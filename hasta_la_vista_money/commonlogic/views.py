@@ -3,7 +3,7 @@ from django.db.models import Count, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.shortcuts import get_object_or_404
 from django.views.generic import CreateView
-from hasta_la_vista_money.account.models import Account
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
 
@@ -84,7 +84,7 @@ def create_object_view(form, model, request, message) -> dict[str, bool]:
     form_instance = form.save(commit=False)
     cd = form.cleaned_data
     amount = cd.get('amount')
-    account = cd.get('account')
+    account = cd.get('finance_account')
     category = cd.get('category')
 
     selected_account = get_object_or_404(Account, id=account.id)

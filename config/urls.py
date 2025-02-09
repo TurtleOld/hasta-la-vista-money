@@ -29,7 +29,7 @@ urlpatterns = [
     path(
         'hasta-la-vista-money/',
         include(
-            'hasta_la_vista_money.account.urls',
+            'hasta_la_vista_money.finance_account.urls',
             namespace='applications',
         ),
         name='applications',
@@ -59,12 +59,12 @@ urlpatterns = [
         name='expense',
     ),
     path(
-        'account/',
+        'finance_account/',
         include(
-            'hasta_la_vista_money.account.urls',
-            namespace='account',
+            'hasta_la_vista_money.finance_account.urls',
+            namespace='finance_account',
         ),
-        name='account',
+        name='finance_account',
     ),
     path(
         'reports/',

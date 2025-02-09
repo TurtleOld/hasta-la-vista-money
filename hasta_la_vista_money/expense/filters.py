@@ -1,8 +1,8 @@
 import django_filters
 from django.forms import Select
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.account.models import Account
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+from hasta_la_vista_money.finance_account.models import Account
 
 
 class ExpenseFilter(django_filters.FilterSet):

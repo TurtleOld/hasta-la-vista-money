@@ -12,12 +12,12 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DeleteView, DetailView, ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.account.models import Account
 from hasta_la_vista_money.commonlogic.custom_paginator import (
     paginator_custom_view,
 )
 from hasta_la_vista_money.commonlogic.views import collect_info_receipt
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
     ReceiptFilter,
@@ -56,7 +56,7 @@ class ReceiptView(
                 user=self.request.user,
             )
             receipt_form = ReceiptForm()
-            receipt_form.fields['account'].queryset = user.account_users
+            receipt_form.fields['account'].queryset = user.finance_account_users
             receipt_form.fields['seller'].queryset = user.customer_users.distinct(
                 'name_seller',
             )

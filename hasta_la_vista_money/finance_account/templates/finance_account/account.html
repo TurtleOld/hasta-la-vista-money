@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+{% load comma %}
+
+{% block title %}
+    {% translate 'Управляй финансами семьи грамотно!' %}{% endblock %}
+{% block content %}
+    <div class="container-fluid">
+        {% include 'finance_account/modals/add_account.html' %}
+        {% include 'finance_account/modals/exchange_money_account.html' %}
+        {% include 'finance_account/modals/statistics.html' %}
+        {% include 'error_modal.html' %}
+        <div class="row">
+            <div class="col-10 mt-5">
+                    <div class="col-xl-6">
+                        <div id="chart_combine"></div>
+                    </div>
+            </div>
+            <!-- /.col-7 -->
+        </div>
+        <!-- /.row -->
+        <div class="row d-flex justify-content-between justify-content-xl-start mt-5">
+            <div class="col-xl-4 t-5 pe-xl-5">
+                <div class="account overflow-auto shadow rounded-4">
+                    {% include 'finance_account/account_table.html' %}
+                </div>
+            </div>
+            <div class="col-xl-6 text-center">
+                <button type="button"
+                        class="btn btn-success btn mt-2 mt-xl-0 fs-6"
+                        data-bs-toggle="modal" data-bs-target="#statistics">
+                    {% translate 'Общая статистика пользователя ' %}{{ user.username }}
+                </button>
+            </div>
+        </div>
+    </div>
+    <script nonce="{{ request.csp_nonce }}"
+            src="https://code.highcharts.com/highcharts.js">
+    </script>
+    <script nonce="{{ request.csp_nonce }}">
+        Highcharts.chart('chart_combine', {{ chart_combine|safe }})
+    </script>
+{% endblock %}

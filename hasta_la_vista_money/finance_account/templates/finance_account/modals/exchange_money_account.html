@@ -1,0 +1,41 @@
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load comma %}
+
+<div id="exchange-account"
+     class="ajax-modal modal fade {% if transfer_money_form.errors %}show{% endif %}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    {% translate 'Перевод со счёта на счёт' %}
+                </h5>
+                <button type="button" class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {{ transfer_money_form.media }}
+                <form id="exchange-account-form" class="ajax-form form"
+                      method="post"
+                      action="{% url 'finance_account:transfer_money' %}">
+                    {% csrf_token %}
+                    {% if transfer_money_form %}
+                        {% for field in transfer_money_form %}
+                            {{ field.errors }}
+                            <div class="form-group{% if field.errors %} has-error{% endif %}">
+                                {{ field | as_crispy_field }}
+                                {% if field.errors %}
+                                    {% for error in field.errors %}
+                                        <p class="help-block">{{ error }}</p>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    <button type="submit" class="btn btn-warning text-white">Перевести</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

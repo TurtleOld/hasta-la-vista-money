@@ -1,6 +1,5 @@
 from django.test import TestCase
 from django.urls import reverse_lazy
-
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.models import Loan
 from hasta_la_vista_money.users.models import User
@@ -9,7 +8,7 @@ from hasta_la_vista_money.users.models import User
 class TestLoan(TestCase):
     fixtures = [
         'users.yaml',
-        'account.yaml',
+        'finance_account.yaml',
         'income.yaml',
         'income_cat.yaml',
         'loan.yaml',
@@ -66,5 +65,8 @@ class TestLoan(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertFormError(
-            response, form='form', field='date', errors='Обязательное поле.'
+            response,
+            form='form',
+            field='date',
+            errors='Обязательное поле.',
         )

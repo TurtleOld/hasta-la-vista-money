@@ -1,0 +1,23 @@
+[
+    {
+        "model": "finance_account.account",
+        "pk": 1,
+        "fields": {
+            "user": 1,
+
+            "name_account": "Банковская карта",
+            "balance": "300000.00",
+            "currency": "RUB"
+        }
+    },
+    {
+        "model": "finance_account.account",
+        "pk": 2,
+        "fields": {
+            "user": 1,
+            "name_account": "Основной счёт",
+            "balance": "200000.00",
+            "currency": "RUB"
+        }
+    }
+]

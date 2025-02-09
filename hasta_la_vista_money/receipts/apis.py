@@ -1,7 +1,7 @@
 import decimal
 import json
 
-from hasta_la_vista_money.account.models import Account
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
     ReceiptSerializer,
@@ -58,7 +58,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
     def post(self, request, *args, **kwargs):
         request_data = json.loads(request.body)
         user_id = request_data.get('user')
-        account_id = request_data.get('account')
+        account_id = request_data.get('finance_account')
         receipt_date = request_data.get('receipt_date')
         total_sum = request_data.get('total_sum')
         number_receipt = request_data.get('number_receipt')

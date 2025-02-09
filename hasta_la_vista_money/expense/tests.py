@@ -1,9 +1,9 @@
 from django.test import TestCase
 from django.urls import reverse_lazy
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.account.models import Account
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
 TEST_AMOUNT = 15000
@@ -13,7 +13,7 @@ NEW_TEST_AMOUNT = 25000
 class TestExpense(TestCase):
     fixtures = [
         'users.yaml',
-        'account.yaml',
+        'finance_account.yaml',
         'expense.yaml',
         'expense_cat.yaml',
     ]

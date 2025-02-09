@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse_lazy
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.account.models import Account
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
@@ -13,7 +13,7 @@ NEW_TEST_AMOUNT = 25000
 class TestIncome(TestCase):
     fixtures = [
         'users.yaml',
-        'account.yaml',
+        'finance_account.yaml',
         'income.yaml',
         'income_cat.yaml',
     ]
