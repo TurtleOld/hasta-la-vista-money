@@ -9,8 +9,8 @@ from django.forms import (
     formset_factory,
 )
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.account.models import Account
 from hasta_la_vista_money.commonlogic.forms import BaseFieldsForm
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 
 

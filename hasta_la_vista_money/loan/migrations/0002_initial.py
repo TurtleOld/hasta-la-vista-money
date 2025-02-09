@@ -11,93 +11,84 @@ class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('finance_account', '0002_initial'),
-        ('receipts', '0001_initial'),
+        ('loan', '0001_initial'),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='seller',
+            model_name='paymentschedule',
             name='user',
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.PROTECT,
-                related_name='customer_users',
+                related_name='payment_schedule_users',
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
         migrations.AddField(
-            model_name='receipt',
+            model_name='paymentmakeloan',
             name='account',
             field=models.ForeignKey(
-                on_delete=django.db.models.deletion.PROTECT,
-                related_name='receipt_accounts',
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='payment_make_loan_accounts',
                 to='finance_account.account',
             ),
         ),
         migrations.AddField(
-            model_name='receipt',
-            name='product',
-            field=models.ManyToManyField(
-                related_name='receipt_products', to='receipts.product'
-            ),
-        ),
-        migrations.AddField(
-            model_name='receipt',
-            name='seller',
+            model_name='paymentmakeloan',
+            name='loan',
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
-                related_name='receipt_customers',
-                to='receipts.seller',
-                verbose_name='customer',
+                related_name='loans',
+                to='loan.loan',
             ),
         ),
         migrations.AddField(
-            model_name='receipt',
+            model_name='paymentmakeloan',
             name='user',
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.PROTECT,
-                related_name='receipt_users',
+                related_name='payment_make_loan_users',
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
         migrations.AddField(
-            model_name='product',
+            model_name='loan',
+            name='account',
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='loan_accounts',
+                to='finance_account.account',
+            ),
+        ),
+        migrations.AddField(
+            model_name='loan',
             name='user',
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.PROTECT,
-                related_name='product_users',
+                related_name='loan_users',
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
         migrations.AddIndex(
-            model_name='receipt',
+            model_name='loan',
+            index=models.Index(fields=['-id'], name='loan_loan_id_bf4de1_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='loan',
             index=models.Index(
-                fields=['-receipt_date'], name='receipts_re_receipt_27a810_idx'
+                fields=['loan_amount'], name='loan_loan_loan_am_4dd1a2_idx'
             ),
         ),
         migrations.AddIndex(
-            model_name='receipt',
+            model_name='loan',
             index=models.Index(
-                fields=['number_receipt'], name='receipts_re_number__8b0553_idx'
+                fields=['annual_interest_rate'], name='loan_loan_annual__c669ae_idx'
             ),
         ),
         migrations.AddIndex(
-            model_name='receipt',
-            index=models.Index(fields=['nds10'], name='receipts_re_nds10_eca936_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='receipt',
-            index=models.Index(fields=['nds20'], name='receipts_re_nds20_70a9e3_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='receipt',
+            model_name='loan',
             index=models.Index(
-                fields=['operation_type'], name='receipts_re_operati_6c2387_idx'
-            ),
-        ),
-        migrations.AddIndex(
-            model_name='receipt',
-            index=models.Index(
-                fields=['total_sum'], name='receipts_re_total_s_b77e3b_idx'
+                fields=['period_loan'], name='loan_loan_period__f18127_idx'
             ),
         ),
     ]

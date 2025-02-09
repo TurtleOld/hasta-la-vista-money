@@ -10,7 +10,6 @@ from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.account.models import Account
 from hasta_la_vista_money.commonlogic.custom_paginator import (
     paginator_custom_view,
 )
@@ -29,6 +28,7 @@ from hasta_la_vista_money.custom_mixin import (
 from hasta_la_vista_money.expense.filters import ExpenseFilter
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
 
@@ -97,7 +97,7 @@ class ExpenseView(
             )
             add_expense_form.fields[
                 'account'
-            ].queryset = user.account_users.select_related('user').all()
+            ].queryset = user.finance_account_users.select_related('user').all()
 
             expenses = expense_filter.qs
 

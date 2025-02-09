@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse_lazy
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.account.models import Account
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.users.models import User
@@ -10,7 +10,7 @@ from hasta_la_vista_money.users.models import User
 class TestReceipt(TestCase):
     fixtures = [
         'users.yaml',
-        'account.yaml',
+        'finance_account.yaml',
         'receipt_receipt.yaml',
         'receipt_seller.yaml',
         'receipt_product.yaml',

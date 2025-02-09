@@ -9,7 +9,6 @@ from django.views.generic.edit import CreateView, DeletionMixin
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.account.models import Account
 from hasta_la_vista_money.commonlogic.custom_paginator import (
     paginator_custom_view,
 )
@@ -25,6 +24,7 @@ from hasta_la_vista_money.custom_mixin import (
     DeleteObjectMixin,
     UpdateViewMixin,
 )
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.models import Income, IncomeCategory
@@ -91,7 +91,9 @@ class IncomeView(
                 category_queryset=income_categories,
             )
 
-            income_form.fields['account'].queryset = user.account_users.select_related(
+            income_form.fields[
+                'account'
+            ].queryset = user.finance_account_users.select_related(
                 'user',
             ).all()
 
@@ -188,7 +190,7 @@ class IncomeUpdateView(
         context = super().get_context_data(**kwargs)
         form_class = self.get_form_class()
         form = form_class(**self.get_form_kwargs())
-        form.fields['account'].queryset = user.account_users.select_related(
+        form.fields['account'].queryset = user.finance_account_users.select_related(
             'user',
         ).all()
         context['income_form'] = form

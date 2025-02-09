@@ -48,7 +48,7 @@ CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split() or []
 # Application definition
 LOCAL_APPS = [
     'hasta_la_vista_money',
-    'hasta_la_vista_money.account',
+    'hasta_la_vista_money.finance_account',
     'hasta_la_vista_money.budget',
     'hasta_la_vista_money.commonlogic',
     'hasta_la_vista_money.expense',
