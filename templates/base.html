@@ -59,5 +59,12 @@
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/planning.js' %}?v={% word_hash %}"></script>
+    <script nonce="{{request.csp_nonce}}">
+      // Инициализация tooltips
+      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+    </script>
 </body>
 </html>
