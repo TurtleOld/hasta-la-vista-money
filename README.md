@@ -12,13 +12,12 @@ ___
 The Hasta La Vista, Money project is currently under active development, so be aware of potential bugs and future changes.
 ___
 Hasta La Vista, Money is a home accounting project designed to efficiently manage family expenses and income. Additionally, the app provides an easy way to enter purchase data manually.
-An Android mobile application for scanning QR codes from receipts is in development.
 
-This project is intended as self-hosted, meaning it can be installed on your own hosting. This feature is also under development.
+The application is deployed on your own hosting using [Docker](https://docs.docker.com/desktop/setup/install/linux/), instructions below.
 ___
 ## Installation  
 
-The application is deployed using [Docker](https://docs.docker.com/desktop/setup/install/linux/). You can deploy it on your local machine or a server.
+You can deploy it on your local machine or a server.
 
 In the directory where the project files will reside, create a _.env_ file and populate it with the following details:
 

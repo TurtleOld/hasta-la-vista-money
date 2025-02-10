@@ -3,6 +3,14 @@
 
 Welcome to the documentation page of the project **Hasta La Vista, Money**!
 
+### Disclaimer:
+The Hasta La Vista, Money project is currently under active development, so be aware of potential bugs and future changes.
+___
+Hasta La Vista, Money is a home accounting project designed to efficiently manage family expenses and income. Additionally, the app provides an easy way to enter purchase data manually.
+
+
+The application is deployed on your own hosting using [Docker](https://docs.docker.com/desktop/setup/install/linux/), instructions below.
+
 ## Installation  
 
 The application is deployed using [Docker](https://docs.docker.com/desktop/setup/install/linux/). You can deploy it on your local machine or a server.
