@@ -11,7 +11,7 @@
                 <form class="form" method="post">
                     {% csrf_token %}
                     {{ income_form | crispy }}
-                    <button type="submit" class="btn btn-primary">{% translate 'Сохранить' %}</button>
+                    <button type="submit" class="btn btn-success">{% translate 'Сохранить' %}</button>
                     <a class="btn btn-warning text-light position-absolute end-0" href="{% url 'income:list' %}">{% translate 'Вернуться назад' %}</a>
                 </form>
             </div>

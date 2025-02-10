@@ -62,7 +62,7 @@
 						<h2>{% translate 'Список моих кредитов:' %}</h2>
 						{% for item_loan in loan %}
 							<button type="button"
-							        class="btn btn-primary btn-danger"
+							        class="btn btn-success btn-danger"
 							        data-bs-toggle="modal"
 							        data-bs-target="#loan-{{ item_loan.pk }}">
 								{% translate 'Кредит № ' %}{{ item_loan.pk }}<br>
@@ -164,7 +164,7 @@
 														</div>
 													{% endfor %}
 												{% endif %}
-												<button type="submit" class="btn btn-primary">{% translate 'Добавить платеж' %}</button>
+												<button type="submit" class="btn btn-success">{% translate 'Добавить платеж' %}</button>
 											</form>
 										</div>
 									</div>

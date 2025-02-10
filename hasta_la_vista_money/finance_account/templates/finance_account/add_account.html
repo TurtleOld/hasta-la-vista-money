@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load comma %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        {% translate 'Добавить счёт' %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="add-account-form" class="ajax-form form"
+                      method="post" action="{% url 'finance_account:create' %}">
+                        {% csrf_token %}
+                        {% if add_account_form %}
+                            {% for field in add_account_form %}
+                                {{ field.errors }}
+                                <div class="form-group{% if field.errors %} has-error{% endif %}">
+                                    {% if field == 'balance' %}
+                                        {{ field | comma }}
+                                    {% else %}
+                                        {{ field | as_crispy_field }}
+                                    {% endif %}
+                                    {% if field.errors %}
+                                        {% for error in field.errors %}
+                                            <p class="help-block">{{ error }}</p>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                        <button type="submit" class="btn btn-success">Добавить новый счёт</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

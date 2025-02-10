@@ -316,7 +316,14 @@ class AccountCreateView(SuccessMessageMixin, AccountBaseView, CreateView):
     """
 
     form_class = AddAccountForm
+    template_name = 'finance_account/add_account.html'
     no_permission_url = reverse_lazy('login')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['add_account_form'] = AddAccountForm()
+
+        return context
 
     def post(self, request: WSGIRequest, *args, **kwargs) -> JsonResponse:
         """
