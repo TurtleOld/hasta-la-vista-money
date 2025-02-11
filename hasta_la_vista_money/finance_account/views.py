@@ -322,6 +322,11 @@ class AccountCreateView(SuccessMessageMixin, AccountBaseView, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['add_account_form'] = AddAccountForm()
+        context['tooltip_form_add_account'] = (
+            'Введите название счета (до 250 символов).<br>'
+            'Укажите начальный баланс - сумму, которая находится на счете при его создании.<br>'
+            'Выберите валюту счета из выпадающего списка.'
+        )
 
         return context
 
