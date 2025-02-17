@@ -70,10 +70,7 @@ urlpatterns = [
         'budget/',
         include('hasta_la_vista_money.budget.urls', namespace='budget'),
     ),
-    path('admin/', admin.site.urls)
+    path('admin/', admin.site.urls),
+    path('__debug__/', include('debug_toolbar.urls')),
+    # re_path(r'rosetta/', include('rosetta.urls'))
 ]
-
-if 'rosetta' in settings.INSTALLED_APPS:
-    urlpatterns.append(re_path(r'^rosetta/', include('rosetta.urls')))
-if settings.DEBUG:
-    urlpatterns.append(path('__debug__/', include('debug_toolbar.urls')))
