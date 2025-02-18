@@ -1,5 +1,5 @@
 from django.urls import path
-from hasta_la_vista_money.users.apis import ListUsersAPIView, LoginUserAPIView
+from hasta_la_vista_money.authentication.apis import ListUsersAPIView, LoginUserAPIView
 from hasta_la_vista_money.users.views import (
     CreateUser,
     ListUsers,

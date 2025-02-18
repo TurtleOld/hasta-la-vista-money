@@ -48,6 +48,8 @@ CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split() or []
 # Application definition
 LOCAL_APPS = [
     'hasta_la_vista_money',
+    'hasta_la_vista_money.api',
+    'hasta_la_vista_money.authentication',
     'hasta_la_vista_money.finance_account',
     'hasta_la_vista_money.budget',
     'hasta_la_vista_money.commonlogic',
@@ -90,7 +92,6 @@ INSTALLED_APPS = [
     *LOCAL_APPS,
     *THIRD_PARTY_APPS,
 ]
-
 
 MIDDLEWARE = [
     'debug_toolbar.middleware.DebugToolbarMiddleware',

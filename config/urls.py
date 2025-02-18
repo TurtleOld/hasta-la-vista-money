@@ -81,6 +81,11 @@ urlpatterns = [
         include('hasta_la_vista_money.budget.urls', namespace='budget'),
         name='budget',
     ),
+    path(
+        'api',
+        include('hasta_la_vista_money.api.urls', namespace='api'),
+        name='api',
+    ),
 ]
 
 if 'rosetta' in settings.INSTALLED_APPS:
