@@ -58,6 +58,8 @@ jobs:
       # run makemigrations and migrate
       - name: Run makemigrations
         run: poetry run python manage.py makemigrations
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
 
       - name: Run check
         run: poetry run python manage.py check
