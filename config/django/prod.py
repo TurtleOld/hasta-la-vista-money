@@ -1,8 +1,8 @@
 from config.env import env
 from config.django.base import *  # NOQA
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split() or ['127.0.0.1',
-                                                           'localhost']
+ALLOWED_HOSTS = env.bool('ALLOWED_HOSTS', '').split() or ['127.0.0.1',
+                                                          'localhost']
 
 SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=True)
 

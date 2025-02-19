@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from sentry_sdk.integrations.django import DjangoIntegration
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from config.env import BASE_DIR, env, APPS_DIR
+import os
 
 django_stubs_ext.monkeypatch()
 load_dotenv()
