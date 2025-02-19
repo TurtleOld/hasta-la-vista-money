@@ -20,12 +20,16 @@ urlpatterns = [
         name='category_list',
     ),
     path(
-        'create/category',
+        'create/category/',
         IncomeCategoryCreateView.as_view(),
         name='create_category',
     ),
     path('change/<int:pk>/', IncomeUpdateView.as_view(), name='change'),
-    path('delete/<int:pk>/', IncomeDeleteView.as_view(), name='delete_income'),
+    path(
+        'delete/<int:pk>/',
+        IncomeDeleteView.as_view(),
+        name='delete_income',
+    ),
     path(
         'category/<int:pk>/',
         IncomeCategoryDeleteView.as_view(),

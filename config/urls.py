@@ -5,19 +5,16 @@ from hasta_la_vista_money.users.views import IndexView, LoginUser, LogoutUser
 
 urlpatterns = [
     re_path(
-        'users/',
+        r'^users/',
         include(
             'hasta_la_vista_money.users.urls',
             namespace='users',
         ),
-        name='list',
     ),
     path('', IndexView.as_view(), name='index'),
     path(
         'login/',
-        LoginUser.as_view(
-            redirect_authenticated_user=True,
-        ),
+        LoginUser.as_view(redirect_authenticated_user=True),
         name='login',
     ),
     path(
@@ -32,7 +29,6 @@ urlpatterns = [
             'hasta_la_vista_money.finance_account.urls',
             namespace='applications',
         ),
-        name='applications',
     ),
     path(
         'receipts/',
@@ -40,7 +36,6 @@ urlpatterns = [
             'hasta_la_vista_money.receipts.urls',
             namespace='receipts',
         ),
-        name='receipt',
     ),
     path(
         'income/',
@@ -48,7 +43,6 @@ urlpatterns = [
             'hasta_la_vista_money.income.urls',
             namespace='income',
         ),
-        name='income',
     ),
     path(
         'expense/',
@@ -56,7 +50,6 @@ urlpatterns = [
             'hasta_la_vista_money.expense.urls',
             namespace='expense',
         ),
-        name='expense',
     ),
     path(
         'finance_account/',
@@ -64,22 +57,18 @@ urlpatterns = [
             'hasta_la_vista_money.finance_account.urls',
             namespace='finance_account',
         ),
-        name='finance_account',
     ),
     path(
         'reports/',
         include('hasta_la_vista_money.reports.urls', namespace='reports'),
-        name='reports',
     ),
     path(
         'loan/',
         include('hasta_la_vista_money.loan.urls', namespace='loan'),
-        name='loan',
     ),
     path(
         'budget/',
         include('hasta_la_vista_money.budget.urls', namespace='budget'),
-        name='budget',
     ),
     path(
         'api/',
@@ -93,3 +82,7 @@ if 'rosetta' in settings.INSTALLED_APPS:
 if settings.DEBUG:
     urlpatterns += (path('__debug__/', include('debug_toolbar.urls')),)
     urlpatterns += (path('adminushka/', admin.site.urls),)
+    path('admin/', admin.site.urls),
+    path('__debug__/', include('debug_toolbar.urls')),
+    # re_path(r'rosetta/', include('rosetta.urls'))
+]

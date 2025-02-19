@@ -33,16 +33,6 @@
                 </div>
             {% endfor %}
         {% endif %}
-    {% endif %}
-    {% if user.is_registered %}
-        {% include 'header.html' %}
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert container position-absolute start-50 translate-middle mt-5 text-center {% if message.tags %}{{ message.tags }}{% endif %}">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        {% endif %}
     {% elif not user.last_login %}
         {% if messages %}
             {% for message in messages %}

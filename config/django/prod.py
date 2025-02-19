@@ -1,12 +1,14 @@
+from config.env import env
 from config.django.base import *  # NOQA
 
-ADMINS = [('Alexander Pavlov', 'alexander.pavlov@pavlovteam.ru')]
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split() or ['127.0.0.1',
+                                                           'localhost']
 
-CSRF_COOKIE_SECURE = True
-CSRF_USE_SESSIONS = True
-SECURE_HSTS_SECONDS = 1800
-SECURE_HSTS_PRELOAD = True
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=True)
 
-# Rosetta
-ROSETTA_WSGI_AUTO_RELOAD = False
-ROSETTA_UWSGI_AUTO_RELOAD = False
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+SECURE_CONTENT_TYPE_NOSNIFF = env.bool(
+    "SECURE_CONTENT_TYPE_NOSNIFF",
+    default=True,
+)
