@@ -36,7 +36,7 @@ urlpatterns = [
         name='transfer_money',
     ),
     path(
-        'api/list',
+        'list/',
         AccountListCreateAPIView.as_view(),
         name='api_list',
     ),

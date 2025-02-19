@@ -82,7 +82,7 @@ urlpatterns = [
         name='budget',
     ),
     path(
-        'api',
+        'api/',
         include('hasta_la_vista_money.api.urls', namespace='api'),
         name='api',
     ),
