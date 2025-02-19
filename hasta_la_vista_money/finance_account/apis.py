@@ -1,6 +1,5 @@
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
-from rest_framework.authentication import TokenAuthentication
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
