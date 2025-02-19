@@ -1,6 +1,8 @@
 from django.urls import path
-
-from hasta_la_vista_money.authentication.apis import LoginUserAPIView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 app_name = 'authentication'
-urlpatterns = [path('login/', LoginUserAPIView.as_view(), name='login')]
+urlpatterns = [
+    path('token/', TokenObtainPairView.as_view(), name='token'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+]
