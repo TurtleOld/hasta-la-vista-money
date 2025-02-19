@@ -10,7 +10,7 @@ urlpatterns = [
         ),
     ),
     path(
-        'finance-account/',
+        'finaccount/',
         include(
             'hasta_la_vista_money.finance_account.urls',
             namespace='finance_account',

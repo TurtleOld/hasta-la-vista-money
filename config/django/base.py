@@ -200,7 +200,7 @@ LOGOUT_REDIRECT_URL = '/login'
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': 'django_filters.rest_framework.DjangoFilterBackend',
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
 
@@ -232,3 +232,17 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
     INSTALLED_APPS,
     MIDDLEWARE,
 )
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'DEBUG',
+    },
+}

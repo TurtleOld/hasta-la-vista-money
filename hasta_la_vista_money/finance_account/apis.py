@@ -7,7 +7,6 @@ from rest_framework.response import Response
 
 
 class AccountListCreateAPIView(ListCreateAPIView):
-    authentication_classes = (TokenAuthentication,)
     serializer_class = AccountSerializer
     permission_classes = (IsAuthenticated,)
 
