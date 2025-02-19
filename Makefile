@@ -7,9 +7,6 @@ lint:
 .PHONY: format
 format:
 	@cd ./hasta_la_vista_money && \
-			echo "Running black..." && \
-			poetry run black . && \
-			echo "" && \
 			echo "Running ruff..." && \
 			poetry run ruff format
 
