@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from sentry_sdk.integrations.django import DjangoIntegration
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from config.env import BASE_DIR, env, APPS_DIR
+import os
 
 django_stubs_ext.monkeypatch()
 load_dotenv()
@@ -16,6 +17,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', None)
 DEBUG = os.getenv('DEBUG', 'false').lower() in {'true', '1', 't'}
 BASE_URL = os.getenv('BASE_URL') or 'http://127.0.0.1:8000/'
 
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split() or []
 INTERNAL_IPS = [
     os.environ.get(
@@ -30,6 +32,8 @@ INTERNAL_IPS = [
 # Application definition
 LOCAL_APPS = [
     'hasta_la_vista_money',
+    'hasta_la_vista_money.api',
+    'hasta_la_vista_money.authentication',
     'hasta_la_vista_money.finance_account',
     'hasta_la_vista_money.budget',
     'hasta_la_vista_money.commonlogic',

@@ -24,7 +24,7 @@ urlpatterns = [
     ),
     path('<int:pk>/', ReceiptDeleteView.as_view(), name='delete'),
     path(
-        'api/list',
+        'list/',
         ReceiptListAPIView.as_view(),
         name='api_list',
     ),

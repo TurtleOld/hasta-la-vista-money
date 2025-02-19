@@ -216,3 +216,5 @@ ENV/
 # End of https://www.gitignore.io/api/macos,linux,django,python,pycharm
 .gigaide/gigaide.properties
 mypy.txt
+
+Writerside

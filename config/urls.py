@@ -70,6 +70,11 @@ urlpatterns = [
         'budget/',
         include('hasta_la_vista_money.budget.urls', namespace='budget'),
     ),
+    path(
+        'api/',
+        include('hasta_la_vista_money.api.urls', namespace='api'),
+        name='api',
+    ),
     path('admin/', admin.site.urls),
     path('__debug__/', include('debug_toolbar.urls')),
     # re_path(r'rosetta/', include('rosetta.urls'))

@@ -1,6 +1,6 @@
 import json
 
-from hasta_la_vista_money.commonlogic.check_user import check_user
+from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.serializers import UserSerializer
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
@@ -25,15 +25,19 @@ class ListUsersAPIView(ListCreateAPIView):
 
 
 class LoginUserAPIView(APIView):
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         data = json.loads(request.body)
         username = data.get('username')
         password = data.get('password')
 
-        user = check_user(username)
+        if '@' in username:
+            user = User.objects.get(email=username)
+        else:
+            user = User.objects.get(username=username)
 
         if user is not None and user.check_password(password):
             token, _ = Token.objects.get_or_create(user=user)
+            print(token)
             return Response(
                 {'token': token.key, 'user': user.username},
                 status=status.HTTP_200_OK,
