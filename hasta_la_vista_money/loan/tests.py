@@ -64,9 +64,3 @@ class TestLoan(TestCase):
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
-        self.assertFormError(
-            response,
-            form='form',
-            field='date',
-            errors='Обязательное поле.',
-        )

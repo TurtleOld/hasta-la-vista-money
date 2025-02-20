@@ -6,7 +6,6 @@ import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('finance_account', '0002_initial'),
@@ -16,6 +15,10 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='account',
             name='user',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='finance_account_users', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='finance_account_users',
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
     ]
