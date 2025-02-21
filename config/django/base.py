@@ -1,32 +1,35 @@
+import os
+from pathlib import Path
+
 import dj_database_url
 import django_stubs_ext
 import sentry_sdk
 from config.django.sessions import *  # NOQA
+from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from dotenv import load_dotenv
 from sentry_sdk.integrations.django import DjangoIntegration
-from config.settings.debug_toolbar.setup import DebugToolbarSetup
-from config.env import BASE_DIR, env, APPS_DIR
-import os
 
 django_stubs_ext.monkeypatch()
 load_dotenv()
-env.read_env(os.path.join(BASE_DIR, ".env"))
 
 # Security settings
 SECRET_KEY = os.getenv('SECRET_KEY', None)
 DEBUG = os.getenv('DEBUG', 'false').lower() in {'true', '1', 't'}
 BASE_URL = os.getenv('BASE_URL') or 'http://127.0.0.1:8000/'
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split() or []
 INTERNAL_IPS = [
-    os.environ.get(
-        'LOCAL_IPS',
-    )
-    if os.environ.get(
-        'LOCAL_IPS',
-    )
-    else '127.0.0.1',
+    (
+        os.environ.get(
+            'LOCAL_IPS',
+        )
+        if os.environ.get(
+            'LOCAL_IPS',
+        )
+        else '127.0.0.1'
+    ),
 ]
 
 # Application definition
@@ -97,7 +100,7 @@ ASGI_APPLICATION = 'config.asgi.application'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(APPS_DIR, "templates")],
+        'DIRS': [os.path.join(BASE_DIR, 'hasta_la_vista_money', 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -145,11 +148,11 @@ if os.getenv('DATABASE_URL'):
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 AUTHENTICATION_BACKENDS = (
@@ -182,8 +185,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CSP_INCLUDE_NONCE_IN = ['script-src', 'style-src', 'img-src', 'font-src']
 CSP_REPORT_URI = [os.getenv('SENTRY_ENDPOINT')]
 CSP_DEFAULT_SRC = ("'self'", BASE_URL, 'https://code.highcharts.com')
-CSP_SCRIPT_SRC = (
-    "'self'", '127.0.0.1', BASE_URL, 'https://code.highcharts.com')
+CSP_SCRIPT_SRC = ("'self'", '127.0.0.1', BASE_URL, 'https://code.highcharts.com')
 CSP_STYLE_SRC = ("'self'", BASE_URL, 'https://code.highcharts.com')
 CSP_IMG_SRC = ("'self'", 'data:', BASE_URL)
 CSP_FONT_SRC = ("'self'", BASE_URL)
