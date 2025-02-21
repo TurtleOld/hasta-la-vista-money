@@ -152,7 +152,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'
+    },
 ]
 
 AUTHENTICATION_BACKENDS = (
@@ -182,16 +184,28 @@ STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Content Security Policy (CSP)
+additional_script_src = tuple(
+    filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(','))
+)
 CSP_INCLUDE_NONCE_IN = ['script-src', 'style-src', 'img-src', 'font-src']
 CSP_REPORT_URI = [os.getenv('SENTRY_ENDPOINT')]
-CSP_DEFAULT_SRC = ("'self'", BASE_URL, 'https://code.highcharts.com')
-CSP_SCRIPT_SRC = ("'self'", '127.0.0.1', BASE_URL, 'https://code.highcharts.com')
-CSP_STYLE_SRC = ("'self'", BASE_URL, 'https://code.highcharts.com')
-CSP_IMG_SRC = ("'self'", 'data:', BASE_URL)
-CSP_FONT_SRC = ("'self'", BASE_URL)
-CSP_FRAME_SRC = ("'none'",)
-CSP_BASE_URI = ("'none'",)
-CSP_OBJECT_SRC = ("'none'",)
+CSP_DEFAULT_SRC = ("'self'", BASE_URL,
+                   'https://code.highcharts.com',
+                   'https://htmx.org') + additional_script_src
+
+CSP_SCRIPT_SRC = (
+                     "'self'", BASE_URL,
+                     'https://code.highcharts.com',
+                     'https://unpkg.com',
+                     'https://htmx.org') + additional_script_src
+CSP_STYLE_SRC = ("'self'", BASE_URL,
+                 'https://code.highcharts.com',
+                 'https://htmx.org') + additional_script_src
+CSP_IMG_SRC = ("'self'", 'data:', BASE_URL) + additional_script_src
+CSP_FONT_SRC = ("'self'", BASE_URL) + additional_script_src
+CSP_FRAME_SRC = ("'none'",) + additional_script_src
+CSP_BASE_URI = ("'none'",) + additional_script_src
+CSP_OBJECT_SRC = ("'none'",) + additional_script_src
 
 # Authentication and user settings
 AUTH_USER_MODEL = 'users.User'
