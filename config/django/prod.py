@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from config.django.base import *  # NOQA
 
@@ -15,3 +16,6 @@ SECURE_CONTENT_TYPE_NOSNIFF = os.environ.get(
     'SECURE_CONTENT_TYPE_NOSNIFF',
     default=True,
 )
+
+ACCESS_TOKEN_LIFETIME: timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
+REFRESH_TOKEN_LIFETIME: timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
