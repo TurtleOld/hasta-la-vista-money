@@ -29,12 +29,12 @@ urlpatterns = [
         name='api_list',
     ),
     path(
-        'api/create',
+        'create-receipt/',
         ReceiptCreateAPIView.as_view(),
         name='receipt_api_create',
     ),
     path(
-        'customer/api/create',
+        'seller/create/',
         SellerCreateAPIView.as_view(),
         name='api_list',
     ),
