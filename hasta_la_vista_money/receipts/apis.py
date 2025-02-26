@@ -65,7 +65,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         operation_type = request_data.get('operation_type')
         nds10 = request_data.get('nds10')
         nds20 = request_data.get('nds20')
-        customer_data = request_data.get('customer')
+        seller_data = request_data.get('seller')
         products_data = request_data.get('product')
 
         try:
@@ -76,17 +76,17 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 
             if not check_existing_receipt:
                 user = User.objects.get(id=user_id)
-                customer_data['user'] = user
+                seller_data['user'] = user
                 account = Account.objects.get(id=account_id)
                 account.balance -= decimal.Decimal(total_sum)
                 account.save()
                 request_data['account'] = account
-                customer = Seller.objects.create(**customer_data)
+                seller = Seller.objects.create(**seller_data)
                 receipt = Receipt.objects.create(
                     user=user,
                     account=account,
                     receipt_date=receipt_date,
-                    customer=customer,
+                    seller=seller,
                     total_sum=total_sum,
                     number_receipt=number_receipt,
                     operation_type=operation_type,
