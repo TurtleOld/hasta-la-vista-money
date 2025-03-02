@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -152,9 +153,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'
-    },
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 AUTHENTICATION_BACKENDS = (
@@ -185,22 +184,30 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Content Security Policy (CSP)
 additional_script_src = tuple(
-    filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(','))
+    filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
 )
 CSP_INCLUDE_NONCE_IN = ['script-src', 'style-src', 'img-src', 'font-src']
 CSP_REPORT_URI = [os.getenv('SENTRY_ENDPOINT')]
-CSP_DEFAULT_SRC = ("'self'", BASE_URL,
-                   'https://code.highcharts.com',
-                   'https://htmx.org') + additional_script_src
+CSP_DEFAULT_SRC = (
+    "'self'",
+    BASE_URL,
+    'https://code.highcharts.com',
+    'https://htmx.org',
+) + additional_script_src
 
 CSP_SCRIPT_SRC = (
-                     "'self'", BASE_URL,
-                     'https://code.highcharts.com',
-                     'https://unpkg.com',
-                     'https://htmx.org') + additional_script_src
-CSP_STYLE_SRC = ("'self'", BASE_URL,
-                 'https://code.highcharts.com',
-                 'https://htmx.org') + additional_script_src
+    "'self'",
+    BASE_URL,
+    'https://code.highcharts.com',
+    'https://unpkg.com',
+    'https://htmx.org',
+) + additional_script_src
+CSP_STYLE_SRC = (
+    "'self'",
+    BASE_URL,
+    'https://code.highcharts.com',
+    'https://htmx.org',
+) + additional_script_src
 CSP_IMG_SRC = ("'self'", 'data:', BASE_URL) + additional_script_src
 CSP_FONT_SRC = ("'self'", BASE_URL) + additional_script_src
 CSP_FRAME_SRC = ("'none'",) + additional_script_src
@@ -215,7 +222,7 @@ LOGOUT_REDIRECT_URL = '/login'
 
 # REST Framework
 REST_FRAMEWORK = {
-    'DEFAULT_FILTER_BACKENDS': 'django_filters.rest_framework.DjangoFilterBackend',
+    'DEFAULT_FILTER_BACKENDS': ('django_filters.rest_framework.DjangoFilterBackend',),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -249,3 +256,6 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
     INSTALLED_APPS,
     MIDDLEWARE,
 )
+
+ACCESS_TOKEN_LIFETIME: timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
+REFRESH_TOKEN_LIFETIME: timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
