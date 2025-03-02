@@ -9,7 +9,7 @@ from hasta_la_vista_money.receipts.serializers import (
 )
 from hasta_la_vista_money.users.models import User
 from rest_framework import status
-from rest_framework.generics import ListCreateAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -28,7 +28,7 @@ class ReceiptListAPIView(ListCreateAPIView):
         return Response(serializer.data)
 
 
-class SellerDetailAPIView(APIView):
+class SellerDetailAPIView(RetrieveAPIView):
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
     lookup_field = 'id'
