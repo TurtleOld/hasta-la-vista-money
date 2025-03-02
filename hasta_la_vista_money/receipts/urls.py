@@ -3,7 +3,7 @@ from hasta_la_vista_money.receipts.apis import (
     ReceiptCreateAPIView,
     ReceiptListAPIView,
     SellerCreateAPIView,
-    SellerListAPIView,
+    SellerDetailAPIView,
 )
 from hasta_la_vista_money.receipts.views import (
     ProductByMonthView,
@@ -39,8 +39,8 @@ urlpatterns = [
         name='api_list',
     ),
     path(
-        'seller/<int:id>',
-        SellerListAPIView.as_view(),
+        'seller/<int:id>/',
+        SellerDetailAPIView.as_view(),
         name='seller',
     ),
     path(

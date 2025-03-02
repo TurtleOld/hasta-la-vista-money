@@ -28,18 +28,13 @@ class ReceiptListAPIView(ListCreateAPIView):
         return Response(serializer.data)
 
 
-class SellerListAPIView(ListCreateAPIView):
+class SellerDetailAPIView(APIView):
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
     lookup_field = 'id'
 
     def get_queryset(self):
         return Seller.objects.filter(user=self.request.user)
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = SellerSerializer(queryset, many=True)
-        return Response(serializer.data)
 
 
 class SellerCreateAPIView(APIView):
