@@ -29,7 +29,7 @@ class ReceiptListAPIView(ListCreateAPIView):
 
 
 class SellerDetailAPIView(RetrieveAPIView):
-    serializer_class = ReceiptSerializer
+    serializer_class = SellerSerializer
     permission_classes = (IsAuthenticated,)
     lookup_field = 'id'
 
