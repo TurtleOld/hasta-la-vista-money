@@ -61,28 +61,38 @@ jobs:
         run: poetry run python manage.py makemigrations
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
+          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
 
       - name: Run check
         run: poetry run python manage.py check
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
+          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
 
       - name: Run migrations
         run: poetry run python manage.py migrate
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
+          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
 
       - name: Run Tests
         run: make test
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/github_actions
+          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
+          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
 
       - name: Run Tests with Coverage
         run: make coverage
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/github_actions
+          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
+          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
 
       - name: Run codacy-coverage-reporter
         uses: codacy/codacy-coverage-reporter-action@v1.3.0
