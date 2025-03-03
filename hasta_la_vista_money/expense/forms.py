@@ -1,4 +1,5 @@
 from django.forms import DateTimeInput, ModelChoiceField, DateTimeField, DecimalField
+from django.forms.fields import CharField
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.commonlogic.forms import BaseForm
@@ -19,7 +20,12 @@ class AddExpenseForm(BaseForm):
     )
     date = DateTimeField(
         label='Дата',
-        widget=DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
+        widget=DateTimeInput(
+            attrs={
+                'type': 'datetime-local',
+                'class': 'form-control',
+            }
+        ),
         help_text='Укажите дату и время расхода',
     )
     amount = DecimalField(
@@ -53,10 +59,15 @@ class AddExpenseForm(BaseForm):
 
 
 class AddCategoryForm(BaseForm):
-    labels = {
-        'name': _('Название категории'),
-        'parent_category': _('Вложенность'),
-    }
+    name = CharField(
+        label='Название категории',
+        help_text='Введите название категории для её создания',
+    )
+    parent_category = ModelChoiceField(
+        queryset=ExpenseCategory.objects.all(),
+        label='Родительская категория',
+        help_text='Выберите родительскую категорию для создаваемой категории',
+    )
     field = 'parent_category'
 
     def configure_category_choices(self, category_choices):
