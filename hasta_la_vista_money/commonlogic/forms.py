@@ -5,10 +5,10 @@ from django.forms import ModelForm
 
 
 def get_category_choices(
-        queryset: QuerySet[Any],
-        parent=None,
-        level=0,
-        max_level=2,
+    queryset: QuerySet[Any],
+    parent=None,
+    level=0,
+    max_level=2,
 ):
     """Формируем выбор категории в форме."""
     choices = []
@@ -59,12 +59,12 @@ class BaseForm(BaseFieldsForm):
     field: str
 
     def __init__(
-            self,
-            user=None,
-            depth=None,
-            category_queryset=None,
-            *args,
-            **kwargs,
+        self,
+        user=None,
+        depth=None,
+        category_queryset=None,
+        *args,
+        **kwargs,
     ):
         """
         Инициализирует экземпляр класса BaseForm.
@@ -88,8 +88,8 @@ class BaseForm(BaseFieldsForm):
             self.configure_category_choices(category_choices)
 
     def configure_category_choices(
-            self,
-            category_choices: list[tuple[Any, str]],
+        self,
+        category_choices: list[tuple[Any, str]],
     ):
         """Configure category choices for the form."""
         self.fields[self.field].choices = category_choices
