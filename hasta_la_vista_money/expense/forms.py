@@ -1,4 +1,5 @@
-from django.forms import DateTimeInput, ModelChoiceField
+from django.forms import DateTimeInput, ModelChoiceField, DateTimeField, \
+    DecimalField, MultipleChoiceField
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.commonlogic.forms import BaseForm
@@ -7,14 +8,23 @@ from hasta_la_vista_money.finance_account.models import Account
 
 
 class AddExpenseForm(BaseForm):
-    labels = {
-        'category': _('Категория расхода'),
-        'account': _('Счёт списания'),
-        'date': _('Дата'),
-        'amount': _('Сумма'),
-    }
-
-    category = ModelChoiceField(queryset=ExpenseCategory.objects.all())
+    category = ModelChoiceField(
+        queryset=ExpenseCategory.objects.all(),
+        label='Категория расхода',
+        help_text='Выберите категорию расхода'
+    )
+    account = ModelChoiceField(queryset=Account.objects.all(),
+                               label='Счёт списания',
+                               help_text='Выберите с какого счёта списывать расход', )
+    date = DateTimeField(
+        label='Дата',
+        widget=DateTimeInput(
+            attrs={'type': 'datetime-local', 'class': 'form-control'}
+        ),
+        help_text="Укажите дату и время расхода"
+    )
+    amount = DecimalField(label='Сумма списания',
+                          help_text='Введите сумму списания', )
 
     field = 'category'
 
@@ -39,11 +49,6 @@ class AddExpenseForm(BaseForm):
     class Meta:
         model = Expense
         fields = ['category', 'account', 'date', 'amount']
-        widgets = {
-            'date': DateTimeInput(
-                attrs={'type': 'datetime-local', 'class': 'form-control'},
-            ),
-        }
 
 
 class AddCategoryForm(BaseForm):
