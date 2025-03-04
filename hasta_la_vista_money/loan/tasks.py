@@ -10,12 +10,12 @@ from hasta_la_vista_money.users.models import User
 
 
 def calculate_annuity_loan(
-        user_id,
-        loan_id,
-        start_date,
-        loan_amount,
-        annual_interest_rate,
-        period_loan,
+    user_id,
+    loan_id,
+    start_date,
+    loan_amount,
+    annual_interest_rate,
+    period_loan,
 ):
     """
     Функция по расчёту аннуитетных платежей.
@@ -40,14 +40,12 @@ def calculate_annuity_loan(
     NUMBER_TWELFTH_MONTH_YEAR = Decimal(12)
     HUNDRED = Decimal(100)
 
-    monthly_interest_rate = (
-                                        annual_interest_rate / NUMBER_TWELFTH_MONTH_YEAR) / HUNDRED
+    monthly_interest_rate = (annual_interest_rate / NUMBER_TWELFTH_MONTH_YEAR) / HUNDRED
 
     monthly_payment = (
-            loan_amount
-            * (monthly_interest_rate * (
-                1 + monthly_interest_rate) ** period_loan)
-            / ((1 + monthly_interest_rate) ** period_loan - 1)
+        loan_amount
+        * (monthly_interest_rate * (1 + monthly_interest_rate) ** period_loan)
+        / ((1 + monthly_interest_rate) ** period_loan - 1)
     )
 
     balance = loan_amount
@@ -84,12 +82,12 @@ def calculate_annuity_loan(
 
 
 def calculate_differentiated_loan(
-        user_id,
-        loan_id,
-        start_date: datetime,
-        loan_amount: Decimal,
-        annual_interest_rate: Decimal,
-        period_loan: int,
+    user_id,
+    loan_id,
+    start_date: datetime,
+    loan_amount: Decimal,
+    annual_interest_rate: Decimal,
+    period_loan: int,
 ):
     """
     Функция по расчёту дифференцированных платежей.
@@ -112,8 +110,7 @@ def calculate_differentiated_loan(
     NUMBER_TWELFTH_MONTH_YEAR = Decimal(12)
     HUNDRED = Decimal(100)
 
-    monthly_interest_rate = (
-                                        annual_interest_rate / NUMBER_TWELFTH_MONTH_YEAR) / HUNDRED
+    monthly_interest_rate = (annual_interest_rate / NUMBER_TWELFTH_MONTH_YEAR) / HUNDRED
 
     balance = loan_amount
     start_date = start_date + relativedelta(months=1)
