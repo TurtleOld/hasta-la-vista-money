@@ -1,10 +1,10 @@
 """Модуль задач для пакета loan."""
 
-import datetime
+from datetime import datetime, date
+from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from django.shortcuts import get_object_or_404
-from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.models import Loan, PaymentSchedule
 from hasta_la_vista_money.users.models import User
 
@@ -18,7 +18,7 @@ def calculate_annuity_loan(
     period_loan,
 ):
     """
-    Асинхронная функция по расчёту аннуитетных платежей.
+    Функция по расчёту аннуитетных платежей.
 
     :param user_id:
     :param loan_id:
@@ -28,14 +28,24 @@ def calculate_annuity_loan(
     :param period_loan:
     :return:
     """
-    monthly_interest_rate = float(
-        (annual_interest_rate / constants.NUMBER_TWELFTH_MONTH_YEAR) / 100,
-    )
+    if not isinstance(loan_amount, Decimal):
+        loan_amount = Decimal(
+            str(loan_amount)
+        )  # Convert to string first to avoid precision issues
+    if not isinstance(annual_interest_rate, Decimal):
+        annual_interest_rate = Decimal(str(annual_interest_rate))
+    if not isinstance(period_loan, Decimal):
+        period_loan = Decimal(str(period_loan))
+
+    NUMBER_TWELFTH_MONTH_YEAR = Decimal(12)
+    HUNDRED = Decimal(100)
+
+    monthly_interest_rate = (annual_interest_rate / NUMBER_TWELFTH_MONTH_YEAR) / HUNDRED
 
     monthly_payment = (
-        float(loan_amount)
-        * (monthly_interest_rate * (1 + monthly_interest_rate) ** float(period_loan))
-        / ((1 + monthly_interest_rate) ** float(period_loan) - 1)
+        loan_amount
+        * (monthly_interest_rate * (1 + monthly_interest_rate) ** period_loan)
+        / ((1 + monthly_interest_rate) ** period_loan - 1)
     )
 
     balance = loan_amount
@@ -43,13 +53,10 @@ def calculate_annuity_loan(
     start_date = start_date + relativedelta(months=1)
 
     user = get_object_or_404(User, id=user_id)
-
-    loan = get_object_or_404(
-        Loan,
-        id=loan_id,
-    )
+    loan = get_object_or_404(Loan, id=loan_id)
 
     for _ in range(1, int(period_loan) + 1):
+        # Calculate interest and principal payment
         interest = balance * monthly_interest_rate
         principal_payment = monthly_payment - interest
         balance -= principal_payment
@@ -57,9 +64,10 @@ def calculate_annuity_loan(
         year = start_date.year
         month = start_date.month
         day = start_date.day
-        current_date = datetime.date(year, month, day)
+        current_date = date(year, month, day)
 
         next_date = start_date + relativedelta(months=1)
+
         PaymentSchedule.objects.create(
             user=user,
             loan=loan,
@@ -76,13 +84,13 @@ def calculate_annuity_loan(
 def calculate_differentiated_loan(
     user_id,
     loan_id,
-    start_date: datetime.datetime,
-    loan_amount: float,
-    annual_interest_rate: float,
+    start_date: datetime,
+    loan_amount: Decimal,
+    annual_interest_rate: Decimal,
     period_loan: int,
 ):
     """
-    Асинхронная функция по расчёту дифференцированных платежей.
+    Функция по расчёту дифференцированных платежей.
 
     :param user_id:
     :param loan_id:
@@ -92,28 +100,31 @@ def calculate_differentiated_loan(
     :param period_loan:
     :return:
     """
-    user = get_object_or_404(User, id=user_id)
+    # Ensure loan_amount is a Decimal
+    if not isinstance(loan_amount, Decimal):
+        loan_amount = Decimal(str(loan_amount))
 
+    user = get_object_or_404(User, id=user_id)
     loan = Loan.objects.filter(id=loan_id).first()
 
-    monthly_interest_rate = float(
-        (annual_interest_rate / constants.NUMBER_TWELFTH_MONTH_YEAR) / 100,
-    )
+    NUMBER_TWELFTH_MONTH_YEAR = Decimal(12)
+    HUNDRED = Decimal(100)
+
+    monthly_interest_rate = (annual_interest_rate / NUMBER_TWELFTH_MONTH_YEAR) / HUNDRED
 
     balance = loan_amount
-
     start_date = start_date + relativedelta(months=1)
 
     for _ in range(1, int(period_loan) + 1):
         interest = balance * monthly_interest_rate
-        principal_payment = loan_amount / period_loan
+        principal_payment = loan_amount / Decimal(period_loan)
         balance -= principal_payment
         monthly_payment = interest + principal_payment
 
         year = start_date.year
         month = start_date.month
         day = start_date.day
-        current_date = datetime.date(year, month, day)
+        current_date = date(year, month, day)
 
         next_date = start_date + relativedelta(months=1)
 

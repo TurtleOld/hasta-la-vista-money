@@ -54,15 +54,6 @@ class BaseFieldsForm(ModelForm):  # type: ignore
 
         abstract = True
 
-    def __init__(self, *args, **kwargs):
-        """Конструктор класса."""
-        super().__init__(*args, **kwargs)
-        for field in self.fields:  # : 528
-            self.fields[field].label = self.labels.get(
-                field,
-                self.fields[field].label,
-            )
-
 
 class BaseForm(BaseFieldsForm):
     field: str

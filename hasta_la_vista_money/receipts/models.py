@@ -20,7 +20,7 @@ class Seller(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
-        related_name='customer_users',
+        related_name='seller_users',
     )
     name_seller = models.CharField(max_length=255)
     retail_place_address = models.CharField(
@@ -121,8 +121,8 @@ class Receipt(models.Model):
     seller = models.ForeignKey(
         Seller,
         on_delete=models.CASCADE,
-        verbose_name='customer',
-        related_name='receipt_customers',
+        verbose_name='seller',
+        related_name='receipt_sellers',
     )
     user = models.ForeignKey(
         User,

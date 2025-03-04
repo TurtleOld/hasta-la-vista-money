@@ -57,7 +57,7 @@ class ReceiptView(
             )
             receipt_form = ReceiptForm()
             receipt_form.fields['account'].queryset = user.finance_account_users
-            receipt_form.fields['seller'].queryset = user.customer_users.distinct(
+            receipt_form.fields['seller'].queryset = user.seller_users.distinct(
                 'name_seller',
             )
 
@@ -145,7 +145,7 @@ class ReceiptCreateView(SuccessMessageMixin, BaseView, CreateView):
         )
 
     @staticmethod
-    def create_receipt(request, receipt_form, product_formset, customer):
+    def create_receipt(request, receipt_form, product_formset, seller):
         receipt = receipt_form.save(commit=False)
         total_sum = receipt.total_sum
         account = receipt.account
@@ -154,7 +154,7 @@ class ReceiptCreateView(SuccessMessageMixin, BaseView, CreateView):
             account_balance.balance -= total_sum
             account_balance.save()
             receipt.user = request.user
-            receipt.customer = customer
+            receipt.seller = seller
             receipt.manual = True
             receipt.save()
             for product_form in product_formset:
@@ -164,7 +164,7 @@ class ReceiptCreateView(SuccessMessageMixin, BaseView, CreateView):
                 receipt.product.add(product)
             return receipt
 
-    def form_valid_receipt(self, receipt_form, product_formset, customer):
+    def form_valid_receipt(self, receipt_form, product_formset, seller):
         number_receipt = self.check_exist_receipt(self.request, receipt_form)
         if number_receipt:
             messages.error(
@@ -176,7 +176,7 @@ class ReceiptCreateView(SuccessMessageMixin, BaseView, CreateView):
                 self.request,
                 receipt_form,
                 product_formset,
-                customer,
+                seller,
             )
             messages.success(
                 self.request,
@@ -194,7 +194,7 @@ class ReceiptCreateView(SuccessMessageMixin, BaseView, CreateView):
         return context
 
     def form_valid(self, form):
-        customer = form.cleaned_data.get('customer')
+        seller = form.cleaned_data.get('seller')
         product_formset = ProductFormSet(self.request.POST)
 
         valid_form = form.is_valid() and product_formset.is_valid()
@@ -202,7 +202,7 @@ class ReceiptCreateView(SuccessMessageMixin, BaseView, CreateView):
             response_data = self.form_valid_receipt(
                 receipt_form=form,
                 product_formset=product_formset,
-                customer=customer,
+                seller=seller,
             )
         else:
             response_data = {

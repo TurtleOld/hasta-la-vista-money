@@ -25,12 +25,12 @@ class ReceiptSerializer(ModelSerializer):
 
     def create(self, validated_data):
         products_data = validated_data.pop('product')
-        customer_data = validated_data.pop('customer')
-        customer_serializer = SellerSerializer(data=customer_data)
-        if not customer_serializer.is_valid():
-            raise ValidationError('Invalid customer data')
-        customer = customer_serializer.save()
-        receipt = Receipt.objects.create(customer=customer, **validated_data)
+        seller_data = validated_data.pop('seller')
+        seller_serializer = SellerSerializer(data=seller_data)
+        if not seller_serializer.is_valid():
+            raise ValidationError('Invalid seller data')
+        seller = seller_serializer.save()
+        receipt = Receipt.objects.create(seller=seller, **validated_data)
         for product_data in products_data:
             product_serializer = ProductSerializer(data=product_data)
             if not product_serializer.is_valid():

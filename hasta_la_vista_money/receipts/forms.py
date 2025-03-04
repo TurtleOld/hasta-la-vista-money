@@ -1,5 +1,6 @@
 import django_filters
 from django.forms import (
+    DecimalField,
     CharField,
     DateTimeInput,
     ModelForm,
@@ -7,11 +8,21 @@ from django.forms import (
     Select,
     TextInput,
     formset_factory,
+    DateTimeField,
+    ChoiceField,
 )
+from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
+from django_filters.fields import ModelChoiceField
+
 from hasta_la_vista_money.commonlogic.forms import BaseFieldsForm
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.models import (
+    Product,
+    Receipt,
+    Seller,
+    OPERATION_TYPES,
+)
 
 
 class ReceiptFilter(django_filters.FilterSet):
@@ -98,21 +109,29 @@ class SellerForm(ModelForm):
 class ProductForm(BaseFieldsForm):
     """Форма для внесения данных по продуктам."""
 
-    labels = {
-        'product_name': _('Наименование продукта'),
-        'price': _('Цена'),
-        'quantity': _('Количество'),
-        'amount': _('Сумма'),
-    }
+    product_name = CharField(
+        label='Наименование продукта',
+        help_text='Укажите наименование продукта',
+    )
+    price = CharField(
+        label='Цена продукта',
+        help_text='Укажите цену продукта',
+        widget=NumberInput(attrs={'class': 'price'}),
+    )
+    quantity = CharField(
+        label='Количество продукта',
+        help_text='Укажите количество продукта',
+        widget=NumberInput(attrs={'class': 'quantity'}),
+    )
+    amount = CharField(
+        label='Итоговая сумма за продукт',
+        help_text='Высчитывается автоматически на основании цены и количества',
+        widget=NumberInput(attrs={'class': 'amount', 'readonly': True}),
+    )
 
     class Meta:
         model = Product
         fields = ['product_name', 'price', 'quantity', 'amount']
-        widgets = {
-            'price': NumberInput(attrs={'class': 'price'}),
-            'quantity': NumberInput(attrs={'class': 'quantity'}),
-            'amount': NumberInput(attrs={'class': 'amount', 'readonly': True}),
-        }
 
     def clean(self):
         cleaned_data = super().clean()
@@ -131,16 +150,49 @@ ProductFormSet = formset_factory(ProductForm, extra=1)
 class ReceiptForm(BaseFieldsForm):
     """Форма для внесения данных по чеку."""
 
-    labels = {
-        'seller': _('Имя продавца'),
-        'account': _('Счёт'),
-        'receipt_date': _('Дата и время чека'),
-        'operation_type': _('Тип операции'),
-        'number_receipt': _('Номер документа'),
-        'nds10': _('НДС 10%'),
-        'nds20': _('НДС 20%'),
-        'total_sum': _('Итоговая сумма по чеку'),
-    }
+    seller = ModelChoiceField(
+        queryset=Seller.objects.all(),
+        label='Имя продавца',
+        help_text='Выберите продавца. Если он ещё не создан, нажмите кнопку ниже.',
+    )
+    account = ModelChoiceField(
+        queryset=Account.objects.all(),
+        label='Счёт списания',
+        help_text='Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.',
+    )
+    receipt_date = DateTimeField(
+        label='Дата и время покупки',
+        help_text='Указывается дата и время покупки, указанные в чеке.',
+        widget=DateTimeInput(
+            attrs={'type': 'datetime-local', 'class': 'form-control'},
+        ),
+    )
+    operation_type = ChoiceField(
+        choices=OPERATION_TYPES,
+        label='Тип операции',
+        help_text='Выберите тип операции.',
+    )
+    number_receipt = IntegerField(
+        label='Номер документа',
+        help_text='Укажите номер документа. Обычно на чеке указан как ФД.',
+    )
+    nds10 = DecimalField(
+        label='НДС по ставке 10%',
+        help_text='Поле необязательное',
+        required=False,
+    )
+    nds20 = DecimalField(
+        label='НДС по ставке 20%',
+        help_text='Поле необязательное',
+        required=False,
+    )
+    total_sum = DecimalField(
+        label=_('Итоговая сумма по чеку'),
+        help_text='Высчитывается автоматически на основании итоговых сумм продуктов',
+        widget=NumberInput(
+            attrs={'class': 'total-sum', 'readonly': True},
+        ),
+    )
 
     class Meta:
         model = Receipt
@@ -152,13 +204,5 @@ class ReceiptForm(BaseFieldsForm):
             'operation_type',
             'total_sum',
         ]
-        widgets = {
-            'receipt_date': DateTimeInput(
-                attrs={'type': 'datetime-local', 'class': 'form-control'},
-            ),
-            'total_sum': NumberInput(
-                attrs={'class': 'total-sum', 'readonly': True},
-            ),
-        }
 
     products = ProductFormSet()

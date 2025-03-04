@@ -1,20 +1,42 @@
-from django.forms import DateTimeInput, ModelChoiceField
-from django.utils.translation import gettext_lazy as _
+from django.forms import (
+    DateTimeInput,
+    ModelChoiceField,
+    DateTimeField,
+    DecimalField,
+    CharField,
+)
 from hasta_la_vista_money.commonlogic.forms import BaseForm
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
 
 class IncomeForm(BaseForm):
     """Модельная форма отображения доходов на сайте."""
 
-    labels = {
-        'category': _('Категория дохода'),
-        'account': _('Счёт начисления'),
-        'date': _('Дата'),
-        'amount': _('Сумма'),
-    }
-
-    category = ModelChoiceField(queryset=IncomeCategory.objects.all())
+    category = ModelChoiceField(
+        queryset=IncomeCategory.objects.all(),
+        label='Категория дохода',
+        help_text='Выберите категорию дохода',
+    )
+    account = ModelChoiceField(
+        queryset=Account.objects.all(),
+        label='Счёт списания',
+        help_text='Выберите на какой счёт зачислить доход',
+    )
+    date = DateTimeField(
+        label='Дата',
+        widget=DateTimeInput(
+            attrs={
+                'type': 'datetime-local',
+                'class': 'form-control',
+            }
+        ),
+        help_text='Укажите дату и время получения дохода',
+    )
+    amount = DecimalField(
+        label='Сумма пополнения',
+        help_text='Введите сумму пополнения',
+    )
 
     field = 'category'
 
@@ -32,10 +54,15 @@ class IncomeForm(BaseForm):
 
 
 class AddCategoryIncomeForm(BaseForm):
-    labels = {
-        'name': 'Название категории',
-        'parent_category': 'Вложенность',
-    }
+    name = CharField(
+        label='Название категории',
+        help_text='Введите название категории дохода для её создания',
+    )
+    parent_category = ModelChoiceField(
+        queryset=IncomeCategory.objects.all(),
+        label='Родительская категория',
+        help_text='Выберите родительскую категорию дохода для создаваемой категории',
+    )
     field = 'parent_category'
 
     class Meta:

@@ -1,7 +1,7 @@
 {% load i18n %}
 {% load crispy_forms_tags %}
 
-<div id="add-customer" class="modal modal-lg fade ajax-modal">
+<div id="add-seller" class="modal modal-lg fade ajax-modal">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -17,16 +17,16 @@
                       action="{% url 'receipts:create_seller' %}">
                     {% csrf_token %}
                     {% if seller_form %}
-                        {% for field in seller_form %}
-                            <div class="form-group {% if field.errors %} has-error{% endif %}">
-                                {{ field | as_crispy_field }}
-                                {% if field.errors %}
-                                    {% for error in field.errors %}
-                                        <p class="help-block">{{ error }}</p>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
+                    {% for field in seller_form %}
+                    <div class="form-group {% if field.errors %} has-error{% endif %}">
+                        {{ field | as_crispy_field }}
+                        {% if field.errors %}
+                        {% for error in field.errors %}
+                        <p class="help-block">{{ error }}</p>
                         {% endfor %}
+                        {% endif %}
+                    </div>
+                    {% endfor %}
                     {% endif %}
                     <button type="submit" class="btn btn-success">
                         Добавить

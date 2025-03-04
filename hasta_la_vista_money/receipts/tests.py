@@ -49,7 +49,7 @@ class TestReceipt(TestCase):
             'name_seller': 'ООО Рога и Копыта',
         }
 
-        new_customer = Seller.objects.create(**new_seller_data)
+        new_seller = Seller.objects.create(**new_seller_data)
 
         new_receipt_data = {
             'user': self.user,
@@ -58,7 +58,7 @@ class TestReceipt(TestCase):
             'number_receipt': 111,
             'operation_type': 1,
             'total_sum': 10,
-            'seller': new_customer,
+            'seller': new_seller,
         }
         new_receipt = Receipt.objects.create(**new_receipt_data)
         new_receipt.product.add(new_product)
