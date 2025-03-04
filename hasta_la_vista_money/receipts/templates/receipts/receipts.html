@@ -9,256 +9,264 @@
 {% block title %}{% translate 'Список чеков' %}{% endblock %}
 
 {% block content %}
-    <div class="container-fluid">
-        {% include 'error_modal.html' %}
-        {% include 'receipts/filter.html' %}
-        {% include 'receipts/modals/add_receipt.html' %}
-        {% include 'receipts/modals/add_seller.html' %}
-        {% include 'receipts/modals/receipts_statistics.html' %}
-    </div>
-    <div class="container">
-        <div class="row mt-5">
-            <div class="d-flex justify-content-start">
-                <button type="button"
-                        class="d-flex align-items-center btn btn-outline-success me-5"
-                        data-bs-toggle="modal"
-                        data-bs-target="#receipts-statistics">
-                    {% translate 'Статистика' %}
-                </button>
-            </div>
-            <!-- /.d-flex justify-content-end -->
+<div class="container-fluid">
+    {% include 'error_modal.html' %}
+    {% include 'receipts/filter.html' %}
+    {% include 'receipts/modals/add_receipt.html' %}
+    {% include 'receipts/modals/add_seller.html' %}
+    {% include 'receipts/modals/receipts_statistics.html' %}
+</div>
+<div class="container">
+    <div class="row mt-5">
+        <div class="d-flex justify-content-start">
+            <button type="button"
+                    class="d-flex align-items-center btn btn-outline-success me-5"
+                    data-bs-toggle="modal"
+                    data-bs-target="#receipts-statistics">
+                {% translate 'Статистика' %}
+            </button>
         </div>
-        <!-- /.row mt-5 -->
-        <div class="row">
-            <div class="d-grid gap-2 d-md-flex justify-content-around">
-                <ul class="count-receipt-list list-group list-group-horizontal d-flex align-items-center m-1">
-                    <span class="text-center">{% translate 'Количество чеков:' %}</span>
-                    <li class="list-group-item rounded-3 me-2">{{ total_receipts.count }}</li>
-                    <span class="text-center">{% translate 'Сумма чеков:' %}</span>
-                    <li class="list-group-item rounded-3">
-                        {% if total_sum_receipts.total is not None %}
-                            {{ total_sum_receipts.total }}{% else %}
-                            0{% endif %}</li>
-                </ul>
-                <a class="d-flex align-items-center btn btn-sm btn-outline-success m-xl-1 m-1"
-                   href="{% url 'receipts:products' %}">Часто покупаемые
-                    товары</a>
-                <button type="button"
-                        class="d-flex align-items-center btn btn-sm btn-outline-success m-xl-1 m-1"
-                        data-bs-toggle="modal" data-bs-target="#add-customer">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16"
-                         height="16" fill="currentColor" class="bi bi-plus-lg"
-                         viewBox="0 0 16 16">
-                        <path fill-rule="evenodd"
-                              d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"></path>
-                    </svg>
-                    {% translate 'Добавить нового продавца' %}
+        <!-- /.d-flex justify-content-end -->
+    </div>
+    <!-- /.row mt-5 -->
+    <div class="row">
+        <div class="d-grid gap-2 d-md-flex justify-content-around">
+            <ul class="count-receipt-list list-group list-group-horizontal d-flex align-items-center m-1">
+                <span class="text-center">{% translate 'Количество чеков:' %}</span>
+                <li class="list-group-item rounded-3 me-2">{{ total_receipts.count }}
+                </li>
+                <span class="text-center">{% translate 'Сумма чеков:' %}</span>
+                <li class="list-group-item rounded-3">
+                    {% if total_sum_receipts.total is not None %}
+                    {{ total_sum_receipts.total }}{% else %}
+                    0{% endif %}
+                </li>
+            </ul>
+            <a class="d-flex align-items-center btn btn-sm btn-outline-success m-xl-1 m-1"
+               href="{% url 'receipts:products' %}">Часто покупаемые
+                товары</a>
+            <button type="button"
+                    class="d-flex align-items-center btn btn-sm btn-outline-success m-xl-1 m-1"
+                    data-bs-toggle="modal" data-bs-target="#add-seller">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16"
+                     height="16" fill="currentColor" class="bi bi-plus-lg"
+                     viewBox="0 0 16 16">
+                    <path fill-rule="evenodd"
+                          d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"></path>
+                </svg>
+                {% translate 'Добавить нового продавца' %}
+            </button>
+            <button type="button"
+                    class="d-flex align-items-center add-receipt-button btn btn-sm btn-outline-success m-xl-1 m-1"
+                    data-bs-toggle="modal" data-bs-target="#add-receipt">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16"
+                     height="16" fill="currentColor" class="bi bi-plus-lg"
+                     viewBox="0 0 16 16">
+                    <path fill-rule="evenodd"
+                          d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"></path>
+                </svg>
+                {% translate 'Добавить чек вручную' %}
+            </button>
+        </div>
+        {% for receipt in receipts %}
+        <div class="col-xl-12">
+            <div class="d-grid gap-2">
+                <button class="button-receipt btn btn-outline-secondary text-dark border-secondary mb-2"
+                        data-bs-toggle="modal"
+                        data-bs-target="#receipt-{{ receipt.id }}">{{
+                    receipt.seller.name_seller }}<br>
+                    <strong>{% translate 'Дата: ' %}</strong>{{
+                    receipt.receipt_date | date:"d.m.Y H:i" }}
+                    <strong>{% translate 'Сумма' %}
+                        чека: </strong>{{ receipt.total_sum | comma }}
                 </button>
-                <button type="button"
-                        class="d-flex align-items-center add-receipt-button btn btn-sm btn-outline-success m-xl-1 m-1"
-                        data-bs-toggle="modal" data-bs-target="#add-receipt">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16"
-                         height="16" fill="currentColor" class="bi bi-plus-lg"
-                         viewBox="0 0 16 16">
-                        <path fill-rule="evenodd"
-                              d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"></path>
-                    </svg>
-                    {% translate 'Добавить чек вручную' %}
-                </button>
+                <!-- /.btn btn-light text-dark -->
             </div>
-            {% for receipt in receipts %}
-                <div class="col-xl-12">
-                    <div class="d-grid gap-2">
-                        <button class="button-receipt btn btn-outline-secondary text-dark border-secondary mb-2"
-                                data-bs-toggle="modal"
-                                data-bs-target="#receipt-{{ receipt.id }}">{{ receipt.seller.name_seller }}<br>
-                            <strong>{% translate 'Дата: ' %}</strong>{{ receipt.receipt_date | date:"d.m.Y H:i" }}
-                            <strong>{% translate 'Сумма' %}
-                                чека: </strong>{{ receipt.total_sum | comma }}
-                        </button>
-                        <!-- /.btn btn-light text-dark -->
+        </div>
+        <div id="receipt-{{ receipt.id }}"
+             class="modal modal-lg fade ajax-modal">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="col-xl-4">
+                            {% translate 'Кассовый чек' %}
+                        </div>
+                        <!-- /.col-xl-4 -->
+                        <div class="col-xl-4">
+                            {% if receipt.operation_type == 1 %}
+                            {% translate 'Покупка' %}
+                            {% elif receipt.operation_type == 2 %}
+                            {% translate 'Возврат покупки' %}
+                            {% endif %}
+                        </div>
+                        <!-- /.col-xl-4 -->
+                        <div class="col-xl-3">
+                            {{ receipt.receipt_date | date:"d.m.Y H:i" }}
+                        </div>
+                        <!-- /.col-xl-4 -->
+                        <div class="col-xl-1">
+                            <button type="button" class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Close"></button>
+                        </div>
+                        <!-- /.col-xl-1 -->
                     </div>
-                </div>
-                <div id="receipt-{{ receipt.id }}"
-                     class="modal modal-lg fade ajax-modal">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <div class="col-xl-4">
-                                    {% translate 'Кассовый чек' %}
-                                </div>
-                                <!-- /.col-xl-4 -->
-                                <div class="col-xl-4">
-                                    {% if receipt.operation_type == 1 %}
-                                        {% translate 'Покупка' %}
-                                    {% elif receipt.operation_type == 2 %}
-                                        {% translate 'Возврат покупки' %}
-                                    {% endif %}
-                                </div>
-                                <!-- /.col-xl-4 -->
-                                <div class="col-xl-3">
-                                    {{ receipt.receipt_date | date:"d.m.Y H:i" }}
-                                </div>
-                                <!-- /.col-xl-4 -->
-                                <div class="col-xl-1">
-                                    <button type="button" class="btn-close"
-                                            data-bs-dismiss="modal"
-                                            aria-label="Close"></button>
-                                </div>
-                                <!-- /.col-xl-1 -->
+                    <div class="modal-body">
+                        <div class="d-flex justify-content-center align-items-center">
+                            <div class="col-xl-10">
+                                <strong class="fs-4">{{
+                                    receipt.seller.name_seller }}</strong>
                             </div>
-                            <div class="modal-body">
-                                <div class="d-flex justify-content-center align-items-center">
-                                    <div class="col-xl-10">
-                                        <strong class="fs-4">{{ receipt.customer.name_seller }}</strong>
-                                    </div>
-                                    <!-- /.col-xl-10 -->
-                                    <div class="col-xl-2">
-                                        <form class="form-remove-receipt-button m-0"
-                                              action="{% url 'receipts:delete' receipt.id %}"
-                                              method="post">
-                                            {% csrf_token %}
-                                            <input type="hidden"
-                                                   name="receipt_id"
-                                                   value="{{ receipt.id }}">
-                                            <button class="remove-object-button position-absolute top-50 end-0 translate-middle mr-5 btn btn-outline-danger border-0 btn-small"
-                                                    data-nonce="{{ request.csp_nonce }}"
-                                                    type="submit"
-                                                    name="delete_receipt_button">
-                                                <svg xmlns="http://www.w3.org/2000/svg"
-                                                     width="12" height="12"
-                                                     fill="currentColor"
-                                                     class="bi bi-x-lg"
-                                                     viewBox="0 0 16 16">
-                                                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"></path>
-                                                </svg>
-                                            </button>
-                                        </form>
-                                    </div>
-                                    <!-- /.col-xl-2 -->
+                            <!-- /.col-xl-10 -->
+                            <div class="col-xl-2">
+                                <form class="form-remove-receipt-button m-0"
+                                      action="{% url 'receipts:delete' receipt.id %}"
+                                      method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden"
+                                           name="receipt_id"
+                                           value="{{ receipt.id }}">
+                                    <button class="remove-object-button position-absolute top-50 end-0 translate-middle mr-5 btn btn-outline-danger border-0 btn-small"
+                                            data-nonce="{{ request.csp_nonce }}"
+                                            type="submit"
+                                            name="delete_receipt_button">
+                                        <svg xmlns="http://www.w3.org/2000/svg"
+                                             width="12" height="12"
+                                             fill="currentColor"
+                                             class="bi bi-x-lg"
+                                             viewBox="0 0 16 16">
+                                            <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"></path>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                            <!-- /.col-xl-2 -->
 
-                                </div>
-                                <table class="table mt-1"
-                                       aria-describedby="table for receipt">
-                                    <thead>
-                                    <tr>
-                                        <th>{% translate 'Предмет расчёта' %}</th>
-                                        <th>{% translate 'Цена' %}</th>
-                                        <th>{% translate 'Количество' %}</th>
-                                        <th>{% translate 'Сумма' %}</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    {% for product in receipt.product.all %}
-                                        <tr>
-                                            <td>{{ product.product_name }}</td>
-                                            <td>{{ product.price | comma }}</td>
-                                            <td>{{ product.quantity }}</td>
-                                            <td>{{ product.amount | comma }}</td>
-                                        </tr>
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
-                                <!-- /.table -->
-                                <div class="row justify-content-between align-items-center">
-                                    <div class="ms-2 col-xl-3">
-                                        <strong class="fs-4">{% translate 'Итог' %}</strong>
-                                    </div>
-                                    <div class="col-3">
-                                        <strong class="fs-4">{{ receipt.total_sum }}</strong>
-                                    </div>
-                                </div>
-                                <!-- /.d-flex justify-content-between align-items-center-->
-                                {% if receipt.nds10 %}
-                                    <div class="row justify-content-between align-items-center mt-3">
-                                        <div class="ms-2 col-xl-3">
-                                            {% translate 'НДС 10%' %}
-                                        </div>
-                                        <div class="col-3">
-                                            {{ receipt.nds10 }}
-                                        </div>
-                                    </div>
-                                    <!-- /.d-flex justify-content-between align-items-center-->
-                                {% endif %}
-                                {% if receipt.nds20 %}
-                                    <div class="row justify-content-between align-items-center">
-                                        <div class="ms-2 col-xl-3">
-                                            {% translate 'НДС 20%' %}
-                                        </div>
-                                        <div class="col-3">
-                                            {{ receipt.nds20 }}
-                                        </div>
-                                    </div>
-                                {% endif %}
-                                <!-- /.d-flex justify-content-between align-items-center-->
-                                <div class="row justify-content-between align-items-center">
-                                    <div class="ms-2 col-xl-3">
-                                        {% translate 'Списано со счёта' %}
-                                    </div>
-                                    <div class="col-3">
-                                        {{ receipt.account }}
-                                    </div>
-                                </div>
-                                <!-- /.d-flex justify-content-between align-items-center-->
-                                <div class="row justify-content-between align-items-center mt-5">
-                                    <div class="ms-2 col-xl-3">
-                                        {% translate 'Место расчётов' %}
-                                    </div>
-                                    <div class="col-8">
-                                        {{ receipt.customer.retail_place }}
-                                    </div>
-                                </div>
-                                <!-- /.d-flex justify-content-between align-items-center-->
-                                <div class="row justify-content-between align-items-center mt-1">
-                                    <div class="ms-2 col-xl-3">
-                                        {% translate 'Адрес расчётов' %}
-                                    </div>
-                                    <div class="col-8">
-                                        {% if receipt.customer.retail_place_address %}
-                                            {{ receipt.customer.retail_place_address }}
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <!-- /.d-flex justify-content-between align-items-center-->
+                        </div>
+                        <table class="table mt-1"
+                               aria-describedby="table for receipt">
+                            <thead>
+                            <tr>
+                                <th>{% translate 'Предмет расчёта' %}</th>
+                                <th>{% translate 'Цена' %}</th>
+                                <th>{% translate 'Количество' %}</th>
+                                <th>{% translate 'Сумма' %}</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for product in receipt.product.all %}
+                            <tr>
+                                <td>{{ product.product_name }}</td>
+                                <td>{{ product.price | comma }}</td>
+                                <td>{{ product.quantity }}</td>
+                                <td>{{ product.amount | comma }}</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                        <!-- /.table -->
+                        <div class="row justify-content-between align-items-center">
+                            <div class="ms-2 col-xl-3">
+                                <strong class="fs-4">{% translate 'Итог'
+                                    %}</strong>
+                            </div>
+                            <div class="col-3">
+                                <strong class="fs-4">{{ receipt.total_sum
+                                    }}</strong>
                             </div>
                         </div>
+                        <!-- /.d-flex justify-content-between align-items-center-->
+                        {% if receipt.nds10 %}
+                        <div class="row justify-content-between align-items-center mt-3">
+                            <div class="ms-2 col-xl-3">
+                                {% translate 'НДС 10%' %}
+                            </div>
+                            <div class="col-3">
+                                {{ receipt.nds10 }}
+                            </div>
+                        </div>
+                        <!-- /.d-flex justify-content-between align-items-center-->
+                        {% endif %}
+                        {% if receipt.nds20 %}
+                        <div class="row justify-content-between align-items-center">
+                            <div class="ms-2 col-xl-3">
+                                {% translate 'НДС 20%' %}
+                            </div>
+                            <div class="col-3">
+                                {{ receipt.nds20 }}
+                            </div>
+                        </div>
+                        {% endif %}
+                        <!-- /.d-flex justify-content-between align-items-center-->
+                        <div class="row justify-content-between align-items-center">
+                            <div class="ms-2 col-xl-3">
+                                {% translate 'Списано со счёта' %}
+                            </div>
+                            <div class="col-3">
+                                {{ receipt.account }}
+                            </div>
+                        </div>
+                        <!-- /.d-flex justify-content-between align-items-center-->
+                        <div class="row justify-content-between align-items-center mt-5">
+                            <div class="ms-2 col-xl-3">
+                                {% translate 'Место расчётов' %}
+                            </div>
+                            <div class="col-8">
+                                {{ receipt.seller.retail_place }}
+                            </div>
+                        </div>
+                        <!-- /.d-flex justify-content-between align-items-center-->
+                        <div class="row justify-content-between align-items-center mt-1">
+                            <div class="ms-2 col-xl-3">
+                                {% translate 'Адрес расчётов' %}
+                            </div>
+                            <div class="col-8">
+                                {% if receipt.seller.retail_place_address %}
+                                {{ receipt.seller.retail_place_address }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <!-- /.d-flex justify-content-between align-items-center-->
                     </div>
                 </div>
-            {% endfor %}
-            {% if receipts.has_other_pages %}
-                <div class="btn-group mb-5 w-25" role="group"
-                     aria-label="Item pagination">
-                    {% if receipts.has_previous %}
-                        <a href="?
+            </div>
+        </div>
+        {% endfor %}
+        {% if receipts.has_other_pages %}
+        <div class="btn-group mb-5 w-25" role="group"
+             aria-label="Item pagination">
+            {% if receipts.has_previous %}
+            <a href="?
 
                                 {% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if request.GET %}&{% endif %}receipts={{ receipts.previous_page_number }}"
-                           class="btn text-danger btn-outline-secondary">&laquo;</a>
-                    {% endif %}
+               class="btn text-danger btn-outline-secondary">&laquo;</a>
+            {% endif %}
 
-                    {% for page_number in receipts.paginator.page_range %}
-                        {% if receipts.number == page_number %}
-                            <button class="btn text-dark btn-outline-secondary active">
+            {% for page_number in receipts.paginator.page_range %}
+            {% if receipts.number == page_number %}
+            <button class="btn text-dark btn-outline-secondary active">
                                 <span>{{ page_number }}<span
                                         class="visually-hidden">(current)</span></span>
-                            </button>
-                        {% elif page_number >= receipts.number|add:-2 and page_number <= receipts.number|add:2 %}
-                            <a href="?
+            </button>
+            {% elif page_number >= receipts.number|add:-2 and page_number <=
+            receipts.number|add:2 %}
+            <a href="?
 
                                     {% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}&receipts={{ page_number }}"
-                               class="btn text-dark btn-outline-secondary">
-                                {{ page_number }}
-                            </a>
-                        {% endif %}
-                    {% endfor %}
+               class="btn text-dark btn-outline-secondary">
+                {{ page_number }}
+            </a>
+            {% endif %}
+            {% endfor %}
 
-                    {% if receipts.has_next %}
-                        <a href="?
+            {% if receipts.has_next %}
+            <a href="?
 
                                 {% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}&receipts={{ receipts.next_page_number }}"
-                           class="btn text-danger btn-outline-secondary">&raquo;</a>
-                    {% endif %}
-                </div>
+               class="btn text-danger btn-outline-secondary">&raquo;</a>
             {% endif %}
         </div>
+        {% endif %}
     </div>
+</div>
 {% endblock %}

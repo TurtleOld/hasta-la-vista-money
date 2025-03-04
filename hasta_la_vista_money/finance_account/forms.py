@@ -7,6 +7,7 @@ from django.forms import (
     ModelChoiceField,
     ModelForm,
     Textarea,
+    ChoiceField,
 )
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
@@ -17,14 +18,23 @@ from hasta_la_vista_money.finance_account.models import (
 
 
 class AddAccountForm(ModelForm[Account]):
+    name_account = CharField(
+        label='Наименование счёта',
+        help_text='Введите наименование счёта. Максимальная длина 250 символов.',
+    )
+    balance = DecimalField(
+        label='Баланс',
+        help_text='Введите начальный баланс, который есть сейчас на счёту в банке\\в наличной валюте.\nМаксимальное число 20 символов.',
+    )
+    currency = ChoiceField(
+        choices=Account.CURRENCY_LIST,
+        label='Валюта счёта',
+        help_text='Выберите из списка валюту счёта',
+    )
+
     class Meta:
         model = Account
         fields = ['name_account', 'balance', 'currency']
-        labels = {
-            'name_account': _('Наименование счёта'),
-            'balance': _('Начальный баланс'),
-            'currency': _('Валюта счёта'),
-        }
 
 
 class TransferMoneyAccountForm(ModelForm[Account]):
@@ -53,11 +63,11 @@ class TransferMoneyAccountForm(ModelForm[Account]):
         self.fields['notes'] = CharField(
             label=_('Заметка'),
             required=False,
+            help_text=constants.ACCOUNT_FORM_NOTES,
             widget=Textarea(
                 attrs={
                     'rows': 3,
                     'maxlength': constants.TWO_HUNDRED_FIFTY,
-                    'placeholder': constants.ACCOUNT_FORM_NOTES,
                 },
             ),
         )

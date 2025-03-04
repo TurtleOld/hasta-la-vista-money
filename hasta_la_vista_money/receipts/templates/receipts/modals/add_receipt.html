@@ -20,61 +20,72 @@
                     {% csrf_token %}
                     <div class="p-3 border">
                         {% if receipt_form %}
-                            <div class="form-group {% if receipt_form.seller.errors %} has-error{% endif %}">
-                                {{ receipt_form.seller | as_crispy_field }}
-                                <button type="button" class="btn btn-outline-success mb-3"
-                                        data-bs-target="#add-customer"
-                                        data-bs-toggle="modal"
-                                        data-bs-dismiss="modal">
-                                    Добавить продавца
-                                </button>
-                                {% if receipt_form.seller.errors %}
-                                    {% for error in receipt_form.seller.errors %}
-                                        <p class="help-block">{{ error }}</p>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                            <div class="form-group {% if receipt_form.account.errors %} has-error{% endif %}">
-                                {{ receipt_form.account | as_crispy_field }}
-                                <a href="{% url 'finance_account:create' %}" class="btn btn-outline-success mb-3">
-                                    Добавить счёт
-                                </a>
-                                {% if receipt_form.account.errors %}
-                                    {% for error in receipt_form.account.errors %}
-                                        <p class="help-block">{{ error }}</p>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                            {% for field in receipt_form %}
-                                {% if field.name != 'seller' and field.name != 'account' %}
-                                    <div class="form-group {% if field.errors %} has-error{% endif %}">
-                                        {{ field | as_crispy_field }}
-                                        {% if field.errors %}
-                                            {% for error in field.errors %}
-                                                <p class="help-block">{{ error }}</p>
-                                            {% endfor %}
-                                        {% endif %}
-                                    </div>
-                                {% endif %}
+                        <div class="form-group {% if receipt_form.seller.errors %} has-error{% endif %}">
+                            {{ receipt_form.seller | as_crispy_field }}
+                            <button type="button"
+                                    class="btn btn-outline-success mb-3"
+                                    data-bs-target="#add-seller"
+                                    data-bs-toggle="modal"
+                                    data-bs-dismiss="modal">
+                                Добавить продавца
+                            </button>
+                            {% if receipt_form.seller.errors %}
+                            {% for error in receipt_form.seller.errors %}
+                            <p class="help-block">{{ error }}</p>
                             {% endfor %}
+                            {% endif %}
+                        </div>
+                        <div class="form-group {% if receipt_form.account.errors %} has-error{% endif %}">
+                            {{ receipt_form.account | as_crispy_field }}
+                            <a href="{% url 'finance_account:create' %}"
+                               class="btn btn-outline-success mb-3">
+                                Добавить счёт
+                            </a>
+                            {% if receipt_form.account.errors %}
+                            {% for error in receipt_form.account.errors %}
+                            <p class="help-block">{{ error }}</p>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+                        {% for field in receipt_form %}
+                        {% if field.name != 'seller' and field.name != 'account' %}
+                        <div class="form-group {% if field.errors %} has-error{% endif %}">
+                            {{ field | as_crispy_field }}
+                            {% if field.errors %}
+                            {% for error in field.errors %}
+                            <p class="help-block">{{ error }}</p>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% endfor %}
                         {% endif %}
                     </div>
                     {{ product_formset.management_form }}
                     {% if product_formset %}
-                        {% for product_form in product_formset %}
-                            <div class="form-group form-product p-3 border {% if product_form.errors %} has-error{% endif %}">
-                                {{ product_form | crispy }}
-                                {% if product_form.errors %}
-                                    {% for error in product_form.errors %}
-                                        <p class="help-block">{{ error }}</p>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
+                    {% for product_form in product_formset %}
+                    <div class="form-group form-product p-3 border {% if product_form.errors %} has-error{% endif %}">
+                        {{ product_form | crispy }}
+                        {% if product_form.errors %}
+                        {% for error in product_form.errors %}
+                        <p class="help-block">{{ error }}</p>
                         {% endfor %}
+                        {% endif %}
+                    </div>
+                    {% endfor %}
                     {% endif %}
-                    <button id="add-form" type="button" class="add-product-btn btn btn-outline-warning">Добавить ещё один товар</button>
-                    <button id="remove-form" type="button" class="remove-product-btn btn btn-outline-danger">Удалить один товар</button>
-                    <button type="submit" class="add-receipt-btn mx-auto btn btn-outline-primary">Добавить чек</button>
+                    <button id="add-form" type="button"
+                            class="add-product-btn btn btn-outline-warning">
+                        Добавить ещё один товар
+                    </button>
+                    <button id="remove-form" type="button"
+                            class="remove-product-btn btn btn-outline-danger">
+                        Удалить один товар
+                    </button>
+                    <button type="submit"
+                            class="add-receipt-btn mx-auto btn btn-outline-primary">
+                        Добавить чек
+                    </button>
                 </form>
             </div>
         </div>
