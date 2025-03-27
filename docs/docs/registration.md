@@ -2,4 +2,6 @@
 
 To register on the website, go to the `/users/registration/` page  
 ![register.png](https://raw.githubusercontent.com/turtleold/hasta-la-vista-money/main/docs/img/register.png)  
-An administrator account will be created.
+Until the user is created, navigating to the main page will redirect to the registration page. 
+After registration, an administrator account will be created. 
+
