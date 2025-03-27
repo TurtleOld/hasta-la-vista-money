@@ -12,7 +12,7 @@ theme:
     repo: fontawesome/brands/github
   features:
     - navigation.tabs
-  favicon: img/favicon.png
+  favicon: icon/favicon.png
   language: en
   palette:
 
