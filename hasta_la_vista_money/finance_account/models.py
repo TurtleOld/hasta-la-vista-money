@@ -18,6 +18,11 @@ class Account(models.Model):
         ('TRY', _('Турецкая лира')),
         ('CNH', _('Китайский юань')),
     ]
+    TYPE_ACCOUNT_LIST = [
+        ('C', _('Кредитный счёт')),
+        ('D', _('Дебетовый счёт')),
+        ('CASH', _('Наличные')),
+    ]
 
     user = models.ForeignKey(
         User,
@@ -27,6 +32,11 @@ class Account(models.Model):
     name_account = models.CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,
         default=_('Основной счёт'),
+    )
+    type_account = models.CharField(
+        choices=TYPE_ACCOUNT_LIST,
+        default=TYPE_ACCOUNT_LIST[1][1],
+        verbose_name=_('Тип счёта'),
     )
     balance = models.DecimalField(
         max_digits=constants.TWENTY,
