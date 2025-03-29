@@ -5,12 +5,14 @@ nav:
   - Getting started:
       - Installation: index.md
       - Contribute: contribute.md
+      - Registration: registration.md
 theme:
   name: material
   icon:
     repo: fontawesome/brands/github
   features:
     - navigation.tabs
+  favicon: icon/favicon.png
   language: en
   palette:
 
@@ -35,6 +37,10 @@ theme:
         icon: material/brightness-4
         name: Switch to system preference
 
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - pymdownx.blocks.caption
 
 plugins:
   - search:
