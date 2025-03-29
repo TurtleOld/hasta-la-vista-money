@@ -172,6 +172,12 @@ table {
     caption-side: top;
 }
 
+.type-account {
+    font-family: IBM Plex Mono, sans-serif;
+    margin-left: -3rem;
+    font-size: .7rem;
+}
+
 
 @import "account";
 @import "buttons";

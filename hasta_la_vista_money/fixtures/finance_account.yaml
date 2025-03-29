@@ -4,7 +4,7 @@
         "pk": 1,
         "fields": {
             "user": 1,
-
+            "type_account": C,
             "name_account": "Банковская карта",
             "balance": "300000.00",
             "currency": "RUB"
@@ -15,6 +15,7 @@
         "pk": 2,
         "fields": {
             "user": 1,
+            "type_account": D,
             "name_account": "Основной счёт",
             "balance": "200000.00",
             "currency": "RUB"
