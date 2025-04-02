@@ -1,10 +1,11 @@
 {
   "name": "Hasta La Vista, Money!",
-    "colors": {
+  "colors": {
     "primary": "#16A34A",
     "light": "#4ADE80",
     "dark": "#166534"
   },
+  "favicon": "docs/docs/icon/favicon.svg",
   "language": "en",
     "anchors": [
     {
