@@ -152,9 +152,11 @@ class IncomeCopyView(
         income_id = kwargs.get('pk')
         new_income = get_new_type_operation(Income, income_id, request)
 
+        valid_income = get_object_or_404(Income, pk=new_income.pk)
+
         messages.success(request, 'Расход успешно скопирован.')
         return redirect(
-            reverse_lazy('income:change', kwargs={'pk': new_income.pk}),
+            reverse_lazy('income:change', kwargs={'pk': valid_income.pk}),
         )
 
 
