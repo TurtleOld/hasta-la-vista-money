@@ -1,0 +1,22 @@
+{
+  "name": "Hasta La Vista, Money!",
+  "favicon": "docs/docs/icon/favicon.ico",
+  "theme": "dark",
+  "language": "en",
+  "sidebar": {
+    "default": [
+      "Installation",
+      "Contribute",
+      "Registration"
+    ]
+  },
+  "search": true,
+  "feedback": {
+    "enabled": false,
+    "type": "email",
+    "email": "feedback@example.com"
+  },
+  "socialLinks": {
+    "github": "https://github.com/TurtleOld/hasta-la-vista-money"
+  }
+}
