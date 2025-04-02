@@ -9,7 +9,7 @@
   "language": "en",
     "anchors": [
     {
-      "name": "Installation",
+      "name": "Getting Started",
       "icon": "rectangle-terminal",
       "color": "#f59f0b",
       "url": "docs/docs/index.md"
