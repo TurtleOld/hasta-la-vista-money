@@ -1,9 +1,10 @@
 {% load i18n %}
+{% load comma %}
 
 <div class="card">
     <div class="card-body text-center">
         <h5 class="card-title">{% translate 'Сумма всех счетов' %}</h5>
-        <p class="card-text">{{ total_balance_all }}</p>
+        <p class="card-text">{{ sum_all_accounts | comma }}</p>
     </div>
 </div>
 <!-- /.card -->
