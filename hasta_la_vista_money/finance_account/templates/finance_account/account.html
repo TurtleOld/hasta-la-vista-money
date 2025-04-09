@@ -11,12 +11,13 @@
         {% include 'finance_account/modals/statistics.html' %}
         {% include 'error_modal.html' %}
         <div class="row">
-            <div class="col-10 mt-5">
-                    <div class="col-xl-6">
-                        <div id="chart_combine"></div>
-                    </div>
+            <div class="col-xl-5 mt-5">
+                <div id="chart_combine"></div>
             </div>
-            <!-- /.col-7 -->
+            <!-- /.col-5 .mt-5 -->
+            <div class="offset-xl-2 col-xl-2 mt-5">
+                {% include 'finance_account/card_total_balance.html' %}
+            </div>
         </div>
         <!-- /.row -->
         <div class="row d-flex justify-content-between justify-content-xl-start mt-5">

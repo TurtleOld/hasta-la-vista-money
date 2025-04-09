@@ -156,7 +156,7 @@ class AccountView(
         """Возвращает уникальные даты и суммы для доходов."""
         return cls.unique_data(income_dates, income_amounts)
 
-    def get_context_data(self, **kwargs) -> dict:
+    def get_context_data(self, **kwargs) -> dict[str, Any] | None:
         """
         Собирает контекст данных для отображения на странице, включая счета,
         аналитические данные по доходам и расходам,
@@ -268,6 +268,10 @@ class AccountView(
 
             accounts = user.finance_account_users.select_related('user').all()
 
+            sum_all_accounts = user.finance_account_users.aggregate(
+                Sum('balance'),
+            )['balance__sum']
+
             receipt_info_by_month = collect_info_receipt(user=user)
 
             income = collect_info_income(user)
@@ -298,6 +302,7 @@ class AccountView(
             context['income_expense'] = income_expense
             context['transfer_money_log'] = transfer_money_log
             context['chart_combine'] = json.dumps(chart_combined)
+            context['sum_all_accounts'] = sum_all_accounts
 
             return context
 
