@@ -1,27 +1,26 @@
 import django_filters
 from django.forms import (
-    DecimalField,
     CharField,
+    ChoiceField,
+    DateTimeField,
     DateTimeInput,
+    DecimalField,
     ModelForm,
     NumberInput,
     Select,
     TextInput,
     formset_factory,
-    DateTimeField,
-    ChoiceField,
 )
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
 from django_filters.fields import ModelChoiceField
-
 from hasta_la_vista_money.commonlogic.forms import BaseFieldsForm
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
+    OPERATION_TYPES,
     Product,
     Receipt,
     Seller,
-    OPERATION_TYPES,
 )
 
 
@@ -113,17 +112,17 @@ class ProductForm(BaseFieldsForm):
         label='Наименование продукта',
         help_text='Укажите наименование продукта',
     )
-    price = CharField(
+    price = DecimalField(
         label='Цена продукта',
         help_text='Укажите цену продукта',
         widget=NumberInput(attrs={'class': 'price'}),
     )
-    quantity = CharField(
+    quantity = IntegerField(
         label='Количество продукта',
         help_text='Укажите количество продукта',
         widget=NumberInput(attrs={'class': 'quantity'}),
     )
-    amount = CharField(
+    amount = DecimalField(
         label='Итоговая сумма за продукт',
         help_text='Высчитывается автоматически на основании цены и количества',
         widget=NumberInput(attrs={'class': 'amount', 'readonly': True}),
