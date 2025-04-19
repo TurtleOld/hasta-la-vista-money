@@ -73,10 +73,10 @@
             <div class="d-grid gap-2">
                 <button class="button-receipt btn btn-outline-secondary text-dark border-secondary mb-2"
                         data-bs-toggle="modal"
-                        data-bs-target="#receipt-{{ receipt.id }}">{{
-                    receipt.seller.name_seller }}<br>
-                    <strong>{% translate 'Дата: ' %}</strong>{{
-                    receipt.receipt_date | date:"d.m.Y H:i" }}
+                        data-bs-target="#receipt-{{ receipt.id }}">
+                    {{ receipt.seller.name_seller }}<br>
+                    <strong>{% translate 'Дата: ' %}</strong>
+                    {{ receipt.receipt_date | date:"d.m.Y H:i" }}
                     <strong>{% translate 'Сумма' %}
                         чека: </strong>{{ receipt.total_sum | comma }}
                 </button>
