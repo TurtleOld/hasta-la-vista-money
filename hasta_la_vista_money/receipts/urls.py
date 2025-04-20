@@ -34,6 +34,11 @@ urlpatterns = [
         name='receipt_api_create',
     ),
     path(
+        'image/',
+        ReceiptCreateAPIView.as_view(),
+        name='receipt_image',
+    ),
+    path(
         'seller/create/',
         SellerCreateAPIView.as_view(),
         name='api_list',
