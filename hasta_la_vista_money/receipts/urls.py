@@ -1,5 +1,6 @@
 from django.urls import path
 from hasta_la_vista_money.receipts.apis import (
+    DataUrlAPIView,
     ReceiptCreateAPIView,
     ReceiptListAPIView,
     SellerCreateAPIView,
@@ -35,7 +36,7 @@ urlpatterns = [
     ),
     path(
         'image/',
-        ReceiptCreateAPIView.as_view(),
+        DataUrlAPIView.as_view(),
         name='receipt_image',
     ),
     path(
