@@ -4,6 +4,7 @@ import json
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
+    ImageDataSerializer,
     ReceiptSerializer,
     SellerSerializer,
 )
@@ -36,6 +37,24 @@ class SellerDetailAPIView(RetrieveAPIView):
 
     def get_queryset(self):
         return Seller.objects.filter(user__id=self.request.user.pk)
+
+
+class DataUrlAPIView(APIView):
+    def post(self, request):
+        serializer = ImageDataSerializer(data=request.data)
+
+        if serializer.is_valid():
+            data_url = serializer.validated_data['data_url']
+            print(f'Received Data URL: {data_url}')
+            return Response(
+                {'message': 'Data URL received successfully', 'data_url': data_url},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class SellerCreateAPIView(APIView):
