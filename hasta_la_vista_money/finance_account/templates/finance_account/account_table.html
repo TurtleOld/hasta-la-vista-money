@@ -45,7 +45,10 @@
         <tbody>
         {% for account in accounts %}
             <tr id="tr-position" class="text-center">
-                <td>{{ account.name_account }}</td>
+                <td>
+                    {{ account.name_account }}<br>
+                    <div class="type-account">{{ account.get_type_account_display }}</div>
+                </td>
                 <td class="text-nowrap">{{ account.balance | comma }}</td>
                 <td class="text-nowrap">{{ account.currency }}</td>
                 <td>

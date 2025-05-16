@@ -131,9 +131,11 @@ class ExpenseCopyView(
         expense_id = kwargs.get('pk')
         new_expense = get_new_type_operation(Expense, expense_id, request)
 
+        valid_expense = get_object_or_404(Expense, pk=new_expense.pk)
+
         messages.success(request, 'Расход успешно скопирован.')
         return redirect(
-            reverse_lazy('expense:change', kwargs={'pk': new_expense.pk}),
+            reverse_lazy('expense:change', kwargs={'pk': valid_expense.pk}),
         )
 
 

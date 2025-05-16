@@ -2,12 +2,12 @@ from typing import Any, Dict
 
 from django.forms import (
     CharField,
+    ChoiceField,
     DateTimeInput,
     DecimalField,
     ModelChoiceField,
     ModelForm,
     Textarea,
-    ChoiceField,
 )
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
@@ -22,9 +22,14 @@ class AddAccountForm(ModelForm[Account]):
         label='Наименование счёта',
         help_text='Введите наименование счёта. Максимальная длина 250 символов.',
     )
+    type_account = ChoiceField(
+        choices=Account.TYPE_ACCOUNT_LIST,
+        label='Тип счёта',
+        help_text='Выберите из списка тип счёта',
+    )
     balance = DecimalField(
         label='Баланс',
-        help_text='Введите начальный баланс, который есть сейчас на счёту в банке\\в наличной валюте.\nМаксимальное число 20 символов.',
+        help_text='Введите начальный баланс, который есть сейчас на счёту в банке\\в наличной валюте.\nМаксимальная длина 20 символов.',
     )
     currency = ChoiceField(
         choices=Account.CURRENCY_LIST,
@@ -32,9 +37,13 @@ class AddAccountForm(ModelForm[Account]):
         help_text='Выберите из списка валюту счёта',
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
+
     class Meta:
         model = Account
-        fields = ['name_account', 'balance', 'currency']
+        fields = ['name_account', 'type_account', 'balance', 'currency']
 
 
 class TransferMoneyAccountForm(ModelForm[Account]):

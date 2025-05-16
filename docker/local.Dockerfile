@@ -1,6 +1,6 @@
 # This docker file is used for production
 # Creating image based on official python3 image
-FROM python:3.11.2
+FROM python:3.12.7
 
 # Get the django project into the docker container
 RUN curl -sSL https://install.python-poetry.org | python3 - && /root/.local/bin/poetry --version

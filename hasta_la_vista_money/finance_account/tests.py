@@ -42,6 +42,7 @@ class TestAccount(TestCase):
 
         new_account = {
             'user': self.user,
+            'type_account': 'C',
             'name_account': 'Банковская карта *8090',
             'balance': BALANCE_TEST,
             'currency': 'RUB',
@@ -61,6 +62,7 @@ class TestAccount(TestCase):
         url = reverse_lazy('finance_account:change', args=(self.account1.pk,))
         update_account = {
             'user': self.user,
+            'type_account': 'D',
             'name_account': 'Основной счёт',
             'balance': NEW_BALANCE_TEST,
             'currency': 'RUB',

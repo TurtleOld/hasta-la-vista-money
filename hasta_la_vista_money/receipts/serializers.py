@@ -1,7 +1,7 @@
 from django_stubs_ext.db.models import TypedModelMeta
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from rest_framework.exceptions import ValidationError
-from rest_framework.serializers import ModelSerializer
+from rest_framework.serializers import CharField, ModelSerializer, Serializer
 
 
 class SellerSerializer(ModelSerializer):
@@ -38,3 +38,7 @@ class ReceiptSerializer(ModelSerializer):
             product = product_serializer.save()
             receipt.product.add(product)
         return receipt
+
+
+class ImageDataSerializer(Serializer):
+    data_url = CharField(required=True)
