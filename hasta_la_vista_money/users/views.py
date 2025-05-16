@@ -1,7 +1,8 @@
 from django.contrib import messages
-from django.contrib.auth import authenticate, login
-from django.contrib.auth.forms import PasswordChangeForm
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth import authenticate, login, update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
 from django.http import JsonResponse
 from django.shortcuts import redirect
@@ -151,3 +152,37 @@ class UpdateUserView(
         else:
             response_data = {'success': False, 'errors': user_update.errors}
         return JsonResponse(response_data)
+
+
+class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
+    template_name = 'users/set_password.html'
+    form_class = SetPasswordForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context['form_password'] = self.form_class(
+            user=self.request.user,
+            data=self.request.POST,
+        )
+
+        return context
+
+    def form_valid(self, form):
+        form.save()
+
+        update_session_auth_hash(request=self.request, user=form.user)
+
+        messages.success(
+            self.request,
+            f'Пароль успешно установлен для пользователя {form.user}',
+        )
+
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        # Генерируем URL для профиля пользователя с использованием его pk
+        return reverse_lazy(
+            'users:profile',
+            kwargs={'pk': self.request.user.pk},
+        )
