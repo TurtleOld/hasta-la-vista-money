@@ -33,11 +33,6 @@ class RegisterUserForm(UserCreationForm[User]):
 
 
 class UpdateUserForm(ModelForm):
-    password = ReadOnlyPasswordHashField(
-        label='',
-        help_text=constants.HELP_TEXT_PASSWORD,
-    )
-
     class Meta:
         model = User
         fields = [

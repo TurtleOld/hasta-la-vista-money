@@ -4,23 +4,22 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("finance_account", "0004_account_type_account"),
+        ('finance_account', '0004_account_type_account'),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name="account",
-            name="type_account",
+            model_name='account',
+            name='type_account',
             field=models.CharField(
                 choices=[
-                    ("C", "Кредитный счёт"),
-                    ("D", "Дебетовый счёт"),
-                    ("CASH", "Наличные"),
+                    ('C', 'Кредитный счёт'),
+                    ('D', 'Дебетовый счёт'),
+                    ('CASH', 'Наличные'),
                 ],
-                default="Дебетовый счёт",
-                verbose_name="Тип счёта",
+                default='Дебетовый счёт',
+                verbose_name='Тип счёта',
             ),
         ),
     ]
