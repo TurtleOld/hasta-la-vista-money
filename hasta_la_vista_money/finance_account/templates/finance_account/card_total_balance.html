@@ -4,7 +4,7 @@
 <div class="card">
     <div class="card-body text-center">
         <h5 class="card-title">{% translate 'Сумма всех счетов' %}</h5>
-        <p class="card-text">{{ sum_all_accounts | comma }}</p>
+        <p class="card-text">{% if sum_all_accounts%}{{ sum_all_accounts | comma }}{% else %}Нет данных для отображения{% endif %}</p>
     </div>
 </div>
 <!-- /.card -->

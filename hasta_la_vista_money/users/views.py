@@ -5,7 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
 from django.http import JsonResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, TemplateView, UpdateView
@@ -160,24 +160,24 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
-        context['form_password'] = self.form_class(
-            user=self.request.user,
-            data=self.request.POST,
-        )
-
+        user = get_object_or_404(User, pk=self.request.user.pk)
+        if self.request.method == 'POST':
+            context['form_password'] = self.form_class(
+                user=user,
+                data=self.request.POST,
+            )
+            context['user'] = user
+        else:
+            context['form_password'] = self.form_class(user=user)
         return context
 
     def form_valid(self, form):
         form.save()
-
         update_session_auth_hash(request=self.request, user=form.user)
-
         messages.success(
             self.request,
             f'Пароль успешно установлен для пользователя {form.user}',
         )
-
         return super().form_valid(form)
 
     def get_success_url(self):
