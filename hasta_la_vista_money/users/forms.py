@@ -1,6 +1,5 @@
 from django.contrib.auth.forms import (
     AuthenticationForm,
-    ReadOnlyPasswordHashField,
     UserCreationForm,
 )
 from django.forms import CharField, ModelForm, PasswordInput

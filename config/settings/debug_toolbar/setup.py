@@ -2,7 +2,7 @@ import logging
 
 from django.urls import include, path
 
-logger = logging.getLogger("configuration")
+logger = logging.getLogger('configuration')
 
 
 def show_toolbar(*args, **kwargs) -> bool:
@@ -30,7 +30,7 @@ def show_toolbar(*args, **kwargs) -> bool:
     try:
         import debug_toolbar  # noqa
     except ImportError:
-        logger.info("No installation found for: django_debug_toolbar")
+        logger.info('No installation found for: django_debug_toolbar')
         return False
 
     return True
@@ -44,12 +44,12 @@ class DebugToolbarSetup:
     @staticmethod
     def do_settings(INSTALLED_APPS, MIDDLEWARE, middleware_position=None):
         _show_toolbar: bool = show_toolbar()
-        logger.info(f"Django Debug Toolbar in use: {_show_toolbar}")
+        logger.info(f'Django Debug Toolbar in use: {_show_toolbar}')
 
         if not _show_toolbar:
             return INSTALLED_APPS, MIDDLEWARE
 
-        INSTALLED_APPS = INSTALLED_APPS + ["debug_toolbar"]
+        INSTALLED_APPS = INSTALLED_APPS + ['debug_toolbar']
 
         # In order to deal with that:
         # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#add-the-middleware
@@ -59,7 +59,7 @@ class DebugToolbarSetup:
         # We support inserting the middleware at an arbitrary position in the list.
         # If position is not specified, we will just include it at the end of the list.
 
-        debug_toolbar_middleware = "debug_toolbar.middleware.DebugToolbarMiddleware"
+        debug_toolbar_middleware = 'debug_toolbar.middleware.DebugToolbarMiddleware'
 
         if middleware_position is None:
             MIDDLEWARE = MIDDLEWARE + [debug_toolbar_middleware]
@@ -79,4 +79,4 @@ class DebugToolbarSetup:
 
         import debug_toolbar  # noqa
 
-        return urlpatterns + [path("__debug__/", include(debug_toolbar.urls))]
+        return urlpatterns + [path('__debug__/', include(debug_toolbar.urls))]
