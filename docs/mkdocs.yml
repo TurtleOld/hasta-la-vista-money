@@ -2,34 +2,41 @@ site_name: Hasta La Vista, Money!
 repo_url: https://github.com/hlvm-app/hasta-la-vista-money.git
 edit_uri: edit/main/docs/
 nav:
-  - Getting started:
+  - Hasta la Vista, Money:
+    - Quick start:
       - Installation: index.md
-      - Contribute: contribute.md
       - Registration: registration.md
+    - Getting Started:
+        - Account Summary Page: finance_account/finance_account.md
+  - Contribute:
+      contribute.md
 theme:
   name: material
   icon:
     repo: fontawesome/brands/github
   features:
     - navigation.tabs
+    - navigation.top
+    - navigation.footer
+    - navigation.expand
+    - navigation.path
+    - navigation.tracking
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.instant.prefetch
   favicon: icon/favicon.png
   language: en
   palette:
-
-    # Palette toggle for automatic mode
     - media: "(prefers-color-scheme)"
-
       toggle:
         icon: material/brightness-auto
         name: Switch to light mode
-    # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
       primary: white
       scheme: default
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       primary: black
       scheme: slate
