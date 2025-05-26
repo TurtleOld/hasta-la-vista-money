@@ -1,6 +1,6 @@
 # This docker file is used for production
 # Creating image based on official python3 image
-FROM python:3.12.10
+FROM python:3.13.3
 
 ENV PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
