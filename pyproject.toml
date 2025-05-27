@@ -41,7 +41,7 @@ myst-parser = "^4.0.0"
 flower = "^2.0.1"
 
 [tool.poetry.group.dev.dependencies]
-pre-commit = "^3.4.0"
+pre-commit = "^4.0.0"
 yesqa = "^1.5.0"
 mypy = "^1.5.1"
 bump2version = "^1.0.1"
