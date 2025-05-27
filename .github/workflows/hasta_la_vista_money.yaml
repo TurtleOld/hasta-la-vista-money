@@ -1,7 +1,8 @@
 # This is a basic workflow to help you get started with Actions
 
 name: hasta-la-vista-money
-
+permissions:
+  contents: read
 # Controls when the workflow will run
 on:
   push:
@@ -38,9 +39,9 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4.2.2
-      - uses: actions/setup-python@v5.4.0
+      - uses: actions/setup-python@v5.6.0
         with:
-          python-version: '3.12.7'
+          python-version: '3.13.3'
 
       - name: Install the latest version of ruff
         uses: astral-sh/ruff-action@v3
