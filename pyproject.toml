@@ -24,7 +24,7 @@ numpy = "^1.24.3"
 django-axes = "^8.0.0"
 Twisted = {extras = ["http2", "tls"], version = "^24.7.0"}
 python-dateutil = "^2.8.2"
-django-debug-toolbar = "^4.2.0"
+django-debug-toolbar = "^5.0.0"
 daphne = "^4.0.0"
 sentry-sdk = "^2.22.0"
 django-rosetta = "^0.10.0"
