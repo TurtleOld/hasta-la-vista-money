@@ -20,7 +20,7 @@ urllib3 = "^2.0.2"
 django-csp = "^3.7"
 channels = "^4.0.0"
 Pillow = "^10.0.1"
-numpy = "^1.24.3"
+numpy = "^2.0.0"
 django-axes = "^8.0.0"
 Twisted = {extras = ["http2", "tls"], version = "^24.7.0"}
 python-dateutil = "^2.8.2"
