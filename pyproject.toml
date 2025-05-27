@@ -19,7 +19,7 @@ Django = "5.2.1"
 urllib3 = "^2.0.2"
 django-csp = "^3.7"
 channels = "^4.0.0"
-Pillow = "^10.0.1"
+Pillow = "^11.0.0"
 numpy = "^2.0.0"
 django-axes = "^8.0.0"
 Twisted = {extras = ["http2", "tls"], version = "^24.7.0"}
