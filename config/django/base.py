@@ -185,34 +185,32 @@ STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Content Security Policy (CSP)
-additional_script_src = tuple(
+additional_script_src = list(
     filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
 )
 CONTENT_SECURITY_POLICY = {
     "EXCLUDE_URL_PREFIXES": ["/admin"],
     "DIRECTIVES": {
         "default-src": [
-            SELF, BASE_URL,
-            'https://code.highcharts.com',
-            'https://htmx.org',
-            additional_script_src,
-        ],
+                           SELF, BASE_URL,
+                           'https://code.highcharts.com',
+                           'https://htmx.org',
+
+                       ] + additional_script_src,
         "script-src": [
-            SELF, BASE_URL,
-            'https://code.highcharts.com',
-            'https://unpkg.com',
-            'https://htmx.org',
-            additional_script_src,
-        ],
+                          SELF, BASE_URL,
+                          'https://code.highcharts.com',
+                          'https://unpkg.com',
+                          'https://htmx.org',
+                      ] + additional_script_src,
         "img-src": [
             SELF, "data:", BASE_URL,
         ],
         'style-src': [
-            BASE_URL,
-            'https://code.highcharts.com',
-            'https://htmx.org',
-            additional_script_src,
-        ]
+                         BASE_URL,
+                         'https://code.highcharts.com',
+                         'https://htmx.org',
+                     ] + additional_script_src,
     },
 }
 
