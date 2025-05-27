@@ -35,7 +35,7 @@ django-stubs-ext = "^5.1.1"
 djangorestframework-simplejwt = "^5.5.0"
 
 [tool.poetry.dev-dependencies]
-Faker = "^13.7.0"
+Faker = "^37.0.0"
 coverage = "^7.3.2"
 myst-parser = "^2.0.0"
 flower = "^2.0.1"
