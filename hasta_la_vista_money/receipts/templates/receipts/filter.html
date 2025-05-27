@@ -7,7 +7,7 @@
     <div class="row">
         <div class="col-12">
             <details>
-                <summary class="btn btn-outline-success mt-2">Фильтр</summary>
+                <summary class="btn btn-outline-success mt-2">{% translate 'Фильтр' %}</summary>
                 <form action="" method="get" class="form">
                     {% csrf_token %}
                     {{ receipt_filter.form | crispy }}

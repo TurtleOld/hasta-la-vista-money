@@ -72,7 +72,6 @@ HELP_TEXT_PASSWORD: Final = _(
     'в консоли сервера.',
 )
 
-
 HELP_TEXT_FORGOT_PASSWORD: Final = _(
     'Укажите логин, который указывали при регистрации.<br>'
     'Ссылка для восстановления пароля будет выслана в чат с ботом.<br>'
@@ -107,83 +106,11 @@ ACCOUNT_FORM_NOTES: Final = _(
     'Введите заметку не более 250 символов. Поле необязательное!',
 )
 
-# Сообщения для телеграма
-SAFE_LOGIN_PASSWORD: Final = _(
-    'Ваш логин и пароль был удалены для обеспечения сохранности'
-    ' конфиденциальных данных!',
-)
-ALREADY_LOGGING_LINK_ACCOUNT: Final = (
-    _('Вы уже авторизованы и связаны с этим аккаунтом.\n'),
-    SAFE_LOGIN_PASSWORD,
-)
-
-ALREADY_LINK_ANOTHER_ACCOUNT: Final = (
-    _('Ваш аккаунт уже связан с другим Telegram аккаунтом.\n'),
-    SAFE_LOGIN_PASSWORD,
-)
-
-AUTHORIZATION_SUCCESSFUL: Final = (
-    _('Авторизация прошла успешно. Вы привязаны к своему аккаунту.\n'),
-    SAFE_LOGIN_PASSWORD,
-)
-
-INVALID_USERNAME_PASSWORD: Final = (
-    _('Неверный логин или пароль. Попробуйте ещё раз.\n'),
-    SAFE_LOGIN_PASSWORD,
-)
-
-INCORRECT_FORMAT: Final = (
-    _('Некорректный формат. Повторите ввод логина и пароля.\n'),
-    SAFE_LOGIN_PASSWORD,
-)
-
-REQUIRED_AUTHORIZATION: Final = _(
-    'Требуется авторизация.\nВведите логин и пароль в формате: логин:пароль',
-)
-
-ACCEPTED_FORMAT_JSON: Final = _(
-    'Принимаются файлы JSON, текст по формату и фотографии QR-кодов',
-)
-
-NOT_CREATE_ACCOUNT: Final = _(
-    'Не выбран счёт! Сначала выберите его используя команду /select_account',
-)
-ERROR_DATABASE_RECORD: Final = _('Ошибка записи в базу данных!')
-ALREADY_LOGGED: Final = _(
-    'Вы уже авторизованы! Повторная авторизация не требуется!',
-)
-ACCESS_DENIED: Final = _(
-    'У вас нет доступа к использованию бота, сначала надо авторизоваться - /auth',
-)
-HELP_TEXT_START: Final = _(
-    'Описание команд:\n'
-    '/start и /help выводят этот текст;\n'
-    '/auth - позволяет авторизоваться в боте для доступа к '
-    'остальным командам;\n'
-    '/select_account - выводит список счетов для выбора. '
-    'Счета добавляются через сайт;\n'
-    '/manual - позволяет добавить чек с помощью параметров '
-    'самого чека, если, например, QR-код не считывается;\n'
-    '/deauthorize - отвязывает телеграм аккаунт от бота.',
-)
-START_MANUAL_HANDLER_RECEIPT: Final = _(
-    'Чтобы добавить чек используя данные с чека, '
-    'введите поочередно - Дату в формате ГГГГ-ММ-ДД ЧЧ:ММ:СС, '
-    'сумму чека, ФН, ФД, ФП.\n'
-    'Ввод можно отменить командой /cancel\n'
-    'Сначала введите дату в формате ГГГГ-ММ-ДД ЧЧ:ММ:СС',
-)
-NO_INFORMATION_BY_RECEIPT: Final = _(
-    'Нет информации по чеку.\nПопробуйте позже или внесите данные на сайте',
-)
-CANCEL_MANUAL_RECEIPT: Final = 'Вы отменили ввод данных чека'
-
 # HTTP Status
 SUCCESS_CODE: Final = 200
 SERVER_ERROR: Final = 500
 NOT_FOUND: Final = 404
 REDIRECTS: Final = 302
-
 
 # Числа
 ONE: Final = 1
@@ -206,7 +133,6 @@ MINUTE_MINUS_ONE: Final = 59
 SECOND_MINUS_ONE: Final = 59
 TODAY_MINUS_FIVE_YEARS: Final = 23
 THREE_HUNDRED_SIXTY_FIVE: Final = 365
-
 
 # Порядковые номера месяцев
 NUMBER_FIRST_MONTH_YEAR: Final = 1
@@ -232,7 +158,6 @@ WEBHOOKS_TELEGRAM: Final = 'This page for Webhooks Telegram!'
 # Параметры дат
 TODAY = datetime.datetime.today()
 CURRENT_YEAR = datetime.date.today().year
-
 
 MONTH_NUMBERS: Final = {
     'Январь': 1,
