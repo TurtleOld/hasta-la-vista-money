@@ -63,21 +63,7 @@ SUCCESS_MESSAGE_CHANGED_PASSWORD: Final = _(
 SUCCESS_MESSAGE_LOGOUT: Final = _(
     'Вы успешно вышли из своей учётной записи!',
 )
-HELP_TEXT_PASSWORD: Final = _(
-    'Пароли хранятся в зашифрованном виде, '
-    'поэтому нет возможности посмотреть ваш пароль, '
-    'но вы можете сбросить пароль, выполнив команду '
-    '<code>docker exec -it hlvm_server sh -c '
-    '"python manage.py changepassword &lt;username&gt;"</code> '
-    'в консоли сервера.',
-)
 
-HELP_TEXT_FORGOT_PASSWORD: Final = _(
-    'Укажите логин, который указывали при регистрации.<br>'
-    'Ссылка для восстановления пароля будет выслана в чат с ботом.<br>'
-    'После нажатия на кнопку ниже, '
-    'произойдёт переадресация в телеграм.',
-)
 SUCCESS_CATEGORY_ADDED: Final = _('Категория добавлена!')
 SUCCESS_EXPENSE_ADDED: Final = _('Операция расхода успешно добавлена!')
 SUCCESS_INCOME_ADDED: Final = _('Операция дохода успешно добавлена!')

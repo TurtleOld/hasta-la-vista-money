@@ -4,12 +4,11 @@
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 #: .\hasta_la_vista_money\finance_account\models.py:109
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-27 16:28+0300\n"
+"POT-Creation-Date: 2025-05-29 16:56+0300\n"
 "PO-Revision-Date: 2024-02-25 18:56+0300\n"
 "Last-Translator: Александр Павлов <>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -104,95 +103,70 @@ msgid "Вы успешно вышли из своей учётной запис�
 msgstr "You have successfully logged out of your account!"
 
 #: .\hasta_la_vista_money\constants.py:67
-#, fuzzy
-#| msgid ""
-#| "Пароли хранятся в зашифрованном виде, поэтому нет возможности посмотреть "
-#| "ваш пароль, но вы можете поменять его на новый перейдя на "
-#| "вкладку<br>\"Изменить пароль\""
-msgid ""
-"Пароли хранятся в зашифрованном виде, поэтому нет возможности посмотреть ваш "
-"пароль, но вы можете сбросить пароль, выполнив команду <code>docker exec -it "
-"hlvm_server sh -c \"python manage.py changepassword &lt;username&gt;\"</"
-"code> в консоли сервера."
-msgstr ""
-"Passwords are stored in encrypted form, so there is no way to view your "
-"password, but you can change it by going to the \"Change password\" tab."
-
-#: .\hasta_la_vista_money\constants.py:76
-msgid ""
-"Укажите логин, который указывали при регистрации.<br>Ссылка для "
-"восстановления пароля будет выслана в чат с ботом.<br>После нажатия на "
-"кнопку ниже, произойдёт переадресация в телеграм."
-msgstr ""
-"Enter the login you specified during registration.<br>A password recovery "
-"link will be sent to the chat with the bot.<br>After clicking the button "
-"below, you will be redirected to Telegram."
-
-#: .\hasta_la_vista_money\constants.py:81
 msgid "Категория добавлена!"
 msgstr "Category added!"
 
-#: .\hasta_la_vista_money\constants.py:82
+#: .\hasta_la_vista_money\constants.py:68
 msgid "Операция расхода успешно добавлена!"
 msgstr "Expense operation successfully added!"
 
-#: .\hasta_la_vista_money\constants.py:83
+#: .\hasta_la_vista_money\constants.py:69
 msgid "Операция дохода успешно добавлена!"
 msgstr "Income operation successfully added!"
 
-#: .\hasta_la_vista_money\constants.py:84
+#: .\hasta_la_vista_money\constants.py:70
 msgid "Операция дохода успешно обновлена!"
 msgstr "Income operation successfully updated!"
 
-#: .\hasta_la_vista_money\constants.py:85
+#: .\hasta_la_vista_money\constants.py:71
 msgid "Операция расхода успешно обновлена!"
 msgstr "Expense operation successfully updated!"
 
-#: .\hasta_la_vista_money\constants.py:86
+#: .\hasta_la_vista_money\constants.py:72
 msgid "Операция расхода успешно удалена!"
 msgstr "Expense operation successfully deleted!"
 
-#: .\hasta_la_vista_money\constants.py:87
+#: .\hasta_la_vista_money\constants.py:73
 msgid "Операция дохода успешно удалена!"
 msgstr "Income operation successfully deleted!"
 
-#: .\hasta_la_vista_money\constants.py:89
+#: .\hasta_la_vista_money\constants.py:75
 msgid "Категория расхода успешно удалена!"
 msgstr "Expense category successfully deleted!"
 
-#: .\hasta_la_vista_money\constants.py:92
+#: .\hasta_la_vista_money\constants.py:78
 msgid "Категория дохода успешно удалена!"
 msgstr "Income category successfully deleted!"
 
-#: .\hasta_la_vista_money\constants.py:95
+#: .\hasta_la_vista_money\constants.py:81
 msgid "Категория не может быть удалена, так как связана с расходом"
 msgstr "Category cannot be deleted as it is linked to an expense"
 
-#: .\hasta_la_vista_money\constants.py:98
+#: .\hasta_la_vista_money\constants.py:84
 msgid "Категория не может быть удалена, так как связана с доходом"
 msgstr "Category cannot be deleted as it is linked to an income"
 
-#: .\hasta_la_vista_money\constants.py:100
+#: .\hasta_la_vista_money\constants.py:86
 msgid "Средства успешно переведены"
 msgstr "Funds successfully transferred"
 
-#: .\hasta_la_vista_money\constants.py:101
+#: .\hasta_la_vista_money\constants.py:87
 msgid "Недостаточно средств"
 msgstr "Insufficient funds"
 
-#: .\hasta_la_vista_money\constants.py:102
+#: .\hasta_la_vista_money\constants.py:88
 msgid "Кредит успешно добавлен"
 msgstr "Loan successfully added"
 
-#: .\hasta_la_vista_money\constants.py:103
+#: .\hasta_la_vista_money\constants.py:89
 msgid "Кредит успешно удалён"
 msgstr "Loan successfully deleted"
 
-#: .\hasta_la_vista_money\constants.py:104
+#: .\hasta_la_vista_money\constants.py:90
 msgid "Платеж успешно внесён"
 msgstr "Payment successfully made"
 
-#: .\hasta_la_vista_money\constants.py:106
+#: .\hasta_la_vista_money\constants.py:92
 msgid "Введите заметку не более 250 символов. Поле необязательное!"
 msgstr "Enter a note of no more than 250 characters. This field is optional!"
 
@@ -242,10 +216,8 @@ msgstr "Edit income operation"
 #: .\hasta_la_vista_money\expense\templates\expense\change_expense.html:14
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\change_account.html:14
 #: .\hasta_la_vista_money\income\templates\income\change_income.html:14
-#, fuzzy
-#| msgid "Изменить"
 msgid "Сохранить"
-msgstr "Edit"
+msgstr "Save"
 
 #: .\hasta_la_vista_money\expense\templates\expense\change_expense.html:15
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\change_account.html:15
@@ -281,8 +253,8 @@ msgstr "Date"
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:69
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:95
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:11
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:80
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:153
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:79
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:152
 msgid "Сумма"
 msgstr "Amount"
 
@@ -298,10 +270,8 @@ msgid "Добавить категорию"
 msgstr "Add category"
 
 #: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:102
-#, fuzzy
-#| msgid "Информация о расходах"
 msgid "Информация о расходах отсутствует!"
-msgstr "Expense information"
+msgstr "No expense information available!"
 
 #: .\hasta_la_vista_money\expense\templates\expense\filter.html:14
 #: .\hasta_la_vista_money\income\templates\income\filter.html:14
@@ -405,16 +375,12 @@ msgid "Китайский юань"
 msgstr "Chinese Yuan (CNY)"
 
 #: .\hasta_la_vista_money\finance_account\models.py:22
-#, fuzzy
-#| msgid "Предмет расчёта"
 msgid "Кредитный счёт"
-msgstr "Item of calculation"
+msgstr "Credit account"
 
 #: .\hasta_la_vista_money\finance_account\models.py:23
-#, fuzzy
-#| msgid "Добавить новый счёт"
 msgid "Дебетовый счёт"
-msgstr "Add new account"
+msgstr "Debit account"
 
 #: .\hasta_la_vista_money\finance_account\models.py:24
 msgid "Наличные"
@@ -425,8 +391,8 @@ msgid "Основной счёт"
 msgstr "Main Account"
 
 #: .\hasta_la_vista_money\finance_account\models.py:51
-msgid "Date created"
-msgstr ""
+msgid "Дата и время создания"
+msgstr "Date and time of creation"
 
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\account.html:7
 msgid "Управляй финансами семьи грамотно!"
@@ -453,8 +419,6 @@ msgid "Добавить счёт"
 msgstr "Add account"
 
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\add_account.html:39
-#, fuzzy
-#| msgid "Добавить счёт"
 msgid "Добавить новый счёт"
 msgstr "Add a new account"
 
@@ -534,6 +498,7 @@ msgid "Дата платежа"
 msgstr "Payment date"
 
 #: .\hasta_la_vista_money\loan\forms.py:95
+#: .\hasta_la_vista_money\receipts\forms.py:159
 msgid "Счёт списания"
 msgstr "Debit account"
 
@@ -582,8 +547,6 @@ msgstr "Loan term (months): "
 
 #: .\hasta_la_vista_money\loan\templates\loan\loan.html:85
 #: .\hasta_la_vista_money\loan\templates\loan\loan.html:86
-#, fuzzy
-#| msgid "Внести платеж"
 msgid "Внести платёж"
 msgstr "Make a payment"
 
@@ -632,23 +595,128 @@ msgid "Добавить платеж"
 msgstr "Add a payment"
 
 #: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:11
-msgid "Варианты платежей:"
+msgid "Варианты платежей"
 msgstr "Payment options:"
 
 #: .\hasta_la_vista_money\receipts\forms.py:33
 msgid "Продавец"
 msgstr "Seller"
 
+#: .\hasta_la_vista_money\receipts\forms.py:82
+#: .\hasta_la_vista_money\receipts\forms.py:154
+msgid "Имя продавца"
+msgstr "Seller name"
+
+#: .\hasta_la_vista_money\receipts\forms.py:84
+msgid "Адрес места покупки"
+msgstr "Address of the purchase location "
+
+#: .\hasta_la_vista_money\receipts\forms.py:85
+#: .\hasta_la_vista_money\receipts\forms.py:89
+msgid "Поле может быть пустым"
+msgstr "The field can be left blank"
+
+#: .\hasta_la_vista_money\receipts\forms.py:88
+msgid "Название магазина"
+msgstr "Store name"
+
+#: .\hasta_la_vista_money\receipts\forms.py:112
+msgid "Наименование продукта"
+msgstr "Product name"
+
+#: .\hasta_la_vista_money\receipts\forms.py:113
+msgid "Укажите наименование продукта"
+msgstr "Enter name product"
+
+#: .\hasta_la_vista_money\receipts\forms.py:116
+msgid "Цена продукта"
+msgstr "Price product"
+
+#: .\hasta_la_vista_money\receipts\forms.py:117
+msgid "Укажите цену продукта"
+msgstr "Enter price product"
+
+#: .\hasta_la_vista_money\receipts\forms.py:121
+msgid "Количество продукта"
+msgstr "Quantity product"
+
+#: .\hasta_la_vista_money\receipts\forms.py:122
+msgid "Укажите количество продукта"
+msgstr "Enter the quantity of the product"
+
+#: .\hasta_la_vista_money\receipts\forms.py:126
+msgid "Итоговая сумма за продукт"
+msgstr "The total amount for the product"
+
+#: .\hasta_la_vista_money\receipts\forms.py:127
+msgid "Высчитывается автоматически на основании цены и количества"
+msgstr ""
+"It is calculated automatically based on the total amounts of the products."
+
 #: .\hasta_la_vista_money\receipts\forms.py:141
 msgid "Количество должно быть больше 0."
 msgstr "Quantity should be greater than 0."
+
+#: .\hasta_la_vista_money\receipts\forms.py:155
+msgid "Выберите продавца. Если он ещё не создан, нажмите кнопку ниже."
+msgstr ""
+"Select the seller. If it has not been created yet, click the button below."
+
+#: .\hasta_la_vista_money\receipts\forms.py:160
+msgid "Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже."
+msgstr ""
+"Select the withdrawal account. If it has not been created yet, click the "
+"button below. "
+
+#: .\hasta_la_vista_money\receipts\forms.py:163
+msgid "Дата и время покупки"
+msgstr "Date and time of purchase"
+
+#: .\hasta_la_vista_money\receipts\forms.py:164
+msgid "Указывается дата и время покупки, указанные в чеке."
+msgstr "The date and time of purchase as stated on the receipt are indicated."
+
+#: .\hasta_la_vista_money\receipts\forms.py:171
+msgid "Тип операции"
+msgstr "Operation type"
+
+#: .\hasta_la_vista_money\receipts\forms.py:172
+msgid "Выберите тип операции."
+msgstr "Select the type of operation."
+
+#: .\hasta_la_vista_money\receipts\forms.py:175
+msgid "Номер документа"
+msgstr "Document number"
+
+#: .\hasta_la_vista_money\receipts\forms.py:176
+msgid "Укажите номер документа. Обычно на чеке указан как ФД."
+msgstr ""
+"Enter the document number. It is usually indicated on the receipt as \"FD\". "
+
+#: .\hasta_la_vista_money\receipts\forms.py:179
+msgid "НДС по ставке 10%"
+msgstr "VAT 10%"
+
+#: .\hasta_la_vista_money\receipts\forms.py:180
+#: .\hasta_la_vista_money\receipts\forms.py:185
+msgid "Поле необязательное"
+msgstr "The field is optional."
+
+#: .\hasta_la_vista_money\receipts\forms.py:184
+msgid "НДС по ставке 20%"
+msgstr "VAT 20%"
 
 #: .\hasta_la_vista_money\receipts\forms.py:189
 msgid "Итоговая сумма по чеку"
 msgstr "Total receipt amount"
 
+#: .\hasta_la_vista_money\receipts\forms.py:190
+msgid "Высчитывается автоматически на основании итоговых сумм продуктов"
+msgstr ""
+"It is calculated automatically based on the total amounts of the products."
+
 #: .\hasta_la_vista_money\receipts\models.py:10
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:97
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:96
 msgid "Покупка"
 msgstr "Purchase"
 
@@ -664,7 +732,12 @@ msgstr "Sale\\Win"
 msgid "Возврат выигрыша или продажи"
 msgstr "Return of winnings or sale"
 
+#: .\hasta_la_vista_money\receipts\templates\receipts\filter.html:10
+msgid "Фильтр"
+msgstr "Filter"
+
 #: .\hasta_la_vista_money\receipts\templates\receipts\purchased_products.html:4
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:46
 msgid "Часто покупаемые товары"
 msgstr "Frequently purchased items"
 
@@ -684,59 +757,59 @@ msgstr "Number of receipts:"
 msgid "Сумма чеков:"
 msgstr "Total receipts amount:"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:57
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:56
 msgid "Добавить нового продавца"
 msgstr "Add a new seller"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:68
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:67
 msgid "Добавить чек вручную"
 msgstr "Add receipt manually "
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:78
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:77
 msgid "Дата: "
-msgstr "Date"
+msgstr "Date: "
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:92
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:91
 msgid "Кассовый чек"
 msgstr "Cash receipt"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:99
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:98
 msgid "Возврат покупки"
 msgstr "Purchase return"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:150
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:149
 msgid "Предмет расчёта"
 msgstr "Item of calculation"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:151
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:150
 msgid "Цена"
 msgstr "Price"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:152
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:151
 msgid "Количество"
 msgstr "Quantity"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:182
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:181
 #, fuzzy, python-format
 #| msgid "НДС 10%"
 msgid "НДС 10%%"
 msgstr "VAT 10%"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:193
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:192
 #, fuzzy, python-format
 #| msgid "НДС 20%"
 msgid "НДС 20%%"
 msgstr "VAT 20%"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:203
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:202
 msgid "Списано со счёта"
 msgstr "Debited from account"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:212
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:211
 msgid "Место расчётов"
 msgstr "Transaction location"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:221
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:220
 msgid "Адрес расчётов"
 msgstr "Transaction address"
 
@@ -790,10 +863,8 @@ msgstr "Log in"
 
 #: .\hasta_la_vista_money\users\templates\users\password_change_done.html:6
 #: .\hasta_la_vista_money\users\templates\users\set_password.html:6
-#, fuzzy
-#| msgid "Личный кабинет пользователя "
 msgid "Установка нового пароля для пользователя "
-msgstr "User profile "
+msgstr "Setting a new password for the user "
 
 #: .\hasta_la_vista_money\users\templates\users\password_change_done.html:11
 #: .\hasta_la_vista_money\users\templates\users\profile.html:43
@@ -810,16 +881,12 @@ msgid "Регистрация нового пользователя"
 msgstr "Register a new user"
 
 #: .\hasta_la_vista_money\users\templates\users\registration.html:18
-#, fuzzy
-#| msgid "Ещё не зарегистрированы?"
 msgid "Зарегистрироваться"
-msgstr "Ещё не зарегистрированы?"
+msgstr "Sign In"
 
 #: .\hasta_la_vista_money\users\views.py:77
-#, fuzzy
-#| msgid "Неверный логин или пароль. Попробуйте ещё раз.\n"
 msgid "Неправильный логин или пароль!"
-msgstr "Invalid login or password. Please try again."
+msgstr "Incorrect login or password!"
 
 #: .\hasta_la_vista_money\users\views.py:113
 msgid "Форма регистрации"
@@ -829,105 +896,11 @@ msgstr "Registration form"
 msgid "Регистрация"
 msgstr "Registration"
 
-#~ msgid "Дата создания"
-#~ msgstr "Date created"
-
-#~ msgid "Неверный логин или пароль. Попробуйте ещё раз.\n"
-#~ msgstr "Invalid login or password. Please try again.\n"
-
-#~ msgid "Некорректный формат. Повторите ввод логина и пароля.\n"
-#~ msgstr "Incorrect format. Please re-enter your login and password.\n"
-
-#~ msgid "Ошибка записи в базу данных!"
-#~ msgstr "Database write error!"
-
-#~ msgid "Начальный баланс"
-#~ msgstr "Initial balance"
-
-#~ msgid "Категория расхода"
-#~ msgstr "Expense category"
-
-#, python-brace-format
-#~ msgid "Недостаточно средств на счёте {account}"
-#~ msgstr "Insufficient funds in account {account}"
-
-#~ msgid "Название категории"
-#~ msgstr "Category name"
-
-#~ msgid "Вложенность"
-#~ msgstr "Nesting"
-
-#~ msgid "Информация о расходах ещё не добавлена!"
-#~ msgstr "Expense information has not been added yet!"
-
-#~ msgid "Управление категориями расхода"
-#~ msgstr "Expense category management"
-
-#~ msgid "Категория дохода"
-#~ msgstr "Income category"
-
-#~ msgid "Счёт начисления"
-#~ msgstr "Credit account"
-
-#~ msgid "Управление категориями дохода"
-#~ msgstr "Income category management"
-
-#~ msgid "Информация о доходах ещё не добавлена!"
-#~ msgstr "Income information has not been added yet!"
-
-#~ msgid "Начальная дата кредита"
-#~ msgstr "Loan start date"
-
-#~ msgid "Тип кредита"
-#~ msgstr "Loan type"
-
-#~ msgid "Сумма кредита"
-#~ msgstr "Loan amount"
-
-#~ msgid "Годовая ставка в %"
-#~ msgstr "Annual interest rate (%)"
-
-#~ msgid "Срок кредита в месяцах"
-#~ msgstr "Loan term in months"
-
-#~ msgid "YYYY-DD-MM"
-#~ msgstr "YYYY-DD-MM"
-
-#~ msgid "Наименование продукта"
-#~ msgstr "Product name"
-
-#~ msgid "Имя продавца"
-#~ msgstr "Seller name"
-
-#~ msgid "Дата и время чека"
-#~ msgstr "Receipt date and time"
-
-#~ msgid "Тип операции"
-#~ msgstr "Operation type"
-
-#~ msgid "Номер документа"
-#~ msgstr "Document number"
-
-#~ msgid "Добавить чек вручную по наименованиям"
-#~ msgstr "Add receipt manually by item names"
-
-#~ msgid "Тогда нажимайте кнопку:"
-#~ msgstr "Then click the button:"
-
-#~ msgid "Восстановить пароль"
-#~ msgstr "Restore password"
-
-#~ msgid "Сбросить пароль"
-#~ msgstr "Reset password"
-
-#~ msgid "Добавить ещё один товар"
-#~ msgstr "Add another item"
-
-#~ msgid "Добавить новый расход"
-#~ msgstr "Add new expense"
-
-#~ msgid "Удалить один товар"
-#~ msgstr "Delete one item"
-
-#~ msgid "Сменить пароль"
-#~ msgstr "Change password"
+#~ msgid ""
+#~ "Укажите логин, который указывали при регистрации.<br>Ссылка для "
+#~ "восстановления пароля будет выслана в чат с ботом.<br>После нажатия на "
+#~ "кнопку ниже, произойдёт переадресация в телеграм."
+#~ msgstr ""
+#~ "Enter the login you specified during registration.<br>A password recovery "
+#~ "link will be sent to the chat with the bot.<br>After clicking the button "
+#~ "below, you will be redirected to Telegram."
