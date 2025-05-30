@@ -1,6 +1,58 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
+  "extends": ["config:recommended"],
+  "semanticCommitScope": "deps",
+  "automergeType": "pr",
+  "prCreation": "immediate",
+  "ignorePresets": [":ignoreModulesAndTests"],
+  "ignorePaths": ["**/node_modules/**", "**/__fixtures__/**", "test/**", "**/migrations/**"],
+  "rebaseWhen": "conflicted",
+  "baseBranches": ["$default", "next"],
+  "packageRules": [
+    {
+      "matchPackageNames": ["Django"],
+      "semanticCommitType": "build",
+      "groupName": "Django updates"
+    },
+    {
+      "matchPackageNames": ["djangorestframework"],
+      "semanticCommitType": "build",
+      "groupName": "Django REST Framework"
+    },
+    {
+      "matchDepTypes": ["dependencies", "optionalDependencies"],
+      "semanticCommitType": "build"
+    },
+    {
+      "matchFileNames": [".py"],
+      "enabled": false
+    },
+    {
+      "matchFileNames": ["requirements.txt", "**/requirements/*.txt"],
+      "fileMatch": ["\\.txt$"]
+    },
+    {
+      "matchManagers": ["pip_requirements"],
+      "semanticCommitType": "build"
+    },
+    {
+      "matchDepTypes": ["devDependencies"],
+      "enabled": false
+    },
+    {
+      "matchFileNames": ["requirements.txt", "**/requirements/*.txt"],
+      "groupName": "requirements.txt dependencies"
+    },
+    {
+      "matchPackageNames": ["Django"],
+      "matchUpdateTypes": ["major"],
+      "commitMessagePrefix": "feat(deps)!:",
+      "semanticCommitType": "feat"
+    },
+    {
+      "matchPackageNames": ["Django"],
+      "matchUpdateTypes": ["minor"],
+      "semanticCommitType": "fix"
+    }
   ]
 }
