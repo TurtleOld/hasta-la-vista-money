@@ -48,7 +48,7 @@ class Account(models.Model):
         auto_now_add=True,
         null=True,
         blank=True,
-        verbose_name=_('Date created'),
+        verbose_name=_('Дата и время создания'),
     )
 
     class Meta:

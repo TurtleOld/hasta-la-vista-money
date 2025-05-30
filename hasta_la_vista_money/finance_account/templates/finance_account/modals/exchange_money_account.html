@@ -21,19 +21,21 @@
                       action="{% url 'finance_account:transfer_money' %}">
                     {% csrf_token %}
                     {% if transfer_money_form %}
-                        {% for field in transfer_money_form %}
-                            {{ field.errors }}
-                            <div class="form-group{% if field.errors %} has-error{% endif %}">
-                                {{ field | as_crispy_field }}
-                                {% if field.errors %}
-                                    {% for error in field.errors %}
-                                        <p class="help-block">{{ error }}</p>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
+                    {% for field in transfer_money_form %}
+                    {{ field.errors }}
+                    <div class="form-group{% if field.errors %} has-error{% endif %}">
+                        {{ field | as_crispy_field }}
+                        {% if field.errors %}
+                        {% for error in field.errors %}
+                        <p class="help-block">{{ error }}</p>
                         {% endfor %}
+                        {% endif %}
+                    </div>
+                    {% endfor %}
                     {% endif %}
-                    <button type="submit" class="btn btn-success text-white">Перевести</button>
+                    <button type="submit" class="btn btn-success text-white">
+                        {% translate 'Перевести' %}
+                    </button>
                 </form>
             </div>
         </div>

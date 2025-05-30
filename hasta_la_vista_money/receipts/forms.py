@@ -79,14 +79,14 @@ class ReceiptFilter(django_filters.FilterSet):
 class SellerForm(ModelForm):
     """Класс формы продавца."""
 
-    name_seller = CharField(label='Имя продавца')
+    name_seller = CharField(label=_('Имя продавца'))
     retail_place_address = CharField(
-        label='Адрес места покупки',
-        widget=TextInput(attrs={'placeholder': 'Поле может быть пустым'}),
+        label=_('Адрес места покупки'),
+        widget=TextInput(attrs={'placeholder': _('Поле может быть пустым')}),
     )
     retail_place = CharField(
-        label='Название магазина',
-        widget=TextInput(attrs={'placeholder': 'Поле может быть пустым'}),
+        label=_('Название магазина'),
+        widget=TextInput(attrs={'placeholder': _('Поле может быть пустым')}),
     )
 
     class Meta:
@@ -109,22 +109,22 @@ class ProductForm(BaseFieldsForm):
     """Форма для внесения данных по продуктам."""
 
     product_name = CharField(
-        label='Наименование продукта',
-        help_text='Укажите наименование продукта',
+        label=_('Наименование продукта'),
+        help_text=_('Укажите наименование продукта'),
     )
     price = DecimalField(
-        label='Цена продукта',
-        help_text='Укажите цену продукта',
+        label=_('Цена продукта'),
+        help_text=_('Укажите цену продукта'),
         widget=NumberInput(attrs={'class': 'price'}),
     )
     quantity = IntegerField(
-        label='Количество продукта',
-        help_text='Укажите количество продукта',
+        label=_('Количество продукта'),
+        help_text=_('Укажите количество продукта'),
         widget=NumberInput(attrs={'class': 'quantity'}),
     )
     amount = DecimalField(
-        label='Итоговая сумма за продукт',
-        help_text='Высчитывается автоматически на основании цены и количества',
+        label=_('Итоговая сумма за продукт'),
+        help_text=_('Высчитывается автоматически на основании цены и количества'),
         widget=NumberInput(attrs={'class': 'amount', 'readonly': True}),
     )
 
@@ -151,43 +151,43 @@ class ReceiptForm(BaseFieldsForm):
 
     seller = ModelChoiceField(
         queryset=Seller.objects.all(),
-        label='Имя продавца',
-        help_text='Выберите продавца. Если он ещё не создан, нажмите кнопку ниже.',
+        label=_('Имя продавца'),
+        help_text=_('Выберите продавца. Если он ещё не создан, нажмите кнопку ниже.'),
     )
     account = ModelChoiceField(
         queryset=Account.objects.all(),
-        label='Счёт списания',
-        help_text='Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.',
+        label=_('Счёт списания'),
+        help_text=_('Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.'),
     )
     receipt_date = DateTimeField(
-        label='Дата и время покупки',
-        help_text='Указывается дата и время покупки, указанные в чеке.',
+        label=_('Дата и время покупки'),
+        help_text=_('Указывается дата и время покупки, указанные в чеке.'),
         widget=DateTimeInput(
             attrs={'type': 'datetime-local', 'class': 'form-control'},
         ),
     )
     operation_type = ChoiceField(
         choices=OPERATION_TYPES,
-        label='Тип операции',
-        help_text='Выберите тип операции.',
+        label=_('Тип операции'),
+        help_text=_('Выберите тип операции.'),
     )
     number_receipt = IntegerField(
-        label='Номер документа',
-        help_text='Укажите номер документа. Обычно на чеке указан как ФД.',
+        label=_('Номер документа'),
+        help_text=_('Укажите номер документа. Обычно на чеке указан как ФД.'),
     )
     nds10 = DecimalField(
-        label='НДС по ставке 10%',
-        help_text='Поле необязательное',
+        label=_('НДС по ставке 10%'),
+        help_text=_('Поле необязательное'),
         required=False,
     )
     nds20 = DecimalField(
-        label='НДС по ставке 20%',
-        help_text='Поле необязательное',
+        label=_('НДС по ставке 20%'),
+        help_text=_('Поле необязательное'),
         required=False,
     )
     total_sum = DecimalField(
         label=_('Итоговая сумма по чеку'),
-        help_text='Высчитывается автоматически на основании итоговых сумм продуктов',
+        help_text=_('Высчитывается автоматически на основании итоговых сумм продуктов'),
         widget=NumberInput(
             attrs={'class': 'total-sum', 'readonly': True},
         ),

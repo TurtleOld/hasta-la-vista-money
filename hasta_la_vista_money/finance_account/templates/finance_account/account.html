@@ -15,7 +15,7 @@
                 <div id="chart_combine"></div>
             </div>
             <!-- /.col-5 .mt-5 -->
-            <div class="offset-xl-2 col-xl-2 mt-5">
+            <div class="offset-xl-2 col-xl-3 mt-5">
                 {% include 'finance_account/card_total_balance.html' %}
             </div>
         </div>
@@ -30,7 +30,7 @@
                 <button type="button"
                         class="btn btn-success btn mt-2 mt-xl-0 fs-6"
                         data-bs-toggle="modal" data-bs-target="#statistics">
-                    {% translate 'Общая статистика пользователя ' %}{{ user.username }}
+                    {% translate 'Общая статистика пользователя' %} {{user.username }}
                 </button>
             </div>
         </div>
