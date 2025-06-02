@@ -1,3 +1,4 @@
+{% load i18n %}
 {% load comma %}
 
 <div id="receipts-statistics" class="modal modal-lg fade ajax-modal">
@@ -5,7 +6,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    Статистика по чекам
+                    {% translate 'Статистика по чекам' %}
                 </h5>
                 <button type="button" class="btn-close"
                         data-bs-dismiss="modal"
@@ -17,16 +18,16 @@
                            aria-label="table about receipts">
                         <tr>
                             <th>
-                                Период
+                                {% translate 'Период' %}
                             </th>
                             <th>
-                                Количество чеков
+                                {% translate 'Количество чеков' %}
                             </th>
                             <th>
-                                Сумма
+                                {% translate 'Сумма' %}
                             </th>
                             <th>
-                                Счёт
+                                {% translate 'Счёт' %}
                             </th>
                         </tr>
                         {% for receipt in receipt_info_by_month %}

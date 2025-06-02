@@ -15,7 +15,7 @@
                                 data-bs-toggle="tab"
                                 data-bs-target="#personal-info" type="button"
                                 role="tab" aria-controls="personal-info"
-                                aria-selected="true">Персональная информация
+                                aria-selected="true">{% translate 'Персональная информация' %}
                         </button>
                     </li>
                 </ul>
@@ -38,7 +38,7 @@
                                 {% endfor %}
                             {% endif %}
                             <button type="submit" class="btn btn-success">
-                                Сохранить
+                                {% translate 'Сохранить' %}
                             </button>
                             <a class="btn btn-success" href="{% url 'users:password' %}">{% translate 'Установить новый пароль' %}</a>
                         </form>

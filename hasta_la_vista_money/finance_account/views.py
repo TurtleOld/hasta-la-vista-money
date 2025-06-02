@@ -8,6 +8,7 @@ from django.db.models import Sum
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
+from django.utils.translation import gettext as _
 from django.views.generic import CreateView, ListView, UpdateView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.views import collect_info_receipt
@@ -218,22 +219,22 @@ class AccountView(
                 'borderWidth': 1,
                 'height': 300,
             },
-            'title': {'text': 'Аналитика'},
+            'title': {'text': _('Аналитика')},
             'xAxis': [
                 {
                     'categories': all_dates,
-                    'title': {'text': 'Дата'},
+                    'title': {'text': _('Дата')},
                 },
             ],
-            'yAxis': {'title': {'text': 'Сумма'}},
+            'yAxis': {'title': {'text': _('Сумма')}},
             'series': [
                 {
-                    'name': 'Расходы',
+                    'name': _('Расходы'),
                     'data': expense_series_data,
                     'color': 'red',
                 },
                 {
-                    'name': 'Доходы',
+                    'name': _('Доходы'),
                     'data': income_series_data,
                     'color': 'green',
                 },

@@ -9,7 +9,7 @@ from config.django.sessions import *  # NOQA
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from dotenv import load_dotenv
 from sentry_sdk.integrations.django import DjangoIntegration
-from csp.constants import SELF
+from csp.constants import SELF, NONCE
 
 django_stubs_ext.monkeypatch()
 load_dotenv()
@@ -195,22 +195,35 @@ CONTENT_SECURITY_POLICY = {
                            SELF, BASE_URL,
                            'https://code.highcharts.com',
                            'https://htmx.org',
-
+                           'https://cdn.jsdelivr.net',
                        ] + additional_script_src,
         "script-src": [
-                          SELF, BASE_URL,
+                          SELF, NONCE, BASE_URL,
                           'https://code.highcharts.com',
                           'https://unpkg.com',
                           'https://htmx.org',
+                          'https://cdn.jsdelivr.net',
                       ] + additional_script_src,
         "img-src": [
-            SELF, "data:", BASE_URL,
+            SELF, NONCE, "data:", BASE_URL,
         ],
         'style-src': [
+                         SELF,
+                         NONCE,
                          BASE_URL,
                          'https://code.highcharts.com',
                          'https://htmx.org',
+                         'https://cdn.jsdelivr.net',
                      ] + additional_script_src,
+        'font-src': [
+                        SELF,
+                        NONCE,
+                        BASE_URL,
+                    ] + additional_script_src,
+        'frame-ancestors': [
+                               SELF,
+                           ] + additional_script_src,
+        'report_uri': [os.getenv('SENTRY_ENDPOINT')],
     },
 }
 

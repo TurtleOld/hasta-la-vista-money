@@ -2,6 +2,8 @@
 {% load i18n %}
 {% load crispy_forms_tags %}
 
+{% block title %}{% translate 'Добавить категорию расхода' %}{% endblock %}
+
 {% block content %}
 <div class="container mt-5">
     <div class="row justify-content-center">
@@ -29,7 +31,7 @@
                         {% endif %}
                         <div class="mt-3 d-flex align-items-center">
                             <button type="submit" class="btn btn-outline-success">{% translate 'Добавить' %}</button>
-                            <a class="btn btn-outline-success ms-1" href="{% url 'expense:category_list' %}">Отмена</a>
+                            <a class="btn btn-outline-success ms-1" href="{% url 'expense:category_list' %}">{% translate 'Отмена' %}</a>
                         </div>
                     </form>
                 </div>
