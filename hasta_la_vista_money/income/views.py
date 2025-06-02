@@ -3,6 +3,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, UpdateView
 from django.views.generic.edit import CreateView, DeletionMixin
@@ -154,7 +155,7 @@ class IncomeCopyView(
 
         valid_income = get_object_or_404(Income, pk=new_income.pk)
 
-        messages.success(request, 'Расход успешно скопирован.')
+        messages.success(request, _('Расход успешно скопирован.'))
         return redirect(
             reverse_lazy('income:change', kwargs={'pk': valid_income.pk}),
         )
@@ -315,9 +316,9 @@ class IncomeCategoryCreateView(CreateView):
     def form_invalid(self, form):
         error_message = ''
         if 'name' in form.errors:
-            error_message = 'Такая категория уже была добавлена!'
+            error_message = _('Такая категория уже была добавлена!')
         else:
-            error_message = (
+            error_message = _(
                 'Ошибка при добавлении категории. Проверьте введенные данные.'
             )
         messages.error(self.request, error_message)

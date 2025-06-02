@@ -5,6 +5,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
 from django.shortcuts import render
 from django.urls import reverse_lazy
+from django.utils.translation import gettext as _
 from django.views.generic import TemplateView
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.expense.models import Expense
@@ -136,7 +137,7 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
             chart_data = {
                 'chart': {'type': 'pie'},
                 'title': {
-                    'text': f'Статистика расходов по категории {parent_category}',
+                    'text': _(f'Статистика расходов по категории {parent_category}'),
                 },
                 'series': [{'name': parent_category, 'data': data}],
                 'credits': {'enabled': 'false'},
@@ -173,17 +174,17 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
 
         chart_expense = {
             'chart': {'type': 'line'},
-            'title': {'text': 'Статистика по расходам'},
+            'title': {'text': _('Статистика по расходам')},
             'xAxis': [
                 {
                     'categories': unique_expense_dates,
-                    'title': {'text': 'Дата'},
+                    'title': {'text': _('Дата')},
                 },
             ],
-            'yAxis': {'title': {'text': 'Сумма'}},
+            'yAxis': {'title': {'text': _('Сумма')}},
             'series': [
                 {
-                    'name': 'Расходы',
+                    'name': _('Расходы'),
                     'data': unique_expense_amounts,
                     'color': 'red',
                     'xAxis': 0,
@@ -199,17 +200,17 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
 
         chart_income = {
             'chart': {'type': 'line'},
-            'title': {'text': 'Статистика по доходам'},
+            'title': {'text': _('Статистика по доходам')},
             'xAxis': [
                 {
                     'categories': unique_income_dates,
-                    'title': {'text': 'Дата'},
+                    'title': {'text': _('Дата')},
                 },
             ],
-            'yAxis': {'title': {'text': 'Сумма'}},
+            'yAxis': {'title': {'text': _('Сумма')}},
             'series': [
                 {
-                    'name': 'Доходы',
+                    'name': _('Доходы'),
                     'data': unique_income_amounts,
                     'color': 'green',
                     'xAxis': 0,
