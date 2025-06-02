@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-29 16:56+0300\n"
+"POT-Creation-Date: 2025-06-02 11:48+0300\n"
 "PO-Revision-Date: 2024-02-25 18:56+0300\n"
 "Last-Translator: Александр Павлов <>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -182,6 +182,7 @@ msgstr "Category"
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:63
 #: .\hasta_la_vista_money\income\filters.py:16
 #: .\hasta_la_vista_money\receipts\forms.py:37
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:21
 msgid "Период"
 msgstr "Period"
 
@@ -192,6 +193,7 @@ msgstr "Period"
 #: .\hasta_la_vista_money\income\filters.py:26
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:13
 #: .\hasta_la_vista_money\receipts\forms.py:47
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:30
 msgid "Счёт"
 msgstr "Account"
 
@@ -238,6 +240,7 @@ msgid "Вы уверены?"
 msgstr "Are you sure?"
 
 #: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:8
+#: .\hasta_la_vista_money\finance_account\views.py:232
 #: .\hasta_la_vista_money\templates\header.html:68
 #: .\hasta_la_vista_money\templates\header.html:98
 msgid "Расходы"
@@ -245,6 +248,7 @@ msgstr "Expenses"
 
 #: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:11
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:94
+#: .\hasta_la_vista_money\finance_account\views.py:226
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:10
 msgid "Дата"
 msgstr "Date"
@@ -252,7 +256,9 @@ msgstr "Date"
 #: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:12
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:69
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:95
+#: .\hasta_la_vista_money\finance_account\views.py:229
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:11
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:27
 #: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:79
 #: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:152
 msgid "Сумма"
@@ -415,6 +421,7 @@ msgid "Счета ещё не созданы!"
 msgstr "Accounts have not been created yet!"
 
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\add_account.html:13
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\add_receipt.html:42
 msgid "Добавить счёт"
 msgstr "Add account"
 
@@ -449,6 +456,7 @@ msgstr "Statistics"
 
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:25
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:26
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:9
 msgid "Статистика по чекам"
 msgstr "Statistics on receipts"
 
@@ -463,8 +471,20 @@ msgid "Статистика переводов"
 msgstr "Transfer money statistics"
 
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:66
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:24
 msgid "Количество чеков"
 msgstr "Number of receipts"
+
+#: .\hasta_la_vista_money\finance_account\views.py:222
+msgid "Аналитика"
+msgstr "Analytics"
+
+#: .\hasta_la_vista_money\finance_account\views.py:237
+#: .\hasta_la_vista_money\income\templates\income\income_table.html:7
+#: .\hasta_la_vista_money\templates\header.html:55
+#: .\hasta_la_vista_money\templates\header.html:84
+msgid "Доходы"
+msgstr "Incomes"
 
 #: .\hasta_la_vista_money\income\templates\income\add_category_income.html:12
 #: .\hasta_la_vista_money\income\templates\income\show_category_income.html:12
@@ -474,12 +494,6 @@ msgstr "Add income category"
 #: .\hasta_la_vista_money\income\templates\income\income.html:7
 msgid "Информация о доходе"
 msgstr "Income information"
-
-#: .\hasta_la_vista_money\income\templates\income\income_table.html:7
-#: .\hasta_la_vista_money\templates\header.html:55
-#: .\hasta_la_vista_money\templates\header.html:84
-msgid "Доходы"
-msgstr "Incomes"
 
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:18
 msgid "Добавить новую доходную операцию"
@@ -511,86 +525,86 @@ msgid "Сумма платежа"
 msgstr "Payment amount"
 
 #: .\hasta_la_vista_money\loan\templates\loan\add_loan.html:13
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:52
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:53
 msgid "Добавить кредит"
 msgstr "Add loan"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:9
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:10
 #: .\hasta_la_vista_money\templates\header.html:127
 msgid "Кредиты"
 msgstr "Loans"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:15
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:16
 msgid "Подсказка"
 msgstr "Hint"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:62
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:63
 msgid "Список моих кредитов:"
 msgstr "List of my loans:"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:68
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:79
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:69
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:80
 msgid "Кредит № "
 msgstr "Loan No. "
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:69
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:70
 msgid "Сумма кредита: "
 msgstr "Loan amount: "
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:70
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:71
 msgid "Годовая процентная ставка: "
 msgstr "Annual interest rate: "
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:71
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:72
 msgid "Срок кредита (месяцы): "
 msgstr "Loan term (months): "
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:85
 #: .\hasta_la_vista_money\loan\templates\loan\loan.html:86
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:87
 msgid "Внести платёж"
 msgstr "Make a payment"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:94
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:95
 msgid "Удалить кредит"
 msgstr "Delete loan"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:103
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:104
 msgid "График платежей:"
 msgstr "Payment schedule:"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:104
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:105
 msgid "Общая сумма кредита:"
 msgstr "Total loan amount:"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:105
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:106
 msgid "Сумма переплаты:"
 msgstr "Overpayment amount:"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:110
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:111
 msgid "Месяц"
 msgstr "Month"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:111
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:112
 msgid "Остаток"
 msgstr "Balance"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:112
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:113
 msgid "Ежемесячный платеж"
 msgstr "Monthly payment"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:113
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:114
 msgid "Проценты"
 msgstr "Interest"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:114
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:115
 msgid "Погашение основного долга"
 msgstr "Principal repayment"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:142
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:143
 msgid "Внести платеж за кредит №"
 msgstr "Make a payment for loan No."
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:167
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:168
 msgid "Добавить платеж"
 msgstr "Add a payment"
 
@@ -736,6 +750,23 @@ msgstr "Return of winnings or sale"
 msgid "Фильтр"
 msgstr "Filter"
 
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\add_receipt.html:9
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\add_receipt.html:87
+msgid "Добавить чек"
+msgstr "Add receipt"
+
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\add_receipt.html:30
+msgid "Добавить продавца"
+msgstr "Add seller"
+
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\add_receipt.html:79
+msgid "Добавить ещё один товар"
+msgstr "Add another product"
+
+#: .\hasta_la_vista_money\receipts\templates\receipts\modals\add_receipt.html:83
+msgid "Удалить один товар"
+msgstr "Delete one product"
+
 #: .\hasta_la_vista_money\receipts\templates\receipts\purchased_products.html:4
 #: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:46
 msgid "Часто покупаемые товары"
@@ -790,14 +821,10 @@ msgid "Количество"
 msgstr "Quantity"
 
 #: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:181
-#, fuzzy, python-format
-#| msgid "НДС 10%"
 msgid "НДС 10%%"
 msgstr "VAT 10%"
 
 #: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:192
-#, fuzzy, python-format
-#| msgid "НДС 20%"
 msgid "НДС 20%%"
 msgstr "VAT 20%"
 
@@ -813,7 +840,7 @@ msgstr "Transaction location"
 msgid "Адрес расчётов"
 msgstr "Transaction address"
 
-#: .\hasta_la_vista_money\reports\templates\reports\reports.html:6
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:7
 #: .\hasta_la_vista_money\templates\header.html:138
 msgid "Отчёты"
 msgstr "Reports"
@@ -854,7 +881,7 @@ msgstr "Login page"
 
 #: .\hasta_la_vista_money\users\templates\users\login.html:10
 msgid "Удобная домашняя бухгалтерия. Управляй финансами семьи грамотно!"
-msgstr " Convenient home accounting. Manage family finances wisely!"
+msgstr "Convenient home accounting. Manage family finances wisely!"
 
 #: .\hasta_la_vista_money\users\templates\users\login.html:19
 #: .\hasta_la_vista_money\users\views.py:61
