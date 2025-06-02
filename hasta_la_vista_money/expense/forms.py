@@ -66,7 +66,9 @@ class AddCategoryForm(BaseForm):
     parent_category = ModelChoiceField(
         queryset=ExpenseCategory.objects.all(),
         label=_('Родительская категория'),
-        help_text=_('Выберите родительскую категорию расхода для создаваемой категории'),
+        help_text=_(
+            'Выберите родительскую категорию расхода для создаваемой категории'
+        ),
     )
     field = 'parent_category'
 

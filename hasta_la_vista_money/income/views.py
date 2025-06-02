@@ -318,8 +318,8 @@ class IncomeCategoryCreateView(CreateView):
         if 'name' in form.errors:
             error_message = _('Такая категория уже была добавлена!')
         else:
-            error_message = (
-                _('Ошибка при добавлении категории. Проверьте введенные данные.')
+            error_message = _(
+                'Ошибка при добавлении категории. Проверьте введенные данные.'
             )
         messages.error(self.request, error_message)
 

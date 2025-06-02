@@ -20,8 +20,7 @@ from hasta_la_vista_money.finance_account.models import (
 class AddAccountForm(ModelForm[Account]):
     name_account = CharField(
         label=_('Наименование счёта'),
-        help_text=_(
-            'Введите наименование счёта. Максимальная длина 250 символов.'),
+        help_text=_('Введите наименование счёта. Максимальная длина 250 символов.'),
     )
     type_account = ChoiceField(
         choices=Account.TYPE_ACCOUNT_LIST,
@@ -31,7 +30,8 @@ class AddAccountForm(ModelForm[Account]):
     balance = DecimalField(
         label=_('Баланс'),
         help_text=_(
-            'Введите начальный баланс, который есть сейчас на счёту в банке\\в наличной валюте.\nМаксимальная длина 20 символов.'),
+            'Введите начальный баланс, который есть сейчас на счёту в банке\\в наличной валюте.\nМаксимальная длина 20 символов.'
+        ),
     )
     currency = ChoiceField(
         choices=Account.CURRENCY_LIST,

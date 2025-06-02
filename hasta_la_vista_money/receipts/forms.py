@@ -157,7 +157,9 @@ class ReceiptForm(BaseFieldsForm):
     account = ModelChoiceField(
         queryset=Account.objects.all(),
         label=_('Счёт списания'),
-        help_text=_('Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.'),
+        help_text=_(
+            'Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.'
+        ),
     )
     receipt_date = DateTimeField(
         label=_('Дата и время покупки'),
