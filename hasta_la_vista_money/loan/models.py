@@ -2,6 +2,7 @@ import decimal
 
 from django.db import models
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
@@ -9,8 +10,8 @@ from hasta_la_vista_money.users.models import User
 
 class Loan(models.Model):
     TYPE_LOAN = [
-        ('Annuity', 'Аннуитетный'),
-        ('Differentiated', 'Дифференцированный'),
+        ('Annuity', _('Аннуитетный')),
+        ('Differentiated', _('Дифференцированный')),
     ]
 
     user = models.ForeignKey(
@@ -44,7 +45,7 @@ class Loan(models.Model):
         ]
 
     def __str__(self):
-        return f'Кредит №{self.id} на сумму {self.loan_amount}'
+        return _(f'Кредит №{self.id} на сумму {self.loan_amount}')
 
     def get_absolute_url(self):
         return reverse('loan:delete', args=[self.id])

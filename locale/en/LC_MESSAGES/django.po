@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-02 13:53+0300\n"
+"POT-Creation-Date: 2025-06-02 14:32+0300\n"
 "PO-Revision-Date: 2024-02-25 18:56+0300\n"
 "Last-Translator: Александр Павлов <>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -222,6 +222,9 @@ msgstr "Choose which account to transfer the expense to"
 #: .\hasta_la_vista_money\finance_account\views.py:226
 #: .\hasta_la_vista_money\income\forms.py:28
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:10
+#: .\hasta_la_vista_money\loan\forms.py:19
+#: .\hasta_la_vista_money\reports\views.py:181
+#: .\hasta_la_vista_money\reports\views.py:207
 msgid "Дата"
 msgstr "Date"
 
@@ -272,6 +275,7 @@ msgstr "Add"
 
 #: .\hasta_la_vista_money\expense\templates\expense\add_category_expense.html:34
 #: .\hasta_la_vista_money\income\templates\income\add_category_income.html:32
+#: .\hasta_la_vista_money\loan\templates\loan\add_loan.html:37
 msgid "Отмена"
 msgstr "Cancel"
 
@@ -283,6 +287,7 @@ msgstr "Edit income operation"
 #: .\hasta_la_vista_money\expense\templates\expense\change_expense.html:14
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\change_account.html:14
 #: .\hasta_la_vista_money\income\templates\income\change_income.html:14
+#: .\hasta_la_vista_money\users\templates\users\profile.html:41
 msgid "Сохранить"
 msgstr "Save"
 
@@ -308,6 +313,7 @@ msgstr "Are you sure?"
 
 #: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:8
 #: .\hasta_la_vista_money\finance_account\views.py:232
+#: .\hasta_la_vista_money\reports\views.py:187
 #: .\hasta_la_vista_money\templates\header.html:68
 #: .\hasta_la_vista_money\templates\header.html:98
 msgid "Расходы"
@@ -321,6 +327,8 @@ msgstr "Expenses"
 #: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:27
 #: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:79
 #: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:152
+#: .\hasta_la_vista_money\reports\views.py:184
+#: .\hasta_la_vista_money\reports\views.py:210
 msgid "Сумма"
 msgstr "Amount"
 
@@ -547,6 +555,7 @@ msgstr "Analytics"
 
 #: .\hasta_la_vista_money\finance_account\views.py:237
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:7
+#: .\hasta_la_vista_money\reports\views.py:213
 #: .\hasta_la_vista_money\templates\header.html:55
 #: .\hasta_la_vista_money\templates\header.html:84
 msgid "Доходы"
@@ -589,7 +598,6 @@ msgid "Дата создания"
 msgstr "Date of creation"
 
 #: .\hasta_la_vista_money\income\templates\income\add_category_income.html:12
-#: .\hasta_la_vista_money\income\templates\income\show_category_income.html:12
 msgid "Добавить категорию дохода"
 msgstr "Add income category"
 
@@ -614,6 +622,10 @@ msgstr "Income information is missing! "
 msgid "Добавить новый доход"
 msgstr "Add income category"
 
+#: .\hasta_la_vista_money\income\templates\income\show_category_income.html:12
+msgid "Категории дохода"
+msgstr "Income categories"
+
 #: .\hasta_la_vista_money\income\views.py:158
 msgid "Расход успешно скопирован."
 msgstr "The expense has been successfully copied."
@@ -626,6 +638,48 @@ msgstr "This category has already been added!"
 msgid "Ошибка при добавлении категории. Проверьте введенные данные."
 msgstr "Error when adding a category. Check the entered data."
 
+#: .\hasta_la_vista_money\loan\forms.py:26
+msgid "Укажите дату начала кредита"
+msgstr "Specify the start date of the loan"
+
+#: .\hasta_la_vista_money\loan\forms.py:31
+msgid "Тип кредита"
+msgstr "Loan type"
+
+#: .\hasta_la_vista_money\loan\forms.py:33
+msgid ""
+"Выберите тип кредита из доступных вариантов. <button class=\"btn btn-outline-"
+"info btn-sm\" data-bs-toggle=\"modal\" data-bs-target=\"#payment-"
+"options\">Какой тип кредита выбрать?</button>"
+msgstr ""
+"Choose the type of loan from the available options. <button class=\"btn btn-"
+"outline-info btn-sm\" data-bs-toggle=\"modal\" data-bs-target=\"#payment-"
+"options\">What type of loan should I choose?</button>"
+
+#: .\hasta_la_vista_money\loan\forms.py:39
+msgid "Сумма кредита"
+msgstr "Loan amount"
+
+#: .\hasta_la_vista_money\loan\forms.py:40
+msgid "Введите сумму кредита в рублях"
+msgstr "Enter the loan amount in rubles"
+
+#: .\hasta_la_vista_money\loan\forms.py:44
+msgid "Годовая ставка в %"
+msgstr "Annual rate in %"
+
+#: .\hasta_la_vista_money\loan\forms.py:45
+msgid "Введите годовую процентную ставку по кредиту"
+msgstr "Enter the annual interest rate on the loan"
+
+#: .\hasta_la_vista_money\loan\forms.py:49
+msgid "Срок кредита в месяцах"
+msgstr "Loan term in months"
+
+#: .\hasta_la_vista_money\loan\forms.py:50
+msgid "Укажите срок кредита в месяцах"
+msgstr "Specify the loan term in months"
+
 #: .\hasta_la_vista_money\loan\forms.py:94
 msgid "Дата платежа"
 msgstr "Payment date"
@@ -637,6 +691,14 @@ msgstr "Loan"
 #: .\hasta_la_vista_money\loan\forms.py:97
 msgid "Сумма платежа"
 msgstr "Payment amount"
+
+#: .\hasta_la_vista_money\loan\models.py:13
+msgid "Аннуитетный"
+msgstr "Аннуитетный"
+
+#: .\hasta_la_vista_money\loan\models.py:14
+msgid "Дифференцированный"
+msgstr "Differentiated"
 
 #: .\hasta_la_vista_money\loan\templates\loan\add_loan.html:13
 #: .\hasta_la_vista_money\loan\templates\loan\loan.html:53
@@ -722,9 +784,321 @@ msgstr "Make a payment for loan No."
 msgid "Добавить платеж"
 msgstr "Add a payment"
 
-#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:11
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:10
 msgid "Варианты платежей"
 msgstr "Payment options:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:17
+msgid "1. Аннуитетный платеж"
+msgstr "1. Annuity Payment"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:19
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:48
+msgid "Определение:"
+msgstr "Definition:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:20
+msgid ""
+"Аннуитетный платеж — это способ погашения кредита, при котором заемщик "
+"ежемесячно платит фиксированную сумму. Эта сумма включает как часть "
+"основного долга, так и начисленные проценты."
+msgstr ""
+"An annuity payment is a method of repaying a loan where the borrower pays a "
+"fixed amount monthly. This amount includes both a portion of the principal "
+"debt and accrued interest."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:23
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:52
+msgid "Особенности:"
+msgstr "Features:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:25
+msgid ""
+"Ежемесячный платеж остается постоянным на протяжении всего срока кредита."
+msgstr "The monthly payment remains constant throughout the entire loan term."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:26
+msgid ""
+"В начале срока большая часть платежа идет на погашение процентов, а меньшая "
+"— на погашение основного долга."
+msgstr ""
+"At the beginning of the term, a larger portion of the payment goes toward "
+"interest, and a smaller portion toward repaying the principal."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:27
+msgid ""
+"По мере выплаты кредита соотношение меняется: проценты уменьшаются, а доля "
+"основного долга увеличивается."
+msgstr ""
+"As the loan is repaid, the ratio changes: interest decreases and the share "
+"of the principal increases."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:30
+msgid "Формула расчета аннуитетного платежа:"
+msgstr "Formula for calculating an annuity payment:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:34
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:64
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:75
+msgid "Где:"
+msgstr "Where:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:36
+msgid "размер аннуитетного платежа,"
+msgstr "annuity payment amount,"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:37
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:67
+msgid "сумма кредита,"
+msgstr "loan amount,"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:38
+msgid "месячная процентная ставка (годовая ставка делится на 12),"
+msgstr "monthly interest rate (annual rate divided by 12),"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:39
+msgid "количество месяцев (срок кредита)."
+msgstr "number of months (loan term)."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:42
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:86
+msgid "Пример:"
+msgstr "Example:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:43
+#, fuzzy, python-format
+#| msgid ""
+#| "Если вы взяли кредит на 100 000 рублей под 12% годовых на 12 месяцев, то "
+#| "ежемесячный платеж будет одинаковым, например, 8 885 рублей. В первый "
+#| "месяц большая часть этой суммы пойдет на проценты, а меньшая — на "
+#| "погашение основного долга."
+msgid ""
+"Если вы взяли кредит на 100 000 рублей под 12%% годовых на 12 месяцев, то "
+"ежемесячный платеж будет одинаковым, например, 8 885 рублей. В первый месяц "
+"большая часть этой суммы пойдет на проценты, а меньшая — на погашение "
+"основного долга."
+msgstr ""
+"If you took a loan of 100 000 rubles at 12% annual interest for 12 months, "
+"the monthly payment would be fixed, e.g., 8 885 rubles. In the first month, "
+"most of this sum will go toward interest, and the smaller part toward "
+"repaying the principal."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:46
+msgid "2. Дифференцированный платеж"
+msgstr "2. Differentiated Payment"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:49
+msgid ""
+"Дифференцированный платеж — это способ погашения кредита, при котором "
+"заемщик ежемесячно выплачивает фиксированную часть основного долга плюс "
+"проценты на остаток задолженности."
+msgstr ""
+"A differentiated payment is a loan repayment method where the borrower pays "
+"a fixed portion of the principal plus interest on the remaining balance each "
+"month."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:54
+msgid ""
+"Ежемесячный платеж уменьшается с течением времени, так как проценты "
+"начисляются на остаток долга, который постепенно снижается."
+msgstr ""
+"The monthly payment decreases over time as interest is calculated on the "
+"decreasing debt balance."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:55
+msgid ""
+"Сразу после получения кредита заемщик начинает активно погашать основной "
+"долг."
+msgstr ""
+"Immediately after receiving the loan, the borrower begins actively repaying "
+"the principal."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:56
+msgid ""
+"Первоначальные платежи выше, чем при аннуитетной схеме, но общая переплата "
+"по кредиту меньше."
+msgstr ""
+"Initial payments are higher than with the annuity scheme, but the total "
+"interest paid over the loan term is lower."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:59
+msgid "Формула расчета дифференцированного платежа:"
+msgstr "Formula for calculating a differentiated payment:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:60
+msgid "Фиксированная часть основного долга:"
+msgstr "Fixed portion of the principal:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:66
+msgid "ежемесячная сумма основного долга,"
+msgstr "monthly principal amount,"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:68
+msgid "количество месяцев."
+msgstr "number of months."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:71
+msgid "Проценты за текущий месяц:"
+msgstr "Interest for the current month:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:77
+msgid "проценты за месяц,"
+msgstr "interest for the month,"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:78
+msgid "месячная процентная ставка."
+msgstr "monthly interest rate."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:81
+msgid "Общий платеж за месяц:"
+msgstr "Total monthly payment:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:87
+#, fuzzy, python-format
+#| msgid ""
+#| "Если вы взяли кредит на 100 000 рублей под 12% годовых на 12 месяцев, то "
+#| "фиксированная часть основного долга составит \\( 100\\,000 / 12 = 8\\,333 "
+#| "\\) рубля. В первый месяц проценты будут начислены на всю сумму кредита "
+#| "(\\( 100\\,000 \\cdot 0.01 = 1\\,000 \\) рублей), и общий платеж составит "
+#| "\\( 8\\,333 + 1\\,000 = 9\\,333 \\) рубля. Во второй месяц проценты будут "
+#| "начислены на остаток (\\( 91\\,667 \\cdot 0.01 = 917 \\) рублей), и "
+#| "платеж уменьшится."
+msgid ""
+"Если вы взяли кредит на 100 000 рублей под 12%% годовых на 12 месяцев, то "
+"фиксированная часть основного долга составит \\( 100\\,000 / 12 = 8\\,333 "
+"\\) рубля. В первый месяц проценты будут начислены на всю сумму кредита (\\"
+"( 100\\,000 \\cdot 0.01 = 1\\,000 \\) рублей), и общий платеж составит \\"
+"( 8\\,333 + 1\\,000 = 9\\,333 \\) рубля. Во второй месяц проценты будут "
+"начислены на остаток (\\( 91\\,667 \\cdot 0.01 = 917 \\) рублей), и платеж "
+"уменьшится."
+msgstr ""
+"If you took a loan of 100 000 rubles at 12% annual interest for 12 months, "
+"the fixed principal portion would be 100\\,000 / 12 = 8\\,333 rubles. In the "
+"first month, interest will be charged on the full loan amount (100\\,000 "
+"\\cdot 0.01 = 1\\,000 rubles), making the total payment 8\\,333 + 1\\,000 = "
+"9\\,333 rubles. In the second month, interest will be charged on the "
+"remaining balance (91\\,667 \\cdot 0.01 = 917 rubles), and the payment will "
+"decrease."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:90
+msgid "Сравнение аннуитетного и дифференцированного платежей"
+msgstr "Comparison of annuity and differentiated payments"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:93
+msgid "Критерий"
+msgstr "Criterion"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:94
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:125
+msgid "Аннуитетный платеж"
+msgstr "Annuity Payment"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:95
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:126
+msgid "Дифференцированный платеж"
+msgstr "Differentiated Payment"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:98
+msgid "Размер ежемесячного платежа"
+msgstr "Monthly payment size"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:99
+msgid "Постоянный"
+msgstr "Constant"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:100
+msgid "Уменьшается с каждым месяцем"
+msgstr "Decreases each month"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:103
+msgid "Переплата по кредиту"
+msgstr "Total interest paid"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:104
+msgid "Больше"
+msgstr "Higher"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:105
+msgid "Меньше"
+msgstr "Lower"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:108
+msgid "Начало погашения основного долга"
+msgstr "Start of principal repayment"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:109
+msgid "Меньшая доля в начале"
+msgstr "Smaller share at the beginning"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:110
+msgid "Большая доля с самого начала"
+msgstr "Larger share from the start"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:113
+msgid "Удобство для заемщика"
+msgstr "Convenience for the borrower"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:114
+msgid "Более предсказуемый график платежей"
+msgstr "More predictable payment schedule"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:115
+msgid "Требует планирования из-за уменьшения платежей"
+msgstr "Requires planning due to decreasing payments"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:118
+msgid "Общая стоимость кредита"
+msgstr "Total cost of the loan"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:119
+msgid "Выше"
+msgstr "Higher"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:120
+msgid "Ниже"
+msgstr "Lower"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:124
+msgid "Какой способ выбрать?"
+msgstr "Which method to choose?"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:125
+msgid ""
+"подходит тем, кто ценит стабильность и предсказуемость ежемесячных расходов. "
+"Это удобно для длительных кредитов (например, ипотека)."
+msgstr ""
+"Suitable for those who value stability and predictability in monthly "
+"expenses. It is convenient for long-term loans (e.g., mortgages)."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:126
+msgid ""
+"выгоден тем, кто хочет минимизировать переплату по кредиту и готов к более "
+"высоким платежам в начале срока. Этот вариант чаще используется для "
+"краткосрочных кредитов."
+msgstr ""
+"Beneficial for those who want to minimize total interest and are ready for "
+"higher payments at the beginning. This option is often used for short-term "
+"loans."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:129
+msgid "Итог:"
+msgstr "Summary:"
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:131
+msgid ""
+"Аннуитетный платеж — это равные ежемесячные выплаты, где большая часть денег "
+"в начале идет на проценты."
+msgstr ""
+"An annuity payment means equal monthly payments, where a large portion of "
+"the money initially goes toward interest."
+
+#: .\hasta_la_vista_money\loan\templates\loan\modals\payment-options.html:132
+msgid ""
+"Дифференцированный платеж — это уменьшающиеся ежемесячные выплаты, где сразу "
+"активно гасится основной долг."
+msgstr ""
+"A differentiated payment means decreasing monthly payments, where the "
+"principal is actively repaid from the very beginning."
 
 #: .\hasta_la_vista_money\receipts\forms.py:33
 msgid "Продавец"
@@ -959,6 +1333,14 @@ msgstr "Transaction address"
 msgid "Отчёты"
 msgstr "Reports"
 
+#: .\hasta_la_vista_money\reports\views.py:177
+msgid "Статистика по расходам"
+msgstr "Expense statistics"
+
+#: .\hasta_la_vista_money\reports\views.py:203
+msgid "Статистика по доходам"
+msgstr "Income statistics"
+
 #: .\hasta_la_vista_money\templates\404.html:6
 #: .\hasta_la_vista_money\templates\404.html:13
 msgid "404 - Страница не найдена"
@@ -1016,6 +1398,10 @@ msgstr "Set new password"
 #: .\hasta_la_vista_money\users\templates\users\profile.html:6
 msgid "Личный кабинет пользователя "
 msgstr "User profile "
+
+#: .\hasta_la_vista_money\users\templates\users\profile.html:18
+msgid "Персональная информация"
+msgstr "Personal information"
 
 #: .\hasta_la_vista_money\users\templates\users\registration.html:6
 msgid "Регистрация нового пользователя"
