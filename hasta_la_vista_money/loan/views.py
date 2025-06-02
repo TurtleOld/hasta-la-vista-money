@@ -21,23 +21,22 @@ class LoanView(CustomNoPermissionMixin, SuccessMessageMixin, ListView):
 
     def get_context_data(self, *args, **kwargs):
         user = get_object_or_404(User, username=self.request.user)
-        if user:
-            loan_form = LoanForm()
-            payment_make_loan_form = PaymentMakeLoanForm(user=self.request.user)
-            loan = user.loan_users.all()
-            result_calculate = user.payment_schedule_users.select_related(
-                'loan',
-            ).all()
-            payment_make_loan = user.payment_make_loan_users.all()
+        loan_form = LoanForm()
+        payment_make_loan_form = PaymentMakeLoanForm(user=self.request.user)
+        loan = user.loan_users.all()
+        result_calculate = user.payment_schedule_users.select_related(
+            'loan',
+        ).all()
+        payment_make_loan = user.payment_make_loan_users.all()
 
-            context = super().get_context_data(**kwargs)
-            context['loan_form'] = loan_form
-            context['payment_make_loan_form'] = payment_make_loan_form
-            context['loan'] = loan
-            context['result_calculate'] = result_calculate
-            context['payment_make_loan'] = payment_make_loan
+        context = super().get_context_data(**kwargs)
+        context['loan_form'] = loan_form
+        context['payment_make_loan_form'] = payment_make_loan_form
+        context['loan'] = loan
+        context['result_calculate'] = result_calculate
+        context['payment_make_loan'] = payment_make_loan
 
-            return context
+        return context
 
 
 class LoanCreateView(CustomNoPermissionMixin, SuccessMessageMixin, CreateView):

@@ -694,7 +694,7 @@ msgstr "Payment amount"
 
 #: .\hasta_la_vista_money\loan\models.py:13
 msgid "Аннуитетный"
-msgstr "Аннуитетный"
+msgstr "Annuity"
 
 #: .\hasta_la_vista_money\loan\models.py:14
 msgid "Дифференцированный"
