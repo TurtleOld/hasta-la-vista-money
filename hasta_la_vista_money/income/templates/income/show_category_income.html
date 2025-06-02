@@ -9,7 +9,7 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
                     <h5 class="card-title">
-                        {% translate 'Добавить категорию дохода' %}
+                        {% translate 'Категории дохода' %}
                     </h5>
                     <a class="btn btn-success btn-sm"
                        href="{% url 'income:create_category' %}">
@@ -20,7 +20,7 @@
                     {% include "income/income_cat_list.html" %}
                 </div>
             </div>
-            <a class="btn btn-outline-success mt-1" href="{% url 'income:list' %}">Назад</a>
+            <a class="btn btn-outline-success mt-1" href="{% url 'income:list' %}">{% translate 'Вернуться назад' %}</a>
         </div>
     </div>
 </div>

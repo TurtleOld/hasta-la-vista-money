@@ -10,27 +10,27 @@ from hasta_la_vista_money.finance_account.models import Account
 class AddExpenseForm(BaseForm):
     category = ModelChoiceField(
         queryset=ExpenseCategory.objects.all(),
-        label='Категория расхода',
-        help_text='Выберите категорию расхода',
+        label=_('Категория расхода'),
+        help_text=_('Выберите категорию расхода'),
     )
     account = ModelChoiceField(
         queryset=Account.objects.all(),
-        label='Счёт списания',
-        help_text='Выберите с какого счёта списывать расход',
+        label=_('Счёт списания'),
+        help_text=_('Выберите с какого счёта списывать расход'),
     )
     date = DateTimeField(
-        label='Дата',
+        label=_('Дата'),
         widget=DateTimeInput(
             attrs={
                 'type': 'datetime-local',
                 'class': 'form-control',
             }
         ),
-        help_text='Укажите дату и время расхода',
+        help_text=_('Укажите дату и время расхода'),
     )
     amount = DecimalField(
-        label='Сумма списания',
-        help_text='Введите сумму списания',
+        label=_('Сумма списания'),
+        help_text=_('Введите сумму списания'),
     )
 
     field = 'category'
@@ -60,13 +60,13 @@ class AddExpenseForm(BaseForm):
 
 class AddCategoryForm(BaseForm):
     name = CharField(
-        label='Название категории',
-        help_text='Введите название категории расхода для её создания',
+        label=_('Название категории'),
+        help_text=_('Введите название категории расхода для её создания'),
     )
     parent_category = ModelChoiceField(
         queryset=ExpenseCategory.objects.all(),
-        label='Родительская категория',
-        help_text='Выберите родительскую категорию расхода для создаваемой категории',
+        label=_('Родительская категория'),
+        help_text=_('Выберите родительскую категорию расхода для создаваемой категории'),
     )
     field = 'parent_category'
 
