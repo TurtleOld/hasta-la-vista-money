@@ -215,14 +215,6 @@ CONTENT_SECURITY_POLICY = {
                          'https://htmx.org',
                          'https://cdn.jsdelivr.net',
                      ] + additional_script_src,
-        'style-src-elem': [
-                              SELF,
-                              NONCE,
-                              BASE_URL,
-                              'https://code.highcharts.com',
-                              'https://htmx.org',
-                              'https://cdn.jsdelivr.net',
-                          ] + additional_script_src,
         'font-src': [
                         SELF,
                         NONCE,
