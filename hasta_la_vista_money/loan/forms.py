@@ -32,7 +32,6 @@ class LoanForm(BaseForm):
         help_text=mark_safe(
             _(
                 'Выберите тип кредита из доступных вариантов. '
-                '<button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#payment-options">Какой тип кредита выбрать?</button>'
             )
         ),
     )
