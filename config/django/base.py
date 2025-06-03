@@ -9,6 +9,7 @@ from config.django.sessions import *  # NOQA
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from dotenv import load_dotenv
 from sentry_sdk.integrations.django import DjangoIntegration
+from csp.constants import SELF, NONCE
 
 django_stubs_ext.monkeypatch()
 load_dotenv()
@@ -153,7 +154,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 AUTHENTICATION_BACKENDS = (
@@ -183,36 +185,47 @@ STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Content Security Policy (CSP)
-additional_script_src = tuple(
+additional_script_src = list(
     filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
 )
-CSP_INCLUDE_NONCE_IN = ['script-src', 'style-src', 'img-src', 'font-src']
-CSP_REPORT_URI = [os.getenv('SENTRY_ENDPOINT')]
-CSP_DEFAULT_SRC = (
-    "'self'",
-    BASE_URL,
-    'https://code.highcharts.com',
-    'https://htmx.org',
-) + additional_script_src
-
-CSP_SCRIPT_SRC = (
-    "'self'",
-    BASE_URL,
-    'https://code.highcharts.com',
-    'https://unpkg.com',
-    'https://htmx.org',
-) + additional_script_src
-CSP_STYLE_SRC = (
-    "'self'",
-    BASE_URL,
-    'https://code.highcharts.com',
-    'https://htmx.org',
-) + additional_script_src
-CSP_IMG_SRC = ("'self'", 'data:', BASE_URL) + additional_script_src
-CSP_FONT_SRC = ("'self'", BASE_URL) + additional_script_src
-CSP_FRAME_SRC = ("'none'",) + additional_script_src
-CSP_BASE_URI = ("'none'",) + additional_script_src
-CSP_OBJECT_SRC = ("'none'",) + additional_script_src
+CONTENT_SECURITY_POLICY = {
+    "EXCLUDE_URL_PREFIXES": ["/admin"],
+    "DIRECTIVES": {
+        "default-src": [
+                           SELF, BASE_URL,
+                           'https://code.highcharts.com',
+                           'https://htmx.org',
+                           'https://cdn.jsdelivr.net',
+                       ] + additional_script_src,
+        "script-src": [
+                          SELF, NONCE, BASE_URL,
+                          'https://code.highcharts.com',
+                          'https://unpkg.com',
+                          'https://htmx.org',
+                          'https://cdn.jsdelivr.net',
+                      ] + additional_script_src,
+        "img-src": [
+            SELF, NONCE, "data:", BASE_URL,
+        ],
+        'style-src': [
+                         SELF,
+                         NONCE,
+                         BASE_URL,
+                         'https://code.highcharts.com',
+                         'https://htmx.org',
+                         'https://cdn.jsdelivr.net',
+                     ] + additional_script_src,
+        'font-src': [
+                        SELF,
+                        NONCE,
+                        BASE_URL,
+                    ] + additional_script_src,
+        'frame-ancestors': [
+                               SELF,
+                           ] + additional_script_src,
+        'report_uri': [os.getenv('SENTRY_ENDPOINT')],
+    },
+}
 
 # Authentication and user settings
 AUTH_USER_MODEL = 'users.User'
@@ -222,7 +235,8 @@ LOGOUT_REDIRECT_URL = '/login'
 
 # REST Framework
 REST_FRAMEWORK = {
-    'DEFAULT_FILTER_BACKENDS': ('django_filters.rest_framework.DjangoFilterBackend',),
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -257,5 +271,7 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
     MIDDLEWARE,
 )
 
-ACCESS_TOKEN_LIFETIME: timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
-REFRESH_TOKEN_LIFETIME: timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
+ACCESS_TOKEN_LIFETIME: timedelta(
+    minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
+REFRESH_TOKEN_LIFETIME: timedelta(
+    days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))

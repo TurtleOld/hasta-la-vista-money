@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.models import CommonIncomeExpense
 from hasta_la_vista_money.finance_account.models import Account
@@ -53,7 +54,7 @@ class Income(CommonIncomeExpense):
         auto_now_add=True,
         null=True,
         blank=True,
-        verbose_name='Date created',
+        verbose_name=_('Дата создания'),
     )
 
     def __str__(self):

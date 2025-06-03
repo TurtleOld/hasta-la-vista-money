@@ -5,6 +5,7 @@ from django.forms import (
     DecimalField,
     CharField,
 )
+from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.commonlogic.forms import BaseForm
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
@@ -15,27 +16,27 @@ class IncomeForm(BaseForm):
 
     category = ModelChoiceField(
         queryset=IncomeCategory.objects.all(),
-        label='Категория дохода',
-        help_text='Выберите категорию дохода',
+        label=_('Категория дохода'),
+        help_text=_('Выберите категорию дохода'),
     )
     account = ModelChoiceField(
         queryset=Account.objects.all(),
-        label='Счёт списания',
-        help_text='Выберите на какой счёт зачислить доход',
+        label=_('Счёт списания'),
+        help_text=_('Выберите на какой счёт зачислить доход'),
     )
     date = DateTimeField(
-        label='Дата',
+        label=_('Дата'),
         widget=DateTimeInput(
             attrs={
                 'type': 'datetime-local',
                 'class': 'form-control',
             }
         ),
-        help_text='Укажите дату и время получения дохода',
+        help_text=_('Укажите дату и время получения дохода'),
     )
     amount = DecimalField(
-        label='Сумма пополнения',
-        help_text='Введите сумму пополнения',
+        label=_('Сумма пополнения'),
+        help_text=_('Введите сумму пополнения'),
     )
 
     field = 'category'
@@ -55,13 +56,13 @@ class IncomeForm(BaseForm):
 
 class AddCategoryIncomeForm(BaseForm):
     name = CharField(
-        label='Название категории',
-        help_text='Введите название категории дохода для её создания',
+        label=_('Название категории'),
+        help_text=_('Введите название категории дохода для её создания'),
     )
     parent_category = ModelChoiceField(
         queryset=IncomeCategory.objects.all(),
-        label='Родительская категория',
-        help_text='Выберите родительскую категорию дохода для создаваемой категории',
+        label=_('Родительская категория'),
+        help_text=_('Выберите родительскую категорию дохода для создаваемой категории'),
     )
     field = 'parent_category'
 

@@ -16,38 +16,35 @@ from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
 
 class LoanForm(BaseForm):
     date = DateTimeField(
-        label='Дата',
+        label=_('Дата'),
         widget=DateTimeInput(
             attrs={
                 'type': 'datetime-local',
                 'class': 'form-control',
             }
         ),
-        help_text='Укажите дату начала кредита',
+        help_text=_('Укажите дату начала кредита'),
     )
 
     type_loan = ChoiceField(
         choices=Loan.TYPE_LOAN,
-        label='Тип кредита',
-        help_text=mark_safe(
-            'Выберите тип кредита из доступных вариантов. '
-            '<button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#payment-options">Какой тип кредита выбрать?</button>'
-        ),
+        label=_('Тип кредита'),
+        help_text=mark_safe(_('Выберите тип кредита из доступных вариантов. ')),
     )
 
     loan_amount = DecimalField(
-        label='Сумма кредита',
-        help_text='Введите сумму кредита в рублях',
+        label=_('Сумма кредита'),
+        help_text=_('Введите сумму кредита в рублях'),
     )
 
     annual_interest_rate = DecimalField(
-        label='Годовая ставка в %',
-        help_text='Введите годовую процентную ставку по кредиту',
+        label=_('Годовая ставка в %'),
+        help_text=_('Введите годовую процентную ставку по кредиту'),
     )
 
     period_loan = IntegerField(
-        label='Срок кредита в месяцах',
-        help_text='Укажите срок кредита в месяцах',
+        label=_('Срок кредита в месяцах'),
+        help_text=_('Укажите срок кредита в месяцах'),
     )
 
     class Meta:
@@ -82,7 +79,7 @@ class LoanForm(BaseForm):
         form.user = self.request_user
         form.account = Account.objects.create(
             user=self.request_user,
-            name_account=f'Кредитный счёт на {loan_amount}',
+            name_account=_(f'Кредитный счёт на {loan_amount}'),
             balance=loan_amount,
             currency='RU',
         )
