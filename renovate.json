@@ -7,5 +7,6 @@
   "ignorePresets": [":ignoreModulesAndTests"],
   "ignorePaths": ["**/node_modules/**", "**/__fixtures__/**", "test/**", "**/migrations/**"],
   "rebaseWhen": "conflicted",
-  "baseBranches": ["$default"]
+  "baseBranches": ["$default"],
+  "dependencyDashboard": false
 }
