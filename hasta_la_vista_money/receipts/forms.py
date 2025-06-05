@@ -1,8 +1,6 @@
 from os.path import splitext
-
 import django_filters
 from django.core.exceptions import ValidationError
-from django.core.validators import validate_image_file_extension
 from django.forms import (
     CharField,
     ChoiceField,
@@ -18,7 +16,6 @@ from django.forms import (
     FileField,
 )
 from django.forms.fields import IntegerField
-from django.template.base import kwarg_re
 from django.utils.translation import gettext_lazy as _
 from django_filters.fields import ModelChoiceField
 from hasta_la_vista_money.commonlogic.forms import BaseFieldsForm
