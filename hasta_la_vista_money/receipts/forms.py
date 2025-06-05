@@ -16,6 +16,7 @@ from django.forms import (
     formset_factory, Form,FileField
 )
 from django.forms.fields import IntegerField
+from django.template.base import kwarg_re
 from django.utils.translation import gettext_lazy as _
 from django_filters.fields import ModelChoiceField
 from hasta_la_vista_money.commonlogic.forms import BaseFieldsForm
@@ -222,4 +223,10 @@ def validate_image_jpg_png(value):
 
 
 class UploadImageForm(Form):
+    account = ModelChoiceField(queryset=Account.objects.all())
     file = FileField(label=_('Выберите файл'), validators=[validate_image_jpg_png],)
+
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['account'].initial = Account.objects.filter(user=user)

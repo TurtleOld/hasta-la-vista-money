@@ -303,9 +303,16 @@ class UploadImageView(LoginRequiredMixin, FormView):
     form_class = UploadImageForm
     success_url = reverse_lazy('receipts:list')
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
         uploaded_file = self.request.FILES['file']
         user = self.request.user
+
+        account = form.cleaned_data.get('account')
 
         json_receipt = analyze_image_with_ai(uploaded_file)
         decode_json_receipt = json.loads(json_receipt)
@@ -336,6 +343,7 @@ class UploadImageView(LoginRequiredMixin, FormView):
 
         receipt, _ = Receipt.objects.update_or_create(
             user=user,
+            account=account,
             number_receipt=decode_json_receipt['number_receipt'],
             defaults={
                 'receipt_date': datetime.strptime(decode_json_receipt['receipt_date'], "%d.%m.%Y %H:%M"),
