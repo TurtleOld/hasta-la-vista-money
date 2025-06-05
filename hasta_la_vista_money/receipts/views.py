@@ -1,6 +1,9 @@
+import json
+from datetime import datetime
 from decimal import Decimal
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, ProtectedError, Sum, Window
 from django.db.models.expressions import F
@@ -9,7 +12,8 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import CreateView, DeleteView, DetailView, ListView
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, \
+    FormView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.custom_paginator import (
@@ -22,9 +26,10 @@ from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
     ReceiptFilter,
     ReceiptForm,
-    SellerForm,
+    SellerForm, UploadImageForm,
 )
-from hasta_la_vista_money.receipts.models import Receipt, Seller
+from hasta_la_vista_money.receipts.models import Receipt, Seller, Product
+from hasta_la_vista_money.receipts.services import analyze_image_with_ai
 from hasta_la_vista_money.users.models import User
 
 
@@ -291,3 +296,58 @@ class ProductByMonthView(ListView):
         context['frequently_purchased_products'] = all_purchased_products
 
         return context
+
+
+class UploadImageView(LoginRequiredMixin, FormView):
+    template_name = 'receipts/upload_image.html'
+    form_class = UploadImageForm
+    success_url = reverse_lazy('receipts:list')
+
+    def form_valid(self, form):
+        uploaded_file = self.request.FILES['file']
+        user = self.request.user
+
+        json_receipt = analyze_image_with_ai(uploaded_file)
+        decode_json_receipt = json.loads(json_receipt)
+
+        seller, _ = Seller.objects.update_or_create(
+            user=user,
+            name_seller=decode_json_receipt['name_seller'],
+            defaults={
+                'retail_place_address': decode_json_receipt.get(
+                    'retail_place_address', ''),
+                'retail_place': decode_json_receipt.get('retail_place', ''),
+            }
+        )
+
+        products = []
+        for item in decode_json_receipt.get('items', []):
+            product, _ = Product.objects.update_or_create(
+                user=user,
+                product_name=item['product_name'],
+                defaults={
+                    'category': item['category'],
+                    'price': item['price'],
+                    'quantity': item['quantity'],
+                    'amount': item['amount'],
+                }
+            )
+            products.append(product)
+
+        receipt, _ = Receipt.objects.update_or_create(
+            user=user,
+            number_receipt=decode_json_receipt['number_receipt'],
+            defaults={
+                'receipt_date': datetime.strptime(decode_json_receipt['receipt_date'], "%d.%m.%Y %H:%M"),
+                'nds10': decode_json_receipt.get('nds10', 0),
+                'nds20': decode_json_receipt.get('nds20', 0),
+                'operation_type': decode_json_receipt.get('operation_type', 0),
+                'total_sum': decode_json_receipt['total_sum'],
+                'seller': seller,
+            }
+        )
+
+        if products:
+            receipt.product.set(products)
+
+        return super().form_valid(form)

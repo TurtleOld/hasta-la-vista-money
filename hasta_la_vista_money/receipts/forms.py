@@ -1,4 +1,8 @@
+from os.path import splitext
+
 import django_filters
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_image_file_extension
 from django.forms import (
     CharField,
     ChoiceField,
@@ -209,5 +213,13 @@ class ReceiptForm(BaseFieldsForm):
     products = ProductFormSet()
 
 
+def validate_image_jpg_png(value):
+
+    ext = splitext(value.name)[1].lower()
+
+    if ext not in ['.jpg', '.jpeg', '.png']:
+        raise ValidationError(_('Разрешены только файлы форматов: JPG, JPEG или PNG'))
+
+
 class UploadImageForm(Form):
-    file = FileField(label=_('Выберите файл'))
+    file = FileField(label=_('Выберите файл'), validators=[validate_image_jpg_png],)
