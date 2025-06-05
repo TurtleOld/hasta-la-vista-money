@@ -12,6 +12,7 @@ from hasta_la_vista_money.receipts.views import (
     ReceiptDeleteView,
     ReceiptView,
     SellerCreateView,
+    UploadImageView,
 )
 
 app_name = 'receipts'
@@ -53,5 +54,10 @@ urlpatterns = [
         'products',
         ProductByMonthView.as_view(),
         name='products',
+    ),
+    path(
+        'upload/',
+        UploadImageView.as_view(),
+        name='upload',
     ),
 ]

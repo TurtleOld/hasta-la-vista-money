@@ -1,4 +1,6 @@
+from os.path import splitext
 import django_filters
+from django.core.exceptions import ValidationError
 from django.forms import (
     CharField,
     ChoiceField,
@@ -9,7 +11,9 @@ from django.forms import (
     NumberInput,
     Select,
     TextInput,
-    formset_factory, Form,FileField
+    formset_factory,
+    Form,
+    FileField,
 )
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
@@ -209,5 +213,21 @@ class ReceiptForm(BaseFieldsForm):
     products = ProductFormSet()
 
 
+def validate_image_jpg_png(value):
+    ext = splitext(value.name)[1].lower()
+
+    if ext not in ['.jpg', '.jpeg', '.png']:
+        raise ValidationError(_('Разрешены только файлы форматов: JPG, JPEG или PNG'))
+
+
 class UploadImageForm(Form):
-    file = FileField(label=_('Выберите файл'))
+    account = ModelChoiceField(queryset=Account.objects.all())
+    file = FileField(
+        label=_('Выберите файл'),
+        validators=[validate_image_jpg_png],
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['account'].initial = Account.objects.filter(user=user)

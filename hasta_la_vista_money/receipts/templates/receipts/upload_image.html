@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load csp %}
+
+
+{% block content %}
+<div class="container mt-5 d-flex align-items-center flex-column">
+    <h2 class="mx-auto">Загрузите изображение чека</h2>
+    <form class="mx-auto" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="btn btn-success" type="submit">Загрузить</button>
+    </form>
+</div>
+<!-- /.container -->
+
+{% endblock %}
