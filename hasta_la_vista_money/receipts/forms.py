@@ -9,7 +9,7 @@ from django.forms import (
     NumberInput,
     Select,
     TextInput,
-    formset_factory,
+    formset_factory, Form,FileField
 )
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
@@ -207,3 +207,7 @@ class ReceiptForm(BaseFieldsForm):
         ]
 
     products = ProductFormSet()
+
+
+class UploadImageForm(Form):
+    file = FileField(label=_('Выберите файл'))
