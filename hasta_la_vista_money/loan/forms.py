@@ -7,7 +7,6 @@ from django.forms import (
     DecimalField,
     IntegerField,
 )
-from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.commonlogic.forms import BaseForm
 from hasta_la_vista_money.finance_account.models import Account
@@ -29,7 +28,7 @@ class LoanForm(BaseForm):
     type_loan = ChoiceField(
         choices=Loan.TYPE_LOAN,
         label=_('Тип кредита'),
-        help_text=mark_safe(_('Выберите тип кредита из доступных вариантов. ')),
+        help_text=_('Выберите тип кредита из доступных вариантов. '),
     )
 
     loan_amount = DecimalField(
