@@ -13,7 +13,9 @@ from django.forms import (
     NumberInput,
     Select,
     TextInput,
-    formset_factory, Form,FileField
+    formset_factory,
+    Form,
+    FileField,
 )
 from django.forms.fields import IntegerField
 from django.template.base import kwarg_re
@@ -215,7 +217,6 @@ class ReceiptForm(BaseFieldsForm):
 
 
 def validate_image_jpg_png(value):
-
     ext = splitext(value.name)[1].lower()
 
     if ext not in ['.jpg', '.jpeg', '.png']:
@@ -224,7 +225,10 @@ def validate_image_jpg_png(value):
 
 class UploadImageForm(Form):
     account = ModelChoiceField(queryset=Account.objects.all())
-    file = FileField(label=_('Выберите файл'), validators=[validate_image_jpg_png],)
+    file = FileField(
+        label=_('Выберите файл'),
+        validators=[validate_image_jpg_png],
+    )
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)

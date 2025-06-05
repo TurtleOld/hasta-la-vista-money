@@ -9,14 +9,13 @@ def image_to_base64(uploaded_file) -> str:
     Преобразует загруженное изображение в строку Base64.
     """
     file_bytes = uploaded_file.read()
-    encoded_str = base64.b64encode(file_bytes).decode("utf-8")
-    return f"data:image/jpeg;base64,{encoded_str}"
-
+    encoded_str = base64.b64encode(file_bytes).decode('utf-8')
+    return f'data:image/jpeg;base64,{encoded_str}'
 
 
 def analyze_image_with_ai(image_base64: UploadedFile):
     token = os.getenv('GITHUB_TOKEN')
-    endpoint = "https://models.github.ai/inference"
+    endpoint = 'https://models.github.ai/inference'
     model = os.getenv('MODEL')
 
     client = OpenAI(
@@ -30,18 +29,18 @@ def analyze_image_with_ai(image_base64: UploadedFile):
         top_p=1.0,
         messages=[
             {
-                "role": "system",
-                "content": (
-                    "Вы — помощник, который помогает извлекать данные с кассовых чеков. "
-                    "Ваша задача — проанализировать изображение и вернуть JSON без дополнительного текста."
+                'role': 'system',
+                'content': (
+                    'Вы — помощник, который помогает извлекать данные с кассовых чеков. '
+                    'Ваша задача — проанализировать изображение и вернуть JSON без дополнительного текста.'
                 ),
             },
             {
-                "role": "user",
-                "content": [
+                'role': 'user',
+                'content': [
                     {
-                        "type": "text",
-                        "text": (
+                        'type': 'text',
+                        'text': (
                             'На изображении представлен кассовый чек. '
                             'Преобразуйте его в JSON с ключами: '
                             'name_seller (имя продавца), retail_place_address (адрес расчетов), '
@@ -54,14 +53,12 @@ def analyze_image_with_ai(image_base64: UploadedFile):
                         ),
                     },
                     {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": image_to_base64(image_base64)
-                        }
-                    }
-                ]
-            }
-        ]
+                        'type': 'image_url',
+                        'image_url': {'url': image_to_base64(image_base64)},
+                    },
+                ],
+            },
+        ],
     )
 
     return response.choices[0].message.content

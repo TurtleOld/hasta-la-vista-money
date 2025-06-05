@@ -12,8 +12,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, \
-    FormView
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, FormView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.custom_paginator import (
@@ -26,7 +25,8 @@ from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
     ReceiptFilter,
     ReceiptForm,
-    SellerForm, UploadImageForm,
+    SellerForm,
+    UploadImageForm,
 )
 from hasta_la_vista_money.receipts.models import Receipt, Seller, Product
 from hasta_la_vista_money.receipts.services import analyze_image_with_ai
@@ -322,9 +322,10 @@ class UploadImageView(LoginRequiredMixin, FormView):
             name_seller=decode_json_receipt['name_seller'],
             defaults={
                 'retail_place_address': decode_json_receipt.get(
-                    'retail_place_address', ''),
+                    'retail_place_address', ''
+                ),
                 'retail_place': decode_json_receipt.get('retail_place', ''),
-            }
+            },
         )
 
         products = []
@@ -337,7 +338,7 @@ class UploadImageView(LoginRequiredMixin, FormView):
                     'price': item['price'],
                     'quantity': item['quantity'],
                     'amount': item['amount'],
-                }
+                },
             )
             products.append(product)
 
@@ -346,13 +347,15 @@ class UploadImageView(LoginRequiredMixin, FormView):
             account=account,
             number_receipt=decode_json_receipt['number_receipt'],
             defaults={
-                'receipt_date': datetime.strptime(decode_json_receipt['receipt_date'], "%d.%m.%Y %H:%M"),
+                'receipt_date': datetime.strptime(
+                    decode_json_receipt['receipt_date'], '%d.%m.%Y %H:%M'
+                ),
                 'nds10': decode_json_receipt.get('nds10', 0),
                 'nds20': decode_json_receipt.get('nds20', 0),
                 'operation_type': decode_json_receipt.get('operation_type', 0),
                 'total_sum': decode_json_receipt['total_sum'],
                 'seller': seller,
-            }
+            },
         )
 
         if products:
