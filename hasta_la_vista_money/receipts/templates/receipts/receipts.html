@@ -66,6 +66,8 @@
                 </svg>
                 {% translate 'Добавить чек вручную' %}
             </button>
+            <a class="d-flex align-items-center btn btn-sm btn-outline-success m-xl-1 m-1"
+               href="{% url 'receipts:upload' %}">{% translate 'Обработка изображения чека' %}</a>
         </div>
         {% for receipt in receipts %}
         <div class="col-xl-12">
