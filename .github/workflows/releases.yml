@@ -5,42 +5,13 @@ permissions:
 on:
   push:
     tags:
-      - 'v*'
+      - "v*.*.*"
 
 jobs:
-  create-release:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Generate changelog
-      id: changelog
-      run: |
-        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        if [ -z "$PREVIOUS_TAG" ]; then
-          CHANGELOG=$(git log --pretty=format:"* %s (%an)" | head -n 10)
-        else
-          CHANGELOG=$(git log $PREVIOUS_TAG..HEAD --pretty=format:"* %s (%an)")
-        fi
-          
-        ESCAPED_CHANGELOG=$(echo "$CHANGELOG" | sed 's/"/\\"/g; s/`/\\`/g; s/\$/\\\$/g')
-
-        echo "changelog<<EOF" >> $GITHUB_ENV
-        echo "$ESCAPED_CHANGELOG" >> $GITHUB_ENV
-        echo "EOF" >> $GITHUB_ENV
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref_name }}
-        release_name: Release ${{ github.ref_name }}
-        draft: true
-        prerelease: false
-        body: ${{ steps.changelog.outputs.changelog }}
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Release
+        uses: softprops/action-gh-release@v2
