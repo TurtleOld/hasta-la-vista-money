@@ -5,7 +5,7 @@ permissions:
 on:
   push:
     tags:
-      - 'v*'
+      - '*'
 
 jobs:
   create-release:
@@ -26,7 +26,12 @@ jobs:
         else
           CHANGELOG=$(git log $PREVIOUS_TAG..HEAD --pretty=format:"* %s (%an)")
         fi
-        echo "::set-output name=changelog::$CHANGELOG"
+          
+        ESCAPED_CHANGELOG=$(echo "$CHANGELOG" | sed 's/"/\\"/g; s/`/\\`/g; s/\$/\\\$/g')
+
+        echo "changelog<<EOF" >> $GITHUB_ENV
+        echo "$ESCAPED_CHANGELOG" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
 
     - name: Create Release
       id: create_release
