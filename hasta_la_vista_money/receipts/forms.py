@@ -13,7 +13,7 @@ from django.forms import (
     TextInput,
     formset_factory,
     Form,
-    FileField,
+    FileField, ClearableFileInput,
 )
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
@@ -221,13 +221,18 @@ def validate_image_jpg_png(value):
 
 
 class UploadImageForm(Form):
-    account = ModelChoiceField(queryset=Account.objects.all())
+    account = ModelChoiceField(
+        queryset=Account.objects.all(),
+        widget=Select(attrs={'class': 'form-control'}),
+    )
     file = FileField(
-        label=_('Выберите файл'),
+        label='Выберите файл',
+        widget=ClearableFileInput(attrs={
+            'class': 'form-control',
+        }),
         validators=[validate_image_jpg_png],
     )
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.fields['account'].initial = Account.objects.filter(user=user)

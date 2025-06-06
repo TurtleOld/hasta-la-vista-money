@@ -26,7 +26,7 @@ def analyze_image_with_ai(image_base64: UploadedFile):
     response = client.chat.completions.create(
         model=model,
         temperature=1.0,
-        top_p=1.0,
+        top_p=0.4,
         messages=[
             {
                 'role': 'system',
@@ -36,25 +36,33 @@ def analyze_image_with_ai(image_base64: UploadedFile):
                 ),
             },
             {
-                'role': 'user',
-                'content': [
+                "role": "user",
+                "content": [
                     {
-                        'type': 'text',
-                        'text': (
-                            'На изображении представлен кассовый чек. '
-                            'Преобразуйте его в JSON с ключами: '
-                            'name_seller (имя продавца), retail_place_address (адрес расчетов), '
-                            'retail_place (место расчетов), total_sum (итоговая сумма), '
-                            'operation_type (Приход - 1, Расход - 2)'
-                            'receipt_date (дата и время, формат d.m.Y H:M), number_receipt (ФД на чеке, числовое значение), '
-                            'Может содержать НДС 10% и 20%, поля nds10 и nds20 соответственно'
-                            'items — список товаров. Каждый товар содержит: product_name, category, price, quantity, amount. '
-                            'Категорию определяйте по названию товара.'
+                        "type": "text",
+                        "text": (
+                            "На изображении представлен кассовый чек. Преобразуйте его в JSON со следующими ключами:  "
+                            "- **name_seller**: имя продавца, если указано.  "
+                            "- **retail_place_address**: адрес расчетов, если указан.  "
+                            "- **retail_place**: место расчетов, если указано.  "
+                            "- **total_sum**: итоговая сумма в чеке.  "
+                            "- **operation_type**: тип операции (1 для \"Приход\", 2 для \"Расход\").  "
+                            "- **receipt_date**: дата и время в формате \"ДД.ММ.ГГГГ ЧЧ:ММ\", например: \"20.05.2025 11:40\".  "
+                            "- **number_receipt**: номер ФД из чека (числовое значение).  "
+                            "- **nds10**: сумма НДС 10%, если указано, или 0.  "
+                            "- **nds20**: сумма НДС 20%, если указано, или 0.  "
+                            "- **items**: список товаров, где каждый товар содержит:  "
+                            "  - **product_name**: название товара.  "
+                            "  - **category**: категория товара (определяется по названию).  "
+                            "  - **price**: цена за единицу товара.  "
+                            "  - **quantity**: количество товара.  "
+                            "  - **amount**: общая сумма за товар (цена × количество).  "
+                            "Ответьте только в виде корректного JSON, без дополнительного текста. Учитывайте указания, если они присутствуют."
                         ),
                     },
                     {
-                        'type': 'image_url',
-                        'image_url': {'url': image_to_base64(image_base64)},
+                        "type": "image_url",
+                        "image_url": {"url": image_to_base64(image_base64)},
                     },
                 ],
             },

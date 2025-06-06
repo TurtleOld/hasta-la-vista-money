@@ -6,14 +6,20 @@
 
 
 {% block content %}
-<div class="container mt-5 d-flex align-items-center flex-column">
-    <h2 class="mx-auto">Загрузите изображение чека</h2>
-    <form class="mx-auto" method="post" enctype="multipart/form-data">
+<div class="container mt-5">
+    <h2 class="text-center mb-4">Загрузите изображение чека</h2>
+    <form method="post" enctype="multipart/form-data" class="mx-auto w-50">
         {% csrf_token %}
-        {{ form.as_p }}
-        <button class="btn btn-success" type="submit">Загрузить</button>
+        <div class="mb-3">
+            {{ form.account.label_tag }}
+            {{ form.account }}
+        </div>
+        <div class="mb-3">
+            {{ form.file.label_tag }}
+            {{ form.file }}
+        </div>
+        <button type="submit" class="btn btn-success">Загрузить</button>
     </form>
 </div>
 <!-- /.container -->
-
 {% endblock %}
