@@ -20,16 +20,13 @@ jobs:
     - name: Generate changelog
       id: changelog
       run: |
-        # Получаем предыдущий тег
         PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-
         if [ -z "$PREVIOUS_TAG" ]; then
           CHANGELOG=$(git log --pretty=format:"* %s (%an)" | head -n 10)
         else
           CHANGELOG=$(git log $PREVIOUS_TAG..HEAD --pretty=format:"* %s (%an)")
         fi
-
-        echo "changelog=$CHANGELOG" >> $GITHUB_ENV
+        echo "::set-output name=changelog::$CHANGELOG"
 
     - name: Create Release
       id: create_release
@@ -41,6 +38,4 @@ jobs:
         release_name: Release ${{ github.ref_name }}
         draft: true
         prerelease: false
-        body: |
-          Changes in this Release:
-          ${{ env.changelog }}
+        body: ${{ steps.changelog.outputs.changelog }}
