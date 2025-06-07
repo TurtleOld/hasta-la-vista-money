@@ -22,7 +22,7 @@ channels = "^4.0.0"
 Pillow = "^11.0.0"
 numpy = "^2.0.0"
 django-axes = "^8.0.0"
-Twisted = {extras = ["http2", "tls"], version = "^24.7.0"}
+Twisted = {extras = ["http2", "tls"], version = "^25.0.0"}
 python-dateutil = "^2.8.2"
 django-debug-toolbar = "^5.0.0"
 daphne = "^4.0.0"
