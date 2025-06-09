@@ -309,60 +309,75 @@ class UploadImageView(LoginRequiredMixin, FormView):
         kwargs['user'] = self.request.user
         return kwargs
 
+    @staticmethod
+    def check_exist_receipt(user, number_receipt):
+        return Receipt.objects.filter(
+            user=user,
+            number_receipt=number_receipt,
+        )
+
     def form_valid(self, form):
-        uploaded_file = self.request.FILES['file']
-        user = self.request.user
+        try:
+            uploaded_file = self.request.FILES['file']
+            user = self.request.user
 
-        json_receipt = analyze_image_with_ai(uploaded_file)
-        decode_json_receipt = json.loads(json_receipt)
+            json_receipt = analyze_image_with_ai(uploaded_file)
+            decode_json_receipt = json.loads(json_receipt)
 
-        account = form.cleaned_data.get('account')
-        number_receipt = decode_json_receipt['number_receipt']
-        if not number_receipt:
-            seller, _ = Seller.objects.update_or_create(
-                user=user,
-                name_seller=decode_json_receipt['name_seller'],
-                defaults={
-                    'retail_place_address': decode_json_receipt.get(
-                        'retail_place_address', ''
-                    ),
-                    'retail_place': decode_json_receipt.get('retail_place', ''),
-                },
-            )
-
-            products = []
-            for item in decode_json_receipt.get('items', []):
-                product, _ = Product.objects.update_or_create(
+            account = form.cleaned_data.get('account')
+            number_receipt = decode_json_receipt['number_receipt']
+            receipt_exists = self.check_exist_receipt(user, number_receipt)
+            if not receipt_exists.exists():
+                seller, _ = Seller.objects.update_or_create(
                     user=user,
-                    product_name=item['product_name'],
+                    name_seller=decode_json_receipt['name_seller'],
                     defaults={
-                        'category': item['category'],
-                        'price': item['price'],
-                        'quantity': item['quantity'],
-                        'amount': item['amount'],
+                        'retail_place_address': decode_json_receipt.get(
+                            'retail_place_address', ''
+                        ),
+                        'retail_place': decode_json_receipt.get('retail_place', ''),
                     },
                 )
-                products.append(product)
 
-            receipt, _ = Receipt.objects.update_or_create(
-                user=user,
-                account=account,
-                number_receipt=decode_json_receipt['number_receipt'],
-                defaults={
-                    'receipt_date': datetime.strptime(
-                        decode_json_receipt['receipt_date'], '%d.%m.%Y %H:%M'
-                    ),
-                    'nds10': decode_json_receipt.get('nds10', 0),
-                    'nds20': decode_json_receipt.get('nds20', 0),
-                    'operation_type': decode_json_receipt.get('operation_type', 0),
-                    'total_sum': decode_json_receipt['total_sum'],
-                    'seller': seller,
-                },
+                products = []
+                for item in decode_json_receipt.get('items', []):
+                    product, _ = Product.objects.update_or_create(
+                        user=user,
+                        product_name=item['product_name'],
+                        defaults={
+                            'category': item['category'],
+                            'price': item['price'],
+                            'quantity': item['quantity'],
+                            'amount': item['amount'],
+                        },
+                    )
+                    products.append(product)
+
+                receipt, _ = Receipt.objects.update_or_create(
+                    user=user,
+                    account=account,
+                    number_receipt=decode_json_receipt['number_receipt'],
+                    defaults={
+                        'receipt_date': datetime.strptime(
+                            decode_json_receipt['receipt_date'], '%d.%m.%Y %H:%M'
+                        ),
+                        'nds10': decode_json_receipt.get('nds10', 0),
+                        'nds20': decode_json_receipt.get('nds20', 0),
+                        'operation_type': decode_json_receipt.get('operation_type', 0),
+                        'total_sum': decode_json_receipt['total_sum'],
+                        'seller': seller,
+                    },
+                )
+
+                if products:
+                    receipt.product.set(products)
+
+                return super().form_valid(form)
+            messages.error(self.request, gettext_lazy(constants.RECEIPT_ALREADY_EXISTS))
+            return super().form_invalid(form)
+        except ValueError:
+            messages.error(
+                self.request,
+                'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',
             )
-
-            if products:
-                receipt.product.set(products)
-
-            return super().form_valid(form)
-        messages.error(self.request, gettext_lazy(constants.RECEIPT_ALREADY_EXISTS))
-        return super().form_invalid(form)
+            return super().form_invalid(form)
