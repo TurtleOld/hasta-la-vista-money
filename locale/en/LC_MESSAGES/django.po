@@ -1334,10 +1334,8 @@ msgid "Адрес расчётов"
 msgstr "Transaction address"
 
 #: .\hasta_la_vista_money\receipts\templates\receipts\upload_image.html:10
-#, fuzzy
-#| msgid "Укажите наименование продукта"
 msgid "Загрузите изображение чека"
-msgstr "Enter name product"
+msgstr "Upload the receipt image"
 
 #: .\hasta_la_vista_money\receipts\templates\receipts\upload_image.html:21
 msgid "Загрузить"
