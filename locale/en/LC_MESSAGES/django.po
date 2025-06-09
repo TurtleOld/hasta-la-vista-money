@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-09 14:51+0300\n"
+"POT-Creation-Date: 2025-06-09 15:29+0300\n"
 "PO-Revision-Date: 2024-02-25 18:56+0300\n"
 "Last-Translator: Александр Павлов <>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1333,6 +1333,10 @@ msgstr "Transaction location"
 msgid "Адрес расчётов"
 msgstr "Transaction address"
 
+#: .\hasta_la_vista_money\receipts\templates\receipts\upload_image.html:7
+msgid "Загрузка чеков с изображения"
+msgstr "Processing receipt from image"
+
 #: .\hasta_la_vista_money\receipts\templates\receipts\upload_image.html:10
 msgid "Загрузите изображение чека"
 msgstr "Upload the receipt image"
@@ -1340,6 +1344,10 @@ msgstr "Upload the receipt image"
 #: .\hasta_la_vista_money\receipts\templates\receipts\upload_image.html:21
 msgid "Загрузить"
 msgstr "Upload"
+
+#: .\hasta_la_vista_money\receipts\templates\receipts\upload_image.html:24
+msgid "Загрузка..."
+msgstr "Loading..."
 
 #: .\hasta_la_vista_money\reports\templates\reports\reports.html:7
 #: .\hasta_la_vista_money\templates\header.html:138
