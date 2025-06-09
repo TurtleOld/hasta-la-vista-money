@@ -235,7 +235,6 @@ class UploadImageForm(Form):
             }
         ),
         validators=[validate_image_jpg_png],
-
     )
 
     def __init__(self, user, *args, **kwargs):

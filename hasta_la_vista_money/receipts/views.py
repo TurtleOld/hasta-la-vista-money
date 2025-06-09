@@ -310,7 +310,7 @@ class UploadImageView(LoginRequiredMixin, FormView):
         return kwargs
 
     @staticmethod
-    def check_exist_receipt(user,number_receipt):
+    def check_exist_receipt(user, number_receipt):
         return Receipt.objects.filter(
             user=user,
             number_receipt=number_receipt,
@@ -376,5 +376,8 @@ class UploadImageView(LoginRequiredMixin, FormView):
             messages.error(self.request, gettext_lazy(constants.RECEIPT_ALREADY_EXISTS))
             return super().form_invalid(form)
         except ValueError:
-            messages.error(self.request, 'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',)
+            messages.error(
+                self.request,
+                'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',
+            )
             return super().form_invalid(form)
