@@ -366,4 +366,3 @@ class UploadImageView(LoginRequiredMixin, FormView):
             return super().form_valid(form)
         messages.error(self.request, gettext_lazy(constants.RECEIPT_ALREADY_EXISTS))
         return super().form_invalid(form)
-

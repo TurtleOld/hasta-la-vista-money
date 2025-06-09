@@ -10,7 +10,6 @@
 
 {% block content %}
 <div class="container-fluid">
-    {% include 'error_modal.html' %}
     {% include 'receipts/filter.html' %}
     {% include 'receipts/modals/add_receipt.html' %}
     {% include 'receipts/modals/add_seller.html' %}
@@ -85,7 +84,7 @@
             </div>
         </div>
         <div id="receipt-{{ receipt.id }}"
-             class="modal modal-lg fade ajax-modal">
+             class="modal modal-lg fade">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">

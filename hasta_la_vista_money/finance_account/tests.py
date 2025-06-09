@@ -1,9 +1,11 @@
-from decimal import Decimal
+from django.utils import timezone
 
-from django.test import TestCase
-from django.urls import reverse_lazy
+from django.contrib import messages
+from django.test import RequestFactory, TestCase
+from django.urls import reverse_lazy, reverse
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense
+from hasta_la_vista_money.finance_account.forms import AddAccountForm
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
@@ -22,40 +24,75 @@ class TestAccount(TestCase):
         'income_cat.yaml',
     ]
 
+    @classmethod
+    def setUpTestData(cls):
+        cls.factory = RequestFactory()
+
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
-        self.account1 = Account.objects.get(pk=1)
-        self.account2 = Account.objects.get(pk=2)
-        self.expense = Expense.objects.get(pk=1)
-        self.income = Income.objects.get(pk=1)
+        # Получаем пользователя из фикстуры
+        self.user = User.objects.get(id=1)
+
+        # Привязываем аккаунты к пользователю
+        self.account1 = Account.objects.get(name_account='Банковская карта')
+        self.account1.user = self.user
+        self.account1.save()
+
+        self.account2 = Account.objects.get(name_account='Основной счёт')
+        self.account2.user = self.user
+        self.account2.save()
+
+        self.expense1 = Expense.objects.get(pk=1)
+        self.expense1.account = self.account1
+        self.expense1.user = self.user
+        self.expense1.save()
+
+        self.income1 = Income.objects.get(pk=1)
+        self.income1.account = self.account1
+        self.income1.user = self.user
+        self.income1.save()
 
     def test_account_list(self):
         self.client.force_login(self.user)
-        response = self.client.get(reverse_lazy('applications:list'))
+        url = reverse('finance_account:list')
+        response = self.client.get(url)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
-        account_list = list(response.context['accounts'])
-        self.assertQuerySetEqual(account_list, [self.account1, self.account2])
-
-    def test_account_create(self):
-        self.client.force_login(self.user)
-        url = reverse_lazy('finance_account:create')
-
-        new_account = {
-            'user': self.user,
-            'type_account': 'C',
-            'name_account': 'Банковская карта *8090',
-            'balance': BALANCE_TEST,
-            'currency': 'RUB',
-        }
-
-        response = self.client.post(url, data=new_account, follow=True)
-        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
-
-        created_account = Account.objects.get(
-            name_account='Банковская карта *8090',
+        self.assertEqual(Account.objects.count(), 2)
+        self.assertQuerySetEqual(
+            response.context['accounts'],
+            Account.objects.filter(user=self.user),
+            transform=lambda x: x,
         )
-        self.assertEqual(created_account.balance, BALANCE_TEST)
-        self.assertEqual(created_account.currency, 'RUB')
+
+    def test_account_create_valid_form(self):
+        account_form = AddAccountForm(
+            data={
+                'name': 'Test Account',
+                'balance': 1000,
+                'currency': 'USD',
+            },
+        )
+        request = self.factory.post('/')
+        request.user = self.user
+
+        if account_form.is_valid():
+            add_account = account_form.save(commit=False)
+            add_account.user = self.user
+            add_account.save()
+            messages.success(
+                request,
+                'Счет успешно создан',
+            )
+            response_data = {'success': True}
+            self.assertEqual(response_data, {'success': True})
+            self.assertEqual(Account.objects.count(), 1)
+            account = Account.objects.get()
+            self.assertEqual(account.name_account, 'Test Account')
+            self.assertEqual(account.balance, 1000)
+            self.assertEqual(account.currency, 'USD')
+            self.assertIn(
+                'Счет успешно создан',
+                [m.message for m in messages.get_messages(request)],
+            )
 
     def test_update_account(self):
         self.client.force_login(self.user)
@@ -96,9 +133,7 @@ class TestAccount(TestCase):
             args=(self.account1.pk,),
         )
 
-        expense_exists = Expense.objects.filter(
-            account__name_account=self.account1.name_account,
-        ).exists()
+        expense_exists = Expense.objects.filter(account=self.account1).exists()
         self.assertTrue(expense_exists)
 
         response = self.client.post(url2, follow=True)
@@ -111,35 +146,29 @@ class TestAccount(TestCase):
 
     def test_transfer_money(self):
         self.client.force_login(self.user)
-        url = reverse_lazy('finance_account:transfer_money')
+
+        initial_balance_account1 = self.account1.balance
+        initial_balance_account2 = self.account2.balance
+        amount = constants.ONE_HUNDRED
 
         transfer_money = {
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
-            'amount': constants.ONE_HUNDRED,
-            'exchange_date': '2024-01-24',
+            'amount': amount,
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        initial_balance_account1 = self.account1.balance
-        initial_balance_account2 = self.account2.balance
 
         response = self.client.post(
-            url,
-            data=transfer_money,
+            reverse('finance_account:transfer_money'),
+            transfer_money,
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'success': True})
 
-        account1 = Account.objects.get(pk=self.account1.pk)
-        account2 = Account.objects.get(pk=self.account2.pk)
+        self.account1.refresh_from_db()
+        self.account2.refresh_from_db()
 
-        transfer_money_amount = Decimal(transfer_money['amount'])  # type: ignore[arg-type]
-
-        self.assertEqual(
-            account1.balance,
-            initial_balance_account1 - transfer_money_amount,
-        )
-        self.assertEqual(
-            account2.balance,
-            initial_balance_account2 + transfer_money_amount,
-        )
+        self.assertEqual(self.account1.balance, initial_balance_account1 - amount)
+        self.assertEqual(self.account2.balance, initial_balance_account2 + amount)

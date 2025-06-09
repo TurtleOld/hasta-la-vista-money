@@ -1,14 +1,16 @@
 import json
-from typing import Any, Optional
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Sum
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, JsonResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
+from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.views import collect_info_receipt
@@ -23,7 +25,6 @@ from hasta_la_vista_money.finance_account.forms import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.prepare import (
     collect_info_expense,
@@ -308,7 +309,7 @@ class AccountView(
             return context
 
 
-class AccountCreateView(SuccessMessageMixin, AccountBaseView, CreateView):
+class AccountCreateView(CreateView):
     """
     Представление для создания нового счёта.
 
@@ -323,49 +324,24 @@ class AccountCreateView(SuccessMessageMixin, AccountBaseView, CreateView):
 
     form_class = AddAccountForm
     template_name = 'finance_account/add_account.html'
+    model = Account
     no_permission_url = reverse_lazy('login')
+    success_message = constants.SUCCESS_MESSAGE_ADDED_ACCOUNT
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['add_account_form'] = AddAccountForm()
-        context['tooltip_form_add_account'] = (
-            'Введите название счета (до 250 символов).<br>'
-            'Укажите начальный баланс - сумму, которая находится на счете при его создании.<br>'
-            'Выберите валюту счета из выпадающего списка.'
-        )
-
         return context
 
-    def post(self, request: WSGIRequest, *args, **kwargs) -> JsonResponse:
-        """
-        Обрабатывает POST-запрос на создание нового счета.
+    def get_success_url(self):
+        return reverse_lazy('applications:list')
 
-        Проверяет форму на валидность, сохраняет новый счет и отправляет сообщение
-        об успешном добавлении. В случае ошибки возвращает список ошибок формы.
-
-        Args:
-            request (WSGIRequest): Объект запроса, содержащий данные формы.
-
-        Returns:
-            JsonResponse: JSON-ответ, содержащий информацию об успешности операции или
-            список ошибок.
-        """
-        account_form = AddAccountForm(request.POST)
-        if account_form.is_valid():
-            add_account = account_form.save(commit=False)
-            add_account.user = request.user
-            add_account.save()
-            messages.success(
-                request,
-                constants.SUCCESS_MESSAGE_ADDED_ACCOUNT,
-            )
-            response_data = {'success': True}
-        else:
-            response_data = {
-                'success': False,
-                'errors': account_form.errors,
-            }
-        return JsonResponse(response_data)
+    def form_valid(self, form):
+        account = form.save(commit=False)
+        account.user = self.request.user
+        account.save()
+        messages.success(self.request, self.success_message)
+        return HttpResponseRedirect(self.get_success_url())
 
 
 class ChangeAccountView(
@@ -409,64 +385,30 @@ class TransferMoneyAccountView(
     CustomNoPermissionMixin,
     SuccessMessageMixin,
     AccountBaseView,
-    UpdateView,
+    View,
 ):
     """
     Представление для перевода средств между счетами.
-
-    Это представление использует форму для перевода средств, проверяет её на валидность
-    и сохраняет данные о переводе в случае успеха. Возвращает JSON-ответ с результатом
-    операции.
-
-    Attributes:
-        form_class (TransferMoneyAccountForm): Форма для перевода средств.
-        success_message (str): Сообщение, отображаемое при успешном переводе.
     """
 
     form_class = TransferMoneyAccountForm
     success_message = constants.SUCCESS_MESSAGE_TRANSFER_MONEY
 
     def post(self, request: WSGIRequest, *args, **kwargs) -> JsonResponse:
-        """
-        Обрабатывает POST-запрос на перевод средств.
+        form = self.form_class(user=request.user, data=request.POST)
 
-        Проверяет форму на валидность и тип запроса. Если форма валидна и запрос
-        был выполнен с помощью AJAX, сохраняет данные перевода и отправляет сообщение
-        об успешном переводе. В случае ошибки возвращает список ошибок формы.
-
-        Args:
-            request (WSGIRequest): Объект запроса, содержащий данные формы.
-
-        Returns:
-            JsonResponse: JSON-ответ, содержащий информацию об успешности операции
-            или список ошибок.
-        """
-        transfer_money_form = TransferMoneyAccountForm(
-            user=request.user,
-            data=request.POST,
-        )
-
-        valid_form = (
-            transfer_money_form.is_valid()
+        if (
+            form.is_valid()
             and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
-        )
-        if valid_form:
-            transfer_log: Optional[TransferMoneyLog] = transfer_money_form.save(
-                commit=False,
-            )
-
-            if transfer_log is not None and request.user.is_authenticated:
-                transfer_log.user = request.user
-                transfer_log.save()
+        ):
+            try:
+                form.save()
                 messages.success(request, self.success_message)
-            response_data: dict[str, Any] = {'success': True}
-            return JsonResponse(response_data)
+                return JsonResponse({'success': True})
+            except ValidationError as e:
+                return JsonResponse({'success': False, 'errors': str(e)})
         else:
-            error_data: dict[str, Any] = {
-                'success': False,
-                'errors': transfer_money_form.errors,
-            }
-            return JsonResponse(error_data)
+            return JsonResponse({'success': False, 'errors': form.errors})
 
 
 class DeleteAccountView(DeleteObjectMixin):

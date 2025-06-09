@@ -119,7 +119,6 @@ class TransferMoneyAccountForm(ModelForm[Account]):
                 exchange_date=exchange_date,
                 notes=notes,
             )
-
         return None
 
     class Meta:
