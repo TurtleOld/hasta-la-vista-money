@@ -223,6 +223,7 @@ def validate_image_jpg_png(value):
 
 class UploadImageForm(Form):
     account = ModelChoiceField(
+        label=_('Счёт'),
         queryset=Account.objects.all(),
         widget=Select(attrs={'class': 'form-control'}),
     )
@@ -234,6 +235,7 @@ class UploadImageForm(Form):
             }
         ),
         validators=[validate_image_jpg_png],
+
     )
 
     def __init__(self, user, *args, **kwargs):
