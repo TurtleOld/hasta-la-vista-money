@@ -1,0 +1,3 @@
+# Processing receipts with AI
+
+On the page with the list of receipts, there is a button labeled "Process Receipt Image". After navigating to the form page, you need to fill out the form: specify the account from which funds will be deducted, select a receipt image from your computer (supported formats are jpeg, jpg, png), and click "Upload". After that, please wait for the upload to complete — once finished, you will be redirected back to the receipts list page.

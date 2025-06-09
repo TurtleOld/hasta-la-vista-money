@@ -227,7 +227,7 @@ class UploadImageForm(Form):
         widget=Select(attrs={'class': 'form-control'}),
     )
     file = FileField(
-        label='Выберите файл',
+        label=_('Выберите файл'),
         widget=ClearableFileInput(
             attrs={
                 'class': 'form-control',

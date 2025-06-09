@@ -8,6 +8,8 @@ nav:
       - Registration: registration.md
     - Getting Started:
         - Account Summary Page: finance_account/finance_account.md
+        - Receipts Page: receipts/receipts.md
+        - Add receipts with AI: receipts/processing_receipt_ai.md
   - Contribute:
       contribute.md
 theme:
