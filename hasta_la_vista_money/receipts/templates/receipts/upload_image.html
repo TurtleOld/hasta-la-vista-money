@@ -4,11 +4,11 @@
 {% load static %}
 {% load csp %}
 
-
+{% block title %}{% translate 'Загрузка чеков с изображения' %}{% endblock %}
 {% block content %}
 <div class="container mt-5">
     <h2 class="text-center mb-4">{% translate 'Загрузите изображение чека' %}</h2>
-    <form method="post" enctype="multipart/form-data" class="mx-auto w-50">
+    <form method="post" enctype="multipart/form-data" class="mx-auto w-50" id="uploadForm">
         {% csrf_token %}
         <div class="mb-3">
             {{ form.account.label_tag }}
@@ -18,8 +18,27 @@
             {{ form.file.label_tag }}
             {{ form.file }}
         </div>
-        <button type="submit" class="btn btn-success">{% translate 'Загрузить' %}</button>
+        <button type="submit" class="btn btn-success" id="submitBtn">{% translate 'Загрузить' %}</button>
+        <div id="loadingIcon" class="d-none">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            {% translate 'Загрузка...' %}
+        </div>
     </form>
 </div>
 <!-- /.container -->
+<style>
+    .spinner-border {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        vertical-align: text-bottom;
+    }
+</style>
+
+<script nonce="{{request.csp_nonce}}">
+    document.getElementById('uploadForm').addEventListener('submit', function () {
+        document.getElementById('submitBtn').classList.add('d-none');
+        document.getElementById('loadingIcon').classList.remove('d-none');
+    });
+</script>
 {% endblock %}
