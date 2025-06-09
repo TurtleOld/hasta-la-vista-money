@@ -7,7 +7,7 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h2 class="text-center mb-4">Загрузите изображение чека</h2>
+    <h2 class="text-center mb-4">{% translate 'Загрузите изображение чека' %}</h2>
     <form method="post" enctype="multipart/form-data" class="mx-auto w-50">
         {% csrf_token %}
         <div class="mb-3">
@@ -18,7 +18,7 @@
             {{ form.file.label_tag }}
             {{ form.file }}
         </div>
-        <button type="submit" class="btn btn-success">Загрузить</button>
+        <button type="submit" class="btn btn-success">{% translate 'Загрузить' %}</button>
     </form>
 </div>
 <!-- /.container -->
