@@ -13,7 +13,8 @@ from django.forms import (
     TextInput,
     formset_factory,
     Form,
-    FileField, ClearableFileInput,
+    FileField,
+    ClearableFileInput,
 )
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
@@ -227,9 +228,11 @@ class UploadImageForm(Form):
     )
     file = FileField(
         label='Выберите файл',
-        widget=ClearableFileInput(attrs={
-            'class': 'form-control',
-        }),
+        widget=ClearableFileInput(
+            attrs={
+                'class': 'form-control',
+            }
+        ),
         validators=[validate_image_jpg_png],
     )
 
