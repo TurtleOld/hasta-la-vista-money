@@ -1,5 +1,6 @@
 from typing import Any, Dict
 
+from django.core.exceptions import ValidationError
 from django.forms import (
     CharField,
     ChoiceField,
@@ -119,7 +120,6 @@ class TransferMoneyAccountForm(ModelForm[Account]):
                 exchange_date=exchange_date,
                 notes=notes,
             )
-
         return None
 
     class Meta:
