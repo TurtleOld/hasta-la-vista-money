@@ -1,5 +1,5 @@
 import json
-from typing import Any, Optional
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Sum
 from django.http import HttpRequest, JsonResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views import View
@@ -25,7 +25,6 @@ from hasta_la_vista_money.finance_account.forms import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.prepare import (
     collect_info_expense,
