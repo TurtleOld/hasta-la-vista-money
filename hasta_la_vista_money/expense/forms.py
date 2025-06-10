@@ -69,6 +69,8 @@ class AddCategoryForm(BaseForm):
         help_text=_(
             'Выберите родительскую категорию расхода для создаваемой категории'
         ),
+        required=False,
+        empty_label=_('Нет родительской категории'),
     )
     field = 'parent_category'
 
