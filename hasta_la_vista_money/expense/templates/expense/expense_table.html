@@ -1,5 +1,6 @@
 {% load i18n %}
 {% load comma %}
+{% load expense_tags %}
 
 
 <div id="expense-table" class="table-responsive">
@@ -48,6 +49,7 @@
                 <td>{{ expense.account__name_account }}</td>
                 <td>
                     <div class="table-buttons">
+                        {% if not expense.id|stringformat:"s"|startswith:"receipt_" %}
                         <a href="{% url 'expense:change' expense.id %}"
                            class="change-object-button btn btn-info border-0 btn-sm me-1">
                             <svg xmlns="http://www.w3.org/2000/svg"
@@ -93,6 +95,7 @@
                                 </svg>
                             </button>
                         </form>
+                        {% endif %}
                     </div>
                     <!-- /.table-buttons -->
                 </td>

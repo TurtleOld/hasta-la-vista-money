@@ -81,11 +81,20 @@ def create_object_view(form, model, request, message) -> dict[str, bool]:
     :param message:
     :return: JsonResponse
     """
+    if not form.is_valid():
+        return {'success': False, 'errors': form.errors}
+
     form_instance = form.save(commit=False)
     cd = form.cleaned_data
     amount = cd.get('amount')
-    account = cd.get('finance_account')
+    account = cd.get('account')
     category = cd.get('category')
+
+    if not all([amount, account, category]):
+        return {
+            'success': False,
+            'errors': {'__all__': ['Все поля должны быть заполнены']},
+        }
 
     selected_account = get_object_or_404(Account, id=account.id)
     selected_category = get_object_or_404(model, name=category)
@@ -101,7 +110,10 @@ def create_object_view(form, model, request, message) -> dict[str, bool]:
             message,
         )
         return {'success': True}
-    return {'success': False, 'errors': form.errors}
+    return {
+        'success': False,
+        'errors': {'__all__': ['У вас нет прав для выполнения этого действия']},
+    }
 
 
 def change_account_balance(account, request, amount):
