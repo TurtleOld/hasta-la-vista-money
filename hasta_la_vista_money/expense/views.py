@@ -2,7 +2,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Sum, Q
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -71,7 +71,7 @@ class ExpenseView(
             receipt_category, _ = ExpenseCategory.objects.get_or_create(
                 user=user,
                 name='Покупки по чекам',
-                defaults={'name': 'Покупки по чекам'}
+                defaults={'name': 'Покупки по чекам'},
             )
 
             expense_categories = (
@@ -114,7 +114,7 @@ class ExpenseView(
             receipt_expenses = (
                 Receipt.objects.filter(
                     user=user,
-                    operation_type=1  # Only purchases
+                    operation_type=1,  # Only purchases
                 )
                 .values(
                     'receipt_date',
@@ -129,13 +129,15 @@ class ExpenseView(
             # Convert receipt expenses to match expense format
             receipt_expense_list = []
             for receipt in receipt_expenses:
-                receipt_expense_list.append({
-                    'id': f'receipt_{receipt["receipt_date"].strftime("%Y%m%d")}_{receipt["account__name_account"]}',
-                    'date': receipt['receipt_date'],
-                    'amount': receipt['amount'],
-                    'category__name': 'Покупки по чекам',
-                    'account__name_account': receipt['account__name_account'],
-                })
+                receipt_expense_list.append(
+                    {
+                        'id': f'receipt_{receipt["receipt_date"].strftime("%Y%m%d")}_{receipt["account__name_account"]}',
+                        'date': receipt['receipt_date'],
+                        'amount': receipt['amount'],
+                        'category__name': 'Покупки по чекам',
+                        'account__name_account': receipt['account__name_account'],
+                    }
+                )
 
             # Combine regular expenses and receipt expenses
             all_expenses = list(expenses) + receipt_expense_list
