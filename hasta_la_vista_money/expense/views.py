@@ -2,6 +2,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -29,6 +30,7 @@ from hasta_la_vista_money.expense.filters import ExpenseFilter
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
 
@@ -65,6 +67,13 @@ class ExpenseView(
         user = get_object_or_404(User, username=self.request.user)
         depth_limit = 3
         if user:
+            # Create receipt expense category if it doesn't exist
+            receipt_category, _ = ExpenseCategory.objects.get_or_create(
+                user=user,
+                name='Покупки по чекам',
+                defaults={'name': 'Покупки по чекам'},
+            )
+
             expense_categories = (
                 user.category_expense_users.select_related('user')
                 .values(
@@ -101,9 +110,41 @@ class ExpenseView(
 
             expenses = expense_filter.qs
 
+            # Get receipt expenses grouped by month and account
+            receipt_expenses = (
+                Receipt.objects.filter(
+                    user=user,
+                    operation_type=1,  # Only purchases
+                )
+                .values(
+                    'receipt_date',
+                    'account__name_account',
+                )
+                .annotate(
+                    amount=Sum('total_sum'),
+                )
+                .order_by('-receipt_date')
+            )
+
+            # Convert receipt expenses to match expense format
+            receipt_expense_list = []
+            for receipt in receipt_expenses:
+                receipt_expense_list.append(
+                    {
+                        'id': f'receipt_{receipt["receipt_date"].strftime("%Y%m%d")}_{receipt["account__name_account"]}',
+                        'date': receipt['receipt_date'],
+                        'amount': receipt['amount'],
+                        'category__name': 'Покупки по чекам',
+                        'account__name_account': receipt['account__name_account'],
+                    }
+                )
+
+            # Combine regular expenses and receipt expenses
+            all_expenses = list(expenses) + receipt_expense_list
+
             pages_expense = paginator_custom_view(
                 self.request,
-                expenses,
+                all_expenses,
                 self.paginate_by,
                 'expenses',
             )
