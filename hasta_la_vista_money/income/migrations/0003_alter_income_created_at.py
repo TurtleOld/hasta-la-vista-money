@@ -4,17 +4,16 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("income", "0002_initial"),
+        ('income', '0002_initial'),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name="income",
-            name="created_at",
+            model_name='income',
+            name='created_at',
             field=models.DateTimeField(
-                auto_now_add=True, null=True, verbose_name="Дата создания"
+                auto_now_add=True, null=True, verbose_name='Дата создания'
             ),
         ),
     ]

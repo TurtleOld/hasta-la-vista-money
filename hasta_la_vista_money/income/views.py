@@ -1,6 +1,8 @@
+from typing import Any, Dict, Optional
+
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -34,7 +36,7 @@ from hasta_la_vista_money.users.models import User
 
 class BaseView:
     template_name = 'income/income.html'
-    success_url = reverse_lazy('income:list')
+    success_url: Optional[str] = reverse_lazy('income:list')
 
 
 class IncomeCategoryBaseView(BaseView):
@@ -55,66 +57,71 @@ class IncomeView(
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
 
-    def get_context_data(self, *args, **kwargs):
+    def get_context_data(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        context = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
         depth_limit = 3
-        if user:
-            categories = (
-                user.category_income_users.select_related('user')
-                .values(
-                    'id',
-                    'name',
-                    'parent_category',
-                    'parent_category__name',
-                )
-                .order_by('parent_category_id')
-                .all()
+
+        categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .values(
+                'id',
+                'name',
+                'parent_category',
+                'parent_category__name',
             )
-            income_filter = IncomeFilter(
-                self.request.GET,
-                queryset=Income.objects.all(),
-                user=self.request.user,
-            )
+            .order_by('parent_category_id')
+            .all()
+        )
 
-            flattened_categories = build_category_tree(
-                categories,
-                depth=depth_limit,
-            )
+        income_filter = IncomeFilter(
+            self.request.GET,
+            queryset=Income.objects.all(),
+            user=self.request.user,
+        )
 
-            income_categories = (
-                user.category_income_users.select_related('user')
-                .order_by('parent_category__name', 'name')
-                .all()
-            )
-            income_form = IncomeForm(
-                user=self.request.user,
-                depth=depth_limit,
-                category_queryset=income_categories,
-            )
+        flattened_categories = build_category_tree(
+            categories,
+            depth=depth_limit,
+        )
 
-            income_form.fields[
-                'account'
-            ].queryset = user.finance_account_users.select_related(
-                'user',
-            ).all()
+        income_categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        income_form = IncomeForm(
+            user=self.request.user,
+            depth=depth_limit,
+            category_queryset=income_categories,
+        )
 
-            income_by_month = income_filter.qs
+        income_form.fields['account'].queryset = (
+            Account.objects.filter(user=user).select_related('user').all()
+        )
 
-            pages_income = paginator_custom_view(
-                self.request,
-                income_by_month,
-                self.paginate_by,
-                'income',
-            )
+        income_by_month = income_filter.qs
 
-            context = super().get_context_data(**kwargs)
-            context['categories'] = categories
-            context['income_filter'] = income_filter
-            context['income_by_month'] = pages_income
-            context['income_form'] = income_form
-            context['flattened_categories'] = flattened_categories
+        pages_income = paginator_custom_view(
+            self.request,
+            income_by_month,
+            self.paginate_by or 10,
+            'income',
+        )
 
-            return context
+        context.update(
+            {
+                'categories': categories,
+                'income_filter': income_filter,
+                'income_by_month': pages_income,
+                'income_form': income_form,
+                'flattened_categories': flattened_categories,
+            },
+        )
+
+        return context
 
 
 class IncomeCreateView(
@@ -127,8 +134,9 @@ class IncomeCreateView(
     no_permission_url = reverse_lazy('login')
     form_class = IncomeForm
     depth_limit = 3
+    success_url: Optional[str] = reverse_lazy('income:list')
 
-    def form_valid(self, form):
+    def form_valid(self, form: Any) -> HttpResponse:
         if form.is_valid():
             form_class = self.get_form_class()
             form = self.get_form(form_class)
@@ -139,6 +147,7 @@ class IncomeCreateView(
                 message=constants.SUCCESS_INCOME_ADDED,
             )
             return JsonResponse(response_data)
+        return super().form_valid(form)
 
 
 class IncomeCopyView(
@@ -149,7 +158,7 @@ class IncomeCopyView(
 ):
     no_permission_url = reverse_lazy('login')
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
         income_id = kwargs.get('pk')
         new_income = get_new_type_operation(Income, income_id, request)
 
@@ -172,34 +181,34 @@ class IncomeUpdateView(
     template_name = 'income/change_income.html'
     form_class = IncomeForm
     no_permission_url = reverse_lazy('login')
-    success_url = reverse_lazy('income:list')
+    success_url: Optional[str] = reverse_lazy('income:list')
     depth_limit = 3
 
-    def get_object(self, queryset=None):
+    def get_object(self, queryset: Any = None) -> Income:
         return get_object_or_404(
             Income,
             pk=self.kwargs['pk'],
             user=self.request.user,
         )
 
-    def get_form_kwargs(self):
+    def get_form_kwargs(self) -> Dict[str, Any]:
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         kwargs['depth'] = self.depth_limit
         return kwargs
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         context = super().get_context_data(**kwargs)
         form_class = self.get_form_class()
         form = form_class(**self.get_form_kwargs())
-        form.fields['account'].queryset = user.finance_account_users.select_related(
-            'user',
-        ).all()
+        form.fields['account'].queryset = (
+            Account.objects.filter(user=user).select_related('user').all()
+        )
         context['income_form'] = form
         return context
 
-    def form_valid(self, form):
+    def form_valid(self, form: Any) -> HttpResponse:
         income = get_queryset_type_income_expenses(self.object.id, Income, form)
 
         amount = form.cleaned_data.get('amount')
@@ -227,14 +236,16 @@ class IncomeUpdateView(
                 constants.SUCCESS_INCOME_UPDATE,
             )
             return super().form_valid(form)
+        return HttpResponseRedirect(str(self.success_url))
 
 
 class IncomeDeleteView(BaseView, DeleteView, DeletionMixin):
     model = Income
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
+    success_url: Optional[str] = reverse_lazy('income:list')
 
-    def form_valid(self, form):
+    def form_valid(self, form: Any) -> HttpResponse:
         income = self.get_object()
         account = income.account
         amount = income.amount
@@ -248,6 +259,7 @@ class IncomeDeleteView(BaseView, DeleteView, DeletionMixin):
                 constants.SUCCESS_INCOME_DELETED,
             )
             return super().form_valid(form)
+        return HttpResponseRedirect(str(self.success_url))
 
 
 class IncomeCategoryView(ListView):
@@ -255,10 +267,16 @@ class IncomeCategoryView(ListView):
     model = IncomeCategory
     depth = 3
 
-    def get_context_data(self, *, object_list=..., **kwargs):
+    def get_context_data(
+        self,
+        *,
+        object_list: Any = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         categories = (
-            user.category_income_users.select_related('user')
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
             .values(
                 'id',
                 'name',
@@ -273,9 +291,12 @@ class IncomeCategoryView(ListView):
             depth=self.depth,
         )
         context = super().get_context_data(**kwargs)
-        context['categories'] = categories
-        context['flattened_categories'] = flattened_categories
-
+        context.update(
+            {
+                'categories': categories,
+                'flattened_categories': flattened_categories,
+            },
+        )
         return context
 
 
@@ -283,10 +304,10 @@ class IncomeCategoryCreateView(CreateView):
     model = IncomeCategory
     template_name = 'income/add_category_income.html'
     form_class = AddCategoryIncomeForm
-    success_url = reverse_lazy('income:category_list')
+    success_url: Optional[str] = reverse_lazy('income:category_list')
     depth = 3
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         add_category_income_form = AddCategoryIncomeForm(
             user=self.request.user,
@@ -295,13 +316,13 @@ class IncomeCategoryCreateView(CreateView):
         context['add_category_income_form'] = add_category_income_form
         return context
 
-    def get_form_kwargs(self):
+    def get_form_kwargs(self) -> Dict[str, Any]:
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         kwargs['depth'] = self.depth
         return kwargs
 
-    def form_valid(self, form):
+    def form_valid(self, form: Any) -> HttpResponse:
         category_name = self.request.POST.get('name')
         category_form = form.save(commit=False)
         category_form.user = self.request.user
@@ -311,22 +332,23 @@ class IncomeCategoryCreateView(CreateView):
             f'Категория "{category_name}" была успешно добавлена!',
         )
 
-        return redirect(self.success_url)
+        return HttpResponseRedirect(str(self.success_url))
 
-    def form_invalid(self, form):
+    def form_invalid(self, form: Any) -> HttpResponse:
         error_message = ''
         if 'name' in form.errors:
             error_message = _('Такая категория уже была добавлена!')
         else:
             error_message = _(
-                'Ошибка при добавлении категории. Проверьте введенные данные.'
+                'Ошибка при добавлении категории. Проверьте введенные данные.',
             )
         messages.error(self.request, error_message)
 
-        return HttpResponseRedirect(reverse_lazy('income:create_category'))
+        return HttpResponseRedirect(str(reverse_lazy('income:create_category')))
 
 
 class IncomeCategoryDeleteView(BaseView, DeleteObjectMixin):
     model = IncomeCategory
     success_message = constants.SUCCESS_CATEGORY_INCOME_DELETED
     error_message = constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY
+    success_url: Optional[str] = reverse_lazy('income:category_list')

@@ -218,3 +218,4 @@ ENV/
 mypy.txt
 
 Writerside
+.vscode
