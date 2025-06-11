@@ -7,9 +7,9 @@ import django_stubs_ext
 import sentry_sdk
 from config.django.sessions import *  # NOQA
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
+from csp.constants import NONCE, SELF
 from dotenv import load_dotenv
 from sentry_sdk.integrations.django import DjangoIntegration
-from csp.constants import SELF, NONCE
 
 django_stubs_ext.monkeypatch()
 load_dotenv()
@@ -93,6 +93,8 @@ MIDDLEWARE = [
     'hasta_la_vista_money.users.middleware.CheckAdminMiddleware',
     'axes.middleware.AxesMiddleware',
 ]
+if os.getenv('DEBUG'):
+    MIDDLEWARE.insert(0, 'kolo.middleware.KoloMiddleware')
 
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
