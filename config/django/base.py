@@ -311,7 +311,7 @@ LOGGING = {
         },
         'flat_line_file': {
             'class': 'logging.handlers.WatchedFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'app.log'),
+            'filename': os.path.join(BASE_DIR, 'logs', 'hlvm.log'),
             'formatter': 'key_value',
         },
     },

@@ -34,7 +34,7 @@ LOGGING = {
     'handlers': {
         'json_file': {
             'class': 'logging.handlers.WatchedFileHandler',
-            'filename': os.path.join('/var/log/myproject/', 'app.json'),
+            'filename': os.path.join(BASE_DIR, 'logs', 'hlvm.log'),  # noqa: F405
             'formatter': 'json',
         },
         'console': {
