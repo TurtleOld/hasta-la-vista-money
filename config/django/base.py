@@ -5,6 +5,7 @@ from pathlib import Path
 import dj_database_url
 import django_stubs_ext
 import sentry_sdk
+import structlog
 from config.django.sessions import *  # NOQA
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from csp.constants import NONCE, SELF
@@ -62,6 +63,7 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'rosetta',
+    'django_structlog',
 ]
 
 if DEBUG:
@@ -92,6 +94,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'hasta_la_vista_money.users.middleware.CheckAdminMiddleware',
     'axes.middleware.AxesMiddleware',
+    'django_structlog.middlewares.RequestMiddleware',
 ]
 if os.getenv('DEBUG'):
     MIDDLEWARE.insert(0, 'kolo.middleware.KoloMiddleware')
@@ -284,3 +287,61 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
 
 ACCESS_TOKEN_LIFETIME: timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
 REFRESH_TOKEN_LIFETIME: timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
+
+if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
+    os.mkdir(os.path.join(BASE_DIR, 'logs'))
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'console': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.dev.ConsoleRenderer(),
+        },
+        'key_value': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.processors.KeyValueRenderer(
+                key_order=['timestamp', 'level', 'event', 'logger'],
+            ),
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'console',
+        },
+        'flat_line_file': {
+            'class': 'logging.handlers.WatchedFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'hlvm.log'),
+            'formatter': 'key_value',
+        },
+    },
+    'loggers': {
+        'django_structlog': {
+            'handlers': ['console', 'flat_line_file'],
+            'level': 'DEBUG',
+        },
+        'myproject': {  # Замените на имя вашего Django-проекта
+            'handlers': ['console', 'flat_line_file'],
+            'level': 'DEBUG',
+        },
+    },
+}
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.filter_by_level,
+        structlog.processors.TimeStamper(fmt='iso'),
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.dev.set_exc_info,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
