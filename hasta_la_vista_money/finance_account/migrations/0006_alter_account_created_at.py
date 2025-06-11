@@ -4,17 +4,16 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("finance_account", "0005_alter_account_type_account"),
+        ('finance_account', '0005_alter_account_type_account'),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name="account",
-            name="created_at",
+            model_name='account',
+            name='created_at',
             field=models.DateTimeField(
-                auto_now_add=True, null=True, verbose_name="Дата и время создания"
+                auto_now_add=True, null=True, verbose_name='Дата и время создания'
             ),
         ),
     ]
