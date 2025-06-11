@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 
+import structlog
 from config.django.base import *  # NOQA
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split() or [
@@ -19,3 +20,53 @@ SECURE_CONTENT_TYPE_NOSNIFF = os.environ.get(
 
 ACCESS_TOKEN_LIFETIME: timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
 REFRESH_TOKEN_LIFETIME: timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.processors.JSONRenderer(),
+        },
+    },
+    'handlers': {
+        'json_file': {
+            'class': 'logging.handlers.WatchedFileHandler',
+            'filename': os.path.join('/var/log/myproject/', 'app.json'),
+            'formatter': 'json',
+        },
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
+        },
+    },
+    'loggers': {
+        'django_structlog': {
+            'handlers': ['json_file', 'console'],
+            'level': 'INFO',
+        },
+        'myproject': {  # Замените на имя вашего Django-проекта
+            'handlers': ['json_file', 'console'],
+            'level': 'INFO',
+        },
+    },
+}
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.filter_by_level,
+        structlog.processors.TimeStamper(fmt='iso'),
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
