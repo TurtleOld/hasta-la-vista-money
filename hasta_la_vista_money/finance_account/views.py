@@ -1,12 +1,12 @@
 import json
-from typing import Any
+from typing import Any, Dict
 
 from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Sum
-from django.http import HttpRequest, JsonResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
@@ -25,6 +25,7 @@ from hasta_la_vista_money.finance_account.forms import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.prepare import (
     collect_info_expense,
@@ -158,7 +159,7 @@ class AccountView(
         """Возвращает уникальные даты и суммы для доходов."""
         return cls.unique_data(income_dates, income_amounts)
 
-    def get_context_data(self, **kwargs) -> dict[str, Any] | None:
+    def get_context_data(self, **kwargs) -> Dict[str, Any]:
         """
         Собирает контекст данных для отображения на странице, включая счета,
         аналитические данные по доходам и расходам,
@@ -171,6 +172,11 @@ class AccountView(
         Returns:
             Контекст данных для отображения на странице.
         """
+        context = super().get_context_data(**kwargs)
+
+        if not self.request.user.is_authenticated:
+            return context
+
         expense_dataset, income_dataset = self.collect_datasets(self.request)
 
         expense_dates, expense_amounts = self.transform_data_expense(
@@ -262,51 +268,61 @@ class AccountView(
             },
         }
 
-        if self.request.user.is_authenticated:
-            user = get_object_or_404(
-                User,
-                username=self.request.user,
-            )
+        user = get_object_or_404(
+            User,
+            username=self.request.user,
+        )
 
-            accounts = user.finance_account_users.select_related('user').all()
+        accounts = Account.objects.filter(user=user).select_related('user').all()
 
-            sum_all_accounts = user.finance_account_users.aggregate(
-                Sum('balance'),
-            )['balance__sum']
+        sum_all_accounts = Account.objects.filter(user=user).aggregate(
+            Sum('balance'),
+        )['balance__sum']
 
-            receipt_info_by_month = collect_info_receipt(user=user)
+        receipt_info_by_month = collect_info_receipt(user=user)
 
-            income = collect_info_income(user)
-            expenses = collect_info_expense(user)
-            income_expense = sort_expense_income(expenses, income)
+        income = collect_info_income(user)
+        expenses = collect_info_expense(user)
+        income_expense = sort_expense_income(expenses, income)
 
-            account_transfer_money = user.finance_account_users.select_related(
+        account_transfer_money = (
+            Account.objects.filter(user=user)
+            .select_related(
                 'user',
-            ).all()
-            initial_form_data = {
-                'from_account': account_transfer_money.first(),
-                'to_account': account_transfer_money.first(),
-            }
+            )
+            .all()
+        )
+        initial_form_data = {
+            'from_account': account_transfer_money.first(),
+            'to_account': account_transfer_money.first(),
+        }
 
-            transfer_money_log = user.transfer_money.select_related(
+        transfer_money_log = (
+            TransferMoneyLog.objects.filter(user=user)
+            .select_related(
                 'to_account',
                 'from_account',
-            ).all()
-
-            context = super().get_context_data(**kwargs)
-            context['accounts'] = accounts
-            context['add_account_form'] = AddAccountForm()
-            context['transfer_money_form'] = TransferMoneyAccountForm(
-                user=self.request.user,
-                initial=initial_form_data,
             )
-            context['receipt_info_by_month'] = receipt_info_by_month
-            context['income_expense'] = income_expense
-            context['transfer_money_log'] = transfer_money_log
-            context['chart_combine'] = json.dumps(chart_combined)
-            context['sum_all_accounts'] = sum_all_accounts
+            .all()
+        )
 
-            return context
+        context.update(
+            {
+                'accounts': accounts,
+                'add_account_form': AddAccountForm(),
+                'transfer_money_form': TransferMoneyAccountForm(
+                    user=self.request.user,
+                    initial=initial_form_data,
+                ),
+                'receipt_info_by_month': receipt_info_by_month,
+                'income_expense': income_expense,
+                'transfer_money_log': transfer_money_log,
+                'chart_combine': json.dumps(chart_combined),
+                'sum_all_accounts': sum_all_accounts,
+            },
+        )
+
+        return context
 
 
 class AccountCreateView(CreateView):
