@@ -2,7 +2,10 @@ import base64
 import os
 
 from django.core.files.uploadedfile import UploadedFile
+from dotenv import load_dotenv
 from openai import OpenAI
+
+load_dotenv()
 
 
 def image_to_base64(uploaded_file) -> str:
@@ -15,19 +18,17 @@ def image_to_base64(uploaded_file) -> str:
 
 
 def analyze_image_with_ai(image_base64: UploadedFile):
-    token = os.getenv('GITHUB_TOKEN')
+    token = os.environ.get('GITHUB_TOKEN')
     endpoint = 'https://models.github.ai/inference'
-    model = os.getenv('MODEL')
+    model = os.environ.get('MODEL', 'openai/gpt-4o')
 
     client = OpenAI(
         base_url=endpoint,
         api_key=token,
     )
-
     response = client.chat.completions.create(
         model=model,
-        temperature=0,
-        max_tokens=4096,
+        temperature=0.6,
         messages=[
             {
                 'role': 'system',
@@ -83,8 +84,8 @@ def analyze_image_with_ai(image_base64: UploadedFile):
                             '\n'
                             'Ожидаемый JSON:\n'
                             '"items": [\n'
-                            '  {"product_name": "Хлеб пшеничный", "price": 25.00, "quantity": 2, "amount": 50.00},\n'
-                            '  {"product_name": "Хлеб пшеничный", "price": 25.00, "quantity": 1, "amount": 25.00},\n'
+                            '  {"product_name": "Хлеб пшеничный", "category": "Хлебобулочные изделия", "price": 25.00, "quantity": 2, "amount": 50.00},\n'
+                            '  {"product_name": "Хлеб пшеничный", "category": "Хлебобулочные изделия", "price": 25.00, "quantity": 1, "amount": 25.00},\n'
                             '  {"product_name": "Молоко 3%", "price": 45.00, "quantity": 1, "amount": 45.00}\n'
                             ']\n'
                             '\n'
@@ -99,5 +100,4 @@ def analyze_image_with_ai(image_base64: UploadedFile):
             },
         ],
     )
-
     return response.choices[0].message.content
