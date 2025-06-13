@@ -55,7 +55,7 @@ python-dateutil==2.9.0.post0 ; python_full_version >= "3.12.7" and python_full_v
 python-dotenv==1.1.0 ; python_full_version >= "3.12.7" and python_full_version < "4.0.0"
 python-ipware==3.0.0 ; python_full_version >= "3.12.7" and python_full_version < "4.0.0"
 pyyaml==6.0.2 ; python_full_version >= "3.12.7" and python_full_version < "4.0.0"
-requests==2.32.3 ; python_full_version >= "3.12.7" and python_full_version < "4.0.0"
+requests==2.32.4 ; python_full_version >= "3.12.7" and python_full_version < "4.0.0"
 sentry-sdk==2.29.1 ; python_full_version >= "3.12.7" and python_full_version < "4.0.0"
 service-identity==24.2.0 ; python_full_version >= "3.12.7" and python_full_version < "4.0.0"
 setuptools==80.9.0 ; python_full_version >= "3.12.7" and python_full_version < "4.0.0"
