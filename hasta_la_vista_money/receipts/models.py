@@ -26,11 +26,13 @@ class Seller(models.Model):
     retail_place_address = models.CharField(
         default='Нет данных',
         blank=True,
+        null=True,
         max_length=1000,
     )
     retail_place = models.CharField(
         default='Нет данных',
         blank=True,
+        null=True,
         max_length=1000,
     )
     created_at = models.DateTimeField(

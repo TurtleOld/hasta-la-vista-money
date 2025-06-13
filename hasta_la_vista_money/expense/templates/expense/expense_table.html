@@ -41,7 +41,7 @@
         <tbody>
         {% for expense in expenses %}
             <tr>
-                <td title="{{ expense.date }}">{{ expense.date | date:'F Y' }}</td>
+                <td title="{{ expense.date_month }}">{{ expense.date_label }}</td>
                 <td class="text-nowrap">{{ expense.amount | comma }}</td>
                 <td>{% if expense.category__parent_category__name %}
                     <strong>{{ expense.category__parent_category__name }}</strong>
