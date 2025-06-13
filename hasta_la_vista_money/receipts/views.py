@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from decimal import Decimal
 
+import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
@@ -11,9 +12,15 @@ from django.db.models.functions import RowNumber, TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.utils.translation import gettext_lazy as _
 from django.utils.translation import gettext_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, FormView
+from django.utils.translation import gettext_lazy as _
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    DetailView,
+    FormView,
+    ListView,
+)
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.custom_paginator import (
@@ -29,9 +36,11 @@ from hasta_la_vista_money.receipts.forms import (
     SellerForm,
     UploadImageForm,
 )
-from hasta_la_vista_money.receipts.models import Receipt, Seller, Product
+from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.services import analyze_image_with_ai
 from hasta_la_vista_money.users.models import User
+
+logger = structlog.get_logger(__name__)
 
 
 class BaseView:
@@ -333,7 +342,8 @@ class UploadImageView(LoginRequiredMixin, FormView):
                     name_seller=decode_json_receipt['name_seller'],
                     defaults={
                         'retail_place_address': decode_json_receipt.get(
-                            'retail_place_address', ''
+                            'retail_place_address',
+                            '',
                         ),
                         'retail_place': decode_json_receipt.get('retail_place', ''),
                     },
@@ -359,7 +369,8 @@ class UploadImageView(LoginRequiredMixin, FormView):
                     number_receipt=decode_json_receipt['number_receipt'],
                     defaults={
                         'receipt_date': datetime.strptime(
-                            decode_json_receipt['receipt_date'], '%d.%m.%Y %H:%M'
+                            self.normalize_date(decode_json_receipt['receipt_date']),
+                            '%d.%m.%Y %H:%M',
                         ),
                         'nds10': decode_json_receipt.get('nds10', 0),
                         'nds20': decode_json_receipt.get('nds20', 0),
@@ -375,9 +386,21 @@ class UploadImageView(LoginRequiredMixin, FormView):
                 return super().form_valid(form)
             messages.error(self.request, gettext_lazy(constants.RECEIPT_ALREADY_EXISTS))
             return super().form_invalid(form)
-        except ValueError:
+        except ValueError as e:
+            logger.error(e)
             messages.error(
                 self.request,
                 'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',
             )
             return super().form_invalid(form)
+
+    @staticmethod
+    def normalize_date(date_str):
+        try:
+            return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
+                '%d.%m.%Y %H:%M',
+            )
+        except ValueError:
+            day, month, year_short, time = date_str.replace(' ', '.').split('.')
+            current_century = str(datetime.now().year)[:2]
+            return f'{day}.{month}.{current_century}{year_short} {time}'
