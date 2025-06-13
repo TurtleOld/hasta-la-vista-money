@@ -71,7 +71,12 @@ class IncomeExpenseCreateViewMixin(CreateView):
         return kwargs
 
 
-def create_object_view(form, model, request, message) -> dict[str, bool]:
+def create_object_view(
+    form,
+    model,
+    request,
+    message,
+) -> dict[str, bool | dict[str, list[str]]]:
     """
     Создание объектов для внесения данных по платежам кредита, расхода и дохода.
 

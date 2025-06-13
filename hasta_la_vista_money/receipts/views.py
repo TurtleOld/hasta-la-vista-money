@@ -1,7 +1,10 @@
+import decimal
 import json
+import re
 from datetime import datetime
 from decimal import Decimal
 
+import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
@@ -11,9 +14,15 @@ from django.db.models.functions import RowNumber, TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.utils.translation import gettext_lazy as _
 from django.utils.translation import gettext_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, FormView
+from django.utils.translation import gettext_lazy as _
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    DetailView,
+    FormView,
+    ListView,
+)
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.custom_paginator import (
@@ -29,9 +38,11 @@ from hasta_la_vista_money.receipts.forms import (
     SellerForm,
     UploadImageForm,
 )
-from hasta_la_vista_money.receipts.models import Receipt, Seller, Product
+from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.services import analyze_image_with_ai
 from hasta_la_vista_money.users.models import User
+
+logger = structlog.get_logger(__name__)
 
 
 class BaseView:
@@ -316,68 +327,95 @@ class UploadImageView(LoginRequiredMixin, FormView):
             number_receipt=number_receipt,
         )
 
+    @staticmethod
+    def clean_json_response(text):
+        match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
+        if match:
+            return match.group(1)
+        return text.strip()
+
     def form_valid(self, form):
         try:
             uploaded_file = self.request.FILES['file']
             user = self.request.user
+            account = form.cleaned_data.get('account')
 
             json_receipt = analyze_image_with_ai(uploaded_file)
+            if 'json' in json_receipt:
+                json_receipt = self.clean_json_response(json_receipt)
             decode_json_receipt = json.loads(json_receipt)
 
-            account = form.cleaned_data.get('account')
             number_receipt = decode_json_receipt['number_receipt']
             receipt_exists = self.check_exist_receipt(user, number_receipt)
             if not receipt_exists.exists():
                 seller, _ = Seller.objects.update_or_create(
                     user=user,
-                    name_seller=decode_json_receipt['name_seller'],
+                    name_seller=decode_json_receipt.get('name_seller'),
                     defaults={
                         'retail_place_address': decode_json_receipt.get(
-                            'retail_place_address', ''
+                            'retail_place_address',
+                            'Нет данных',
                         ),
-                        'retail_place': decode_json_receipt.get('retail_place', ''),
+                        'retail_place': decode_json_receipt.get(
+                            'retail_place',
+                            'Нет данных',
+                        ),
                     },
                 )
 
                 products = []
                 for item in decode_json_receipt.get('items', []):
-                    product, _ = Product.objects.update_or_create(
+                    product = Product.objects.create(
                         user=user,
                         product_name=item['product_name'],
-                        defaults={
-                            'category': item['category'],
-                            'price': item['price'],
-                            'quantity': item['quantity'],
-                            'amount': item['amount'],
-                        },
+                        category=item['category'],
+                        price=item['price'],
+                        quantity=item['quantity'],
+                        amount=item['amount'],
                     )
                     products.append(product)
 
-                receipt, _ = Receipt.objects.update_or_create(
+                receipt = Receipt.objects.create(
                     user=user,
                     account=account,
                     number_receipt=decode_json_receipt['number_receipt'],
-                    defaults={
-                        'receipt_date': datetime.strptime(
-                            decode_json_receipt['receipt_date'], '%d.%m.%Y %H:%M'
-                        ),
-                        'nds10': decode_json_receipt.get('nds10', 0),
-                        'nds20': decode_json_receipt.get('nds20', 0),
-                        'operation_type': decode_json_receipt.get('operation_type', 0),
-                        'total_sum': decode_json_receipt['total_sum'],
-                        'seller': seller,
-                    },
+                    receipt_date=datetime.strptime(
+                        self.normalize_date(decode_json_receipt['receipt_date']),
+                        '%d.%m.%Y %H:%M',
+                    ),
+                    nds10=decode_json_receipt.get('nds10', 0),
+                    nds20=decode_json_receipt.get('nds20', 0),
+                    operation_type=decode_json_receipt.get('operation_type', 0),
+                    total_sum=decode_json_receipt['total_sum'],
+                    seller=seller,
                 )
 
                 if products:
                     receipt.product.set(products)
 
+                account_balance = get_object_or_404(Account, id=account.id)
+                account_balance.balance -= decimal.Decimal(
+                    decode_json_receipt['total_sum'],
+                )
+                account_balance.save()
                 return super().form_valid(form)
             messages.error(self.request, gettext_lazy(constants.RECEIPT_ALREADY_EXISTS))
             return super().form_invalid(form)
-        except ValueError:
+        except ValueError as e:
+            logger.error(e)
             messages.error(
                 self.request,
                 'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',
             )
             return super().form_invalid(form)
+
+    @staticmethod
+    def normalize_date(date_str):
+        try:
+            return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
+                '%d.%m.%Y %H:%M',
+            )
+        except ValueError:
+            day, month, year_short, time = date_str.replace(' ', '.').split('.')
+            current_century = str(datetime.now().year)[:2]
+            return f'{day}.{month}.{current_century}{year_short} {time}'
