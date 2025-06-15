@@ -18,12 +18,12 @@ def image_to_base64(uploaded_file) -> str:
 
 
 def analyze_image_with_ai(image_base64: UploadedFile):
-    token = os.environ.get('GITHUB_TOKEN')
-    endpoint = 'https://models.github.ai/inference'
-    model = os.environ.get('MODEL', 'openai/gpt-4o')
+    base_url = os.environ.get('API_BASE_URL', 'https://models.github.ai/inference')
+    token = os.environ.get('API_KEY')
+    model = os.environ.get('API_MODEL', 'openai/gpt-4o')
 
     client = OpenAI(
-        base_url=endpoint,
+        base_url=base_url,
         api_key=token,
     )
     response = client.chat.completions.create(
