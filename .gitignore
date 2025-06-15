@@ -219,3 +219,5 @@ mypy.txt
 
 Writerside
 .vscode
+
+.ruff_cache
