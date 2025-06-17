@@ -47,6 +47,7 @@ theme:
         name: Switch to system preference
 
 markdown_extensions:
+  - admonition
   - attr_list
   - md_in_html
   - pymdownx.blocks.caption
