@@ -51,11 +51,11 @@ Click the "Submit" button to complete the transfer.
     Note: You cannot transfer funds between identical accounts.
 
 ### Editing an account:  
-    ![table finance accounts](https://media.githubusercontent.com/media/TurtleOld/hasta-la-vista-money/refs/heads/main/docs/img/table_finance_accounts.png)
-
-    Select the account you want to edit from the table.
-    Click the "✏️" button to change its details.
-     
+![table finance accounts](https://media.githubusercontent.com/media/TurtleOld/hasta-la-vista-money/refs/heads/main/docs/img/table_finance_accounts.png)
+```
+Select the account you want to edit from the table.
+Click the "✏️" button to change its details.
+```
 
 ### Viewing detailed statistics:  
 
