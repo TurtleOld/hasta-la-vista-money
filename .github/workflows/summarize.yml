@@ -41,6 +41,6 @@ jobs:
 
       - name: Comment with AI summary
         run: |
-          gh issue comment --issue-number ${{ github.event.inputs.issue_number }} --body "${{ steps.inference.outputs.response }}"
+          gh issue comment ${{ github.event.inputs.issue_number }} --body "${{ steps.inference.outputs.response }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
