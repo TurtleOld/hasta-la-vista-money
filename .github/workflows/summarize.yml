@@ -1,0 +1,46 @@
+name: Summarize new issues
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        type: number
+        required: true
+        description: 'Issue number to summarize'
+      issue_title:
+        type: string
+        required: true
+        description: 'Title of the issue'
+      issue_body:
+        type: string
+        required: true
+        description: 'Body/content of the issue'
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      models: read
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run AI inference
+        id: inference
+        uses: actions/ai-inference@v1.1.0
+        with:
+          prompt: |
+            Summarize the following GitHub issue in one paragraph:
+            Title: ${{ github.event.inputs.issue_title }}
+            Body: ${{ github.event.inputs.issue_body }}
+
+      - name: Comment with AI summary
+        run: |
+          gh issue comment --issue-number ${{ github.event.inputs.issue_number }} --body "${{ steps.inference.outputs.response }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
