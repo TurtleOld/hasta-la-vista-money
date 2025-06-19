@@ -1,14 +1,15 @@
 .PHONY: lint
 lint:
 		@cd ./hasta_la_vista_money && \
-			echo "Running ruff check..." && \
-			poetry run ruff check . --fix
+			echo "Running flake8 check..." && \
+			flake8 . --select=WPS
 
 .PHONY: format
 format:
 	@cd ./hasta_la_vista_money && \
 			echo "Running ruff..." && \
 			poetry run ruff format
+			poetry run ruff check --fix
 
 
 .PHONY: transprepare
