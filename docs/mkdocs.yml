@@ -7,8 +7,10 @@ nav:
       - Installation: index.md
       - Registration: registration.md
     - Getting Started:
+      - Accounts management page:
         - Account Summary Page: finance_account/finance_account.md
-        - Receipts Page: receipts/receipts.md
+      - Receipts management page:
+        - Receipts Page: receipts/receipts_page.md
         - Add receipts with AI: receipts/processing_receipt_ai.md
   - Contribute:
       contribute.md
@@ -18,9 +20,9 @@ theme:
     repo: fontawesome/brands/github
   features:
     - navigation.tabs
+    - navigation.sections
     - navigation.top
     - navigation.footer
-    - navigation.expand
     - navigation.path
     - navigation.tracking
     - navigation.instant
@@ -50,7 +52,12 @@ markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
-  - pymdownx.blocks.caption
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - def_list
 
 plugins:
   - search:
@@ -63,6 +70,5 @@ plugins:
             members_order: 'source'
 
 
-copyright: '© Alexander Pavlov 2022-2024'
 site_author: 'Alexander Pavlov'
-site_description: 'Navigation:'
+site_description: 'Hasta la Vista, Money!' 
