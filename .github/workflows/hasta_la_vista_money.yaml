@@ -57,7 +57,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install -e '.[dev]'
+          uv venv .venv && uv pip install -e '.[dev]'
 
       # run makemigrations and migrate
       - name: Run makemigrations

@@ -14,7 +14,7 @@ ENV PATH="/home/superuser/.local/bin:$PATH"
 
 RUN pip install uv
 
-RUN uv pip install -e '.[dev]'
+RUN uv venv .venv && uv pip install -e '.[dev]'
 
 EXPOSE 8000
 

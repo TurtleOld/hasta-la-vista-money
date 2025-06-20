@@ -2,10 +2,9 @@
 # Creating image based on official python3 image
 FROM python:3.13.5
 
-
 RUN pip install uv
 
-RUN uv pip install -e '.[dev]'
+RUN uv venv .venv && uv pip install -e '.[dev]'
 
 ENV PATH="/root/.local/bin:$PATH"
 
