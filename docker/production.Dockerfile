@@ -1,6 +1,9 @@
 FROM python:3.13.5-slim as builder
 
-WORKDIR /app
+RUN adduser --disabled-password --gecos '' appuser
+USER appuser
+WORKDIR /home/appuser/app
+ENV PATH="/home/appuser/.local/bin:$PATH"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
@@ -10,7 +13,8 @@ RUN apt-get update && \
 ENV PATH="/root/.local/bin:$PATH"
 
 COPY pyproject.toml poetry.lock ./
-RUN pip install poetry-plugin-export && \
+
+RUN poetry self add poetry-plugin-export && \
     poetry config virtualenvs.create false && \
     poetry export --with extras=psycopg2-binary --without-hashes --format=requirements.txt > requirements.prod.txt
 
