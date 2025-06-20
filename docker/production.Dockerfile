@@ -1,39 +1,28 @@
-FROM python:3.13.5-slim AS builder
-
-USER root
-WORKDIR /root/app
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/* && \
-    curl -sSL https://install.python-poetry.org  | python3 -
-
-ENV PATH="/root/.local/bin:$PATH"
-
-COPY ../pyproject.toml ../poetry.lock ./
-
-RUN poetry self add poetry-plugin-export && \
-    poetry config virtualenvs.create false && \
-    poetry export --without-hashes --format=requirements.txt > requirements.prod.txt
-
-
-FROM python:3.13.5-slim
-
-RUN adduser --disabled-password --gecos '' appuser
-USER appuser
-WORKDIR /home/appuser/app
-ENV HOME=/home/appuser
-ENV PATH="$HOME/.local/bin:$PATH"
-
-COPY --from=builder /root/app/requirements.prod.txt ./
-RUN pip install --no-cache-dir --user -r requirements.prod.txt
-
-COPY --chown=appuser:appuser ../ .
+# This docker file is used for production
+# Creating image based on official python3 image
+FROM python:3.13.5
 
 ENV PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# Get the django project into the docker container
+
+
+
+RUN useradd -m superuser
+USER superuser
+WORKDIR /home/superuser
+COPY ../ .
+ENV PATH="/home/superuser/.local/bin:$PATH"
+RUN curl -sSL https://install.python-poetry.org
+   | python3 - && poetry --version
+RUN pip install --upgrade pip
+RUN pip install -r /home/superuser/requirements/prod.txt
+RUN pip install -r /home/superuser/requirements/dev.txt
+
+
+
 EXPOSE 8000
 
-CMD ["sh", "-c", "python manage.py migrate && python manage.py collectstatic --noinput && granian --interface asgi config.asgi:application --port 8000 --host 0.0.0.0"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

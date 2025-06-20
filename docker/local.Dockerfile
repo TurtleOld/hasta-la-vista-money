@@ -1,24 +1,20 @@
-FROM python:3.13.5-slim
+# This docker file is used for production
+# Creating image based on official python3 image
+FROM python:3.13.5
+
+# Get the django project into the docker container
+RUN curl -sSL https://install.python-poetry.org
+   | python3 - && /root/.local/bin/poetry --version
+RUN poetry config virtualenvs.create false && poetry install --extras psycopg2-binary --only main
+RUN where poetry
+ENV PATH="/root/.local/bin:$PATH"
+
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements/prod.txt
 
 ENV PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN mkdir -p /home/appuser/.local/bin \
-    && curl -sSL https://install.python-poetry.org  | POETRY_HOME=/home/appuser/.local python3 -
-
-ENV PATH="/home/appuser/.local/bin:$PATH"
-
-COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.create false && poetry install --extras psycopg2-binary --no-root
-
-COPY . .
-
-EXPOSE 8000
 
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
