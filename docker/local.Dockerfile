@@ -3,8 +3,7 @@
 FROM python:3.13.5
 
 # Get the django project into the docker container
-RUN curl -sSL https://install.python-poetry.org
-   | python3 - && /root/.local/bin/poetry --version
+RUN curl -sSL https://install.python-poetry.org | python3 - && /root/.local/bin/poetry --version
 RUN poetry config virtualenvs.create false && poetry install --extras psycopg2-binary --only main
 RUN where poetry
 ENV PATH="/root/.local/bin:$PATH"
