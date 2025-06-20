@@ -10,7 +10,8 @@ RUN apt-get update && \
 ENV PATH="/root/.local/bin:$PATH"
 
 COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.create false && \
+RUN pip install poetry-plugin-export && \
+    poetry config virtualenvs.create false && \
     poetry export --with extras=psycopg2-binary --without-hashes --format=requirements.txt > requirements.prod.txt
 
 FROM python:3.13.5-slim
