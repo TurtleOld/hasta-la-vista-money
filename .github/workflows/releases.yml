@@ -6,6 +6,20 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        type: string
+        description: 'Tag name for the release'
+        default: "auto"
+      release_title:
+        type: string
+        description: 'Title of the release'
+        default: 'Release'
+      prerelease:
+        type: boolean
+        description: 'Is this a pre-release?'
+        default: false
 
 jobs:
   build:
@@ -13,5 +27,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"* %s (%an)" | head -n 10)
+          else
+            CHANGELOG=$(git log $PREVIOUS_TAG..HEAD --pretty=format:"* %s (%an)")
+          fi
+
+          echo "changelog=$CHANGELOG" >> $GITHUB_ENV
       - name: Release
         uses: softprops/action-gh-release@v2.3.2
+        with:
+          generate_release_notes: true
+          tag_name: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.changelog.outputs.changelog }}
