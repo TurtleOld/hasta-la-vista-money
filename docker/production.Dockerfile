@@ -10,7 +10,7 @@ RUN apt-get update && \
 
 ENV PATH="/root/.local/bin:$PATH"
 
-COPY pyproject.toml poetry.lock ./
+COPY ../pyproject.toml ../poetry.lock ./
 
 RUN poetry self add poetry-plugin-export && \
     poetry config virtualenvs.create false && \
@@ -28,7 +28,7 @@ ENV PATH="$HOME/.local/bin:$PATH"
 COPY --from=builder /root/app/requirements.prod.txt ./
 RUN pip install --no-cache-dir --user -r requirements.prod.txt
 
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser ../ .
 
 ENV PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
