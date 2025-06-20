@@ -14,7 +14,7 @@ COPY pyproject.toml poetry.lock ./
 
 RUN poetry self add poetry-plugin-export && \
     poetry config virtualenvs.create false && \
-    poetry export --with extras=psycopg2-binary --without-hashes --format=requirements.txt > requirements.prod.txt
+    poetry export --without-hashes --format=requirements.txt > requirements.prod.txt
 
 
 FROM python:3.13.5-slim
