@@ -11,8 +11,7 @@ USER superuser
 WORKDIR /home/superuser
 COPY ../ .
 ENV PATH="/home/superuser/.local/bin:$PATH"
-RUN curl -sSL https://install.python-poetry.org
-   | python3 - && poetry --version
+RUN curl -sSL https://install.python-poetry.org | python3 - && poetry --version
 RUN pip install --upgrade pip
 RUN pip install -r /home/superuser/requirements/prod.txt
 RUN pip install -r /home/superuser/requirements/dev.txt
