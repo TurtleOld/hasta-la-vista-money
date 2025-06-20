@@ -6,6 +6,20 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        type: string
+        description: 'Tag name for the release'
+        default: "auto"
+      release_title:
+        type: string
+        description: 'Title of the release'
+        default: 'Release'
+      prerelease:
+        type: boolean
+        description: 'Is this a pre-release?'
+        default: false
 
 jobs:
   build:
