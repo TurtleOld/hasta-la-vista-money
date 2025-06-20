@@ -41,8 +41,6 @@ Faker = "^37.0.0"
 coverage = "^7.3.2"
 myst-parser = "^4.0.0"
 flower = "^2.0.1"
-
-[tool.poetry.group.dev.dependencies]
 pre-commit = "^4.0.0"
 yesqa = "^1.5.0"
 mypy = "^1.5.1"
