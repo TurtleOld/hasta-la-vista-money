@@ -25,7 +25,6 @@ django-axes = "^8.0.0"
 Twisted = {extras = ["http2", "tls"], version = "^25.0.0"}
 python-dateutil = "^2.8.2"
 django-debug-toolbar = "^5.0.0"
-daphne = "^4.0.0"
 sentry-sdk = "^2.22.0"
 django-rosetta = "^0.10.0"
 crispy-bootstrap5 = "^2025.4"
@@ -35,6 +34,7 @@ django-stubs-ext = "^5.1.1"
 djangorestframework-simplejwt = "^5.5.0"
 openai = "^1.84.0"
 django-structlog = "^9.1.1"
+granian = "^2.3.4"
 
 [tool.poetry.dev-dependencies]
 Faker = "^37.0.0"
