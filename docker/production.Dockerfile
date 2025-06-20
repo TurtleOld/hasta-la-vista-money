@@ -6,10 +6,6 @@ ENV PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Get the django project into the docker container
-
-
-
 RUN useradd -m superuser
 USER superuser
 WORKDIR /home/superuser
@@ -20,8 +16,6 @@ RUN curl -sSL https://install.python-poetry.org
 RUN pip install --upgrade pip
 RUN pip install -r /home/superuser/requirements/prod.txt
 RUN pip install -r /home/superuser/requirements/dev.txt
-
-
 
 EXPOSE 8000
 
