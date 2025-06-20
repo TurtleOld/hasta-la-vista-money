@@ -1,52 +1,47 @@
-
 name: hlvm
 
 services:
   db:
     container_name: hlvm_db
-    image: postgres:latest
+    image: postgres:16-alpine
+    restart: always
     volumes:
       - ${LOCATION:-./app_data}/postgres:/var/lib/postgresql/data
-    env_file:
-      - .env
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-hlvm}
     ports:
       - "5433:5432"
-    restart: always
     networks:
       - default
+
   hlvm-server:
     container_name: hlvm_server
-    image: ghcr.io/turtleold/hasta-la-vista-money:main
     build:
       context: ./
       dockerfile: docker/production.Dockerfile
+    image: ghcr.io/turtleold/hasta-la-vista-money:main
+    restart: on-failure
     volumes:
-      - ${LOCATION:-./app_data}:/app
-    command: sh -c "python manage.py migrate && python manage.py collectstatic && daphne config.asgi:application --port ${PORT:-8090} --bind 0.0.0.0 -v2"
-    ports:
-      - "8001:8001"
-    expose:
-      - "8001"
+      - ${LOCATION:-./app_data}:/home/appuser/app
     env_file:
       - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
-      SECRET_KEY: ${SECRET_KEY:-}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
-      BASE_URL: ${BASE_URL:-http://127.0.0.1:8090}
-      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
-      SENTRY_ENDPOINT: ${SENTRY_ENDPOINT:-}
     depends_on:
       - db
-    restart: on-failure
-    networks:
-      - default
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
+      SECRET_KEY: ${SECRET_KEY:-insecure_key}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      BASE_URL: ${BASE_URL:-http://127.0.0.1:8090}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:8090}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-dev}
+      SENTRY_ENDPOINT: ${SENTRY_ENDPOINT:-}
+    user: "appuser"
+    working_dir: /home/appuser/app
+    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && granian --interface asgi config.asgi:application --port ${PORT:-8090} --host 0.0.0.0"
+
   nginx:
     image: nginx:alpine
     ports:
@@ -57,11 +52,10 @@ services:
     depends_on:
       - hlvm-server
     restart: ${RESTART:-always}
+
 networks:
   default:
     driver: bridge
-    attachable: true
     ipam:
-      driver: default
       config:
         - subnet: 172.31.0.0/16
