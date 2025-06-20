@@ -1,9 +1,7 @@
 FROM python:3.13.5-slim as builder
 
-RUN adduser --disabled-password --gecos '' appuser
-USER appuser
-WORKDIR /home/appuser/app
-ENV PATH="/home/appuser/.local/bin:$PATH"
+USER root
+WORKDIR /root/app
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
@@ -18,6 +16,7 @@ RUN poetry self add poetry-plugin-export && \
     poetry config virtualenvs.create false && \
     poetry export --with extras=psycopg2-binary --without-hashes --format=requirements.txt > requirements.prod.txt
 
+
 FROM python:3.13.5-slim
 
 WORKDIR /app
@@ -27,7 +26,7 @@ USER appuser
 ENV HOME=/home/appuser
 ENV PATH="$HOME/.local/bin:$PATH"
 
-COPY --from=builder /app/requirements.prod.txt ./
+COPY --from=builder /root/app/requirements.prod.txt ./
 RUN pip install --no-cache-dir --user -r requirements.prod.txt
 
 COPY --chown=appuser:appuser . .
@@ -38,4 +37,4 @@ ENV PYTHONFAULTHANDLER=1 \
 
 EXPOSE 8000
 
-CMD ["python", "manage.py", "migrate", "&&", "python", "manage.py", "collectstatic", "--noinput", "&&", "granian", "--interface", "asgi", "config.asgi:application", "--port", "8000", "--host", "0.0.0.0"]
+CMD ["sh", "-c", "python manage.py migrate && python manage.py collectstatic --noinput && granian --interface asgi config.asgi:application --port 8000 --host 0.0.0.0"]
