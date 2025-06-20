@@ -1,4 +1,4 @@
-FROM python:3.13.5-slim as builder
+FROM python:3.13.5-slim AS builder
 
 USER root
 WORKDIR /root/app
@@ -19,10 +19,9 @@ RUN poetry self add poetry-plugin-export && \
 
 FROM python:3.13.5-slim
 
-WORKDIR /app
-
 RUN adduser --disabled-password --gecos '' appuser
 USER appuser
+WORKDIR /home/appuser/app
 ENV HOME=/home/appuser
 ENV PATH="$HOME/.local/bin:$PATH"
 
