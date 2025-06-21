@@ -2,7 +2,7 @@
 # Creating image based on official python3 image
 FROM python:3.13.5
 
-RUN pip install uv
+RUN pip install uv==0.7.13
 
 RUN uv venv .venv && uv pip install -e '.[dev]'
 

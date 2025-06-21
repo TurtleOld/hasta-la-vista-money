@@ -44,12 +44,12 @@ jobs:
           python-version: '3.13.5'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v2
+        uses: astral-sh/setup-uv@797cf5c0a210b8b257f62fe1fbf9a46b4fc201bf
         with:
           version: "latest"
 
       - name: Install the latest version of ruff
-        uses: astral-sh/ruff-action@v3
+        uses: astral-sh/ruff-action@1a00e79e804ff48e5f06a066a1e2fea784cb792e
         with:
           version: "latest"
       - run: ruff check --fix
@@ -98,7 +98,7 @@ jobs:
           ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
 
       - name: Run codacy-coverage-reporter
-        uses: codacy/codacy-coverage-reporter-action@v1.3.0
+        uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           coverage-reports: 'coverage.xml'
