@@ -67,7 +67,7 @@ secretkey:
 
 .PHONY: test
 test:
-		DB_USER="postgres" DB_PASSWORD="postgres" uv run python ./manage.py test -v 2
+		@uv run python ./manage.py test -v 2
 
 .PHONY: coverage
 coverage:
