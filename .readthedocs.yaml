@@ -21,7 +21,6 @@ python:
       path: .
       extra_requirements:
         - dev
-      install_with_pip: false
 
 # Build documentation in the docs/ directory with Sphinx
 mkdocs:
