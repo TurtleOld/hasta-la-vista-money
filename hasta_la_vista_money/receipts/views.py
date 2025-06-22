@@ -29,7 +29,6 @@ from hasta_la_vista_money.commonlogic.custom_paginator import (
     paginator_custom_view,
 )
 from hasta_la_vista_money.commonlogic.views import collect_info_receipt
-from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
@@ -51,7 +50,7 @@ class BaseView:
 
 
 class ReceiptView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     BaseView,
     SuccessMessageMixin,
     FilterView,
@@ -138,7 +137,7 @@ class SellerCreateView(SuccessMessageMixin, BaseView, CreateView):
         return JsonResponse(response_data)
 
 
-class ReceiptCreateView(SuccessMessageMixin, BaseView, CreateView):
+class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, CreateView):
     model = Receipt
     form_class = ReceiptForm
     success_message = constants.SUCCESS_MESSAGE_CREATE_RECEIPT
@@ -229,7 +228,7 @@ class ReceiptCreateView(SuccessMessageMixin, BaseView, CreateView):
         return JsonResponse(response_data)
 
 
-class ReceiptDeleteView(BaseView, DetailView, DeleteView):
+class ReceiptDeleteView(LoginRequiredMixin, BaseView, DetailView, DeleteView):
     model = Receipt
 
     def form_valid(self, form):
@@ -254,9 +253,10 @@ class ReceiptDeleteView(BaseView, DetailView, DeleteView):
             return redirect(self.success_url)
 
 
-class ProductByMonthView(ListView):
+class ProductByMonthView(LoginRequiredMixin, ListView):
     template_name = 'receipts/purchased_products.html'
     model = Receipt
+    login_url = '/login/'
 
     def get_context_data(self, *, object_list=None, **kwargs):
         context = super().get_context_data(**kwargs)
