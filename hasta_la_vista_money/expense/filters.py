@@ -47,19 +47,21 @@ class ExpenseFilter(django_filters.FilterSet):
 
     @property
     def qs(self):
+        """Возвращает QuerySet с фильтрацией по пользователю."""
         queryset = super().qs
-        expenses = (
-            queryset.filter(user=self.user)
-            .distinct()
-            .values(
-                'id',
-                'date',
-                'account__name_account',
-                'category__name',
-                'category__parent_category__name',
-                'amount',
-                'user',
-            )
+        return queryset.filter(user=self.user).distinct()
+
+    def get_expenses_with_annotations(self):
+        """Возвращает список расходов с дополнительными полями для отображения."""
+        queryset = self.qs
+        expenses = queryset.values(
+            'id',
+            'date',
+            'account__name_account',
+            'category__name',
+            'category__parent_category__name',
+            'amount',
+            'user',
         )
 
         # Добавляем date_label для каждого расхода

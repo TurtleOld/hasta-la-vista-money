@@ -112,7 +112,7 @@ class ExpenseView(
             'account'
         ].queryset = user.finance_account_users.select_related('user').all()
 
-        expenses = expense_filter.qs
+        expenses = expense_filter.get_expenses_with_annotations()
 
         receipt_expenses = (
             Receipt.objects.filter(
