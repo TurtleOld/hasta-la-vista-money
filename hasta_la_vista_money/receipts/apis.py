@@ -45,7 +45,6 @@ class DataUrlAPIView(APIView):
 
         if serializer.is_valid():
             data_url = serializer.validated_data['data_url']
-            print(f'Received Data URL: {data_url}')
             return Response(
                 {'message': 'Data URL received successfully', 'data_url': data_url},
                 status=status.HTTP_200_OK,

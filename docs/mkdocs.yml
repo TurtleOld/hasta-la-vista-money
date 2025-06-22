@@ -10,8 +10,12 @@ nav:
       - Accounts management page:
         - Account Summary Page: finance_account/finance_account.md
       - Receipts management page:
+        - Quick Start: receipts/quick_start.md
         - Receipts Page: receipts/receipts_page.md
         - Add receipts with AI: receipts/processing_receipt_ai.md
+        - Developer Guide: receipts/development.md
+      - Expenses management page:
+        - Expenses Page: expenses/expenses_page.md
   - Contribute:
       contribute.md
 theme:
