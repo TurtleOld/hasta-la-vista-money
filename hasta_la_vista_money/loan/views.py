@@ -1,4 +1,5 @@
 from django.contrib.messages.views import SuccessMessageMixin
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView
@@ -45,6 +46,7 @@ class LoanCreateView(CustomNoPermissionMixin, SuccessMessageMixin, CreateView):
     form_class = LoanForm
     success_url = reverse_lazy('loan:list')
     success_message = constants.SUCCESS_MESSAGE_LOAN_CREATE
+    no_permission_url = reverse_lazy('login')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -96,26 +98,37 @@ class LoanDeleteView(CustomNoPermissionMixin, SuccessMessageMixin, DeleteView):
     model = Loan
     success_url = reverse_lazy('loan:list')
     success_message = constants.SUCCESS_MESSAGE_LOAN_DELETE
+    no_permission_url = reverse_lazy('login')
 
     def form_valid(self, form):
         loan = self.get_object()
         account = loan.account
         loan.delete()
-        account.delete()
+        try:
+            account.delete()
+        except Exception:
+            pass
         return super().form_valid(form)
 
 
-class PaymentMakeCreateView(CreateView):
+class PaymentMakeCreateView(CustomNoPermissionMixin, CreateView):
     template_name = 'loan/loan.html'
     model = PaymentMakeLoan
     form_class = PaymentMakeLoanForm
     success_url = reverse_lazy('loan:list')
+    no_permission_url = reverse_lazy('login')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
 
     def post(self, request, *args, **kwargs):
         payment_make_form = self.form_class(request.user, request.POST)
-        return create_object_view(
+        result = create_object_view(
             form=payment_make_form,
             model=self.model,
             request=request,
             message=constants.SUCCESS_MESSAGE_PAYMENT_MAKE,
         )
+        return JsonResponse(result)

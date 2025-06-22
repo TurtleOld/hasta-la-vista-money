@@ -145,7 +145,7 @@ class AccountView(
                 unique_amounts.append(amounts[data_index])
             else:
                 index = unique_dates.index(date)
-                unique_amounts[index] += amounts[index]
+                unique_amounts[index] += amounts[data_index]
 
         return unique_dates, unique_amounts
 

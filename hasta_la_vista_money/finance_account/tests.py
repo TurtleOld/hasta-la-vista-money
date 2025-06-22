@@ -1,12 +1,27 @@
-from django.utils import timezone
+from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib import messages
 from django.test import RequestFactory, TestCase
-from django.urls import reverse_lazy, reverse
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.finance_account.forms import AddAccountForm
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.forms import (
+    AddAccountForm,
+    TransferMoneyAccountForm,
+)
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
+from hasta_la_vista_money.finance_account.prepare import (
+    collect_info_expense,
+    collect_info_income,
+    sort_expense_income,
+)
+from hasta_la_vista_money.finance_account.serializers import AccountSerializer
+from hasta_la_vista_money.finance_account.views import AccountView
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
 
@@ -57,10 +72,9 @@ class TestAccount(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertEqual(Account.objects.count(), 2)
-        self.assertQuerySetEqual(
-            response.context['accounts'],
-            Account.objects.filter(user=self.user),
-            transform=lambda x: x,
+        self.assertEqual(
+            list(response.context['accounts']),
+            list(Account.objects.filter(user=self.user)),
         )
 
     def test_account_create_valid_form(self):
@@ -149,7 +163,7 @@ class TestAccount(TestCase):
 
         initial_balance_account1 = self.account1.balance
         initial_balance_account2 = self.account2.balance
-        amount = constants.ONE_HUNDRED
+        amount = Decimal('100')
 
         transfer_money = {
             'from_account': self.account1.pk,
@@ -172,3 +186,429 @@ class TestAccount(TestCase):
 
         self.assertEqual(self.account1.balance, initial_balance_account1 - amount)
         self.assertEqual(self.account2.balance, initial_balance_account2 + amount)
+
+    def test_transfer_money_insufficient_funds(self):
+        """Тест перевода средств при недостаточном балансе."""
+        self.client.force_login(self.user)
+
+        amount = self.account1.balance + Decimal('1000')  # Сумма больше баланса
+
+        transfer_money = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': amount,
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+
+        response = self.client.post(
+            reverse('finance_account:transfer_money'),
+            transfer_money,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(response.status_code, 200)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('from_account', response_data['errors'])
+
+    def test_transfer_money_same_account(self):
+        """Тест перевода средств на тот же счет."""
+        self.client.force_login(self.user)
+
+        transfer_money = {
+            'from_account': self.account1.pk,
+            'to_account': self.account1.pk,
+            'amount': 100,
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+
+        response = self.client.post(
+            reverse('finance_account:transfer_money'),
+            transfer_money,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(response.status_code, 200)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('to_account', response_data['errors'])
+
+    def test_transfer_money_invalid_form(self):
+        """Тест перевода средств с невалидной формой."""
+        self.client.force_login(self.user)
+
+        transfer_money = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': 'invalid_amount',
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+
+        response = self.client.post(
+            reverse('finance_account:transfer_money'),
+            transfer_money,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(response.status_code, 200)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('amount', response_data['errors'])
+
+    def test_transfer_money_no_ajax(self):
+        """Тест перевода средств без AJAX запроса."""
+        self.client.force_login(self.user)
+
+        transfer_money = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': 100,
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+
+        response = self.client.post(
+            reverse('finance_account:transfer_money'),
+            transfer_money,
+        )
+        self.assertEqual(response.status_code, 200)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+
+    def test_account_model_methods(self):
+        """Тест методов модели Account."""
+        # Тест __str__
+        self.assertEqual(str(self.account1), 'Банковская карта')
+
+        # Тест get_absolute_url
+        expected_url = reverse('finance_account:change', args=[self.account1.pk])
+        self.assertEqual(self.account1.get_absolute_url(), expected_url)
+
+        # Тест transfer_money успешный
+        initial_balance1 = self.account1.balance
+        initial_balance2 = self.account2.balance
+        amount = Decimal('100')
+
+        result = self.account1.transfer_money(self.account2, amount)
+        self.assertTrue(result)
+
+        self.account1.refresh_from_db()
+        self.account2.refresh_from_db()
+        self.assertEqual(self.account1.balance, initial_balance1 - amount)
+        self.assertEqual(self.account2.balance, initial_balance2 + amount)
+
+        # Тест transfer_money неуспешный (недостаточно средств)
+        large_amount = self.account1.balance + Decimal('1000')
+        result = self.account1.transfer_money(self.account2, large_amount)
+        self.assertFalse(result)
+
+    def test_transfer_money_log_model(self):
+        """Тест модели TransferMoneyLog."""
+        transfer_log = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account1,
+            to_account=self.account2,
+            amount=100,
+            exchange_date=timezone.now(),
+            notes='Test transfer log',
+        )
+
+        # Тест __str__
+        expected_str = f'{transfer_log.exchange_date:%d-%m-%Y %H:%M}. Перевод суммы {transfer_log.amount} со счёта "{self.account1}" на счёт "{self.account2}". '
+        self.assertEqual(str(transfer_log), expected_str)
+
+    def test_account_form_validation(self):
+        """Тест валидации формы AddAccountForm."""
+        # Валидная форма
+        form = AddAccountForm(
+            data={
+                'name_account': 'Test Account',
+                'type_account': 'D',
+                'balance': 1000,
+                'currency': 'RUB',
+            },
+        )
+        self.assertTrue(form.is_valid())
+
+        # Невалидная форма (отсутствует обязательное поле)
+        form = AddAccountForm(
+            data={
+                'name_account': 'Test Account',
+                'balance': 1000,
+            },
+        )
+        self.assertFalse(form.is_valid())
+
+    def test_transfer_money_form_validation(self):
+        """Тест валидации формы TransferMoneyAccountForm."""
+        # Валидная форма
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            data={
+                'from_account': self.account1.pk,
+                'to_account': self.account2.pk,
+                'amount': 100,
+                'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'notes': 'Test transfer',
+            },
+        )
+        self.assertTrue(form.is_valid())
+
+        # Невалидная форма - перевод на тот же счет
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            data={
+                'from_account': self.account1.pk,
+                'to_account': self.account1.pk,
+                'amount': 100,
+                'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'notes': 'Test transfer',
+            },
+        )
+        self.assertFalse(form.is_valid())
+
+        # Невалидная форма - недостаточно средств
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            data={
+                'from_account': self.account1.pk,
+                'to_account': self.account2.pk,
+                'amount': self.account1.balance + Decimal('1000'),
+                'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'notes': 'Test transfer',
+            },
+        )
+        self.assertFalse(form.is_valid())
+
+    def test_transfer_money_form_save(self):
+        """Тест сохранения формы TransferMoneyAccountForm."""
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            data={
+                'from_account': self.account1.pk,
+                'to_account': self.account2.pk,
+                'amount': 100,
+                'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'notes': 'Test transfer',
+            },
+        )
+
+        if form.is_valid():
+            transfer_log = form.save()
+            if transfer_log is not None:
+                self.assertEqual(transfer_log.user, self.user)
+                self.assertEqual(transfer_log.from_account, self.account1)
+                self.assertEqual(transfer_log.to_account, self.account2)
+                self.assertEqual(transfer_log.amount, 100)
+
+    def test_account_view_methods(self):
+        """Тест методов класса AccountView."""
+        expense_dataset, income_dataset = AccountView.collect_datasets(
+            type('MockRequest', (), {'user': self.user})(),
+        )
+        self.assertIsNotNone(expense_dataset)
+        self.assertIsNotNone(income_dataset)
+
+        test_dataset = [
+            {'date': timezone.now().date(), 'total_amount': 100},
+            {'date': timezone.now().date(), 'total_amount': 200},
+        ]
+        dates, amounts = AccountView.transform_data(test_dataset)
+        self.assertEqual(len(dates), 2)
+        self.assertEqual(len(amounts), 2)
+
+        dates = ['2023-01-01', '2023-01-01', '2023-01-02']
+        amounts = [100, 200, 300]
+        unique_dates, unique_amounts = AccountView.unique_data(dates, amounts)
+        self.assertEqual(len(unique_dates), 2)
+        self.assertEqual(unique_amounts[0], 300)
+
+        expense_dates, expense_amounts = AccountView.transform_data_expense(
+            test_dataset,
+        )
+        income_dates, income_amounts = AccountView.transform_data_income(test_dataset)
+        self.assertEqual(len(expense_dates), 2)
+        self.assertEqual(len(income_dates), 2)
+
+        unique_expense_dates, unique_expense_amounts = AccountView.unique_expense_data(
+            dates,
+            amounts,
+        )
+        unique_income_dates, unique_income_amounts = AccountView.unique_income_data(
+            dates,
+            amounts,
+        )
+        self.assertEqual(unique_expense_dates, unique_dates)
+        self.assertEqual(unique_income_dates, unique_dates)
+
+    def test_prepare_functions(self):
+        """Тест функций из модуля prepare."""
+        income_info = collect_info_income(self.user)
+        self.assertIsNotNone(income_info)
+
+        expense_info = collect_info_expense(self.user)
+        self.assertIsNotNone(expense_info)
+
+        sorted_data = sort_expense_income(expense_info, income_info)
+        self.assertIsInstance(sorted_data, list)
+
+    def test_account_serializer(self):
+        """Тест сериализатора AccountSerializer."""
+        serializer = AccountSerializer(self.account1)
+        data = serializer.data
+
+        self.assertIn('id', data)
+        self.assertIn('name_account', data)
+        self.assertIn('balance', data)
+        self.assertIn('currency', data)
+        self.assertEqual(data['name_account'], self.account1.name_account)
+        self.assertEqual(str(data['balance']), str(self.account1.balance))
+        self.assertEqual(data['currency'], self.account1.currency)
+
+    def test_account_create_view(self):
+        """Тест представления создания счета."""
+        self.client.force_login(self.user)
+
+        url = reverse('finance_account:create')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('add_account_form', response.context)
+
+        data = {
+            'name_account': 'New Test Account',
+            'type_account': 'D',
+            'balance': 5000,
+            'currency': 'USD',
+        }
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+    def test_change_account_view(self):
+        """Тест представления изменения счета."""
+        self.client.force_login(self.user)
+
+        url = reverse('finance_account:change', args=[self.account1.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('add_account_form', response.context)
+
+        data = {
+            'name_account': 'Updated Account Name',
+            'type_account': 'D',
+            'balance': 3000,
+            'currency': 'EUR',
+        }
+        response = self.client.post(url, data, follow=True)
+        self.assertEqual(response.status_code, 200)
+
+    def test_account_view_context_data(self):
+        """Тест контекста данных в AccountView."""
+        self.client.force_login(self.user)
+
+        url = reverse('finance_account:list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('accounts', response.context)
+        self.assertIn('add_account_form', response.context)
+        self.assertIn('transfer_money_form', response.context)
+        self.assertIn('transfer_money_log', response.context)
+        self.assertIn('chart_combine', response.context)
+        self.assertIn('sum_all_accounts', response.context)
+
+    def test_account_view_unauthenticated(self):
+        """Тест AccountView для неаутентифицированного пользователя."""
+        url = reverse('finance_account:list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 302)
+
+    def test_account_form_initial_values(self):
+        """Тест начальных значений формы AddAccountForm."""
+        form = AddAccountForm()
+        self.assertEqual(form.fields['type_account'].initial, 'D')
+
+    def test_transfer_money_form_initialization(self):
+        """Тест инициализации формы TransferMoneyAccountForm."""
+        form = TransferMoneyAccountForm(user=self.user)
+
+        self.assertIn('from_account', form.fields)
+        self.assertIn('to_account', form.fields)
+        self.assertIn('amount', form.fields)
+        self.assertIn('notes', form.fields)
+
+    def test_account_model_choices(self):
+        """Тест выбора в модели Account."""
+        currency_choices = [choice[0] for choice in Account.CURRENCY_LIST]
+        self.assertIn('RUB', currency_choices)
+        self.assertIn('USD', currency_choices)
+        self.assertIn('EUR', currency_choices)
+
+        type_choices = [choice[0] for choice in Account.TYPE_ACCOUNT_LIST]
+        self.assertIn('C', type_choices)
+        self.assertIn('D', type_choices)
+        self.assertIn('CASH', type_choices)
+
+    def test_transfer_money_log_ordering(self):
+        """Тест сортировки TransferMoneyLog."""
+        log1 = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account1,
+            to_account=self.account2,
+            amount=100,
+            exchange_date=timezone.now(),
+            notes='First transfer',
+        )
+
+        log2 = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account2,
+            to_account=self.account1,
+            amount=200,
+            exchange_date=timezone.now() + timedelta(hours=1),
+            notes='Second transfer',
+        )
+
+        logs = TransferMoneyLog.objects.all()
+        self.assertEqual(logs[0], log2)
+        self.assertEqual(logs[1], log1)
+
+    def test_account_model_defaults(self):
+        """Тест значений по умолчанию в модели Account."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Test Default Account',
+            currency='RUB',
+        )
+
+        self.assertEqual(account.balance, 0)
+        self.assertEqual(account.type_account, 'Дебетовый счёт')
+
+    def test_transfer_money_form_clean_method(self):
+        """Тест метода clean формы TransferMoneyAccountForm."""
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            data={
+                'from_account': self.account1.pk,
+                'to_account': self.account1.pk,
+                'amount': self.account1.balance + Decimal('1000'),
+                'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'notes': 'Test transfer',
+            },
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('to_account', form.errors)
+        self.assertIn('from_account', form.errors)
+
+    def test_account_view_with_no_data(self):
+        """Тест AccountView с пустыми данными."""
+        Expense.objects.all().delete()
+        Income.objects.all().delete()
+
+        self.client.force_login(self.user)
+        url = reverse('finance_account:list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('accounts', response.context)

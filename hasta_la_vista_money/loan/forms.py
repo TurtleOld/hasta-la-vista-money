@@ -1,11 +1,12 @@
 """Модуль форм по кредитам."""
 
 from django.forms import (
-    DateTimeInput,
-    DateTimeField,
     ChoiceField,
+    DateTimeField,
+    DateTimeInput,
     DecimalField,
     IntegerField,
+    ModelChoiceField,
 )
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.commonlogic.forms import BaseForm
@@ -20,7 +21,7 @@ class LoanForm(BaseForm):
             attrs={
                 'type': 'datetime-local',
                 'class': 'form-control',
-            }
+            },
         ),
         help_text=_('Укажите дату начала кредита'),
     )
@@ -86,12 +87,33 @@ class LoanForm(BaseForm):
 
 
 class PaymentMakeLoanForm(BaseForm):
-    labels = {
-        'date': _('Дата платежа'),
-        'account': _('Счёт списания'),
-        'loan': _('Кредит'),
-        'amount': _('Сумма платежа'),
-    }
+    date = DateTimeField(
+        label=_('Дата платежа'),
+        widget=DateTimeInput(
+            attrs={
+                'type': 'datetime-local',
+                'class': 'form-control',
+            },
+        ),
+        help_text=_('Укажите дату платежа'),
+    )
+
+    account = ModelChoiceField(
+        queryset=Account.objects.all(),
+        label=_('Счёт списания'),
+        help_text=_('Выберите счёт для списания'),
+    )
+
+    loan = ModelChoiceField(
+        queryset=Loan.objects.all(),
+        label=_('Кредит'),
+        help_text=_('Выберите кредит для погашения'),
+    )
+
+    amount = DecimalField(
+        label=_('Сумма платежа'),
+        help_text=_('Введите сумму платежа'),
+    )
 
     def __init__(self, user, *args, **kwargs):
         """
@@ -102,6 +124,7 @@ class PaymentMakeLoanForm(BaseForm):
         super().__init__(*args, **kwargs)
         self.user = user
         self.fields['account'].queryset = self.get_account_queryset()
+        self.fields['loan'].queryset = Loan.objects.filter(user=user)
 
     def get_account_queryset(self):
         accounts = Account.objects.filter(user=self.user)

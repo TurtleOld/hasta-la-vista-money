@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -262,7 +263,7 @@ class IncomeDeleteView(BaseView, DeleteView, DeletionMixin):
         return HttpResponseRedirect(str(self.success_url))
 
 
-class IncomeCategoryView(ListView):
+class IncomeCategoryView(LoginRequiredMixin, ListView):
     template_name = 'income/show_category_income.html'
     model = IncomeCategory
     depth = 3
