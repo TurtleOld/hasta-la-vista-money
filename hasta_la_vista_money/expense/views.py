@@ -1,6 +1,7 @@
 from typing import Any, Optional
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
 from django.db.models.functions import ExtractYear, TruncMonth
@@ -238,7 +239,7 @@ class ExpenseUpdateView(
         context = super().get_context_data(**kwargs)
         form_class = self.get_form_class()
         form = form_class(**self.get_form_kwargs())
-        form.fields['account'].queryset = user.account_users.select_related(
+        form.fields['account'].queryset = user.finance_account_users.select_related(
             'user',
         ).all()
         context['add_expense_form'] = form
@@ -280,7 +281,7 @@ class ExpenseUpdateView(
             return super().form_valid(form)
 
 
-class ExpenseDeleteView(ExpenseBaseView, DetailView, DeleteView):
+class ExpenseDeleteView(LoginRequiredMixin, ExpenseBaseView, DetailView, DeleteView):
     context_object_name = 'expense'
     no_permission_url = reverse_lazy('login')
 
@@ -300,7 +301,7 @@ class ExpenseDeleteView(ExpenseBaseView, DetailView, DeleteView):
             return super().form_valid(form)
 
 
-class ExpenseCategoryView(ListView):
+class ExpenseCategoryView(LoginRequiredMixin, ListView):
     template_name = 'expense/show_category_expense.html'
     model = ExpenseCategory
     depth = 3
@@ -329,7 +330,7 @@ class ExpenseCategoryView(ListView):
         return context
 
 
-class ExpenseCategoryCreateView(CreateView):
+class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
     model = ExpenseCategory
     template_name = 'expense/add_category_expense.html'
     form_class = AddCategoryForm
