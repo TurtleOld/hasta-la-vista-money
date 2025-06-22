@@ -1,4 +1,9 @@
-from django.forms import DateTimeInput, ModelChoiceField, DateTimeField, DecimalField
+from django.forms import (
+    DateTimeField,
+    DateTimeInput,
+    DecimalField,
+    ModelChoiceField,
+)
 from django.forms.fields import CharField
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
@@ -24,7 +29,7 @@ class AddExpenseForm(BaseForm):
             attrs={
                 'type': 'datetime-local',
                 'class': 'form-control',
-            }
+            },
         ),
         help_text=_('Укажите дату и время расхода'),
     )
@@ -67,7 +72,7 @@ class AddCategoryForm(BaseForm):
         queryset=ExpenseCategory.objects.all(),
         label=_('Родительская категория'),
         help_text=_(
-            'Выберите родительскую категорию расхода для создаваемой категории'
+            'Выберите родительскую категорию расхода для создаваемой категории',
         ),
         required=False,
         empty_label=_('Нет родительской категории'),

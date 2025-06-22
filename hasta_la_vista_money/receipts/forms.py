@@ -1,20 +1,21 @@
 from os.path import splitext
+
 import django_filters
 from django.core.exceptions import ValidationError
 from django.forms import (
     CharField,
     ChoiceField,
+    ClearableFileInput,
     DateTimeField,
     DateTimeInput,
     DecimalField,
+    FileField,
+    Form,
     ModelForm,
     NumberInput,
     Select,
     TextInput,
     formset_factory,
-    Form,
-    FileField,
-    ClearableFileInput,
 )
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
@@ -163,7 +164,7 @@ class ReceiptForm(BaseFieldsForm):
         queryset=Account.objects.all(),
         label=_('Счёт списания'),
         help_text=_(
-            'Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.'
+            'Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.',
         ),
     )
     receipt_date = DateTimeField(
@@ -232,7 +233,7 @@ class UploadImageForm(Form):
         widget=ClearableFileInput(
             attrs={
                 'class': 'form-control',
-            }
+            },
         ),
         validators=[validate_image_jpg_png],
     )

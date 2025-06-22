@@ -108,7 +108,7 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
         user = get_object_or_404(User, username=self.request.user)
 
         list_dates = user.budget_date_list_users.order_by('date')
-        total_sum_list_expense = [0] * len(list_dates)  # noqa: WPS435
+        total_sum_list_expense = [0] * len(list_dates)
 
         expense_model = Expense
         expense_parent_categories = user.category_expense_users.filter(
@@ -127,7 +127,7 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
             total_sum_list_expense,
         )
 
-        total_sum_list_income = [0] * len(list_dates)  # noqa: WPS435
+        total_sum_list_income = [0] * len(list_dates)
         income_model = Income
         income_parent_categories = user.category_income_users.filter(
             parent_category=None,

@@ -1,6 +1,6 @@
 """Модуль задач для пакета loan."""
 
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
@@ -30,7 +30,7 @@ def calculate_annuity_loan(
     """
     if not isinstance(loan_amount, Decimal):
         loan_amount = Decimal(
-            str(loan_amount)
+            str(loan_amount),
         )  # Convert to string first to avoid precision issues
     if not isinstance(annual_interest_rate, Decimal):
         annual_interest_rate = Decimal(str(annual_interest_rate))
