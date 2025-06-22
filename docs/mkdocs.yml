@@ -12,6 +12,8 @@ nav:
       - Receipts management page:
         - Receipts Page: receipts/receipts_page.md
         - Add receipts with AI: receipts/processing_receipt_ai.md
+      - Expenses management page:
+        - Expenses Page: expenses/expenses_page.md
   - Contribute:
       contribute.md
 theme:

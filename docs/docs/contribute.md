@@ -19,7 +19,7 @@ To install **Poetry**, run the following command:
 
 **Linux, macOS, Windows (WSL):**
 
-``` bash
+```bash
 curl -sSL https://install.python-poetry.org | python3 -
 ```
 A detailed installation guide for Poetry is available at [official documentation](<https://python-poetry.org/docs/>).
@@ -32,7 +32,7 @@ A detailed installation guide for Poetry is available at [official documentation
 
 #### Cloning the repository
 
-``` bash
+```bash
 git clone https://github.com/TurtleOld/hasta-la-vista-money.git
 cd hasta-la-vista-money
 ```
@@ -42,7 +42,9 @@ cd hasta-la-vista-money
 make .env
 ```
 
-SECRET_KEY - Key for the settings.py file. You can generate the key using the command - ```make secretkey```
+SECRET_KEY - Key for the settings.py file. You can generate the key using the command - ```bash
+make secretkey
+```
 
 > SECRET_KEY=
 
@@ -65,20 +67,22 @@ ALLOWED_HOSTS - List of allowed hosts. Example 'localhost',
 
 ### 1.3 Activating the virtual environment:
 
-``` bash
+```bash
 make shell
 ```
 
-If you encounter the error: ```Command 'make' not found...```  
+If you encounter the error: ```bash
+Command 'make' not found...
+```  
 Run the following command in the console:
 
-``` bash
+```bash
 sudo apt install make
 ```
 
 Then:
 
-``` bash
+```bash
 make install
 ```
 
@@ -86,24 +90,24 @@ make install
 
 ## 2. Running the application in development mode
 
-``` bash
+```bash
 make start
 ```
 
 ## 3. Test code
 
-```commandline
+```bash
 make test
 ```
 
 ## 4. Linting
 
-```commandline
+```bash
 make lint
 ```
 
 ## 5. Formatting code
 Before pushing the code to the remote repository, format it according to the guidelines:
-```commandline
+```bash
 make format
 ```

@@ -134,8 +134,6 @@ class ExpenseView(
         for receipt in receipt_expenses:
             month_date = receipt['month']
             date_label = date_format(month_date, 'F Y')
-            print(receipt['month'])
-            print(date_label)
 
             receipt_expense_list.append(
                 {
@@ -146,6 +144,7 @@ class ExpenseView(
                     'amount': receipt['amount'],
                     'category__name': 'Покупки по чекам',
                     'account__name_account': receipt['account__name_account'],
+                    'user': user,
                 },
             )
 

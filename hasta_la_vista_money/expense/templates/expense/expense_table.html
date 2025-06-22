@@ -13,6 +13,7 @@
             <th class="col-1">{% translate 'Сумма' %}</th>
             <th class="col-1">{% translate 'Категория' %}</th>
             <th class="col-1">{% translate 'Счёт' %}</th>
+            <th class="col-1">{% translate 'Пользователь' %}</th>
             <th class="col-1">
                 <button type="button" class="btn btn-outline-success"
                         data-bs-toggle="modal" data-bs-target="#add-expense"
@@ -45,13 +46,17 @@
                 <td class="text-nowrap">{{ expense.amount | comma }}</td>
                 <td>{% if expense.category__parent_category__name %}
                     <strong>{{ expense.category__parent_category__name }}</strong>
-                    \ {% endif %}{{ expense.category__name }}</td>
+                    {% endif %}
+                    {{ expense.category__name }}
+                </td>
                 <td>{{ expense.account__name_account }}</td>
+                <td>{% if expense.user.get_full_name %}{{ expense.user.get_full_name }}{% else %} {{ expense.user }}{% endif %}</td>
                 <td>
                     <div class="table-buttons">
                         {% if not expense.id|stringformat:"s"|startswith:"receipt_" %}
                         <a href="{% url 'expense:change' expense.id %}"
-                           class="change-object-button btn btn-info border-0 btn-sm me-1">
+                           class="change-object-button btn btn-info border-0 btn-sm me-1"
+                           title="{% translate 'Редактировать расход' %}">
                             <svg xmlns="http://www.w3.org/2000/svg"
                                  width="12"
                                  height="12" fill="currentColor"
@@ -68,7 +73,8 @@
                                    value="{{ expense.id }}">
                             <button class="btn btn-warning border-0 btn-sm me-1"
                                     data-nonce="{{ request.csp_nonce }}"
-                                    type="submit">
+                                    type="submit"
+                                    title="{% translate 'Копировать расход' %}">
                                 <svg xmlns="http://www.w3.org/2000/svg"
                                      width="16"
                                      height="16"
@@ -87,12 +93,9 @@
                                    value="{{ expense.id }}">
                             <button class="remove-object-button btn btn-danger border-0 btn-sm"
                                     data-nonce="{{ request.csp_nonce }}"
-                                    type="submit" name="delete_expense_button">
-                                <svg xmlns="http://www.w3.org/2000/svg"
-                                     width="12" height="12" fill="currentColor"
-                                     class="bi bi-x-lg" viewBox="0 0 16 16">
-                                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"></path>
-                                </svg>
+                                    type="submit" name="delete_expense_button"
+                                    title="{% translate 'Удалить расход' %}">
+                                {% include 'button_remove.html' %}
                             </button>
                         </form>
                         {% endif %}
