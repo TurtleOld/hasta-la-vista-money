@@ -1,4 +1,6 @@
+import structlog
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -13,6 +15,8 @@ from hasta_la_vista_money.loan.tasks import (
     calculate_differentiated_loan,
 )
 from hasta_la_vista_money.users.models import User
+
+logger = structlog.get_logger(__name__)
 
 
 class LoanView(CustomNoPermissionMixin, SuccessMessageMixin, ListView):
@@ -106,8 +110,8 @@ class LoanDeleteView(CustomNoPermissionMixin, SuccessMessageMixin, DeleteView):
         loan.delete()
         try:
             account.delete()
-        except Exception:
-            pass
+        except ProtectedError:
+            logger.error(f'Account {account.name_account} is protected')
         return super().form_valid(form)
 
 
