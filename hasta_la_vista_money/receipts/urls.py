@@ -43,7 +43,7 @@ urlpatterns = [
     path(
         'seller/create/',
         SellerCreateAPIView.as_view(),
-        name='api_list',
+        name='seller_create_api',
     ),
     path(
         'seller/<int:id>/',

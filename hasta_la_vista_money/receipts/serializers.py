@@ -8,6 +8,7 @@ class SellerSerializer(ModelSerializer):
     class Meta(TypedModelMeta):
         model = Seller
         fields = '__all__'
+        read_only_fields = ('user',)
 
 
 class ProductSerializer(ModelSerializer):
