@@ -908,7 +908,7 @@ class TestReceiptPermissions(TestCase):
         self.user2 = User.objects.create_user(
             username='testuser2',
             email='test2@example.com',
-            password='testpass123',
+            password='testpass123',  # nosec
         )
         self.account1 = Account.objects.get(pk=1)
         self.account2 = Account.objects.create(
