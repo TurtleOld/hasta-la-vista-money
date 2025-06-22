@@ -77,6 +77,6 @@ class DebugToolbarSetup:
         if not show_toolbar():
             return urlpatterns
 
-        import debug_toolbar  # noqa
+        import debug_toolbar
 
         return urlpatterns + [path('__debug__/', include(debug_toolbar.urls))]

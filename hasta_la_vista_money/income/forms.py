@@ -1,9 +1,9 @@
 from django.forms import (
-    DateTimeInput,
-    ModelChoiceField,
-    DateTimeField,
-    DecimalField,
     CharField,
+    DateTimeField,
+    DateTimeInput,
+    DecimalField,
+    ModelChoiceField,
 )
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.commonlogic.forms import BaseForm
@@ -30,7 +30,7 @@ class IncomeForm(BaseForm):
             attrs={
                 'type': 'datetime-local',
                 'class': 'form-control',
-            }
+            },
         ),
         help_text=_('Укажите дату и время получения дохода'),
     )

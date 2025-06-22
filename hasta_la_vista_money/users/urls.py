@@ -3,8 +3,8 @@ from hasta_la_vista_money.users.views import (
     CreateUser,
     ListUsers,
     LoginUser,
-    UpdateUserView,
     SetPasswordUserView,
+    UpdateUserView,
 )
 
 app_name = 'users'
