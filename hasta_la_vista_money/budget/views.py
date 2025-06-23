@@ -13,6 +13,7 @@ from hasta_la_vista_money.users.models import User
 from datetime import date
 from decimal import Decimal
 from collections import defaultdict
+from django.db.models.functions import TruncMonth
 
 
 def get_fact_amount(user, category, month, type_):
@@ -77,19 +78,28 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
         income_categories = list(get_categories(user, 'income'))
 
         # ----------- Расходы -----------
-        # Все расходы за нужные месяцы и категории одним запросом
-        expenses = (
-            Expense.objects.filter(
-                user=user, category__in=expense_categories, date__in=months
+        # Все расходы за нужные месяцы и категории одним запросом, группировка по месяцу
+        if months:
+            expenses = (
+                Expense.objects.filter(
+                    user=user,
+                    category__in=expense_categories,
+                    date__gte=months[0],
+                    date__lte=months[-1],
+                )
+                .annotate(month=TruncMonth("date"))
+                .values("category_id", "month")
+                .annotate(total=Sum("amount"))
             )
-            .values('category_id', 'date')
-            .annotate(total=Sum('amount'))
-        )
+        else:
+            expenses = []
         expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
         for e in expenses:
-            expense_fact_map[e['category_id']][e['date']] = e['total'] or 0
+            month_date = (
+                e["month"].date() if hasattr(e["month"], "date") else e["month"]
+            )
+            expense_fact_map[e["category_id"]][month_date] = e["total"] or 0
 
-        # Все планы расходов одним запросом
         plans_exp = Planning.objects.filter(
             user=user,
             date__in=months,
@@ -125,17 +135,26 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
                 total_plan_expense[i] += plan
             expense_data.append(row)
 
-        # ----------- Доходы -----------
-        incomes = (
-            Income.objects.filter(
-                user=user, category__in=income_categories, date__in=months
+        if months:
+            incomes = (
+                Income.objects.filter(
+                    user=user,
+                    category__in=income_categories,
+                    date__gte=months[0],
+                    date__lte=months[-1],
+                )
+                .annotate(month=TruncMonth("date"))
+                .values("category_id", "month")
+                .annotate(total=Sum("amount"))
             )
-            .values('category_id', 'date')
-            .annotate(total=Sum('amount'))
-        )
+        else:
+            incomes = []
         income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
         for e in incomes:
-            income_fact_map[e['category_id']][e['date']] = e['total'] or 0
+            month_date = (
+                e["month"].date() if hasattr(e["month"], "date") else e["month"]
+            )
+            income_fact_map[e["category_id"]][month_date] = e["total"] or 0
 
         plans_inc = Planning.objects.filter(
             user=user,
@@ -171,7 +190,6 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
                 total_fact_income[i] += fact
                 total_plan_income[i] += plan
             income_data.append(row)
-
         context['months'] = months
         context['expense_data'] = expense_data
         context['income_data'] = income_data
