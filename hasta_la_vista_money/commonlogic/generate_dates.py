@@ -20,7 +20,7 @@ def generate_date_list(
         else:
             raise ValueError('current_date must be datetime or QuerySet')
 
-    last_date_obj = DateList.objects.filter(user=user).order_by("-date").first()
+    last_date_obj = DateList.objects.filter(user=user).order_by('-date').first()
     if last_date_obj:
         start_date = last_date_obj.date + relativedelta(months=1)
     else:
@@ -33,7 +33,7 @@ def generate_date_list(
 
     existing_dates = set(
         DateList.objects.filter(user=user, date__in=new_dates).values_list(
-            "date", flat=True
+            'date', flat=True
         )
     )
     for d in new_dates:

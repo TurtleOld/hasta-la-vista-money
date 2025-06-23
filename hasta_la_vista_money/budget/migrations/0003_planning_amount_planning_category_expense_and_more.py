@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('budget', '0002_initial'),
         ('expense', '0002_initial'),
@@ -24,12 +23,22 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='planning',
             name='category_expense',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='expense.expensecategory'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                to='expense.expensecategory',
+            ),
         ),
         migrations.AddField(
             model_name='planning',
             name='category_income',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='income.incomecategory'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                to='income.incomecategory',
+            ),
         ),
         migrations.AddField(
             model_name='planning',
@@ -39,7 +48,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='planning',
             name='type',
-            field=models.CharField(choices=[('expense', 'Расход'), ('income', 'Доход')], default='expense', max_length=10),
+            field=models.CharField(
+                choices=[('expense', 'Расход'), ('income', 'Доход')],
+                default='expense',
+                max_length=10,
+            ),
         ),
         migrations.AlterField(
             model_name='datelist',
@@ -49,10 +62,14 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='planning',
             name='user',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
+            ),
         ),
         migrations.AlterUniqueTogether(
             name='planning',
-            unique_together={('user', 'category_expense', 'category_income', 'date', 'type')},
+            unique_together={
+                ('user', 'category_expense', 'category_income', 'date', 'type')
+            },
         ),
     ]

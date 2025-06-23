@@ -305,7 +305,7 @@ class AccountView(
             prev = balances_prev_by_currency.get(cur, 0)
             delta = now - prev
             percent = (delta / prev * 100) if prev else None
-            delta_by_currency[cur] = {"delta": delta, "percent": percent}
+            delta_by_currency[cur] = {'delta': delta, 'percent': percent}
 
         # Если одна валюта — возвращаем просто сумму, иначе словарь
         sum_all_accounts = (
@@ -354,21 +354,21 @@ class AccountView(
 
         context.update(
             {
-                "accounts": accounts,
-                "add_account_form": AddAccountForm(),
-                "transfer_money_form": TransferMoneyAccountForm(
+                'accounts': accounts,
+                'add_account_form': AddAccountForm(),
+                'transfer_money_form': TransferMoneyAccountForm(
                     user=self.request.user,
                     initial=initial_form_data,
                 ),
-                "receipt_info_by_month": receipt_info_by_month,
-                "income_expense": income_expense,
-                "transfer_money_log": transfer_money_log,
-                "chart_combine": json.dumps(chart_combined),
-                "sum_all_accounts": sum_all_accounts,
-                "sum_all_accounts_prev": sum_all_accounts_prev,
-                "sum_all_accounts_delta": sum_all_accounts_delta,
-                "currencies": currencies,
-                "is_multi_currency": is_multi_currency,
+                'receipt_info_by_month': receipt_info_by_month,
+                'income_expense': income_expense,
+                'transfer_money_log': transfer_money_log,
+                'chart_combine': json.dumps(chart_combined),
+                'sum_all_accounts': sum_all_accounts,
+                'sum_all_accounts_prev': sum_all_accounts_prev,
+                'sum_all_accounts_delta': sum_all_accounts_delta,
+                'currencies': currencies,
+                'is_multi_currency': is_multi_currency,
             },
         )
 
