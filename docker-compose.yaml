@@ -17,6 +17,11 @@ services:
     restart: always
     networks:
       - default
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   hlvm-server:
     container_name: hlvm_server
     image: ghcr.io/turtleold/hasta-la-vista-money:main
@@ -24,10 +29,8 @@ services:
       context: ./
       dockerfile: docker/production.Dockerfile
     volumes:
-      - ${LOCATION:-./app_data}:/app
-    command: sh -c "python manage.py migrate && python manage.py collectstatic && granian --interface asgi config.asgi:application --port ${PORT:-8090} --host 0.0.0.0"
-    ports:
-      - "8001:8001"
+      - ${LOCATION:-./app_data}/static:/app/static
+    command: sh -c ".venv/bin/python manage.py migrate && .venv/bin/python manage.py collectstatic --noinput --clear && .venv/bin/granian --interface asgi config.asgi:application --port 8001 --host 0.0.0.0"
     expose:
       - "8001"
     env_file:
@@ -42,20 +45,31 @@ services:
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       SENTRY_ENDPOINT: ${SENTRY_ENDPOINT:-}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: on-failure
     networks:
       - default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
   nginx:
     image: nginx:alpine
     ports:
       - "8090:80"
     volumes:
       - ${CONF_PATH:-./nginx}/nginx.conf:/etc/nginx/nginx.conf
-      - ${LOCATION:-./app_data}:/app
+      - ${LOCATION:-./app_data}/static:/app/static
     depends_on:
       - hlvm-server
-    restart: ${RESTART:-always}
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 networks:
   default:
     driver: bridge

@@ -106,19 +106,20 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Templates
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'hasta_la_vista_money', 'templates')],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [os.path.join(BASE_DIR, "hasta_la_vista_money", "templates")],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
-            'libraries': {
-                'comma': 'hasta_la_vista_money.templatags.thousand_comma',
-                'word_hash': 'hasta_la_vista_money.templatags.generate_hash',
+            "libraries": {
+                "comma": "hasta_la_vista_money.templatags.thousand_comma",
+                "word_hash": "hasta_la_vista_money.templatags.generate_hash",
+                "dict_get": "hasta_la_vista_money.templatags.dict_get",
             },
         },
     },
@@ -285,8 +286,12 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
     MIDDLEWARE,
 )
 
-ACCESS_TOKEN_LIFETIME: timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
-REFRESH_TOKEN_LIFETIME: timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
+ACCESS_TOKEN_LIFETIME = timedelta(
+    minutes=int(os.environ.get("ACCESS_TOKEN_LIFETIME", "60"))
+)
+REFRESH_TOKEN_LIFETIME = timedelta(
+    days=int(os.environ.get("REFRESH_TOKEN_LIFETIME", "7"))
+)
 
 if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
     os.mkdir(os.path.join(BASE_DIR, 'logs'))

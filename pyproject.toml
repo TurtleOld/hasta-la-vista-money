@@ -1,6 +1,6 @@
 [project]
 name = "hastalavistamoney"
-version = "1.5.5"
+version = "1.5.6"
 description = "Home Accounting Project"
 authors = [
     {name = "Alexander Pavlov", email = "dev@pavlovteam.ru"}
