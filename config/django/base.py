@@ -116,9 +116,10 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
-            'libraries': {
-                'comma': 'hasta_la_vista_money.templatags.thousand_comma',
-                'word_hash': 'hasta_la_vista_money.templatags.generate_hash',
+            "libraries": {
+                "comma": "hasta_la_vista_money.templatags.thousand_comma",
+                "word_hash": "hasta_la_vista_money.templatags.generate_hash",
+                "dict_get": "hasta_la_vista_money.templatags.dict_get",
             },
         },
     },
