@@ -1,21 +1,18 @@
-# This docker file is used for production
-# Creating image based on official python3 image
-FROM python:3.13.5
+FROM python:3.12-slim
 
-ENV PYTHONFAULTHANDLER=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
-RUN useradd -m superuser
-USER superuser
-WORKDIR /home/superuser
-COPY ../ .
-ENV PATH="/home/superuser/.local/bin:$PATH"
+WORKDIR /app
 
 RUN pip install uv
 
-RUN uv venv .venv && uv pip install -e '.[dev]'
+COPY pyproject.toml uv.lock ./
 
-EXPOSE 8000
+RUN uv venv .venv && .venv/bin/uv pip install -e '.[dev]'
 
-CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+COPY . .
+
+RUN .venv/bin/python manage.py collectstatic --noinput --clear
+
+RUN adduser --disabled-password --gecos '' appuser && chown -R appuser /app
+USER appuser
+
+CMD [".venv/bin/granian", "--interface", "asgi", "config.asgi:application", "--port", "8001", "--host", "0.0.0.0"]
