@@ -16,6 +16,8 @@ nav:
         - Developer Guide: receipts/development.md
       - Expenses management page:
         - Expenses Page: expenses/expenses_page.md
+      - Income management page:
+        - Income Page: income/income_page.md
   - Contribute:
       contribute.md
 theme:
