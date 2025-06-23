@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from dateutil.relativedelta import relativedelta
 from django.db.models import QuerySet
 from hasta_la_vista_money import constants
@@ -11,7 +10,9 @@ def generate_date_list(
     current_date: datetime | QuerySet[DateList],
     user: User,
 ):
-    """Функция генерации первых 12 месяцев начиная с переданной даты."""
+    """
+    Добавляет 12 новых месяцев после самой последней даты пользователя.
+    """
     if isinstance(current_date, QuerySet):
         last_date_instance = current_date.last()
         if last_date_instance is not None:
@@ -19,14 +20,22 @@ def generate_date_list(
         else:
             raise ValueError('current_date must be datetime or QuerySet')
 
-    list_date = [
-        current_date + relativedelta(months=date_index)
-        for date_index in range(
-            0,
-            constants.NUMBER_TWELFTH_MONTH_YEAR + 1,
-        )
+    last_date_obj = DateList.objects.filter(user=user).order_by('-date').first()
+    if last_date_obj:
+        start_date = last_date_obj.date + relativedelta(months=1)
+    else:
+        start_date = current_date
+
+    new_dates = [
+        start_date + relativedelta(months=i)
+        for i in range(constants.NUMBER_TWELFTH_MONTH_YEAR)
     ]
 
-    for item_date in list_date:
-        date_list_instance = DateList(user=user, date=item_date)
-        date_list_instance.save()
+    existing_dates = set(
+        DateList.objects.filter(user=user, date__in=new_dates).values_list(
+            'date', flat=True
+        )
+    )
+    for d in new_dates:
+        if d not in existing_dates:
+            DateList.objects.create(user=user, date=d)

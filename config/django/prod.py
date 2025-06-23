@@ -18,9 +18,8 @@ SECURE_CONTENT_TYPE_NOSNIFF = os.environ.get(
     default=True,
 )
 
-ACCESS_TOKEN_LIFETIME: timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
-REFRESH_TOKEN_LIFETIME: timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
-
+ACCESS_TOKEN_LIFETIME = timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', "60")))
+REFRESH_TOKEN_LIFETIME = timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', "7")))
 
 LOGGING = {
     'version': 1,

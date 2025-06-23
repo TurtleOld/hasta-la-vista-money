@@ -3,6 +3,7 @@ from hasta_la_vista_money.budget.views import (
     BudgetView,
     change_planning,
     generate_date_list_view,
+    save_planning,
 )
 
 app_name = 'budget'
@@ -14,4 +15,5 @@ urlpatterns = [
         change_planning,
         name='change_planning',
     ),
+    path('save-planning/', save_planning, name='save_planning'),
 ]
