@@ -287,8 +287,8 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
     MIDDLEWARE,
 )
 
-ACCESS_TOKEN_LIFETIME = timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME'), "60"))
-REFRESH_TOKEN_LIFETIME = timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME'), "7"))
+ACCESS_TOKEN_LIFETIME = timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', "60")))
+REFRESH_TOKEN_LIFETIME = timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', "7")))
 
 if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
     os.mkdir(os.path.join(BASE_DIR, 'logs'))
