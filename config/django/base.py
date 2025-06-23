@@ -120,6 +120,7 @@ TEMPLATES = [
                 "comma": "hasta_la_vista_money.templatags.thousand_comma",
                 "word_hash": "hasta_la_vista_money.templatags.generate_hash",
                 "dict_get": "hasta_la_vista_money.templatags.dict_get",
+                'index': 'hasta_la_vista_money.templatags.index'
             },
         },
     },
