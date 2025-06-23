@@ -6,7 +6,7 @@ RUN pip install uv
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv venv .venv && .venv/bin/uv pip install -e '.[dev]'
+RUN uv venv .venv && uv pip install -e '.[dev]'
 
 COPY . .
 
