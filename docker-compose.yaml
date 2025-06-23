@@ -30,7 +30,7 @@ services:
       dockerfile: docker/production.Dockerfile
     volumes:
       - ${LOCATION:-./app_data}/static:/app/static
-    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput --clear && granian --interface asgi config.asgi:application --port 8001 --host 0.0.0.0"
+    command: sh -c ".venv/bin/python manage.py migrate && .venv/bin/python manage.py collectstatic --noinput --clear && .venv/bin/granian --interface asgi config.asgi:application --port 8001 --host 0.0.0.0"
     expose:
       - "8001"
     env_file:
