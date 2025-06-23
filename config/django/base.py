@@ -106,19 +106,20 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Templates
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'hasta_la_vista_money', 'templates')],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [os.path.join(BASE_DIR, "hasta_la_vista_money", "templates")],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
-            'libraries': {
-                'comma': 'hasta_la_vista_money.templatags.thousand_comma',
-                'word_hash': 'hasta_la_vista_money.templatags.generate_hash',
+            "libraries": {
+                "comma": "hasta_la_vista_money.templatags.thousand_comma",
+                "word_hash": "hasta_la_vista_money.templatags.generate_hash",
+                "dict_get": "hasta_la_vista_money.templatags.dict_get",
             },
         },
     },
