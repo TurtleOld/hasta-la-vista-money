@@ -1,98 +1,62 @@
 import json
-
-from django.db.models import QuerySet, Sum
-from django.db.models.functions import TruncMonth
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
-from hasta_la_vista_money.budget.models import Planning
+from hasta_la_vista_money.budget.models import Planning, DateList
 from hasta_la_vista_money.commonlogic.generate_dates import generate_date_list
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
-from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+from datetime import date
+from decimal import Decimal
+from collections import defaultdict
 
 
-def get_queryset_budget_type_operation(model, user, category):
-    """
-    Получение Queryset по типу операции.
-
-    :param model: Queryset
-    :param user: User
-    :param category: Queryset
-
-    """
-    return (
-        model.objects.filter(
-            user=user,
-            category__parent_category=category,
+def get_fact_amount(user, category, month, type_):
+    if type_ == "expense":
+        return (
+            Expense.objects.filter(
+                user=user,
+                category=category,
+                date__year=month.year,
+                date__month=month.month,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
         )
-        .annotate(month=TruncMonth('date'))
-        .values('month')
-        .annotate(total_amount=Sum('amount'))
-        .order_by('month')
+    else:
+        return (
+            Income.objects.filter(
+                user=user,
+                category=category,
+                date__year=month.year,
+                date__month=month.month,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+
+
+def get_plan_amount(user, category, month, type_):
+    q = Planning.objects.filter(
+        user=user,
+        date=month,
+        type=type_,
     )
+    if type_ == "expense":
+        q = q.filter(category_expense=category)
+    else:
+        q = q.filter(category_income=category)
+    plan = q.first()
+    return plan.amount if plan else 0
 
 
-def category_amount_date_dict(
-    model,
-    parent_categories: QuerySet,
-    user: User,
-) -> dict:
-    """
-    Функция по формированию словаря с категориями и их суммой и датой.
-
-    :param model: Queryset
-    :param parent_categories: Queryset
-    :param user: User
-
-    :return: dict
-    """
-    result = {}
-    for category in parent_categories:
-        result[category.name] = {}
-        queryset = get_queryset_budget_type_operation(model, user, category)
-        for query_item in queryset:
-            month_key = query_item['month'].strftime('%Y-%m')
-            total_amount = query_item['total_amount']
-            result[category.name][month_key] = total_amount
-    return result
-
-
-def category_amounts(
-    list_dates: list,
-    parent_categories: QuerySet,
-    category_amount_date: dict,
-    total_sum_list: list,
-) -> list:
-    """
-    Функция формирующая список категорий и их сумм.
-
-    :param list_dates: list
-    :param parent_categories: Queryset
-    :param category_amount_date: dict
-    :param total_sum_list: list
-
-    :return: list
-    """
-    category_amount = []
-
-    for category in parent_categories:
-        row = {'category': category.name, 'amounts': []}
-
-        for date_index, date in enumerate(list_dates):
-            month_key = date.date.strftime('%Y-%m')
-            amount = category_amount_date.get(category.name, {}).get(
-                month_key,
-                '0,00',
-            )
-            row['amounts'].append(amount)
-            amount_str = str(amount)
-            total_sum_list[date_index] += float(amount_str.replace(',', '.'))
-
-        category_amount.append(row)
-    return category_amount
+def get_categories(user, type_):
+    if type_ == "expense":
+        return user.category_expense_users.filter(parent_category=None).order_by("name")
+    else:
+        return user.category_income_users.filter(parent_category=None).order_by("name")
 
 
 class BaseView:
@@ -104,52 +68,117 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
         user = get_object_or_404(User, username=self.request.user)
+        list_dates = DateList.objects.filter(user=user).order_by("date")
+        months = [d.date for d in list_dates]
 
-        list_dates = user.budget_date_list_users.order_by('date')
-        total_sum_list_expense = [0] * len(list_dates)
+        # Получаем все категории
+        expense_categories = list(get_categories(user, "expense"))
+        income_categories = list(get_categories(user, "income"))
 
-        expense_model = Expense
-        expense_parent_categories = user.category_expense_users.filter(
-            parent_category=None,
-        ).order_by('name')
-        expenses_dict = category_amount_date_dict(
-            expense_model,
-            expense_parent_categories,
-            user,
+        # ----------- Расходы -----------
+        # Все расходы за нужные месяцы и категории одним запросом
+        expenses = (
+            Expense.objects.filter(
+                user=user, category__in=expense_categories, date__in=months
+            )
+            .values("category_id", "date")
+            .annotate(total=Sum("amount"))
         )
+        expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        for e in expenses:
+            expense_fact_map[e["category_id"]][e["date"]] = e["total"] or 0
 
-        expense_category_amount = category_amounts(
-            list_dates,
-            expense_parent_categories,
-            expenses_dict,
-            total_sum_list_expense,
+        # Все планы расходов одним запросом
+        plans_exp = Planning.objects.filter(
+            user=user,
+            date__in=months,
+            type="expense",
+            category_expense__in=expense_categories,
+        ).values("category_expense_id", "date", "amount")
+        expense_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+        for p in plans_exp:
+            expense_plan_map[p["category_expense_id"]][p["date"]] = p["amount"] or 0
+
+        expense_data = []
+        total_fact_expense = [0] * len(months)
+        total_plan_expense = [0] * len(months)
+        for cat in expense_categories:
+            row = {
+                "category": cat.name,
+                "category_id": cat.id,
+                "fact": [],
+                "plan": [],
+                "diff": [],
+                "percent": [],
+            }
+            for i, m in enumerate(months):
+                fact = expense_fact_map[cat.id][m]
+                plan = expense_plan_map[cat.id][m]
+                diff = fact - plan
+                percent = (fact / plan * 100) if plan else None
+                row["fact"].append(fact)
+                row["plan"].append(plan)
+                row["diff"].append(diff)
+                row["percent"].append(percent)
+                total_fact_expense[i] += fact
+                total_plan_expense[i] += plan
+            expense_data.append(row)
+
+        # ----------- Доходы -----------
+        incomes = (
+            Income.objects.filter(
+                user=user, category__in=income_categories, date__in=months
+            )
+            .values("category_id", "date")
+            .annotate(total=Sum("amount"))
         )
+        income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        for e in incomes:
+            income_fact_map[e["category_id"]][e["date"]] = e["total"] or 0
 
-        total_sum_list_income = [0] * len(list_dates)
-        income_model = Income
-        income_parent_categories = user.category_income_users.filter(
-            parent_category=None,
-        ).order_by('name')
-        income_dict = category_amount_date_dict(
-            income_model,
-            income_parent_categories,
-            user,
-        )
-        income_category_amount = category_amounts(
-            list_dates,
-            income_parent_categories,
-            income_dict,
-            total_sum_list_income,
-        )
+        plans_inc = Planning.objects.filter(
+            user=user,
+            date__in=months,
+            type="income",
+            category_income__in=income_categories,
+        ).values("category_income_id", "date", "amount")
+        income_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+        for p in plans_inc:
+            income_plan_map[p["category_income_id"]][p["date"]] = p["amount"] or 0
 
-        context['list_dates'] = list_dates
-        context['expense_category_amount'] = expense_category_amount
-        context['income_category_amount'] = income_category_amount
-        context['total_sum_list_expense'] = total_sum_list_expense
-        context['total_sum_list_income'] = total_sum_list_income
+        income_data = []
+        total_fact_income = [0] * len(months)
+        total_plan_income = [0] * len(months)
+        for cat in income_categories:
+            row = {
+                "category": cat.name,
+                "category_id": cat.id,
+                "fact": [],
+                "plan": [],
+                "diff": [],
+                "percent": [],
+            }
+            for i, m in enumerate(months):
+                fact = income_fact_map[cat.id][m]
+                plan = income_plan_map[cat.id][m]
+                diff = fact - plan
+                percent = (fact / plan * 100) if plan else None
+                row["fact"].append(fact)
+                row["plan"].append(plan)
+                row["diff"].append(diff)
+                row["percent"].append(percent)
+                total_fact_income[i] += fact
+                total_plan_income[i] += plan
+            income_data.append(row)
 
+        context["months"] = months
+        context["expense_data"] = expense_data
+        context["income_data"] = income_data
+        context["total_fact_expense"] = total_fact_expense
+        context["total_plan_expense"] = total_plan_expense
+        context["total_fact_income"] = total_fact_income
+        context["total_plan_income"] = total_plan_income
         return context
 
 
@@ -158,7 +187,11 @@ def generate_date_list_view(request):
     if request.method == 'POST':
         user = request.user
         queryset_user = get_object_or_404(User, username=user)
-        queryset_last_date = queryset_user.budget_date_list_users.last().date
+        last_date_obj = queryset_user.budget_date_list_users.last()
+        if last_date_obj:
+            queryset_last_date = last_date_obj.date
+        else:
+            queryset_last_date = date.today().replace(day=1)
         generate_date_list(queryset_last_date, queryset_user)
         return redirect(reverse_lazy('budget:list'))
 
@@ -171,3 +204,43 @@ def change_planning(request):
         return JsonResponse({'planning_value': planning_value})
     except json.JSONDecodeError:
         return JsonResponse({'error': 'error'})
+
+
+def save_planning(request):
+    print("save_planning called", request.body)
+    """AJAX: сохранить план по категории, месяцу, типу (расход/доход)"""
+    if (
+        request.method == "POST"
+        and request.headers.get("x-requested-with") == "XMLHttpRequest"
+    ):
+        data = json.loads(request.body.decode("utf-8"))
+        user = request.user
+        month = date.fromisoformat(data["month"])
+        try:
+            amount = Decimal(str(data["amount"]))
+        except Exception:
+            amount = Decimal("0")
+        type_ = data["type"]
+        if type_ == "expense":
+            category = get_object_or_404(ExpenseCategory, id=data["category_id"])
+            plan, created = Planning.objects.get_or_create(
+                user=user,
+                category_expense=category,
+                date=month,
+                type=type_,
+                defaults={"amount": amount},
+            )
+        else:
+            category = get_object_or_404(IncomeCategory, id=data["category_id"])
+            plan, created = Planning.objects.get_or_create(
+                user=user,
+                category_income=category,
+                date=month,
+                type=type_,
+                defaults={"amount": amount},
+            )
+        if not created:
+            plan.amount = amount
+            plan.save()
+        return JsonResponse({"success": True, "amount": str(plan.amount)})
+    return JsonResponse({"success": False, "error": "Invalid request"})

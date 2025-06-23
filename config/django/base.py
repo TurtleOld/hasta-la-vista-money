@@ -119,6 +119,7 @@ TEMPLATES = [
             'libraries': {
                 'comma': 'hasta_la_vista_money.templatags.thousand_comma',
                 'word_hash': 'hasta_la_vista_money.templatags.generate_hash',
+                'index': 'hasta_la_vista_money.templatags.index',
             },
         },
     },
@@ -285,8 +286,8 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
     MIDDLEWARE,
 )
 
-ACCESS_TOKEN_LIFETIME: timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
-REFRESH_TOKEN_LIFETIME: timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
+ACCESS_TOKEN_LIFETIME = timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME')))
+REFRESH_TOKEN_LIFETIME = timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME')))
 
 if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
     os.mkdir(os.path.join(BASE_DIR, 'logs'))

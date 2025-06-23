@@ -178,6 +178,33 @@ table {
     font-size: .7rem;
 }
 
+.budget-table,
+.budget-table th,
+.budget-table td {
+    border: 1px solid #333 !important;
+}
+
+.budget-table {
+    border-collapse: collapse !important;
+    background-color: #fff;
+}
+
+.table-responsive {
+    overflow-x: auto !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding-bottom: 0.5rem;
+}
+
+.delta-positive {
+    background-color: #ffeaea !important;
+    color: #b30000;
+}
+
+.delta-negative {
+    background-color: #eaffea !important;
+    color: #006600;
+}
 
 @import "account";
 @import "buttons";
