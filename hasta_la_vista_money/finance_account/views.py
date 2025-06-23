@@ -34,6 +34,9 @@ from hasta_la_vista_money.finance_account.prepare import (
 )
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
+from collections import defaultdict
+from django.utils import timezone
+from datetime import timedelta
 
 
 class BaseView:
@@ -275,9 +278,52 @@ class AccountView(
 
         accounts = Account.objects.filter(user=user).select_related('user').all()
 
-        sum_all_accounts = Account.objects.filter(user=user).aggregate(
-            Sum('balance'),
-        )['balance__sum']
+        # Группируем счета по валюте
+        today = timezone.now().date()
+        # Для динамики: предыдущий день
+        prev_day = today - timedelta(days=1)
+
+        # Суммы по валютам на сегодня
+        balances_by_currency = defaultdict(float)
+        for acc in accounts:
+            balances_by_currency[acc.currency] += float(acc.balance)
+        currencies = list(balances_by_currency.keys())
+
+        # Суммы по валютам на конец предыдущего дня
+        # (если есть created_at, иначе просто 0)
+        balances_prev_by_currency = defaultdict(float)
+        for acc in accounts:
+            # Если счет создан до prev_day, учитываем его баланс
+            if acc.created_at and acc.created_at.date() <= prev_day:
+                balances_prev_by_currency[acc.currency] += float(acc.balance)
+            # Если нет created_at, пропускаем (или можно учитывать всегда)
+
+        # Динамика: разница и процент
+        delta_by_currency = {}
+        for cur in currencies:
+            now = balances_by_currency.get(cur, 0)
+            prev = balances_prev_by_currency.get(cur, 0)
+            delta = now - prev
+            percent = (delta / prev * 100) if prev else None
+            delta_by_currency[cur] = {"delta": delta, "percent": percent}
+
+        # Если одна валюта — возвращаем просто сумму, иначе словарь
+        sum_all_accounts = (
+            list(balances_by_currency.values())[0]
+            if len(balances_by_currency) == 1
+            else dict(balances_by_currency)
+        )
+        sum_all_accounts_prev = (
+            list(balances_prev_by_currency.values())[0]
+            if len(balances_prev_by_currency) == 1
+            else dict(balances_prev_by_currency)
+        )
+        sum_all_accounts_delta = (
+            list(delta_by_currency.values())[0]
+            if len(delta_by_currency) == 1
+            else delta_by_currency
+        )
+        is_multi_currency = isinstance(sum_all_accounts, dict)
 
         receipt_info_by_month = collect_info_receipt(user=user)
 
@@ -308,17 +354,21 @@ class AccountView(
 
         context.update(
             {
-                'accounts': accounts,
-                'add_account_form': AddAccountForm(),
-                'transfer_money_form': TransferMoneyAccountForm(
+                "accounts": accounts,
+                "add_account_form": AddAccountForm(),
+                "transfer_money_form": TransferMoneyAccountForm(
                     user=self.request.user,
                     initial=initial_form_data,
                 ),
-                'receipt_info_by_month': receipt_info_by_month,
-                'income_expense': income_expense,
-                'transfer_money_log': transfer_money_log,
-                'chart_combine': json.dumps(chart_combined),
-                'sum_all_accounts': sum_all_accounts,
+                "receipt_info_by_month": receipt_info_by_month,
+                "income_expense": income_expense,
+                "transfer_money_log": transfer_money_log,
+                "chart_combine": json.dumps(chart_combined),
+                "sum_all_accounts": sum_all_accounts,
+                "sum_all_accounts_prev": sum_all_accounts_prev,
+                "sum_all_accounts_delta": sum_all_accounts_delta,
+                "currencies": currencies,
+                "is_multi_currency": is_multi_currency,
             },
         )
 

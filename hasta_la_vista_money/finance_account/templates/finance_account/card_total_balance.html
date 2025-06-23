@@ -1,11 +1,56 @@
 {% load i18n %}
 {% load comma %}
+{% load dict_get %}
 
-<div class="card">
-    <div class="card-body text-center">
-        <h5 class="card-title">{% translate 'Сумма всех счетов' %}</h5>
-        <p class="card-text">
-            {% if sum_all_accounts%}{{ sum_all_accounts | comma }}{% else %}{% translate 'Нет данных для отображения' %}{% endif %}</p>
+<div class="card card-total-balance shadow-lg border-0 rounded-4 bg-light position-relative overflow-hidden">
+    <div class="card-body text-center py-4">
+        <div class="mb-2">
+            <span style="font-size: 2rem;">💰</span>
+        </div>
+        <h5 class="card-title mb-3">{% translate 'Сумма всех счетов' %}</h5>
+        {% if is_multi_currency %}
+            {% for cur, val in sum_all_accounts.items %}
+                <div class="fs-2 fw-bold mb-1 text-success">
+                    {{ val|comma }} <span class="text-muted">{{ cur }}</span>
+                </div>
+                {% with delta_data=sum_all_accounts_delta|dict_get:cur %}
+                    {% if delta_data %}
+                        {% with delta=delta_data.delta percent=delta_data.percent %}
+                            {% if delta != 0 and delta %}
+                                <div class="mb-2">
+                                    {% if delta > 0 %}
+                                        <span class="text-success">▲ +{{ delta|comma }} ({{ percent|floatformat:2 }}%)</span>
+                                    {% elif delta < 0 %}
+                                        <span class="text-danger">▼ {{ delta|comma }} ({{ percent|floatformat:2 }}%)</span>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endwith %}
+            {% endfor %}
+        {% elif sum_all_accounts %}
+            <div class="fs-2 fw-bold mb-1 text-success">
+                {{ sum_all_accounts|comma }}<span class="text-muted">{{ currencies.0 }}</span>
+            </div>
+            {% if sum_all_accounts_delta %}
+                {% with delta=sum_all_accounts_delta.delta percent=sum_all_accounts_delta.percent %}
+                    {% if delta != 0 and delta %}
+                        <div class="mb-2">
+                            {% if delta > 0 %}
+                                <span class="text-success">▲ +{{ delta|comma }} ({{ percent|floatformat:2 }}%)</span>
+                            {% elif delta < 0 %}
+                                <span class="text-danger">▼ {{ delta|comma }} ({{ percent|floatformat:2 }}%)</span>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+            {% endif %}
+        {% else %}
+            <div class="fs-2 fw-bold mb-1 text-success">
+                {% translate 'Нет данных для отображения' %}
+            </div>
+        {% endif %}
     </div>
 </div>
 <!-- /.card -->
