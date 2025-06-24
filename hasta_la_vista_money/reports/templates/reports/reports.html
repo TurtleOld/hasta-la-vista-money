@@ -7,57 +7,162 @@
 {% block title %}{% translate 'Отчёты' %}{% endblock %}
 {% block content %}
     <div class="container-fluid">
-
-        <div class="row mt-5">
-            {% if chart_expense %}
-                <div class="col-xl-6">
-                    <div id="container-chart-expense"></div>
-                </div>
-            {% endif %}
-            <!-- /.col-xl-6 -->
-            {% if chart_income %}
-                <div class="col-xl-6">
-                    <div id="container-chart-income"></div>
-                </div>
-            {% endif %}
-            <!-- /.col-xl-6 -->
-        </div>
-        <!-- /.row -->
-        <div class="row">
-            {% for chart_data in charts_data %}
-            <div class="col-xl-6">
-                <div id="pie-chart-{{ forloop.counter }}" class="w-100 mt-5"></div>
+        <h2 class="mb-4 text-center">{% translate 'Финансовые отчёты' %}</h2>
+        <!-- Новые графики бюджета -->
+        <div class="row justify-content-center mb-5">
+            <div class="col-lg-8 col-md-10 col-12">
+                <canvas id="budgetChart" height="120"></canvas>
             </div>
-            {% endfor %}
-            <!-- /.col-xl-6 -->
         </div>
-        <!-- /.row -->
-
-
+        <div class="row justify-content-center mb-5">
+            <div class="col-lg-8 col-md-10 col-12">
+                <canvas id="balanceChart" height="120"></canvas>
+            </div>
+        </div>
+        <div class="row justify-content-center mb-5">
+            <div class="col-lg-6 col-md-8 col-12">
+                <canvas id="pieChart" height="120"></canvas>
+            </div>
+        </div>
     </div>
     <!-- /.container-fluid -->
 
+    <!-- Данные для новых графиков -->
+    {{ chart_labels|json_script:"chartLabels" }}
+    {{ chart_income|json_script:"chartIncome" }}
+    {{ chart_expense|json_script:"chartExpense" }}
+    {{ chart_balance|json_script:"chartBalance" }}
+    {{ pie_labels|json_script:"pieLabels" }}
+    {{ pie_values|json_script:"pieValues" }}
 
-
-    <script nonce="{{request.csp_nonce}}" src="https://code.highcharts.com/highcharts.js"></script>
-    <script nonce="{{request.csp_nonce}}" src="https://code.highcharts.com/modules/drilldown.js"></script>
-    <script nonce="{{ request.csp_nonce }}">
-    {% for chart_data in charts_data %}
-        Highcharts.chart('pie-chart-{{ forloop.counter }}', {
-            chart: {{ chart_data.chart|safe }},
-            title: {{ chart_data.title|safe }},
-            series: {{ chart_data.series|safe }},
-            drilldown: {{ chart_data.drilldown|safe }},
-            credits: {{ chart_data.credits|safe }},
-            exporting: {{ chart_data.exporting|safe }}
+    <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script nonce="{{request.csp_nonce}}">
+    document.addEventListener('DOMContentLoaded', function() {
+        // График доходов и расходов
+        const ctx = document.getElementById('budgetChart').getContext('2d');
+        const chartLabels = JSON.parse(document.getElementById('chartLabels').textContent);
+        const chartIncome = JSON.parse(document.getElementById('chartIncome').textContent);
+        const chartExpense = JSON.parse(document.getElementById('chartExpense').textContent);
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartLabels,
+                datasets: [
+                    {
+                        label: 'Доходы',
+                        data: chartIncome,
+                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Расходы',
+                        data: chartExpense,
+                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: 'Доходы и расходы по месяцам' }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
         });
-    {% endfor %}
-</script>
-
-    <script nonce="{{request.csp_nonce}}">
-        Highcharts.chart('container-chart-expense', {{ chart_expense|safe }})
+        
+        // График баланса
+        const balanceCtx = document.getElementById('balanceChart').getContext('2d');
+        const chartBalance = JSON.parse(document.getElementById('chartBalance').textContent);
+        new Chart(balanceCtx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: 'Баланс (Доходы - Расходы)',
+                    data: chartBalance,
+                    borderColor: 'rgba(0, 123, 255, 1)',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.1,
+                    pointBackgroundColor: 'rgba(0, 123, 255, 1)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: 'Баланс по месяцам' }
+                },
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        grid: {
+                            color: function(context) {
+                                if (context.tick.value === 0) {
+                                    return 'rgba(0, 0, 0, 0.3)';
+                                }
+                                return 'rgba(0, 0, 0, 0.1)';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                const sign = value >= 0 ? '+' : '';
+                                return `Баланс: ${sign}${value.toFixed(2)}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Круговая диаграмма
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        const pieLabels = JSON.parse(document.getElementById('pieLabels').textContent);
+        const pieValues = JSON.parse(document.getElementById('pieValues').textContent);
+        if (pieLabels.length > 0) {
+            new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: pieLabels,
+                    datasets: [{
+                        data: pieValues,
+                        backgroundColor: [
+                            'rgba(220, 53, 69, 0.7)',
+                            'rgba(255, 193, 7, 0.7)',
+                            'rgba(23, 162, 184, 0.7)',
+                            'rgba(40, 167, 69, 0.7)',
+                            'rgba(108, 117, 125, 0.7)',
+                            'rgba(0, 123, 255, 0.7)',
+                            'rgba(255, 87, 34, 0.7)',
+                            'rgba(156, 39, 176, 0.7)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { display: true, text: 'Структура расходов по категориям (все месяцы)' }
+                    }
+                }
+            });
+        }
+    });
     </script>
-    <script nonce="{{request.csp_nonce}}">
-        Highcharts.chart('container-chart-income', {{ chart_income|safe }})
-    </script>
-    {% endblock %}
+{% endblock %}
