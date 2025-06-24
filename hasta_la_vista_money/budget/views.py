@@ -66,6 +66,7 @@ class BaseView:
 
 class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
     model = Planning
+    template_name = "budget/budget.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
