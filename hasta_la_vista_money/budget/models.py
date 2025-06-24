@@ -20,7 +20,7 @@ class DateList(models.Model):
     )
 
     def __str__(self):
-        return f"{self.user} - {self.date}"
+        return f'{self.user} - {self.date}'
 
 
 class Planning(models.Model):
@@ -55,4 +55,4 @@ class Planning(models.Model):
         )
 
     def __str__(self):
-        return f"{self.user} - {self.date} - {self.type} - {self.amount}"
+        return f'{self.user} - {self.date} - {self.type} - {self.amount}'
