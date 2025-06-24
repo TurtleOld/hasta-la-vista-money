@@ -22,7 +22,7 @@
                             </div>
                             <div class="form-group {% if field.errors %} has-error{% endif %}">
                                 {{ loan_form.type_loan | as_crispy_field}}
-                                <button class="btn btn-outline-info btn-sm -mt-3" data-bs-toggle="modal" data-bs-target="#payment-options">Какой тип кредита выбрать?</button>
+                                <button class="btn btn-outline-info btn-sm -mt-3" data-bs-toggle="modal" data-bs-target="#payment-options">{% translate 'Какой тип кредита выбрать?' %}</button>
                             </div>
                             <div class="form-group {% if field.errors %} has-error{% endif %}">
                                 {{ loan_form.loan_amount | as_crispy_field}}
