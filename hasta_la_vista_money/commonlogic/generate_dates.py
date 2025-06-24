@@ -2,16 +2,20 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from django.db.models import QuerySet
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.budget.models import DateList
+from hasta_la_vista_money.budget.models import DateList, Planning
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.expense.models import ExpenseCategory
+from hasta_la_vista_money.income.models import IncomeCategory
 
 
 def generate_date_list(
     current_date: datetime | QuerySet[DateList],
     user: User,
+    type_: str = None,
 ):
     """
     Добавляет 12 новых месяцев после самой последней даты пользователя.
+    Если type_ задан, добавляет только для расходов или только для доходов (в Planning).
     """
     if isinstance(current_date, QuerySet):
         last_date_instance = current_date.last()
@@ -39,3 +43,24 @@ def generate_date_list(
     for d in new_dates:
         if d not in existing_dates:
             DateList.objects.create(user=user, date=d)
+        # Добавляем пустые Planning только для выбранного типа
+        if type_ == 'expense':
+            categories = ExpenseCategory.objects.filter(user=user)
+            for cat in categories:
+                Planning.objects.get_or_create(
+                    user=user,
+                    category_expense=cat,
+                    date=d,
+                    type='expense',
+                    defaults={'amount': 0},
+                )
+        elif type_ == 'income':
+            categories = IncomeCategory.objects.filter(user=user)
+            for cat in categories:
+                Planning.objects.get_or_create(
+                    user=user,
+                    category_income=cat,
+                    date=d,
+                    type='income',
+                    defaults={'amount': 0},
+                )

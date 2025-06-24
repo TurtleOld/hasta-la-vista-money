@@ -3,239 +3,113 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% load csp %}
-{% load index %}
-
 
 {% block title %}{% translate 'Бюджет' %}{% endblock %}
 
 {% block content %}
 <div class="container my-4">
     <h2 class="mb-4 text-center">{% translate 'Бюджет по категориям' %}</h2>
-    <div class="d-flex justify-content-end mb-2">
+    <div class="d-flex justify-content-center gap-3 mb-4">
+        <a href="{% url 'budget:expense_table' %}" class="btn btn-outline-primary">{% translate 'Таблица расходов' %}</a>
+        <a href="{% url 'budget:income_table' %}" class="btn btn-outline-success">{% translate 'Таблица доходов' %}</a>
+        <a href="{% url 'reports:list' %}" class="btn btn-outline-info">{% translate 'Отчёты' %}</a>
+    </div>
+    <div class="d-flex justify-content-center mb-4">
         <form action="{% url 'budget:generate_date' %}" method="post" class="m-0">
             {% csrf_token %}
             <button class="btn btn-outline-primary">{% translate 'Добавить ещё месяцы' %}</button>
         </form>
     </div>
-    <div class="row">
-        <div class="col-12">
-            {% if not months %}
-                <div class="alert alert-info text-center my-4">
-                    {% translate 'Нет данных по месяцам. Добавьте даты для планирования бюджета.' %}
-                </div>
-            {% endif %}
-            <h4 class="mt-4">{% translate 'Расходы' %}</h4>
-            <div class="table-responsive mb-5">
-                <table class="table table-bordered align-middle text-center budget-table table-sm">
-                    <thead class="table-light">
-                        <tr>
-                            <th>{% translate 'Категория' %}</th>
-                            {% for m in months %}
-                                <th colspan="4">{{ m|date:"F Y" }}</th>
-                            {% empty %}
-                                <th colspan="4">{% translate 'Нет месяцев' %}</th>
-                            {% endfor %}
-                        </tr>
-                        <tr>
-                            <th></th>
-                            {% for m in months %}
-                                <th>{% translate 'Факт' %}</th>
-                                <th>{% translate 'План' %}</th>
-                                <th>{% translate 'Δ' %}</th>
-                                <th>%</th>
-                            {% empty %}
-                                <th>{% translate 'Факт' %}</th>
-                                <th>{% translate 'План' %}</th>
-                                <th>{% translate 'Δ' %}</th>
-                                <th>%</th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in expense_data %}
-                        <tr>
-                            <td class="text-start">{{ row.category }}</td>
-                            {% for m in months %}
-                                {% with idx=forloop.counter0 %}
-                                {% with f=row.fact|index:idx p=row.plan|index:idx d=row.diff|index:idx pc=row.percent|index:idx %}
-                                <td>{% if f %}{{ f|floatformat:2 }}{% else %}&nbsp;{% endif %}</td>
-                                <td class="plan-cell" contenteditable="true"
-                                    data-category="{{ row.category }}"
-                                    data-category-id="{{ row.category_id }}"
-                                    data-category-idx="{{ forloop.parentloop.counter0 }}"
-                                    data-month="{{ months|index:idx|date:'Y-m-d' }}"
-                                    data-type="expense"
-                                    >
-                                    {% if p %}{{ p|floatformat:2 }}{% else %}{% endif %}
-                                </td>
-                                <td class="text-muted delta-cell {% if d < 0 %}delta-negative{% elif d > 0 %}delta-positive{% endif %}">{% if d %}{{ d|floatformat:2 }}{% else %}&nbsp;{% endif %}</td>
-                                <td>{% if pc %}{{ pc|floatformat:0 }}%{% else %}&nbsp;{% endif %}</td>
-                                {% endwith %}
-                                {% endwith %}
-                            {% endfor %}
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="{{ months|length|add:1|default:5 }}" class="text-center text-muted">{% translate 'Нет данных по расходам' %}</td></tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot class="table-secondary">
-                        <tr>
-                            <th>{% translate 'Итого' %}</th>
-                            {% for m in months %}
-                                {% with idx=forloop.counter0 %}
-                                <td>{{ total_fact_expense|index:idx|default:'—'|floatformat:2 }}</td>
-                                <td>{{ total_plan_expense|index:idx|default:'—'|floatformat:2 }}</td>
-                                <td>{% diff_by_index total_fact_expense total_plan_expense idx as diff %}{{ diff|default:'—'|floatformat:2 }}</td>
-                                <td>{% with fact=total_fact_expense|index:idx plan=total_plan_expense|index:idx %}{% if plan %}{{ fact|div:plan|floatformat:0 }}%{% else %}—{% endif %}{% endwith %}</td>
-                                {% endwith %}
-                            {% endfor %}
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-        <div class="col-12">
-            <h4 class="mt-4">{% translate 'Доходы' %}</h4>
-            <div class="table-responsive mb-5">
-                <table class="table table-bordered align-middle text-center budget-table table-sm">
-                    <thead class="table-light">
-                        <tr>
-                            <th>{% translate 'Категория' %}</th>
-                            {% for m in months %}
-                                <th colspan="4">{{ m|date:"F Y" }}</th>
-                            {% empty %}
-                                <th colspan="4">{% translate 'Нет месяцев' %}</th>
-                            {% endfor %}
-                        </tr>
-                        <tr>
-                            <th></th>
-                            {% for m in months %}
-                                <th>{% translate 'Факт' %}</th>
-                                <th>{% translate 'План' %}</th>
-                                <th>{% translate 'Δ' %}</th>
-                                <th>%</th>
-                            {% empty %}
-                                <th>{% translate 'Факт' %}</th>
-                                <th>{% translate 'План' %}</th>
-                                <th>{% translate 'Δ' %}</th>
-                                <th>%</th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in income_data %}
-                        <tr>
-                            <td class="text-start">{{ row.category }}</td>
-                            {% for m in months %}
-                                {% with idx=forloop.counter0 %}
-                                {% with f=row.fact|index:idx p=row.plan|index:idx d=row.diff|index:idx pc=row.percent|index:idx %}
-                                <td>{% if f %}{{ f|floatformat:2 }}{% else %}&nbsp;{% endif %}</td>
-                                <td class="plan-cell" contenteditable="true"
-                                    data-category="{{ row.category }}"
-                                    data-category-id="{{ row.category_id }}"
-                                    data-category-idx="{{ forloop.parentloop.counter0 }}"
-                                    data-month="{{ months|index:idx|date:'Y-m-d' }}"
-                                    data-type="income"
-                                    >
-                                    {% if p %}{{ p|floatformat:2 }}{% else %}{% endif %}
-                                </td>
-                                <td class="text-muted delta-cell {% if d < 0 %}delta-negative{% elif d > 0 %}delta-positive{% endif %}">{% if d %}{{ d|floatformat:2 }}{% else %}&nbsp;{% endif %}</td>
-                                <td>{% if pc %}{{ pc|floatformat:0 }}%{% else %}&nbsp;{% endif %}</td>
-                                {% endwith %}
-                                {% endwith %}
-                            {% endfor %}
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="{{ months|length|add:1|default:5 }}" class="text-center text-muted">{% translate 'Нет данных по доходам' %}</td></tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot class="table-secondary">
-                        <tr>
-                            <th>{% translate 'Итого' %}</th>
-                            {% for m in months %}
-                                {% with idx=forloop.counter0 %}
-                                <td>{{ total_fact_income|index:idx|default:'—'|floatformat:2 }}</td>
-                                <td>{{ total_plan_income|index:idx|default:'—'|floatformat:2 }}</td>
-                                <td>{% diff_by_index total_fact_income total_plan_income idx as diff %}{{ diff|default:'—'|floatformat:2 }}</td>
-                                <td>{% with fact=total_fact_income|index:idx plan=total_plan_income|index:idx %}{% if plan %}{{ fact|div:plan|floatformat:0 }}%{% else %}—{% endif %}{% endwith %}</td>
-                                {% endwith %}
-                            {% endfor %}
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+    <div class="row justify-content-center mb-5">
+        <div class="col-lg-8 col-md-10 col-12">
+            <canvas id="planExecutionChart" height="120"></canvas>
         </div>
     </div>
+    {{ chart_labels|json_script:"chartLabels" }}
+    {{ chart_plan_execution_income|json_script:"chartPlanExecutionIncome" }}
+    {{ chart_plan_execution_expense|json_script:"chartPlanExecutionExpense" }}
 </div>
+<script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script nonce="{{request.csp_nonce}}">
-$(function() {
-    function recalcRowAndTotals(cell) {
-        var row = cell.closest('tr');
-        var colIdx = cell.index();
-        var monthIdx = Math.floor((colIdx - 1) / 4);
-        if (monthIdx < 0) return;
-        var factCell = row.find('td').eq(1 + monthIdx * 4);
-        var planCell = row.find('td').eq(1 + monthIdx * 4 + 1);
-        var diffCell = row.find('td').eq(1 + monthIdx * 4 + 2);
-        var percentCell = row.find('td').eq(1 + monthIdx * 4 + 3);
-        var fact = parseFloat(factCell.text().replace(',', '.')) || 0;
-        var plan = parseFloat(planCell.text().replace(',', '.')) || 0;
-        var diff = fact - plan;
-        var percent = plan ? (fact / plan * 100) : null;
-        diffCell.text(diff ? diff.toFixed(2) : '—');
-        percentCell.text(percent ? percent.toFixed(0) + '%' : '—');
-        diffCell.removeClass('delta-negative delta-positive');
-        if (diff < 0) diffCell.addClass('delta-negative');
-        else if (diff > 0) diffCell.addClass('delta-positive');
-        var table = cell.closest('table');
-        var totalFact = 0, totalPlan = 0;
-        table.find('tbody tr').each(function() {
-            var tds = $(this).find('td');
-            totalFact += parseFloat(tds.eq(1 + monthIdx * 4).text().replace(',', '.')) || 0;
-            totalPlan += parseFloat(tds.eq(1 + monthIdx * 4 + 1).text().replace(',', '.')) || 0;
-        });
-        var tfoot = table.find('tfoot tr th, tfoot tr td');
-        var base = 1 + monthIdx * 4;
-        tfoot.eq(base).text(totalFact ? totalFact.toFixed(2) : '—');
-        tfoot.eq(base + 1).text(totalPlan ? totalPlan.toFixed(2) : '—');
-        var tDiff = totalFact - totalPlan;
-        tfoot.eq(base + 2).text(tDiff ? tDiff.toFixed(2) : '—');
-        tfoot.eq(base + 3).text(totalPlan ? (totalFact / totalPlan * 100).toFixed(0) + '%' : '—');
-    }
-    $('.plan-cell').on('input', function() {
-        recalcRowAndTotals($(this));
-    });
-    $('.plan-cell').on('blur', function() {
-        var cell = $(this);
-        var amount = parseFloat(cell.text().replace(',', '.')) || 0;
-        var category = cell.data('category');
-        var category_id = cell.data('category-id');
-        var month = cell.data('month');
-        var type = cell.data('type');
-        $.ajax({
-            url: "{% url 'budget:save_planning' %}",
-            type: 'POST',
-            data: JSON.stringify({
-                amount: amount,
-                category_id: category_id,
-                month: month,
-                type: type
-            }),
-            contentType: 'application/json',
-            headers: {'X-CSRFToken': '{{ csrf_token }}'},
-            success: function(resp) {
-                if (resp.success) {
-                    cell.addClass('table-success');
-                    setTimeout(function(){ cell.removeClass('table-success'); }, 1000);
-                    recalcRowAndTotals(cell);
-                } else {
-                    cell.addClass('table-danger');
+document.addEventListener('DOMContentLoaded', function() {
+    // График выполнения плана
+    const planExecutionCtx = document.getElementById('planExecutionChart').getContext('2d');
+    const chartLabels = JSON.parse(document.getElementById('chartLabels').textContent);
+    const chartPlanExecutionIncome = JSON.parse(document.getElementById('chartPlanExecutionIncome').textContent);
+    const chartPlanExecutionExpense = JSON.parse(document.getElementById('chartPlanExecutionExpense').textContent);
+    new Chart(planExecutionCtx, {
+        type: 'line',
+        data: {
+            labels: chartLabels,
+            datasets: [
+                {
+                    label: 'Доходы (% выполнения плана)',
+                    data: chartPlanExecutionIncome,
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.1,
+                    pointBackgroundColor: 'rgba(40, 167, 69, 1)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5
+                },
+                {
+                    label: 'Расходы (% выполнения плана)',
+                    data: chartPlanExecutionExpense,
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.1,
+                    pointBackgroundColor: 'rgba(220, 53, 69, 1)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'top' },
+                title: { display: true, text: 'Выполнение плана по месяцам (%)' }
+            },
+            scales: {
+                y: { 
+                    beginAtZero: true,
+                    max: function(context) {
+                        const maxValue = Math.max(...chartPlanExecutionIncome, ...chartPlanExecutionExpense);
+                        return Math.max(100, Math.ceil(maxValue / 10) * 10);
+                    },
+                    grid: {
+                        color: function(context) {
+                            if (context.tick.value === 100) {
+                                return 'rgba(0, 0, 0, 0.3)';
+                            }
+                            return 'rgba(0, 0, 0, 0.1)';
+                        }
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
                 }
             },
-            error: function() {
-                cell.addClass('table-danger');
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.y;
+                            const label = context.dataset.label;
+                            return `${label}: ${value.toFixed(1)}%`;
+                        }
+                    }
+                }
             }
-        });
+        }
     });
 });
 </script>

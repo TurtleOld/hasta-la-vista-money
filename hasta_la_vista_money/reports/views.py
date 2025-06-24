@@ -1,15 +1,18 @@
-import json
 from collections import defaultdict
+from decimal import Decimal
 
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.budget.models import DateList
+from hasta_la_vista_money.users.models import User
+from django.db.models.functions import TruncMonth
 
 
 class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
@@ -151,90 +154,106 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         return charts_data
 
     def get(self, request, *args, **kwargs):
-        expense_dataset, income_dataset = self.collect_datasets(request)
-
-        expense_dates, expense_amounts = self.transform_data_expense(
-            expense_dataset,
-        )
-        income_dates, income_amounts = self.transform_data_income(
-            income_dataset,
-        )
-
-        unique_expense_dates, unique_expense_amounts = self.unique_expense_data(
-            expense_dates,
-            expense_amounts,
-        )
-
-        unique_income_dates, unique_income_amounts = self.unique_income_data(
-            income_dates,
-            income_amounts,
-        )
-
-        charts_data = self.pie_expense_category(request)
-
-        chart_expense = {
-            'chart': {'type': 'line'},
-            'title': {'text': _('Статистика по расходам')},
-            'xAxis': [
-                {
-                    'categories': unique_expense_dates,
-                    'title': {'text': _('Дата')},
-                },
-            ],
-            'yAxis': {'title': {'text': _('Сумма')}},
-            'series': [
-                {
-                    'name': _('Расходы'),
-                    'data': unique_expense_amounts,
-                    'color': 'red',
-                    'xAxis': 0,
-                },
-            ],
-            'credits': {
-                'enabled': False,
-            },
-            'exporting': {
-                'enabled': False,
-            },
-        }
-
-        chart_income = {
-            'chart': {'type': 'line'},
-            'title': {'text': _('Статистика по доходам')},
-            'xAxis': [
-                {
-                    'categories': unique_income_dates,
-                    'title': {'text': _('Дата')},
-                },
-            ],
-            'yAxis': {'title': {'text': _('Сумма')}},
-            'series': [
-                {
-                    'name': _('Доходы'),
-                    'data': unique_income_amounts,
-                    'color': 'green',
-                    'xAxis': 0,
-                },
-            ],
-            'credits': {
-                'enabled': False,
-            },
-            'exporting': {
-                'enabled': False,
-            },
-        }
-
-        dump_expense = json.dumps(chart_expense)
-        dump_income = json.dumps(chart_income)
+        # Подготовка данных для новых графиков бюджета
+        budget_chart_data = self.prepare_budget_charts(request)
         return render(
             request,
             self.template_name,
-            {
-                'chart_expense': dump_expense,
-                'chart_income': dump_income,
-                'charts_data': charts_data,
-            },
+            budget_chart_data,
         )
+
+    def prepare_budget_charts(self, request):
+        """Подготовка данных для графиков бюджета"""
+        user = get_object_or_404(User, username=request.user)
+        list_dates = DateList.objects.filter(user=user).order_by('date')
+        months = [d.date for d in list_dates]
+
+        expense_categories = list(
+            user.category_expense_users.filter(parent_category=None).order_by('name')
+        )
+        income_categories = list(
+            user.category_income_users.filter(parent_category=None).order_by('name')
+        )
+
+        chart_labels = [m.strftime('%b %Y') for m in months]
+
+        total_fact_income = [0] * len(months)
+        total_fact_expense = [0] * len(months)
+
+        if months:
+            expenses = (
+                Expense.objects.filter(
+                    user=user,
+                    category__in=expense_categories,
+                    date__gte=months[0],
+                    date__lte=months[-1],
+                )
+                .annotate(month=TruncMonth('date'))
+                .values('category_id', 'month')
+                .annotate(total=Sum('amount'))
+            )
+            expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+            for e in expenses:
+                month_date = (
+                    e['month'].date() if hasattr(e['month'], 'date') else e['month']
+                )
+                expense_fact_map[e['category_id']][month_date] = e['total'] or 0
+
+            for i, m in enumerate(months):
+                for cat in expense_categories:
+                    total_fact_expense[i] += expense_fact_map[cat.id][m]
+
+            incomes = (
+                Income.objects.filter(
+                    user=user,
+                    category__in=income_categories,
+                    date__gte=months[0],
+                    date__lte=months[-1],
+                )
+                .annotate(month=TruncMonth('date'))
+                .values('category_id', 'month')
+                .annotate(total=Sum('amount'))
+            )
+            income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+            for e in incomes:
+                month_date = (
+                    e['month'].date() if hasattr(e['month'], 'date') else e['month']
+                )
+                income_fact_map[e['category_id']][month_date] = e['total'] or 0
+
+            for i, m in enumerate(months):
+                for cat in income_categories:
+                    total_fact_income[i] += income_fact_map[cat.id][m]
+
+        chart_balance = []
+        for i in range(len(months)):
+            balance = total_fact_income[i] - total_fact_expense[i]
+            chart_balance.append(float(balance))
+
+        pie_labels = []
+        pie_values = []
+        if months and expense_categories:
+            category_totals = defaultdict(lambda: Decimal('0'))
+            for cat in expense_categories:
+                for month in months:
+                    amount = expense_fact_map[cat.id][month]
+                    if amount:
+                        category_totals[cat.id] += amount
+
+            for cat in expense_categories:
+                total = category_totals[cat.id]
+                if total > 0:
+                    pie_labels.append(cat.name)
+                    pie_values.append(float(total))
+
+        return {
+            'chart_labels': chart_labels,
+            'chart_income': total_fact_income,
+            'chart_expense': total_fact_expense,
+            'chart_balance': chart_balance,
+            'pie_labels': pie_labels,
+            'pie_values': pie_values,
+        }
 
 
 class ReportsAnalyticMixin(TemplateView):
