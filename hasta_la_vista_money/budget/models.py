@@ -19,6 +19,9 @@ class DateList(models.Model):
         verbose_name='Date created',
     )
 
+    def __str__(self):
+        return f'{self.user} - {self.date}'
+
 
 class Planning(models.Model):
     TYPE_CHOICES = (
@@ -50,3 +53,6 @@ class Planning(models.Model):
             'date',
             'type',
         )
+
+    def __str__(self):
+        return f'{self.user} - {self.date} - {self.type} - {self.amount}'

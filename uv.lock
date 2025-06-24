@@ -791,7 +791,7 @@ wheels = [
 
 [[package]]
 name = "hastalavistamoney"
-version = "1.5.6"
+version = "1.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "channels" },
