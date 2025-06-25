@@ -320,6 +320,127 @@ class UploadImageView(LoginRequiredMixin, FormView):
         kwargs['user'] = self.request.user
         return kwargs
 
+    def post(self, request, *args, **kwargs):
+        """Обработка AJAX запросов для загрузки файлов"""
+        if request.headers.get(
+            'X-Requested-With',
+        ) == 'XMLHttpRequest' or request.headers.get('HX-Request'):
+            return self.handle_ajax_upload(request)
+        return super().post(request, *args, **kwargs)
+
+    def handle_ajax_upload(self, request):
+        """Обработка AJAX загрузки файла"""
+        try:
+            if 'file' not in request.FILES:
+                return self.render_error_response('Файл не найден')
+
+            uploaded_file = request.FILES['file']
+            account_id = request.POST.get('account')
+
+            if not account_id:
+                return self.render_error_response('Счёт не выбран')
+
+            account = get_object_or_404(Account, id=account_id, user=request.user)
+
+            json_receipt = analyze_image_with_ai(uploaded_file)
+            if 'json' in json_receipt:
+                json_receipt = self.clean_json_response(json_receipt)
+
+            decode_json_receipt = json.loads(json_receipt)
+            number_receipt = decode_json_receipt['number_receipt']
+
+            # Проверка существования чека
+            receipt_exists = self.check_exist_receipt(request.user, number_receipt)
+            if receipt_exists.exists():
+                return self.render_error_response('Чек с таким номером уже существует')
+
+            # Создание чека
+            seller, _ = Seller.objects.update_or_create(
+                user=request.user,
+                name_seller=decode_json_receipt.get('name_seller'),
+                defaults={
+                    'retail_place_address': decode_json_receipt.get(
+                        'retail_place_address',
+                        'Нет данных',
+                    ),
+                    'retail_place': decode_json_receipt.get(
+                        'retail_place',
+                        'Нет данных',
+                    ),
+                },
+            )
+
+            products = []
+            for item in decode_json_receipt.get('items', []):
+                product = Product.objects.create(
+                    user=request.user,
+                    product_name=item['product_name'],
+                    category=item['category'],
+                    price=item['price'],
+                    quantity=item['quantity'],
+                    amount=item['amount'],
+                )
+                products.append(product)
+
+            receipt = Receipt.objects.create(
+                user=request.user,
+                account=account,
+                number_receipt=decode_json_receipt['number_receipt'],
+                receipt_date=datetime.strptime(
+                    self.normalize_date(decode_json_receipt['receipt_date']),
+                    '%d.%m.%Y %H:%M',
+                ),
+                nds10=decode_json_receipt.get('nds10', 0),
+                nds20=decode_json_receipt.get('nds20', 0),
+                operation_type=decode_json_receipt.get('operation_type', 0),
+                total_sum=decode_json_receipt['total_sum'],
+                seller=seller,
+            )
+
+            if products:
+                receipt.product.set(products)
+
+            # Обновление баланса счета
+            account.balance -= decimal.Decimal(decode_json_receipt['total_sum'])
+            account.save()
+
+            return self.render_success_response('Чек успешно загружен и обработан!')
+
+        except ValueError as e:
+            logger.error(f'Ошибка парсинга JSON: {e}')
+            return self.render_error_response(
+                'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',
+            )
+        except Exception as e:
+            logger.error(f'Ошибка при обработке чека: {e}')
+            return self.render_error_response(
+                'Произошла ошибка при обработке чека. Попробуйте ещё раз.',
+            )
+
+    def render_success_response(self, message):
+        """Рендеринг успешного ответа для HTMX"""
+        from django.http import HttpResponse
+
+        html = f"""
+        <div class="alert alert-success" role="alert">
+            <i class="bi bi-check-circle me-2"></i>
+            {message}
+        </div>
+        """
+        return HttpResponse(html)
+
+    def render_error_response(self, error_message):
+        """Рендеринг ответа с ошибкой для HTMX"""
+        from django.http import HttpResponse
+
+        html = f"""
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            {error_message}
+        </div>
+        """
+        return HttpResponse(html)
+
     @staticmethod
     def check_exist_receipt(user, number_receipt):
         return Receipt.objects.filter(
@@ -334,7 +455,19 @@ class UploadImageView(LoginRequiredMixin, FormView):
             return match.group(1)
         return text.strip()
 
+    @staticmethod
+    def normalize_date(date_str):
+        try:
+            return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
+                '%d.%m.%Y %H:%M',
+            )
+        except ValueError:
+            day, month, year_short, time = date_str.replace(' ', '.').split('.')
+            current_century = str(datetime.now().year)[:2]
+            return f'{day}.{month}.{current_century}{year_short} {time}'
+
     def form_valid(self, form):
+        """Обработка обычных POST запросов (не HTMX)"""
         try:
             uploaded_file = self.request.FILES['file']
             user = self.request.user
@@ -398,7 +531,10 @@ class UploadImageView(LoginRequiredMixin, FormView):
                     decode_json_receipt['total_sum'],
                 )
                 account_balance.save()
+
+                messages.success(self.request, 'Чек успешно загружен и обработан!')
                 return super().form_valid(form)
+
             messages.error(self.request, gettext_lazy(constants.RECEIPT_ALREADY_EXISTS))
             return super().form_invalid(form)
         except ValueError as e:
@@ -408,14 +544,10 @@ class UploadImageView(LoginRequiredMixin, FormView):
                 'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',
             )
             return super().form_invalid(form)
-
-    @staticmethod
-    def normalize_date(date_str):
-        try:
-            return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
-                '%d.%m.%Y %H:%M',
+        except Exception as e:
+            logger.error(f'Ошибка при обработке чека: {e}')
+            messages.error(
+                self.request,
+                'Произошла ошибка при обработке чека. Попробуйте ещё раз.',
             )
-        except ValueError:
-            day, month, year_short, time = date_str.replace(' ', '.').split('.')
-            current_century = str(datetime.now().year)[:2]
-            return f'{day}.{month}.{current_century}{year_short} {time}'
+            return super().form_invalid(form)
