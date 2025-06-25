@@ -96,8 +96,6 @@ MIDDLEWARE = [
     'axes.middleware.AxesMiddleware',
     'django_structlog.middlewares.RequestMiddleware',
 ]
-if os.getenv('DEBUG'):
-    MIDDLEWARE.insert(0, 'kolo.middleware.KoloMiddleware')
 
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
