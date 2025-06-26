@@ -81,9 +81,7 @@ class LoginUser(SuccessMessageMixin, LoginView):
             tokens = RefreshToken.for_user(user)
             self.jwt_access_token = str(tokens.access_token)
             self.jwt_refresh_token = str(tokens)
-            return self.render_to_response(
-                self.get_context_data(redirect_to=self.get_success_url())
-            )
+            return super().form_valid(form)
         messages.error(self.request, _('Неправильный логин или пароль!'))
         return self.form_invalid(form)
 
