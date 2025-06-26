@@ -233,6 +233,8 @@ class UploadImageForm(Form):
         widget=ClearableFileInput(
             attrs={
                 'class': 'form-control',
+                'accept': '.jpg,.jpeg,.png',
+                'data-max-size': '5242880',  # 5MB в байтах
             },
         ),
         validators=[validate_image_jpg_png],
@@ -240,4 +242,14 @@ class UploadImageForm(Form):
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['account'].initial = Account.objects.filter(user=user)
+        self.fields['account'].queryset = Account.objects.filter(user=user)
+        if self.fields['account'].queryset.exists():
+            self.fields['account'].initial = self.fields['account'].queryset.first()
+
+    def clean_file(self):
+        file = self.cleaned_data.get('file')
+        if file:
+            # Проверка размера файла (5MB)
+            if file.size > 5 * 1024 * 1024:
+                raise ValidationError(_('Размер файла не должен превышать 5MB'))
+        return file

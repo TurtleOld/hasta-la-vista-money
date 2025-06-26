@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-09 15:29+0300\n"
+"POT-Creation-Date: 2025-06-24 14:22+0300\n"
 "PO-Revision-Date: 2024-02-25 18:56+0300\n"
 "Last-Translator: Александр Павлов <>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,41 +19,104 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Translated-Using: django-rosetta 0.10.0\n"
 
-#: .\hasta_la_vista_money\budget\templates\budget.html:8
+#: .\hasta_la_vista_money\budget\templates\budget.html:7
 #: .\hasta_la_vista_money\templates\header.html:115
 msgid "Бюджет"
 msgstr "Budget"
 
-#: .\hasta_la_vista_money\budget\templates\budget.html:22
-msgid "Раздел с бюджетом находится в разработке"
-msgstr "The budget section is under development"
+#: .\hasta_la_vista_money\budget\templates\budget.html:11
+msgid "Бюджет по категориям"
+msgstr "Budget by categories"
 
-#: .\hasta_la_vista_money\budget\templates\budget.html:33
-msgid "Добавить список дат"
-msgstr "Add a list of dates"
+#: .\hasta_la_vista_money\budget\templates\budget.html:13
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:7
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:11
+msgid "Таблица расходов"
+msgstr "Expenses Table"
 
-#: .\hasta_la_vista_money\budget\templates\budget.html:38
-msgid "Расход"
-msgstr "Expense"
+#: .\hasta_la_vista_money\budget\templates\budget.html:14
+#: .\hasta_la_vista_money\budget\templates\income_table.html:7
+#: .\hasta_la_vista_money\budget\templates\income_table.html:11
+msgid "Таблица доходов"
+msgstr "Income Table"
 
-#: .\hasta_la_vista_money\budget\templates\budget.html:45
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:169
-msgid "Итог"
-msgstr "Total"
+#: .\hasta_la_vista_money\budget\templates\budget.html:15
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:7
+#: .\hasta_la_vista_money\templates\header.html:138
+msgid "Отчёты"
+msgstr "Reports"
 
-#: .\hasta_la_vista_money\budget\templates\budget.html:54
-#: .\hasta_la_vista_money\budget\templates\budget.html:90
+#: .\hasta_la_vista_money\budget\templates\budget.html:20
+msgid "Добавить ещё месяцы"
+msgstr "Add more months"
+
+#: .\hasta_la_vista_money\budget\templates\budget.html:46
+msgid "Доходы (%% выполнения плана)"
+msgstr "Income (% of plan completion)"
+
+#: .\hasta_la_vista_money\budget\templates\budget.html:59
+msgid "Расходы (%% выполнения плана)"
+msgstr "Expenses (% of plan completion)"
+
+#: .\hasta_la_vista_money\budget\templates\budget.html:77
+msgid "Выполнение плана по месяцам (%)"
+msgstr "Plan completion by month (%)"
+
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:13
+#: .\hasta_la_vista_money\budget\templates\income_table.html:13
+msgid "Назад"
+msgstr "Back"
+
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:19
+#: .\hasta_la_vista_money\budget\templates\income_table.html:20
+#: .\hasta_la_vista_money\expense\filters.py:14
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:14
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:88
+#: .\hasta_la_vista_money\income\filters.py:12
+#: .\hasta_la_vista_money\income\templates\income\income_table.html:12
+msgid "Категория"
+msgstr "Category"
+
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:23
+#: .\hasta_la_vista_money\budget\templates\income_table.html:24
+msgid "Нет месяцев"
+msgstr "No months"
+
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:29
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:34
+#: .\hasta_la_vista_money\budget\templates\income_table.html:30
+#: .\hasta_la_vista_money\budget\templates\income_table.html:35
 msgid "Факт"
 msgstr "Actual"
 
-#: .\hasta_la_vista_money\budget\templates\budget.html:55
-#: .\hasta_la_vista_money\budget\templates\budget.html:91
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:30
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:35
+#: .\hasta_la_vista_money\budget\templates\income_table.html:31
+#: .\hasta_la_vista_money\budget\templates\income_table.html:36
 msgid "План"
 msgstr "Plan"
 
-#: .\hasta_la_vista_money\budget\templates\budget.html:74
-msgid "Доход"
-msgstr "Income"
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:31
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:36
+#: .\hasta_la_vista_money\budget\templates\income_table.html:32
+#: .\hasta_la_vista_money\budget\templates\income_table.html:37
+msgid "Δ"
+msgstr "Δ"
+
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:67
+msgid "Нет данных по расходам"
+msgstr "No expense data"
+
+#: .\hasta_la_vista_money\budget\templates\expense_table.html:72
+#: .\hasta_la_vista_money\budget\templates\income_table.html:73
+#, fuzzy
+#| msgid "Итог"
+msgid "Итого"
+msgstr "Total"
+
+#: .\hasta_la_vista_money\budget\templates\income_table.html:68
+msgid "Нет данных по доходам"
+msgstr "No income data"
 
 #: .\hasta_la_vista_money\constants.py:43
 msgid "Вы успешно авторизовались!"
@@ -171,95 +234,92 @@ msgstr "Payment successfully made"
 msgid "Введите заметку не более 250 символов. Поле необязательное!"
 msgstr "Enter a note of no more than 250 characters. This field is optional!"
 
-#: .\hasta_la_vista_money\expense\filters.py:12
-#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:13
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:93
-#: .\hasta_la_vista_money\income\filters.py:12
-#: .\hasta_la_vista_money\income\templates\income\income_table.html:12
-msgid "Категория"
-msgstr "Category"
-
-#: .\hasta_la_vista_money\expense\filters.py:16
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:63
+#: .\hasta_la_vista_money\expense\filters.py:18
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:62
 #: .\hasta_la_vista_money\income\filters.py:16
-#: .\hasta_la_vista_money\receipts\forms.py:42
+#: .\hasta_la_vista_money\receipts\forms.py:43
 #: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:21
 msgid "Период"
 msgstr "Period"
 
-#: .\hasta_la_vista_money\expense\filters.py:26
-#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:14
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:72
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:96
+#: .\hasta_la_vista_money\expense\filters.py:28
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:15
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:65
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:91
 #: .\hasta_la_vista_money\income\filters.py:26
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:13
-#: .\hasta_la_vista_money\receipts\forms.py:52
+#: .\hasta_la_vista_money\receipts\forms.py:53
+#: .\hasta_la_vista_money\receipts\forms.py:227
 #: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:30
 msgid "Счёт"
 msgstr "Account"
 
-#: .\hasta_la_vista_money\expense\forms.py:13
+#: .\hasta_la_vista_money\expense\forms.py:18
 msgid "Категория расхода"
 msgstr "Expense category"
 
-#: .\hasta_la_vista_money\expense\forms.py:14
+#: .\hasta_la_vista_money\expense\forms.py:19
 msgid "Выберите категорию расхода"
 msgstr "Add expense category"
 
-#: .\hasta_la_vista_money\expense\forms.py:18
+#: .\hasta_la_vista_money\expense\forms.py:23
 #: .\hasta_la_vista_money\income\forms.py:24
-#: .\hasta_la_vista_money\loan\forms.py:91
-#: .\hasta_la_vista_money\receipts\forms.py:164
+#: .\hasta_la_vista_money\loan\forms.py:103
+#: .\hasta_la_vista_money\receipts\forms.py:165
 msgid "Счёт списания"
 msgstr "Debit account"
 
-#: .\hasta_la_vista_money\expense\forms.py:19
+#: .\hasta_la_vista_money\expense\forms.py:24
 msgid "Выберите с какого счёта списывать расход"
 msgstr "Choose which account to transfer the expense to"
 
-#: .\hasta_la_vista_money\expense\forms.py:22
-#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:11
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:94
-#: .\hasta_la_vista_money\finance_account\views.py:227
+#: .\hasta_la_vista_money\expense\forms.py:27
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:12
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:89
+#: .\hasta_la_vista_money\finance_account\views.py:236
 #: .\hasta_la_vista_money\income\forms.py:28
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:10
-#: .\hasta_la_vista_money\loan\forms.py:18
-#: .\hasta_la_vista_money\reports\views.py:181
-#: .\hasta_la_vista_money\reports\views.py:207
+#: .\hasta_la_vista_money\loan\forms.py:19
 msgid "Дата"
 msgstr "Date"
 
-#: .\hasta_la_vista_money\expense\forms.py:29
+#: .\hasta_la_vista_money\expense\forms.py:34
 msgid "Укажите дату и время расхода"
 msgstr "Specify the date and time of receipt of expense"
 
-#: .\hasta_la_vista_money\expense\forms.py:32
+#: .\hasta_la_vista_money\expense\forms.py:37
 #, fuzzy
 #| msgid "Счёт списания"
 msgid "Сумма списания"
 msgstr "Debit account"
 
-#: .\hasta_la_vista_money\expense\forms.py:33
+#: .\hasta_la_vista_money\expense\forms.py:38
 msgid "Введите сумму списания"
 msgstr "Enter the debit amount"
 
-#: .\hasta_la_vista_money\expense\forms.py:63
+#: .\hasta_la_vista_money\expense\forms.py:68
 #: .\hasta_la_vista_money\income\forms.py:59
 msgid "Название категории"
 msgstr "Category name"
 
-#: .\hasta_la_vista_money\expense\forms.py:64
+#: .\hasta_la_vista_money\expense\forms.py:69
 msgid "Введите название категории расхода для её создания"
 msgstr "Enter the name of the expense category to create it"
 
-#: .\hasta_la_vista_money\expense\forms.py:68
+#: .\hasta_la_vista_money\expense\forms.py:73
 #: .\hasta_la_vista_money\income\forms.py:64
 msgid "Родительская категория"
 msgstr "Parent category"
 
-#: .\hasta_la_vista_money\expense\forms.py:70
+#: .\hasta_la_vista_money\expense\forms.py:75
 msgid "Выберите родительскую категорию расхода для создаваемой категории"
 msgstr "Select the parent expense category for the category you are creating"
+
+#: .\hasta_la_vista_money\expense\forms.py:78
+#, fuzzy
+#| msgid "Родительская категория"
+msgid "Нет родительской категории"
+msgstr "Parent category"
 
 #: .\hasta_la_vista_money\expense\templates\expense\add_category_expense.html:5
 #: .\hasta_la_vista_money\expense\templates\expense\add_category_expense.html:14
@@ -307,44 +367,58 @@ msgid "Информация о расходах"
 msgstr "Expense information"
 
 #: .\hasta_la_vista_money\expense\templates\expense\expense_cat_list.html:13
-#: .\hasta_la_vista_money\expense\templates\expense\expense_cat_list.html:40
-#: .\hasta_la_vista_money\expense\templates\expense\expense_cat_list.html:65
+#: .\hasta_la_vista_money\expense\templates\expense\expense_cat_list.html:33
+#: .\hasta_la_vista_money\expense\templates\expense\expense_cat_list.html:51
 msgid "Вы уверены?"
 msgstr "Are you sure?"
 
-#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:8
-#: .\hasta_la_vista_money\finance_account\views.py:233
-#: .\hasta_la_vista_money\reports\views.py:187
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:9
+#: .\hasta_la_vista_money\finance_account\views.py:242
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:59
 #: .\hasta_la_vista_money\templates\header.html:68
 #: .\hasta_la_vista_money\templates\header.html:98
 msgid "Расходы"
 msgstr "Expenses"
 
-#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:12
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:69
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:95
-#: .\hasta_la_vista_money\finance_account\views.py:230
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:13
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:64
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:90
+#: .\hasta_la_vista_money\finance_account\views.py:239
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:11
 #: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:27
 #: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:80
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:152
-#: .\hasta_la_vista_money\reports\views.py:184
-#: .\hasta_la_vista_money\reports\views.py:210
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:138
 msgid "Сумма"
 msgstr "Amount"
 
-#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:18
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:16
+msgid "Пользователь"
+msgstr "User"
+
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:20
 msgid "Добавить новую расходную операцию"
 msgstr "Add a new expense operation"
 
-#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:28
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:30
 #: .\hasta_la_vista_money\expense\templates\expense\show_category_expense.html:16
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:28
 #: .\hasta_la_vista_money\income\templates\income\show_category_income.html:16
 msgid "Добавить категорию"
 msgstr "Add category"
 
-#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:102
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:59
+msgid "Редактировать расход"
+msgstr "Edit expense"
+
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:77
+msgid "Копировать расход"
+msgstr "Copy expense"
+
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:97
+msgid "Удалить расход"
+msgstr "Delete expense"
+
+#: .\hasta_la_vista_money\expense\templates\expense\expense_table.html:108
 msgid "Информация о расходах отсутствует!"
 msgstr "No expense information available!"
 
@@ -395,7 +469,6 @@ msgstr ""
 "Maximum length is 20 characters."
 
 #: .\hasta_la_vista_money\finance_account\forms.py:38
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\account_table.html:13
 msgid "Валюта счёта"
 msgstr "Account currency"
 
@@ -480,18 +553,24 @@ msgid "Управляй финансами семьи грамотно!"
 msgstr "Manage your family's finances competently!"
 
 #: .\hasta_la_vista_money\finance_account\templates\finance_account\account.html:32
+#, fuzzy
+#| msgid "Общая статистика пользователя"
+msgid "Показать подробную статистику пользователя"
+msgstr "User's overall statistics"
+
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\account.html:34
 msgid "Общая статистика пользователя"
 msgstr "User's overall statistics"
 
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\account_table.html:11
-msgid "Название счёта"
-msgstr "Account name"
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\account_table.html:7
+msgid "Счета"
+msgstr "Accounts"
 
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\account_table.html:12
-msgid "Баланс счёта"
-msgstr "Account Balance"
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\account_table.html:65
+msgid "Удалить счёт"
+msgstr "Delete account"
 
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\account_table.html:87
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\account_table.html:73
 msgid "Счета ещё не созданы!"
 msgstr "Accounts have not been created yet!"
 
@@ -504,11 +583,11 @@ msgstr "Add account"
 msgid "Добавить новый счёт"
 msgstr "Add a new account"
 
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\card_total_balance.html:6
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\card_total_balance.html:10
 msgid "Сумма всех счетов"
 msgstr "Total amount of all accounts"
 
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\card_total_balance.html:8
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\card_total_balance.html:51
 msgid "Нет данных для отображения"
 msgstr "No data to display"
 
@@ -545,18 +624,18 @@ msgstr "Income and expense statistics"
 msgid "Статистика переводов"
 msgstr "Transfer money statistics"
 
-#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:66
+#: .\hasta_la_vista_money\finance_account\templates\finance_account\modals\statistics.html:63
 #: .\hasta_la_vista_money\receipts\templates\receipts\modals\receipts_statistics.html:24
 msgid "Количество чеков"
 msgstr "Number of receipts"
 
-#: .\hasta_la_vista_money\finance_account\views.py:223
+#: .\hasta_la_vista_money\finance_account\views.py:232
 msgid "Аналитика"
 msgstr "Analytics"
 
-#: .\hasta_la_vista_money\finance_account\views.py:238
+#: .\hasta_la_vista_money\finance_account\views.py:247
 #: .\hasta_la_vista_money\income\templates\income\income_table.html:7
-#: .\hasta_la_vista_money\reports\views.py:213
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:52
 #: .\hasta_la_vista_money\templates\header.html:55
 #: .\hasta_la_vista_money\templates\header.html:84
 msgid "Доходы"
@@ -615,7 +694,13 @@ msgstr "Income information"
 msgid "Добавить новую доходную операцию"
 msgstr "Add a new income operation"
 
-#: .\hasta_la_vista_money\income\templates\income\income_table.html:101
+#: .\hasta_la_vista_money\income\templates\income\income_table.html:86
+#, fuzzy
+#| msgid "Удалить кредит"
+msgid "Удалить доход"
+msgstr "Delete loan"
+
+#: .\hasta_la_vista_money\income\templates\income\income_table.html:96
 msgid "Информация о доходах отсутствует!"
 msgstr "Income information is missing! "
 
@@ -627,67 +712,81 @@ msgstr "Add income category"
 msgid "Категории дохода"
 msgstr "Income categories"
 
-#: .\hasta_la_vista_money\income\views.py:158
+#: .\hasta_la_vista_money\income\views.py:168
 msgid "Расход успешно скопирован."
 msgstr "The expense has been successfully copied."
 
-#: .\hasta_la_vista_money\income\views.py:319
+#: .\hasta_la_vista_money\income\views.py:341
 msgid "Такая категория уже была добавлена!"
 msgstr "This category has already been added!"
 
-#: .\hasta_la_vista_money\income\views.py:322
+#: .\hasta_la_vista_money\income\views.py:344
 msgid "Ошибка при добавлении категории. Проверьте введенные данные."
 msgstr "Error when adding a category. Check the entered data."
 
-#: .\hasta_la_vista_money\loan\forms.py:25
+#: .\hasta_la_vista_money\loan\forms.py:26
 msgid "Укажите дату начала кредита"
 msgstr "Specify the start date of the loan"
 
-#: .\hasta_la_vista_money\loan\forms.py:30
+#: .\hasta_la_vista_money\loan\forms.py:31
 msgid "Тип кредита"
 msgstr "Loan type"
 
-#: .\hasta_la_vista_money\loan\forms.py:31
-#, fuzzy
-#| msgid "Выберите с какого счёта списывать расход"
+#: .\hasta_la_vista_money\loan\forms.py:32
 msgid "Выберите тип кредита из доступных вариантов. "
-msgstr "Choose which account to transfer the expense to"
+msgstr "Select the loan type from the available options."
 
-#: .\hasta_la_vista_money\loan\forms.py:35
+#: .\hasta_la_vista_money\loan\forms.py:36
 msgid "Сумма кредита"
 msgstr "Loan amount"
 
-#: .\hasta_la_vista_money\loan\forms.py:36
+#: .\hasta_la_vista_money\loan\forms.py:37
 msgid "Введите сумму кредита в рублях"
 msgstr "Enter the loan amount in rubles"
 
-#: .\hasta_la_vista_money\loan\forms.py:40
+#: .\hasta_la_vista_money\loan\forms.py:41
 msgid "Годовая ставка в %"
 msgstr "Annual rate in %"
 
-#: .\hasta_la_vista_money\loan\forms.py:41
+#: .\hasta_la_vista_money\loan\forms.py:42
 msgid "Введите годовую процентную ставку по кредиту"
 msgstr "Enter the annual interest rate on the loan"
 
-#: .\hasta_la_vista_money\loan\forms.py:45
+#: .\hasta_la_vista_money\loan\forms.py:46
 msgid "Срок кредита в месяцах"
 msgstr "Loan term in months"
 
-#: .\hasta_la_vista_money\loan\forms.py:46
+#: .\hasta_la_vista_money\loan\forms.py:47
 msgid "Укажите срок кредита в месяцах"
 msgstr "Specify the loan term in months"
 
-#: .\hasta_la_vista_money\loan\forms.py:90
+#: .\hasta_la_vista_money\loan\forms.py:91
 msgid "Дата платежа"
 msgstr "Payment date"
 
-#: .\hasta_la_vista_money\loan\forms.py:92
+#: .\hasta_la_vista_money\loan\forms.py:98
+msgid "Укажите дату платежа"
+msgstr "Specify the payment date"
+
+#: .\hasta_la_vista_money\loan\forms.py:104
+msgid "Выберите счёт для списания"
+msgstr "Select the account to be debited"
+
+#: .\hasta_la_vista_money\loan\forms.py:109
 msgid "Кредит"
 msgstr "Loan"
 
-#: .\hasta_la_vista_money\loan\forms.py:93
+#: .\hasta_la_vista_money\loan\forms.py:110
+msgid "Выберите кредит для погашения"
+msgstr "Select the loan to be repaid"
+
+#: .\hasta_la_vista_money\loan\forms.py:114
 msgid "Сумма платежа"
 msgstr "Payment amount"
+
+#: .\hasta_la_vista_money\loan\forms.py:115
+msgid "Введите сумму платежа"
+msgstr "Enter the payment amount"
 
 #: .\hasta_la_vista_money\loan\models.py:14
 msgid "Аннуитетный"
@@ -701,6 +800,12 @@ msgstr "Differentiated"
 #: .\hasta_la_vista_money\loan\templates\loan\loan.html:53
 msgid "Добавить кредит"
 msgstr "Add loan"
+
+#: .\hasta_la_vista_money\loan\templates\loan\add_loan.html:25
+#, fuzzy
+#| msgid "Какой способ выбрать?"
+msgid "Какой тип кредита выбрать?"
+msgstr "Which method to choose?"
 
 #: .\hasta_la_vista_money\loan\templates\loan\loan.html:10
 #: .\hasta_la_vista_money\templates\header.html:127
@@ -737,47 +842,48 @@ msgstr "Loan term (months): "
 msgid "Внести платёж"
 msgstr "Make a payment"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:95
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:91
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:93
 msgid "Удалить кредит"
 msgstr "Delete loan"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:104
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:102
 msgid "График платежей:"
 msgstr "Payment schedule:"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:105
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:103
 msgid "Общая сумма кредита:"
 msgstr "Total loan amount:"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:106
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:104
 msgid "Сумма переплаты:"
 msgstr "Overpayment amount:"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:111
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:109
 msgid "Месяц"
 msgstr "Month"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:112
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:110
 msgid "Остаток"
 msgstr "Balance"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:113
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:111
 msgid "Ежемесячный платеж"
 msgstr "Monthly payment"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:114
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:112
 msgid "Проценты"
 msgstr "Interest"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:115
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:113
 msgid "Погашение основного долга"
 msgstr "Principal repayment"
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:143
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:141
 msgid "Внести платеж за кредит №"
 msgstr "Make a payment for loan No."
 
-#: .\hasta_la_vista_money\loan\templates\loan\loan.html:168
+#: .\hasta_la_vista_money\loan\templates\loan\loan.html:166
 msgid "Добавить платеж"
 msgstr "Add a payment"
 
@@ -1097,133 +1203,133 @@ msgstr ""
 "A differentiated payment means decreasing monthly payments, where the "
 "principal is actively repaid from the very beginning."
 
-#: .\hasta_la_vista_money\receipts\forms.py:38
+#: .\hasta_la_vista_money\receipts\forms.py:39
 msgid "Продавец"
 msgstr "Seller"
 
-#: .\hasta_la_vista_money\receipts\forms.py:87
-#: .\hasta_la_vista_money\receipts\forms.py:159
+#: .\hasta_la_vista_money\receipts\forms.py:88
+#: .\hasta_la_vista_money\receipts\forms.py:160
 msgid "Имя продавца"
 msgstr "Seller name"
 
-#: .\hasta_la_vista_money\receipts\forms.py:89
+#: .\hasta_la_vista_money\receipts\forms.py:90
 msgid "Адрес места покупки"
 msgstr "Address of the purchase location "
 
-#: .\hasta_la_vista_money\receipts\forms.py:90
-#: .\hasta_la_vista_money\receipts\forms.py:94
+#: .\hasta_la_vista_money\receipts\forms.py:91
+#: .\hasta_la_vista_money\receipts\forms.py:95
 msgid "Поле может быть пустым"
 msgstr "The field can be left blank"
 
-#: .\hasta_la_vista_money\receipts\forms.py:93
+#: .\hasta_la_vista_money\receipts\forms.py:94
 msgid "Название магазина"
 msgstr "Store name"
 
-#: .\hasta_la_vista_money\receipts\forms.py:117
+#: .\hasta_la_vista_money\receipts\forms.py:118
 msgid "Наименование продукта"
 msgstr "Product name"
 
-#: .\hasta_la_vista_money\receipts\forms.py:118
+#: .\hasta_la_vista_money\receipts\forms.py:119
 msgid "Укажите наименование продукта"
 msgstr "Enter name product"
 
-#: .\hasta_la_vista_money\receipts\forms.py:121
+#: .\hasta_la_vista_money\receipts\forms.py:122
 msgid "Цена продукта"
 msgstr "Price product"
 
-#: .\hasta_la_vista_money\receipts\forms.py:122
+#: .\hasta_la_vista_money\receipts\forms.py:123
 msgid "Укажите цену продукта"
 msgstr "Enter price product"
 
-#: .\hasta_la_vista_money\receipts\forms.py:126
+#: .\hasta_la_vista_money\receipts\forms.py:127
 msgid "Количество продукта"
 msgstr "Quantity product"
 
-#: .\hasta_la_vista_money\receipts\forms.py:127
+#: .\hasta_la_vista_money\receipts\forms.py:128
 msgid "Укажите количество продукта"
 msgstr "Enter the quantity of the product"
 
-#: .\hasta_la_vista_money\receipts\forms.py:131
+#: .\hasta_la_vista_money\receipts\forms.py:132
 msgid "Итоговая сумма за продукт"
 msgstr "The total amount for the product"
 
-#: .\hasta_la_vista_money\receipts\forms.py:132
+#: .\hasta_la_vista_money\receipts\forms.py:133
 msgid "Высчитывается автоматически на основании цены и количества"
 msgstr ""
 "It is calculated automatically based on the total amounts of the products."
 
-#: .\hasta_la_vista_money\receipts\forms.py:146
+#: .\hasta_la_vista_money\receipts\forms.py:147
 msgid "Количество должно быть больше 0."
 msgstr "Quantity should be greater than 0."
 
-#: .\hasta_la_vista_money\receipts\forms.py:160
+#: .\hasta_la_vista_money\receipts\forms.py:161
 msgid "Выберите продавца. Если он ещё не создан, нажмите кнопку ниже."
 msgstr ""
 "Select the seller. If it has not been created yet, click the button below."
 
-#: .\hasta_la_vista_money\receipts\forms.py:166
+#: .\hasta_la_vista_money\receipts\forms.py:167
 msgid "Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже."
 msgstr ""
 "Select the withdrawal account. If it has not been created yet, click the "
 "button below. "
 
-#: .\hasta_la_vista_money\receipts\forms.py:170
+#: .\hasta_la_vista_money\receipts\forms.py:171
 msgid "Дата и время покупки"
 msgstr "Date and time of purchase"
 
-#: .\hasta_la_vista_money\receipts\forms.py:171
+#: .\hasta_la_vista_money\receipts\forms.py:172
 msgid "Указывается дата и время покупки, указанные в чеке."
 msgstr "The date and time of purchase as stated on the receipt are indicated."
 
-#: .\hasta_la_vista_money\receipts\forms.py:178
+#: .\hasta_la_vista_money\receipts\forms.py:179
 msgid "Тип операции"
 msgstr "Operation type"
 
-#: .\hasta_la_vista_money\receipts\forms.py:179
+#: .\hasta_la_vista_money\receipts\forms.py:180
 msgid "Выберите тип операции."
 msgstr "Select the type of operation."
 
-#: .\hasta_la_vista_money\receipts\forms.py:182
+#: .\hasta_la_vista_money\receipts\forms.py:183
 msgid "Номер документа"
 msgstr "Document number"
 
-#: .\hasta_la_vista_money\receipts\forms.py:183
+#: .\hasta_la_vista_money\receipts\forms.py:184
 msgid "Укажите номер документа. Обычно на чеке указан как ФД."
 msgstr ""
 "Enter the document number. It is usually indicated on the receipt as \"FD\". "
 
-#: .\hasta_la_vista_money\receipts\forms.py:186
+#: .\hasta_la_vista_money\receipts\forms.py:187
 msgid "НДС по ставке 10%"
 msgstr "VAT 10%"
 
-#: .\hasta_la_vista_money\receipts\forms.py:187
-#: .\hasta_la_vista_money\receipts\forms.py:192
+#: .\hasta_la_vista_money\receipts\forms.py:188
+#: .\hasta_la_vista_money\receipts\forms.py:193
 msgid "Поле необязательное"
 msgstr "The field is optional."
 
-#: .\hasta_la_vista_money\receipts\forms.py:191
+#: .\hasta_la_vista_money\receipts\forms.py:192
 msgid "НДС по ставке 20%"
 msgstr "VAT 20%"
 
-#: .\hasta_la_vista_money\receipts\forms.py:196
+#: .\hasta_la_vista_money\receipts\forms.py:197
 msgid "Итоговая сумма по чеку"
 msgstr "Total receipt amount"
 
-#: .\hasta_la_vista_money\receipts\forms.py:197
+#: .\hasta_la_vista_money\receipts\forms.py:198
 msgid "Высчитывается автоматически на основании итоговых сумм продуктов"
 msgstr ""
 "It is calculated automatically based on the total amounts of the products."
 
-#: .\hasta_la_vista_money\receipts\forms.py:221
+#: .\hasta_la_vista_money\receipts\forms.py:222
 msgid "Разрешены только файлы форматов: JPG, JPEG или PNG"
 msgstr "Only JPG, JPEG or PNG file formats are allowed"
 
-#: .\hasta_la_vista_money\receipts\forms.py:230
+#: .\hasta_la_vista_money\receipts\forms.py:232
 msgid "Выберите файл"
 msgstr "Select file"
 
 #: .\hasta_la_vista_money\receipts\models.py:10
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:97
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:95
 msgid "Покупка"
 msgstr "Purchase"
 
@@ -1293,45 +1399,59 @@ msgstr "Process Receipt Image"
 msgid "Дата: "
 msgstr "Date: "
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:92
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:91
 msgid "Кассовый чек"
 msgstr "Cash receipt"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:99
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:97
 msgid "Возврат покупки"
 msgstr "Purchase return"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:149
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:124
+#, fuzzy
+#| msgid "Добавить чек"
+msgid "Удалить чек"
+msgstr "Add receipt"
+
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:135
 msgid "Предмет расчёта"
 msgstr "Item of calculation"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:150
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:136
 msgid "Цена"
 msgstr "Price"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:151
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:137
 msgid "Количество"
 msgstr "Quantity"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:179
-msgid "НДС 10%"
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:154
+msgid "Итог"
+msgstr "Total"
+
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:163
+#, fuzzy
+#| msgid "НДС 10%"
+msgid "НДС"
 msgstr "VAT 10%"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:190
-msgid "НДС 20%"
-msgstr "VAT 20%"
-
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:200
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:177
 msgid "Списано со счёта"
 msgstr "Debited from account"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:209
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:186
 msgid "Место расчётов"
 msgstr "Transaction location"
 
-#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:218
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:194
 msgid "Адрес расчётов"
 msgstr "Transaction address"
+
+#: .\hasta_la_vista_money\receipts\templates\receipts\receipts.html:204
+#, fuzzy
+#| msgid "Дата и время покупки"
+msgid "Дата и время"
+msgstr "Date and time of purchase"
 
 #: .\hasta_la_vista_money\receipts\templates\receipts\upload_image.html:7
 msgid "Загрузка чеков с изображения"
@@ -1349,18 +1469,29 @@ msgstr "Upload"
 msgid "Загрузка..."
 msgstr "Loading..."
 
-#: .\hasta_la_vista_money\reports\templates\reports\reports.html:7
-#: .\hasta_la_vista_money\templates\header.html:138
-msgid "Отчёты"
-msgstr "Reports"
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:10
+msgid "Финансовые отчёты"
+msgstr "Financial reports"
 
-#: .\hasta_la_vista_money\reports\views.py:177
-msgid "Статистика по расходам"
-msgstr "Expense statistics"
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:71
+msgid "Доходы и расходы по месяцам"
+msgstr "Income and expenses by month"
 
-#: .\hasta_la_vista_money\reports\views.py:203
-msgid "Статистика по доходам"
-msgstr "Income statistics"
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:87
+msgid "Баланс (Доходы - Расходы)"
+msgstr "Balance (Income - Expenses)"
+
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:104
+msgid "Баланс по месяцам"
+msgstr "Balance by month"
+
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:125
+msgid "Баланс:"
+msgstr "Balance:"
+
+#: .\hasta_la_vista_money\reports\templates\reports\reports.html:161
+msgid "Структура расходов по категориям (все месяцы)"
+msgstr "Expense structure by category (all months)"
 
 #: .\hasta_la_vista_money\templates\404.html:6
 #: .\hasta_la_vista_money\templates\404.html:13
@@ -1369,8 +1500,7 @@ msgstr "404 - Page not found"
 
 #: .\hasta_la_vista_money\templates\404.html:17
 msgid "Извините, страница, которую вы ищете, не существует или была удалена."
-msgstr ""
-"Sorry, the page you are looking for does not exist or has been deleted."
+msgstr "Sorry, the page you are looking for does not exist or has been deleted."
 
 #: .\hasta_la_vista_money\templates\500.html:7
 msgid "Ошибка на сервере"
@@ -1435,6 +1565,30 @@ msgstr "Registration form"
 #: .\hasta_la_vista_money\users\views.py:114
 msgid "Регистрация"
 msgstr "Registration"
+
+#~ msgid "Раздел с бюджетом находится в разработке"
+#~ msgstr "The budget section is under development"
+
+#~ msgid "Добавить список дат"
+#~ msgstr "Add a list of dates"
+
+#~ msgid "Расход"
+#~ msgstr "Expense"
+
+#~ msgid "Доход"
+#~ msgstr "Income"
+
+#~ msgid "Название счёта"
+#~ msgstr "Account name"
+
+#~ msgid "Баланс счёта"
+#~ msgstr "Account Balance"
+
+#~ msgid "НДС 20%"
+#~ msgstr "VAT 20%"
+
+#~ msgid "Статистика по доходам"
+#~ msgstr "Income statistics"
 
 #~ msgid ""
 #~ "Выберите тип кредита из доступных вариантов. <button class=\"btn btn-"

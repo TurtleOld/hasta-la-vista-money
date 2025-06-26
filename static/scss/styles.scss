@@ -135,7 +135,6 @@ body {
     padding: 1rem 0 1rem 0;
 }
 
-/* Кастомный CSS */
 .purchased-products {
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -204,8 +203,6 @@ table {
     background-color: #eaffea !important;
     color: #006600;
 }
-
-
 
 .bg-gradient-primary {
     background: linear-gradient(135deg, #198754 0%, #20c997 100%);
@@ -439,3 +436,9 @@ table {
         border-color: #198754;
     }
 }
+
+@import "account";
+@import "upload";
+@import "buttons";
+@import "fonts" ;
+@import "mobile";

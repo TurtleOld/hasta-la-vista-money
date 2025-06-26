@@ -63,6 +63,8 @@ class AddCategoryIncomeForm(BaseForm):
         queryset=IncomeCategory.objects.all(),
         label=_('Родительская категория'),
         help_text=_('Выберите родительскую категорию дохода для создаваемой категории'),
+        empty_label=_('Нет родительской категории'),
+        required=False,
     )
     field = 'parent_category'
 
