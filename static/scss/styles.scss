@@ -204,6 +204,239 @@ table {
     color: #006600;
 }
 
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    color: white;
+}
+
+.receipt-card {
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    overflow: hidden;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        border-color: #198754;
+    }
+}
+
+.receipt-card-header {
+    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    color: white;
+    padding: 1rem;
+    border-bottom: none;
+}
+
+.receipt-card-body {
+    padding: 1.5rem;
+}
+
+.receipt-info-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.receipt-seller-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #198754;
+    margin-bottom: 0.5rem;
+}
+
+.receipt-details {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.receipt-amount {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #198754;
+}
+
+.receipt-date {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.receipt-products-preview {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.modal-receipt {
+    .modal-content {
+        border-radius: 16px;
+        border: none;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal-header {
+        background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+        color: white;
+        border-bottom: none;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .modal-body {
+        padding: 2rem;
+    }
+}
+
+.receipt-table {
+    th {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+        color: #495057;
+    }
+
+    td {
+        vertical-align: middle;
+        border-bottom: 1px solid #f1f3f4;
+    }
+
+    tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+}
+
+.receipt-summary {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.receipt-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+
+    &:last-child {
+        margin-bottom: 0;
+        border-top: 1px solid #dee2e6;
+        padding-top: 0.5rem;
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+}
+
+.action-buttons-container {
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stats-card {
+    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+
+    .stats-number {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .stats-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.receipt-card {
+    animation: fadeInUp 0.3s ease-out;
+}
+
+@media (max-width: 767px) {
+    .receipt-info-grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .receipt-card-body {
+        padding: 1rem;
+    }
+
+    .modal-receipt .modal-body {
+        padding: 1rem;
+    }
+
+    .receipt-summary-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+
+    .action-buttons-container {
+        padding: 1rem;
+    }
+
+    .stats-card {
+        padding: 1rem;
+
+        .stats-number {
+            font-size: 1.5rem;
+        }
+    }
+}
+
+.btn-receipt-action {
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+
+    &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+}
+
+.pagination {
+    .page-link {
+        border-radius: 6px;
+        margin: 0 2px;
+        border: 1px solid #dee2e6;
+
+        &:hover {
+            background-color: #198754;
+            border-color: #198754;
+            color: white;
+        }
+    }
+
+    .page-item.active .page-link {
+        background-color: #198754;
+        border-color: #198754;
+    }
+}
+
 @import "account";
 @import "upload";
 @import "buttons";
