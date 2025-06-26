@@ -153,7 +153,8 @@
                         </a>
                     </li>
                     <li class="nav-item ms-2 border-0" data-bs-title="Выход">
-                        <form action="/logout/" class="form button-exit">
+                        <form action="{% url 'logout' %}" method="post" class="form button-exit">
+                            {% csrf_token %}
                             <button class="btn btn-outline-danger d-flex align-items-center text-dark border-0 p-2"
                                     type="submit" value="/logout/">
                                 <span class="text-menu-button pe-1">{% translate 'Выход' %}</span>

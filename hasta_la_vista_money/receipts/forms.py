@@ -36,11 +36,11 @@ class ReceiptFilter(django_filters.FilterSet):
     name_seller = django_filters.ModelChoiceFilter(
         queryset=Seller.objects.all(),
         field_name='seller__name_seller',
-        label=_('Продавец'),
+        label='',
         widget=Select(attrs={'class': 'form-control mb-2'}),
     )
     receipt_date = django_filters.DateFromToRangeFilter(
-        label=_('Период'),
+        label='',
         widget=django_filters.widgets.RangeWidget(
             attrs={
                 'class': 'form-control',
@@ -50,8 +50,35 @@ class ReceiptFilter(django_filters.FilterSet):
     )
     account = django_filters.ModelChoiceFilter(
         queryset=Account.objects.all(),
-        label=_('Счёт'),
+        label='',
         widget=Select(attrs={'class': 'form-control mb-4'}),
+    )
+    total_sum_min = django_filters.NumberFilter(
+        field_name="total_sum",
+        lookup_expr="gte",
+        label='',
+        widget=NumberInput(
+            attrs={"class": "form-control", "placeholder": _("Сумма от")}
+        ),
+    )
+    total_sum_max = django_filters.NumberFilter(
+        field_name="total_sum",
+        lookup_expr="lte",
+        label='',
+        widget=NumberInput(
+            attrs={"class": "form-control", "placeholder": _("Сумма до")}
+        ),
+    )
+    product_name = django_filters.CharFilter(
+        method="filter_by_product_name",
+        label='',
+        widget=TextInput(
+            attrs={
+                "class": "form-control",
+                "autocomplete": "off",
+                "placeholder": _("Введите товар"),
+            }
+        ),
     )
 
     def __init__(self, *args, **kwargs):
@@ -77,9 +104,21 @@ class ReceiptFilter(django_filters.FilterSet):
         queryset = super().qs
         return queryset.filter(user=self.user).distinct()
 
+    def filter_by_product_name(self, queryset, name, value):
+        if value:
+            return queryset.filter(product__product_name__icontains=value)
+        return queryset
+
     class Meta:
         model = Receipt
-        fields = ['name_seller', 'receipt_date', 'account']
+        fields = [
+            "name_seller",
+            "receipt_date",
+            "account",
+            "total_sum_min",
+            "total_sum_max",
+            "product_name",
+        ]
 
 
 class SellerForm(ModelForm):

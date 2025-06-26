@@ -442,3 +442,38 @@ table {
 @import "buttons";
 @import "fonts" ;
 @import "mobile";
+
+.sticky-filter {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+}
+
+.filter-card {
+    transition: box-shadow 0.3s, transform 0.3s;
+}
+
+.filter-card.collapsing,
+.filter-card.collapse.show {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, .15);
+    transform: translateY(2px) scale(1.01);
+}
+
+.icon-label {
+    position: relative;
+    padding-left: 1.7em;
+    display: inline-block;
+}
+
+.icon-label::before {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'bootstrap-icons';
+    font-size: 1.2em;
+    color: #198754;
+    content: '';
+    width: 1.5em;
+    text-align: center;
+}

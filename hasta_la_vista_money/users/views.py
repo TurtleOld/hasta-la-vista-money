@@ -21,6 +21,7 @@ from hasta_la_vista_money.users.forms import (
     UserLoginForm,
 )
 from hasta_la_vista_money.users.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 class IndexView(TemplateView):
@@ -60,6 +61,10 @@ class LoginUser(SuccessMessageMixin, LoginView):
         context = super().get_context_data(**kwargs)
         context['button_text'] = _('Войти')
         context['user_login_form'] = UserLoginForm()
+        if hasattr(self, "jwt_access_token"):
+            context["jwt_access_token"] = self.jwt_access_token
+        if hasattr(self, "jwt_refresh_token"):
+            context["jwt_refresh_token"] = self.jwt_refresh_token
         return context
 
     def form_valid(self, form):
@@ -73,7 +78,12 @@ class LoginUser(SuccessMessageMixin, LoginView):
         )
         if user is not None:
             login(self.request, user)
-            return super().form_valid(form)
+            tokens = RefreshToken.for_user(user)
+            self.jwt_access_token = str(tokens.access_token)
+            self.jwt_refresh_token = str(tokens)
+            return self.render_to_response(
+                self.get_context_data(redirect_to=self.get_success_url())
+            )
         messages.error(self.request, _('Неправильный логин или пароль!'))
         return self.form_invalid(form)
 
