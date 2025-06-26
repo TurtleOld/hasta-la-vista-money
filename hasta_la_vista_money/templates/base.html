@@ -9,15 +9,15 @@
 <html lang="ru">
 <head>
     {% block head %}
-        <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}?v={% word_hash %}">
+        <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}?v={% word_hash %}">
         <script nonce="{{request.csp_nonce}}" src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}?v={% word_hash %}"></script>
         <title>{% block title %}{% endblock %} - Hasta La Vista, Money!</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
-        <link rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
-        <link rel="stylesheet" href="{% static 'css/bootstrap-icons.min.css' %}?v={% word_hash %}">
-        <link rel="stylesheet" href="{% static 'css/styles.css' %}?v={% word_hash %}">
+        <link nonce="{{request.csp_nonce}}" rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
+        <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+        <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'css/styles.css' %}?v={% word_hash %}">
         <script nonce="{{request.csp_nonce}}" src="https://unpkg.com/htmx.org@2.0.4"></script>
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/jquery-3.7.1.min.js' %}?v={% word_hash %}"></script>
         <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
