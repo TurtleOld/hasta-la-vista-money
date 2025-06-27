@@ -8,7 +8,6 @@ let totalForms = document.querySelector("#id_form-TOTAL_FORMS")
 document.addEventListener('DOMContentLoaded', function() {
     onClickRemoveObject();
 
-    // --- Autocomplete for product field in receipts filter ---
     const productInput = document.getElementById('product-autocomplete');
     let dropdown;
     let results = [];
@@ -53,7 +52,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!items.length) return;
         removeActive(items);
 
-        // Валидация currentFocus для предотвращения Generic Object Injection Sink
         if (typeof currentFocus !== 'number' || isNaN(currentFocus)) {
             currentFocus = 0;
         }
@@ -61,11 +59,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (currentFocus >= items.length) currentFocus = 0;
         if (currentFocus < 0) currentFocus = items.length - 1;
 
-        // Дополнительная проверка, что элемент существует
-        // Валидация индекса для предотвращения Object Injection Sink
         if (typeof currentFocus === 'number' && !isNaN(currentFocus) &&
             currentFocus >= 0 && currentFocus < items.length) {
-            const targetItem = items[currentFocus];
+            const targetItem = Array.prototype.at.call(items, currentFocus);
             if (targetItem && typeof targetItem.classList !== 'undefined') {
                 targetItem.classList.add('active');
             }
@@ -90,7 +86,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 results = data.results || [];
                 showDropdown(results);
             } catch (e) {
-                // Ошибка сети или токена
                 closeDropdown();
             }
         });
@@ -98,14 +93,12 @@ document.addEventListener('DOMContentLoaded', function() {
         productInput.addEventListener('keydown', function (e) {
             const items = dropdown ? dropdown.querySelectorAll('.dropdown-item') : [];
             if (e.key === 'ArrowDown') {
-                // Валидация currentFocus перед изменением
                 if (typeof currentFocus !== 'number' || isNaN(currentFocus)) {
                     currentFocus = -1;
                 }
                 currentFocus++;
                 addActive(items);
             } else if (e.key === 'ArrowUp') {
-                // Валидация currentFocus перед изменением
                 if (typeof currentFocus !== 'number' || isNaN(currentFocus)) {
                     currentFocus = items.length;
                 }
@@ -114,10 +107,9 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (e.key === 'Enter') {
                 e.preventDefault();
 
-                // Валидация currentFocus для предотвращения Generic Object Injection Sink
                 if (typeof currentFocus === 'number' && !isNaN(currentFocus) &&
                     currentFocus > -1 && currentFocus < items.length) {
-                    const targetItem = items[currentFocus];
+                    const targetItem = Array.prototype.at.call(items, currentFocus);
                     if (targetItem && typeof targetItem.click === 'function') {
                         targetItem.click();
                     }
@@ -136,7 +128,6 @@ document.addEventListener('DOMContentLoaded', function() {
         loginForm.addEventListener('submit', async function (e) {
             e.preventDefault();
 
-            // Валидация URL формы для предотвращения SSRF
             const formAction = loginForm.action;
             if (!formAction || typeof formAction !== 'string') {
                 alert('Ошибка: неверный URL формы');
@@ -166,7 +157,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     localStorage.setItem('access_token', data.access);
                     localStorage.setItem('refresh_token', data.refresh);
 
-                    // Валидация redirect_url для предотвращения XSS
                     try {
                         const redirectUrl = new URL(data.redirect_url, window.location.origin);
                         if (redirectUrl.origin !== window.location.origin) {
@@ -179,11 +169,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
                 } else {
-                    // Ошибка: показать сообщение
                     alert('Ошибка входа. Проверьте логин и пароль.');
                 }
             } else {
-                // Если не JSON (например, обычный HTML), fallback: reload
                 window.location.reload();
             }
         });
@@ -279,20 +267,16 @@ function onClickRemoveObject() {
     });
 }
 
-// --- Safe fetch function to prevent user-controlled URLs ---
 function safeFetch(url, options = {}) {
-    // Дополнительная валидация URL
     if (!url || typeof url !== 'string') {
         throw new Error('Invalid URL provided');
     }
 
-    // Проверяем, что URL относительный или принадлежит нашему домену
     try {
         const urlObj = new URL(url, window.location.origin);
         if (urlObj.origin !== window.location.origin) {
             throw new Error('URL must be from the same origin');
         }
-        // Используем только pathname, search и hash для безопасности
         const safeUrl = urlObj.pathname + urlObj.search + urlObj.hash;
         return fetch(safeUrl, options);
     } catch (e) {
@@ -300,7 +284,20 @@ function safeFetch(url, options = {}) {
     }
 }
 
-// --- JWT fetch with refresh support ---
+function ultraSafeFetch(path, options = {}) {
+    if (!path || typeof path !== 'string') {
+        throw new Error('Invalid path provided');
+    }
+
+    const cleanPath = path.replace(/[^a-zA-Z0-9\-_\/\.\?=&]/g, '');
+
+    if (!cleanPath.startsWith('/')) {
+        throw new Error('Path must start with /');
+    }
+
+    return fetch(cleanPath, options);
+}
+
 async function fetchWithAuth(url, options = {}) {
     if (!url || typeof url !== 'string') {
         throw new Error('Invalid URL provided');
@@ -310,50 +307,46 @@ async function fetchWithAuth(url, options = {}) {
         if (urlObj.origin !== window.location.origin) {
             throw new Error('URL must be from the same origin');
         }
+        const path = urlObj.pathname + urlObj.search + urlObj.hash;
+
+        let token = localStorage.getItem('access_token');
+        if (!options.headers) options.headers = {};
+        if (token) options.headers['Authorization'] = 'Bearer ' + token;
+
+        let response = await ultraSafeFetch(path, options);
+
+        if (response.status === 401) {
+            const refresh = localStorage.getItem('refresh_token');
+            if (refresh) {
+                const refreshResp = await fetch('/authentication/token/refresh/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh })
+                });
+                if (refreshResp.ok) {
+                    const data = await refreshResp.json();
+                    localStorage.setItem('access_token', data.access);
+                    options.headers['Authorization'] = 'Bearer ' + data.access;
+                    return ultraSafeFetch(path, options);
+                } else {
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
+                    window.location.replace('/users/login/');
+                    return response;
+                }
+            }
+        }
+        return response;
     } catch (e) {
         throw new Error('Invalid URL format');
     }
-
-    let token = localStorage.getItem('access_token');
-    if (!options.headers) options.headers = {};
-    if (token) options.headers['Authorization'] = 'Bearer ' + token;
-
-    let response = await safeFetch(url, options);
-
-    if (response.status === 401) {
-        // Попробовать обновить access token
-        const refresh = localStorage.getItem('refresh_token');
-        if (refresh) {
-            const refreshResp = await fetch('/authentication/token/refresh/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh })
-            });
-            if (refreshResp.ok) {
-                const data = await refreshResp.json();
-                localStorage.setItem('access_token', data.access);
-                // Повторить исходный запрос с новым access token
-                options.headers['Authorization'] = 'Bearer ' + data.access;
-                return safeFetch(url, options);
-            } else {
-                // refresh тоже невалиден — разлогинить пользователя
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
-                window.location.replace('/users/login/');
-                return response;
-            }
-        }
-    }
-    return response;
 }
 
-// --- Check and refresh tokens on page load ---
 async function checkAndRefreshTokensOnLoad() {
     const access = localStorage.getItem('access_token');
     const refresh = localStorage.getItem('refresh_token');
 
-    // Если нет токенов, нечего проверять
     if (!access || !refresh) {
         console.log('Токены не найдены в localStorage');
         return;
@@ -370,7 +363,6 @@ async function checkAndRefreshTokensOnLoad() {
 
     console.log(`Токен истечёт через ${secondsLeft} секунд`);
 
-    // Если токен истёк или истечёт в ближайшие 5 минут, обновляем его
     if (secondsLeft <= 300) {
         console.log('Обновляем токены...');
         try {
@@ -422,10 +414,8 @@ function scheduleAccessTokenRefresh() {
 
     const now = Math.floor(Date.now() / 1000);
     const secondsLeft = payload.exp - now;
-    // Обновлять за 30 секунд до истечения
     const refreshIn = (secondsLeft - 30) * 1000;
     if (refreshIn <= 0) {
-        // Уже истёк — обновить сразу
         doRefreshToken();
     } else {
         setTimeout(doRefreshToken, refreshIn);
@@ -448,7 +438,6 @@ async function doRefreshToken() {
         if (resp.ok) {
             const data = await resp.json();
             localStorage.setItem('access_token', data.access);
-            // Если refresh token тоже обновился, сохраняем его
             if (data.refresh) {
                 localStorage.setItem('refresh_token', data.refresh);
             }
@@ -458,8 +447,6 @@ async function doRefreshToken() {
             console.log('Ошибка при обновлении токенов, очищаем сессию');
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
-            // Показываем alert только если пользователь активно использует приложение
-            // (например, при попытке выполнить действие)
             if (document.hasFocus()) {
                 alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
                 window.location.replace('/users/login/');
@@ -467,15 +454,11 @@ async function doRefreshToken() {
         }
     } catch (e) {
         console.log('Сетевая ошибка при обновлении токенов:', e);
-        // При сетевой ошибке пробуем ещё раз через 10 секунд
         setTimeout(doRefreshToken, 10000);
     }
 }
 
-// Запускаем проверку токенов при загрузке страницы
 document.addEventListener('DOMContentLoaded', function () {
-    // Проверяем и обновляем токены при загрузке страницы
     checkAndRefreshTokensOnLoad();
-    // Планируем следующее обновление
     scheduleAccessTokenRefresh();
 });
