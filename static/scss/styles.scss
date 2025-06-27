@@ -9,6 +9,14 @@ $table-striped-bg: #d1f5e0 !important;
 @import "fonts";
 @import "mobile";
 
+.header {
+    position: relative;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1500;
+}
+
 #income-table table thead th {
     position: sticky;
     top: 0;
@@ -21,6 +29,7 @@ $table-striped-bg: #d1f5e0 !important;
     overflow-x: auto;
     max-height: 500px;
 }
+
 html, body {
     width: 100% !important;
     height: 100% !important;

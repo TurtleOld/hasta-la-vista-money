@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+{% load static %}
+{% load comma %}
+
+{% block title %}{% translate 'Детальная статистика' %} - {{ user.username }}{% endblock %}
+
+{% block content %}
+    <div class="container-fluid">
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="bi bi-graph-up"></i> {% translate 'Детальная статистика' %}</h2>
+                    <a href="{% url 'users:profile' user.id %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i> {% translate 'Назад к профилю' %}
+                    </a>
+                </div>
+            </div>
+
+            <!-- График доходов и расходов -->
+            <div class="col-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% translate 'Динамика доходов и расходов (последние 6 месяцев)' %}</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="incomeExpenseChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Топ категорий -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% translate 'Топ категорий расходов за год' %}</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if top_expense_categories %}
+                            <div class="list-group list-group-flush">
+                                {% for category in top_expense_categories %}
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span>{{ category.category__name }}</span>
+                                        <span class="badge bg-danger rounded-pill">
+                                            {{ category.total|floatformat:2 }} ₽
+                                        </span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">{% translate 'Нет данных о расходах' %}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% translate 'Топ категорий доходов за год' %}</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if top_income_categories %}
+                            <div class="list-group list-group-flush">
+                                {% for category in top_income_categories %}
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span>{{ category.category__name }}</span>
+                                        <span class="badge bg-success rounded-pill">
+                                            {{ category.total|floatformat:2 }} ₽
+                                        </span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">{% translate 'Нет данных о доходах' %}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Таблица с данными -->
+            <div class="col-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% translate 'Месячная статистика' %}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>{% translate 'Месяц' %}</th>
+                                        <th>{% translate 'Доходы' %}</th>
+                                        <th>{% translate 'Расходы' %}</th>
+                                        <th>{% translate 'Сбережения' %}</th>
+                                        <th>{% translate 'Процент сбережений' %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for month in months_data %}
+                                        <tr>
+                                            <td>{{ month.month }}</td>
+                                            <td class="text-success">{{ month.income|floatformat:2 }} ₽</td>
+                                            <td class="text-danger">{{ month.expenses|floatformat:2 }} ₽</td>
+                                            <td class="{% if month.savings >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                {{ month.savings|floatformat:2 }} ₽
+                                            </td>
+                                            <td>
+                                                {% if month.income > 0 %}
+                                                    <span class="badge {% if month.savings >= 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                                        {{ month.savings_percent|floatformat:1 }}%
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">-</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script nonce="{{ request.csp_nonce }}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script nonce="{{ request.csp_nonce }}">
+        // Данные для графика
+        const monthsData = {{ months_data|safe }};
+        
+        const ctx = document.getElementById('incomeExpenseChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: monthsData.map(item => item.month),
+                datasets: [{
+                    label: '{% translate "Доходы" %}',
+                    data: monthsData.map(item => item.income),
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }, {
+                    label: '{% translate "Расходы" %}',
+                    data: monthsData.map(item => item.expenses),
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    tension: 0.1
+                }, {
+                    label: '{% translate "Сбережения" %}',
+                    data: monthsData.map(item => item.savings),
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: '{% translate "Динамика финансов за последние 6 месяцев" %}'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString() + ' ₽';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+    <style>
+        .card {
+            border: none;
+            border-radius: 15px;
+        }
+        .table th {
+            border-top: none;
+            font-weight: 600;
+        }
+        .badge {
+            font-size: 0.8em;
+        }
+    </style>
+{% endblock %} 

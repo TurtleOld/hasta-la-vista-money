@@ -119,10 +119,9 @@ class IncomeView(
         total_amount_page = sum(income["amount"] for income in pages_income)
         total_amount_period = sum(income["amount"] for income in income_by_month)
 
-        # Для графика: сгруппировать доходы по месяцам
         monthly_data = OrderedDict()
-        for income in income_by_month:
-            # income['date'] может быть датой или строкой
+        sorted_incomes = sorted(income_by_month, key=lambda x: x["date"])
+        for income in sorted_incomes:
             date_val = income["date"]
             if isinstance(date_val, str):
                 try:
