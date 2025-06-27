@@ -1,3 +1,26 @@
+$table-hover-bg: #d1f5e0 !important;
+$table-striped-bg: #d1f5e0 !important;
+
+@import "bootstrap/bootstrap";
+
+@import "account";
+@import "upload";
+@import "buttons";
+@import "fonts";
+@import "mobile";
+
+#income-table table thead th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 2;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.04);
+}
+
+#income-table.table-responsive {
+    overflow-x: auto;
+    max-height: 500px;
+}
 html, body {
     width: 100% !important;
     height: 100% !important;
@@ -436,12 +459,6 @@ table {
         border-color: #198754;
     }
 }
-
-@import "account";
-@import "upload";
-@import "buttons";
-@import "fonts" ;
-@import "mobile";
 
 .sticky-filter {
     position: sticky;

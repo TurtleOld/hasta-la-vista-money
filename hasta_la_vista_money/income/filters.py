@@ -9,11 +9,11 @@ class IncomeFilter(django_filters.FilterSet):
     category = django_filters.ModelChoiceFilter(
         queryset=IncomeCategory.objects.all(),
         field_name='category',
-        label=_('Категория'),
+        label='',
         widget=Select(attrs={'class': 'form-control mb-2'}),
     )
     date = django_filters.DateFromToRangeFilter(
-        label=_('Период'),
+        label='',
         widget=django_filters.widgets.RangeWidget(
             attrs={
                 'class': 'form-control',
@@ -23,7 +23,7 @@ class IncomeFilter(django_filters.FilterSet):
     )
     account = django_filters.ModelChoiceFilter(
         queryset=Account.objects.all(),
-        label=_('Счёт'),
+        label='',
         widget=Select(attrs={'class': 'form-control mb-4'}),
     )
 

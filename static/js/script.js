@@ -468,3 +468,4 @@ document.addEventListener('DOMContentLoaded', function () {
     checkAndRefreshTokensOnLoad();
     scheduleAccessTokenRefresh();
 });
+

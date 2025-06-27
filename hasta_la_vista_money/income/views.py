@@ -33,6 +33,10 @@ from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+from collections import OrderedDict
+from django.utils import formats
+import calendar
+from datetime import datetime
 
 
 class BaseView:
@@ -112,13 +116,37 @@ class IncomeView(
             'income',
         )
 
+        total_amount_page = sum(income["amount"] for income in pages_income)
+        total_amount_period = sum(income["amount"] for income in income_by_month)
+
+        # Для графика: сгруппировать доходы по месяцам
+        monthly_data = OrderedDict()
+        for income in income_by_month:
+            # income['date'] может быть датой или строкой
+            date_val = income["date"]
+            if isinstance(date_val, str):
+                try:
+                    date_val = datetime.fromisoformat(date_val)
+                except Exception:
+                    continue
+            month_label = formats.date_format(date_val, "F Y")
+            if month_label not in monthly_data:
+                monthly_data[month_label] = 0
+            monthly_data[month_label] += income["amount"]
+        chart_labels = list(monthly_data.keys())
+        chart_values = [float(v) for v in monthly_data.values()]
+
         context.update(
             {
-                'categories': categories,
-                'income_filter': income_filter,
-                'income_by_month': pages_income,
-                'income_form': income_form,
-                'flattened_categories': flattened_categories,
+                "categories": categories,
+                "income_filter": income_filter,
+                "income_by_month": pages_income,
+                "income_form": income_form,
+                "flattened_categories": flattened_categories,
+                "total_amount_page": total_amount_page,
+                "total_amount_period": total_amount_period,
+                "chart_labels": chart_labels,
+                "chart_values": chart_values,
             },
         )
 
