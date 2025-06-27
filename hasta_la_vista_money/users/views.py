@@ -54,7 +54,7 @@ class LoginUser(SuccessMessageMixin, LoginView):
     template_name = 'users/login.html'
     form_class = UserLoginForm
     success_message = constants.SUCCESS_MESSAGE_LOGIN
-    next_page = '/hasta-la-vista-money'
+    next_page = reverse_lazy("applications:list")
     redirect_authenticated_user = True
 
     def get_context_data(self, **kwargs):
@@ -81,7 +81,16 @@ class LoginUser(SuccessMessageMixin, LoginView):
             tokens = RefreshToken.for_user(user)
             self.jwt_access_token = str(tokens.access_token)
             self.jwt_refresh_token = str(tokens)
-            return super().form_valid(form)
+            messages.success(self.request, self.success_message)
+            if self.request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return JsonResponse(
+                    {
+                        "access": self.jwt_access_token,
+                        "refresh": self.jwt_refresh_token,
+                        "redirect_url": self.get_success_url(),
+                    }
+                )
+            return redirect(self.get_success_url())
         messages.error(self.request, _('Неправильный логин или пароль!'))
         return self.form_invalid(form)
 

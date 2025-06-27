@@ -19,7 +19,6 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import (
     CreateView,
     DeleteView,
-    DetailView,
     FormView,
     ListView,
 )
@@ -187,6 +186,7 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
                 self.request,
                 _(constants.RECEIPT_ALREADY_EXISTS),
             )
+            return False
         else:
             self.create_receipt(
                 self.request,
@@ -198,7 +198,7 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
                 self.request,
                 constants.SUCCESS_MESSAGE_CREATE_RECEIPT,
             )
-            return {'success': True}
+            return True
 
     def setup(self, request, *args, **kwargs):
         self.request = request
@@ -206,6 +206,7 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context['receipt_form'] = self.get_form()
         context['product_formset'] = ProductFormSet()
         return context
 
@@ -215,20 +216,20 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
 
         valid_form = form.is_valid() and product_formset.is_valid()
         if valid_form:
-            response_data = self.form_valid_receipt(
+            success = self.form_valid_receipt(
                 receipt_form=form,
                 product_formset=product_formset,
                 seller=seller,
             )
+            if success:
+                return super().form_valid(form)
+            else:
+                return self.form_invalid(form)
         else:
-            response_data = {
-                'success': False,
-                'errors': product_formset.errors,
-            }
-        return JsonResponse(response_data)
+            return self.form_invalid(form)
 
 
-class ReceiptDeleteView(LoginRequiredMixin, BaseView, DetailView, DeleteView):
+class ReceiptDeleteView(LoginRequiredMixin, BaseView, DeleteView):
     model = Receipt
 
     def form_valid(self, form):

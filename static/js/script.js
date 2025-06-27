@@ -93,33 +93,33 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- AJAX filter submit for receipts filter ---
-    // const filterForm = document.getElementById('receipts-filter-form');
-    // if (filterForm) {
-    //     filterForm.addEventListener('submit', function (e) {
-    //         e.preventDefault();
-    //         const formData = new FormData(filterForm);
-    //         const params = new URLSearchParams();
-    //         for (const [key, value] of formData.entries()) {
-    //             if (value) params.append(key, value);
-    //         }
-    //         fetch(window.location.pathname + '?' + params.toString(), {
-    //             headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    //         })
-    //             .then(response => response.text())
-    //             .then(html => {
-    //                 // Обновляем только список чеков (контейнер после фильтра)
-    //                 const parser = new DOMParser();
-    //                 const doc = parser.parseFromString(html, 'text/html');
-    //                 const newContent = doc.querySelector('.container');
-    //                 if (newContent) {
-    //                     document.querySelector('.container').replaceWith(newContent);
-    //                 } else {
-    //                     window.location.reload();
-    //                 }
-    //             });
-    //     });
-    // }
+
+    const loginForm = document.querySelector('form.form');
+    if (loginForm && window.location.pathname.includes('login')) {
+        loginForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const formData = new FormData(loginForm);
+            const response = await fetch(loginForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (response.headers.get('content-type')?.includes('application/json')) {
+                const data = await response.json();
+                if (data.access && data.refresh && data.redirect_url) {
+                    localStorage.setItem('access_token', data.access);
+                    localStorage.setItem('refresh_token', data.refresh);
+                    window.location = data.redirect_url;
+                } else {
+                    // Ошибка: показать сообщение
+                    alert('Ошибка входа. Проверьте логин и пароль.');
+                }
+            } else {
+                // Если не JSON (например, обычный HTML), fallback: reload
+                window.location.reload();
+            }
+        });
+    }
 });
 
 window.setTimeout(function() {
@@ -247,6 +247,57 @@ async function fetchWithAuth(url, options = {}) {
     return response;
 }
 
+// --- Check and refresh tokens on page load ---
+async function checkAndRefreshTokensOnLoad() {
+    const access = localStorage.getItem('access_token');
+    const refresh = localStorage.getItem('refresh_token');
+
+    // Если нет токенов, нечего проверять
+    if (!access || !refresh) {
+        console.log('Токены не найдены в localStorage');
+        return;
+    }
+
+    const payload = parseJwt(access);
+    if (!payload || !payload.exp) {
+        console.log('Не удалось декодировать access token');
+        return;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const secondsLeft = payload.exp - now;
+
+    console.log(`Токен истечёт через ${secondsLeft} секунд`);
+
+    // Если токен истёк или истечёт в ближайшие 5 минут, обновляем его
+    if (secondsLeft <= 300) {
+        console.log('Обновляем токены...');
+        try {
+            const resp = await fetch('/authentication/token/refresh/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh })
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                localStorage.setItem('access_token', data.access);
+                if (data.refresh) {
+                    localStorage.setItem('refresh_token', data.refresh);
+                }
+                console.log('Токены обновлены автоматически');
+            } else {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                console.log('Сессия истекла, токены очищены');
+            }
+        } catch (e) {
+            console.log('Ошибка при обновлении токенов:', e);
+        }
+    } else {
+        console.log('Токен ещё действителен, обновление не требуется');
+    }
+}
+
 function parseJwt(token) {
     try {
         const base64Url = token.split('.')[1];
@@ -282,8 +333,12 @@ function scheduleAccessTokenRefresh() {
 
 async function doRefreshToken() {
     const refresh = localStorage.getItem('refresh_token');
-    if (!refresh) return;
+    if (!refresh) {
+        console.log('Refresh token не найден');
+        return;
+    }
     try {
+        console.log('Выполняем плановое обновление токенов...');
         const resp = await fetch('/authentication/token/refresh/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -292,16 +347,34 @@ async function doRefreshToken() {
         if (resp.ok) {
             const data = await resp.json();
             localStorage.setItem('access_token', data.access);
+            // Если refresh token тоже обновился, сохраняем его
+            if (data.refresh) {
+                localStorage.setItem('refresh_token', data.refresh);
+            }
+            console.log('Токены успешно обновлены');
             scheduleAccessTokenRefresh();
         } else {
+            console.log('Ошибка при обновлении токенов, очищаем сессию');
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
-            alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
-            window.location.href = '/users/login/';
+            // Показываем alert только если пользователь активно использует приложение
+            // (например, при попытке выполнить действие)
+            if (document.hasFocus()) {
+                alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
+                window.location.href = '/users/login/';
+            }
         }
     } catch (e) {
+        console.log('Сетевая ошибка при обновлении токенов:', e);
+        // При сетевой ошибке пробуем ещё раз через 10 секунд
         setTimeout(doRefreshToken, 10000);
     }
 }
 
-document.addEventListener('DOMContentLoaded', scheduleAccessTokenRefresh);
+// Запускаем проверку токенов при загрузке страницы
+document.addEventListener('DOMContentLoaded', function () {
+    // Проверяем и обновляем токены при загрузке страницы
+    checkAndRefreshTokensOnLoad();
+    // Планируем следующее обновление
+    scheduleAccessTokenRefresh();
+});

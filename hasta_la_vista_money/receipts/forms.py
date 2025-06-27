@@ -54,29 +54,29 @@ class ReceiptFilter(django_filters.FilterSet):
         widget=Select(attrs={'class': 'form-control mb-4'}),
     )
     total_sum_min = django_filters.NumberFilter(
-        field_name="total_sum",
-        lookup_expr="gte",
+        field_name='total_sum',
+        lookup_expr='gte',
         label='',
         widget=NumberInput(
-            attrs={"class": "form-control", "placeholder": _("Сумма от")}
+            attrs={'class': 'form-control', 'placeholder': _('Сумма от')}
         ),
     )
     total_sum_max = django_filters.NumberFilter(
-        field_name="total_sum",
-        lookup_expr="lte",
+        field_name='total_sum',
+        lookup_expr='lte',
         label='',
         widget=NumberInput(
-            attrs={"class": "form-control", "placeholder": _("Сумма до")}
+            attrs={'class': 'form-control', 'placeholder': _('Сумма до')}
         ),
     )
     product_name = django_filters.CharFilter(
-        method="filter_by_product_name",
+        method='filter_by_product_name',
         label='',
         widget=TextInput(
             attrs={
-                "class": "form-control",
-                "autocomplete": "off",
-                "placeholder": _("Введите товар"),
+                'class': 'form-control',
+                'autocomplete': 'off',
+                'placeholder': _('Введите товар'),
             }
         ),
     )
@@ -112,12 +112,12 @@ class ReceiptFilter(django_filters.FilterSet):
     class Meta:
         model = Receipt
         fields = [
-            "name_seller",
-            "receipt_date",
-            "account",
-            "total_sum_min",
-            "total_sum_max",
-            "product_name",
+            'name_seller',
+            'receipt_date',
+            'account',
+            'total_sum_min',
+            'total_sum_max',
+            'product_name',
         ]
 
 

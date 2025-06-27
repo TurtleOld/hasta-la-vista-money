@@ -135,29 +135,29 @@ class SellerAutocompleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
-        query = request.GET.get("q", "").strip()
+        query = request.GET.get('q', '').strip()
         sellers = Seller.objects.filter(user=request.user)
         if query:
             sellers = sellers.filter(name_seller__icontains=query)
         sellers = (
-            sellers.order_by("name_seller")
-            .values_list("name_seller", flat=True)
+            sellers.order_by('name_seller')
+            .values_list('name_seller', flat=True)
             .distinct()[:10]
         )
-        return Response({"results": list(sellers)})
+        return Response({'results': list(sellers)})
 
 
 class ProductAutocompleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
-        query = request.GET.get("q", "").strip()
+        query = request.GET.get('q', '').strip()
         products = Product.objects.filter(user=request.user)
         if query:
             products = products.filter(product_name__icontains=query)
         products = (
-            products.order_by("product_name")
-            .values_list("product_name", flat=True)
+            products.order_by('product_name')
+            .values_list('product_name', flat=True)
             .distinct()[:10]
         )
-        return Response({"results": list(products)})
+        return Response({'results': list(products)})
