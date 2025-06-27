@@ -10,11 +10,69 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Autocomplete for product field in receipts filter ---
     const productInput = document.getElementById('product-autocomplete');
-    if (productInput) {
-        let dropdown;
-        let results = [];
-        let currentFocus = -1;
+    let dropdown;
+    let results = [];
+    let currentFocus = -1;
 
+    function showDropdown(items) {
+        if (!productInput) return;
+        closeDropdown();
+        if (!items.length) return;
+        dropdown = document.createElement('div');
+        dropdown.className = 'dropdown-menu show w-100';
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = productInput.offsetTop + productInput.offsetHeight + 'px';
+        dropdown.style.left = productInput.offsetLeft + 'px';
+        dropdown.style.zIndex = 1051;
+        items.forEach(item => {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'dropdown-item';
+            option.textContent = item;
+            option.onclick = function () {
+                if (productInput) {
+                    productInput.value = item;
+                }
+                closeDropdown();
+            };
+            dropdown.appendChild(option);
+        });
+        if (productInput.parentNode) {
+            productInput.parentNode.appendChild(dropdown);
+        }
+        currentFocus = -1;
+    }
+
+    function closeDropdown() {
+        if (dropdown) dropdown.remove();
+        dropdown = null;
+        currentFocus = -1;
+    }
+
+    function addActive(items) {
+        if (!items.length) return;
+        removeActive(items);
+
+        // Валидация currentFocus для предотвращения Generic Object Injection Sink
+        if (typeof currentFocus !== 'number' || isNaN(currentFocus)) {
+            currentFocus = 0;
+        }
+
+        if (currentFocus >= items.length) currentFocus = 0;
+        if (currentFocus < 0) currentFocus = items.length - 1;
+
+        // Дополнительная проверка, что элемент существует
+        const targetItem = items[currentFocus];
+        if (targetItem && typeof targetItem.classList !== 'undefined') {
+            targetItem.classList.add('active');
+        }
+    }
+
+    function removeActive(items) {
+        items.forEach(item => item.classList.remove('active'));
+    }
+
+    if (productInput) {
         productInput.addEventListener('input', async function () {
             const query = this.value.trim();
             if (query.length < 2) {
@@ -36,15 +94,29 @@ document.addEventListener('DOMContentLoaded', function() {
         productInput.addEventListener('keydown', function (e) {
             const items = dropdown ? dropdown.querySelectorAll('.dropdown-item') : [];
             if (e.key === 'ArrowDown') {
+                // Валидация currentFocus перед изменением
+                if (typeof currentFocus !== 'number' || isNaN(currentFocus)) {
+                    currentFocus = -1;
+                }
                 currentFocus++;
                 addActive(items);
             } else if (e.key === 'ArrowUp') {
+                // Валидация currentFocus перед изменением
+                if (typeof currentFocus !== 'number' || isNaN(currentFocus)) {
+                    currentFocus = items.length;
+                }
                 currentFocus--;
                 addActive(items);
             } else if (e.key === 'Enter') {
                 e.preventDefault();
-                if (currentFocus > -1 && items[currentFocus]) {
-                    items[currentFocus].click();
+
+                // Валидация currentFocus для предотвращения Generic Object Injection Sink
+                if (typeof currentFocus === 'number' && !isNaN(currentFocus) &&
+                    currentFocus > -1 && currentFocus < items.length) {
+                    const targetItem = items[currentFocus];
+                    if (targetItem && typeof targetItem.click === 'function') {
+                        targetItem.click();
+                    }
                 }
             }
         });
@@ -52,45 +124,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.addEventListener('click', function (e) {
             if (e.target !== productInput) closeDropdown();
         });
-
-        function showDropdown(items) {
-            closeDropdown();
-            if (!items.length) return;
-            dropdown = document.createElement('div');
-            dropdown.className = 'dropdown-menu show w-100';
-            dropdown.style.position = 'absolute';
-            dropdown.style.top = productInput.offsetTop + productInput.offsetHeight + 'px';
-            dropdown.style.left = productInput.offsetLeft + 'px';
-            dropdown.style.zIndex = 1051;
-            items.forEach(item => {
-                const option = document.createElement('button');
-                option.type = 'button';
-                option.className = 'dropdown-item';
-                option.textContent = item;
-                option.onclick = function () {
-                    productInput.value = item;
-                    closeDropdown();
-                };
-                dropdown.appendChild(option);
-            });
-            productInput.parentNode.appendChild(dropdown);
-            currentFocus = -1;
-        }
-        function closeDropdown() {
-            if (dropdown) dropdown.remove();
-            dropdown = null;
-            currentFocus = -1;
-        }
-        function addActive(items) {
-            if (!items.length) return;
-            removeActive(items);
-            if (currentFocus >= items.length) currentFocus = 0;
-            if (currentFocus < 0) currentFocus = items.length - 1;
-            items[currentFocus].classList.add('active');
-        }
-        function removeActive(items) {
-            items.forEach(item => item.classList.remove('active'));
-        }
     }
 
 
@@ -98,8 +131,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (loginForm && window.location.pathname.includes('login')) {
         loginForm.addEventListener('submit', async function (e) {
             e.preventDefault();
+
+            // Валидация URL формы для предотвращения SSRF
+            const formAction = loginForm.action;
+            if (!formAction || typeof formAction !== 'string') {
+                alert('Ошибка: неверный URL формы');
+                return;
+            }
+
+            try {
+                const urlObj = new URL(formAction, window.location.origin);
+                if (urlObj.origin !== window.location.origin) {
+                    alert('Ошибка: неверный URL формы');
+                    return;
+                }
+            } catch (e) {
+                alert('Ошибка: неверный формат URL');
+                return;
+            }
+
             const formData = new FormData(loginForm);
-            const response = await fetch(loginForm.action, {
+            const response = await fetch(formAction, {
                 method: 'POST',
                 body: formData,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -109,7 +161,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.access && data.refresh && data.redirect_url) {
                     localStorage.setItem('access_token', data.access);
                     localStorage.setItem('refresh_token', data.refresh);
-                    window.location = data.redirect_url;
+
+                    // Валидация redirect_url для предотвращения XSS
+                    try {
+                        const redirectUrl = new URL(data.redirect_url, window.location.origin);
+                        if (redirectUrl.origin !== window.location.origin) {
+                            alert('Ошибка: неверный URL редиректа');
+                            return;
+                        }
+                        window.location.replace(redirectUrl.pathname + redirectUrl.search + redirectUrl.hash);
+                    } catch (e) {
+                        alert('Ошибка: неверный формат URL редиректа');
+                        return;
+                    }
                 } else {
                     // Ошибка: показать сообщение
                     alert('Ошибка входа. Проверьте логин и пароль.');
@@ -213,6 +277,18 @@ function onClickRemoveObject() {
 
 // --- JWT fetch with refresh support ---
 async function fetchWithAuth(url, options = {}) {
+    if (!url || typeof url !== 'string') {
+        throw new Error('Invalid URL provided');
+    }
+    try {
+        const urlObj = new URL(url, window.location.origin);
+        if (urlObj.origin !== window.location.origin) {
+            throw new Error('URL must be from the same origin');
+        }
+    } catch (e) {
+        throw new Error('Invalid URL format');
+    }
+
     let token = localStorage.getItem('access_token');
     if (!options.headers) options.headers = {};
     if (token) options.headers['Authorization'] = 'Bearer ' + token;
@@ -239,7 +315,7 @@ async function fetchWithAuth(url, options = {}) {
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
                 alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
-                window.location.href = '/users/login/';
+                window.location.replace('/users/login/');
                 return response;
             }
         }
@@ -361,7 +437,7 @@ async function doRefreshToken() {
             // (например, при попытке выполнить действие)
             if (document.hasFocus()) {
                 alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
-                window.location.href = '/users/login/';
+                window.location.replace('/users/login/');
             }
         }
     } catch (e) {
