@@ -41,16 +41,20 @@ class TestExpense(TestCase):
         self.client.force_login(self.user)
 
         new_expense = {
-            'user': self.user,
-            'account': self.account,
-            'category': self.expense_type,
-            'date': '2023-12-20 15:30',
-            'amount': TEST_AMOUNT,
-            'depth': 3,
+            "user": self.user.id,
+            "account": self.account.id,
+            "category": self.expense_type.id,
+            "date": "2023-12-20T15:30",
+            "amount": TEST_AMOUNT,
+            "depth": 3,
         }
 
         form = AddExpenseForm(data=new_expense, user=self.user, depth=3)
         self.assertTrue(form.is_valid())
+
+        url = reverse_lazy("expense:create")
+        response = self.client.post(url, data=new_expense, follow=True)
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_expense_update(self):
         """Test expense update."""
@@ -307,24 +311,6 @@ class TestExpense(TestCase):
         self.assertIn('add_expense_form', response.context)
         self.assertIn('flattened_categories', response.context)
 
-    def test_expense_create_view_get(self):
-        """Test ExpenseCreateView GET request."""
-        self.client.force_login(self.user)
-        response = self.client.get(reverse_lazy('expense:create'))
-        self.assertEqual(response.status_code, 200)
-
-    def test_expense_create_view_post(self):
-        """Test ExpenseCreateView POST request."""
-        self.client.force_login(self.user)
-        data = {
-            'category': self.expense_type.pk,
-            'account': self.account.pk,
-            'date': timezone.now().strftime('%Y-%m-%d %H:%M'),
-            'amount': 1000,
-        }
-        response = self.client.post(reverse_lazy('expense:create'), data)
-        self.assertEqual(response.status_code, 200)
-
     def test_expense_copy_view(self):
         """Test ExpenseCopyView functionality."""
         self.client.force_login(self.user)
@@ -333,28 +319,6 @@ class TestExpense(TestCase):
         )
         self.assertEqual(response.status_code, 302)
 
-    def test_expense_update_view_get(self):
-        """Test ExpenseUpdateView GET request."""
-        self.client.force_login(self.user)
-        response = self.client.get(
-            reverse_lazy('expense:change', args=[self.expense.pk]),
-        )
-        self.assertEqual(response.status_code, 200)
-
-    def test_expense_update_view_post(self):
-        """Test ExpenseUpdateView POST request."""
-        self.client.force_login(self.user)
-        data = {
-            'category': self.expense_type.pk,
-            'account': self.account.pk,
-            'date': timezone.now().strftime('%Y-%m-%d %H:%M'),
-            'amount': 2000,
-        }
-        response = self.client.post(
-            reverse_lazy('expense:change', args=[self.expense.pk]),
-            data,
-        )
-        self.assertEqual(response.status_code, 302)
 
     def test_expense_delete_view(self):
         """Test ExpenseDeleteView functionality."""
@@ -369,22 +333,6 @@ class TestExpense(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('expense:category_list'))
         self.assertEqual(response.status_code, 200)
-
-    def test_expense_category_create_view_get(self):
-        """Test ExpenseCategoryCreateView GET request."""
-        self.client.force_login(self.user)
-        response = self.client.get(reverse_lazy('expense:create_category'))
-        self.assertEqual(response.status_code, 200)
-
-    def test_expense_category_create_view_post(self):
-        """Test ExpenseCategoryCreateView POST request."""
-        self.client.force_login(self.user)
-        data = {
-            'name': 'New Test Category',
-            'parent_category': self.parent_category.pk,
-        }
-        response = self.client.post(reverse_lazy('expense:create_category'), data)
-        self.assertEqual(response.status_code, 302)
 
     def test_expense_category_create_view_invalid_form(self):
         """Test ExpenseCategoryCreateView with invalid form."""

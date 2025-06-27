@@ -45,17 +45,17 @@ class TestIncome(TestCase):
         url = reverse_lazy('income:create')
 
         new_income = {
-            'user': self.user,
-            'account': self.account,
-            'category': self.income_type,
-            'date': '2023-12-20 15:30',
-            'amount': TEST_AMOUNT,
+            "user": self.user.id,
+            "account": self.account.id,
+            "category": self.income_type.id,
+            "date": "2023-12-20 15:30",
+            "amount": TEST_AMOUNT,
         }
 
         form = IncomeForm(data=new_income, user=self.user, depth=3)
         self.assertTrue(form.is_valid())
 
-        response = self.client.post(url, data=form.data, follow=True)
+        response = self.client.post(url, data=new_income, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_update(self):

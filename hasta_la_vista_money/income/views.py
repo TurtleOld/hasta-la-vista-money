@@ -177,6 +177,10 @@ class IncomeCreateView(
             return JsonResponse(response_data)
         return super().form_valid(form)
 
+    def form_invalid(self, form):
+        # Передаем объект формы в шаблон
+        return self.render_to_response(self.get_context_data(income_form=form))
+
 
 class IncomeCopyView(
     CustomNoPermissionMixin,
