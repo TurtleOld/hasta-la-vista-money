@@ -58,52 +58,41 @@ class TestReceipt(TestCase):
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:create')
 
-        new_product_data = {
-            'user': self.user,
-            'product_name': 'Яблоко',
-            'price': 10,
-            'quantity': 1,
-            'amount': 10,
-            'nds_type': 1,
-            'nds_sum': 1.3,
-        }
-
-        new_product = Product.objects.create(**new_product_data)
-
+        # Создаём необходимые объекты для формы
         new_seller_data = {
             'user': self.user,
             'name_seller': 'ООО Рога и Копыта',
         }
-
         new_seller = Seller.objects.create(**new_seller_data)
 
-        new_receipt_data = {
-            'user': self.user,
-            'account': self.account,
+        form_data = {
+            'seller': new_seller.id,
+            'account': self.account.id,
             'receipt_date': '2023-06-28 21:24',
             'number_receipt': 111,
             'operation_type': 1,
             'total_sum': 10,
-            'seller': new_seller,
+            'form-TOTAL_FORMS': 1,
+            'form-INITIAL_FORMS': 0,
+            'form-MIN_NUM_FORMS': 0,
+            'form-MAX_NUM_FORMS': 1000,
+            'form-0-product_name': 'Яблоко',
+            'form-0-price': 10,
+            'form-0-quantity': 1,
+            'form-0-amount': 10,
+            'form-0-nds_type': 1,
+            'form-0-nds_sum': 1.3,
         }
-        new_receipt = Receipt.objects.create(**new_receipt_data)
-        new_receipt.product.add(new_product)
 
-        form_receipt = ReceiptForm(data=new_receipt_data)
-        self.assertTrue(form_receipt.is_valid())
-
-        response_receipt = self.client.post(url, data=form_receipt.data)
-        self.assertEqual(
-            response_receipt.status_code,
-            constants.SUCCESS_CODE,
-        )
+        response = self.client.post(url, data=form_data)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_receipt_delete(self):
         """Тест удаления чека."""
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:delete', kwargs={'pk': self.receipt.pk})
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_receipt_list_unauthorized(self):
         """Тест доступа к списку чеков без авторизации."""

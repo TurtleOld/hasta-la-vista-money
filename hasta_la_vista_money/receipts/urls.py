@@ -5,6 +5,8 @@ from hasta_la_vista_money.receipts.apis import (
     ReceiptListAPIView,
     SellerCreateAPIView,
     SellerDetailAPIView,
+    SellerAutocompleteAPIView,
+    ProductAutocompleteAPIView,
 )
 from hasta_la_vista_money.receipts.views import (
     ProductByMonthView,
@@ -59,5 +61,15 @@ urlpatterns = [
         'upload/',
         UploadImageView.as_view(),
         name='upload',
+    ),
+    path(
+        'api/seller-autocomplete/',
+        SellerAutocompleteAPIView.as_view(),
+        name='seller_autocomplete_api',
+    ),
+    path(
+        'api/product-autocomplete/',
+        ProductAutocompleteAPIView.as_view(),
+        name='product_autocomplete_api',
     ),
 ]

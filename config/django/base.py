@@ -96,8 +96,6 @@ MIDDLEWARE = [
     'axes.middleware.AxesMiddleware',
     'django_structlog.middlewares.RequestMiddleware',
 ]
-if os.getenv('DEBUG'):
-    MIDDLEWARE.insert(0, 'kolo.middleware.KoloMiddleware')
 
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
@@ -106,25 +104,27 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Templates
 TEMPLATES = [
     {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [os.path.join(BASE_DIR, "hasta_la_vista_money", "templates")],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.debug",
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [os.path.join(BASE_DIR, 'hasta_la_vista_money', 'templates')],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
             ],
-            "libraries": {
-                "comma": "hasta_la_vista_money.templatags.thousand_comma",
-                "word_hash": "hasta_la_vista_money.templatags.generate_hash",
-                "dict_get": "hasta_la_vista_money.templatags.dict_get",
-                'index': 'hasta_la_vista_money.templatags.index'
+            'libraries': {
+                'comma': 'hasta_la_vista_money.templatags.thousand_comma',
+                'word_hash': 'hasta_la_vista_money.templatags.generate_hash',
+                'dict_get': 'hasta_la_vista_money.templatags.dict_get',
+                'index': 'hasta_la_vista_money.templatags.index',
             },
         },
     },
 ]
+
+CONN_MAX_AGE = 200
 
 # Database
 DATABASES = {
@@ -135,6 +135,7 @@ DATABASES = {
         'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
         'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
         'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        'CONN_MAX_AGE': CONN_MAX_AGE,
     },
 }
 
@@ -195,52 +196,66 @@ additional_script_src = list(
     filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
 )
 CONTENT_SECURITY_POLICY = {
-    'EXCLUDE_URL_PREFIXES': ['/admin'],
-    'DIRECTIVES': {
-        'default-src': [
+    "EXCLUDE_URL_PREFIXES": ["/admin"],
+    "DIRECTIVES": {
+        "default-src": [
             SELF,
             BASE_URL,
-            'https://code.highcharts.com',
-            'https://htmx.org',
-            'https://cdn.jsdelivr.net',
+            "https://code.highcharts.com",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.jsdelivr.net",
         ]
         + additional_script_src,
-        'script-src': [
+        "script-src": [
             SELF,
             NONCE,
             BASE_URL,
-            'https://code.highcharts.com',
-            'https://unpkg.com',
-            'https://htmx.org',
-            'https://cdn.jsdelivr.net',
+            "https://code.highcharts.com",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.jsdelivr.net",
         ]
         + additional_script_src,
-        'img-src': [
+        "img-src": [
             SELF,
             NONCE,
-            'data:',
+            "data:",
             BASE_URL,
+            "https://code.highcharts.com",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.jsdelivr.net",
         ],
-        'style-src': [
+        "style-src": [
             SELF,
             NONCE,
             BASE_URL,
-            'https://code.highcharts.com',
-            'https://htmx.org',
-            'https://cdn.jsdelivr.net',
+            "https://code.highcharts.com",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.jsdelivr.net",
         ]
         + additional_script_src,
-        'font-src': [
+        "font-src": [
             SELF,
             NONCE,
             BASE_URL,
+            "https://code.highcharts.com",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.jsdelivr.net",
         ]
         + additional_script_src,
-        'frame-ancestors': [
+        "frame-ancestors": [
             SELF,
+            "https://code.highcharts.com",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.jsdelivr.net",
         ]
         + additional_script_src,
-        'report_uri': [os.getenv('SENTRY_ENDPOINT')],
+        "report_uri": [os.getenv("SENTRY_ENDPOINT")],
     },
 }
 
@@ -287,8 +302,10 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
     MIDDLEWARE,
 )
 
-ACCESS_TOKEN_LIFETIME = timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', "60")))
-REFRESH_TOKEN_LIFETIME = timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', "7")))
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7'))),
+}
 
 if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
     os.mkdir(os.path.join(BASE_DIR, 'logs'))

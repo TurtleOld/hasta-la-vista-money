@@ -21,4 +21,14 @@
         </form>
     </div>
 
+{% if jwt_access_token and redirect_to %}
+<script nonce="{{request.csp_nonce}}">
+  localStorage.setItem('access_token', '{{ jwt_access_token }}');
+  {% if jwt_refresh_token %}
+  localStorage.setItem('refresh_token', '{{ jwt_refresh_token }}');
+  {% endif %}
+  window.location.href = "{{ redirect_to }}";
+</script>
+{% endif %}
+
 {% endblock %}
