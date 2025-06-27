@@ -62,9 +62,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (currentFocus < 0) currentFocus = items.length - 1;
 
         // Дополнительная проверка, что элемент существует
-        const targetItem = items[currentFocus];
-        if (targetItem && typeof targetItem.classList !== 'undefined') {
-            targetItem.classList.add('active');
+        // Валидация индекса для предотвращения Object Injection Sink
+        if (typeof currentFocus === 'number' && !isNaN(currentFocus) &&
+            currentFocus >= 0 && currentFocus < items.length) {
+            const targetItem = items[currentFocus];
+            if (targetItem && typeof targetItem.classList !== 'undefined') {
+                targetItem.classList.add('active');
+            }
         }
     }
 
@@ -275,6 +279,27 @@ function onClickRemoveObject() {
     });
 }
 
+// --- Safe fetch function to prevent user-controlled URLs ---
+function safeFetch(url, options = {}) {
+    // Дополнительная валидация URL
+    if (!url || typeof url !== 'string') {
+        throw new Error('Invalid URL provided');
+    }
+
+    // Проверяем, что URL относительный или принадлежит нашему домену
+    try {
+        const urlObj = new URL(url, window.location.origin);
+        if (urlObj.origin !== window.location.origin) {
+            throw new Error('URL must be from the same origin');
+        }
+        // Используем только pathname, search и hash для безопасности
+        const safeUrl = urlObj.pathname + urlObj.search + urlObj.hash;
+        return fetch(safeUrl, options);
+    } catch (e) {
+        throw new Error('Invalid URL format');
+    }
+}
+
 // --- JWT fetch with refresh support ---
 async function fetchWithAuth(url, options = {}) {
     if (!url || typeof url !== 'string') {
@@ -293,7 +318,7 @@ async function fetchWithAuth(url, options = {}) {
     if (!options.headers) options.headers = {};
     if (token) options.headers['Authorization'] = 'Bearer ' + token;
 
-    let response = await fetch(url, options);
+    let response = await safeFetch(url, options);
 
     if (response.status === 401) {
         // Попробовать обновить access token
@@ -309,7 +334,7 @@ async function fetchWithAuth(url, options = {}) {
                 localStorage.setItem('access_token', data.access);
                 // Повторить исходный запрос с новым access token
                 options.headers['Authorization'] = 'Bearer ' + data.access;
-                return fetch(url, options);
+                return safeFetch(url, options);
             } else {
                 // refresh тоже невалиден — разлогинить пользователя
                 localStorage.removeItem('access_token');
