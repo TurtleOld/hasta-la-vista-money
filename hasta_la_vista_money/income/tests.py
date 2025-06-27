@@ -45,11 +45,11 @@ class TestIncome(TestCase):
         url = reverse_lazy('income:create')
 
         new_income = {
-            "user": self.user.id,
-            "account": self.account.id,
-            "category": self.income_type.id,
-            "date": "2023-12-20 15:30",
-            "amount": TEST_AMOUNT,
+            'user': self.user.id,
+            'account': self.account.id,
+            'category': self.income_type.id,
+            'date': '2023-12-20 15:30',
+            'amount': TEST_AMOUNT,
         }
 
         form = IncomeForm(data=new_income, user=self.user, depth=3)

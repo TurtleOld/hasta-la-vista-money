@@ -41,18 +41,18 @@ class TestExpense(TestCase):
         self.client.force_login(self.user)
 
         new_expense = {
-            "user": self.user.id,
-            "account": self.account.id,
-            "category": self.expense_type.id,
-            "date": "2023-12-20T15:30",
-            "amount": TEST_AMOUNT,
-            "depth": 3,
+            'user': self.user.id,
+            'account': self.account.id,
+            'category': self.expense_type.id,
+            'date': '2023-12-20T15:30',
+            'amount': TEST_AMOUNT,
+            'depth': 3,
         }
 
         form = AddExpenseForm(data=new_expense, user=self.user, depth=3)
         self.assertTrue(form.is_valid())
 
-        url = reverse_lazy("expense:create")
+        url = reverse_lazy('expense:create')
         response = self.client.post(url, data=new_expense, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
@@ -318,7 +318,6 @@ class TestExpense(TestCase):
             reverse_lazy('expense:expense_copy', args=[self.expense.pk]),
         )
         self.assertEqual(response.status_code, 302)
-
 
     def test_expense_delete_view(self):
         """Test ExpenseDeleteView functionality."""

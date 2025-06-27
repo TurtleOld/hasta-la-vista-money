@@ -1,6 +1,5 @@
 import django_filters
 from django.forms import Select
-from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 

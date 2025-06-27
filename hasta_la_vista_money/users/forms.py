@@ -1,5 +1,5 @@
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.forms import CharField, ModelForm, PasswordInput, EmailField
+from django.forms import CharField, ModelForm, PasswordInput
 from django_stubs_ext.db.models import TypedModelMeta
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
@@ -32,14 +32,14 @@ class UpdateUserForm(ModelForm):
     class Meta:
         model = User
         fields = [
-            "username",
-            "email",
-            "first_name",
-            "last_name",
+            'username',
+            'email',
+            'first_name',
+            'last_name',
         ]
         labels = {
-            "username": "Имя пользователя",
-            "email": "Email",
-            "first_name": "Имя",
-            "last_name": "Фамилия",
+            'username': 'Имя пользователя',
+            'email': 'Email',
+            'first_name': 'Имя',
+            'last_name': 'Фамилия',
         }

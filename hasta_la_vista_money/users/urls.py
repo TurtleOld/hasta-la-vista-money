@@ -12,21 +12,21 @@ from hasta_la_vista_money.users.views import (
 
 app_name = 'users'
 urlpatterns = [
-    path("registration/", CreateUser.as_view(), name="registration"),
-    path("profile/<int:pk>/", ListUsers.as_view(), name="profile"),
+    path('registration/', CreateUser.as_view(), name='registration'),
+    path('profile/<int:pk>/', ListUsers.as_view(), name='profile'),
     path(
-        "profile/password/",
+        'profile/password/',
         SetPasswordUserView.as_view(),
-        name="password",
+        name='password',
     ),
-    path("login/", LoginUser.as_view(), name="login"),
+    path('login/', LoginUser.as_view(), name='login'),
     path(
-        "update_user/<int:pk>",
+        'update_user/<int:pk>',
         UpdateUserView.as_view(),
-        name="update_user",
+        name='update_user',
     ),
-    path("list/user", ListUsers.as_view(), name="list_user"),
-    path("export-data/", ExportUserDataView.as_view(), name="export_data"),
-    path("statistics/", UserStatisticsView.as_view(), name="statistics"),
-    path("notifications/", UserNotificationsView.as_view(), name="notifications"),
+    path('list/user', ListUsers.as_view(), name='list_user'),
+    path('export-data/', ExportUserDataView.as_view(), name='export_data'),
+    path('statistics/', UserStatisticsView.as_view(), name='statistics'),
+    path('notifications/', UserNotificationsView.as_view(), name='notifications'),
 ]
