@@ -267,32 +267,26 @@ function onClickRemoveObject() {
     });
 }
 
-function safeFetch(url, options = {}) {
-    if (!url || typeof url !== 'string') {
-        throw new Error('Invalid URL provided');
-    }
-
-    try {
-        const urlObj = new URL(url, window.location.origin);
-        if (urlObj.origin !== window.location.origin) {
-            throw new Error('URL must be from the same origin');
-        }
-        const safeUrl = urlObj.pathname + urlObj.search + urlObj.hash;
-        return fetch(safeUrl, options);
-    } catch (e) {
-        throw new Error('Invalid URL format');
-    }
-}
-
 function ultraSafeFetch(path, options = {}) {
     if (!path || typeof path !== 'string') {
         throw new Error('Invalid path provided');
     }
 
-    const cleanPath = path.replace(/[^a-zA-Z0-9\-_\/\.\?=&]/g, '');
+    const cleanPath = path.replace(/[^a-zA-Z0-9\-_/.?=&]/g, '');
 
     if (!cleanPath.startsWith('/')) {
         throw new Error('Path must start with /');
+    }
+
+    const allowedPaths = [
+        '/receipts/api/product-autocomplete/',
+        '/authentication/token/refresh/',
+        '/users/login/'
+    ];
+
+    const isAllowed = allowedPaths.some(allowedPath => cleanPath.startsWith(allowedPath));
+    if (!isAllowed) {
+        throw new Error('Path not allowed');
     }
 
     return fetch(cleanPath, options);
