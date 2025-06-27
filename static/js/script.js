@@ -289,7 +289,19 @@ function ultraSafeFetch(path, options = {}) {
         throw new Error('Path not allowed');
     }
 
-    return fetch(cleanPath, options);
+    const safeFetch = (url, opts) => {
+        if (url === '/receipts/api/product-autocomplete/') {
+            return fetch('/receipts/api/product-autocomplete/', opts);
+        } else if (url === '/authentication/token/refresh/') {
+            return fetch('/authentication/token/refresh/', opts);
+        } else if (url === '/users/login/') {
+            return fetch('/users/login/', opts);
+        } else {
+            throw new Error('Unsafe URL detected');
+        }
+    };
+
+    return safeFetch(cleanPath, options);
 }
 
 async function fetchWithAuth(url, options = {}) {
