@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, update_session_auth_hash
@@ -452,12 +452,10 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             .order_by('-total')[:10]
         )
 
-        # Статистика по чекам
         from hasta_la_vista_money.commonlogic.views import collect_info_receipt
 
         receipt_info_by_month = collect_info_receipt(user=user)
 
-        # Статистика доходов и расходов
         from hasta_la_vista_money.finance_account.prepare import (
             collect_info_expense,
             collect_info_income,
@@ -530,46 +528,46 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
 
         # Объединение уникальных дат
         all_dates = sorted(set(expense_dates + income_dates))
-        expense_series_data = [
-            expense_amounts[expense_dates.index(date)] if date in expense_dates else 0
-            for date in all_dates
-        ]
-        income_series_data = [
-            income_amounts[income_dates.index(date)] if date in income_dates else 0
-            for date in all_dates
-        ]
 
-        # Создание данных для графика
-        chart_combined = {
-            'chart': {
-                'type': 'line',
-                'borderColor': '#000000',
-                'borderWidth': 1,
-                'height': 300,
-            },
-            'title': {'text': _('Аналитика доходов и расходов')},
-            'xAxis': [
-                {
-                    'categories': all_dates,
-                    'title': {'text': _('Дата')},
-                },
-            ],
-            'yAxis': {'title': {'text': _('Сумма')}},
-            'series': [
-                {
-                    'name': _('Расходы'),
-                    'data': expense_series_data,
-                    'color': 'red',
-                },
-                {
-                    'name': _('Доходы'),
-                    'data': income_series_data,
-                    'color': 'green',
-                },
-            ],
-            'credits': {'enabled': False},
-            'exporting': {'enabled': False},
-        }
+        # Если данных нет, создаем пустой график
+        if not all_dates:
+            chart_combined = {
+                'labels': [],
+                'expense_data': [],
+                'income_data': [],
+            }
+        else:
+            expense_series_data = [
+                expense_amounts[expense_dates.index(date)]
+                if date in expense_dates
+                else 0
+                for date in all_dates
+            ]
+            income_series_data = [
+                income_amounts[income_dates.index(date)] if date in income_dates else 0
+                for date in all_dates
+            ]
+
+            if len(all_dates) == 1:
+                # Добавляем предыдущий день
+                single_date = datetime.strptime(all_dates[0], '%Y-%m-%d')
+                prev_date = (single_date - timedelta(days=1)).strftime('%Y-%m-%d')
+
+                all_dates = [prev_date] + all_dates
+                expense_series_data = [0] + expense_series_data
+                income_series_data = [0] + income_series_data
+
+                print('Добавлена дополнительная точка данных')
+                print(f'Новые даты: {all_dates}')
+                print(f'Новые расходы: {expense_series_data}')
+                print(f'Новые доходы: {income_series_data}')
+
+            # Формируем данные для Chart.js
+            chart_combined = {
+                'labels': all_dates,
+                'expense_data': expense_series_data,
+                'income_data': income_series_data,
+            }
 
         context.update(
             {

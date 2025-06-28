@@ -196,66 +196,60 @@ additional_script_src = list(
     filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
 )
 CONTENT_SECURITY_POLICY = {
-    "EXCLUDE_URL_PREFIXES": ["/admin"],
-    "DIRECTIVES": {
-        "default-src": [
+    'EXCLUDE_URL_PREFIXES': ['/admin'],
+    'DIRECTIVES': {
+        'default-src': [
             SELF,
             BASE_URL,
-            "https://code.highcharts.com",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.jsdelivr.net",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
         ]
         + additional_script_src,
-        "script-src": [
+        'script-src': [
             SELF,
             NONCE,
             BASE_URL,
-            "https://code.highcharts.com",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.jsdelivr.net",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
         ]
         + additional_script_src,
-        "img-src": [
+        'img-src': [
             SELF,
             NONCE,
-            "data:",
+            'data:',
             BASE_URL,
-            "https://code.highcharts.com",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.jsdelivr.net",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
         ],
-        "style-src": [
+        'style-src': [
             SELF,
             NONCE,
             BASE_URL,
-            "https://code.highcharts.com",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.jsdelivr.net",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
         ]
         + additional_script_src,
-        "font-src": [
+        'font-src': [
             SELF,
             NONCE,
             BASE_URL,
-            "https://code.highcharts.com",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.jsdelivr.net",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
         ]
         + additional_script_src,
-        "frame-ancestors": [
+        'frame-ancestors': [
             SELF,
-            "https://code.highcharts.com",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.jsdelivr.net",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
         ]
         + additional_script_src,
-        "report_uri": [os.getenv("SENTRY_ENDPOINT")],
+        'report_uri': [os.getenv('SENTRY_ENDPOINT')],
     },
 }
 
@@ -303,8 +297,12 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
 )
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60'))),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7'))),
+    'ACCESS_TOKEN_LIFETIME': timedelta(
+        minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60')),
+    ),
+    'REFRESH_TOKEN_LIFETIME': timedelta(
+        days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7')),
+    ),
 }
 
 if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
