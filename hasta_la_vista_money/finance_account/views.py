@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
+from django.db.models import Sum
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
@@ -18,7 +19,10 @@ from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
 )
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -75,6 +79,19 @@ class AccountView(
             'to_account': account_transfer_money.first(),
         }
 
+        # Журнал переводов
+        transfer_money_log = (
+            TransferMoneyLog.objects.filter(user=user)
+            .select_related('to_account', 'from_account')
+            .order_by('-created_at')[:10]
+        )
+
+        # Сумма всех счетов
+        sum_all_accounts = accounts.aggregate(total=Sum('balance'))['total'] or 0
+
+        # Данные для графика (пустые, так как статистика перенесена в users app)
+        chart_combine = {'labels': [], 'datasets': []}
+
         context.update(
             {
                 'accounts': accounts,
@@ -83,6 +100,9 @@ class AccountView(
                     user=self.request.user,
                     initial=initial_form_data,
                 ),
+                'transfer_money_log': transfer_money_log,
+                'chart_combine': chart_combine,
+                'sum_all_accounts': sum_all_accounts,
             },
         )
 

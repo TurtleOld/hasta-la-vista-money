@@ -1,0 +1,311 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+{% load static %}
+{% load comma %}
+
+{% block title %}{% translate 'Детальная статистика' %} - {{ user.username }}{% endblock %}
+
+{% block content %}
+    <div class="container-fluid">
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="bi bi-graph-up"></i> {% translate 'Детальная статистика' %}</h2>
+                    <a href="{% url 'users:profile' user.id %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i> {% translate 'Назад к профилю' %}
+                    </a>
+                </div>
+            </div>
+
+            <!-- Общая статистика по счетам -->
+            <div class="col-12 mb-4">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-primary text-white shadow-sm">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">{% translate 'Всего счетов' %}</h5>
+                                <h3 class="mb-0">{{ accounts.count }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-success text-white shadow-sm">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">{% translate 'Общий баланс' %}</h5>
+                                <h3 class="mb-0">
+                                    {% for currency, balance in balances_by_currency.items %}
+                                        {{ balance|floatformat:2 }} {{ currency }}
+                                        {% if not forloop.last %}<br>{% endif %}
+                                    {% endfor %}
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-info text-white shadow-sm">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">{% translate 'Чеков' %}</h5>
+                                <h3 class="mb-0">{{ receipt_info_by_month|length }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-warning text-dark shadow-sm">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">{% translate 'Операций' %}</h5>
+                                <h3 class="mb-0">{{ income_expense|length }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- График доходов и расходов -->
+            <div class="col-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0">{% translate 'Динамика доходов и расходов' %}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="incomeExpenseChart" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Табы с детальной статистикой -->
+            <div class="col-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" id="statisticsTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="monthly-tab" data-bs-toggle="tab" data-bs-target="#monthly" type="button" role="tab">
+                                    {% translate 'Месячная статистика' %}
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="receipts-tab" data-bs-toggle="tab" data-bs-target="#receipts" type="button" role="tab">
+                                    {% translate 'Статистика по чекам' %}
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="operations-tab" data-bs-toggle="tab" data-bs-target="#operations" type="button" role="tab">
+                                    {% translate 'Доходы и расходы' %}
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="transfers-tab" data-bs-toggle="tab" data-bs-target="#transfers" type="button" role="tab">
+                                    {% translate 'Переводы' %}
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="categories-tab" data-bs-toggle="tab" data-bs-target="#categories" type="button" role="tab">
+                                    {% translate 'Топ категорий' %}
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="statisticsTabsContent">
+                            <!-- Месячная статистика -->
+                            <div class="tab-pane fade show active" id="monthly" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>{% translate 'Месяц' %}</th>
+                                                <th>{% translate 'Доходы' %}</th>
+                                                <th>{% translate 'Расходы' %}</th>
+                                                <th>{% translate 'Сбережения' %}</th>
+                                                <th>{% translate 'Процент сбережений' %}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for month in months_data %}
+                                                <tr>
+                                                    <td>{{ month.month }}</td>
+                                                    <td class="text-success">{{ month.income|floatformat:2 }} ₽</td>
+                                                    <td class="text-danger">{{ month.expenses|floatformat:2 }} ₽</td>
+                                                    <td class="{% if month.savings >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                        {{ month.savings|floatformat:2 }} ₽
+                                                    </td>
+                                                    <td>
+                                                        {% if month.income > 0 %}
+                                                            <span class="badge {% if month.savings >= 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                                                {{ month.savings_percent|floatformat:1 }}%
+                                                            </span>
+                                                        {% else %}
+                                                            <span class="badge bg-secondary">-</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Статистика по чекам -->
+                            <div class="tab-pane fade" id="receipts" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>{% translate 'Период' %}</th>
+                                                <th>{% translate 'Количество чеков' %}</th>
+                                                <th>{% translate 'Сумма' %}</th>
+                                                <th>{% translate 'Счёт' %}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for receipt in receipt_info_by_month %}
+                                                <tr>
+                                                    <td>{{ receipt.month|date:"F Y" }}</td>
+                                                    <td>{{ receipt.count }}</td>
+                                                    <td class="text-success fw-bold">{{ receipt.total_amount|comma }}</td>
+                                                    <td>{{ receipt.account__name_account }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Доходы и расходы -->
+                            <div class="tab-pane fade" id="operations" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>{% translate 'Тип' %}</th>
+                                                <th>{% translate 'Категория' %}</th>
+                                                <th>{% translate 'Дата' %}</th>
+                                                <th>{% translate 'Сумма' %}</th>
+                                                <th>{% translate 'Счёт' %}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for item in income_expense %}
+                                                <tr>
+                                                    <td>
+                                                        {% if item.type == 'income' %}
+                                                            <span class="badge bg-success">💰 {% translate 'Доход' %}</span>
+                                                        {% else %}
+                                                            <span class="badge bg-danger">💸 {% translate 'Расход' %}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{{ item.category__name }}</td>
+                                                    <td>{{ item.date|date:'F Y' }}</td>
+                                                    <td class="fw-bold {% if item.type == 'income' %}text-success{% else %}text-danger{% endif %}">
+                                                        {{ item.amount|comma }}
+                                                    </td>
+                                                    <td>{{ item.account__name_account }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Переводы -->
+                            <div class="tab-pane fade" id="transfers" role="tabpanel">
+                                <div class="list-group">
+                                    {% for transfer in transfer_money_log %}
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <strong>{{ transfer.from_account.name_account }}</strong>
+                                                    <i class="bi bi-arrow-right mx-2"></i>
+                                                    <strong>{{ transfer.to_account.name_account }}</strong>
+                                                </div>
+                                                <span class="badge bg-primary">{{ transfer.amount|comma }}</span>
+                                            </div>
+                                            <small class="text-muted">{{ transfer.created_at|date:"d.m.Y H:i" }}</small>
+                                        </div>
+                                    {% empty %}
+                                        <div class="text-center text-muted py-4">
+                                            {% translate 'Нет данных о переводах' %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Топ категорий -->
+                            <div class="tab-pane fade" id="categories" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>{% translate 'Топ категорий расходов' %}</h6>
+                                        {% if top_expense_categories %}
+                                            <div class="list-group list-group-flush">
+                                                {% for category in top_expense_categories %}
+                                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <span>{{ category.category__name }}</span>
+                                                        <span class="badge bg-danger rounded-pill">
+                                                            {{ category.total|floatformat:2 }} ₽
+                                                        </span>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted">{% translate 'Нет данных о расходах' %}</p>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>{% translate 'Топ категорий доходов' %}</h6>
+                                        {% if top_income_categories %}
+                                            <div class="list-group list-group-flush">
+                                                {% for category in top_income_categories %}
+                                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <span>{{ category.category__name }}</span>
+                                                        <span class="badge bg-success rounded-pill">
+                                                            {{ category.total|floatformat:2 }} ₽
+                                                        </span>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted">{% translate 'Нет данных о доходах' %}</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Highcharts для графиков -->
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script nonce="{{ request.csp_nonce }}">
+        // График доходов и расходов
+        Highcharts.chart('incomeExpenseChart', {{ chart_combined|safe }});
+    </script>
+
+    <style>
+        .card {
+            border: none;
+            border-radius: 15px;
+        }
+        .table th {
+            border-top: none;
+            font-weight: 600;
+        }
+        .badge {
+            font-size: 0.8em;
+        }
+        .nav-tabs .nav-link {
+            border: none;
+            color: #6c757d;
+        }
+        .nav-tabs .nav-link.active {
+            color: #0d6efd;
+            border-bottom: 2px solid #0d6efd;
+        }
+        .list-group-item {
+            border-left: none;
+            border-right: none;
+        }
+    </style>
+{% endblock %}

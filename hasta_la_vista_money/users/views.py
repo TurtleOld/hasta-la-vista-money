@@ -54,16 +54,13 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         month_start = today.replace(day=1)
         last_month = (month_start - timedelta(days=1)).replace(day=1)
 
-        # Общий баланс по всем счетам
         total_balance = (
             Account.objects.filter(user=user).aggregate(total=Sum('balance'))['total']
             or 0
         )
 
-        # Количество счетов
         accounts_count = Account.objects.filter(user=user).count()
 
-        # Статистика за текущий месяц
         current_month_expenses = (
             Expense.objects.filter(user=user, date__gte=month_start).aggregate(
                 total=Sum('amount'),
@@ -78,7 +75,6 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
             or 0
         )
 
-        # Статистика за прошлый месяц
         last_month_expenses = (
             Expense.objects.filter(
                 user=user,
@@ -110,10 +106,8 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
             .order_by('-date')[:5]
         )
 
-        # Количество чеков
         receipts_count = Receipt.objects.filter(user=user).count()
 
-        # Топ категорий расходов за текущий месяц
         top_expense_categories = (
             Expense.objects.filter(user=user, date__gte=month_start)
             .values('category__name')
@@ -143,8 +137,12 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
             user_update_pass_form = PasswordChangeForm(
                 user=self.request.user,
             )
+            user_statistics = self.get_user_statistics(self.request.user)
+
             context['user_update'] = user_update
             context['user_update_pass_form'] = user_update_pass_form
+            context['user_statistics'] = user_statistics
+            context['user'] = self.request.user
         return context
 
 
@@ -435,10 +433,8 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 },
             )
 
-        # Разворачиваем список для правильного отображения на графике
         months_data.reverse()
 
-        # Добавляем расчет процента сбережений для каждого месяца
         for month_data in months_data:
             if month_data['income'] > 0:
                 month_data['savings_percent'] = (
