@@ -1,10 +1,3 @@
-let productForm = document.querySelectorAll(".form-product")
-let container = document.querySelector("#form-create-receipt")
-let addButton = document.querySelector("#add-form")
-let removeButton = document.querySelector("#remove-form")
-let totalForms = document.querySelector("#id_form-TOTAL_FORMS")
-
-
 document.addEventListener('DOMContentLoaded', function() {
     onClickRemoveObject();
 
@@ -122,7 +115,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-
     const loginForm = document.querySelector('form.form');
     if (loginForm && window.location.pathname.includes('login')) {
         loginForm.addEventListener('submit', async function (e) {
@@ -176,6 +168,85 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    let productForm = document.querySelectorAll(".form-product");
+    let container = document.querySelector("#form-create-receipt");
+    let addButton = document.querySelector("#add-form");
+    let removeButton = document.querySelector("#remove-form");
+    let totalForms = document.querySelector("#id_form-TOTAL_FORMS");
+
+    let formNum = productForm.length-1;
+    if (addButton) addButton.addEventListener('click', addForm);
+    if (removeButton) removeButton.addEventListener('click', removeForm);
+
+    function addForm(e) {
+        e.preventDefault();
+        let newForm = productForm[0].cloneNode(true);
+        let formRegex = RegExp(`form-(\\d){1}-`,'g');
+        formNum++;
+        newForm.innerHTML = newForm.innerHTML.replace(formRegex, `form-${formNum}-`);
+        container.insertBefore(newForm, addButton);
+        totalForms.setAttribute('value', `${formNum+1}`);
+        newForm.querySelector('.price').addEventListener('input', amountUpdate);
+        newForm.querySelector('.quantity').addEventListener('input', amountUpdate);
+    }
+
+    function removeForm(e) {
+        e.preventDefault();
+        productForm = document.querySelectorAll(".form-product");
+        let lastForm = productForm[productForm.length - 1];
+        let formRegex = RegExp(`form-(\\d){1}-`,'g');
+        lastForm.innerHTML = lastForm.innerHTML.replace(formRegex, `form-${productForm.length - 1}-`);
+        if (productForm.length > 1) {
+            lastForm.remove();
+        }
+        totalForms.setAttribute('value', `${productForm.length}`);
+    }
+
+    function amountUpdate() {
+        let formInputs = container.querySelectorAll('.form-product');
+        formInputs.forEach( formInput => {
+            let priceInput = formInput.querySelector('.price');
+            let quantityInput = formInput.querySelector('.quantity');
+            let amountInput = formInput.querySelector('.amount');
+            if (priceInput && quantityInput && amountInput) {
+                let price = parseFloat(priceInput.value);
+                let quantity = parseFloat(quantityInput.value);
+                let amount = price * quantity;
+                amountInput.value = amount.toFixed(2);
+            }
+        });
+    }
+
+    productForm.forEach(form => {
+        form.querySelector('.price').addEventListener('input', amountUpdate);
+        form.querySelector('.quantity').addEventListener('input', amountUpdate);
+    });
+
+    function calculateTotalSum() {
+        let totalSumInput = document.getElementById('id_total_sum');
+        let amountInputs = document.querySelectorAll('.amount');
+        let total_sum = 0;
+
+        amountInputs.forEach(amountInput => {
+          total_sum += parseFloat(amountInput.value);
+        });
+
+        totalSumInput.value = total_sum.toFixed(2);
+    }
+
+    const formCreateReceipt = document.getElementById('form-create-receipt');
+    if (formCreateReceipt) {
+        formCreateReceipt.addEventListener('input', calculateTotalSum);
+    }
+
+    if (window.location.pathname.includes('/receipts')) {
+        window.tokens.ensureValidAccessToken().then(valid => {
+            if (valid) {
+                window.tokens.scheduleAccessTokenRefresh();
+            }
+        });
+    }
 });
 
 window.setTimeout(function() {
@@ -183,77 +254,6 @@ window.setTimeout(function() {
         $(this).remove();
     });
 }, 4000);
-
-let formNum = productForm.length-1
-addButton.addEventListener('click', addForm)
-removeButton.addEventListener('click', removeForm)
-
-function addForm(e) {
-    e.preventDefault()
-
-    let newForm = productForm[0].cloneNode(true)
-    let formRegex = RegExp(`form-(\\d){1}-`,'g')
-
-    formNum++
-    newForm.innerHTML = newForm.innerHTML.replace(formRegex, `form-${formNum}-`)
-    container.insertBefore(newForm, addButton)
-
-    totalForms.setAttribute('value', `${formNum+1}`)
-    newForm.querySelector('.price').addEventListener('input', amountUpdate);
-    newForm.querySelector('.quantity').addEventListener('input', amountUpdate);
-}
-
-function removeForm(e) {
-    e.preventDefault()
-
-    productForm = document.querySelectorAll(".form-product")
-    let lastForm = productForm[productForm.length - 1]
-
-    let formRegex = RegExp(`form-(\\d){1}-`,'g')
-    lastForm.innerHTML = lastForm.innerHTML.replace(formRegex, `form-${productForm.length - 1}-`);
-
-    if (productForm.length > 1) {
-        lastForm.remove();
-    }
-
-    totalForms.setAttribute('value', `${productForm.length}`)
-
-}
-
-function amountUpdate() {
-    let formInputs = container.querySelectorAll('.form-product');
-    formInputs.forEach( formInput => {
-        let priceInput = formInput.querySelector('.price');
-        let quantityInput = formInput.querySelector('.quantity');
-        let amountInput = formInput.querySelector('.amount');
-        if (priceInput && quantityInput && amountInput) {
-            let price = parseFloat(priceInput.value);
-            let quantity = parseFloat(quantityInput.value);
-            let amount = price * quantity;
-            amountInput.value = amount.toFixed(2);
-        }
-    });
-}
-
-productForm.forEach(form => {
-    form.querySelector('.price').addEventListener('input', amountUpdate);
-    form.querySelector('.quantity').addEventListener('input', amountUpdate);
-});
-
-
-function calculateTotalSum() {
-    let totalSumInput = document.getElementById('id_total_sum');
-    let amountInputs = document.querySelectorAll('.amount');
-    let total_sum = 0;
-
-    amountInputs.forEach(amountInput => {
-      total_sum += parseFloat(amountInput.value);
-    });
-
-    totalSumInput.value = total_sum.toFixed(2);
-  }
-
-document.getElementById('form-create-receipt').addEventListener('input', calculateTotalSum);
 
 function onClickRemoveObject() {
     const removeObjectButton = document.querySelectorAll('.remove-object-button')
@@ -348,124 +348,3 @@ async function fetchWithAuth(url, options = {}) {
         throw new Error('Invalid URL format');
     }
 }
-
-async function checkAndRefreshTokensOnLoad() {
-    const access = localStorage.getItem('access_token');
-    const refresh = localStorage.getItem('refresh_token');
-
-    if (!access || !refresh) {
-        console.log('Токены не найдены в localStorage');
-        return;
-    }
-
-    const payload = parseJwt(access);
-    if (!payload || !payload.exp) {
-        console.log('Не удалось декодировать access token');
-        return;
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    const secondsLeft = payload.exp - now;
-
-    console.log(`Токен истечёт через ${secondsLeft} секунд`);
-
-    if (secondsLeft <= 300) {
-        console.log('Обновляем токены...');
-        try {
-            const resp = await fetch('/authentication/token/refresh/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh })
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                localStorage.setItem('access_token', data.access);
-                if (data.refresh) {
-                    localStorage.setItem('refresh_token', data.refresh);
-                }
-                console.log('Токены обновлены автоматически');
-            } else {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                console.log('Сессия истекла, токены очищены');
-            }
-        } catch (e) {
-            console.log('Ошибка при обновлении токенов:', e);
-        }
-    } else {
-        console.log('Токен ещё действителен, обновление не требуется');
-    }
-}
-
-function parseJwt(token) {
-    try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        return JSON.parse(jsonPayload);
-    } catch (e) {
-        return null;
-    }
-}
-
-function scheduleAccessTokenRefresh() {
-    const access = localStorage.getItem('access_token');
-    const refresh = localStorage.getItem('refresh_token');
-    if (!access || !refresh) return;
-
-    const payload = parseJwt(access);
-    if (!payload || !payload.exp) return;
-
-    const now = Math.floor(Date.now() / 1000);
-    const secondsLeft = payload.exp - now;
-    const refreshIn = (secondsLeft - 30) * 1000;
-    if (refreshIn <= 0) {
-        doRefreshToken();
-    } else {
-        setTimeout(doRefreshToken, refreshIn);
-    }
-}
-
-async function doRefreshToken() {
-    const refresh = localStorage.getItem('refresh_token');
-    if (!refresh) {
-        console.log('Refresh token не найден');
-        return;
-    }
-    try {
-        console.log('Выполняем плановое обновление токенов...');
-        const resp = await fetch('/authentication/token/refresh/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh })
-        });
-        if (resp.ok) {
-            const data = await resp.json();
-            localStorage.setItem('access_token', data.access);
-            if (data.refresh) {
-                localStorage.setItem('refresh_token', data.refresh);
-            }
-            console.log('Токены успешно обновлены');
-            scheduleAccessTokenRefresh();
-        } else {
-            console.log('Ошибка при обновлении токенов, очищаем сессию');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            if (document.hasFocus()) {
-                alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
-                window.location.replace('/users/login/');
-            }
-        }
-    } catch (e) {
-        console.log('Сетевая ошибка при обновлении токенов:', e);
-        setTimeout(doRefreshToken, 10000);
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    checkAndRefreshTokensOnLoad();
-    scheduleAccessTokenRefresh();
-});
-

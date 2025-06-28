@@ -1,12 +1,12 @@
 from django.urls import path
 from hasta_la_vista_money.users.views import (
     CreateUser,
+    ExportUserDataView,
     ListUsers,
     LoginUser,
     SetPasswordUserView,
     UpdateUserView,
     UserStatisticsView,
-
 )
 
 app_name = 'users'
@@ -26,4 +26,5 @@ urlpatterns = [
     ),
     path('list/user', ListUsers.as_view(), name='list_user'),
     path('statistics/', UserStatisticsView.as_view(), name='statistics'),
+    path('export_data/', ExportUserDataView.as_view(), name='export_data'),
 ]
