@@ -32,7 +32,14 @@ from hasta_la_vista_money.users.forms import (
     UserLoginForm,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.expense.models import Expense
+from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.models import Receipt
 from rest_framework_simplejwt.tokens import RefreshToken
+from datetime import timedelta
+from django.utils import timezone
+import json
 
 
 class IndexView(TemplateView):
@@ -53,12 +60,11 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         today = timezone.now().date()
         month_start = today.replace(day=1)
         last_month = (month_start - timedelta(days=1)).replace(day=1)
-
         total_balance = (
             Account.objects.filter(user=user).aggregate(total=Sum('balance'))['total']
             or 0
         )
-
+        
         accounts_count = Account.objects.filter(user=user).count()
 
         current_month_expenses = (
@@ -93,7 +99,6 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
             or 0
         )
 
-        # Последние операции (5 последних)
         recent_expenses = (
             Expense.objects.filter(user=user)
             .select_related('category', 'account')
@@ -107,7 +112,6 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         )
 
         receipts_count = Receipt.objects.filter(user=user).count()
-
         top_expense_categories = (
             Expense.objects.filter(user=user, date__gte=month_start)
             .values('category__name')
@@ -295,7 +299,6 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        # Генерируем URL для профиля пользователя с использованием его pk
         return reverse_lazy(
             'users:profile',
             kwargs={'pk': self.request.user.pk},
@@ -307,8 +310,6 @@ class ExportUserDataView(LoginRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         user = request.user
-
-        # Собираем данные пользователя
         user_data = {
             'user_info': {
                 'username': user.username,
@@ -372,7 +373,6 @@ class ExportUserDataView(LoginRequiredMixin, View):
             },
         }
 
-        # Создаем JSON ответ
         response = HttpResponse(
             json.dumps(user_data, ensure_ascii=False, indent=2, default=str),
             content_type='application/json',
@@ -434,7 +434,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             )
 
         months_data.reverse()
-
         for month_data in months_data:
             if month_data['income'] > 0:
                 month_data['savings_percent'] = (
@@ -510,8 +509,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             percent = (delta / prev * 100) if prev else None
             delta_by_currency[cur] = {'delta': delta, 'percent': percent}
 
-        # График доходов и расходов
-
         expense_dataset = (
             Expense.objects.filter(user=user)
             .values('date')
@@ -580,7 +577,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             'credits': {'enabled': False},
             'exporting': {'enabled': False},
         }
-
+        
         context.update(
             {
                 'months_data': months_data,
@@ -668,17 +665,6 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
                     'title': 'Отличные сбережения',
                     'message': 'Вы сэкономили более 20% от доходов в текущем месяце',
                     'icon': 'bi-check-circle',
-                },
-            )
-
-        # Уведомление о новых возможностях
-        if not Receipt.objects.filter(user=user).exists():
-            notifications.append(
-                {
-                    'type': 'info',
-                    'title': 'Новая функция',
-                    'message': 'Попробуйте добавить чек для автоматического учета покупок',
-                    'icon': 'bi-receipt',
                 },
             )
 

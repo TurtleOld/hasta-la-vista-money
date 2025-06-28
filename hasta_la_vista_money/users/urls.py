@@ -6,6 +6,7 @@ from hasta_la_vista_money.users.views import (
     SetPasswordUserView,
     UpdateUserView,
     UserStatisticsView,
+
 )
 
 app_name = 'users'
