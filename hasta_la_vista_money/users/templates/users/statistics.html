@@ -7,7 +7,7 @@
 {% block title %}{% translate 'Детальная статистика' %} - {{ user.username }}{% endblock %}
 
 {% block content %}
-    <div class="container-fluid">
+    <div class="container-fluid statistics-page">
         <div class="row mt-4">
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -20,9 +20,9 @@
 
             <!-- Общая статистика по счетам -->
             <div class="col-12 mb-4">
-                <div class="row">
+                <div class="row statistics-summary">
                     <div class="col-md-3 mb-3">
-                        <div class="card bg-primary text-white shadow-sm">
+                        <div class="card bg-primary text-white shadow-sm statistics-card">
                             <div class="card-body text-center">
                                 <h5 class="card-title">{% translate 'Всего счетов' %}</h5>
                                 <h3 class="mb-0">{{ accounts.count }}</h3>
@@ -30,7 +30,7 @@
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <div class="card bg-success text-white shadow-sm">
+                        <div class="card bg-success text-white shadow-sm statistics-card">
                             <div class="card-body text-center">
                                 <h5 class="card-title">{% translate 'Общий баланс' %}</h5>
                                 <h3 class="mb-0">
@@ -43,7 +43,7 @@
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <div class="card bg-info text-white shadow-sm">
+                        <div class="card bg-info text-white shadow-sm statistics-card">
                             <div class="card-body text-center">
                                 <h5 class="card-title">{% translate 'Чеков' %}</h5>
                                 <h3 class="mb-0">{{ receipt_info_by_month|length }}</h3>
@@ -51,7 +51,7 @@
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <div class="card bg-warning text-dark shadow-sm">
+                        <div class="card bg-warning text-dark shadow-sm statistics-card">
                             <div class="card-body text-center">
                                 <h5 class="card-title">{% translate 'Операций' %}</h5>
                                 <h3 class="mb-0">{{ income_expense|length }}</h3>
@@ -68,7 +68,7 @@
                         <h5 class="mb-0">{% translate 'Динамика доходов и расходов' %}</h5>
                     </div>
                     <div class="card-body">
-                        <div id="incomeExpenseChart" style="height: 400px;"></div>
+                        <div id="incomeExpenseChart" class="chart-container"></div>
                     </div>
                 </div>
             </div>
@@ -282,30 +282,4 @@
         // График доходов и расходов
         Highcharts.chart('incomeExpenseChart', {{ chart_combined|safe }});
     </script>
-
-    <style>
-        .card {
-            border: none;
-            border-radius: 15px;
-        }
-        .table th {
-            border-top: none;
-            font-weight: 600;
-        }
-        .badge {
-            font-size: 0.8em;
-        }
-        .nav-tabs .nav-link {
-            border: none;
-            color: #6c757d;
-        }
-        .nav-tabs .nav-link.active {
-            color: #0d6efd;
-            border-bottom: 2px solid #0d6efd;
-        }
-        .list-group-item {
-            border-left: none;
-            border-right: none;
-        }
-    </style>
 {% endblock %}
