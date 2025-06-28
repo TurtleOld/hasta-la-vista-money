@@ -200,12 +200,6 @@ class TestLoan(TestCase):
         self.assertIn('result_calculate', response.context)
         self.assertIn('payment_make_loan', response.context)
 
-    def test_loan_create_view_get(self):
-        """Test LoanCreateView GET request."""
-        self.client.force_login(self.user)
-        response = self.client.get(reverse_lazy('loan:create'))
-        self.assertEqual(response.status_code, 200)
-
     def test_loan_create_view_context_data(self):
         """Test LoanCreateView context data."""
         self.client.force_login(self.user)

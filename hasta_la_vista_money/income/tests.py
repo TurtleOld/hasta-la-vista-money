@@ -45,9 +45,9 @@ class TestIncome(TestCase):
         url = reverse_lazy('income:create')
 
         new_income = {
-            'user': self.user.id,
-            'account': self.account.id,
-            'category': self.income_type.id,
+            'user': self.user.pk,
+            'account': self.account.pk,
+            'category': self.income_type.pk,
             'date': '2023-12-20 15:30',
             'amount': TEST_AMOUNT,
         }

@@ -41,9 +41,9 @@ class TestExpense(TestCase):
         self.client.force_login(self.user)
 
         new_expense = {
-            'user': self.user.id,
-            'account': self.account.id,
-            'category': self.expense_type.id,
+            'user': self.user.pk,
+            'account': self.account.pk,
+            'category': self.expense_type.pk,
             'date': '2023-12-20T15:30',
             'amount': TEST_AMOUNT,
             'depth': 3,
