@@ -403,43 +403,11 @@ class TestAccount(TestCase):
 
     def test_account_view_methods(self):
         """Тест методов класса AccountView."""
-        expense_dataset, income_dataset = AccountView.collect_datasets(
-            type('MockRequest', (), {'user': self.user})(),
-        )
-        self.assertIsNotNone(expense_dataset)
-        self.assertIsNotNone(income_dataset)
-
-        test_dataset = [
-            {'date': timezone.now().date(), 'total_amount': 100},
-            {'date': timezone.now().date(), 'total_amount': 200},
-        ]
-        dates, amounts = AccountView.transform_data(test_dataset)
-        self.assertEqual(len(dates), 2)
-        self.assertEqual(len(amounts), 2)
-
-        dates = ['2023-01-01', '2023-01-01', '2023-01-02']
-        amounts = [100, 200, 300]
-        unique_dates, unique_amounts = AccountView.unique_data(dates, amounts)
-        self.assertEqual(len(unique_dates), 2)
-        self.assertEqual(unique_amounts[0], 300)
-
-        expense_dates, expense_amounts = AccountView.transform_data_expense(
-            test_dataset,
-        )
-        income_dates, income_amounts = AccountView.transform_data_income(test_dataset)
-        self.assertEqual(len(expense_dates), 2)
-        self.assertEqual(len(income_dates), 2)
-
-        unique_expense_dates, unique_expense_amounts = AccountView.unique_expense_data(
-            dates,
-            amounts,
-        )
-        unique_income_dates, unique_income_amounts = AccountView.unique_income_data(
-            dates,
-            amounts,
-        )
-        self.assertEqual(unique_expense_dates, unique_dates)
-        self.assertEqual(unique_income_dates, unique_dates)
+        # Тестируем только базовую функциональность AccountView
+        # Статистические методы перенесены в users app
+        self.assertTrue(hasattr(AccountView, 'get_context_data'))
+        self.assertTrue(hasattr(AccountView, 'context_object_name'))
+        self.assertEqual(AccountView.context_object_name, 'finance_account')
 
     def test_prepare_functions(self):
         """Тест функций из модуля prepare."""

@@ -1,3 +1,7 @@
+import json
+from collections import defaultdict
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
@@ -5,31 +9,30 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
-from django.http import JsonResponse, HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import CreateView, TemplateView, UpdateView, View
+from django.views import View
+from django.views.generic import CreateView, TemplateView, UpdateView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.generate_dates import generate_date_list
 from hasta_la_vista_money.custom_mixin import (
     CustomNoPermissionMixin,
     CustomSuccessURLUserMixin,
 )
+from hasta_la_vista_money.expense.models import Expense
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.forms import (
     RegisterUserForm,
     UpdateUserForm,
     UserLoginForm,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.income.models import Income
-from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import Receipt
 from rest_framework_simplejwt.tokens import RefreshToken
-from datetime import timedelta
-from django.utils import timezone
-import json
 
 
 class IndexView(TemplateView):
@@ -50,47 +53,45 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         today = timezone.now().date()
         month_start = today.replace(day=1)
         last_month = (month_start - timedelta(days=1)).replace(day=1)
-
-        # Общий баланс по всем счетам
         total_balance = (
             Account.objects.filter(user=user).aggregate(total=Sum('balance'))['total']
             or 0
         )
 
-        # Количество счетов
         accounts_count = Account.objects.filter(user=user).count()
 
-        # Статистика за текущий месяц
         current_month_expenses = (
             Expense.objects.filter(user=user, date__gte=month_start).aggregate(
-                total=Sum('amount')
+                total=Sum('amount'),
             )['total']
             or 0
         )
 
         current_month_income = (
             Income.objects.filter(user=user, date__gte=month_start).aggregate(
-                total=Sum('amount')
+                total=Sum('amount'),
             )['total']
             or 0
         )
 
-        # Статистика за прошлый месяц
         last_month_expenses = (
             Expense.objects.filter(
-                user=user, date__gte=last_month, date__lt=month_start
+                user=user,
+                date__gte=last_month,
+                date__lt=month_start,
             ).aggregate(total=Sum('amount'))['total']
             or 0
         )
 
         last_month_income = (
             Income.objects.filter(
-                user=user, date__gte=last_month, date__lt=month_start
+                user=user,
+                date__gte=last_month,
+                date__lt=month_start,
             ).aggregate(total=Sum('amount'))['total']
             or 0
         )
 
-        # Последние операции (5 последних)
         recent_expenses = (
             Expense.objects.filter(user=user)
             .select_related('category', 'account')
@@ -103,10 +104,7 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
             .order_by('-date')[:5]
         )
 
-        # Количество чеков
         receipts_count = Receipt.objects.filter(user=user).count()
-
-        # Топ категорий расходов за текущий месяц
         top_expense_categories = (
             Expense.objects.filter(user=user, date__gte=month_start)
             .values('category__name')
@@ -184,7 +182,7 @@ class LoginUser(SuccessMessageMixin, LoginView):
                         'access': self.jwt_access_token,
                         'refresh': self.jwt_refresh_token,
                         'redirect_url': self.get_success_url(),
-                    }
+                    },
                 )
             return redirect(self.get_success_url())
         messages.error(self.request, _('Неправильный логин или пароль!'))
@@ -294,7 +292,6 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        # Генерируем URL для профиля пользователя с использованием его pk
         return reverse_lazy(
             'users:profile',
             kwargs={'pk': self.request.user.pk},
@@ -306,8 +303,6 @@ class ExportUserDataView(LoginRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         user = request.user
-
-        # Собираем данные пользователя
         user_data = {
             'user_info': {
                 'username': user.username,
@@ -319,48 +314,58 @@ class ExportUserDataView(LoginRequiredMixin, View):
             },
             'accounts': list(
                 Account.objects.filter(user=user).values(
-                    'name_account', 'balance', 'currency', 'created_at'
-                )
+                    'name_account',
+                    'balance',
+                    'currency',
+                    'created_at',
+                ),
             ),
             'expenses': list(
                 Expense.objects.filter(user=user).values(
-                    'amount', 'date', 'category__name', 'account__name_account'
-                )
+                    'amount',
+                    'date',
+                    'category__name',
+                    'account__name_account',
+                ),
             ),
             'incomes': list(
                 Income.objects.filter(user=user).values(
-                    'amount', 'date', 'category__name', 'account__name_account'
-                )
+                    'amount',
+                    'date',
+                    'category__name',
+                    'account__name_account',
+                ),
             ),
             'receipts': list(
                 Receipt.objects.filter(user=user).values(
-                    'receipt_date', 'seller__name_seller', 'total_sum'
-                )
+                    'receipt_date',
+                    'seller__name_seller',
+                    'total_sum',
+                ),
             ),
             'statistics': {
                 'total_balance': float(
                     Account.objects.filter(user=user).aggregate(total=Sum('balance'))[
                         'total'
                     ]
-                    or 0
+                    or 0,
                 ),
                 'total_expenses': float(
                     Expense.objects.filter(user=user).aggregate(total=Sum('amount'))[
                         'total'
                     ]
-                    or 0
+                    or 0,
                 ),
                 'total_incomes': float(
                     Income.objects.filter(user=user).aggregate(total=Sum('amount'))[
                         'total'
                     ]
-                    or 0
+                    or 0,
                 ),
                 'receipts_count': Receipt.objects.filter(user=user).count(),
             },
         }
 
-        # Создаем JSON ответ
         response = HttpResponse(
             json.dumps(user_data, ensure_ascii=False, indent=2, default=str),
             content_type='application/json',
@@ -396,14 +401,18 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
 
             month_expenses = (
                 Expense.objects.filter(
-                    user=user, date__gte=month_start, date__lte=month_end
+                    user=user,
+                    date__gte=month_start,
+                    date__lte=month_end,
                 ).aggregate(total=Sum('amount'))['total']
                 or 0
             )
 
             month_income = (
                 Income.objects.filter(
-                    user=user, date__gte=month_start, date__lte=month_end
+                    user=user,
+                    date__gte=month_start,
+                    date__lte=month_end,
                 ).aggregate(total=Sum('amount'))['total']
                 or 0
             )
@@ -414,13 +423,10 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                     'expenses': float(month_expenses),
                     'income': float(month_income),
                     'savings': float(month_income - month_expenses),
-                }
+                },
             )
 
-        # Разворачиваем список для правильного отображения на графике
         months_data.reverse()
-
-        # Добавляем расчет процента сбережений для каждого месяца
         for month_data in months_data:
             if month_data['income'] > 0:
                 month_data['savings_percent'] = (
@@ -446,13 +452,139 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             .order_by('-total')[:10]
         )
 
+        # Статистика по чекам
+        from hasta_la_vista_money.commonlogic.views import collect_info_receipt
+
+        receipt_info_by_month = collect_info_receipt(user=user)
+
+        # Статистика доходов и расходов
+        from hasta_la_vista_money.finance_account.prepare import (
+            collect_info_expense,
+            collect_info_income,
+            sort_expense_income,
+        )
+
+        income = collect_info_income(user)
+        expenses = collect_info_expense(user)
+        income_expense = sort_expense_income(expenses, income)
+
+        # Статистика переводов
+        from hasta_la_vista_money.finance_account.models import (
+            TransferMoneyLog,
+        )
+
+        transfer_money_log = (
+            TransferMoneyLog.objects.filter(user=user)
+            .select_related('to_account', 'from_account')
+            .order_by('-created_at')[:20]
+        )
+
+        # Статистика по счетам
+        accounts = Account.objects.filter(user=user).select_related('user').all()
+
+        # Группируем счета по валюте
+        balances_by_currency = defaultdict(float)
+        for acc in accounts:
+            balances_by_currency[acc.currency] += float(acc.balance)
+
+        # Динамика баланса
+        prev_day = today - timedelta(days=1)
+        balances_prev_by_currency = defaultdict(float)
+        for acc in accounts:
+            if acc.created_at and acc.created_at.date() <= prev_day:
+                balances_prev_by_currency[acc.currency] += float(acc.balance)
+
+        delta_by_currency = {}
+        for cur in balances_by_currency.keys():
+            now = balances_by_currency.get(cur, 0)
+            prev = balances_prev_by_currency.get(cur, 0)
+            delta = now - prev
+            percent = (delta / prev * 100) if prev else None
+            delta_by_currency[cur] = {'delta': delta, 'percent': percent}
+
+        expense_dataset = (
+            Expense.objects.filter(user=user)
+            .values('date')
+            .annotate(total_amount=Sum('amount'))
+            .order_by('date')
+        )
+
+        income_dataset = (
+            Income.objects.filter(user=user)
+            .values('date')
+            .annotate(total_amount=Sum('amount'))
+            .order_by('date')
+        )
+
+        # Преобразование данных для графика
+        def transform_data(dataset):
+            dates = []
+            amounts = []
+            for date_amount in dataset:
+                dates.append(date_amount['date'].strftime('%Y-%m-%d'))
+                amounts.append(float(date_amount['total_amount']))
+            return dates, amounts
+
+        expense_dates, expense_amounts = transform_data(expense_dataset)
+        income_dates, income_amounts = transform_data(income_dataset)
+
+        # Объединение уникальных дат
+        all_dates = sorted(set(expense_dates + income_dates))
+        expense_series_data = [
+            expense_amounts[expense_dates.index(date)] if date in expense_dates else 0
+            for date in all_dates
+        ]
+        income_series_data = [
+            income_amounts[income_dates.index(date)] if date in income_dates else 0
+            for date in all_dates
+        ]
+
+        # Создание данных для графика
+        chart_combined = {
+            'chart': {
+                'type': 'line',
+                'borderColor': '#000000',
+                'borderWidth': 1,
+                'height': 300,
+            },
+            'title': {'text': _('Аналитика доходов и расходов')},
+            'xAxis': [
+                {
+                    'categories': all_dates,
+                    'title': {'text': _('Дата')},
+                },
+            ],
+            'yAxis': {'title': {'text': _('Сумма')}},
+            'series': [
+                {
+                    'name': _('Расходы'),
+                    'data': expense_series_data,
+                    'color': 'red',
+                },
+                {
+                    'name': _('Доходы'),
+                    'data': income_series_data,
+                    'color': 'green',
+                },
+            ],
+            'credits': {'enabled': False},
+            'exporting': {'enabled': False},
+        }
+
         context.update(
             {
                 'months_data': months_data,
                 'top_expense_categories': top_expense_categories,
                 'top_income_categories': top_income_categories,
+                'receipt_info_by_month': receipt_info_by_month,
+                'income_expense': income_expense,
+                'transfer_money_log': transfer_money_log,
+                'accounts': accounts,
+                'balances_by_currency': dict(balances_by_currency),
+                'delta_by_currency': delta_by_currency,
+                'chart_combined': chart_combined,
                 'user': user,
-            }
+            },
         )
 
         return context
@@ -486,20 +618,20 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
                     'title': 'Низкий баланс на счетах',
                     'message': f'На следующих счетах низкий баланс: {", ".join([acc.name_account for acc in low_balance_accounts])}',
                     'icon': 'bi-exclamation-triangle',
-                }
+                },
             )
 
         # Уведомление о превышении расходов
         current_month_expenses = (
             Expense.objects.filter(user=user, date__gte=month_start).aggregate(
-                total=Sum('amount')
+                total=Sum('amount'),
             )['total']
             or 0
         )
 
         current_month_income = (
             Income.objects.filter(user=user, date__gte=month_start).aggregate(
-                total=Sum('amount')
+                total=Sum('amount'),
             )['total']
             or 0
         )
@@ -511,7 +643,7 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
                     'title': 'Превышение расходов',
                     'message': f'В текущем месяце расходы превышают доходы на {current_month_expenses - current_month_income:.2f} ₽',
                     'icon': 'bi-arrow-down-circle',
-                }
+                },
             )
 
         # Уведомление о хороших сбережениях
@@ -526,25 +658,14 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
                     'title': 'Отличные сбережения',
                     'message': 'Вы сэкономили более 20% от доходов в текущем месяце',
                     'icon': 'bi-check-circle',
-                }
-            )
-
-        # Уведомление о новых возможностях
-        if not Receipt.objects.filter(user=user).exists():
-            notifications.append(
-                {
-                    'type': 'info',
-                    'title': 'Новая функция',
-                    'message': 'Попробуйте добавить чек для автоматического учета покупок',
-                    'icon': 'bi-receipt',
-                }
+                },
             )
 
         context.update(
             {
                 'notifications': notifications,
                 'user': user,
-            }
+            },
         )
 
         return context

@@ -1,4 +1,3 @@
-import json
 from typing import Any, Dict
 
 from django.contrib import messages
@@ -6,19 +5,16 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Sum
-from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
-from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.views import collect_info_receipt
 from hasta_la_vista_money.custom_mixin import (
     CustomNoPermissionMixin,
     DeleteObjectMixin,
 )
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -27,16 +23,7 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.finance_account.prepare import (
-    collect_info_expense,
-    collect_info_income,
-    sort_expense_income,
-)
-from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
-from collections import defaultdict
-from django.utils import timezone
-from datetime import timedelta
 
 
 class BaseView:
@@ -55,7 +42,7 @@ class AccountView(
     ListView,
 ):
     """
-    Представление отображающее список счетов и финансовую аналитику.
+    Представление отображающее список счетов.
 
     Attributes:
         context_object_name (str): Имя переменной контекста, передаваемой в шаблон.
@@ -65,109 +52,9 @@ class AccountView(
     context_object_name = 'finance_account'
     no_permission_url = reverse_lazy('login')
 
-    @classmethod
-    def collect_datasets(cls, request: HttpRequest) -> tuple:
-        """
-        Собирает данные о расходах и доходах пользователя.
-
-        Parameters:
-            request (HttpRequest): HTTP-запрос с информацией о пользователе.
-
-        Returns:
-            Два набора данных с расходами и доходами, отсортированные по дате.
-        """
-        expense_dataset = (
-            Expense.objects.filter(
-                user=request.user,
-            )
-            .values(
-                'date',
-            )
-            .annotate(
-                total_amount=Sum('amount'),
-            )
-            .order_by('date')
-        )
-
-        income_dataset = (
-            Income.objects.filter(
-                user=request.user,
-            )
-            .values(
-                'date',
-            )
-            .annotate(
-                total_amount=Sum('amount'),
-            )
-            .order_by('date')
-        )
-
-        return expense_dataset, income_dataset
-
-    @classmethod
-    def transform_data(cls, dataset) -> tuple:
-        """
-        Преобразует набор данных в списки дат и сумм.
-
-        Parameters:
-            dataset (QuerySet): Набор данных с датами и суммами.
-
-        Returns:
-            Два списка — один с отформатированными датами, другой с суммами.
-        """
-        dates = []
-        amounts = []
-
-        for date_amount in dataset:
-            dates.append(
-                date_amount['date'].strftime('%Y-%m-%d'),
-            )
-            amounts.append(float(date_amount['total_amount']))
-
-        return dates, amounts
-
-    @classmethod
-    def transform_data_expense(cls, expense_dataset):
-        """Преобразует набор данных о расходах в списки дат и сумм."""
-        return cls.transform_data(expense_dataset)
-
-    @classmethod
-    def transform_data_income(cls, income_dataset):
-        """Преобразует набор данных о доходах в списки дат и сумм."""
-        return cls.transform_data(income_dataset)
-
-    @classmethod
-    def unique_data(cls, dates, amounts):
-        """Объединяет дублирующиеся даты и суммы в уникальные списки."""
-        unique_dates = []
-        unique_amounts = []
-
-        for data_index, date in enumerate(dates):
-            if date not in unique_dates:
-                unique_dates.append(date)
-                unique_amounts.append(amounts[data_index])
-            else:
-                index = unique_dates.index(date)
-                unique_amounts[index] += amounts[data_index]
-
-        return unique_dates, unique_amounts
-
-    @classmethod
-    def unique_expense_data(cls, expense_dates, expense_amounts):
-        """Возвращает уникальные даты и суммы для расходов."""
-        return cls.unique_data(expense_dates, expense_amounts)
-
-    @classmethod
-    def unique_income_data(cls, income_dates, income_amounts):
-        """Возвращает уникальные даты и суммы для доходов."""
-        return cls.unique_data(income_dates, income_amounts)
-
     def get_context_data(self, **kwargs) -> Dict[str, Any]:
         """
-        Собирает контекст данных для отображения на странице, включая счета,
-        аналитические данные по доходам и расходам,
-        формы для добавления счетов и перевода средств,
-        а также журнал переводов.
+        Собирает контекст данных для отображения на странице счетов.
 
         Parameters:
             kwargs (dict): Дополнительные параметры контекста.
@@ -180,177 +67,30 @@ class AccountView(
         if not self.request.user.is_authenticated:
             return context
 
-        expense_dataset, income_dataset = self.collect_datasets(self.request)
-
-        expense_dates, expense_amounts = self.transform_data_expense(
-            expense_dataset,
-        )
-        income_dates, income_amounts = self.transform_data_income(
-            income_dataset,
-        )
-
-        unique_expense_dates, unique_expense_amounts = self.unique_expense_data(
-            expense_dates,
-            expense_amounts,
-        )
-
-        unique_income_dates, unique_income_amounts = self.unique_income_data(
-            income_dates,
-            income_amounts,
-        )
-
-        # Combine unique dates for both expense and income to create a single time axis
-        all_dates = sorted(set(unique_expense_dates + unique_income_dates))
-
-        # Create data points for expense and income that match the combined dates
-        expense_series_data = [
-            (
-                unique_expense_amounts[unique_expense_dates.index(date)]
-                if date in unique_expense_dates
-                else 0
-            )
-            for date in all_dates
-        ]
-
-        income_series_data = [
-            (
-                unique_income_amounts[unique_income_dates.index(date)]
-                if date in unique_income_dates
-                else 0
-            )
-            for date in all_dates
-        ]
-
-        # Create a combined chart with both expense and income data
-        chart_combined = {
-            'chart': {
-                'type': 'line',
-                'borderColor': '#000000',
-                'borderWidth': 1,
-                'height': 300,
-            },
-            'title': {'text': _('Аналитика')},
-            'xAxis': [
-                {
-                    'categories': all_dates,
-                    'title': {'text': _('Дата')},
-                },
-            ],
-            'yAxis': {'title': {'text': _('Сумма')}},
-            'series': [
-                {
-                    'name': _('Расходы'),
-                    'data': expense_series_data,
-                    'color': 'red',
-                },
-                {
-                    'name': _('Доходы'),
-                    'data': income_series_data,
-                    'color': 'green',
-                },
-            ],
-            'credits': {
-                'enabled': False,
-            },
-            'exporting': {
-                'enabled': False,
-            },
-            'responsive': {
-                'rules': [
-                    {
-                        'condition': {'maxWidth': 700},
-                        'chartOptions': {
-                            'legend': {
-                                'layout': 'horizontal',
-                                'align': 'center',
-                                'verticalAlign': 'bottom',
-                            },
-                        },
-                    },
-                ],
-            },
-        }
-
-        user = get_object_or_404(
-            User,
-            username=self.request.user,
-        )
-
+        user = get_object_or_404(User, username=self.request.user)
         accounts = Account.objects.filter(user=user).select_related('user').all()
 
-        # Группируем счета по валюте
-        today = timezone.now().date()
-        # Для динамики: предыдущий день
-        prev_day = today - timedelta(days=1)
-
-        # Суммы по валютам на сегодня
-        balances_by_currency = defaultdict(float)
-        for acc in accounts:
-            balances_by_currency[acc.currency] += float(acc.balance)
-        currencies = list(balances_by_currency.keys())
-
-        # Суммы по валютам на конец предыдущего дня
-        # (если есть created_at, иначе просто 0)
-        balances_prev_by_currency = defaultdict(float)
-        for acc in accounts:
-            # Если счет создан до prev_day, учитываем его баланс
-            if acc.created_at and acc.created_at.date() <= prev_day:
-                balances_prev_by_currency[acc.currency] += float(acc.balance)
-            # Если нет created_at, пропускаем (или можно учитывать всегда)
-
-        # Динамика: разница и процент
-        delta_by_currency = {}
-        for cur in currencies:
-            now = balances_by_currency.get(cur, 0)
-            prev = balances_prev_by_currency.get(cur, 0)
-            delta = now - prev
-            percent = (delta / prev * 100) if prev else None
-            delta_by_currency[cur] = {'delta': delta, 'percent': percent}
-
-        # Если одна валюта — возвращаем просто сумму, иначе словарь
-        sum_all_accounts = (
-            list(balances_by_currency.values())[0]
-            if len(balances_by_currency) == 1
-            else dict(balances_by_currency)
-        )
-        sum_all_accounts_prev = (
-            list(balances_prev_by_currency.values())[0]
-            if len(balances_prev_by_currency) == 1
-            else dict(balances_prev_by_currency)
-        )
-        sum_all_accounts_delta = (
-            list(delta_by_currency.values())[0]
-            if len(delta_by_currency) == 1
-            else delta_by_currency
-        )
-        is_multi_currency = isinstance(sum_all_accounts, dict)
-
-        receipt_info_by_month = collect_info_receipt(user=user)
-
-        income = collect_info_income(user)
-        expenses = collect_info_expense(user)
-        income_expense = sort_expense_income(expenses, income)
-
+        # Форма для перевода средств
         account_transfer_money = (
-            Account.objects.filter(user=user)
-            .select_related(
-                'user',
-            )
-            .all()
+            Account.objects.filter(user=user).select_related('user').all()
         )
         initial_form_data = {
             'from_account': account_transfer_money.first(),
             'to_account': account_transfer_money.first(),
         }
 
+        # Журнал переводов
         transfer_money_log = (
             TransferMoneyLog.objects.filter(user=user)
-            .select_related(
-                'to_account',
-                'from_account',
-            )
-            .all()
+            .select_related('to_account', 'from_account')
+            .order_by('-created_at')[:10]
         )
+
+        # Сумма всех счетов
+        sum_all_accounts = accounts.aggregate(total=Sum('balance'))['total'] or 0
+
+        # Данные для графика (пустые, так как статистика перенесена в users app)
+        chart_combine = {'labels': [], 'datasets': []}
 
         context.update(
             {
@@ -360,15 +100,9 @@ class AccountView(
                     user=self.request.user,
                     initial=initial_form_data,
                 ),
-                'receipt_info_by_month': receipt_info_by_month,
-                'income_expense': income_expense,
                 'transfer_money_log': transfer_money_log,
-                'chart_combine': json.dumps(chart_combined),
+                'chart_combine': chart_combine,
                 'sum_all_accounts': sum_all_accounts,
-                'sum_all_accounts_prev': sum_all_accounts_prev,
-                'sum_all_accounts_delta': sum_all_accounts_delta,
-                'currencies': currencies,
-                'is_multi_currency': is_multi_currency,
             },
         )
 

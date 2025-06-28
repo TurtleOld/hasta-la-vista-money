@@ -503,3 +503,69 @@ table {
     width: 1.5em;
     text-align: center;
 }
+<<<<<<< HEAD
+
+.statistics-page {
+    .card {
+        border: none;
+        border-radius: 15px;
+    }
+
+    .table th {
+        border-top: none;
+        font-weight: 600;
+    }
+
+    .badge {
+        font-size: 0.8em;
+    }
+
+    .nav-tabs .nav-link {
+        border: none;
+        color: #6c757d;
+
+        &.active {
+            color: #0d6efd;
+            border-bottom: 2px solid #0d6efd;
+        }
+    }
+
+    .list-group-item {
+        border-left: none;
+        border-right: none;
+    }
+
+    .statistics-card {
+        transition: transform 0.2s ease-in-out;
+
+        &:hover {
+            transform: translateY(-2px);
+        }
+    }
+
+    .chart-container {
+        height: 400px;
+    }
+
+    .statistics-summary {
+        .card {
+            &.bg-primary {
+                background: linear-gradient(135deg, #0d6efd, #0b5ed7) !important;
+            }
+
+            &.bg-success {
+                background: linear-gradient(135deg, #198754, #157347) !important;
+            }
+
+            &.bg-info {
+                background: linear-gradient(135deg, #0dcaf0, #0aa2c0) !important;
+            }
+
+            &.bg-warning {
+                background: linear-gradient(135deg, #ffc107, #e0a800) !important;
+            }
+        }
+    }
+}
+=======
+>>>>>>> 98108e010e101bdfc06b2927a31cd1c4c7df188c

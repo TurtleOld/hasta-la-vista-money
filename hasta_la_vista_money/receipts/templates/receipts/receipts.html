@@ -13,7 +13,6 @@
     {% include 'receipts/filter.html' %}
     {% include 'receipts/modals/add_receipt.html' %}
     {% include 'receipts/modals/add_seller.html' %}
-    {% include 'receipts/modals/receipts_statistics.html' %}
 </div>
 
 <div class="container">
@@ -45,13 +44,10 @@
                             </div>
                         </div>
                         <div class="col-md-6 text-md-end">
-                            <button type="button"
-                                    class="btn btn-light btn-lg"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#receipts-statistics">
+                            <a href="{% url 'users:statistics' %}" class="btn btn-light btn-lg">
                                 <i class="bi bi-graph-up me-2"></i>
-                                {% translate 'Подробная статистика' %}
-                            </button>
+                                {% translate 'Детальная статистика' %}
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -72,14 +68,14 @@
                         </a>
                         <button type="button"
                                 class="btn btn-outline-primary btn-sm"
-                                data-bs-toggle="modal" 
+                                data-bs-toggle="modal"
                                 data-bs-target="#add-seller">
                             <i class="bi bi-plus-lg me-1"></i>
                             {% translate 'Добавить продавца' %}
                         </button>
                         <button type="button"
                                 class="btn btn-success btn-sm add-receipt-button"
-                                data-bs-toggle="modal" 
+                                data-bs-toggle="modal"
                                 data-bs-target="#add-receipt">
                             <i class="bi bi-plus-lg me-1"></i>
                             {% translate 'Добавить чек' %}
@@ -134,7 +130,7 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Quick Product Preview -->
                     <div class="products-preview">
                         <small class="text-muted">{% translate 'Товары:' %}</small>
@@ -243,7 +239,7 @@
                                         <span class="fw-bold">{% translate 'Итоговая сумма:' %}</span>
                                         <span class="fw-bold text-success fs-5">{{ receipt.total_sum | comma }}</span>
                                     </div>
-                                    
+
                                     {% if receipt.nds10 or receipt.nds20 %}
                                     <div class="summary-item d-flex justify-content-between mb-2">
                                         <span>{% translate 'НДС:' %}</span>
@@ -257,7 +253,7 @@
                                         </span>
                                     </div>
                                     {% endif %}
-                                    
+
                                     <div class="summary-item d-flex justify-content-between mb-2">
                                         <span>{% translate 'Списано со счёта:' %}</span>
                                         <span class="text-primary">{{ receipt.account }}</span>
