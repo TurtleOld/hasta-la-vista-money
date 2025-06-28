@@ -32,14 +32,7 @@ from hasta_la_vista_money.users.forms import (
     UserLoginForm,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.income.models import Income
-from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import Receipt
 from rest_framework_simplejwt.tokens import RefreshToken
-from datetime import timedelta
-from django.utils import timezone
-import json
 
 
 class IndexView(TemplateView):
@@ -64,7 +57,7 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
             Account.objects.filter(user=user).aggregate(total=Sum('balance'))['total']
             or 0
         )
-        
+
         accounts_count = Account.objects.filter(user=user).count()
 
         current_month_expenses = (
@@ -577,7 +570,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             'credits': {'enabled': False},
             'exporting': {'enabled': False},
         }
-        
+
         context.update(
             {
                 'months_data': months_data,
