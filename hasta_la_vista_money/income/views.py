@@ -1,3 +1,5 @@
+from collections import OrderedDict
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from django.contrib import messages
@@ -6,6 +8,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils import formats
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, UpdateView
@@ -112,6 +115,26 @@ class IncomeView(
             'income',
         )
 
+        total_amount_page = sum(income['amount'] for income in pages_income)
+        total_amount_period = sum(income['amount'] for income in income_by_month)
+
+        monthly_data = OrderedDict()
+        sorted_incomes = sorted(income_by_month, key=lambda x: x['date'])
+        for income in sorted_incomes:
+            date_val = income['date']
+            if isinstance(date_val, str):
+                try:
+                    date_val = datetime.fromisoformat(date_val)
+                except ValueError:
+                    # Пропускаем записи с некорректным форматом даты
+                    continue
+            month_label = formats.date_format(date_val, 'F Y')
+            if month_label not in monthly_data:
+                monthly_data[month_label] = 0
+            monthly_data[month_label] += income['amount']
+        chart_labels = list(monthly_data.keys())
+        chart_values = [float(v) for v in monthly_data.values()]
+
         context.update(
             {
                 'categories': categories,
@@ -119,6 +142,10 @@ class IncomeView(
                 'income_by_month': pages_income,
                 'income_form': income_form,
                 'flattened_categories': flattened_categories,
+                'total_amount_page': total_amount_page,
+                'total_amount_period': total_amount_period,
+                'chart_labels': chart_labels,
+                'chart_values': chart_values,
             },
         )
 
@@ -149,6 +176,10 @@ class IncomeCreateView(
             )
             return JsonResponse(response_data)
         return super().form_valid(form)
+
+    def form_invalid(self, form):
+        # Передаем объект формы в шаблон
+        return self.render_to_response(self.get_context_data(income_form=form))
 
 
 class IncomeCopyView(

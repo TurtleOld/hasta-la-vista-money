@@ -1,16 +1,24 @@
 {% load comma %}
 {% load i18n %}
 
+{% if chart_labels and chart_values %}
+<div class="mb-3">
+    <canvas id="incomeSparkline" height="60"></canvas>
+    {{ chart_labels|json_script:"chart-labels" }}
+    {{ chart_values|json_script:"chart-values" }}
+</div>
+{% endif %}
+
 <div id="income-table" class="table-responsive">
-    <table class="table table-light table-striped-columns table-sm table-hover align-middle text-center table-bordered shadow"
+    <table class="table table-white table-striped-columns table-sm table-hover align-middle text-center table-bordered shadow"
            aria-label="table income">
         <caption>{% translate "Доходы" %}</caption>
         <thead>
         <tr>
-            <th class="col-2">{% translate 'Дата' %}</th>
-            <th class="col-2">{% translate 'Сумма' %}</th>
-            <th class="col-2">{% translate 'Категория' %}</th>
-            <th class="col-2">{% translate 'Счёт' %}</th>
+            <th class="col-2 sortable" data-sort="date" title="Сортировать по дате">{% translate 'Дата' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 sortable" data-sort="amount" title="Сортировать по сумме">{% translate 'Сумма' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 sortable" data-sort="category" title="Сортировать по категории">{% translate 'Категория' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 sortable" data-sort="account" title="Сортировать по счёту">{% translate 'Счёт' %} <span class="sort-indicator"></span></th>
             <th class="col-2">
                 <button type="button" class="btn btn-outline-success"
                         data-bs-toggle="modal"
@@ -49,7 +57,8 @@
                 <td>
                     <div class="table-buttons">
                         <a href="{% url 'income:change' income.id %}"
-                           class="change-object-button btn btn-info border-0 btn-sm me-1">
+                           class="change-object-button btn btn-info border-0 btn-sm me-1"
+                           title="{% translate 'Редактировать доход' %}">
                             <svg xmlns="http://www.w3.org/2000/svg"
                                  width="12" height="12"
                                  fill="currentColor"
@@ -65,7 +74,8 @@
                                    value="{{ income.id }}">
                             <button class="btn btn-warning border-0 btn-sm me-1"
                                     data-nonce="{{ request.csp_nonce }}"
-                                    type="submit">
+                                    type="submit"
+                                    title="{% translate 'Скопировать доход' %}">
                                 <svg xmlns="http://www.w3.org/2000/svg"
                                      width="16" height="16" fill="currentColor"
                                      class="bi bi-copy" viewBox="0 0 16 16">
@@ -97,5 +107,50 @@
             </tr>
         {% endfor %}
         </tbody>
+        <tfoot>
+        <tr>
+            <th colspan="5" class="text-end">
+                <div class="d-flex flex-column align-items-end">
+                    <span><strong>{% translate 'Итого за страницу:' %}</strong> {{ total_amount_page|comma }}</span>
+                    <span><strong>{% translate 'Итого за период:' %}</strong> {{ total_amount_period|comma }}</span>
+                </div>
+            </th>
+        </tr>
+        </tfoot>
     </table>
 </div>
+
+{% if chart_labels and chart_values %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script nonce="{{request.csp_nonce}}">
+    const labels = JSON.parse(document.getElementById('chart-labels').textContent);
+    const values = JSON.parse(document.getElementById('chart-values').textContent);
+    const ctx = document.getElementById('incomeSparkline').getContext('2d');
+    const incomeSparkline = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                borderColor: '#198754',
+                backgroundColor: 'rgba(25,135,84,0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 2,
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false },
+                y: { display: false }
+            },
+            elements: { line: { borderCapStyle: 'round' } },
+            responsive: true,
+            maintainAspectRatio: false,
+        }
+    });
+</script>
+{% endif %}

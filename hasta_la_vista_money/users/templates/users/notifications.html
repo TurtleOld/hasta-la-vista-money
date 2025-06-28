@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate 'Уведомления' %} - {{ user.username }}{% endblock %}
+
+{% block content %}
+    <div class="container-fluid">
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="bi bi-bell"></i> {% translate 'Уведомления' %}</h2>
+                    <a href="{% url 'users:profile' user.id %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i> {% translate 'Назад к профилю' %}
+                    </a>
+                </div>
+            </div>
+
+            {% if notifications %}
+                <div class="col-12">
+                    <div class="row">
+                        {% for notification in notifications %}
+                            <div class="col-12 mb-3">
+                                <div class="alert alert-{{ notification.type }} alert-dismissible fade show" role="alert">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi {{ notification.icon }} fs-4 me-3"></i>
+                                        <div>
+                                            <h6 class="alert-heading mb-1">{{ notification.title }}</h6>
+                                            <p class="mb-0">{{ notification.message }}</p>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-body text-center py-5">
+                            <i class="bi bi-check-circle text-success fs-1 mb-3"></i>
+                            <h4>{% translate 'Все хорошо!' %}</h4>
+                            <p class="text-muted">{% translate 'У вас нет активных уведомлений' %}</p>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Рекомендации -->
+            <div class="col-12 mt-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-lightbulb"></i> {% translate 'Рекомендации' %}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>{% translate 'Для улучшения финансового состояния:' %}</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="bi bi-check text-success"></i> {% translate 'Регулярно отслеживайте расходы' %}</li>
+                                    <li><i class="bi bi-check text-success"></i> {% translate 'Создавайте бюджет на месяц' %}</li>
+                                    <li><i class="bi bi-check text-success"></i> {% translate 'Анализируйте категории расходов' %}</li>
+                                    <li><i class="bi bi-check text-success"></i> {% translate 'Ставьте финансовые цели' %}</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>{% translate 'Полезные функции:' %}</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="bi bi-graph-up text-primary"></i> {% translate 'Используйте отчеты для анализа' %}</li>
+                                    <li><i class="bi bi-receipt text-warning"></i> {% translate 'Добавляйте чеки для автоматизации' %}</li>
+                                    <li><i class="bi bi-calendar text-info"></i> {% translate 'Планируйте доходы и расходы' %}</li>
+                                    <li><i class="bi bi-download text-secondary"></i> {% translate 'Экспортируйте данные для анализа' %}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .alert {
+            border: none;
+            border-radius: 15px;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+        }
+        .list-unstyled li {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+{% endblock %} 

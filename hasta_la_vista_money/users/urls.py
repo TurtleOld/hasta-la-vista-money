@@ -5,6 +5,9 @@ from hasta_la_vista_money.users.views import (
     LoginUser,
     SetPasswordUserView,
     UpdateUserView,
+    ExportUserDataView,
+    UserStatisticsView,
+    UserNotificationsView,
 )
 
 app_name = 'users'
@@ -23,4 +26,7 @@ urlpatterns = [
         name='update_user',
     ),
     path('list/user', ListUsers.as_view(), name='list_user'),
+    path('export-data/', ExportUserDataView.as_view(), name='export_data'),
+    path('statistics/', UserStatisticsView.as_view(), name='statistics'),
+    path('notifications/', UserNotificationsView.as_view(), name='notifications'),
 ]
