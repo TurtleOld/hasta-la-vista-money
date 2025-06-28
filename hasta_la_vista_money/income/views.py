@@ -1,3 +1,5 @@
+from collections import OrderedDict
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from django.contrib import messages
@@ -6,6 +8,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils import formats
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, UpdateView
@@ -33,9 +36,6 @@ from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
-from collections import OrderedDict
-from django.utils import formats
-from datetime import datetime
 
 
 class BaseView:
@@ -125,7 +125,8 @@ class IncomeView(
             if isinstance(date_val, str):
                 try:
                     date_val = datetime.fromisoformat(date_val)
-                except Exception:
+                except ValueError:
+                    # Пропускаем записи с некорректным форматом даты
                     continue
             month_label = formats.date_format(date_val, 'F Y')
             if month_label not in monthly_data:

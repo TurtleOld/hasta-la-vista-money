@@ -1,19 +1,20 @@
 import json
+from collections import defaultdict
+from datetime import date
+from decimal import Decimal
+
 from django.db.models import Sum
+from django.db.models.functions import TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
-from hasta_la_vista_money.budget.models import Planning, DateList
+from hasta_la_vista_money.budget.models import DateList, Planning
 from hasta_la_vista_money.commonlogic.generate_dates import generate_date_list
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
-from datetime import date
-from decimal import Decimal
-from collections import defaultdict
-from django.db.models.functions import TruncMonth
 
 
 def get_fact_amount(user, category, month, type_):
@@ -77,8 +78,6 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
         expense_categories = list(get_categories(user, 'expense'))
         income_categories = list(get_categories(user, 'income'))
 
-        # ----------- Расходы -----------
-        # Все расходы за нужные месяцы и категории одним запросом, группировка по месяцу
         if months:
             expenses = (
                 Expense.objects.filter(
@@ -137,7 +136,6 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
                 total_plan_expense[i] += plan
             expense_data.append(row)
 
-        # ----------- Доходы -----------
         if months:
             incomes = (
                 Income.objects.filter(
@@ -196,19 +194,16 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
                 total_plan_income[i] += plan
             income_data.append(row)
 
-        # Для графика выполнения плана: % выполнения (факт/план * 100)
         chart_labels = [m.strftime('%b %Y') for m in months]
         chart_plan_execution_income = []
         chart_plan_execution_expense = []
         for i in range(len(months)):
-            # Для доходов
             if total_plan_income[i] > 0:
                 income_percent = (total_fact_income[i] / total_plan_income[i]) * 100
             else:
                 income_percent = 0 if total_fact_income[i] == 0 else 100
             chart_plan_execution_income.append(float(income_percent))
 
-            # Для расходов
             if total_plan_expense[i] > 0:
                 expense_percent = (total_fact_expense[i] / total_plan_expense[i]) * 100
             else:

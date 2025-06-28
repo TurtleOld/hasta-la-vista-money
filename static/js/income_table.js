@@ -3,6 +3,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const headers = table.querySelectorAll('th.sortable');
     let sortDirection = {};
 
+    // Валидация типов сортировки
+    const validSortTypes = ['amount', 'date', 'category', 'account'];
+
+    function isValidSortType(type) {
+        return validSortTypes.includes(type);
+    }
+
     function compareRows(a, b, type, dir) {
         let valA = a, valB = b;
         if (type === 'amount') {
@@ -24,21 +31,37 @@ document.addEventListener('DOMContentLoaded', function () {
     headers.forEach((header, idx) => {
         header.addEventListener('click', function () {
             const type = header.getAttribute('data-sort');
+
+            // Валидация типа сортировки
+            if (!isValidSortType(type)) {
+                console.warn('Invalid sort type:', type);
+                return;
+            }
+
             const tbody = table.querySelector('tbody');
             const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => row.querySelectorAll('td').length);
             const dir = sortDirection[type] === 'asc' ? 'desc' : 'asc';
-            sortDirection = {}; sortDirection[type] = dir;
+            sortDirection = {};
+            sortDirection[type] = dir;
 
             // Сбросить индикаторы
             headers.forEach(h => h.querySelector('.sort-indicator').textContent = '');
             header.querySelector('.sort-indicator').textContent = dir === 'asc' ? '▲' : '▼';
 
             rows.sort((rowA, rowB) => {
-                let cellA = rowA.querySelectorAll('td')[idx].textContent.trim();
-                let cellB = rowB.querySelectorAll('td')[idx].textContent.trim();
+                const cellsA = rowA.querySelectorAll('td');
+                const cellsB = rowB.querySelectorAll('td');
+
+                // Проверка валидности индекса
+                if (idx >= cellsA.length || idx >= cellsB.length) {
+                    return 0;
+                }
+
+                let cellA = cellsA[idx].textContent.trim();
+                let cellB = cellsB[idx].textContent.trim();
                 return compareRows(cellA, cellB, type, dir);
             });
             rows.forEach(row => tbody.appendChild(row));
         });
     });
-}); 
+});
