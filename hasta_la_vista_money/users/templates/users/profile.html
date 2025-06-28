@@ -2,50 +2,327 @@
 {% load crispy_forms_tags %}
 {% load i18n %}
 {% load static %}
+{% load comma %}
 
 {% block title %}{% translate 'Личный кабинет пользователя ' %}
     {{ user.username }}{% endblock %}
+
 {% block content %}
-    <div class="container">
-        <div class="row mt-5">
-            <div class="col-xl-6">
-                <ul class="nav nav-tabs" id="myTab" role="list">
-                    <li class="nav-item" role="listitem">
-                        <button class="nav-link active" id="personal-info-tab"
-                                data-bs-toggle="tab"
-                                data-bs-target="#personal-info" type="button"
-                                role="tab" aria-controls="personal-info"
-                                aria-selected="true">{% translate 'Персональная информация' %}
-                        </button>
-                    </li>
-                </ul>
-                <div class="tab-content" id="myTabContent">
-                    <div class="tab-pane fade active show" id="personal-info"
-                         role="tabpanel" aria-labelledby="personal-tab">
-                        <form class="ajax-form m-2" method="POST"
-                              action="{% url 'users:update_user' user.id %}">
-                            {% csrf_token %}
-                            {% if user_update %}
-                                {% for field in user_update %}
-                                    <div class="form-group {% if field.errors %} has-error{% endif %}">
-                                        {{ field | as_crispy_field }}
-                                        {% if field.errors %}
-                                            {% for error in field.errors %}
-                                                <p class="help-block">{{ error }}</p>
+    <div class="container-fluid">
+        <div class="row mt-4">
+            <!-- Информация о пользователе -->
+            <div class="col-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="avatar-circle bg-primary text-white d-flex align-items-center justify-content-center" 
+                                     style="width: 80px; height: 80px; border-radius: 50%; font-size: 2rem;">
+                                    {{ user.username|first|upper }}
+                                </div>
+                            </div>
+                            <div class="col">
+                                <h3 class="mb-1">{{ user.get_full_name|default:user.username }}</h3>
+                                <p class="text-muted mb-0">
+                                    <i class="bi bi-envelope"></i> {{ user.email|default:"Email не указан" }}
+                                </p>
+                                <p class="text-muted mb-0">
+                                    <i class="bi bi-calendar"></i> 
+                                    {% translate 'Зарегистрирован' %}: {{ user.date_joined|date:"d.m.Y" }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Статистика -->
+            <div class="col-12 mb-4">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-primary text-white shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">{% translate 'Общий баланс' %}</h6>
+                                        <h4 class="mb-0">{{ user_statistics.total_balance|floatformat:2 }} ₽</h4>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="bi bi-wallet fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-success text-white shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">{% translate 'Доходы (месяц)' %}</h6>
+                                        <h4 class="mb-0">{{ user_statistics.current_month_income|floatformat:2 }} ₽</h4>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="bi bi-arrow-up-circle fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-danger text-white shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">{% translate 'Расходы (месяц)' %}</h6>
+                                        <h4 class="mb-0">{{ user_statistics.current_month_expenses|floatformat:2 }} ₽</h4>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="bi bi-arrow-down-circle fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card {% if user_statistics.monthly_savings >= 0 %}bg-info{% else %}bg-warning{% endif %} text-white shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">{% translate 'Сбережения' %}</h6>
+                                        <h4 class="mb-0">{{ user_statistics.monthly_savings|floatformat:2 }} ₽</h4>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="bi bi-piggy-bank fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладки -->
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" id="profileTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="personal-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#personal" type="button" role="tab">
+                                    <i class="bi bi-person"></i> {% translate 'Персональная информация' %}
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="statistics-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#statistics" type="button" role="tab">
+                                    <i class="bi bi-graph-up"></i> {% translate 'Статистика' %}
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="recent-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#recent" type="button" role="tab">
+                                    <i class="bi bi-clock-history"></i> {% translate 'Последние операции' %}
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="settings-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#settings" type="button" role="tab">
+                                    <i class="bi bi-gear"></i> {% translate 'Настройки' %}
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="profileTabsContent">
+                            <!-- Персональная информация -->
+                            <div class="tab-pane fade show active" id="personal" role="tabpanel">
+                                <form class="ajax-form" method="POST" action="{% url 'users:update_user' user.id %}">
+                                    {% csrf_token %}
+                                    <div class="row">
+                                        {% if user_update %}
+                                            {% for field in user_update %}
+                                                <div class="col-md-6 mb-3">
+                                                    <div class="form-group {% if field.errors %} has-error{% endif %}">
+                                                        {{ field | as_crispy_field }}
+                                                        {% if field.errors %}
+                                                            {% for error in field.errors %}
+                                                                <p class="help-block text-danger">{{ error }}</p>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
                                             {% endfor %}
                                         {% endif %}
                                     </div>
-                                {% endfor %}
-                            {% endif %}
-                            <button type="submit" class="btn btn-success">
-                                {% translate 'Сохранить' %}
-                            </button>
-                            <a class="btn btn-success" href="{% url 'users:password' %}">{% translate 'Установить новый пароль' %}</a>
-                        </form>
+                                    <div class="mt-3">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="bi bi-check-circle"></i> {% translate 'Сохранить изменения' %}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- Статистика -->
+                            <div class="tab-pane fade" id="statistics" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>{% translate 'Общая информация' %}</h5>
+                                        <ul class="list-group list-group-flush">
+                                            <li class="list-group-item d-flex justify-content-between">
+                                                <span>{% translate 'Количество счетов' %}</span>
+                                                <span class="badge bg-primary">{{ user_statistics.accounts_count }}</span>
+                                            </li>
+                                            <li class="list-group-item d-flex justify-content-between">
+                                                <span>{% translate 'Количество чеков' %}</span>
+                                                <span class="badge bg-info">{{ user_statistics.receipts_count }}</span>
+                                            </li>
+                                            <li class="list-group-item d-flex justify-content-between">
+                                                <span>{% translate 'Сравнение с прошлым месяцем' %}</span>
+                                                <span class="badge {% if user_statistics.monthly_savings > user_statistics.last_month_savings %}bg-success{% else %}bg-warning{% endif %}">
+                                                    {% if user_statistics.monthly_savings > user_statistics.last_month_savings %}
+                                                        <i class="bi bi-arrow-up"></i>
+                                                    {% else %}
+                                                        <i class="bi bi-arrow-down"></i>
+                                                    {% endif %}
+                                                </span>
+                                            </li>
+                                        </ul>
+                                        <div class="mt-3">
+                                            <a href="{% url 'users:statistics' %}" class="btn btn-outline-primary">
+                                                <i class="bi bi-graph-up"></i> {% translate 'Детальная статистика' %}
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h5>{% translate 'Топ категорий расходов (текущий месяц)' %}</h5>
+                                        {% if user_statistics.top_expense_categories %}
+                                            <div class="list-group list-group-flush">
+                                                {% for category in user_statistics.top_expense_categories %}
+                                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <span>{{ category.category__name }}</span>
+                                                        <span class="badge bg-danger rounded-pill">
+                                                            {{ category.total|floatformat:2 }} ₽
+                                                        </span>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted">{% translate 'Нет данных о расходах за текущий месяц' %}</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Последние операции -->
+                            <div class="tab-pane fade" id="recent" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>{% translate 'Последние расходы' %}</h5>
+                                        {% if user_statistics.recent_expenses %}
+                                            <div class="list-group">
+                                                {% for expense in user_statistics.recent_expenses %}
+                                                    <div class="list-group-item">
+                                                        <div class="d-flex w-100 justify-content-between">
+                                                            <h6 class="mb-1">{{ expense.category.name }}</h6>
+                                                            <small class="text-danger">{{ expense.amount|floatformat:2 }} ₽</small>
+                                                        </div>
+                                                        <p class="mb-1">{{ expense.account.name_account }}</p>
+                                                        <small class="text-muted">{{ expense.date|date:"d.m.Y" }}</small>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted">{% translate 'Нет данных о расходах' %}</p>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h5>{% translate 'Последние доходы' %}</h5>
+                                        {% if user_statistics.recent_incomes %}
+                                            <div class="list-group">
+                                                {% for income in user_statistics.recent_incomes %}
+                                                    <div class="list-group-item">
+                                                        <div class="d-flex w-100 justify-content-between">
+                                                            <h6 class="mb-1">{{ income.category.name }}</h6>
+                                                            <small class="text-success">{{ income.amount|floatformat:2 }} ₽</small>
+                                                        </div>
+                                                        <p class="mb-1">{{ income.account.name_account }}</p>
+                                                        <small class="text-muted">{{ income.date|date:"d.m.Y" }}</small>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted">{% translate 'Нет данных о доходах' %}</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Настройки -->
+                            <div class="tab-pane fade" id="settings" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>{% translate 'Безопасность' %}</h5>
+                                        <div class="d-grid gap-2">
+                                            <a class="btn btn-outline-primary" href="{% url 'users:password' %}">
+                                                <i class="bi bi-key"></i> {% translate 'Изменить пароль' %}
+                                            </a>
+                                            <a class="btn btn-outline-info" href="{% url 'finance_account:list' %}">
+                                                <i class="bi bi-wallet"></i> {% translate 'Управление счетами' %}
+                                            </a>
+                                            <a class="btn btn-outline-success" href="{% url 'reports:list' %}">
+                                                <i class="bi bi-graph-up"></i> {% translate 'Отчеты и аналитика' %}
+                                            </a>
+                                            <a class="btn btn-outline-warning" href="{% url 'users:notifications' %}">
+                                                <i class="bi bi-bell"></i> {% translate 'Уведомления' %}
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h5>{% translate 'Быстрые действия' %}</h5>
+                                        <div class="d-grid gap-2">
+                                            <a class="btn btn-outline-danger" href="{% url 'expense:list' %}">
+                                                <i class="bi bi-plus-circle"></i> {% translate 'Добавить расход' %}
+                                            </a>
+                                            <a class="btn btn-outline-success" href="{% url 'income:list' %}">
+                                                <i class="bi bi-plus-circle"></i> {% translate 'Добавить доход' %}
+                                            </a>
+                                            <a class="btn btn-outline-warning" href="{% url 'receipts:list' %}">
+                                                <i class="bi bi-receipt"></i> {% translate 'Добавить чек' %}
+                                            </a>
+                                            <a class="btn btn-outline-secondary" href="{% url 'users:export_data' %}">
+                                                <i class="bi bi-download"></i> {% translate 'Экспорт данных' %}
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <!-- /.container -->
+
+    <style>
+        .avatar-circle {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .nav-tabs .nav-link {
+            border: none;
+            color: #6c757d;
+        }
+        .nav-tabs .nav-link.active {
+            color: #0d6efd;
+            border-bottom: 2px solid #0d6efd;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+        }
+        .list-group-item {
+            border: none;
+            border-bottom: 1px solid #f8f9fa;
+        }
+    </style>
 {% endblock %}

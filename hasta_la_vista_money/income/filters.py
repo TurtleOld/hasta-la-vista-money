@@ -1,6 +1,5 @@
 import django_filters
 from django.forms import Select
-from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
@@ -9,11 +8,11 @@ class IncomeFilter(django_filters.FilterSet):
     category = django_filters.ModelChoiceFilter(
         queryset=IncomeCategory.objects.all(),
         field_name='category',
-        label=_('Категория'),
+        label='',
         widget=Select(attrs={'class': 'form-control mb-2'}),
     )
     date = django_filters.DateFromToRangeFilter(
-        label=_('Период'),
+        label='',
         widget=django_filters.widgets.RangeWidget(
             attrs={
                 'class': 'form-control',
@@ -23,7 +22,7 @@ class IncomeFilter(django_filters.FilterSet):
     )
     account = django_filters.ModelChoiceFilter(
         queryset=Account.objects.all(),
-        label=_('Счёт'),
+        label='',
         widget=Select(attrs={'class': 'form-control mb-4'}),
     )
 
