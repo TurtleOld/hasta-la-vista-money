@@ -8,38 +8,70 @@
 {% block content %}
     <div class="container-fluid">
         {% include 'finance_account/modals/exchange_money_account.html' %}
-        {% include 'finance_account/modals/statistics.html' %}
+
         <div class="row">
-            <div class="col-xl-5 mt-5">
-                <div id="chart_combine"></div>
-            </div>
-            <!-- /.col-5 .mt-5 -->
-            <div class="offset-xl-2 col-xl-3 mt-5">
-                {% include 'finance_account/card_total_balance.html' %}
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="bi bi-wallet2"></i> {% translate 'Мои счета' %}</h2>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'users:statistics' %}" class="btn btn-outline-success">
+                            <i class="bi bi-graph-up"></i> {% translate 'Детальная статистика' %}
+                        </a>
+                        <a href="{% url 'finance_account:create' %}"
+                            class="btn btn-outline-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg"
+                                width="16" height="16"
+                                fill="currentColor"
+                                class="bi bi-plus-lg"
+                                viewBox="0 0 16 16">
+                                <path fill-rule="evenodd"
+                                    d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"></path>
+                            </svg>
+                            {% translate 'Добавить счет' %}
+                        </a>
+
+                        <button type="button"
+                            class="btn btn-outline-info"
+                            data-bs-toggle="modal"
+                            data-bs-target="#exchange-account">
+                            <svg xmlns="http://www.w3.org/2000/svg"
+                                width="16" height="16"
+                                fill="currentColor"
+                                class="bi bi-arrow-left-right"
+                                viewBox="0 0 16 16">
+                                <path fill-rule="evenodd"
+                                    d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z"></path>
+                            </svg>
+                            {% translate 'Перевести средства' %}
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-        <!-- /.row -->
-        <div class="row d-flex justify-content-between justify-content-xl-start mt-5">
-            <div class="col-xl-4 t-5 pe-xl-5">
+
+        <div class="row">
+            <div class="col-xl-8">
                 <div class="account overflow-auto shadow rounded-4">
                     {% include 'finance_account/account_table.html' %}
                 </div>
             </div>
-            <div class="col-xl-6 text-center">
-                <button type="button"
-                        class="btn btn-outline-primary btn-lg d-flex align-items-center gap-2 mt-2 mt-xl-0 fs-6 shadow"
-                        data-bs-toggle="modal" data-bs-target="#statistics"
-                        title="{% translate 'Показать подробную статистику пользователя' %}">
-                    <span style="font-size: 1.5rem;">📊</span>
-                    {% translate 'Общая статистика пользователя' %} {{ user.username }}
-                </button>
+            <div class="col-xl-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-info-circle"></i> {% translate 'Информация' %}</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            {% translate 'Здесь вы можете управлять своими счетами, переводить средства между ними и просматривать балансы.' %}
+                        </p>
+                        <hr>
+                        <p class="text-muted">
+                            {% translate 'Для просмотра детальной статистики по доходам, расходам, чекам и переводам перейдите в раздел' %}
+                            <a href="{% url 'users:statistics' %}" class="text-decoration-none">{% translate 'Детальная статистика' %}</a>.
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <script nonce="{{ request.csp_nonce }}"
-            src="https://code.highcharts.com/highcharts.js">
-    </script>
-    <script nonce="{{ request.csp_nonce }}">
-        Highcharts.chart('chart_combine', {{ chart_combine|safe }})
-    </script>
 {% endblock %}
