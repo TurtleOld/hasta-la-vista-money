@@ -452,12 +452,10 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             .order_by('-total')[:10]
         )
 
-        # Статистика по чекам
         from hasta_la_vista_money.commonlogic.views import collect_info_receipt
 
         receipt_info_by_month = collect_info_receipt(user=user)
 
-        # Статистика доходов и расходов
         from hasta_la_vista_money.finance_account.prepare import (
             collect_info_expense,
             collect_info_income,
@@ -516,11 +514,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             .order_by('date')
         )
 
-        print(f'Количество записей расходов: {expense_dataset.count()}')
-        print(f'Количество записей доходов: {income_dataset.count()}')
-        print(f'Данные расходов: {list(expense_dataset)}')
-        print(f'Данные доходов: {list(income_dataset)}')
-
         # Преобразование данных для графика
         def transform_data(dataset):
             dates = []
@@ -555,12 +548,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 for date in all_dates
             ]
 
-            print(f'Всего дат: {len(all_dates)}')
-            print(f'Даты: {all_dates}')
-            print(f'Расходы: {expense_series_data}')
-            print(f'Доходы: {income_series_data}')
-
-            # Если только одна точка данных, добавляем еще одну для лучшего отображения
             if len(all_dates) == 1:
                 # Добавляем предыдущий день
                 single_date = datetime.strptime(all_dates[0], '%Y-%m-%d')

@@ -275,16 +275,9 @@
 
     <script nonce="{{ request.csp_nonce }}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script nonce="{{ request.csp_nonce }}">
-        // Отладочная информация
-        console.log('Chart.js загружен:', typeof Chart);
 
-        // Ждем загрузки DOM
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM загружен');
-
             const chartData = {{ chart_combined|safe }};
-            console.log('Данные графика:', chartData);
-
             const ctx = document.getElementById('incomeExpenseChart');
             if (ctx && typeof Chart !== 'undefined') {
                 try {
@@ -374,7 +367,6 @@
                             }
                         }
                     });
-                    console.log('График успешно создан:', chart);
                 } catch (error) {
                     console.error('Ошибка при создании графика:', error);
                 }
