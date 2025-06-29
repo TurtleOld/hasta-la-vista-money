@@ -22,7 +22,11 @@ class ReceiptListAPIView(ListCreateAPIView):
     permission_classes = (IsAuthenticated,)
 
     def get_queryset(self) -> QuerySet[Receipt, Receipt]:  # type: ignore[override]
-        return Receipt.objects.filter(user=self.request.user)
+        return (
+            Receipt.objects.filter(user=self.request.user)
+            .select_related('seller', 'account', 'user')
+            .prefetch_related('product')
+        )
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -37,7 +41,9 @@ class SellerDetailAPIView(RetrieveAPIView):
     lookup_field = 'id'
 
     def get_queryset(self) -> QuerySet[Seller, Seller]:  # type: ignore[override]
-        return Seller.objects.filter(user__id=self.request.user.pk)
+        return Seller.objects.filter(user__id=self.request.user.pk).select_related(
+            'user',
+        )
 
 
 class DataUrlAPIView(APIView):
@@ -127,14 +133,15 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                     nds20=nds20,
                 )
 
+                products_data = []
                 for product_data in products_data:
-                    # Удаляем receipt из product_data, чтобы избежать ошибки
                     product_data.pop('receipt', None)
                     product_data['user'] = user
-                    # Создаем продукт
-                    product = Product.objects.create(**product_data)
-                    # Добавляем продукт к чеку
-                    receipt.product.add(product)
+                    products_data.append(Product(**product_data))
+
+                products = Product.objects.bulk_create(products_data)
+
+                receipt.product.set(products)
 
                 return Response(
                     ReceiptSerializer(receipt).data,
@@ -156,14 +163,15 @@ class SellerAutocompleteAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         query = request.GET.get('q', '').strip()
-        sellers: QuerySet[Seller, Seller] = Seller.objects.filter(user=request.user)
+        sellers: QuerySet[Seller, Seller] = Seller.objects.filter(
+            user=request.user,
+        ).only('name_seller')
         if query:
             sellers = sellers.filter(name_seller__icontains=query)
-        seller_names: QuerySet[Seller, str] = (
-            sellers.order_by('name_seller')
-            .values_list('name_seller', flat=True)
-            .distinct()[:10]
-        )
+        seller_names: QuerySet[Seller, str] = sellers.values_list(
+            'name_seller',
+            flat=True,
+        ).distinct()[:10]
         return Response({'results': list(seller_names)})
 
 
@@ -172,12 +180,13 @@ class ProductAutocompleteAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         query = request.GET.get('q', '').strip()
-        products: QuerySet[Product, Product] = Product.objects.filter(user=request.user)
+        products: QuerySet[Product, Product] = Product.objects.filter(
+            user=request.user,
+        ).only('product_name')
         if query:
             products = products.filter(product_name__icontains=query)
-        product_names: QuerySet[Product, str] = (
-            products.order_by('product_name')
-            .values_list('product_name', flat=True)
-            .distinct()[:10]
-        )
+        product_names: QuerySet[Product, str] = products.values_list(
+            'product_name',
+            flat=True,
+        ).distinct()[:10]
         return Response({'results': list(product_names)})
