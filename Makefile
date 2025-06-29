@@ -75,7 +75,28 @@ coverage:
 		@uv run coverage xml
 		@uv run coverage report
 
-.PHONY: celery
-celery:
-		@cd ./app && \
-			uv run celery -A calndr worker --loglevel=info
+.PHONY: taskiq-worker
+taskiq-worker:
+		@uv run taskiq worker hasta_la_vista_money.taskiq:broker
+
+.PHONY: taskiq-scheduler
+taskiq-scheduler:
+		@uv run taskiq scheduler hasta_la_vista_money.taskiq:scheduler
+
+.PHONY: taskiq-dashboard
+taskiq-dashboard:
+		@uv run taskiq dashboard hasta_la_vista_money.taskiq:broker
+
+.PHONY: rabbitmq
+rabbitmq:
+		@docker run -d --name hlvm_rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management-alpine
+
+.PHONY: rabbitmq-stop
+rabbitmq-stop:
+		@docker stop hlvm_rabbitmq && docker rm hlvm_rabbitmq
+
+.PHONY: rabbitmq-management
+rabbitmq-management:
+		@echo "RabbitMQ Management UI: http://localhost:15672"
+		@echo "Username: guest"
+		@echo "Password: guest"
