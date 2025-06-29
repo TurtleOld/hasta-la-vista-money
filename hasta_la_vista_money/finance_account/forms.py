@@ -15,6 +15,7 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.users.models import User
 
 
 class AddAccountForm(ModelForm[Account]):
@@ -39,7 +40,7 @@ class AddAccountForm(ModelForm[Account]):
         help_text=_('Выберите из списка валюту счёта'),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
 
@@ -48,8 +49,8 @@ class AddAccountForm(ModelForm[Account]):
         fields = ['name_account', 'type_account', 'balance', 'currency']
 
 
-class TransferMoneyAccountForm(ModelForm[Account]):
-    def __init__(self, user, *args, **kwargs):
+class TransferMoneyAccountForm(ModelForm[TransferMoneyLog]):
+    def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
         """
         Конструктов класса инициализирующий две поля формы.
 
@@ -85,6 +86,8 @@ class TransferMoneyAccountForm(ModelForm[Account]):
 
     def clean(self) -> Dict[str, Any]:
         cleaned_data = super().clean()
+        if cleaned_data is None:
+            return {}
         from_account = cleaned_data.get('from_account')
         to_account = cleaned_data.get('to_account')
         amount = cleaned_data.get('amount')
@@ -103,7 +106,7 @@ class TransferMoneyAccountForm(ModelForm[Account]):
 
         return cleaned_data
 
-    def save(self, commit=True):
+    def save(self, commit: bool = True) -> TransferMoneyLog:
         from_account = self.cleaned_data['from_account']
         to_account = self.cleaned_data['to_account']
         amount = self.cleaned_data['amount']
@@ -119,7 +122,7 @@ class TransferMoneyAccountForm(ModelForm[Account]):
                 exchange_date=exchange_date,
                 notes=notes,
             )
-        return None
+        raise ValueError('Transfer failed - insufficient funds or invalid accounts')
 
     class Meta:
         model = TransferMoneyLog

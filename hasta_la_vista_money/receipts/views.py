@@ -3,6 +3,7 @@ import json
 import re
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 import structlog
 from django.contrib import messages
@@ -16,12 +17,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import (
-    CreateView,
-    DeleteView,
-    FormView,
-    ListView,
-)
+from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.custom_paginator import (
@@ -336,15 +332,17 @@ class UploadImageView(LoginRequiredMixin, FormView):
                 return self.render_error_response('Файл не найден')
 
             uploaded_file = request.FILES['file']
-            account_id = request.POST.get('account')
+            if isinstance(uploaded_file, list):
+                uploaded_file = uploaded_file[0]  # type: ignore[assignment]
 
+            account_id = request.POST.get('account')
             if not account_id:
                 return self.render_error_response('Счёт не выбран')
 
             account = get_object_or_404(Account, id=account_id, user=request.user)
 
             json_receipt = analyze_image_with_ai(uploaded_file)
-            if 'json' in json_receipt:
+            if json_receipt and 'json' in json_receipt:
                 json_receipt = self.clean_json_response(json_receipt)
 
             decode_json_receipt = json.loads(json_receipt)
@@ -443,21 +441,21 @@ class UploadImageView(LoginRequiredMixin, FormView):
         return HttpResponse(html)
 
     @staticmethod
-    def check_exist_receipt(user, number_receipt):
+    def check_exist_receipt(user: Any, number_receipt: Any) -> Any:
         return Receipt.objects.filter(
             user=user,
             number_receipt=number_receipt,
         )
 
     @staticmethod
-    def clean_json_response(text):
+    def clean_json_response(text: str) -> str:
         match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
         if match:
             return match.group(1)
         return text.strip()
 
     @staticmethod
-    def normalize_date(date_str):
+    def normalize_date(date_str: str) -> str:
         try:
             return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
                 '%d.%m.%Y %H:%M',
@@ -471,11 +469,13 @@ class UploadImageView(LoginRequiredMixin, FormView):
         """Обработка обычных POST запросов (не HTMX)"""
         try:
             uploaded_file = self.request.FILES['file']
-            user = self.request.user
+            if isinstance(uploaded_file, list):
+                uploaded_file = uploaded_file[0]  # type: ignore[assignment]
+            user = self.request.user  # type: ignore[assignment]
             account = form.cleaned_data.get('account')
 
             json_receipt = analyze_image_with_ai(uploaded_file)
-            if 'json' in json_receipt:
+            if json_receipt and 'json' in json_receipt:
                 json_receipt = self.clean_json_response(json_receipt)
             decode_json_receipt = json.loads(json_receipt)
 

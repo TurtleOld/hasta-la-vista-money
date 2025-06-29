@@ -1,22 +1,25 @@
-from typing import Optional
+from typing import Any, Optional
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import ProtectedError
+from django.http import HttpRequest
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import DeleteView
 
 
 class CustomNoPermissionMixin(LoginRequiredMixin):
-    no_permission_url = None
+    no_permission_url: str | None = None
     permission_denied_message = ''
     redirect_field_name = ''
-    request = ''
+    request: HttpRequest
 
-    def handle_no_permission(self):
+    def handle_no_permission(self) -> Any:
         messages.error(self.request, self.permission_denied_message)
-        return redirect(self.no_permission_url)
+        if self.no_permission_url:
+            return redirect(self.no_permission_url)
+        return redirect('/')
 
 
 class DeleteObjectMixin(DeleteView):

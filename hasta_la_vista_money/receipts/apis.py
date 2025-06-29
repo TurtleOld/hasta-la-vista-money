@@ -1,6 +1,7 @@
 import decimal
 import json
 
+from django.db.models import QuerySet
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
@@ -20,7 +21,7 @@ class ReceiptListAPIView(ListCreateAPIView):
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Receipt, Receipt]:  # type: ignore[override]
         return Receipt.objects.filter(user=self.request.user)
 
     def list(self, request, *args, **kwargs):
@@ -35,7 +36,7 @@ class SellerDetailAPIView(RetrieveAPIView):
     permission_classes = (IsAuthenticated,)
     lookup_field = 'id'
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Seller, Seller]:  # type: ignore[override]
         return Seller.objects.filter(user__id=self.request.user.pk)
 
 
@@ -44,7 +45,18 @@ class DataUrlAPIView(APIView):
         serializer = ImageDataSerializer(data=request.data)
 
         if serializer.is_valid():
-            data_url = serializer.validated_data['data_url']
+            validated_data = serializer.validated_data
+            if validated_data is None:
+                return Response(
+                    'Invalid data',
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            data_url = validated_data.get('data_url')  # type: ignore[attr-defined]
+            if data_url is None:
+                return Response(
+                    'Data URL is required',
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return Response(
                 {'message': 'Data URL received successfully', 'data_url': data_url},
                 status=status.HTTP_200_OK,
@@ -80,6 +92,14 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         nds20 = request_data.get('nds20')
         seller_data = request_data.get('seller')
         products_data = request_data.get('product')
+
+        if not all(
+            [user_id, account_id, receipt_date, total_sum, seller_data, products_data],
+        ):
+            return Response(
+                'Missing required data',
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             check_existing_receipt = Receipt.objects.filter(
@@ -136,15 +156,15 @@ class SellerAutocompleteAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         query = request.GET.get('q', '').strip()
-        sellers = Seller.objects.filter(user=request.user)
+        sellers: QuerySet[Seller, Seller] = Seller.objects.filter(user=request.user)
         if query:
             sellers = sellers.filter(name_seller__icontains=query)
-        sellers = (
+        seller_names: QuerySet[Seller, str] = (
             sellers.order_by('name_seller')
             .values_list('name_seller', flat=True)
             .distinct()[:10]
         )
-        return Response({'results': list(sellers)})
+        return Response({'results': list(seller_names)})
 
 
 class ProductAutocompleteAPIView(APIView):
@@ -152,12 +172,12 @@ class ProductAutocompleteAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         query = request.GET.get('q', '').strip()
-        products = Product.objects.filter(user=request.user)
+        products: QuerySet[Product, Product] = Product.objects.filter(user=request.user)
         if query:
             products = products.filter(product_name__icontains=query)
-        products = (
+        product_names: QuerySet[Product, str] = (
             products.order_by('product_name')
             .values_list('product_name', flat=True)
             .distinct()[:10]
         )
-        return Response({'results': list(products)})
+        return Response({'results': list(product_names)})

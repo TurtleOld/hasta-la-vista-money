@@ -58,7 +58,7 @@ class ReceiptFilter(django_filters.FilterSet):
         lookup_expr='gte',
         label='',
         widget=NumberInput(
-            attrs={'class': 'form-control', 'placeholder': _('Сумма от')}
+            attrs={'class': 'form-control', 'placeholder': _('Сумма от')},
         ),
     )
     total_sum_max = django_filters.NumberFilter(
@@ -66,7 +66,7 @@ class ReceiptFilter(django_filters.FilterSet):
         lookup_expr='lte',
         label='',
         widget=NumberInput(
-            attrs={'class': 'form-control', 'placeholder': _('Сумма до')}
+            attrs={'class': 'form-control', 'placeholder': _('Сумма до')},
         ),
     )
     product_name = django_filters.CharFilter(
@@ -77,7 +77,7 @@ class ReceiptFilter(django_filters.FilterSet):
                 'class': 'form-control',
                 'autocomplete': 'off',
                 'placeholder': _('Введите товар'),
-            }
+            },
         ),
     )
 
@@ -121,7 +121,7 @@ class ReceiptFilter(django_filters.FilterSet):
         ]
 
 
-class SellerForm(ModelForm):
+class SellerForm(ModelForm[Seller]):
     """Класс формы продавца."""
 
     name_seller = CharField(label=_('Имя продавца'))
@@ -180,7 +180,7 @@ class ProductForm(BaseFieldsForm):
     def clean(self):
         cleaned_data = super().clean()
         quantity = cleaned_data.get('quantity')
-        if quantity <= 0:
+        if quantity is not None and quantity <= 0:
             self.add_error(
                 'quantity',
                 _('Количество должно быть больше 0.'),
