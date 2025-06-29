@@ -188,13 +188,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const formElements = newForm.querySelectorAll('input, select, textarea, label');
         formElements.forEach(element => {
             if (element.name) {
-                element.name = element.name.replace(formRegex, `form-${formNum}-`);
+                element.name = element.name.replace(formRegex, 'form-' + formNum + '-');
             }
             if (element.id) {
-                element.id = element.id.replace(formRegex, `form-${formNum}-`);
+                element.id = element.id.replace(formRegex, 'form-' + formNum + '-');
             }
             if (element.htmlFor) {
-                element.htmlFor = element.htmlFor.replace(formRegex, `form-${formNum}-`);
+                const newHtmlFor = element.htmlFor.replace(formRegex, 'form-' + formNum + '-');
+                element.htmlFor = newHtmlFor;
             }
         });
 
@@ -210,17 +211,17 @@ document.addEventListener('DOMContentLoaded', function() {
         let lastForm = productForm[productForm.length - 1];
         let formRegex = RegExp(`form-(\\d){1}-`,'g');
 
-        // Safely update form field names and IDs without using innerHTML
         const formElements = lastForm.querySelectorAll('input, select, textarea, label');
         formElements.forEach(element => {
             if (element.name) {
-                element.name = element.name.replace(formRegex, `form-${productForm.length - 1}-`);
+                element.name = element.name.replace(formRegex, 'form-' + (productForm.length - 1) + '-');
             }
             if (element.id) {
-                element.id = element.id.replace(formRegex, `form-${productForm.length - 1}-`);
+                element.id = element.id.replace(formRegex, 'form-' + (productForm.length - 1) + '-');
             }
             if (element.htmlFor) {
-                element.htmlFor = element.htmlFor.replace(formRegex, `form-${productForm.length - 1}-`);
+                const newHtmlFor = element.htmlFor.replace(formRegex, 'form-' + (productForm.length - 1) + '-');
+                element.htmlFor = newHtmlFor;
             }
         });
 
