@@ -193,9 +193,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (element.id) {
                 element.id = element.id.replace(formRegex, 'form-' + formNum + '-');
             }
-            if (element.htmlFor) {
-                const newHtmlFor = element.htmlFor.replace(formRegex, 'form-' + formNum + '-');
-                element.htmlFor = newHtmlFor;
+            if (element.hasAttribute('for')) {
+                const currentFor = element.getAttribute('for');
+                const newFor = currentFor.replace(formRegex, 'form-' + formNum + '-');
+                element.setAttribute('for', newFor);
             }
         });
 
@@ -219,9 +220,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (element.id) {
                 element.id = element.id.replace(formRegex, 'form-' + (productForm.length - 1) + '-');
             }
-            if (element.htmlFor) {
-                const newHtmlFor = element.htmlFor.replace(formRegex, 'form-' + (productForm.length - 1) + '-');
-                element.htmlFor = newHtmlFor;
+            if (element.hasAttribute('for')) {
+                const currentFor = element.getAttribute('for');
+                const newFor = currentFor.replace(formRegex, 'form-' + (productForm.length - 1) + '-');
+                element.setAttribute('for', newFor);
             }
         });
 
