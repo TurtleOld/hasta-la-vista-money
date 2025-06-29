@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from decimal import Decimal
+from typing import Any
 from unittest.mock import Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -307,7 +308,7 @@ class TestForms(TestCase):
             'retail_place_address': 'ул. Тестовая, 1',
             'retail_place': 'Магазин "Тест"',
         }
-        form = SellerForm(data=form_data)
+        form = SellerForm(data=form_data)  # type: ignore[no-untyped-call]
         self.assertTrue(form.is_valid())
 
     def test_seller_form_empty_fields(self):
@@ -317,7 +318,7 @@ class TestForms(TestCase):
             'retail_place_address': '',
             'retail_place': '',
         }
-        form = SellerForm(data=form_data)
+        form = SellerForm(data=form_data)  # type: ignore[no-untyped-call]
         self.assertTrue(form.is_valid())
 
     def test_product_form_valid(self):
@@ -415,7 +416,7 @@ class TestForms(TestCase):
             'account': self.account.pk,
         }
 
-        form = UploadImageForm(
+        form = UploadImageForm(  # type: ignore[no-untyped-call]
             user=self.user,
             data=form_data,
             files={'file': test_file},
@@ -444,7 +445,7 @@ class TestReceiptFilter(TestCase):
     def test_filter_by_seller(self):
         """Тест фильтрации по продавцу."""
         filter_data = {'name_seller': self.seller.pk}
-        receipt_filter = ReceiptFilter(
+        receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
             data=filter_data,
             queryset=Receipt.objects.all(),
             user=self.user,
@@ -455,7 +456,7 @@ class TestReceiptFilter(TestCase):
     def test_filter_by_account(self):
         """Тест фильтрации по счету."""
         filter_data = {'account': self.account.pk}
-        receipt_filter = ReceiptFilter(
+        receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
             data=filter_data,
             queryset=Receipt.objects.all(),
             user=self.user,
@@ -469,7 +470,7 @@ class TestReceiptFilter(TestCase):
             'receipt_date_after': '2023-01-01',
             'receipt_date_before': '2023-12-31',
         }
-        receipt_filter = ReceiptFilter(
+        receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
             data=filter_data,
             queryset=Receipt.objects.all(),
             user=self.user,
@@ -543,14 +544,14 @@ class TestReceiptAPIs(APITestCase):
     def test_data_url_api_invalid_data(self):
         """Тест API для обработки data URL с невалидными данными."""
         url = reverse_lazy('receipts:receipt_image')
-        data = {}
+        data: dict[str, Any] = {}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_receipt_create_api(self):
         """Тест API создания чека."""
         url = reverse_lazy('receipts:receipt_api_create')
-        data = {
+        data: dict[str, Any] = {
             'user': self.user.pk,
             'finance_account': self.account.pk,
             'receipt_date': '2023-06-28T21:24:00Z',

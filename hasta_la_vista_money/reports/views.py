@@ -1,18 +1,19 @@
 from collections import defaultdict
 from decimal import Decimal
+from typing import Any, Dict
 
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
-from django.shortcuts import render, get_object_or_404
+from django.db.models.functions import TruncMonth
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView
+from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.income.models import Income
-from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.users.models import User
-from django.db.models.functions import TruncMonth
 
 
 class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
@@ -109,7 +110,6 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
             expense_amount = float(expense.amount)
             expense_data[parent_category_name][month] += expense_amount
 
-            # Collect subcategory data
             if expense.category.parent_category:
                 parent_month_key = f'{parent_category_name}_{month}'
                 subcategory_name = expense.category.name
@@ -154,11 +154,13 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         return charts_data
 
     def get(self, request, *args, **kwargs):
-        # Подготовка данных для новых графиков бюджета
         budget_chart_data = self.prepare_budget_charts(request)
+        template_name = self.template_name
+        if template_name is None:
+            template_name = 'reports/reports.html'
         return render(
             request,
-            self.template_name,
+            template_name,
             budget_chart_data,
         )
 
@@ -169,16 +171,23 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         months = [d.date for d in list_dates]
 
         expense_categories = list(
-            user.category_expense_users.filter(parent_category=None).order_by('name')
+            user.category_expense_users.filter(parent_category=None).order_by('name'),  # type: ignore[attr-defined]
         )
         income_categories = list(
-            user.category_income_users.filter(parent_category=None).order_by('name')
+            user.category_income_users.filter(parent_category=None).order_by('name'),  # type: ignore[attr-defined]
         )
 
         chart_labels = [m.strftime('%b %Y') for m in months]
 
         total_fact_income = [0] * len(months)
         total_fact_expense = [0] * len(months)
+
+        expense_fact_map: Dict[Any, Dict[Any, Any]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
+        income_fact_map: Dict[Any, Dict[Any, Any]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
 
         if months:
             expenses = (
@@ -192,12 +201,12 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
                 .values('category_id', 'month')
                 .annotate(total=Sum('amount'))
             )
-            expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
             for e in expenses:
                 month_date = (
                     e['month'].date() if hasattr(e['month'], 'date') else e['month']
                 )
-                expense_fact_map[e['category_id']][month_date] = e['total'] or 0
+                total_amount = e['total'] if e['total'] is not None else 0
+                expense_fact_map[e['category_id']][month_date] = total_amount
 
             for i, m in enumerate(months):
                 for cat in expense_categories:
@@ -214,12 +223,12 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
                 .values('category_id', 'month')
                 .annotate(total=Sum('amount'))
             )
-            income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
             for e in incomes:
                 month_date = (
                     e['month'].date() if hasattr(e['month'], 'date') else e['month']
                 )
-                income_fact_map[e['category_id']][month_date] = e['total'] or 0
+                total_amount = e['total'] if e['total'] is not None else 0
+                income_fact_map[e['category_id']][month_date] = total_amount
 
             for i, m in enumerate(months):
                 for cat in income_categories:
@@ -233,7 +242,7 @@ class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         pie_labels = []
         pie_values = []
         if months and expense_categories:
-            category_totals = defaultdict(lambda: Decimal('0'))
+            category_totals: Dict[Any, Decimal] = defaultdict(lambda: Decimal('0'))
             for cat in expense_categories:
                 for month in months:
                     amount = expense_fact_map[cat.id][month]

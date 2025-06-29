@@ -18,3 +18,4 @@ def comma(number: float) -> str | None:
     """
     if number:
         return f'{decimal.Decimal(number):,.2f}'.replace(',', ' ')
+    return None

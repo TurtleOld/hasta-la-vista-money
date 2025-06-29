@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
+from typing import Any, Dict
 
 import dj_database_url
 import django_stubs_ext
@@ -124,10 +125,10 @@ TEMPLATES = [
     },
 ]
 
-CONN_MAX_AGE = 200
+CONN_MAX_AGE = 500
 
 # Database
-DATABASES = {
+DATABASES: Dict[str, Any] = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.getenv('POSTGRES_DB', 'postgres'),
@@ -151,9 +152,9 @@ if os.environ.get('GITHUB_WORKFLOW'):
         },
     }
 
-CONN_MAX_AGE = 500
+
 if os.getenv('DATABASE_URL'):
-    DATABASES['default'] = dj_database_url.config(conn_max_age=CONN_MAX_AGE)
+    DATABASES['default'] = dict(dj_database_url.config(conn_max_age=CONN_MAX_AGE))
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

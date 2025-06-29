@@ -2,8 +2,9 @@ import json
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
+from typing import Any, Dict, List, TypedDict, Union, overload
 
-from django.db.models import Sum
+from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -17,44 +18,84 @@ from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
 
 
-def get_fact_amount(user, category, month, type_):
+@overload
+def get_fact_amount(
+    user: User,
+    category: ExpenseCategory,
+    month: date,
+    type_: str,
+) -> Union[Decimal, int]: ...
+
+
+@overload
+def get_fact_amount(
+    user: User,
+    category: IncomeCategory,
+    month: date,
+    type_: str,
+) -> Union[Decimal, int]: ...
+
+
+def get_fact_amount(
+    user: User,
+    category: Union[ExpenseCategory, IncomeCategory],
+    month: date,
+    type_: str,
+) -> Union[Decimal, int]:
     if type_ == 'expense':
-        return (
-            Expense.objects.filter(
-                user=user,
-                category=category,
-                date__year=month.year,
-                date__month=month.month,
-            ).aggregate(total=Sum('amount'))['total']
-            or 0
-        )
+        if isinstance(category, ExpenseCategory):
+            return (
+                Expense.objects.filter(
+                    user=user,
+                    category=category,
+                    date__year=month.year,
+                    date__month=month.month,
+                ).aggregate(total=Sum('amount'))['total']
+                or 0
+            )
+        else:
+            raise ValueError('Expected ExpenseCategory for expense type')
     else:
-        return (
-            Income.objects.filter(
-                user=user,
-                category=category,
-                date__year=month.year,
-                date__month=month.month,
-            ).aggregate(total=Sum('amount'))['total']
-            or 0
-        )
+        if isinstance(category, IncomeCategory):
+            return (
+                Income.objects.filter(
+                    user=user,
+                    category=category,
+                    date__year=month.year,
+                    date__month=month.month,
+                ).aggregate(total=Sum('amount'))['total']
+                or 0
+            )
+        else:
+            raise ValueError('Expected IncomeCategory for income type')
 
 
-def get_plan_amount(user, category, month, type_):
+def get_plan_amount(
+    user: User,
+    category: Union[ExpenseCategory, IncomeCategory],
+    month: date,
+    type_: str,
+) -> Union[Decimal, int]:
     q = Planning.objects.filter(
         user=user,
         date=month,
         type=type_,
     )
     if type_ == 'expense':
-        q = q.filter(category_expense=category)
+        if isinstance(category, ExpenseCategory):
+            q = q.filter(category_expense=category)
+        else:
+            raise ValueError('Expected ExpenseCategory for expense type')
     else:
-        q = q.filter(category_income=category)
+        if isinstance(category, IncomeCategory):
+            q = q.filter(category_income=category)
+        else:
+            raise ValueError('Expected IncomeCategory for income type')
     plan = q.first()
     return plan.amount if plan else 0
 
 
-def get_categories(user, type_):
+def get_categories(user: User, type_: str) -> QuerySet:
     if type_ == 'expense':
         return user.category_expense_users.filter(parent_category=None).order_by('name')
     else:
@@ -68,18 +109,17 @@ class BaseView:
 class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
     model = Planning
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date for d in list_dates]
 
-        # Получаем все категории
         expense_categories = list(get_categories(user, 'expense'))
         income_categories = list(get_categories(user, 'income'))
 
         if months:
-            expenses = (
+            expenses: Union[QuerySet[Expense, Dict[str, Any]], List[Dict[str, Any]]] = (
                 Expense.objects.filter(
                     user=user,
                     category__in=expense_categories,
@@ -92,7 +132,9 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
             )
         else:
             expenses = []
-        expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        expense_fact_map: Dict[int, Dict[date, int]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
         for e in expenses:
             month_date = (
                 e['month'].date() if hasattr(e['month'], 'date') else e['month']
@@ -109,7 +151,9 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
             type='expense',
             category_expense__in=expense_categories,
         ).values('category_expense_id', 'date', 'amount')
-        expense_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+        expense_plan_map: Dict[int, Dict[date, int]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
         for p in plans_exp:
             expense_plan_map[p['category_expense_id']][p['date']] = p['amount'] or 0
 
@@ -133,11 +177,12 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
                 row['plan'].append(plan)
                 row['diff'].append(diff)
                 row['percent'].append(percent)
-                total_plan_expense[i] += plan
+                total_plan_expense[i] += plan or 0
             expense_data.append(row)
 
+        income_queryset: Union[QuerySet[Income, Dict[str, Any]], List[Dict[str, Any]]]
         if months:
-            incomes = (
+            income_queryset = (
                 Income.objects.filter(
                     user=user,
                     category__in=income_categories,
@@ -149,13 +194,15 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
                 .annotate(total=Sum('amount'))
             )
         else:
-            incomes = []
-        income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for e in incomes:
+            income_queryset = []
+        income_fact_map: Dict[int, Dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal('0')),
+        )
+        for e in income_queryset:
             month_date = (
                 e['month'].date() if hasattr(e['month'], 'date') else e['month']
             )
-            income_fact_map[e['category_id']][month_date] = e['total'] or 0
+            income_fact_map[e['category_id']][month_date] = e['total'] or Decimal('0')
         total_fact_income = [0] * len(months)
         for i, m in enumerate(months):
             for cat in income_categories:
@@ -295,14 +342,14 @@ class ExpenseTableView(CustomNoPermissionMixin, BaseView, ListView):
     model = Planning
     template_name = 'expense_table.html'
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date for d in list_dates]
         expense_categories = list(get_categories(user, 'expense'))
         if months:
-            expenses = (
+            expenses: Union[QuerySet[Expense, Dict[str, Any]], List[Dict[str, Any]]] = (
                 Expense.objects.filter(
                     user=user,
                     category__in=expense_categories,
@@ -314,25 +361,30 @@ class ExpenseTableView(CustomNoPermissionMixin, BaseView, ListView):
                 .annotate(total=Sum('amount'))
             )
         else:
-            expenses = []
+            expenses: Union[
+                QuerySet[Expense, Dict[str, Any]],
+                List[Dict[str, Any]],
+            ] = []
         expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
         for e in expenses:
             month_date = (
                 e['month'].date() if hasattr(e['month'], 'date') else e['month']
             )
             expense_fact_map[e['category_id']][month_date] = e['total'] or 0
-        plans_exp = Planning.objects.filter(
+        plans_expense: QuerySet[Planning, dict[str, Any]] = Planning.objects.filter(
             user=user,
             date__in=months,
             type='expense',
             category_expense__in=expense_categories,
         ).values('category_expense_id', 'date', 'amount')
         expense_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for p in plans_exp:
-            expense_plan_map[p['category_expense_id']][p['date']] = p['amount'] or 0
+        for pln in plans_expense:
+            expense_plan_map[pln['category_expense_id']][pln['date']] = (
+                pln['amount'] or 0
+            )
         expense_data = []
-        total_fact_expense = [0] * len(months)
-        total_plan_expense = [0] * len(months)
+        total_fact_expense: list[int] = [0] * len(months)
+        total_plan_expense: list[int] = [0] * len(months)
         for cat in expense_categories:
             row = {
                 'category': cat.name,
@@ -343,8 +395,8 @@ class ExpenseTableView(CustomNoPermissionMixin, BaseView, ListView):
                 'percent': [],
             }
             for i, m in enumerate(months):
-                fact = expense_fact_map[cat.id][m]
-                plan = expense_plan_map[cat.id][m]
+                fact: int = expense_fact_map[cat.id][m]
+                plan: int = expense_plan_map[cat.id][m]
                 diff = fact - plan
                 percent = (fact / plan * 100) if plan else None
                 row['fact'].append(fact)
@@ -353,6 +405,8 @@ class ExpenseTableView(CustomNoPermissionMixin, BaseView, ListView):
                 row['percent'].append(percent)
                 total_fact_expense[i] += fact
                 total_plan_expense[i] += plan
+                print(total_fact_expense[i])
+                print(plan, 'plan')
             expense_data.append(row)
         context['months'] = months
         context['expense_data'] = expense_data
@@ -365,14 +419,14 @@ class IncomeTableView(CustomNoPermissionMixin, BaseView, ListView):
     model = Planning
     template_name = 'income_table.html'
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
         list_dates = DateList.objects.filter(user=user).order_by('date')
-        months = [d.date for d in list_dates]
+        months: List[date] = [d.date for d in list_dates]
         income_categories = list(get_categories(user, 'income'))
         if months:
-            incomes = (
+            income_queryset = (
                 Income.objects.filter(
                     user=user,
                     category__in=income_categories,
@@ -384,27 +438,33 @@ class IncomeTableView(CustomNoPermissionMixin, BaseView, ListView):
                 .annotate(total=Sum('amount'))
             )
         else:
-            incomes = []
-        income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for e in incomes:
+            income_queryset = Income.objects.none()
+        income_fact_map: Dict[int, Dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal('0')),
+        )
+        for e in income_queryset:
             month_date = (
                 e['month'].date() if hasattr(e['month'], 'date') else e['month']
             )
-            income_fact_map[e['category_id']][month_date] = e['total'] or 0
+            income_fact_map[e['category_id']][month_date] = e['total'] or Decimal('0')
         plans_inc = Planning.objects.filter(
             user=user,
             date__in=months,
             type='income',
             category_income__in=income_categories,
         ).values('category_income_id', 'date', 'amount')
-        income_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+        income_plan_map: Dict[int, Dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal('0')),
+        )
         for p in plans_inc:
-            income_plan_map[p['category_income_id']][p['date']] = p['amount'] or 0
-        income_data = []
-        total_fact_income = [0] * len(months)
-        total_plan_income = [0] * len(months)
+            income_plan_map[p['category_income_id']][p['date']] = p[
+                'amount'
+            ] or Decimal('0')
+        income_data: List[Dict[str, Any]] = []
+        total_fact_income: List[Decimal] = [Decimal('0')] * len(months)
+        total_plan_income: List[Decimal] = [Decimal('0')] * len(months)
         for cat in income_categories:
-            row = {
+            row: Dict[str, Any] = {
                 'category': cat.name,
                 'category_id': cat.id,
                 'fact': [],
@@ -429,3 +489,9 @@ class IncomeTableView(CustomNoPermissionMixin, BaseView, ListView):
         context['total_fact_income'] = total_fact_income
         context['total_plan_income'] = total_plan_income
         return context
+
+
+class PlanningExpenseDict(TypedDict):
+    category_expense_id: int
+    date: date
+    amount: Decimal

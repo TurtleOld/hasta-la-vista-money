@@ -1,9 +1,10 @@
 from operator import itemgetter
+from typing import Any, List
 
 from hasta_la_vista_money.users.models import User
 
 
-def collect_info_income(user: User):
+def collect_info_income(user: User) -> Any:
     """
     Сбор информации о доходах из базы данных, фильтруемая по пользователю.
 
@@ -19,7 +20,7 @@ def collect_info_income(user: User):
     )
 
 
-def collect_info_expense(user: User):
+def collect_info_expense(user: User) -> Any:
     """
     Сбор информации о расходах из базы данных, фильтруемая по пользователю.
 
@@ -35,7 +36,7 @@ def collect_info_expense(user: User):
     )
 
 
-def sort_expense_income(expenses, income):
+def sort_expense_income(expenses: Any, income: Any) -> List[Any]:
     """
     Создание отсортированного списка с расходам и доходами.
 
