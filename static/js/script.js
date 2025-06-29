@@ -184,7 +184,20 @@ document.addEventListener('DOMContentLoaded', function() {
         let newForm = productForm[0].cloneNode(true);
         let formRegex = RegExp(`form-(\\d){1}-`,'g');
         formNum++;
-        newForm.innerHTML = newForm.innerHTML.replace(formRegex, `form-${formNum}-`);
+
+        const formElements = newForm.querySelectorAll('input, select, textarea, label');
+        formElements.forEach(element => {
+            if (element.name) {
+                element.name = element.name.replace(formRegex, `form-${formNum}-`);
+            }
+            if (element.id) {
+                element.id = element.id.replace(formRegex, `form-${formNum}-`);
+            }
+            if (element.htmlFor) {
+                element.htmlFor = element.htmlFor.replace(formRegex, `form-${formNum}-`);
+            }
+        });
+
         container.insertBefore(newForm, addButton);
         totalForms.setAttribute('value', `${formNum+1}`);
         newForm.querySelector('.price').addEventListener('input', amountUpdate);
@@ -196,7 +209,21 @@ document.addEventListener('DOMContentLoaded', function() {
         productForm = document.querySelectorAll(".form-product");
         let lastForm = productForm[productForm.length - 1];
         let formRegex = RegExp(`form-(\\d){1}-`,'g');
-        lastForm.innerHTML = lastForm.innerHTML.replace(formRegex, `form-${productForm.length - 1}-`);
+
+        // Safely update form field names and IDs without using innerHTML
+        const formElements = lastForm.querySelectorAll('input, select, textarea, label');
+        formElements.forEach(element => {
+            if (element.name) {
+                element.name = element.name.replace(formRegex, `form-${productForm.length - 1}-`);
+            }
+            if (element.id) {
+                element.id = element.id.replace(formRegex, `form-${productForm.length - 1}-`);
+            }
+            if (element.htmlFor) {
+                element.htmlFor = element.htmlFor.replace(formRegex, `form-${productForm.length - 1}-`);
+            }
+        });
+
         if (productForm.length > 1) {
             lastForm.remove();
         }
