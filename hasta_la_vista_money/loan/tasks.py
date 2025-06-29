@@ -55,8 +55,9 @@ def calculate_annuity_loan(
     user = get_object_or_404(User, id=user_id)
     loan = get_object_or_404(Loan, id=loan_id)
 
+    payment_schedules = []
+
     for _ in range(1, int(period_loan) + 1):
-        # Calculate interest and principal payment
         interest = balance * monthly_interest_rate
         principal_payment = monthly_payment - interest
         balance -= principal_payment
@@ -68,17 +69,21 @@ def calculate_annuity_loan(
 
         next_date = start_date + relativedelta(months=1)
 
-        PaymentSchedule.objects.create(
-            user=user,
-            loan=loan,
-            date=current_date,
-            balance=round(balance, 2),
-            monthly_payment=round(monthly_payment, 2),
-            interest=round(interest, 2),
-            principal_payment=round(principal_payment, 2),
+        payment_schedules.append(
+            PaymentSchedule(
+                user=user,
+                loan=loan,
+                date=current_date,
+                balance=round(balance, 2),
+                monthly_payment=round(monthly_payment, 2),
+                interest=round(interest, 2),
+                principal_payment=round(principal_payment, 2),
+            ),
         )
 
         start_date = next_date
+
+    PaymentSchedule.objects.bulk_create(payment_schedules)
 
 
 def calculate_differentiated_loan(
@@ -115,6 +120,8 @@ def calculate_differentiated_loan(
     balance = loan_amount
     start_date = start_date + relativedelta(months=1)
 
+    payment_schedules = []
+
     for _ in range(1, int(period_loan) + 1):
         interest = balance * monthly_interest_rate
         principal_payment = loan_amount / Decimal(period_loan)
@@ -128,14 +135,18 @@ def calculate_differentiated_loan(
 
         next_date = start_date + relativedelta(months=1)
 
-        PaymentSchedule.objects.create(
-            user=user,
-            loan=loan,
-            date=current_date,
-            balance=round(balance, 2),
-            monthly_payment=round(monthly_payment, 2),
-            interest=round(interest, 2),
-            principal_payment=round(principal_payment, 2),
+        payment_schedules.append(
+            PaymentSchedule(
+                user=user,
+                loan=loan,
+                date=current_date,
+                balance=round(balance, 2),
+                monthly_payment=round(monthly_payment, 2),
+                interest=round(interest, 2),
+                principal_payment=round(principal_payment, 2),
+            ),
         )
 
         start_date = next_date
+
+    PaymentSchedule.objects.bulk_create(payment_schedules)

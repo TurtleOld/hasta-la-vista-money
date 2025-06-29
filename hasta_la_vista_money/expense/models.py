@@ -56,5 +56,13 @@ class Expense(CommonIncomeExpense):
         related_name='expense_categories',
     )
 
+    class Meta(CommonIncomeExpense.Meta):
+        indexes = CommonIncomeExpense.Meta.indexes + [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['user', 'category']),
+            models.Index(fields=['user', 'account']),
+            models.Index(fields=['date', 'amount']),
+        ]
+
     def __str__(self):
         return str(self.category)

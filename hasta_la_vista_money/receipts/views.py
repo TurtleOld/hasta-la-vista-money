@@ -258,20 +258,17 @@ class ProductByMonthView(LoginRequiredMixin, ListView):
     def get_context_data(self, *, object_list=None, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        list_receipts = Receipt.objects.prefetch_related('product').all()
-
         all_purchased_products = (
-            list_receipts.values(
-                'product__product_name',
-            )
-            .filter(user=self.request.user)
+            Receipt.objects.filter(user=self.request.user)
+            .values('product__product_name')
             .annotate(products=Count('product__product_name'))
             .order_by('-products')
             .distinct()[:10]
         )
 
         purchased_products_by_month = (
-            self.model.objects.filter(user=self.request.user)
+            Receipt.objects.filter(user=self.request.user)
+            .prefetch_related('product')
             .annotate(month=TruncMonth('receipt_date'))
             .values('month', 'product__product_name')
             .annotate(total_quantity=Sum('product__quantity'))
@@ -369,17 +366,20 @@ class UploadImageView(LoginRequiredMixin, FormView):
                 },
             )
 
-            products = []
+            products_data = []
             for item in decode_json_receipt.get('items', []):
-                product = Product.objects.create(
-                    user=request.user,
-                    product_name=item['product_name'],
-                    category=item['category'],
-                    price=item['price'],
-                    quantity=item['quantity'],
-                    amount=item['amount'],
+                products_data.append(
+                    Product(
+                        user=request.user,
+                        product_name=item['product_name'],
+                        category=item['category'],
+                        price=item['price'],
+                        quantity=item['quantity'],
+                        amount=item['amount'],
+                    ),
                 )
-                products.append(product)
+
+            products = Product.objects.bulk_create(products_data)
 
             receipt = Receipt.objects.create(
                 user=request.user,
@@ -497,17 +497,20 @@ class UploadImageView(LoginRequiredMixin, FormView):
                     },
                 )
 
-                products = []
+                products_data = []
                 for item in decode_json_receipt.get('items', []):
-                    product = Product.objects.create(
-                        user=user,
-                        product_name=item['product_name'],
-                        category=item['category'],
-                        price=item['price'],
-                        quantity=item['quantity'],
-                        amount=item['amount'],
+                    products_data.append(
+                        Product(
+                            user=user,
+                            product_name=item['product_name'],
+                            category=item['category'],
+                            price=item['price'],
+                            quantity=item['quantity'],
+                            amount=item['amount'],
+                        ),
                     )
-                    products.append(product)
+
+                products = Product.objects.bulk_create(products_data)
 
                 receipt = Receipt.objects.create(
                     user=user,

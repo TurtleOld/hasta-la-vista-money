@@ -46,31 +46,58 @@ def generate_date_list(
             flat=True,
         ),
     )
+
+    dates_to_create = []
     for d in new_dates:
         if d not in existing_dates:
-            DateList.objects.create(user=user, date=d)
-        # Добавляем пустые Planning только для выбранного типа
+            dates_to_create.append(DateList(user=user, date=d))
+
+    if dates_to_create:
+        DateList.objects.bulk_create(dates_to_create)
+
+    planning_to_create = []
+
+    for d in new_dates:
         if type_ == 'expense':
             expense_categories: QuerySet[ExpenseCategory] = (
                 ExpenseCategory.objects.filter(user=user)
             )
             for cat in expense_categories:
-                Planning.objects.get_or_create(
+                if not Planning.objects.filter(
                     user=user,
                     category_expense=cat,
                     date=d,
                     type='expense',
-                    defaults={'amount': 0},
-                )
+                ).exists():
+                    planning_to_create.append(
+                        Planning(
+                            user=user,
+                            category_expense=cat,
+                            date=d,
+                            type='expense',
+                            amount=0,
+                        ),
+                    )
         elif type_ == 'income':
             income_categories: QuerySet[IncomeCategory] = IncomeCategory.objects.filter(
                 user=user,
             )
             for cat in income_categories:
-                Planning.objects.get_or_create(
+                if not Planning.objects.filter(
                     user=user,
                     category_income=cat,
                     date=d,
                     type='income',
-                    defaults={'amount': 0},
-                )
+                ).exists():
+                    planning_to_create.append(
+                        Planning(
+                            user=user,
+                            category_income=cat,
+                            date=d,
+                            type='income',
+                            amount=0,
+                        ),
+                    )
+
+    if planning_to_create:
+        Planning.objects.bulk_create(planning_to_create)

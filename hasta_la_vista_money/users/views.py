@@ -8,7 +8,7 @@ from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -53,44 +53,39 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         today = timezone.now().date()
         month_start = today.replace(day=1)
         last_month = (month_start - timedelta(days=1)).replace(day=1)
-        total_balance = (
-            Account.objects.filter(user=user).aggregate(total=Sum('balance'))['total']
-            or 0
-        )
 
-        accounts_count = Account.objects.filter(user=user).count()
-
-        current_month_expenses = (
-            Expense.objects.filter(user=user, date__gte=month_start).aggregate(
-                total=Sum('amount'),
-            )['total']
-            or 0
+        accounts_data = Account.objects.filter(user=user).aggregate(
+            total_balance=Sum('balance'),
+            accounts_count=Count('id'),
         )
+        total_balance = accounts_data['total_balance'] or 0
+        accounts_count = accounts_data['accounts_count'] or 0
 
-        current_month_income = (
-            Income.objects.filter(user=user, date__gte=month_start).aggregate(
-                total=Sum('amount'),
-            )['total']
-            or 0
-        )
+        current_month_data = Expense.objects.filter(
+            user=user,
+            date__gte=month_start,
+        ).aggregate(total=Sum('amount'))
+        current_month_expenses = current_month_data['total'] or 0
 
-        last_month_expenses = (
-            Expense.objects.filter(
-                user=user,
-                date__gte=last_month,
-                date__lt=month_start,
-            ).aggregate(total=Sum('amount'))['total']
-            or 0
-        )
+        current_month_income_data = Income.objects.filter(
+            user=user,
+            date__gte=month_start,
+        ).aggregate(total=Sum('amount'))
+        current_month_income = current_month_income_data['total'] or 0
 
-        last_month_income = (
-            Income.objects.filter(
-                user=user,
-                date__gte=last_month,
-                date__lt=month_start,
-            ).aggregate(total=Sum('amount'))['total']
-            or 0
-        )
+        last_month_expenses_data = Expense.objects.filter(
+            user=user,
+            date__gte=last_month,
+            date__lt=month_start,
+        ).aggregate(total=Sum('amount'))
+        last_month_expenses = last_month_expenses_data['total'] or 0
+
+        last_month_income_data = Income.objects.filter(
+            user=user,
+            date__gte=last_month,
+            date__lt=month_start,
+        ).aggregate(total=Sum('amount'))
+        last_month_income = last_month_income_data['total'] or 0
 
         recent_expenses = (
             Expense.objects.filter(user=user)
@@ -105,6 +100,7 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
         )
 
         receipts_count = Receipt.objects.filter(user=user).count()
+
         top_expense_categories = (
             Expense.objects.filter(user=user, date__gte=month_start)
             .values('category__name')
@@ -190,10 +186,11 @@ class LoginUser(SuccessMessageMixin, LoginView):
 
     def form_invalid(self, form):
         if form.errors:
-            messages.error(
-                self.request,
-                list(form.errors.values())[0][0],
-            )
+            error_message = list(form.errors.values())[0][0]
+            if isinstance(error_message, str):
+                messages.error(self.request, error_message)
+            else:
+                messages.error(self.request, str(error_message))
         return super().form_invalid(form)
 
 

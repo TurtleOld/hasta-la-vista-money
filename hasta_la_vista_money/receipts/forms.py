@@ -90,19 +90,29 @@ class ReceiptFilter(django_filters.FilterSet):
         """
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+
         self.filters['name_seller'].queryset = (
             Seller.objects.filter(user=self.user)
-            .distinct('name_seller')
+            .values('name_seller')
+            .distinct()
             .order_by('name_seller')
         )
-        self.filters['account'].queryset = Account.objects.filter(
-            user=self.user,
+
+        self.filters['account'].queryset = (
+            Account.objects.filter(user=self.user)
+            .select_related('user')
+            .only('id', 'name_account', 'user__id')
         )
 
     @property
     def qs(self):
         queryset = super().qs
-        return queryset.filter(user=self.user).distinct()
+        return (
+            queryset.filter(user=self.user)
+            .select_related('seller', 'account', 'user')
+            .prefetch_related('product')
+            .distinct()
+        )
 
     def filter_by_product_name(self, queryset, name, value):
         if value:
