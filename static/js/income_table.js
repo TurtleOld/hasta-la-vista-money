@@ -1,9 +1,13 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const table = document.getElementById('income-table').querySelector('table');
+    const incomeTableContainer = document.getElementById('income-table');
+    if (!incomeTableContainer) return;
+
+    const table = incomeTableContainer.querySelector('table');
+    if (!table) return;
+
     const headers = table.querySelectorAll('th.sortable');
     let sortDirection = {};
 
-    // Валидация типов сортировки
     const validSortTypes = ['amount', 'date', 'category', 'account'];
 
     function isValidSortType(type) {

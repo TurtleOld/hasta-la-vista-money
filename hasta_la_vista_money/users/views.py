@@ -386,7 +386,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
-        # Получаем данные за последние 6 месяцев
         today = timezone.now().date()
         months_data = []
 
@@ -435,7 +434,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             else:
                 month_data['savings_percent'] = 0
 
-        # Топ категорий расходов за год
         year_start = today.replace(month=1, day=1)
         top_expense_categories = (
             Expense.objects.filter(user=user, date__gte=year_start)
@@ -444,7 +442,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             .order_by('-total')[:10]
         )
 
-        # Топ категорий доходов за год
         top_income_categories = (
             Income.objects.filter(user=user, date__gte=year_start)
             .values('category__name')
@@ -466,7 +463,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
         expenses = collect_info_expense(user)
         income_expense = sort_expense_income(expenses, income)
 
-        # Статистика переводов
         from hasta_la_vista_money.finance_account.models import (
             TransferMoneyLog,
         )
@@ -477,15 +473,12 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             .order_by('-created_at')[:20]
         )
 
-        # Статистика по счетам
         accounts = Account.objects.filter(user=user).select_related('user').all()
 
-        # Группируем счета по валюте
         balances_by_currency = defaultdict(float)
         for acc in accounts:
             balances_by_currency[acc.currency] += float(acc.balance)
 
-        # Динамика баланса
         prev_day = today - timedelta(days=1)
         balances_prev_by_currency = defaultdict(float)
         for acc in accounts:
@@ -514,7 +507,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             .order_by('date')
         )
 
-        # Преобразование данных для графика
         def transform_data(dataset):
             dates = []
             amounts = []
@@ -526,10 +518,8 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
         expense_dates, expense_amounts = transform_data(expense_dataset)
         income_dates, income_amounts = transform_data(income_dataset)
 
-        # Объединение уникальных дат
         all_dates = sorted(set(expense_dates + income_dates))
 
-        # Если данных нет, создаем пустой график
         if not all_dates:
             chart_combined = {
                 'labels': [],
@@ -549,7 +539,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             ]
 
             if len(all_dates) == 1:
-                # Добавляем предыдущий день
                 single_date = datetime.strptime(all_dates[0], '%Y-%m-%d')
                 prev_date = (single_date - timedelta(days=1)).strftime('%Y-%m-%d')
 
@@ -562,7 +551,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 print(f'Новые расходы: {expense_series_data}')
                 print(f'Новые доходы: {income_series_data}')
 
-            # Формируем данные для Chart.js
             chart_combined = {
                 'labels': all_dates,
                 'expense_data': expense_series_data,

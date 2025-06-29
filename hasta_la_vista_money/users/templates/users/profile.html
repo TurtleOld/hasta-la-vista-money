@@ -16,7 +16,7 @@
                     <div class="card-body">
                         <div class="row align-items-center">
                             <div class="col-auto">
-                                <div class="avatar-circle bg-primary text-white d-flex align-items-center justify-content-center" 
+                                <div class="avatar-circle bg-primary text-white d-flex align-items-center justify-content-center"
                                      style="width: 80px; height: 80px; border-radius: 50%; font-size: 2rem;">
                                     {{ user.username|first|upper }}
                                 </div>
@@ -27,7 +27,7 @@
                                     <i class="bi bi-envelope"></i> {{ user.email|default:"Email не указан" }}
                                 </p>
                                 <p class="text-muted mb-0">
-                                    <i class="bi bi-calendar"></i> 
+                                    <i class="bi bi-calendar"></i>
                                     {% translate 'Зарегистрирован' %}: {{ user.date_joined|date:"d.m.Y" }}
                                 </p>
                             </div>
@@ -108,25 +108,25 @@
                     <div class="card-header">
                         <ul class="nav nav-tabs card-header-tabs" id="profileTabs" role="tablist">
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="personal-tab" data-bs-toggle="tab" 
+                                <button class="nav-link active" id="personal-tab" data-bs-toggle="tab"
                                         data-bs-target="#personal" type="button" role="tab">
                                     <i class="bi bi-person"></i> {% translate 'Персональная информация' %}
                                 </button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="statistics-tab" data-bs-toggle="tab" 
+                                <button class="nav-link" id="statistics-tab" data-bs-toggle="tab"
                                         data-bs-target="#statistics" type="button" role="tab">
                                     <i class="bi bi-graph-up"></i> {% translate 'Статистика' %}
                                 </button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="recent-tab" data-bs-toggle="tab" 
+                                <button class="nav-link" id="recent-tab" data-bs-toggle="tab"
                                         data-bs-target="#recent" type="button" role="tab">
                                     <i class="bi bi-clock-history"></i> {% translate 'Последние операции' %}
                                 </button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="settings-tab" data-bs-toggle="tab" 
+                                <button class="nav-link" id="settings-tab" data-bs-toggle="tab"
                                         data-bs-target="#settings" type="button" role="tab">
                                     <i class="bi bi-gear"></i> {% translate 'Настройки' %}
                                 </button>
@@ -272,9 +272,6 @@
                                             </a>
                                             <a class="btn btn-outline-success" href="{% url 'reports:list' %}">
                                                 <i class="bi bi-graph-up"></i> {% translate 'Отчеты и аналитика' %}
-                                            </a>
-                                            <a class="btn btn-outline-warning" href="{% url 'users:notifications' %}">
-                                                <i class="bi bi-bell"></i> {% translate 'Уведомления' %}
                                             </a>
                                         </div>
                                     </div>
