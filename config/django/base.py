@@ -363,3 +363,25 @@ structlog.configure(
     logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=True,
 )
+
+# Taskiq Configuration (Async Task Queue)
+TASKIQ_RABBITMQ_URL = os.getenv(
+    'TASKIQ_RABBITMQ_URL',
+    'amqp://guest:guest@localhost:5672/',
+)
+TASKIQ_BROKER_URL = os.getenv('TASKIQ_BROKER_URL', 'amqp://guest:guest@localhost:5672/')
+
+# Taskiq settings
+TASKIQ = {
+    'broker_url': TASKIQ_BROKER_URL,
+    'result_backend_url': TASKIQ_RABBITMQ_URL,
+    'task_default_queue': 'default',
+    'task_serializer': 'json',
+    'result_serializer': 'json',
+    'accept_content': ['json'],
+    'timezone': TIME_ZONE,
+    'enable_utc': True,
+    'task_track_started': True,
+    'task_time_limit': 30 * 60,  # 30 минут
+    'worker_max_tasks_per_child': 1000,
+}
