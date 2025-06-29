@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
+from django.views import View
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
@@ -34,6 +35,8 @@ from hasta_la_vista_money.receipts.forms import (
 )
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.services import analyze_image_with_ai
+from hasta_la_vista_money.receipts.tasks import process_receipt_image
+from hasta_la_vista_money.taskiq import broker
 from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
@@ -305,25 +308,26 @@ class ProductByMonthView(LoginRequiredMixin, ListView):
 
 
 class UploadImageView(LoginRequiredMixin, FormView):
-    template_name = 'receipts/upload_image.html'
+    """Представление для загрузки и обработки изображений чеков."""
+
+    template_name = 'receipts/modals/add_receipt.html'
     form_class = UploadImageForm
     success_url = reverse_lazy('receipts:list')
 
     def get_form_kwargs(self):
+        """Передаем пользователя в форму."""
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
 
     def post(self, request, *args, **kwargs):
-        """Обработка AJAX запросов для загрузки файлов"""
-        if request.headers.get(
-            'X-Requested-With',
-        ) == 'XMLHttpRequest' or request.headers.get('HX-Request'):
-            return self.handle_ajax_upload(request)
+        """Обработка POST запроса с HTMX."""
+        if request.headers.get('HX-Request'):
+            return self.handle_htmx_request(request)
         return super().post(request, *args, **kwargs)
 
-    def handle_ajax_upload(self, request):
-        """Обработка AJAX загрузки файла"""
+    def handle_htmx_request(self, request):
+        """Обработка HTMX запроса."""
         try:
             if 'file' not in request.FILES:
                 return self.render_error_response('Файл не найден')
@@ -338,83 +342,28 @@ class UploadImageView(LoginRequiredMixin, FormView):
 
             account = get_object_or_404(Account, id=account_id, user=request.user)
 
-            json_receipt = analyze_image_with_ai(uploaded_file)
-            if json_receipt and 'json' in json_receipt:
-                json_receipt = self.clean_json_response(json_receipt)
+            # Читаем файл в байты для асинхронной обработки
+            image_data = uploaded_file.read()
 
-            decode_json_receipt = json.loads(json_receipt)
-            number_receipt = decode_json_receipt['number_receipt']
+            # Запускаем асинхронную задачу
+            task = broker.kiq(process_receipt_image)(
+                image_data=image_data,
+                user_id=request.user.id,
+                account_id=account.pk,
+            )
 
-            # Проверка существования чека
-            receipt_exists = self.check_exist_receipt(request.user, number_receipt)
-            if receipt_exists.exists():
-                return self.render_error_response('Чек с таким номером уже существует')
-
-            # Создание чека
-            seller, _ = Seller.objects.update_or_create(
-                user=request.user,
-                name_seller=decode_json_receipt.get('name_seller'),
-                defaults={
-                    'retail_place_address': decode_json_receipt.get(
-                        'retail_place_address',
-                        'Нет данных',
-                    ),
-                    'retail_place': decode_json_receipt.get(
-                        'retail_place',
-                        'Нет данных',
-                    ),
+            # Возвращаем ID задачи для отслеживания
+            return JsonResponse(
+                {
+                    'success': True,
+                    'task_id': task.task_id,
+                    'message': 'Обработка чека началась. Вы получите уведомление по завершении.',
                 },
             )
 
-            products_data = []
-            for item in decode_json_receipt.get('items', []):
-                products_data.append(
-                    Product(
-                        user=request.user,
-                        product_name=item['product_name'],
-                        category=item['category'],
-                        price=item['price'],
-                        quantity=item['quantity'],
-                        amount=item['amount'],
-                    ),
-                )
-
-            products = Product.objects.bulk_create(products_data)
-
-            receipt = Receipt.objects.create(
-                user=request.user,
-                account=account,
-                number_receipt=decode_json_receipt['number_receipt'],
-                receipt_date=datetime.strptime(
-                    self.normalize_date(decode_json_receipt['receipt_date']),
-                    '%d.%m.%Y %H:%M',
-                ),
-                nds10=decode_json_receipt.get('nds10', 0),
-                nds20=decode_json_receipt.get('nds20', 0),
-                operation_type=decode_json_receipt.get('operation_type', 0),
-                total_sum=decode_json_receipt['total_sum'],
-                seller=seller,
-            )
-
-            if products:
-                receipt.product.set(products)
-
-            # Обновление баланса счета
-            account.balance -= decimal.Decimal(decode_json_receipt['total_sum'])
-            account.save()
-
-            return self.render_success_response('Чек успешно загружен и обработан!')
-
-        except ValueError as e:
-            logger.error(f'Ошибка парсинга JSON: {e}')
-            return self.render_error_response(
-                'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',
-            )
         except Exception as e:
-            logger.error(f'Ошибка при обработке чека: {e}')
-            return self.render_error_response(
-                'Произошла ошибка при обработке чека. Попробуйте ещё раз.',
-            )
+            logger.error(f'Error in HTMX request: {str(e)}', exc_info=True)
+            return self.render_error_response(f'Ошибка: {str(e)}')
 
     def render_success_response(self, message):
         """Рендеринг успешного ответа для HTMX"""
@@ -555,3 +504,33 @@ class UploadImageView(LoginRequiredMixin, FormView):
                 'Произошла ошибка при обработке чека. Попробуйте ещё раз.',
             )
             return super().form_invalid(form)
+
+
+class TaskStatusView(LoginRequiredMixin, View):
+    """Представление для проверки статуса асинхронных задач."""
+
+    def get(self, request, task_id):
+        """Получение статуса задачи."""
+        try:
+            # Получаем результат задачи
+            result = broker.get_result(task_id)
+
+            if result.is_ready():
+                if result.is_success():
+                    return JsonResponse(
+                        {'status': 'completed', 'result': result.return_value},
+                    )
+                else:
+                    return JsonResponse(
+                        {'status': 'failed', 'error': str(result.return_value)},
+                    )
+            else:
+                return JsonResponse(
+                    {'status': 'pending', 'message': 'Задача выполняется...'},
+                )
+
+        except Exception as e:
+            logger.error(f'Error checking task status: {str(e)}')
+            return JsonResponse(
+                {'status': 'error', 'error': 'Ошибка при проверке статуса задачи'},
+            )
