@@ -140,20 +140,18 @@
                                 <form class="ajax-form" method="POST" action="{% url 'users:update_user' user.id %}">
                                     {% csrf_token %}
                                     <div class="row">
-                                        {% if user_update %}
-                                            {% for field in user_update %}
-                                                <div class="col-md-6 mb-3">
-                                                    <div class="form-group {% if field.errors %} has-error{% endif %}">
-                                                        {{ field | as_crispy_field }}
-                                                        {% if field.errors %}
-                                                            {% for error in field.errors %}
-                                                                <p class="help-block text-danger">{{ error }}</p>
-                                                            {% endfor %}
-                                                        {% endif %}
-                                                    </div>
+                                        {% for field in user_update %}
+                                            <div class="col-md-6 mb-3">
+                                                <div class="form-group {% if field.errors %} has-error{% endif %}">
+                                                    {{ field | as_crispy_field }}
+                                                    {% if field.errors %}
+                                                        {% for error in field.errors %}
+                                                            <p class="help-block text-danger">{{ error }}</p>
+                                                        {% endfor %}
+                                                    {% endif %}
                                                 </div>
-                                            {% endfor %}
-                                        {% endif %}
+                                            </div>
+                                        {% endfor %}
                                     </div>
                                     <div class="mt-3">
                                         <button type="submit" class="btn btn-primary">
@@ -272,6 +270,19 @@
                                             </a>
                                             <a class="btn btn-outline-success" href="{% url 'reports:list' %}">
                                                 <i class="bi bi-graph-up"></i> {% translate 'Отчеты и аналитика' %}
+                                            </a>
+                                        </div>
+                                        <hr>
+                                        <h5>Группы</h5>
+                                        <div class="d-grid gap-2">
+                                            <a class="btn btn-outline-primary" href="{% url 'users:group_create' %}">
+                                                <i class="bi bi-people"></i> Создать группу
+                                            </a>
+                                            <a class="btn btn-outline-danger" href="{% url 'users:group_delete' %}">
+                                                <i class="bi bi-person-dash"></i> Удалить группу
+                                            </a>
+                                            <a class="btn btn-outline-success" href="{% url 'users:add_user_to_group' %}">
+                                                <i class="bi bi-person-plus"></i> Добавить пользователя в группу
                                             </a>
                                         </div>
                                     </div>

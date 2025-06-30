@@ -30,9 +30,14 @@ from hasta_la_vista_money.users.forms import (
     RegisterUserForm,
     UpdateUserForm,
     UserLoginForm,
+    GroupCreateForm,
+    GroupDeleteForm,
+    AddUserToGroupForm,
 )
 from hasta_la_vista_money.users.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.models import Group
+from django.views.generic.edit import FormView
 
 
 class IndexView(TemplateView):
@@ -254,7 +259,9 @@ class UpdateUserView(
             and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
         )
         if valid_form:
-            user_update.save()
+            user = user_update.save(commit=False)
+            user.save()
+            user_update.save_m2m()  # Сохраняем группы
             messages.success(request, self.success_message)
             response_data = {'success': True}
         else:
@@ -652,3 +659,45 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
         )
 
         return context
+
+
+class GroupCreateView(SuccessMessageMixin, FormView):
+    template_name = "users/group_create.html"
+    form_class = GroupCreateForm
+    success_message = "Группа успешно создана."
+
+    def form_valid(self, form):
+        form.save()
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy("users:profile", kwargs={"pk": self.request.user.pk})
+
+
+class GroupDeleteView(SuccessMessageMixin, FormView):
+    template_name = "users/group_delete.html"
+    form_class = GroupDeleteForm
+    success_message = "Группа успешно удалена."
+
+    def form_valid(self, form):
+        group = form.cleaned_data["group"]
+        group.delete()
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy("users:profile", kwargs={"pk": self.request.user.pk})
+
+
+class AddUserToGroupView(SuccessMessageMixin, FormView):
+    template_name = "users/add_user_to_group.html"
+    form_class = AddUserToGroupForm
+    success_message = "Пользователь успешно добавлен в группу."
+
+    def form_valid(self, form):
+        user = form.cleaned_data["user"]
+        group = form.cleaned_data["group"]
+        user.groups.add(group)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy("users:profile", kwargs={"pk": self.request.user.pk})
