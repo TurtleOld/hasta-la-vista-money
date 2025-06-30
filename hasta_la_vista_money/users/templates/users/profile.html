@@ -45,7 +45,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-title">{% translate 'Общий баланс' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.total_balance|floatformat:2|comma }} ₽</h4>
+                                        <h4 class="mb-0">{{ user_statistics.total_balance|comma }} ₽</h4>
                                     </div>
                                     <div class="align-self-center">
                                         <i class="bi bi-wallet fs-1"></i>
@@ -60,7 +60,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-title">{% translate 'Доходы (месяц)' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.current_month_income|floatformat:2|comma }} ₽</h4>
+                                        <h4 class="mb-0">{{ user_statistics.current_month_income|comma }} ₽</h4>
                                     </div>
                                     <div class="align-self-center">
                                         <i class="bi bi-arrow-up-circle fs-1"></i>
@@ -75,7 +75,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-title">{% translate 'Расходы (месяц)' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.current_month_expenses|floatformat:2|comma }} ₽</h4>
+                                        <h4 class="mb-0">{{ user_statistics.current_month_expenses|comma }} ₽</h4>
                                     </div>
                                     <div class="align-self-center">
                                         <i class="bi bi-arrow-down-circle fs-1"></i>
@@ -90,7 +90,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-title">{% translate 'Сбережения' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.monthly_savings|floatformat:2|comma }} ₽</h4>
+                                        <h4 class="mb-0">{{ user_statistics.monthly_savings|comma }} ₽</h4>
                                     </div>
                                     <div class="align-self-center">
                                         <i class="bi bi-piggy-bank fs-1"></i>
@@ -200,7 +200,7 @@
                                                     <div class="list-group-item d-flex justify-content-between align-items-center">
                                                         <span>{{ category.category__name }}</span>
                                                         <span class="badge bg-danger rounded-pill">
-                                                            {{ category.total|floatformat:2|comma }} ₽
+                                                            {{ category.total|comma }} ₽
                                                         </span>
                                                     </div>
                                                 {% endfor %}
@@ -223,7 +223,7 @@
                                                     <div class="list-group-item">
                                                         <div class="d-flex w-100 justify-content-between">
                                                             <h6 class="mb-1">{{ expense.category.name }}</h6>
-                                                            <small class="text-danger">{{ expense.amount|floatformat:2|comma }} ₽</small>
+                                                            <small class="text-danger">{{ expense.amount|comma }} ₽</small>
                                                         </div>
                                                         <p class="mb-1">{{ expense.account.name_account }}</p>
                                                         <small class="text-muted">{{ expense.date|date:"d.m.Y" }}</small>
@@ -242,7 +242,7 @@
                                                     <div class="list-group-item">
                                                         <div class="d-flex w-100 justify-content-between">
                                                             <h6 class="mb-1">{{ income.category.name }}</h6>
-                                                            <small class="text-success">{{ income.amount|floatformat:2|comma }} ₽</small>
+                                                            <small class="text-success">{{ income.amount|comma }} ₽</small>
                                                         </div>
                                                         <p class="mb-1">{{ income.account.name_account }}</p>
                                                         <small class="text-muted">{{ income.date|date:"d.m.Y" }}</small>
@@ -276,13 +276,16 @@
                                         <h5>Группы</h5>
                                         <div class="d-grid gap-2">
                                             <a class="btn btn-outline-primary" href="{% url 'users:group_create' %}">
-                                                <i class="bi bi-people"></i> Создать группу
+                                                <i class="bi bi-people"></i> {% translate "Создать группу" %}
                                             </a>
                                             <a class="btn btn-outline-danger" href="{% url 'users:group_delete' %}">
-                                                <i class="bi bi-person-dash"></i> Удалить группу
+                                                <i class="bi bi-person-dash"></i> {% translate "Удалить группу" %}
                                             </a>
                                             <a class="btn btn-outline-success" href="{% url 'users:add_user_to_group' %}">
-                                                <i class="bi bi-person-plus"></i> Добавить пользователя в группу
+                                                <i class="bi bi-person-plus"></i> {% translate "Добавить пользователя в группу" %}
+                                            </a>
+                                            <a class="btn btn-outline-dark" href="{% url 'users:del_user_to_group' %}">
+                                                <i class="bi bi-person-plus"></i>  {% translate "Удалить пользователя из группы" %}
                                             </a>
                                         </div>
                                     </div>

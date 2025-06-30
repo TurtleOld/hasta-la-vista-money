@@ -36,7 +36,11 @@
                 </div>
                 <div class="col-md-2 mt-0 mb-3">
                   <label class="form-label"><i class="bi bi-box-seam me-1"></i>{% translate 'Товар' %}</label>
+                  {% if request.GET.product_name %}
                   <input type="text" id="product-autocomplete" name="product_name" class="form-control" placeholder="{% translate 'Введите товар' %}" value="{{ request.GET.product_name|default:'' }}" autocomplete="off">
+                  {% else %}
+                  <input type="text" id="product-autocomplete" name="product_name" class="form-control" placeholder="{% translate 'Введите товар' %}" autocomplete="off">
+                  {% endif %}
                 </div>
               </div>
               <div class="mt-3 d-flex gap-2">

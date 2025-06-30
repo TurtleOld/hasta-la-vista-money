@@ -310,7 +310,7 @@ class ProductByMonthView(LoginRequiredMixin, ListView):
 class UploadImageView(LoginRequiredMixin, FormView):
     """Представление для загрузки и обработки изображений чеков."""
 
-    template_name = 'receipts/modals/add_receipt.html'
+    template_name = 'receipts/upload_image.html'
     form_class = UploadImageForm
     success_url = reverse_lazy('receipts:list')
 

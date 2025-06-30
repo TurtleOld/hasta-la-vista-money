@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import CreateView, TemplateView, UpdateView
+from django.views.generic.edit import FormView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.generate_dates import generate_date_list
 from hasta_la_vista_money.custom_mixin import (
@@ -27,17 +28,16 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.forms import (
+    AddUserToGroupForm,
+    DeleteUserFromGroupForm,
+    GroupCreateForm,
+    GroupDeleteForm,
     RegisterUserForm,
     UpdateUserForm,
     UserLoginForm,
-    GroupCreateForm,
-    GroupDeleteForm,
-    AddUserToGroupForm,
 )
 from hasta_la_vista_money.users.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import Group
-from django.views.generic.edit import FormView
 
 
 class IndexView(TemplateView):
@@ -136,6 +136,7 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
                 user=self.request.user,
             )
             user_statistics = self.get_user_statistics(self.request.user)
+            print(user_statistics['total_balance'])
 
             context['user_update'] = user_update
             context['user_update_pass_form'] = user_update_pass_form
@@ -550,11 +551,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 expense_series_data = [0] + expense_series_data
                 income_series_data = [0] + income_series_data
 
-                print('Добавлена дополнительная точка данных')
-                print(f'Новые даты: {all_dates}')
-                print(f'Новые расходы: {expense_series_data}')
-                print(f'Новые доходы: {income_series_data}')
-
             chart_combined = {
                 'labels': all_dates,
                 'expense_data': expense_series_data,
@@ -661,43 +657,58 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class GroupCreateView(SuccessMessageMixin, FormView):
-    template_name = "users/group_create.html"
+class GroupCreateView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+    template_name = 'users/group_create.html'
     form_class = GroupCreateForm
-    success_message = "Группа успешно создана."
+    success_message = _('Группа успешно создана')
 
     def form_valid(self, form):
         form.save()
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy("users:profile", kwargs={"pk": self.request.user.pk})
+        return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
 
 
-class GroupDeleteView(SuccessMessageMixin, FormView):
-    template_name = "users/group_delete.html"
+class GroupDeleteView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+    template_name = 'users/group_delete.html'
     form_class = GroupDeleteForm
-    success_message = "Группа успешно удалена."
+    success_message = _('Группа успешно удалена.')
 
     def form_valid(self, form):
-        group = form.cleaned_data["group"]
+        group = form.cleaned_data['group']
         group.delete()
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy("users:profile", kwargs={"pk": self.request.user.pk})
+        return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
 
 
-class AddUserToGroupView(SuccessMessageMixin, FormView):
-    template_name = "users/add_user_to_group.html"
+class AddUserToGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+    template_name = 'users/add_user_to_group.html'
     form_class = AddUserToGroupForm
-    success_message = "Пользователь успешно добавлен в группу."
+    success_message = _('Пользователь успешно добавлен в группу')
 
     def form_valid(self, form):
-        user = form.cleaned_data["user"]
-        group = form.cleaned_data["group"]
+        user = form.cleaned_data['user']
+        group = form.cleaned_data['group']
         user.groups.add(group)
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy("users:profile", kwargs={"pk": self.request.user.pk})
+        return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
+
+
+class DeleteUserFromGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+    template_name = 'users/delete_user_from_group.html'
+    form_class = DeleteUserFromGroupForm
+    success_message = _('Пользователь успешно удален из группы')
+
+    def form_valid(self, form):
+        user = form.cleaned_data['user']
+        group = form.cleaned_data['group']
+        user.groups.remove(group)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
