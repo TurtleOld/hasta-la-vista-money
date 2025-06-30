@@ -157,11 +157,16 @@ class ExpenseView(
             'expenses',
         )
 
+        total_amount_page = sum(income['amount'] for income in pages_expense)
+        total_amount_period = sum(income['amount'] for income in all_expenses)
+
         context['expense_filter'] = expense_filter
         context['categories'] = expense_categories
         context['expenses'] = pages_expense
         context['add_expense_form'] = add_expense_form
         context['flattened_categories'] = flattened_categories
+        context['total_amount_page'] = total_amount_page
+        context['total_amount_period'] = total_amount_period
 
         return context
 
