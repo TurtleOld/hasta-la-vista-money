@@ -108,14 +108,16 @@
         {% endfor %}
         </tbody>
         <tfoot>
-        <tr>
-            <th colspan="5" class="text-end">
-                <div class="d-flex flex-column align-items-end">
-                    <span><strong>{% translate 'Итого за страницу:' %}</strong> {{ total_amount_page|comma }}</span>
-                    <span><strong>{% translate 'Итого за период:' %}</strong> {{ total_amount_period|comma }}</span>
-                </div>
-            </th>
-        </tr>
+        {% if total_amount_page and total_amount_period %}
+            <tr>
+                <th colspan="5" class="text-end">
+                    <div class="d-flex flex-column align-items-end">
+                        <span><strong>{% translate 'Итого за страницу:' %}</strong> {{ total_amount_page|comma }}</span>
+                        <span><strong>{% translate 'Итого за период:' %}</strong> {{ total_amount_period|comma }}</span>
+                    </div>
+                </th>
+            </tr>
+        {% endif %}
         </tfoot>
     </table>
 </div>
