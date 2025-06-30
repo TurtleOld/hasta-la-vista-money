@@ -45,7 +45,7 @@
                     {% for m in months %}
                         {% with idx=forloop.counter0 %}
                         {% with f=row.fact|index:idx p=row.plan|index:idx d=row.diff|index:idx pc=row.percent|index:idx %}
-                        <td>{% if f %}{{ f|floatformat:2 }}{% else %}&nbsp;{% endif %}</td>
+                        <td>{% if f %}{{ f|floatformat:2|comma }}{% else %}&nbsp;{% endif %}</td>
                         <td class="plan-cell" contenteditable="true"
                             data-category="{{ row.category }}"
                             data-category-id="{{ row.category_id }}"
@@ -55,9 +55,9 @@
                             data-save-url="{% url 'budget:save_planning' %}"
                             data-csrf="{{ csrf_token }}"
                             >
-                            {% if p %}{{ p|floatformat:2 }}{% else %}{% endif %}
+                            {% if p %}{{ p|floatformat:2|comma }}{% else %}{% endif %}
                         </td>
-                        <td class="text-muted delta-cell {% if d < 0 %}delta-negative{% elif d > 0 %}delta-positive{% endif %}">{% if d %}{{ d|floatformat:2 }}{% else %}&nbsp;{% endif %}</td>
+                        <td class="text-muted delta-cell {% if d < 0 %}delta-negative{% elif d > 0 %}delta-positive{% endif %}">{% if d %}{{ d|floatformat:2|comma }}{% else %}&nbsp;{% endif %}</td>
                         <td>{% if pc %}{{ pc|floatformat:0 }}%{% else %}&nbsp;{% endif %}</td>
                         {% endwith %}
                         {% endwith %}
@@ -72,9 +72,9 @@
                     <th>{% translate 'Итого' %}</th>
                     {% for m in months %}
                         {% with idx=forloop.counter0 %}
-                        <td>{{ total_fact_expense|index:idx|default:'—'|floatformat:2 }}</td>
-                        <td>{{ total_plan_expense|index:idx|default:'—'|floatformat:2 }}</td>
-                        <td>{% diff_by_index total_fact_expense total_plan_expense idx as diff %}{{ diff|default:'—'|floatformat:2 }}</td>
+                        <td>{{ total_fact_expense|index:idx|default:'—'|floatformat:2|comma }}</td>
+                        <td>{{ total_plan_expense|index:idx|default:'—'|floatformat:2|comma }}</td>
+                        <td>{% diff_by_index total_fact_expense total_plan_expense idx as diff %}{{ diff|default:'—'|floatformat:2|comma }}</td>
                         <td>{% with fact=total_fact_expense|index:idx plan=total_plan_expense|index:idx %}{% if plan %}{{ fact|div:plan|floatformat:0 }}%{% else %}—{% endif %}{% endwith %}</td>
                         {% endwith %}
                     {% endfor %}

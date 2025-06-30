@@ -18,8 +18,6 @@
                     {% csrf_token %}
                     {% if add_expense_form %}
                         {% for field in add_expense_form %}
-                            <pre>{{ field|pprint }}</pre>
-                            {{ field|default_if_none:'NONE' }}
                             <div class="form-group {% if field.errors %} has-error{% endif %}">
                                 {{ field | as_crispy_field }}
                                 {% if field.errors %}
