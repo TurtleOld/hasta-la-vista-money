@@ -45,7 +45,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-title">{% translate 'Общий баланс' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.total_balance|floatformat:2 }} ₽</h4>
+                                        <h4 class="mb-0">{{ user_statistics.total_balance|floatformat:2|comma }} ₽</h4>
                                     </div>
                                     <div class="align-self-center">
                                         <i class="bi bi-wallet fs-1"></i>
@@ -60,7 +60,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-title">{% translate 'Доходы (месяц)' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.current_month_income|floatformat:2 }} ₽</h4>
+                                        <h4 class="mb-0">{{ user_statistics.current_month_income|floatformat:2|comma }} ₽</h4>
                                     </div>
                                     <div class="align-self-center">
                                         <i class="bi bi-arrow-up-circle fs-1"></i>
@@ -75,7 +75,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-title">{% translate 'Расходы (месяц)' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.current_month_expenses|floatformat:2 }} ₽</h4>
+                                        <h4 class="mb-0">{{ user_statistics.current_month_expenses|floatformat:2|comma }} ₽</h4>
                                     </div>
                                     <div class="align-self-center">
                                         <i class="bi bi-arrow-down-circle fs-1"></i>
@@ -90,7 +90,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-title">{% translate 'Сбережения' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.monthly_savings|floatformat:2 }} ₽</h4>
+                                        <h4 class="mb-0">{{ user_statistics.monthly_savings|floatformat:2|comma }} ₽</h4>
                                     </div>
                                     <div class="align-self-center">
                                         <i class="bi bi-piggy-bank fs-1"></i>
@@ -202,7 +202,7 @@
                                                     <div class="list-group-item d-flex justify-content-between align-items-center">
                                                         <span>{{ category.category__name }}</span>
                                                         <span class="badge bg-danger rounded-pill">
-                                                            {{ category.total|floatformat:2 }} ₽
+                                                            {{ category.total|floatformat:2|comma }} ₽
                                                         </span>
                                                     </div>
                                                 {% endfor %}
@@ -225,7 +225,7 @@
                                                     <div class="list-group-item">
                                                         <div class="d-flex w-100 justify-content-between">
                                                             <h6 class="mb-1">{{ expense.category.name }}</h6>
-                                                            <small class="text-danger">{{ expense.amount|floatformat:2 }} ₽</small>
+                                                            <small class="text-danger">{{ expense.amount|floatformat:2|comma }} ₽</small>
                                                         </div>
                                                         <p class="mb-1">{{ expense.account.name_account }}</p>
                                                         <small class="text-muted">{{ expense.date|date:"d.m.Y" }}</small>
@@ -244,7 +244,7 @@
                                                     <div class="list-group-item">
                                                         <div class="d-flex w-100 justify-content-between">
                                                             <h6 class="mb-1">{{ income.category.name }}</h6>
-                                                            <small class="text-success">{{ income.amount|floatformat:2 }} ₽</small>
+                                                            <small class="text-success">{{ income.amount|floatformat:2|comma }} ₽</small>
                                                         </div>
                                                         <p class="mb-1">{{ income.account.name_account }}</p>
                                                         <small class="text-muted">{{ income.date|date:"d.m.Y" }}</small>
