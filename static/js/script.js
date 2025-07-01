@@ -329,104 +329,139 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         });
     }
-});
 
-window.setTimeout(function() {
-    $(".alert").fadeTo(400, 0).slideUp(400, function(){
-        $(this).remove();
-    });
-}, 4000);
-
-function onClickRemoveObject() {
-    const removeObjectButton = document.querySelectorAll('.remove-object-button')
-    removeObjectButton.forEach((button) => {
-        button.addEventListener('click', (event) => {
-            const confirmed_button_category = confirm('Вы уверены?')
-            if (!confirmed_button_category) {
-                event.preventDefault()
+    function initAccountGroupSelect(selectedValue) {
+        console.log('initAccountGroupSelect called with:', selectedValue);
+        const groupSelect = document.getElementById('account-group-select');
+        console.log('groupSelect:', groupSelect);
+        if (groupSelect) {
+            if (!selectedValue && sessionStorage.getItem('selectedAccountGroup')) {
+                selectedValue = sessionStorage.getItem('selectedAccountGroup');
             }
-        });
-    });
-}
-
-function ultraSafeFetch(path, options = {}) {
-    if (!path || typeof path !== 'string') {
-        throw new Error('Invalid path provided');
-    }
-
-    const cleanPath = path.replace(/[^a-zA-Z0-9\-_/.?=&]/g, '');
-
-    if (!cleanPath.startsWith('/')) {
-        throw new Error('Path must start with /');
-    }
-
-    const allowedPaths = [
-        '/receipts/api/product-autocomplete/',
-        '/authentication/token/refresh/',
-        '/users/login/'
-    ];
-
-    const isAllowed = allowedPaths.some(allowedPath => cleanPath.startsWith(allowedPath));
-    if (!isAllowed) {
-        throw new Error('Path not allowed');
-    }
-
-    const safeFetch = (url, opts) => {
-        if (url === '/receipts/api/product-autocomplete/') {
-            return fetch('/receipts/api/product-autocomplete/', opts);
-        } else if (url === '/authentication/token/refresh/') {
-            return fetch('/authentication/token/refresh/', opts);
-        } else if (url === '/users/login/') {
-            return fetch('/users/login/', opts);
+            if (selectedValue) {
+                groupSelect.value = selectedValue;
+            }
+            groupSelect.onchange = null;
+            groupSelect.addEventListener('change', function () {
+                const groupId = this.value;
+                console.log('Saving to sessionStorage:', groupId);
+                sessionStorage.setItem('selectedAccountGroup', groupId);
+                fetch(`/finance_account/ajax/accounts_by_group/?group_id=${groupId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const block = document.getElementById('account-cards-block');
+                        if (block && data.html) {
+                            block.outerHTML = data.html;
+                            initAccountGroupSelect(groupId);
+                        }
+                    });
+            });
         } else {
-            throw new Error('Unsafe URL detected');
+            console.log('account-group-select not found in DOM');
         }
-    };
-
-    return safeFetch(cleanPath, options);
-}
-
-async function fetchWithAuth(url, options = {}) {
-    if (!url || typeof url !== 'string') {
-        throw new Error('Invalid URL provided');
     }
-    try {
-        const urlObj = new URL(url, window.location.origin);
-        if (urlObj.origin !== window.location.origin) {
-            throw new Error('URL must be from the same origin');
+
+    document.addEventListener('DOMContentLoaded', function () {
+        initAccountGroupSelect();
+    });
+
+    window.setTimeout(function () {
+        $(".alert").fadeTo(400, 0).slideUp(400, function () {
+            $(this).remove();
+        });
+    }, 4000);
+
+    function onClickRemoveObject() {
+        const removeObjectButton = document.querySelectorAll('.remove-object-button')
+        removeObjectButton.forEach((button) => {
+            button.addEventListener('click', (event) => {
+                const confirmed_button_category = confirm('Вы уверены?')
+                if (!confirmed_button_category) {
+                    event.preventDefault()
+                }
+            });
+        });
+    }
+
+    function ultraSafeFetch(path, options = {}) {
+        if (!path || typeof path !== 'string') {
+            throw new Error('Invalid path provided');
         }
-        const path = urlObj.pathname + urlObj.search + urlObj.hash;
 
-        let token = localStorage.getItem('access_token');
-        if (!options.headers) options.headers = {};
-        if (token) options.headers['Authorization'] = 'Bearer ' + token;
+        const cleanPath = path.replace(/[^a-zA-Z0-9\-_/.?=&]/g, '');
 
-        let response = await ultraSafeFetch(path, options);
+        if (!cleanPath.startsWith('/')) {
+            throw new Error('Path must start with /');
+        }
 
-        if (response.status === 401) {
-            const refresh = localStorage.getItem('refresh_token');
-            if (refresh) {
-                const refreshResp = await fetch('/authentication/token/refresh/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refresh })
-                });
-                if (refreshResp.ok) {
-                    const data = await refreshResp.json();
-                    localStorage.setItem('access_token', data.access);
-                    options.headers['Authorization'] = 'Bearer ' + data.access;
-                    return ultraSafeFetch(path, options);
-                } else {
-                    localStorage.removeItem('access_token');
-                    localStorage.removeItem('refresh_token');
-                    alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
-                    window.location.replace('/users/login/');
-                    return response;
+        const allowedPaths = [
+            '/receipts/api/product-autocomplete/',
+            '/authentication/token/refresh/',
+            '/users/login/'
+        ];
+
+        const isAllowed = allowedPaths.some(allowedPath => cleanPath.startsWith(allowedPath));
+        if (!isAllowed) {
+            throw new Error('Path not allowed');
+        }
+
+        const safeFetch = (url, opts) => {
+            if (url === '/receipts/api/product-autocomplete/') {
+                return fetch('/receipts/api/product-autocomplete/', opts);
+            } else if (url === '/authentication/token/refresh/') {
+                return fetch('/authentication/token/refresh/', opts);
+            } else if (url === '/users/login/') {
+                return fetch('/users/login/', opts);
+            } else {
+                throw new Error('Unsafe URL detected');
+            }
+        };
+
+        return safeFetch(cleanPath, options);
+    }
+
+    async function fetchWithAuth(url, options = {}) {
+        if (!url || typeof url !== 'string') {
+            throw new Error('Invalid URL provided');
+        }
+        try {
+            const urlObj = new URL(url, window.location.origin);
+            if (urlObj.origin !== window.location.origin) {
+                throw new Error('URL must be from the same origin');
+            }
+            const path = urlObj.pathname + urlObj.search + urlObj.hash;
+
+            let token = localStorage.getItem('access_token');
+            if (!options.headers) options.headers = {};
+            if (token) options.headers['Authorization'] = 'Bearer ' + token;
+
+            let response = await ultraSafeFetch(path, options);
+
+            if (response.status === 401) {
+                const refresh = localStorage.getItem('refresh_token');
+                if (refresh) {
+                    const refreshResp = await fetch('/authentication/token/refresh/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ refresh })
+                    });
+                    if (refreshResp.ok) {
+                        const data = await refreshResp.json();
+                        localStorage.setItem('access_token', data.access);
+                        options.headers['Authorization'] = 'Bearer ' + data.access;
+                        return ultraSafeFetch(path, options);
+                    } else {
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('refresh_token');
+                        alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
+                        window.location.replace('/users/login/');
+                        return response;
+                    }
                 }
             }
+            return response;
+        } catch (e) {
+            throw new Error('Invalid URL format');
         }
-        return response;
-    } catch (e) {
-        throw new Error('Invalid URL format');
     }
-}
+});

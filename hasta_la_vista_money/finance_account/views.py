@@ -24,6 +24,8 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from hasta_la_vista_money.users.models import User
+from django.template.loader import render_to_string
+from django.contrib.auth.models import Group
 
 
 class BaseView:
@@ -67,8 +69,17 @@ class AccountView(
         if not self.request.user.is_authenticated:
             return context
 
-        user = get_object_or_404(User, username=self.request.user)
-        accounts = Account.objects.filter(user=user).select_related('user').all()
+        user = self.request.user
+        group_id = self.request.GET.get("group_id")
+        if group_id and group_id != "my":
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                accounts = Account.objects.filter(user__in=users_in_group)
+            except Group.DoesNotExist:
+                accounts = Account.objects.none()
+        else:
+            accounts = Account.objects.filter(user=user)
 
         # Форма для перевода средств
         account_transfer_money = (
@@ -94,15 +105,16 @@ class AccountView(
 
         context.update(
             {
-                'accounts': accounts,
-                'add_account_form': AddAccountForm(),
-                'transfer_money_form': TransferMoneyAccountForm(
+                "accounts": accounts,
+                "add_account_form": AddAccountForm(),
+                "transfer_money_form": TransferMoneyAccountForm(
                     user=self.request.user,
                     initial=initial_form_data,
                 ),
-                'transfer_money_log': transfer_money_log,
-                'chart_combine': chart_combine,
-                'sum_all_accounts': sum_all_accounts,
+                "transfer_money_log": transfer_money_log,
+                "chart_combine": chart_combine,
+                "sum_all_accounts": sum_all_accounts,
+                "user_groups": self.request.user.groups.all(),
             },
         )
 
@@ -228,3 +240,30 @@ class DeleteAccountView(DeleteObjectMixin):
     success_url = reverse_lazy('finance_account:list')
     success_message = constants.SUCCESS_MESSAGE_DELETE_ACCOUNT[:]
     error_message = constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT[:]
+
+
+class AjaxAccountsByGroupView(View):
+    def get(self, request, *args, **kwargs):
+        group_id = request.GET.get("group_id")
+        user = request.user
+        accounts = Account.objects.none()
+        user_groups = user.groups.all()
+        if group_id == "my" or not group_id:
+            accounts = Account.objects.filter(user=user)
+        else:
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                accounts = Account.objects.filter(user__in=users_in_group)
+                print(accounts)
+            except Group.DoesNotExist:
+                accounts = Account.objects.none()
+        html = render_to_string(
+            "finance_account/account_table.html",
+            {
+                "accounts": accounts,
+                "user_groups": user_groups,
+                "request": request,
+            },
+        )
+        return JsonResponse({"html": html})
