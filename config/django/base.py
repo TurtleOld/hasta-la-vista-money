@@ -365,23 +365,23 @@ structlog.configure(
 )
 
 # Taskiq Configuration (Async Task Queue)
-TASKIQ_RABBITMQ_URL = os.getenv(
-    'TASKIQ_RABBITMQ_URL',
-    'amqp://guest:guest@localhost:5672/',
+TASKIQ_REDIS_URL = os.environ.get(
+    "TASKIQ_REDIS_URL",
+    "redis://localhost:6379/0",
 )
-TASKIQ_BROKER_URL = os.getenv('TASKIQ_BROKER_URL', 'amqp://guest:guest@localhost:5672/')
+TASKIQ_BROKER_URL = os.environ.get("TASKIQ_BROKER_URL", TASKIQ_REDIS_URL)
 
 # Taskiq settings
 TASKIQ = {
-    'broker_url': TASKIQ_BROKER_URL,
-    'result_backend_url': TASKIQ_RABBITMQ_URL,
-    'task_default_queue': 'default',
-    'task_serializer': 'json',
-    'result_serializer': 'json',
-    'accept_content': ['json'],
-    'timezone': TIME_ZONE,
-    'enable_utc': True,
-    'task_track_started': True,
-    'task_time_limit': 30 * 60,  # 30 минут
-    'worker_max_tasks_per_child': 1000,
+    "broker_url": TASKIQ_BROKER_URL,
+    "result_backend_url": TASKIQ_REDIS_URL,
+    "task_default_queue": "default",
+    "task_serializer": "json",
+    "result_serializer": "json",
+    "accept_content": ["json"],
+    "timezone": TIME_ZONE,
+    "enable_utc": True,
+    "task_track_started": True,
+    "task_time_limit": 30 * 60,  # 30 минут
+    "worker_max_tasks_per_child": 1000,
 }

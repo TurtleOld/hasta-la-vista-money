@@ -763,3 +763,30 @@ table {
         text-align: left;
     }
 }
+.account-foreign {
+    background-color: #e3f0ff !important;
+    border-left: 4px solid #1976d2 !important;
+}
+
+.account-owner-label {
+    font-size: 0.85em;
+    color: #1976d2;
+    font-style: italic;
+    margin-top: 0.25rem;
+}
+
+.receipt-foreign {
+    background-color: #e3f0ff !important;
+    border-left: 4px solid #1976d2 !important;
+}
+
+.receipt-owner-label {
+    font-size: 0.85em;
+    color: #1976d2;
+    font-style: italic;
+    margin-top: 0.25rem;
+}
+
+input[type="file"] {
+    display: none;
+}
