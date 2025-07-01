@@ -153,6 +153,16 @@
                                             </div>
                                         {% endfor %}
                                     </div>
+                                    <div class="mt-4">
+                                        <h5>{% translate 'Мои группы' %}</h5>
+                                        <ul class="list-group list-group-flush">
+                                            {% for group in user_update.instance.groups.all %}
+                                                <li class="list-group-item">{{ group.name }}</li>
+                                            {% empty %}
+                                                <li class="list-group-item">{% translate 'Вы не состоите ни в одной группе' %}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
                                     <div class="mt-3">
                                         <button type="submit" class="btn btn-primary">
                                             <i class="bi bi-check-circle"></i> {% translate 'Сохранить изменения' %}

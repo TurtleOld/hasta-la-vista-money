@@ -5,9 +5,9 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Добавить пользователя в группу</h2>
-    <form method="post">
+    <form method="post" id="add-user-to-group-form">
         {% csrf_token %}
-        {{ form|crispy }}
+        {{ form |crispy }}
         <button type="submit" class="btn btn-success">{% translate "Добавить" %}</button>
     </form>
 </div>

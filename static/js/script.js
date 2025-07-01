@@ -277,6 +277,58 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    const deleteForm = document.getElementById('delete-user-from-group-form');
+    if (deleteForm) {
+        const userSelect = deleteForm.querySelector('select[name="user"]');
+        const groupSelect = deleteForm.querySelector('select[name="group"]');
+
+        userSelect.addEventListener('change', function () {
+            const userId = this.value;
+            groupSelect.innerHTML = '<option value="">Загрузка...</option>';
+            fetch(`/users/ajax/groups_for_user/?user_id=${userId}`)
+                .then(response => response.json())
+                .then(data => {
+                    groupSelect.innerHTML = '';
+                    if (data.groups.length === 0) {
+                        groupSelect.innerHTML = '<option value="">Нет доступных групп</option>';
+                    } else {
+                        data.groups.forEach(function (group) {
+                            const option = document.createElement('option');
+                            option.value = group.id;
+                            option.textContent = group.name;
+                            groupSelect.appendChild(option);
+                        });
+                    }
+                });
+        });
+    }
+
+    const addUserForm = document.getElementById('add-user-to-group-form');
+    if (addUserForm) {
+        const userSelect = addUserForm.querySelector('select[name="user"]');
+        const groupSelect = addUserForm.querySelector('select[name="group"]');
+
+        userSelect.addEventListener('change', function () {
+            const userId = this.value;
+            groupSelect.innerHTML = '<option value="">Загрузка...</option>';
+            fetch(`/users/ajax/groups_not_for_user/?user_id=${userId}`)
+                .then(response => response.json())
+                .then(data => {
+                    groupSelect.innerHTML = '';
+                    if (data.groups.length === 0) {
+                        groupSelect.innerHTML = '<option value="">Нет доступных групп</option>';
+                    } else {
+                        data.groups.forEach(function (group) {
+                            const option = document.createElement('option');
+                            option.value = group.id;
+                            option.textContent = group.name;
+                            groupSelect.appendChild(option);
+                        });
+                    }
+                });
+        });
+    }
 });
 
 window.setTimeout(function() {

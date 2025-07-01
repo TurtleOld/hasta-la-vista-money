@@ -36,28 +36,20 @@ class RegisterUserForm(UserCreationForm[User]):
 
 
 class UpdateUserForm(ModelForm):
-    groups = ModelMultipleChoiceField(
-        queryset=Group.objects.all(),
-        required=False,
-        label='Группы',
-        widget=None,  # Можно заменить на CheckboxSelectMultiple или другой виджет при необходимости
-    )
 
     class Meta:
         model = User
         fields = [
-            'username',
-            'email',
-            'first_name',
-            'last_name',
-            'groups',
+            "username",
+            "email",
+            "first_name",
+            "last_name",
         ]
         labels = {
-            'username': 'Имя пользователя',
-            'email': 'Email',
-            'first_name': 'Имя',
-            'last_name': 'Фамилия',
-            'groups': 'Группы',
+            "username": "Имя пользователя",
+            "email": "Email",
+            "first_name": "Имя",
+            "last_name": "Фамилия",
         }
 
 
@@ -77,9 +69,55 @@ class GroupDeleteForm(forms.Form):
 
 class AddUserToGroupForm(forms.Form):
     user = forms.ModelChoiceField(queryset=User.objects.all(), label='Пользователь')
-    group = forms.ModelChoiceField(queryset=Group.objects.all(), label='Группа')
+    group = forms.ModelChoiceField(queryset=Group.objects.none(), label="Группа")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        user = None
+        if self.is_bound and self.data.get("user"):
+            try:
+                user = User.objects.get(pk=self.data.get("user"))
+            except (ValueError, User.DoesNotExist):
+                user = None
+        elif "user" in self.initial and self.initial["user"]:
+            user_val = self.initial["user"]
+            if isinstance(user_val, User):
+                user = user_val
+            else:
+                try:
+                    user = User.objects.get(pk=user_val)
+                except (ValueError, User.DoesNotExist):
+                    user = None
+        if user:
+            self.fields["group"].queryset = Group.objects.exclude(
+                id__in=user.groups.values_list("id", flat=True)
+            )
+        else:
+            self.fields["group"].queryset = Group.objects.none()
 
 
 class DeleteUserFromGroupForm(forms.Form):
     user = forms.ModelChoiceField(queryset=User.objects.all(), label='Пользователь')
-    group = forms.ModelChoiceField(queryset=Group.objects.all(), label='Группа')
+    group = forms.ModelChoiceField(queryset=Group.objects.none(), label="Группа")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        user = None
+        if self.is_bound and self.data.get("user"):
+            try:
+                user = User.objects.get(pk=self.data.get("user"))
+            except (ValueError, User.DoesNotExist):
+                user = None
+        elif "user" in self.initial and self.initial["user"]:
+            user_val = self.initial["user"]
+            if isinstance(user_val, User):
+                user = user_val
+            else:
+                try:
+                    user = User.objects.get(pk=user_val)
+                except (ValueError, User.DoesNotExist):
+                    user = None
+        if user:
+            self.fields["group"].queryset = user.groups.all()
+        else:
+            self.fields["group"].queryset = Group.objects.none()

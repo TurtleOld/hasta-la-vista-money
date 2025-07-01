@@ -1,3 +1,4 @@
+from decimal import Decimal
 import json
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -136,7 +137,6 @@ class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
                 user=self.request.user,
             )
             user_statistics = self.get_user_statistics(self.request.user)
-            print(user_statistics['total_balance'])
 
             context['user_update'] = user_update
             context['user_update_pass_form'] = user_update_pass_form
@@ -706,9 +706,44 @@ class DeleteUserFromGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView)
 
     def form_valid(self, form):
         user = form.cleaned_data['user']
+        print(user, "user")
         group = form.cleaned_data['group']
+        print(group, "group")
+        print(user.groups.all(), "user.groups.all()")
         user.groups.remove(group)
+        print(user.groups.all(), "user.groups.all()")
         return super().form_valid(form)
 
     def get_success_url(self):
         return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
+
+
+def groups_for_user_ajax(request):
+    user_id = request.GET.get("user_id")
+    groups = []
+    if user_id:
+        try:
+            user = User.objects.get(pk=user_id)
+            groups = list(user.groups.values("id", "name"))
+        except User.DoesNotExist:
+            pass
+    return JsonResponse({"groups": groups})
+
+
+def groups_not_for_user_ajax(request):
+    user_id = request.GET.get("user_id")
+    groups = []
+    if user_id:
+        try:
+            user = User.objects.get(pk=user_id)
+            # Только те группы, в которые пользователь не входит
+            from django.contrib.auth.models import Group
+
+            groups = list(
+                Group.objects.exclude(
+                    id__in=user.groups.values_list("id", flat=True)
+                ).values("id", "name")
+            )
+        except User.DoesNotExist:
+            pass
+    return JsonResponse({"groups": groups})
