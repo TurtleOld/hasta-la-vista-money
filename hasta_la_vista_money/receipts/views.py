@@ -17,14 +17,12 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views import View
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.custom_paginator import (
     paginator_custom_view,
 )
-from hasta_la_vista_money.commonlogic.views import collect_info_receipt
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
@@ -62,8 +60,8 @@ class ReceiptView(
     no_permission_url = reverse_lazy('login')
 
     def get_queryset(self):
-        group_id = self.request.GET.get("group_id")
-        if group_id and group_id != "my":
+        group_id = self.request.GET.get('group_id')
+        if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
@@ -74,15 +72,15 @@ class ReceiptView(
 
     def get_context_data(self, *args, **kwargs):
         user = get_object_or_404(User, username=self.request.user)
-        group_id = self.request.GET.get("group_id")
-        if group_id and group_id != "my":
+        group_id = self.request.GET.get('group_id')
+        if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
                 receipt_queryset = Receipt.objects.filter(user__in=users_in_group)
                 seller_queryset = Seller.objects.filter(
                     user__in=users_in_group
-                ).distinct("name_seller")
+                ).distinct('name_seller')
                 account_queryset = Account.objects.filter(user__in=users_in_group)
             except Group.DoesNotExist:
                 receipt_queryset = Receipt.objects.none()
@@ -90,7 +88,7 @@ class ReceiptView(
                 account_queryset = Account.objects.none()
         else:
             receipt_queryset = Receipt.objects.filter(user=self.request.user)
-            seller_queryset = user.seller_users.distinct("name_seller")
+            seller_queryset = user.seller_users.distinct('name_seller')
             account_queryset = user.finance_account_users
 
         seller_form = SellerForm()
@@ -100,36 +98,36 @@ class ReceiptView(
             user=self.request.user,
         )
         receipt_form = ReceiptForm()
-        receipt_form.fields["account"].queryset = account_queryset
-        receipt_form.fields["seller"].queryset = seller_queryset
+        receipt_form.fields['account'].queryset = account_queryset
+        receipt_form.fields['seller'].queryset = seller_queryset
 
         product_formset = ProductFormSet()
 
         total_sum_receipts = receipt_filter.qs.aggregate(
-            total=Sum("total_sum"),
+            total=Sum('total_sum'),
         )
         total_receipts = receipt_filter.qs
 
         receipt_info_by_month = (
             receipt_queryset.annotate(
-                month=TruncMonth("receipt_date"),
+                month=TruncMonth('receipt_date'),
             )
             .values(
-                "month",
-                "account__name_account",
+                'month',
+                'account__name_account',
             )
             .annotate(
-                count=Count("id"),
-                total_amount=Sum("total_sum"),
+                count=Count('id'),
+                total_amount=Sum('total_sum'),
             )
-            .order_by("-month")
+            .order_by('-month')
         )
 
         page_receipts = paginator_custom_view(
             self.request,
             total_receipts,
             self.paginate_by,
-            "receipts",
+            'receipts',
         )
 
         # Paginator receipts table
@@ -137,19 +135,19 @@ class ReceiptView(
             self.request,
             receipt_info_by_month,
             self.paginate_by,
-            "receipts",
+            'receipts',
         )
 
         context = super().get_context_data(**kwargs)
-        context["receipts"] = page_receipts
-        context["receipt_filter"] = receipt_filter
-        context["total_receipts"] = total_receipts
-        context["total_sum_receipts"] = total_sum_receipts
-        context["seller_form"] = seller_form
-        context["receipt_form"] = receipt_form
-        context["product_formset"] = product_formset
-        context["receipt_info_by_month"] = pages_receipt_table
-        context["user_groups"] = self.request.user.groups.all()
+        context['receipts'] = page_receipts
+        context['receipt_filter'] = receipt_filter
+        context['total_receipts'] = total_receipts
+        context['total_sum_receipts'] = total_sum_receipts
+        context['seller_form'] = seller_form
+        context['receipt_form'] = receipt_form
+        context['product_formset'] = product_formset
+        context['receipt_info_by_month'] = pages_receipt_table
+        context['user_groups'] = self.request.user.groups.all()
 
         return context
 
@@ -460,7 +458,7 @@ class UploadImageView(LoginRequiredMixin, FormView):
 
     @staticmethod
     def clean_json_response(text: str) -> str:
-        match = re.search(r"```(?:json)?\s*({.*?})\s*```", text, re.DOTALL)
+        match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
         if match:
             return match.group(1)
         return text.strip()
@@ -468,20 +466,20 @@ class UploadImageView(LoginRequiredMixin, FormView):
     @staticmethod
     def normalize_date(date_str: str) -> str:
         try:
-            return datetime.strptime(date_str, "%d.%m.%Y %H:%M").strftime(
-                "%d.%m.%Y %H:%M",
+            return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
+                '%d.%m.%Y %H:%M',
             )
         except ValueError:
-            day, month, year_short, time = date_str.replace(" ", ".").split(".")
+            day, month, year_short, time = date_str.replace(' ', '.').split('.')
             current_century = str(datetime.now().year)[:2]
-            return f"{day}.{month}.{current_century}{year_short} {time}"
+            return f'{day}.{month}.{current_century}{year_short} {time}'
 
 
 @require_GET
 def ajax_receipts_by_group(request):
-    group_id = request.GET.get("group_id")
+    group_id = request.GET.get('group_id')
     user = request.user
-    if group_id and group_id != "my":
+    if group_id and group_id != 'my':
         try:
             group = Group.objects.get(pk=group_id)
             users_in_group = group.user_set.all()
@@ -494,11 +492,11 @@ def ajax_receipts_by_group(request):
     # Пагинация (по аналогии с ReceiptView)
     paginate_by = 10
     page_receipts = paginator_custom_view(
-        request, receipt_queryset, paginate_by, "receipts"
+        request, receipt_queryset, paginate_by, 'receipts'
     )
 
     html = render_to_string(
-        "receipts/receipts_block.html",
-        {"receipts": page_receipts, "request": request},
+        'receipts/receipts_block.html',
+        {'receipts': page_receipts, 'request': request},
     )
-    return JsonResponse({"html": html})
+    return JsonResponse({'html': html})

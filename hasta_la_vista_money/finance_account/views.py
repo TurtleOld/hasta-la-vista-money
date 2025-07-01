@@ -6,7 +6,6 @@ from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Sum
 from django.http import HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
@@ -23,7 +22,6 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.users.models import User
 from django.template.loader import render_to_string
 from django.contrib.auth.models import Group
 
@@ -70,8 +68,8 @@ class AccountView(
             return context
 
         user = self.request.user
-        group_id = self.request.GET.get("group_id")
-        if group_id and group_id != "my":
+        group_id = self.request.GET.get('group_id')
+        if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
@@ -105,16 +103,16 @@ class AccountView(
 
         context.update(
             {
-                "accounts": accounts,
-                "add_account_form": AddAccountForm(),
-                "transfer_money_form": TransferMoneyAccountForm(
+                'accounts': accounts,
+                'add_account_form': AddAccountForm(),
+                'transfer_money_form': TransferMoneyAccountForm(
                     user=self.request.user,
                     initial=initial_form_data,
                 ),
-                "transfer_money_log": transfer_money_log,
-                "chart_combine": chart_combine,
-                "sum_all_accounts": sum_all_accounts,
-                "user_groups": self.request.user.groups.all(),
+                'transfer_money_log': transfer_money_log,
+                'chart_combine': chart_combine,
+                'sum_all_accounts': sum_all_accounts,
+                'user_groups': self.request.user.groups.all(),
             },
         )
 
@@ -244,11 +242,11 @@ class DeleteAccountView(DeleteObjectMixin):
 
 class AjaxAccountsByGroupView(View):
     def get(self, request, *args, **kwargs):
-        group_id = request.GET.get("group_id")
+        group_id = request.GET.get('group_id')
         user = request.user
         accounts = Account.objects.none()
         user_groups = user.groups.all()
-        if group_id == "my" or not group_id:
+        if group_id == 'my' or not group_id:
             accounts = Account.objects.filter(user=user)
         else:
             try:
@@ -259,11 +257,11 @@ class AjaxAccountsByGroupView(View):
             except Group.DoesNotExist:
                 accounts = Account.objects.none()
         html = render_to_string(
-            "finance_account/account_table.html",
+            'finance_account/account_table.html',
             {
-                "accounts": accounts,
-                "user_groups": user_groups,
-                "request": request,
+                'accounts': accounts,
+                'user_groups': user_groups,
+                'request': request,
             },
         )
-        return JsonResponse({"html": html})
+        return JsonResponse({'html': html})

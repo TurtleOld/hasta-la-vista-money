@@ -4,7 +4,6 @@ from django.contrib.auth.models import Group
 from django.forms import (
     CharField,
     ModelForm,
-    ModelMultipleChoiceField,
     PasswordInput,
 )
 from django_stubs_ext.db.models import TypedModelMeta
@@ -36,20 +35,19 @@ class RegisterUserForm(UserCreationForm[User]):
 
 
 class UpdateUserForm(ModelForm):
-
     class Meta:
         model = User
         fields = [
-            "username",
-            "email",
-            "first_name",
-            "last_name",
+            'username',
+            'email',
+            'first_name',
+            'last_name',
         ]
         labels = {
-            "username": "Имя пользователя",
-            "email": "Email",
-            "first_name": "Имя",
-            "last_name": "Фамилия",
+            'username': 'Имя пользователя',
+            'email': 'Email',
+            'first_name': 'Имя',
+            'last_name': 'Фамилия',
         }
 
 
@@ -69,18 +67,18 @@ class GroupDeleteForm(forms.Form):
 
 class AddUserToGroupForm(forms.Form):
     user = forms.ModelChoiceField(queryset=User.objects.all(), label='Пользователь')
-    group = forms.ModelChoiceField(queryset=Group.objects.none(), label="Группа")
+    group = forms.ModelChoiceField(queryset=Group.objects.none(), label='Группа')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         user = None
-        if self.is_bound and self.data.get("user"):
+        if self.is_bound and self.data.get('user'):
             try:
-                user = User.objects.get(pk=self.data.get("user"))
+                user = User.objects.get(pk=self.data.get('user'))
             except (ValueError, User.DoesNotExist):
                 user = None
-        elif "user" in self.initial and self.initial["user"]:
-            user_val = self.initial["user"]
+        elif 'user' in self.initial and self.initial['user']:
+            user_val = self.initial['user']
             if isinstance(user_val, User):
                 user = user_val
             else:
@@ -89,27 +87,27 @@ class AddUserToGroupForm(forms.Form):
                 except (ValueError, User.DoesNotExist):
                     user = None
         if user:
-            self.fields["group"].queryset = Group.objects.exclude(
-                id__in=user.groups.values_list("id", flat=True)
+            self.fields['group'].queryset = Group.objects.exclude(
+                id__in=user.groups.values_list('id', flat=True)
             )
         else:
-            self.fields["group"].queryset = Group.objects.none()
+            self.fields['group'].queryset = Group.objects.none()
 
 
 class DeleteUserFromGroupForm(forms.Form):
     user = forms.ModelChoiceField(queryset=User.objects.all(), label='Пользователь')
-    group = forms.ModelChoiceField(queryset=Group.objects.none(), label="Группа")
+    group = forms.ModelChoiceField(queryset=Group.objects.none(), label='Группа')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         user = None
-        if self.is_bound and self.data.get("user"):
+        if self.is_bound and self.data.get('user'):
             try:
-                user = User.objects.get(pk=self.data.get("user"))
+                user = User.objects.get(pk=self.data.get('user'))
             except (ValueError, User.DoesNotExist):
                 user = None
-        elif "user" in self.initial and self.initial["user"]:
-            user_val = self.initial["user"]
+        elif 'user' in self.initial and self.initial['user']:
+            user_val = self.initial['user']
             if isinstance(user_val, User):
                 user = user_val
             else:
@@ -118,6 +116,6 @@ class DeleteUserFromGroupForm(forms.Form):
                 except (ValueError, User.DoesNotExist):
                     user = None
         if user:
-            self.fields["group"].queryset = user.groups.all()
+            self.fields['group'].queryset = user.groups.all()
         else:
-            self.fields["group"].queryset = Group.objects.none()
+            self.fields['group'].queryset = Group.objects.none()

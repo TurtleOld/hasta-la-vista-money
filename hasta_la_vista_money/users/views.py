@@ -1,4 +1,3 @@
-from decimal import Decimal
 import json
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -706,12 +705,12 @@ class DeleteUserFromGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView)
 
     def form_valid(self, form):
         user = form.cleaned_data['user']
-        print(user, "user")
+        print(user, 'user')
         group = form.cleaned_data['group']
-        print(group, "group")
-        print(user.groups.all(), "user.groups.all()")
+        print(group, 'group')
+        print(user.groups.all(), 'user.groups.all()')
         user.groups.remove(group)
-        print(user.groups.all(), "user.groups.all()")
+        print(user.groups.all(), 'user.groups.all()')
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -719,19 +718,19 @@ class DeleteUserFromGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView)
 
 
 def groups_for_user_ajax(request):
-    user_id = request.GET.get("user_id")
+    user_id = request.GET.get('user_id')
     groups = []
     if user_id:
         try:
             user = User.objects.get(pk=user_id)
-            groups = list(user.groups.values("id", "name"))
+            groups = list(user.groups.values('id', 'name'))
         except User.DoesNotExist:
             pass
-    return JsonResponse({"groups": groups})
+    return JsonResponse({'groups': groups})
 
 
 def groups_not_for_user_ajax(request):
-    user_id = request.GET.get("user_id")
+    user_id = request.GET.get('user_id')
     groups = []
     if user_id:
         try:
@@ -741,9 +740,9 @@ def groups_not_for_user_ajax(request):
 
             groups = list(
                 Group.objects.exclude(
-                    id__in=user.groups.values_list("id", flat=True)
-                ).values("id", "name")
+                    id__in=user.groups.values_list('id', flat=True)
+                ).values('id', 'name')
             )
         except User.DoesNotExist:
             pass
-    return JsonResponse({"groups": groups})
+    return JsonResponse({'groups': groups})
