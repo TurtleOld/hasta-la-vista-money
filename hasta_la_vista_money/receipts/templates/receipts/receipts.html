@@ -91,16 +91,13 @@
         </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2 mt-3">
         <h4 class="fw-bold mb-0">Чеки</h4>
         <div class="d-flex align-items-center gap-2">
             <label for="receipt-group-select" class="form-label mb-0">Группа чеков:</label>
             <select id="receipt-group-select"
                     name="group_id"
-                    class="form-select form-select-sm d-inline-block w-auto"
-                    hx-get="{% url 'receipts:ajax_receipts_by_group' %}"
-                    hx-target="#receipts-block"
-                    hx-trigger="change">
+                    class="form-select form-select-sm d-inline-block w-auto">
                 <option value="my" {% if not request.GET.group_id or request.GET.group_id == 'my' %}selected{% endif %}>Мои</option>
                 {% for group in user_groups %}
                     <option value="{{ group.id }}" {% if request.GET.group_id == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>

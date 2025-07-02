@@ -59,7 +59,7 @@ class ReceiptView(
     no_permission_url = reverse_lazy('login')
 
     def get_queryset(self):
-        group_id = self.request.GET.get('group_id')
+        group_id = self.request.GET.get('group_id') or 'my'
         if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
@@ -71,7 +71,7 @@ class ReceiptView(
 
     def get_context_data(self, *args, **kwargs):
         user = get_object_or_404(User, username=self.request.user)
-        group_id = self.request.GET.get('group_id')
+        group_id = self.request.GET.get('group_id') or 'my'
         if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
@@ -87,8 +87,8 @@ class ReceiptView(
                 account_queryset = Account.objects.none()
         else:
             receipt_queryset = Receipt.objects.filter(user=self.request.user)
-            seller_queryset = user.seller_users.distinct('name_seller')
-            account_queryset = user.finance_account_users
+            seller_queryset = Seller.objects.filter(user=user).distinct('name_seller')
+            account_queryset = Account.objects.filter(user=user)
 
         seller_form = SellerForm()
         receipt_filter = ReceiptFilter(
@@ -476,7 +476,7 @@ class UploadImageView(LoginRequiredMixin, FormView):
 
 @require_GET
 def ajax_receipts_by_group(request):
-    group_id = request.GET.get('group_id')
+    group_id = request.GET.get('group_id') or 'my'
     user = request.user
     if group_id and group_id != 'my':
         try:
