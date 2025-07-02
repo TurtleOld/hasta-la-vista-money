@@ -8,23 +8,23 @@ from typing import Any
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, ProtectedError, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views import View
+from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.commonlogic.custom_paginator import (
     paginator_custom_view,
 )
-from hasta_la_vista_money.commonlogic.views import collect_info_receipt
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
@@ -35,8 +35,6 @@ from hasta_la_vista_money.receipts.forms import (
 )
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.services import analyze_image_with_ai
-from hasta_la_vista_money.receipts.tasks import process_receipt_image
-from hasta_la_vista_money.taskiq import broker
 from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
@@ -60,56 +58,97 @@ class ReceiptView(
     filterset_class = ReceiptFilter
     no_permission_url = reverse_lazy('login')
 
+    def get_queryset(self):
+        group_id = self.request.GET.get('group_id')
+        if group_id and group_id != 'my':
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                return Receipt.objects.filter(user__in=users_in_group)
+            except Group.DoesNotExist:
+                return Receipt.objects.none()
+        return Receipt.objects.filter(user=self.request.user)
+
     def get_context_data(self, *args, **kwargs):
         user = get_object_or_404(User, username=self.request.user)
-        if user.is_authenticated:
-            seller_form = SellerForm()
-            receipt_filter = ReceiptFilter(
-                self.request.GET,
-                queryset=Receipt.objects.all(),
-                user=self.request.user,
+        group_id = self.request.GET.get('group_id')
+        if group_id and group_id != 'my':
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                receipt_queryset = Receipt.objects.filter(user__in=users_in_group)
+                seller_queryset = Seller.objects.filter(
+                    user__in=users_in_group,
+                ).distinct('name_seller')
+                account_queryset = Account.objects.filter(user__in=users_in_group)
+            except Group.DoesNotExist:
+                receipt_queryset = Receipt.objects.none()
+                seller_queryset = Seller.objects.none()
+                account_queryset = Account.objects.none()
+        else:
+            receipt_queryset = Receipt.objects.filter(user=self.request.user)
+            seller_queryset = user.seller_users.distinct('name_seller')
+            account_queryset = user.finance_account_users
+
+        seller_form = SellerForm()
+        receipt_filter = ReceiptFilter(
+            self.request.GET,
+            queryset=receipt_queryset,
+            user=self.request.user,
+        )
+        receipt_form = ReceiptForm()
+        receipt_form.fields['account'].queryset = account_queryset
+        receipt_form.fields['seller'].queryset = seller_queryset
+
+        product_formset = ProductFormSet()
+
+        total_sum_receipts = receipt_filter.qs.aggregate(
+            total=Sum('total_sum'),
+        )
+        total_receipts = receipt_filter.qs
+
+        receipt_info_by_month = (
+            receipt_queryset.annotate(
+                month=TruncMonth('receipt_date'),
             )
-            receipt_form = ReceiptForm()
-            receipt_form.fields['account'].queryset = user.finance_account_users
-            receipt_form.fields['seller'].queryset = user.seller_users.distinct(
-                'name_seller',
+            .values(
+                'month',
+                'account__name_account',
             )
-
-            product_formset = ProductFormSet()
-
-            total_sum_receipts = receipt_filter.qs.aggregate(
-                total=Sum('total_sum'),
+            .annotate(
+                count=Count('id'),
+                total_amount=Sum('total_sum'),
             )
-            total_receipts = receipt_filter.qs
+            .order_by('-month')
+        )
 
-            receipt_info_by_month = collect_info_receipt(user=self.request.user)
+        page_receipts = paginator_custom_view(
+            self.request,
+            total_receipts,
+            self.paginate_by,
+            'receipts',
+        )
 
-            page_receipts = paginator_custom_view(
-                self.request,
-                total_receipts,
-                self.paginate_by,
-                'receipts',
-            )
+        # Paginator receipts table
+        pages_receipt_table = paginator_custom_view(
+            self.request,
+            receipt_info_by_month,
+            self.paginate_by,
+            'receipts',
+        )
 
-            # Paginator receipts table
-            pages_receipt_table = paginator_custom_view(
-                self.request,
-                receipt_info_by_month,
-                self.paginate_by,
-                'receipts',
-            )
+        context = super().get_context_data(**kwargs)
+        context['receipts'] = page_receipts
+        context['receipt_filter'] = receipt_filter
+        context['total_receipts'] = total_receipts
+        context['total_sum_receipts'] = total_sum_receipts
+        context['seller_form'] = seller_form
+        context['receipt_form'] = receipt_form
+        context['product_formset'] = product_formset
+        context['receipt_info_by_month'] = pages_receipt_table
+        context['user_groups'] = self.request.user.groups.all()
 
-            context = super().get_context_data(**kwargs)
-            context['receipts'] = page_receipts
-            context['receipt_filter'] = receipt_filter
-            context['total_receipts'] = total_receipts
-            context['total_sum_receipts'] = total_sum_receipts
-            context['seller_form'] = seller_form
-            context['receipt_form'] = receipt_form
-            context['product_formset'] = product_formset
-            context['receipt_info_by_month'] = pages_receipt_table
-
-            return context
+        return context
 
 
 class SellerCreateView(SuccessMessageMixin, BaseView, CreateView):
@@ -308,119 +347,23 @@ class ProductByMonthView(LoginRequiredMixin, ListView):
 
 
 class UploadImageView(LoginRequiredMixin, FormView):
-    """Представление для загрузки и обработки изображений чеков."""
+    """Классическая синхронная обработка загрузки и обработки изображений чеков."""
 
-    template_name = 'receipts/modals/add_receipt.html'
+    template_name = 'receipts/upload_image.html'
     form_class = UploadImageForm
     success_url = reverse_lazy('receipts:list')
 
     def get_form_kwargs(self):
-        """Передаем пользователя в форму."""
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
 
-    def post(self, request, *args, **kwargs):
-        """Обработка POST запроса с HTMX."""
-        if request.headers.get('HX-Request'):
-            return self.handle_htmx_request(request)
-        return super().post(request, *args, **kwargs)
-
-    def handle_htmx_request(self, request):
-        """Обработка HTMX запроса."""
-        try:
-            if 'file' not in request.FILES:
-                return self.render_error_response('Файл не найден')
-
-            uploaded_file = request.FILES['file']
-            if isinstance(uploaded_file, list):
-                uploaded_file = uploaded_file[0]  # type: ignore[assignment]
-
-            account_id = request.POST.get('account')
-            if not account_id:
-                return self.render_error_response('Счёт не выбран')
-
-            account = get_object_or_404(Account, id=account_id, user=request.user)
-
-            # Читаем файл в байты для асинхронной обработки
-            image_data = uploaded_file.read()
-
-            # Запускаем асинхронную задачу
-            task = broker.kiq(process_receipt_image)(
-                image_data=image_data,
-                user_id=request.user.id,
-                account_id=account.pk,
-            )
-
-            # Возвращаем ID задачи для отслеживания
-            return JsonResponse(
-                {
-                    'success': True,
-                    'task_id': task.task_id,
-                    'message': 'Обработка чека началась. Вы получите уведомление по завершении.',
-                },
-            )
-
-        except Exception as e:
-            logger.error(f'Error in HTMX request: {str(e)}', exc_info=True)
-            return self.render_error_response(f'Ошибка: {str(e)}')
-
-    def render_success_response(self, message):
-        """Рендеринг успешного ответа для HTMX"""
-        from django.http import HttpResponse
-
-        html = f"""
-        <div class="alert alert-success" role="alert">
-            <i class="bi bi-check-circle me-2"></i>
-            {message}
-        </div>
-        """
-        return HttpResponse(html)
-
-    def render_error_response(self, error_message):
-        """Рендеринг ответа с ошибкой для HTMX"""
-        from django.http import HttpResponse
-
-        html = f"""
-        <div class="alert alert-danger" role="alert">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            {error_message}
-        </div>
-        """
-        return HttpResponse(html)
-
-    @staticmethod
-    def check_exist_receipt(user: Any, number_receipt: Any) -> Any:
-        return Receipt.objects.filter(
-            user=user,
-            number_receipt=number_receipt,
-        )
-
-    @staticmethod
-    def clean_json_response(text: str) -> str:
-        match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
-        if match:
-            return match.group(1)
-        return text.strip()
-
-    @staticmethod
-    def normalize_date(date_str: str) -> str:
-        try:
-            return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
-                '%d.%m.%Y %H:%M',
-            )
-        except ValueError:
-            day, month, year_short, time = date_str.replace(' ', '.').split('.')
-            current_century = str(datetime.now().year)[:2]
-            return f'{day}.{month}.{current_century}{year_short} {time}'
-
     def form_valid(self, form):
-        """Обработка обычных POST запросов (не HTMX)"""
         try:
             uploaded_file = self.request.FILES['file']
             if isinstance(uploaded_file, list):
-                uploaded_file = uploaded_file[0]  # type: ignore[assignment]
-            user = self.request.user  # type: ignore[assignment]
+                uploaded_file = uploaded_file[0]
+            user = self.request.user
             account = form.cleaned_data.get('account')
 
             json_receipt = analyze_image_with_ai(uploaded_file)
@@ -505,32 +448,56 @@ class UploadImageView(LoginRequiredMixin, FormView):
             )
             return super().form_invalid(form)
 
+    @staticmethod
+    def check_exist_receipt(user: Any, number_receipt: Any) -> Any:
+        return Receipt.objects.filter(
+            user=user,
+            number_receipt=number_receipt,
+        )
 
-class TaskStatusView(LoginRequiredMixin, View):
-    """Представление для проверки статуса асинхронных задач."""
+    @staticmethod
+    def clean_json_response(text: str) -> str:
+        match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
+        if match:
+            return match.group(1)
+        return text.strip()
 
-    def get(self, request, task_id):
-        """Получение статуса задачи."""
+    @staticmethod
+    def normalize_date(date_str: str) -> str:
         try:
-            # Получаем результат задачи
-            result = broker.get_result(task_id)
-
-            if result.is_ready():
-                if result.is_success():
-                    return JsonResponse(
-                        {'status': 'completed', 'result': result.return_value},
-                    )
-                else:
-                    return JsonResponse(
-                        {'status': 'failed', 'error': str(result.return_value)},
-                    )
-            else:
-                return JsonResponse(
-                    {'status': 'pending', 'message': 'Задача выполняется...'},
-                )
-
-        except Exception as e:
-            logger.error(f'Error checking task status: {str(e)}')
-            return JsonResponse(
-                {'status': 'error', 'error': 'Ошибка при проверке статуса задачи'},
+            return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
+                '%d.%m.%Y %H:%M',
             )
+        except ValueError:
+            day, month, year_short, time = date_str.replace(' ', '.').split('.')
+            current_century = str(datetime.now().year)[:2]
+            return f'{day}.{month}.{current_century}{year_short} {time}'
+
+
+@require_GET
+def ajax_receipts_by_group(request):
+    group_id = request.GET.get('group_id')
+    user = request.user
+    if group_id and group_id != 'my':
+        try:
+            group = Group.objects.get(pk=group_id)
+            users_in_group = group.user_set.all()
+            receipt_queryset = Receipt.objects.filter(user__in=users_in_group)
+        except Group.DoesNotExist:
+            receipt_queryset = Receipt.objects.none()
+    else:
+        receipt_queryset = Receipt.objects.filter(user=user)
+
+    receipts = (
+        receipt_queryset.select_related('seller', 'user')
+        .prefetch_related('product')
+        .order_by('-receipt_date')[:20]
+    )
+    return render(
+        request,
+        'receipts/receipts_block.html',
+        {
+            'receipts': receipts,
+            'user_groups': user.groups.all(),
+        },
+    )

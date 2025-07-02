@@ -23,77 +23,6 @@ services:
       timeout: 5s
       retries: 5
 
-  rabbitmq:
-    container_name: hlvm_rabbitmq
-    image: rabbitmq:4-management-alpine
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - ${LOCATION:-./app_data}/rabbitmq:/var/lib/rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
-      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
-    restart: always
-    networks:
-      - default
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  taskiq-worker:
-    container_name: hlvm_taskiq_worker
-    image: ghcr.io/turtleold/hasta-la-vista-money:main
-    build:
-      context: ./
-      dockerfile: docker/production.Dockerfile
-    command: .venv/bin/taskiq worker hasta_la_vista_money.taskiq:broker
-    volumes:
-      - ${LOCATION:-./app_data}/static:/app/static
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
-      TASKIQ_RABBITMQ_URL: ${TASKIQ_RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
-      TASKIQ_BROKER_URL: ${TASKIQ_BROKER_URL:-amqp://guest:guest@rabbitmq:5672/}
-      SECRET_KEY: ${SECRET_KEY:-}
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    restart: on-failure
-    networks:
-      - default
-
-  taskiq-scheduler:
-    container_name: hlvm_taskiq_scheduler
-    image: ghcr.io/turtleold/hasta-la-vista-money:main
-    build:
-      context: ./
-      dockerfile: docker/production.Dockerfile
-    command: .venv/bin/taskiq scheduler hasta_la_vista_money.taskiq:scheduler
-    volumes:
-      - ${LOCATION:-./app_data}/static:/app/static
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
-      TASKIQ_RABBITMQ_URL: ${TASKIQ_RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
-      TASKIQ_BROKER_URL: ${TASKIQ_BROKER_URL:-amqp://guest:guest@rabbitmq:5672/}
-      SECRET_KEY: ${SECRET_KEY:-}
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    restart: on-failure
-    networks:
-      - default
-
   hlvm-server:
     container_name: hlvm_server
     image: ghcr.io/turtleold/hasta-la-vista-money:main
@@ -109,8 +38,6 @@ services:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
-      TASKIQ_RABBITMQ_URL: ${TASKIQ_RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
-      TASKIQ_BROKER_URL: ${TASKIQ_BROKER_URL:-amqp://guest:guest@rabbitmq:5672/}
       SECRET_KEY: ${SECRET_KEY:-}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
       BASE_URL: ${BASE_URL:-http://127.0.0.1:8090}
@@ -120,8 +47,6 @@ services:
       SENTRY_ENDPOINT: ${SENTRY_ENDPOINT:-}
     depends_on:
       db:
-        condition: service_healthy
-      rabbitmq:
         condition: service_healthy
     restart: on-failure
     networks:

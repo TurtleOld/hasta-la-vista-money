@@ -6,6 +6,7 @@ from hasta_la_vista_money.finance_account.views import (
     ChangeAccountView,
     DeleteAccountView,
     TransferMoneyAccountView,
+    AjaxAccountsByGroupView,
 )
 
 app_name = 'finance_account'
@@ -39,5 +40,10 @@ urlpatterns = [
         'list/',
         AccountListCreateAPIView.as_view(),
         name='api_list',
+    ),
+    path(
+        'ajax/accounts_by_group/',
+        AjaxAccountsByGroupView.as_view(),
+        name='ajax_accounts_by_group',
     ),
 ]

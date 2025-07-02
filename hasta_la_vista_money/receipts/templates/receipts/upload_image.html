@@ -28,15 +28,11 @@
     </div>
 
     <!-- Форма загрузки -->
-    <form method="post" enctype="multipart/form-data" class="mx-auto w-50" id="uploadForm"
-          hx-post="{% url 'receipts:upload' %}"
-          hx-encoding="multipart/form-data"
-          hx-target="#upload-result"
-          hx-swap="innerHTML">
+    <form method="post" enctype="multipart/form-data" class="mx-auto w-50" id="uploadForm">
         {% csrf_token %}
 
         <!-- Скрытый input для файла -->
-        <input type="file" name="file" id="file-input" accept=".jpg,.jpeg,.png" style="display: none;">
+        <input type="file" name="file" id="file-input" accept=".jpg,.jpeg,.png">
 
         <div class="mb-3">
             {{ form.account.label_tag }}
@@ -165,37 +161,14 @@ document.addEventListener('DOMContentLoaded', function() {
         uploadZone.querySelector('.upload-content h5').style.color = '';
     }
 
-    // HTMX события
-    document.body.addEventListener('htmx:beforeRequest', function(evt) {
-        if (evt.target.id === 'uploadForm') {
-            submitBtn.classList.add('d-none');
-            loadingIcon.classList.remove('d-none');
-        }
-    });
-
-    document.body.addEventListener('htmx:afterRequest', function(evt) {
-        if (evt.target.id === 'uploadForm') {
-            submitBtn.classList.remove('d-none');
-            loadingIcon.classList.add('d-none');
-
-            // Если успешно, очищаем форму
-            if (evt.detail.xhr.status === 200) {
-                const response = JSON.parse(evt.detail.xhr.responseText);
-                if (response.success) {
-                    preview.style.display = 'none';
-                    fileInput.value = '';
-                    submitBtn.disabled = true;
-                    resetUploadZone();
-                }
-            }
-        }
-    });
-
     // Обработка отправки формы
     form.addEventListener('submit', (e) => {
         if (!fileInput.files.length) {
             e.preventDefault();
             showError('Пожалуйста, выберите файл');
+        } else {
+            submitBtn.classList.add('d-none');
+            loadingIcon.classList.remove('d-none');
         }
     });
 });

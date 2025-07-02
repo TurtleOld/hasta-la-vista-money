@@ -15,6 +15,7 @@ from hasta_la_vista_money.receipts.views import (
     ReceiptView,
     SellerCreateView,
     UploadImageView,
+    ajax_receipts_by_group,
 )
 
 app_name = 'receipts'
@@ -71,5 +72,10 @@ urlpatterns = [
         'api/product-autocomplete/',
         ProductAutocompleteAPIView.as_view(),
         name='product_autocomplete_api',
+    ),
+    path(
+        'ajax/receipts_by_group/',
+        ajax_receipts_by_group,
+        name='ajax_receipts_by_group',
     ),
 ]

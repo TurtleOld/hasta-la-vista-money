@@ -1,12 +1,12 @@
 from typing import Any, Dict
 
 from django.contrib import messages
+from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Sum
 from django.http import HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
@@ -23,7 +23,6 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.users.models import User
 
 
 class BaseView:
@@ -67,8 +66,17 @@ class AccountView(
         if not self.request.user.is_authenticated:
             return context
 
-        user = get_object_or_404(User, username=self.request.user)
-        accounts = Account.objects.filter(user=user).select_related('user').all()
+        user = self.request.user
+        group_id = self.request.GET.get('group_id')
+        if group_id and group_id != 'my':
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                accounts = Account.objects.filter(user__in=users_in_group)
+            except Group.DoesNotExist:
+                accounts = Account.objects.none()
+        else:
+            accounts = Account.objects.filter(user=user)
 
         # Форма для перевода средств
         account_transfer_money = (
@@ -103,6 +111,7 @@ class AccountView(
                 'transfer_money_log': transfer_money_log,
                 'chart_combine': chart_combine,
                 'sum_all_accounts': sum_all_accounts,
+                'user_groups': self.request.user.groups.all(),
             },
         )
 
@@ -228,3 +237,36 @@ class DeleteAccountView(DeleteObjectMixin):
     success_url = reverse_lazy('finance_account:list')
     success_message = constants.SUCCESS_MESSAGE_DELETE_ACCOUNT[:]
     error_message = constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT[:]
+
+
+class AjaxAccountsByGroupView(View):
+    def get(self, request, *args, **kwargs):
+        group_id = request.GET.get('group_id')
+        user = request.user
+        accounts = Account.objects.none()
+        if group_id == 'my' or not group_id:
+            accounts = Account.objects.filter(user=user)
+        else:
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                accounts = Account.objects.filter(user__in=users_in_group)
+            except Group.DoesNotExist:
+                accounts = Account.objects.none()
+        accounts_data = [
+            {
+                'id': acc.pk,
+                'name_account': acc.name_account,
+                'type_account': acc.get_type_account_display(),
+                'balance': float(acc.balance),
+                'currency': acc.currency,
+                'owner': acc.user.username,
+                'is_foreign': acc.user != user,
+                'url': acc.get_absolute_url(),
+            }
+            for acc in accounts
+        ]
+        user_groups = [
+            {'id': group.id, 'name': group.name} for group in user.groups.all()
+        ]
+        return JsonResponse({'accounts': accounts_data, 'user_groups': user_groups})

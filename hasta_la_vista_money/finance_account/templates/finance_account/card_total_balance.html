@@ -19,9 +19,9 @@
                             {% if delta != 0 and delta %}
                                 <div class="mb-2">
                                     {% if delta > 0 %}
-                                        <span class="text-success">▲ +{{ delta|comma }} ({{ percent|floatformat:2 }}%)</span>
+                                        <span class="text-success">▲ +{{ delta|comma }} ({{ percent }}%)</span>
                                     {% elif delta < 0 %}
-                                        <span class="text-danger">▼ {{ delta|comma }} ({{ percent|floatformat:2 }}%)</span>
+                                        <span class="text-danger">▼ {{ delta|comma }} ({{ percent }}%)</span>
                                     {% endif %}
                                 </div>
                             {% endif %}
@@ -38,9 +38,9 @@
                     {% if delta != 0 and delta %}
                         <div class="mb-2">
                             {% if delta > 0 %}
-                                <span class="text-success">▲ +{{ delta|comma }} ({{ percent|floatformat:2 }}%)</span>
+                                <span class="text-success">▲ +{{ delta|comma }} ({{ percent }}%)</span>
                             {% elif delta < 0 %}
-                                <span class="text-danger">▼ {{ delta|comma }} ({{ percent|floatformat:2 }}%)</span>
+                                <span class="text-danger">▼ {{ delta|comma }} ({{ percent }}%)</span>
                             {% endif %}
                         </div>
                     {% endif %}
