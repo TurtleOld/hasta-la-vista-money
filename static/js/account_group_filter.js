@@ -1,8 +1,8 @@
 function renderAccountGroupBlock(data) {
     const block = document.getElementById('account-cards-block');
     if (!block || !Array.isArray(data.accounts)) return;
-    block.innerHTML = '';
     // --- Селектор групп ---
+    block.innerHTML = '';
     const selectorRow = document.createElement('div');
     selectorRow.className = 'd-flex justify-content-between align-items-center mb-2 px-2 pt-2';
     const title = document.createElement('div');
@@ -33,18 +33,20 @@ function renderAccountGroupBlock(data) {
             select.appendChild(opt);
         });
     }
-    // Восстановить выбранное значение
-    const savedGroup = sessionStorage.getItem('selectedAccountGroup');
-    if (savedGroup) select.value = savedGroup;
+    // Выставить значение селектора по query-параметру
+    const url = new URL(window.location.href);
+    const groupId = url.searchParams.get('group_id') || 'my';
+    select.value = groupId;
     select.onchange = null;
     select.addEventListener('change', function () {
-        const groupId = this.value;
-        sessionStorage.setItem('selectedAccountGroup', groupId);
-        fetch(`/finance_account/ajax/accounts_by_group/?group_id=${groupId}`)
-            .then(response => response.json())
-            .then(data => {
-                renderAccountGroupBlock(data);
-            });
+        const selectedGroup = this.value;
+        // Обновить URL
+        const params = new URLSearchParams(window.location.search);
+        params.set('group_id', selectedGroup);
+        const newUrl = window.location.pathname + '?' + params.toString();
+        window.history.pushState({}, '', newUrl);
+        // Подгрузить счета через AJAX
+        loadAccountsBlock(selectedGroup);
     });
     selectWrap.appendChild(select);
     selectorRow.appendChild(selectWrap);
@@ -120,34 +122,37 @@ function renderAccountGroupBlock(data) {
     }
 }
 
-function initAccountGroupSelect() {
-    // 1. Берём group_id из URL, если есть
-    const url = new URL(window.location.href);
-    let groupId = url.searchParams.get('group_id');
-    if (!groupId) {
-        // 2. Если нет — из sessionStorage
-        groupId = sessionStorage.getItem('selectedAccountGroup') || 'my';
-    } else {
-        // 3. Если есть в URL — сохраняем в sessionStorage
-        sessionStorage.setItem('selectedAccountGroup', groupId);
-    }
-    fetch(`/finance_account/ajax/accounts_by_group/?group_id=${groupId}`)
+function loadAccountsBlock(groupId) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('group_id', groupId);
+    fetch(`/finance_account/ajax/accounts_by_group/?` + params.toString(), {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
         .then(response => response.json())
         .then(data => {
-            renderAccountGroupBlock(data);
+            // Безопасная замена блока
+            const block = document.getElementById('account-cards-block');
+            if (block) {
+                // Создаём временный контейнер
+                const temp = document.createElement('div');
+                renderAccountGroupBlock.call(null, Object.assign({}, data, {block: temp}));
+                // temp теперь содержит новый html
+                // Но мы не используем innerHTML, а пересоздаём DOM
+                // Поэтому просто вызываем renderAccountGroupBlock(data)
+                renderAccountGroupBlock(data);
+            }
         });
+}
+
+function initAccountGroupSelect() {
+    // Берём group_id только из query-параметра, если нет — 'my'
+    const url = new URL(window.location.href);
+    let groupId = url.searchParams.get('group_id') || 'my';
+    loadAccountsBlock(groupId);
 }
 
 document.addEventListener('DOMContentLoaded', function () {
     initAccountGroupSelect();
-
-    // Если в sessionStorage выбранная группа не 'my', делаем редирект с параметром group_id
-    const savedGroup = sessionStorage.getItem('selectedAccountGroup');
-    if (savedGroup && savedGroup !== 'my') {
-        const url = new URL(window.location.href);
-        if (url.searchParams.get('group_id') !== savedGroup) {
-            url.searchParams.set('group_id', savedGroup);
-            window.location.replace(url.toString());
-        }
-    }
 });

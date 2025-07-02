@@ -29,7 +29,14 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(html => {
                 const block = document.querySelector('#receipts-block');
                 if (block) {
-                    block.innerHTML = html;
+                    // Безопасная вставка: парсим HTML и заменяем блок
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    // Ожидаем, что receipts_block.html — это один корневой div
+                    const newContent = doc.body.firstElementChild;
+                    if (newContent) {
+                        block.replaceWith(newContent);
+                    }
                 }
             });
     }

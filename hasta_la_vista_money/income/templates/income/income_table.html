@@ -124,7 +124,7 @@
 
 {% if chart_labels and chart_values %}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script nonce="{{request.csp_nonce}}">
     const labels = JSON.parse(document.getElementById('chart-labels').textContent);
     const values = JSON.parse(document.getElementById('chart-values').textContent);
