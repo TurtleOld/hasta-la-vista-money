@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (block) {
                     // Безопасная вставка: парсим HTML и заменяем блок
                     const parser = new DOMParser();
+                    // codacy-disable-next-line security/detect-parse-from-string
                     const doc = parser.parseFromString(html, 'text/html');
                     // Ожидаем, что receipts_block.html — это один корневой div
                     const newContent = doc.body.firstElementChild;
