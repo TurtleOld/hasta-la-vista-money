@@ -1,6 +1,7 @@
 from typing import Any, Dict
 
 from django.contrib import messages
+from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
@@ -22,8 +23,6 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from django.template.loader import render_to_string
-from django.contrib.auth.models import Group
 
 
 class BaseView:
@@ -245,7 +244,6 @@ class AjaxAccountsByGroupView(View):
         group_id = request.GET.get('group_id')
         user = request.user
         accounts = Account.objects.none()
-        user_groups = user.groups.all()
         if group_id == 'my' or not group_id:
             accounts = Account.objects.filter(user=user)
         else:
@@ -253,15 +251,22 @@ class AjaxAccountsByGroupView(View):
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
                 accounts = Account.objects.filter(user__in=users_in_group)
-                print(accounts)
             except Group.DoesNotExist:
                 accounts = Account.objects.none()
-        html = render_to_string(
-            'finance_account/account_table.html',
+        accounts_data = [
             {
-                'accounts': accounts,
-                'user_groups': user_groups,
-                'request': request,
-            },
-        )
-        return JsonResponse({'html': html})
+                'id': acc.pk,
+                'name_account': acc.name_account,
+                'type_account': acc.get_type_account_display(),
+                'balance': float(acc.balance),
+                'currency': acc.currency,
+                'owner': acc.user.username,
+                'is_foreign': acc.user != user,
+                'url': acc.get_absolute_url(),
+            }
+            for acc in accounts
+        ]
+        user_groups = [
+            {'id': group.id, 'name': group.name} for group in user.groups.all()
+        ]
+        return JsonResponse({'accounts': accounts_data, 'user_groups': user_groups})

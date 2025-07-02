@@ -8,6 +8,7 @@ from typing import Any
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, ProtectedError, Sum, Window
 from django.db.models.expressions import F
@@ -17,6 +18,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
@@ -34,9 +36,6 @@ from hasta_la_vista_money.receipts.forms import (
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.services import analyze_image_with_ai
 from hasta_la_vista_money.users.models import User
-from django.contrib.auth.models import Group
-from django.template.loader import render_to_string
-from django.views.decorators.http import require_GET
 
 logger = structlog.get_logger(__name__)
 
@@ -79,7 +78,7 @@ class ReceiptView(
                 users_in_group = group.user_set.all()
                 receipt_queryset = Receipt.objects.filter(user__in=users_in_group)
                 seller_queryset = Seller.objects.filter(
-                    user__in=users_in_group
+                    user__in=users_in_group,
                 ).distinct('name_seller')
                 account_queryset = Account.objects.filter(user__in=users_in_group)
             except Group.DoesNotExist:
@@ -489,14 +488,32 @@ def ajax_receipts_by_group(request):
     else:
         receipt_queryset = Receipt.objects.filter(user=user)
 
-    # Пагинация (по аналогии с ReceiptView)
-    paginate_by = 10
-    page_receipts = paginator_custom_view(
-        request, receipt_queryset, paginate_by, 'receipts'
+    receipts = (
+        receipt_queryset.select_related('seller', 'user')
+        .prefetch_related('product')
+        .order_by('-receipt_date')[:20]
     )
-
-    html = render_to_string(
-        'receipts/receipts_block.html',
-        {'receipts': page_receipts, 'request': request},
+    receipts_data = []
+    for receipt in receipts:
+        products = list(receipt.product.values_list('product_name', flat=True)[:3])
+        receipts_data.append(
+            {
+                'id': receipt.pk,
+                'seller': receipt.seller.name_seller if receipt.seller else '',
+                'receipt_date': receipt.receipt_date.strftime('%d.%m.%Y %H:%M'),
+                'total_sum': float(receipt.total_sum),
+                'operation_type': receipt.operation_type,
+                'is_foreign': receipt.user != user,
+                'owner': receipt.user.username,
+                'products': products,
+                'url': f'/receipts/{receipt.pk}/',
+            },
+        )
+    user_groups = [{'id': group.id, 'name': group.name} for group in user.groups.all()]
+    return JsonResponse(
+        {
+            'receipts': receipts_data,
+            'user_groups': user_groups,
+            'current_user_id': user.pk,
+        },
     )
-    return JsonResponse({'html': html})
