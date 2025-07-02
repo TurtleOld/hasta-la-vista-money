@@ -14,7 +14,7 @@ from django.db.models import Count, ProtectedError, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
@@ -493,27 +493,11 @@ def ajax_receipts_by_group(request):
         .prefetch_related('product')
         .order_by('-receipt_date')[:20]
     )
-    receipts_data = []
-    for receipt in receipts:
-        products = list(receipt.product.values_list('product_name', flat=True)[:3])
-        receipts_data.append(
-            {
-                'id': receipt.pk,
-                'seller': receipt.seller.name_seller if receipt.seller else '',
-                'receipt_date': receipt.receipt_date.strftime('%d.%m.%Y %H:%M'),
-                'total_sum': float(receipt.total_sum),
-                'operation_type': receipt.operation_type,
-                'is_foreign': receipt.user != user,
-                'owner': receipt.user.username,
-                'products': products,
-                'url': f'/receipts/{receipt.pk}/',
-            },
-        )
-    user_groups = [{'id': group.id, 'name': group.name} for group in user.groups.all()]
-    return JsonResponse(
+    return render(
+        request,
+        'receipts/receipts_block.html',
         {
-            'receipts': receipts_data,
-            'user_groups': user_groups,
-            'current_user_id': user.pk,
+            'receipts': receipts,
+            'user_groups': user.groups.all(),
         },
     )

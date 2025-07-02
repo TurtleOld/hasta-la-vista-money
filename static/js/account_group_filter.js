@@ -120,26 +120,22 @@ function renderAccountGroupBlock(data) {
     }
 }
 
-function initAccountGroupSelect(selectedValue) {
-    const groupSelect = document.getElementById('account-group-select');
-    if (groupSelect) {
-        if (!selectedValue && sessionStorage.getItem('selectedAccountGroup')) {
-            selectedValue = sessionStorage.getItem('selectedAccountGroup');
-        }
-        if (selectedValue) {
-            groupSelect.value = selectedValue;
-        }
-        // Не вешаем обработчик здесь, он будет в renderAccountGroupBlock
+function initAccountGroupSelect() {
+    // 1. Берём group_id из URL, если есть
+    const url = new URL(window.location.href);
+    let groupId = url.searchParams.get('group_id');
+    if (!groupId) {
+        // 2. Если нет — из sessionStorage
+        groupId = sessionStorage.getItem('selectedAccountGroup') || 'my';
     } else {
-        // Если селектор ещё не отрисован (например, при первой загрузке)
-        // Получаем данные с сервера и рендерим всё
-        const savedGroup = sessionStorage.getItem('selectedAccountGroup') || 'my';
-        fetch(`/finance_account/ajax/accounts_by_group/?group_id=${savedGroup}`)
-            .then(response => response.json())
-            .then(data => {
-                renderAccountGroupBlock(data);
-            });
+        // 3. Если есть в URL — сохраняем в sessionStorage
+        sessionStorage.setItem('selectedAccountGroup', groupId);
     }
+    fetch(`/finance_account/ajax/accounts_by_group/?group_id=${groupId}`)
+        .then(response => response.json())
+        .then(data => {
+            renderAccountGroupBlock(data);
+        });
 }
 
 document.addEventListener('DOMContentLoaded', function () {

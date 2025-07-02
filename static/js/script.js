@@ -330,41 +330,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function initAccountGroupSelect(selectedValue) {
-        console.log('initAccountGroupSelect called with:', selectedValue);
-        const groupSelect = document.getElementById('account-group-select');
-        console.log('groupSelect:', groupSelect);
-        if (groupSelect) {
-            if (!selectedValue && sessionStorage.getItem('selectedAccountGroup')) {
-                selectedValue = sessionStorage.getItem('selectedAccountGroup');
-            }
-            if (selectedValue) {
-                groupSelect.value = selectedValue;
-            }
-            groupSelect.onchange = null;
-            groupSelect.addEventListener('change', function () {
-                const groupId = this.value;
-                console.log('Saving to sessionStorage:', groupId);
-                sessionStorage.setItem('selectedAccountGroup', groupId);
-                fetch(`/finance_account/ajax/accounts_by_group/?group_id=${groupId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        const block = document.getElementById('account-cards-block');
-                        if (block && data.html) {
-                            block.outerHTML = data.html;
-                            initAccountGroupSelect(groupId);
-                        }
-                    });
-            });
-        } else {
-            console.log('account-group-select not found in DOM');
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        initAccountGroupSelect();
-    });
-
     window.setTimeout(function () {
         $(".alert").fadeTo(400, 0).slideUp(400, function () {
             $(this).remove();

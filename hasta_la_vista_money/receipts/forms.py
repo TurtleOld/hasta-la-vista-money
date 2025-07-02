@@ -108,8 +108,7 @@ class ReceiptFilter(django_filters.FilterSet):
     def qs(self):
         queryset = super().qs
         return (
-            queryset.filter(user=self.user)
-            .select_related('seller', 'account', 'user')
+            queryset.select_related('seller', 'account', 'user')
             .prefetch_related('product')
             .distinct()
         )
