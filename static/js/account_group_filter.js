@@ -130,9 +130,14 @@ function loadAccountsBlock(groupId) {
     })
         .then(response => response.text())
         .then(html => {
-            const block = document.getElementById('account-cards-block');
+            const block = document.querySelector('#account-cards-block');
             if (block) {
-                block.innerHTML = html;
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');  // eslint-disable-line
+                const newContent = doc.body.firstElementChild;
+                if (newContent) {
+                    block.replaceWith(newContent);
+                }
             }
         });
 }
