@@ -21,7 +21,6 @@ def analyze_image_with_ai(image_base64: UploadedFile):
     base_url = os.environ.get('API_BASE_URL', 'https://models.github.ai/inference')
     token = os.environ.get('API_KEY')
     model = os.environ.get('API_MODEL', 'openai/gpt-4o')
-    print(base_url, token, model, 'base_url, token, model')
 
     client = OpenAI(
         base_url=base_url,

@@ -32,17 +32,17 @@ class AddAccountForm(ModelForm[Account]):
         help_text=_('Выберите из списка тип счёта'),
     )
     limit_credit = DecimalField(
-        label=_("Кредитный лимит"),
-        help_text=_("Введите кредитный лимит"),
+        label=_('Кредитный лимит'),
+        help_text=_('Введите кредитный лимит'),
         required=False,
     )
     payment_due_date = DateField(
-        label=_("Дата платежа"),
-        help_text=_("Введите дату платежа"),
+        label=_('Дата платежа'),
+        help_text=_('Введите дату платежа'),
         required=False,
     )
     grace_period_days = IntegerField(
-        label=_("Длительность льготного периода (дней)"),
+        label=_('Длительность льготного периода (дней)'),
         required=False,
     )
     balance = DecimalField(
@@ -61,32 +61,32 @@ class AddAccountForm(ModelForm[Account]):
         super().__init__(*args, **kwargs)
         self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
 
-        self.fields["limit_credit"].widget.attrs["class"] = (
-            self.fields["limit_credit"].widget.attrs.get("class", "")
-            + " credit-only-field"
+        self.fields['limit_credit'].widget.attrs['class'] = (
+            self.fields['limit_credit'].widget.attrs.get('class', '')
+            + ' credit-only-field'
         )
-        self.fields["payment_due_date"].widget.attrs["class"] = (
-            self.fields["payment_due_date"].widget.attrs.get("class", "")
-            + "credit-only-field"
+        self.fields['payment_due_date'].widget.attrs['class'] = (
+            self.fields['payment_due_date'].widget.attrs.get('class', '')
+            + 'credit-only-field'
         )
-        self.fields["grace_period_days"].widget.attrs["class"] = (
-            self.fields["grace_period_days"].widget.attrs.get("class", "")
-            + "credit-only-field"
+        self.fields['grace_period_days'].widget.attrs['class'] = (
+            self.fields['grace_period_days'].widget.attrs.get('class', '')
+            + 'credit-only-field'
         )
-        self.fields["payment_due_date"].widget = DateInput(
-            attrs={"type": "date", "class": "form-control"},
+        self.fields['payment_due_date'].widget = DateInput(
+            attrs={'type': 'date', 'class': 'form-control'},
         )
 
     class Meta:
         model = Account
         fields = [
-            "name_account",
-            "type_account",
-            "limit_credit",
-            "payment_due_date",
-            "grace_period_days",
-            "balance",
-            "currency",
+            'name_account',
+            'type_account',
+            'limit_credit',
+            'payment_due_date',
+            'grace_period_days',
+            'balance',
+            'currency',
         ]
 
 

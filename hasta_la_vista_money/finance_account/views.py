@@ -24,10 +24,7 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from django.template.loader import render_to_string
-from django.shortcuts import render
 from django.utils import timezone
-from datetime import timedelta
-from collections import OrderedDict
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
 
@@ -85,7 +82,7 @@ class AccountView(
         else:
             accounts = Account.objects.filter(user=user)
 
-        credit_cards = accounts.filter(type_account__in=["CreditCard", "Credit"])
+        credit_cards = accounts.filter(type_account__in=['CreditCard', 'Credit'])
         credit_cards_data = []
         for card in credit_cards:
             debt_now = card.get_credit_card_debt()
@@ -98,7 +95,7 @@ class AccountView(
                 last_day = monthrange(start.year, start.month)[1]
                 end = start.replace(day=last_day)
                 debt = card.get_credit_card_debt(start, end)
-                history.append({"month": start.strftime("%m.%Y"), "debt": debt})
+                history.append({'month': start.strftime('%m.%Y'), 'debt': debt})
                 if card.grace_period_days:
                     payment_due_date = end + relativedelta(days=card.grace_period_days)
                     payment_due_date = payment_due_date.replace(
@@ -106,23 +103,23 @@ class AccountView(
                     )
                     payment_schedule.append(
                         {
-                            "month": start.strftime("%m.%Y"),
-                            "sum_expense": debt,
-                            "payment_due": payment_due_date.strftime("%d.%m.%Y"),
+                            'month': start.strftime('%m.%Y'),
+                            'sum_expense': debt,
+                            'payment_due': payment_due_date.strftime('%d.%m.%Y'),
                         }
                     )
             limit_left = (card.limit_credit or 0) - (debt_now or 0)
             credit_cards_data.append(
                 {
-                    "name": card.name_account,
-                    "limit": card.limit_credit,
-                    "debt_now": debt_now,
-                    "payment_due_date": card.payment_due_date,
-                    "history": history,
-                    "currency": card.currency,
-                    "card_obj": card,
-                    "limit_left": limit_left,
-                    "payment_schedule": payment_schedule,
+                    'name': card.name_account,
+                    'limit': card.limit_credit,
+                    'debt_now': debt_now,
+                    'payment_due_date': card.payment_due_date,
+                    'history': history,
+                    'currency': card.currency,
+                    'card_obj': card,
+                    'limit_left': limit_left,
+                    'payment_schedule': payment_schedule,
                 }
             )
 
@@ -146,16 +143,16 @@ class AccountView(
 
         context.update(
             {
-                "accounts": accounts,
-                "add_account_form": AddAccountForm(),
-                "transfer_money_form": TransferMoneyAccountForm(
+                'accounts': accounts,
+                'add_account_form': AddAccountForm(),
+                'transfer_money_form': TransferMoneyAccountForm(
                     user=self.request.user,
                     initial=initial_form_data,
                 ),
-                "transfer_money_log": transfer_money_log,
-                "sum_all_accounts": sum_all_accounts,
-                "user_groups": self.request.user.groups.all(),
-                "credit_cards_data": credit_cards_data,
+                'transfer_money_log': transfer_money_log,
+                'sum_all_accounts': sum_all_accounts,
+                'user_groups': self.request.user.groups.all(),
+                'credit_cards_data': credit_cards_data,
             },
         )
 
@@ -298,7 +295,7 @@ class AjaxAccountsByGroupView(View):
             except Group.DoesNotExist:
                 accounts = Account.objects.none()
         html = render_to_string(
-            "finance_account/_account_cards_block.html",
-            {"accounts": accounts, "request": request},
+            'finance_account/_account_cards_block.html',
+            {'accounts': accounts, 'request': request},
         )
         return HttpResponse(html)

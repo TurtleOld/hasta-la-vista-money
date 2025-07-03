@@ -405,8 +405,6 @@ class ExpenseTableView(CustomNoPermissionMixin, BaseView, ListView):
                 row['percent'].append(percent)
                 total_fact_expense[i] += fact
                 total_plan_expense[i] += plan
-                print(total_fact_expense[i])
-                print(plan, 'plan')
             expense_data.append(row)
         context['months'] = months
         context['expense_data'] = expense_data

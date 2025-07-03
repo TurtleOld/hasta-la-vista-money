@@ -705,12 +705,8 @@ class DeleteUserFromGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView)
 
     def form_valid(self, form):
         user = form.cleaned_data['user']
-        print(user, 'user')
         group = form.cleaned_data['group']
-        print(group, 'group')
-        print(user.groups.all(), 'user.groups.all()')
         user.groups.remove(group)
-        print(user.groups.all(), 'user.groups.all()')
         return super().form_valid(form)
 
     def get_success_url(self):

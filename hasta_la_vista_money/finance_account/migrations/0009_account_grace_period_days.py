@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('finance_account', '0008_fix_type_account_values'),
     ]
@@ -13,6 +12,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='account',
             name='grace_period_days',
-            field=models.PositiveIntegerField(blank=True, help_text='Для кредитных карт: сколько дней длится беспроцентный период (например, 120)', null=True, verbose_name='Длительность льготного периода (дней)'),
+            field=models.PositiveIntegerField(
+                blank=True,
+                help_text='Для кредитных карт: сколько дней длится беспроцентный период (например, 120)',
+                null=True,
+                verbose_name='Длительность льготного периода (дней)',
+            ),
         ),
     ]

@@ -4,15 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('finance_account', '0007_account_limit_credit_account_payment_due_date_and_more'),
+        (
+            'finance_account',
+            '0007_account_limit_credit_account_payment_due_date_and_more',
+        ),
     ]
 
     operations = [
         migrations.AlterField(
             model_name='account',
             name='type_account',
-            field=models.CharField(choices=[('Credit', 'Кредитный счёт'), ('Debit', 'Дебетовый счёт'), ('CreditCard', 'Кредитная карта'), ('DebitCard', 'Дебетовая карта'), ('CASH', 'Наличные')], default='Debit', verbose_name='Тип счёта'),
+            field=models.CharField(
+                choices=[
+                    ('Credit', 'Кредитный счёт'),
+                    ('Debit', 'Дебетовый счёт'),
+                    ('CreditCard', 'Кредитная карта'),
+                    ('DebitCard', 'Дебетовая карта'),
+                    ('CASH', 'Наличные'),
+                ],
+                default='Debit',
+                verbose_name='Тип счёта',
+            ),
         ),
     ]

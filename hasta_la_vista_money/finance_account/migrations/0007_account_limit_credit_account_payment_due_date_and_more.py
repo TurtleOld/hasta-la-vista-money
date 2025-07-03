@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('finance_account', '0006_alter_account_created_at'),
     ]
@@ -13,16 +12,39 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='account',
             name='limit_credit',
-            field=models.DecimalField(blank=True, decimal_places=2, default=0, help_text='Только для кредитных карт и кредитных счетов', max_digits=20, null=True, verbose_name='Кредитный лимит'),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                default=0,
+                help_text='Только для кредитных карт и кредитных счетов',
+                max_digits=20,
+                null=True,
+                verbose_name='Кредитный лимит',
+            ),
         ),
         migrations.AddField(
             model_name='account',
             name='payment_due_date',
-            field=models.DateField(blank=True, help_text='Только для кредитных карт и кредитных счетов', null=True, verbose_name='Дата платежа'),
+            field=models.DateField(
+                blank=True,
+                help_text='Только для кредитных карт и кредитных счетов',
+                null=True,
+                verbose_name='Дата платежа',
+            ),
         ),
         migrations.AlterField(
             model_name='account',
             name='type_account',
-            field=models.CharField(choices=[('Credit', 'Кредитный счёт'), ('Debit', 'Дебетовый счёт'), ('CreditCard', 'Кредитная карта'), ('DebitCard', 'Дебетовая карта'), ('CASH', 'Наличные')], default='Дебетовый счёт', verbose_name='Тип счёта'),
+            field=models.CharField(
+                choices=[
+                    ('Credit', 'Кредитный счёт'),
+                    ('Debit', 'Дебетовый счёт'),
+                    ('CreditCard', 'Кредитная карта'),
+                    ('DebitCard', 'Дебетовая карта'),
+                    ('CASH', 'Наличные'),
+                ],
+                default='Дебетовый счёт',
+                verbose_name='Тип счёта',
+            ),
         ),
     ]

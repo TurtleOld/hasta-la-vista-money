@@ -20,11 +20,11 @@ class Account(models.Model):
         ('CNH', _('Китайский юань')),
     ]
     TYPE_ACCOUNT_LIST = [
-        ("Credit", _("Кредитный счёт")),
-        ("Debit", _("Дебетовый счёт")),
-        ("CreditCard", _("Кредитная карта")),
-        ("DebitCard", _("Дебетовая карта")),
-        ("CASH", _("Наличные")),
+        ('Credit', _('Кредитный счёт')),
+        ('Debit', _('Дебетовый счёт')),
+        ('CreditCard', _('Кредитная карта')),
+        ('DebitCard', _('Дебетовая карта')),
+        ('CASH', _('Наличные')),
     ]
 
     user = models.ForeignKey(
@@ -39,7 +39,7 @@ class Account(models.Model):
     type_account = models.CharField(
         choices=TYPE_ACCOUNT_LIST,
         default=TYPE_ACCOUNT_LIST[1][0],
-        verbose_name=_("Тип счёта"),
+        verbose_name=_('Тип счёта'),
     )
     balance = models.DecimalField(
         max_digits=constants.TWENTY,
@@ -51,23 +51,23 @@ class Account(models.Model):
         max_digits=constants.TWENTY,
         decimal_places=2,
         default=0,
-        verbose_name=_("Кредитный лимит"),
+        verbose_name=_('Кредитный лимит'),
         null=True,
         blank=True,
-        help_text=_("Только для кредитных карт и кредитных счетов"),
+        help_text=_('Только для кредитных карт и кредитных счетов'),
     )
     payment_due_date = models.DateField(
-        verbose_name=_("Дата платежа"),
+        verbose_name=_('Дата платежа'),
         null=True,
         blank=True,
-        help_text=_("Только для кредитных карт и кредитных счетов"),
+        help_text=_('Только для кредитных карт и кредитных счетов'),
     )
     grace_period_days = models.PositiveIntegerField(
         null=True,
         blank=True,
-        verbose_name=_("Длительность льготного периода (дней)"),
+        verbose_name=_('Длительность льготного периода (дней)'),
         help_text=_(
-            "Для кредитных карт: сколько дней длится беспроцентный период (например, 120)"
+            'Для кредитных карт: сколько дней длится беспроцентный период (например, 120)'
         ),
     )
     created_at = models.DateTimeField(
@@ -76,7 +76,6 @@ class Account(models.Model):
         blank=True,
         verbose_name=_('Дата и время создания'),
     )
-    
 
     class Meta:
         db_table = 'account'
@@ -112,7 +111,7 @@ class Account(models.Model):
         from hasta_la_vista_money.receipts.models import Receipt
 
         # Только для кредитных карт и кредитных счетов
-        if self.type_account not in ("CreditCard", "Credit"):
+        if self.type_account not in ('CreditCard', 'Credit'):
             return None
 
         expense_qs = Expense.objects.filter(account=self)
@@ -124,17 +123,17 @@ class Account(models.Model):
             income_qs = income_qs.filter(date__range=(start_date, end_date))
             receipt_qs = receipt_qs.filter(receipt_date__range=(start_date, end_date))
 
-        total_expense = expense_qs.aggregate(total=Sum("amount"))["total"] or 0
-        total_income = income_qs.aggregate(total=Sum("amount"))["total"] or 0
+        total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
+        total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
         total_receipt_expense = (
-            receipt_qs.filter(operation_type=1).aggregate(total=Sum("total_sum"))[
-                "total"
+            receipt_qs.filter(operation_type=1).aggregate(total=Sum('total_sum'))[
+                'total'
             ]
             or 0
         )
         total_receipt_return = (
-            receipt_qs.filter(operation_type=2).aggregate(total=Sum("total_sum"))[
-                "total"
+            receipt_qs.filter(operation_type=2).aggregate(total=Sum('total_sum'))[
+                'total'
             ]
             or 0
         )
