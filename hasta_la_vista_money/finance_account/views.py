@@ -24,9 +24,6 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from django.template.loader import render_to_string
-from django.utils import timezone
-from dateutil.relativedelta import relativedelta
-from calendar import monthrange
 
 
 class BaseView:
@@ -82,47 +79,6 @@ class AccountView(
         else:
             accounts = Account.objects.filter(user=user)
 
-        credit_cards = accounts.filter(type_account__in=['CreditCard', 'Credit'])
-        credit_cards_data = []
-        for card in credit_cards:
-            debt_now = card.get_credit_card_debt()
-            # История по месяцам за последний год
-            history = []
-            payment_schedule = []
-            today = timezone.now().date().replace(day=1)
-            for i in range(12):
-                start = today - relativedelta(months=11 - i)
-                last_day = monthrange(start.year, start.month)[1]
-                end = start.replace(day=last_day)
-                debt = card.get_credit_card_debt(start, end)
-                history.append({'month': start.strftime('%m.%Y'), 'debt': debt})
-                if card.grace_period_days:
-                    payment_due_date = end + relativedelta(days=card.grace_period_days)
-                    payment_due_date = payment_due_date.replace(
-                        day=monthrange(payment_due_date.year, payment_due_date.month)[1]
-                    )
-                    payment_schedule.append(
-                        {
-                            'month': start.strftime('%m.%Y'),
-                            'sum_expense': debt,
-                            'payment_due': payment_due_date.strftime('%d.%m.%Y'),
-                        }
-                    )
-            limit_left = (card.limit_credit or 0) - (debt_now or 0)
-            credit_cards_data.append(
-                {
-                    'name': card.name_account,
-                    'limit': card.limit_credit,
-                    'debt_now': debt_now,
-                    'payment_due_date': card.payment_due_date,
-                    'history': history,
-                    'currency': card.currency,
-                    'card_obj': card,
-                    'limit_left': limit_left,
-                    'payment_schedule': payment_schedule,
-                }
-            )
-
         account_transfer_money = (
             Account.objects.filter(user=user).select_related('user').all()
         )
@@ -152,7 +108,6 @@ class AccountView(
                 'transfer_money_log': transfer_money_log,
                 'sum_all_accounts': sum_all_accounts,
                 'user_groups': self.request.user.groups.all(),
-                'credit_cards_data': credit_cards_data,
             },
         )
 

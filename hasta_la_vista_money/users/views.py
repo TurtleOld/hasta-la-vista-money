@@ -38,6 +38,8 @@ from hasta_la_vista_money.users.forms import (
 )
 from hasta_la_vista_money.users.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
+from dateutil.relativedelta import relativedelta
+from calendar import monthrange
 
 
 class IndexView(TemplateView):
@@ -556,6 +558,46 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 'income_data': income_series_data,
             }
 
+        credit_cards = accounts.filter(type_account__in=['CreditCard', 'Credit'])
+        credit_cards_data = []
+        for card in credit_cards:
+            debt_now = card.get_credit_card_debt()
+            history = []
+            payment_schedule = []
+            today = timezone.now().date().replace(day=1)
+            for i in range(12):
+                start = today - relativedelta(months=11 - i)
+                last_day = monthrange(start.year, start.month)[1]
+                end = start.replace(day=last_day)
+                debt = card.get_credit_card_debt(start, end)
+                history.append({'month': start.strftime('%m.%Y'), 'debt': debt})
+                if card.grace_period_days:
+                    payment_due_date = end + relativedelta(days=card.grace_period_days)
+                    payment_due_date = payment_due_date.replace(
+                        day=monthrange(payment_due_date.year, payment_due_date.month)[1]
+                    )
+                    payment_schedule.append(
+                        {
+                            'month': start.strftime('%m.%Y'),
+                            'sum_expense': debt,
+                            'payment_due': payment_due_date.strftime('%d.%m.%Y'),
+                        }
+                    )
+            limit_left = (card.limit_credit or 0) - (debt_now or 0)
+            credit_cards_data.append(
+                {
+                    'name': card.name_account,
+                    'limit': card.limit_credit,
+                    'debt_now': debt_now,
+                    'payment_due_date': card.payment_due_date,
+                    'history': history,
+                    'currency': card.currency,
+                    'card_obj': card,
+                    'limit_left': limit_left,
+                    'payment_schedule': payment_schedule,
+                }
+            )
+
         context.update(
             {
                 'months_data': months_data,
@@ -569,6 +611,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 'delta_by_currency': delta_by_currency,
                 'chart_combined': chart_combined,
                 'user': user,
+                'credit_cards_data': credit_cards_data,
             },
         )
 
