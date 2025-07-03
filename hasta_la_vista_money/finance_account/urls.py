@@ -12,38 +12,38 @@ from hasta_la_vista_money.finance_account.views import (
 app_name = 'finance_account'
 urlpatterns = [
     path(
-        '',
+        "",
         AccountView.as_view(),
-        name='list',
+        name="list",
     ),
     path(
-        'create/',
+        "create/",
         AccountCreateView.as_view(),
-        name='create',
+        name="create",
     ),
     path(
-        'change/<int:pk>/',
+        "change/<int:pk>/",
         ChangeAccountView.as_view(),
-        name='change',
+        name="change",
     ),
     path(
-        'delete/<int:pk>',
+        "delete/<int:pk>",
         DeleteAccountView.as_view(),
-        name='delete_account',
+        name="delete_account",
     ),
     path(
-        'transfer-money/',
+        "transfer-money/",
         TransferMoneyAccountView.as_view(),
-        name='transfer_money',
+        name="transfer_money",
     ),
     path(
-        'list/',
+        "list/",
         AccountListCreateAPIView.as_view(),
-        name='api_list',
+        name="api_list",
     ),
     path(
-        'ajax/accounts_by_group/',
+        "ajax/accounts_by_group/",
         AjaxAccountsByGroupView.as_view(),
-        name='ajax_accounts_by_group',
+        name="ajax_accounts_by_group",
     ),
 ]

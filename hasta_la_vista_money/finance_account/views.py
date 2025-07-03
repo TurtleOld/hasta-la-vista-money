@@ -6,7 +6,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Sum
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse, HttpResponse
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
@@ -23,6 +23,13 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from django.template.loader import render_to_string
+from django.shortcuts import render
+from django.utils import timezone
+from datetime import timedelta
+from collections import OrderedDict
+from dateutil.relativedelta import relativedelta
+from calendar import monthrange
 
 
 class BaseView:
@@ -78,7 +85,47 @@ class AccountView(
         else:
             accounts = Account.objects.filter(user=user)
 
-        # Форма для перевода средств
+        credit_cards = accounts.filter(type_account__in=["CreditCard", "Credit"])
+        credit_cards_data = []
+        for card in credit_cards:
+            debt_now = card.get_credit_card_debt()
+            # История по месяцам за последний год
+            history = []
+            payment_schedule = []
+            today = timezone.now().date().replace(day=1)
+            for i in range(12):
+                start = today - relativedelta(months=11 - i)
+                last_day = monthrange(start.year, start.month)[1]
+                end = start.replace(day=last_day)
+                debt = card.get_credit_card_debt(start, end)
+                history.append({"month": start.strftime("%m.%Y"), "debt": debt})
+                if card.grace_period_days:
+                    payment_due_date = end + relativedelta(days=card.grace_period_days)
+                    payment_due_date = payment_due_date.replace(
+                        day=monthrange(payment_due_date.year, payment_due_date.month)[1]
+                    )
+                    payment_schedule.append(
+                        {
+                            "month": start.strftime("%m.%Y"),
+                            "sum_expense": debt,
+                            "payment_due": payment_due_date.strftime("%d.%m.%Y"),
+                        }
+                    )
+            limit_left = (card.limit_credit or 0) - (debt_now or 0)
+            credit_cards_data.append(
+                {
+                    "name": card.name_account,
+                    "limit": card.limit_credit,
+                    "debt_now": debt_now,
+                    "payment_due_date": card.payment_due_date,
+                    "history": history,
+                    "currency": card.currency,
+                    "card_obj": card,
+                    "limit_left": limit_left,
+                    "payment_schedule": payment_schedule,
+                }
+            )
+
         account_transfer_money = (
             Account.objects.filter(user=user).select_related('user').all()
         )
@@ -97,21 +144,18 @@ class AccountView(
         # Сумма всех счетов
         sum_all_accounts = accounts.aggregate(total=Sum('balance'))['total'] or 0
 
-        # Данные для графика (пустые, так как статистика перенесена в users app)
-        chart_combine = {'labels': [], 'datasets': []}
-
         context.update(
             {
-                'accounts': accounts,
-                'add_account_form': AddAccountForm(),
-                'transfer_money_form': TransferMoneyAccountForm(
+                "accounts": accounts,
+                "add_account_form": AddAccountForm(),
+                "transfer_money_form": TransferMoneyAccountForm(
                     user=self.request.user,
                     initial=initial_form_data,
                 ),
-                'transfer_money_log': transfer_money_log,
-                'chart_combine': chart_combine,
-                'sum_all_accounts': sum_all_accounts,
-                'user_groups': self.request.user.groups.all(),
+                "transfer_money_log": transfer_money_log,
+                "sum_all_accounts": sum_all_accounts,
+                "user_groups": self.request.user.groups.all(),
+                "credit_cards_data": credit_cards_data,
             },
         )
 
@@ -253,20 +297,8 @@ class AjaxAccountsByGroupView(View):
                 accounts = Account.objects.filter(user__in=users_in_group)
             except Group.DoesNotExist:
                 accounts = Account.objects.none()
-        accounts_data = [
-            {
-                'id': acc.pk,
-                'name_account': acc.name_account,
-                'type_account': acc.get_type_account_display(),
-                'balance': float(acc.balance),
-                'currency': acc.currency,
-                'owner': acc.user.username,
-                'is_foreign': acc.user != user,
-                'url': acc.get_absolute_url(),
-            }
-            for acc in accounts
-        ]
-        user_groups = [
-            {'id': group.id, 'name': group.name} for group in user.groups.all()
-        ]
-        return JsonResponse({'accounts': accounts_data, 'user_groups': user_groups})
+        html = render_to_string(
+            "finance_account/_account_cards_block.html",
+            {"accounts": accounts, "request": request},
+        )
+        return HttpResponse(html)

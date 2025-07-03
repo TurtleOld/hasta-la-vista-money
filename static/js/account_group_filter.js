@@ -125,34 +125,29 @@ function renderAccountGroupBlock(data) {
 function loadAccountsBlock(groupId) {
     const params = new URLSearchParams(window.location.search);
     params.set('group_id', groupId);
-    fetch(`/finance_account/ajax/accounts_by_group/?` + params.toString(), {
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-        },
+    fetch('/finance_account/ajax/accounts_by_group/?' + params.toString(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
-        .then(response => response.json())
-        .then(data => {
-            // Безопасная замена блока
+        .then(response => response.text())
+        .then(html => {
             const block = document.getElementById('account-cards-block');
             if (block) {
-                // Создаём временный контейнер
-                const temp = document.createElement('div');
-                renderAccountGroupBlock.call(null, Object.assign({}, data, {block: temp}));
-                // temp теперь содержит новый html
-                // Но мы не используем innerHTML, а пересоздаём DOM
-                // Поэтому просто вызываем renderAccountGroupBlock(data)
-                renderAccountGroupBlock(data);
+                block.innerHTML = html;
             }
         });
 }
 
-function initAccountGroupSelect() {
-    // Берём group_id только из query-параметра, если нет — 'my'
-    const url = new URL(window.location.href);
-    let groupId = url.searchParams.get('group_id') || 'my';
-    loadAccountsBlock(groupId);
-}
-
 document.addEventListener('DOMContentLoaded', function () {
-    initAccountGroupSelect();
+    const select = document.getElementById('account-group-select');
+    if (select) {
+        select.addEventListener('change', function () {
+            // Обновляем group_id в URL
+            const params = new URLSearchParams(window.location.search);
+            params.set('group_id', this.value);
+            const newUrl = window.location.pathname + '?' + params.toString();
+            window.history.pushState({}, '', newUrl);
+
+            loadAccountsBlock(this.value);
+        });
+    }
 });
