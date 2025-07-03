@@ -16,7 +16,6 @@ def comma(number: float) -> str | None:
     :type number: float
     :return: str | None
     """
-
     if number:
         return f'{decimal.Decimal(number):,.2f}'.replace(',', ' ')
     return decimal.Decimal(0)

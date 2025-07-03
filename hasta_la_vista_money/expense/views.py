@@ -206,7 +206,6 @@ class ExpenseCreateView(
         context = super().get_context_data(**kwargs)
         if 'add_expense_form' not in context:
             context['add_expense_form'] = self.get_form()
-        print(context, 'context')
         return context
 
     def form_valid(self, form) -> HttpResponse:

@@ -6,7 +6,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Sum
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse, HttpResponse
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
@@ -23,6 +23,7 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from django.template.loader import render_to_string
 
 
 class BaseView:
@@ -78,7 +79,6 @@ class AccountView(
         else:
             accounts = Account.objects.filter(user=user)
 
-        # Форма для перевода средств
         account_transfer_money = (
             Account.objects.filter(user=user).select_related('user').all()
         )
@@ -97,9 +97,6 @@ class AccountView(
         # Сумма всех счетов
         sum_all_accounts = accounts.aggregate(total=Sum('balance'))['total'] or 0
 
-        # Данные для графика (пустые, так как статистика перенесена в users app)
-        chart_combine = {'labels': [], 'datasets': []}
-
         context.update(
             {
                 'accounts': accounts,
@@ -109,7 +106,6 @@ class AccountView(
                     initial=initial_form_data,
                 ),
                 'transfer_money_log': transfer_money_log,
-                'chart_combine': chart_combine,
                 'sum_all_accounts': sum_all_accounts,
                 'user_groups': self.request.user.groups.all(),
             },
@@ -253,20 +249,8 @@ class AjaxAccountsByGroupView(View):
                 accounts = Account.objects.filter(user__in=users_in_group)
             except Group.DoesNotExist:
                 accounts = Account.objects.none()
-        accounts_data = [
-            {
-                'id': acc.pk,
-                'name_account': acc.name_account,
-                'type_account': acc.get_type_account_display(),
-                'balance': float(acc.balance),
-                'currency': acc.currency,
-                'owner': acc.user.username,
-                'is_foreign': acc.user != user,
-                'url': acc.get_absolute_url(),
-            }
-            for acc in accounts
-        ]
-        user_groups = [
-            {'id': group.id, 'name': group.name} for group in user.groups.all()
-        ]
-        return JsonResponse({'accounts': accounts_data, 'user_groups': user_groups})
+        html = render_to_string(
+            'finance_account/_account_cards_block.html',
+            {'accounts': accounts, 'request': request},
+        )
+        return HttpResponse(html)
