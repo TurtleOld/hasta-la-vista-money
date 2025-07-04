@@ -1,51 +1,71 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const groupSelect = document.getElementById('income-group-select');
-    if (!groupSelect) return;
+    function getGroupId() {
+        const groupSelect = document.getElementById('income-group-select');
+        return groupSelect ? groupSelect.value : 'my';
+    }
 
-    groupSelect.addEventListener('change', function () {
-        const groupId = this.value;
-        const params = new URLSearchParams(window.location.search);
-        params.set('group_id', groupId);
-
-        // Обновить адресную строку
-        window.history.replaceState({}, '', window.location.pathname + '?' + params.toString());
-
-        fetch('/income/ajax/income_by_group/?' + params.toString(), {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-            .then(response => response.text())
-            .then(html => {
-                // Destroy previous DataTable instance if exists
-                if (window.incomeDataTable) {
-                    window.incomeDataTable.destroy();
-                }
-                const block = document.getElementById('income-table-block');
-                if (block) {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    const newContent = doc.body.firstElementChild;
-                    if (newContent) {
-                        block.replaceWith(newContent);
-                        // Re-init DataTables and save instance
-                        window.incomeDataTable = new DataTable('#income-table', {
-                            language: {
-                                emptyTable: "Информация о доходах отсутствует!",
-                                search: "Поиск:",
-                                lengthMenu: "Показать _MENU_ записей на странице",
-                                info: "Показано с _START_ по _END_ из _TOTAL_ записей",
-                                paginate: {
-                                    first: "«",
-                                    last: "»",
-                                    next: "›",
-                                    previous: "‹"
-                                }
-                            },
-                            order: [[0, 'desc']]
-                        });
+    // Инициализация DataTable только один раз
+    window.incomeDataTable = new DataTable('#income-table', {
+        ajax: {
+            url: '/income/ajax/income_data/',
+            data: function (d) {
+                d.group_id = getGroupId();
+            }
+        },
+        layout: {
+            top: 'searchPanes'
+        },
+        searchPanes: {
+            initCollapsed: true
+        },
+        language: {
+            emptyTable: "Информация о доходах отсутствует!",
+            search: "Поиск:",
+            lengthMenu: "Показать _MENU_ записей на странице",
+            info: "Показано с _START_ по _END_ из _TOTAL_ записей",
+            paginate: {
+                first: "«",
+                last: "»",
+                next: "›",
+                previous: "‹"
+            }
+        },
+        order: [[0, 'desc']],
+        columns: [
+            { title: "Дата" },
+            { title: "Сумма" },
+            { title: "Категория" },
+            { title: "Счёт" },
+            { title: "" }
+        ],
+        columnDefs: [
+            {
+                targets: 2, // Категория
+                searchPanes: { show: true }
+            },
+            {
+                targets: [0, 1, 3, 4],
+                searchPanes: { show: false }
+            },
+            {
+                targets: 1, // Сумма
+                render: {
+                    filter: function (data) {
+                        if (!data) return '';
+                        return data.replace(/ /g, '');
                     }
                 }
-            });
+            }
+        ]
     });
+
+    // При смене группы просто обновляйте данные
+    const groupSelect = document.getElementById('income-group-select');
+    if (groupSelect) {
+        groupSelect.addEventListener('change', function () {
+            window.incomeDataTable.ajax.reload();
+        });
+    }
 
     // Логика для показа/скрытия фильтра
     const toggleBtn = document.getElementById('toggle-group-filter');
@@ -55,4 +75,4 @@ document.addEventListener('DOMContentLoaded', function () {
             filterBlock.classList.toggle('d-none');
         });
     }
-}); 
+});

@@ -30,6 +30,13 @@ document.addEventListener('DOMContentLoaded', function () {
                             block.appendChild(newContent);
                             setTimeout(() => {
                                 window.expenseDataTable = new DataTable('#expense-table', {
+                                    layout: {
+                                        topStart: {
+                                            searchPanes: {
+                                                initCollapsed: true
+                                            }
+                                        },
+                                    },
                                     language: {
                                         emptyTable: "Информация о расходах отсутствует!",
                                         search: "Поиск:",
@@ -43,11 +50,41 @@ document.addEventListener('DOMContentLoaded', function () {
                                         }
                                     },
                                     order: [[0, 'desc']],
-                                    autoWidth: false
+                                    autoWidth: false,
+                                    searchPanes: {
+                                        collapsed: true
+                                    },
+                                    columnDefs: [
+                                        {
+                                            targets: 2, // индекс колонки "Категория"
+                                            searchPanes: {
+                                                show: true
+                                            }
+                                        },
+                                        {
+                                            targets: [0, 1, 3, 4, 5], // остальные колонки
+                                            searchPanes: {
+                                                show: false
+                                            }
+                                        },
+                                        {
+                                            targets: 1, // индекс колонки "Сумма"
+                                            render: {
+                                                filter: function (data, type, row, meta) {
+                                                    if (!data) return '';
+                                                    return data.replace(/ /g, '');
+                                                }
+                                            }
+                                        }
+                                    ]
                                 });
-                                const table = document.getElementById('expense-table');
-                                if (table) {
-                                    table.classList.remove('d-none');
+                                console.log('DataTable created', window.expenseDataTable);
+                                const tableElem = document.getElementById('expense-table');
+                                if (tableElem) {
+                                    tableElem.addEventListener('datatable.init', function () {
+                                        console.log('datatable.init event fired');
+                                    });
+                                    tableElem.classList.remove('d-none');
                                     setTimeout(() => {
                                         if (window.expenseDataTable) {
                                             window.expenseDataTable.columns.adjust().draw();
@@ -68,6 +105,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         window.expenseDataTable = null;
                     }
                     window.expenseDataTable = new DataTable('#expense-table', {
+                        layout: {
+                            topStart: {
+                                searchPanes: {
+                                    initCollapsed: true
+                                }
+                            },
+                        },
                         language: {
                             emptyTable: "Информация о расходах отсутствует!",
                             search: "Поиск:",
@@ -81,11 +125,41 @@ document.addEventListener('DOMContentLoaded', function () {
                             }
                         },
                         order: [[0, 'desc']],
-                        autoWidth: false
+                        autoWidth: false,
+                        searchPanes: {
+                            collapsed: true
+                        },
+                        columnDefs: [
+                            {
+                                targets: 2, // индекс колонки "Категория"
+                                searchPanes: {
+                                    show: true
+                                }
+                            },
+                            {
+                                targets: [0, 1, 3, 4, 5], // остальные колонки
+                                searchPanes: {
+                                    show: false
+                                }
+                            },
+                            {
+                                targets: 1, // индекс колонки "Сумма"
+                                render: {
+                                    filter: function (data, type, row, meta) {
+                                        if (!data) return '';
+                                        return data.replace(/ /g, '');
+                                    }
+                                }
+                            }
+                        ]
                     });
-                    const table = document.getElementById('expense-table');
-                    if (table) {
-                        table.classList.remove('d-none');
+                    console.log('DataTable created', window.expenseDataTable);
+                    const tableElem = document.getElementById('expense-table');
+                    if (tableElem) {
+                        tableElem.addEventListener('datatable.init', function () {
+                            console.log('datatable.init event fired');
+                        });
+                        tableElem.classList.remove('d-none');
                         setTimeout(() => {
                             if (window.expenseDataTable) {
                                 window.expenseDataTable.columns.adjust().draw();
@@ -120,45 +194,18 @@ document.addEventListener('DOMContentLoaded', function () {
         // Индекс колонки Amount (начинается с 0)
         var amountIndex = 1;
 
-        // Кастомная функция поиска по всем колонкам
-        $.fn.dataTable.ext.search.push(function (settings, data, dataIndex, rowData, counter) {
-            var searchValue = '';
-            try {
-                if (settings.oInstance && settings.oInstance.api) {
-                    searchValue = settings.oInstance.api().search().trim();
-                }
-            } catch (e) {
-                searchValue = '';
-            }
+        $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+            var searchValue = settings.oInstance.api().search().trim();
             if (!searchValue) return true;
 
-            // Разбиваем поисковый запрос на слова
-            var searchWords = searchValue.split(/\s+/);
+            var searchDigits = searchValue.replace(/[^\d]/g, '');
+            var cell = (data[1] || '').toString();
+            var cellDigits = cell.replace(/[^\d]/g, '');
 
-            // Для каждой строки: ищем совпадение для каждого слова
-            for (var w = 0; w < searchWords.length; w++) {
-                var word = searchWords[w].toLowerCase();
-                var found = false;
-
-                for (var i = 0; i < data.length; i++) {
-                    var cell = (data[i] || '').toString().toLowerCase();
-                    if (i === amountIndex) {
-                        var cellDigits = cell.replace(/[^\d]/g, '');
-                        var wordDigits = word.replace(/[^\d]/g, '');
-                        if (wordDigits && cellDigits.indexOf(wordDigits) !== -1) {
-                            found = true;
-                            break;
-                        }
-                    } else {
-                        if (cell.indexOf(word) !== -1) {
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-                if (!found) return false;
+            if (/^\d+$/.test(searchValue)) {
+                return cellDigits.indexOf(searchDigits) !== -1;
             }
-            return true;
+            return true; // временно отключаем обычный поиск
         });
     }
-}); 
+});

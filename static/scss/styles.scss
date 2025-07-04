@@ -885,3 +885,38 @@ tr.table-foreign:active {
     --bs-table-bg: #e3f0ff;
     --bs-table-accent-bg: #e3f0ff;
 }
+
+div.dt-searchPanes {
+    margin-bottom: 0.5rem;
+    padding: 0.25rem 0.5rem 0 0.5rem;
+    max-width: 320px;
+}
+.dtsp-searchPane {
+    margin-top: 0 !important;
+    min-width: 160px;
+    max-width: 220px;
+    font-size: 0.95em;
+    padding: 0.15rem 0.5rem 0.25rem 0.5rem;
+}
+div.dtsp-searchPane table {
+    font-size: 0.95em;
+}
+div.dtsp-searchPane .dtsp-search {
+    margin-bottom: 0.15rem;
+}
+div.dtsp-searchPane .dtsp-paneInputButton {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.95em;
+}
+.dtsp-collapseAll, .dtsp-showAll, .dtsp-clearAll {
+    display: none !important;
+}
+.dt-searchPanes {
+    margin-bottom: 0.25rem !important;
+}
+.dtsp-panes {
+    margin-left: 0% !important;
+}
+.dtsp-title {
+    display: none !important;
+}
