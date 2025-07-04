@@ -116,4 +116,49 @@ document.addEventListener('DOMContentLoaded', function () {
             filterBlock.classList.toggle('d-none');
         });
     }
+    if ($.fn.dataTable) {
+        // Индекс колонки Amount (начинается с 0)
+        var amountIndex = 1;
+
+        // Кастомная функция поиска по всем колонкам
+        $.fn.dataTable.ext.search.push(function (settings, data, dataIndex, rowData, counter) {
+            var searchValue = '';
+            try {
+                if (settings.oInstance && settings.oInstance.api) {
+                    searchValue = settings.oInstance.api().search().trim();
+                }
+            } catch (e) {
+                searchValue = '';
+            }
+            if (!searchValue) return true;
+
+            // Разбиваем поисковый запрос на слова
+            var searchWords = searchValue.split(/\s+/);
+
+            // Для каждой строки: ищем совпадение для каждого слова
+            for (var w = 0; w < searchWords.length; w++) {
+                var word = searchWords[w].toLowerCase();
+                var found = false;
+
+                for (var i = 0; i < data.length; i++) {
+                    var cell = (data[i] || '').toString().toLowerCase();
+                    if (i === amountIndex) {
+                        var cellDigits = cell.replace(/[^\d]/g, '');
+                        var wordDigits = word.replace(/[^\d]/g, '');
+                        if (wordDigits && cellDigits.indexOf(wordDigits) !== -1) {
+                            found = true;
+                            break;
+                        }
+                    } else {
+                        if (cell.indexOf(word) !== -1) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found) return false;
+            }
+            return true;
+        });
+    }
 }); 
