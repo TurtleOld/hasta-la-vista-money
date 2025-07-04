@@ -36,6 +36,8 @@ from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+from django.template.loader import render_to_string
+from django.contrib.auth.models import Group
 
 
 class BaseView:
@@ -384,3 +386,26 @@ class IncomeCategoryDeleteView(BaseView, DeleteObjectMixin):
     success_message = constants.SUCCESS_CATEGORY_INCOME_DELETED
     error_message = constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY
     success_url: Optional[str] = reverse_lazy('income:category_list')
+
+
+class IncomeGroupAjaxView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        group_id = request.GET.get("group_id")
+        user = request.user
+        incomes = Income.objects.none()
+        if group_id == "my" or not group_id:
+            incomes = Income.objects.filter(user=user)
+        else:
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                incomes = Income.objects.filter(user__in=users_in_group)
+            except Group.DoesNotExist:
+                incomes = Income.objects.none()
+        # Можно добавить сортировку и пагинацию при необходимости
+        context = {
+            "income_by_month": incomes,
+            "request": request,
+        }
+        html = render_to_string("income/_income_table_block.html", context)
+        return HttpResponse(html)

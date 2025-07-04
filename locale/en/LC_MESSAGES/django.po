@@ -706,7 +706,7 @@ msgstr "Income information is missing! "
 
 #: .\hasta_la_vista_money\income\templates\income\modals\add_income.html:9
 msgid "Добавить новый доход"
-msgstr "Add income category"
+msgstr "Add income"
 
 #: .\hasta_la_vista_money\income\templates\income\show_category_income.html:12
 msgid "Категории дохода"

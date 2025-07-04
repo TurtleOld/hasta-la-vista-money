@@ -1,8 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const incomeTableContainer = document.getElementById('income-table');
-    if (!incomeTableContainer) return;
-
-    const table = incomeTableContainer.querySelector('table');
+    const table = document.getElementById('income-table');
     if (!table) return;
 
     const headers = table.querySelectorAll('th.sortable');
@@ -67,5 +64,21 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             rows.forEach(row => tbody.appendChild(row));
         });
+    });
+
+    new DataTable('#income-table', {
+        language: {
+            emptyTable: "Информация о доходах отсутствует!",
+            search: "Поиск:",
+            lengthMenu: "Показать _MENU_ записей на странице",
+            info: "Показано с _START_ по _END_ из _TOTAL_ записей",
+            paginate: {
+                first: "«",
+                last: "»",
+                next: "›",
+                previous: "‹"
+            }
+        },
+        order: [[0, 'desc']]
     });
 });

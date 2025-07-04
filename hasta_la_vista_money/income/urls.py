@@ -8,36 +8,42 @@ from hasta_la_vista_money.income.views import (
     IncomeDeleteView,
     IncomeUpdateView,
     IncomeView,
+    IncomeGroupAjaxView,
 )
 
 app_name = 'income'
 urlpatterns = [
-    path('', IncomeView.as_view(), name='list'),
-    path('create/', IncomeCreateView.as_view(), name='create'),
+    path("", IncomeView.as_view(), name="list"),
+    path("create/", IncomeCreateView.as_view(), name="create"),
     path(
-        'category/list',
+        "category/list",
         IncomeCategoryView.as_view(),
-        name='category_list',
+        name="category_list",
     ),
     path(
-        'create/category/',
+        "create/category/",
         IncomeCategoryCreateView.as_view(),
-        name='create_category',
+        name="create_category",
     ),
-    path('change/<int:pk>/', IncomeUpdateView.as_view(), name='change'),
+    path("change/<int:pk>/", IncomeUpdateView.as_view(), name="change"),
     path(
-        'delete/<int:pk>/',
+        "delete/<int:pk>/",
         IncomeDeleteView.as_view(),
-        name='delete_income',
+        name="delete_income",
     ),
     path(
-        'category/<int:pk>/',
+        "category/<int:pk>/",
         IncomeCategoryDeleteView.as_view(),
-        name='delete_category_income',
+        name="delete_category_income",
     ),
     path(
-        '<int:pk>/copy/',
+        "<int:pk>/copy/",
         IncomeCopyView.as_view(),
-        name='income_copy',
+        name="income_copy",
+    ),
+    path(
+        "ajax/income_by_group/",
+        IncomeGroupAjaxView.as_view(),
+        name="ajax_income_by_group",
     ),
 ]
