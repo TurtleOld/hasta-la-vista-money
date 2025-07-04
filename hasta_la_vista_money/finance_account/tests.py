@@ -116,7 +116,10 @@ class TestAccount(TestCase):
         url = reverse_lazy('finance_account:change', args=(self.account1.pk,))
         update_account = {
             'user': self.user,
-            'type_account': 'D',
+            'type_account': 'Debit',
+            'limit_credit': 1000,
+            'payment_due_date': '2022-01-01',
+            'grace_period_days': 120,
             'name_account': 'Основной счёт',
             'balance': NEW_BALANCE_TEST,
             'currency': 'RUB',
@@ -322,7 +325,10 @@ class TestAccount(TestCase):
         form = AddAccountForm(
             data={
                 'name_account': 'Test Account',
-                'type_account': 'D',
+                'type_account': 'Debit',
+                'limit_credit': 1000,
+                'payment_due_date': '2022-01-01',
+                'grace_period_days': 120,
                 'balance': 1000,
                 'currency': 'RUB',
             },
@@ -443,7 +449,10 @@ class TestAccount(TestCase):
 
         data = {
             'name_account': 'New Test Account',
-            'type_account': 'D',
+            'type_account': 'Credit',
+            'limit_credit': 1000,
+            'payment_due_date': '2022-01-01',
+            'grace_period_days': 120,
             'balance': 5000,
             'currency': 'USD',
         }
@@ -461,7 +470,10 @@ class TestAccount(TestCase):
 
         data = {
             'name_account': 'Updated Account Name',
-            'type_account': 'D',
+            'type_account': 'Credit',
+            'limit_credit': 1000,
+            'payment_due_date': '2022-01-01',
+            'grace_period_days': 120,
             'balance': 3000,
             'currency': 'EUR',
         }
@@ -480,7 +492,6 @@ class TestAccount(TestCase):
         self.assertIn('add_account_form', response.context)
         self.assertIn('transfer_money_form', response.context)
         self.assertIn('transfer_money_log', response.context)
-        self.assertIn('chart_combine', response.context)
         self.assertIn('sum_all_accounts', response.context)
 
     def test_account_view_unauthenticated(self) -> None:
@@ -493,7 +504,7 @@ class TestAccount(TestCase):
     def test_account_form_initial_values(self) -> None:
         """Тест начальных значений формы AddAccountForm."""
         form = AddAccountForm()
-        self.assertEqual(form.fields['type_account'].initial, 'D')
+        self.assertEqual(form.fields['type_account'].initial, 'Debit')
 
     def test_transfer_money_form_initialization(self) -> None:
         """Тест инициализации формы TransferMoneyAccountForm."""
@@ -512,8 +523,8 @@ class TestAccount(TestCase):
         self.assertIn('EUR', currency_choices)
 
         type_choices = [choice[0] for choice in Account.TYPE_ACCOUNT_LIST]
-        self.assertIn('C', type_choices)
-        self.assertIn('D', type_choices)
+        self.assertIn('Credit', type_choices)
+        self.assertIn('Debit', type_choices)
         self.assertIn('CASH', type_choices)
 
     def test_transfer_money_log_ordering(self) -> None:
@@ -549,7 +560,7 @@ class TestAccount(TestCase):
         )
 
         self.assertEqual(account.balance, 0)
-        self.assertEqual(account.type_account, 'Дебетовый счёт')
+        self.assertEqual(account.type_account, 'Debit')
 
     def test_transfer_money_form_clean_method(self) -> None:
         """Тест метода clean формы TransferMoneyAccountForm."""

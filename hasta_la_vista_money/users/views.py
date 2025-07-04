@@ -1,7 +1,9 @@
 import json
+from calendar import monthrange
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
+from dateutil.relativedelta import relativedelta
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
@@ -556,6 +558,90 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 'income_data': income_series_data,
             }
 
+        def get_credit_card_debt_for_period(card, start_date, end_date):
+            from hasta_la_vista_money.expense.models import Expense
+            from hasta_la_vista_money.income.models import Income
+            from hasta_la_vista_money.receipts.models import Receipt
+
+            # end_date - date, преобразуем в datetime с максимальным временем
+            end_datetime = datetime.combine(end_date, time.max)
+
+            expense_qs = Expense.objects.filter(
+                account=card,
+                date__range=(start_date, end_datetime),
+            )
+            income_qs = Income.objects.filter(
+                account=card,
+                date__range=(start_date, end_datetime),
+            )
+            receipt_qs = Receipt.objects.filter(
+                account=card,
+                receipt_date__range=(start_date, end_datetime),
+            )
+
+            total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
+            total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
+            total_receipt_expense = (
+                receipt_qs.filter(operation_type=1).aggregate(total=Sum('total_sum'))[
+                    'total'
+                ]
+                or 0
+            )
+            total_receipt_return = (
+                receipt_qs.filter(operation_type=2).aggregate(total=Sum('total_sum'))[
+                    'total'
+                ]
+                or 0
+            )
+
+            debt = (total_expense + total_receipt_expense) - (
+                total_income + total_receipt_return
+            )
+            return debt
+
+        credit_cards = accounts.filter(type_account__in=['CreditCard', 'Credit'])
+        credit_cards_data = []
+        for card in credit_cards:
+            debt_now = card.get_credit_card_debt()
+            history = []
+            payment_schedule = []
+            today = timezone.now().date().replace(day=1)
+            for i in range(12):
+                start = today - relativedelta(months=11 - i)
+                last_day = monthrange(start.year, start.month)[1]
+                end = start.replace(day=last_day)
+                # Теперь считаем долг только за месяц (прирост)
+                debt = get_credit_card_debt_for_period(card, start, end)
+                history.append({'month': start.strftime('%m.%Y'), 'debt': debt})
+                if card.grace_period_days:
+                    payment_due_date = end + relativedelta(days=card.grace_period_days)
+                    payment_due_date = payment_due_date.replace(
+                        day=monthrange(payment_due_date.year, payment_due_date.month)[
+                            1
+                        ],
+                    )
+                    payment_schedule.append(
+                        {
+                            'month': start.strftime('%m.%Y'),
+                            'sum_expense': debt,
+                            'payment_due': payment_due_date.strftime('%d.%m.%Y'),
+                        },
+                    )
+            limit_left = (card.limit_credit or 0) - (debt_now or 0)
+            credit_cards_data.append(
+                {
+                    'name': card.name_account,
+                    'limit': card.limit_credit,
+                    'debt_now': debt_now,
+                    'payment_due_date': card.payment_due_date,
+                    'history': history,
+                    'currency': card.currency,
+                    'card_obj': card,
+                    'limit_left': limit_left,
+                    'payment_schedule': payment_schedule,
+                },
+            )
+
         context.update(
             {
                 'months_data': months_data,
@@ -569,6 +655,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                 'delta_by_currency': delta_by_currency,
                 'chart_combined': chart_combined,
                 'user': user,
+                'credit_cards_data': credit_cards_data,
             },
         )
 
@@ -705,12 +792,8 @@ class DeleteUserFromGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView)
 
     def form_valid(self, form):
         user = form.cleaned_data['user']
-        print(user, 'user')
         group = form.cleaned_data['group']
-        print(group, 'group')
-        print(user.groups.all(), 'user.groups.all()')
         user.groups.remove(group)
-        print(user.groups.all(), 'user.groups.all()')
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -740,8 +823,8 @@ def groups_not_for_user_ajax(request):
 
             groups = list(
                 Group.objects.exclude(
-                    id__in=user.groups.values_list('id', flat=True)
-                ).values('id', 'name')
+                    id__in=user.groups.values_list('id', flat=True),
+                ).values('id', 'name'),
             )
         except User.DoesNotExist:
             pass

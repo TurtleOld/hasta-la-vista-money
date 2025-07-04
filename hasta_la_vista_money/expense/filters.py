@@ -69,7 +69,7 @@ class ExpenseFilter(django_filters.FilterSet):
         for expense in expenses:
             expense_dict = dict(expense)
             if expense['date']:
-                expense_dict['date_label'] = date_format(expense['date'], 'd.m.Y H:i')
+                expense_dict['date_label'] = date_format(expense['date'], 'F Y')
                 expense_dict['date_month'] = expense['date']
             else:
                 expense_dict['date_label'] = ''
