@@ -40,8 +40,7 @@
 
                     <!-- Finance Dropdown -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link nav-btn dropdown-toggle"
-                           href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <button class="nav-link nav-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <span class="nav-icon">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor"
                                      class="bi bi-cash-stack" viewBox="0 0 16 16">
@@ -50,7 +49,7 @@
                                 </svg>
                             </span>
                             <span class="nav-text">{% translate "Финансы" %}</span>
-                        </a>
+                        </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow border-0">
                             <li>
                                 <a class="dropdown-item d-flex align-items-center gap-2 {% if request.path == '/income/' %} active {% endif %}"

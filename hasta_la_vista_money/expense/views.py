@@ -1,4 +1,5 @@
 from typing import Any, Optional
+from collections import namedtuple
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -35,10 +36,13 @@ from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
+from django.views.decorators.http import require_GET
+from django.utils.decorators import method_decorator
+from django.template.loader import render_to_string
 
 
 class BaseView:
-    template_name = 'expense/expense.html'
+    template_name = "expense/show_expense.html"
     success_url: Optional[str] = reverse_lazy('expense:list')
 
 
@@ -112,40 +116,56 @@ class ExpenseView(
             'account'
         ].queryset = user.finance_account_users.select_related('user').all()
 
-        expenses = expense_filter.get_expenses_with_annotations()
+        expenses = expense_filter.qs.select_related(
+            "user", "category", "account"
+        ).order_by("-date")
 
+        ReceiptExpense = namedtuple(
+            "ReceiptExpense",
+            [
+                "id",
+                "date",
+                "amount",
+                "category",
+                "account",
+                "user",
+                "is_receipt",
+                "date_label",
+            ],
+        )
         receipt_expenses = (
             Receipt.objects.filter(
                 user=user,
                 operation_type=1,
             )
             .annotate(
-                month=TruncMonth('receipt_date'),
-                year=ExtractYear('receipt_date'),
+                month=TruncMonth("receipt_date"),
+                year=ExtractYear("receipt_date"),
             )
-            .values('month', 'year', 'account__id', 'account__name_account')
-            .annotate(
-                amount=Sum('total_sum'),
+            .values(
+                "month", "year", "account__id", "account__name_account", "total_sum"
             )
-            .order_by('-year', '-month')
+            .order_by("-year", "-month")
         )
-
         receipt_expense_list = []
         for receipt in receipt_expenses:
             month_date = receipt['month']
             date_label = date_format(month_date, 'F Y')
-
+            category_obj = receipt_category
+            account_obj = type(
+                "AccountObj", (), {"name_account": receipt["account__name_account"]}
+            )()
             receipt_expense_list.append(
-                {
-                    'id': f'receipt_{month_date.year}{receipt["month"].strftime("%m")}_{receipt["account__name_account"]}',
-                    'date_label': date_label,
-                    'date_year': month_date.year,
-                    'date_month': month_date,
-                    'amount': receipt['amount'],
-                    'category__name': 'Покупки по чекам',
-                    'account__name_account': receipt['account__name_account'],
-                    'user': user,
-                },
+                ReceiptExpense(
+                    id=f'receipt_{month_date.year}{month_date.strftime("%m")}_{receipt["account__name_account"]}',
+                    date=month_date,
+                    amount=receipt["total_sum"],
+                    category=category_obj,
+                    account=account_obj,
+                    user=user,
+                    is_receipt=True,
+                    date_label=date_label,
+                )
             )
 
         all_expenses = list(expenses) + receipt_expense_list
@@ -157,8 +177,12 @@ class ExpenseView(
             'expenses',
         )
 
-        total_amount_page = sum(income['amount'] for income in pages_expense)
-        total_amount_period = sum(income['amount'] for income in all_expenses)
+        total_amount_page = sum(
+            getattr(income, "amount", 0) for income in pages_expense
+        )
+        total_amount_period = sum(
+            getattr(income, "amount", 0) for income in all_expenses
+        )
 
         context['expense_filter'] = expense_filter
         context['categories'] = expense_categories
@@ -167,6 +191,7 @@ class ExpenseView(
         context['flattened_categories'] = flattened_categories
         context['total_amount_page'] = total_amount_page
         context['total_amount_period'] = total_amount_period
+        context["request"] = self.request
 
         return context
 
@@ -396,3 +421,58 @@ class ExpenseCategoryDeleteView(
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+
+class ExpenseGroupAjaxView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        group_id = request.GET.get("group_id")
+        user = request.user
+        expenses = Expense.objects.none()
+        receipt_expense_list = []
+        if not group_id or group_id == "my":
+            expenses = Expense.objects.filter(user=user)
+            group_users = [user]
+        else:
+            if user.groups.filter(id=group_id).exists():
+                group_users = list(User.objects.filter(groups__id=group_id))
+                expenses = Expense.objects.filter(user__in=group_users)
+            else:
+                group_users = []
+        expenses = expenses.select_related("user", "category", "account").order_by(
+            "-date"
+        )
+        if group_users:
+            receipt_expenses = (
+                Receipt.objects.filter(user__in=group_users, operation_type=1)
+                .annotate(
+                    month=TruncMonth("receipt_date"), year=ExtractYear("receipt_date")
+                )
+                .values("month", "year", "account__id", "account__name_account", "user")
+                .annotate(amount=Sum("total_sum"))
+                .order_by("-year", "-month")
+            )
+            for receipt in receipt_expenses:
+                month_date = receipt["month"]
+                date_label = month_date.strftime("%B %Y") if month_date else ""
+                receipt_user = User.objects.get(id=receipt["user"])
+                receipt_expense_list.append(
+                    {
+                        "id": f"receipt_{receipt['year']}{month_date.strftime('%m')}_{receipt['account__name_account']}_{receipt['user']}",
+                        "date": month_date,
+                        "date_label": date_label,
+                        "amount": receipt["amount"],
+                        "category": {
+                            "name": "Покупки по чекам",
+                            "parent_category": None,
+                        },
+                        "account": {"name_account": receipt["account__name_account"]},
+                        "user": receipt_user,  # всегда объект User
+                        "is_receipt": True,
+                    }
+                )
+        all_expenses = list(expenses) + receipt_expense_list
+        context = {"expenses": all_expenses, "request": request}
+        html = render_to_string(
+            "expense/_expense_table_block.html", context, request=request
+        )
+        return HttpResponse(html)

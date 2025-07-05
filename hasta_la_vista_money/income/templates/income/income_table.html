@@ -9,17 +9,15 @@
 </div>
 {% endif %}
 
-<div id="income-table" class="table-responsive">
-    <table class="table table-white table-striped-columns table-sm table-hover align-middle text-center table-bordered shadow"
-           aria-label="table income">
-        <caption>{% translate "Доходы" %}</caption>
-        <thead>
+<div class="table-responsive">
+    <table id="income-table" class="table table-striped table-hover table-bordered align-middle">
+        <thead class="table-light">
         <tr>
-            <th class="col-2 sortable" data-sort="date" title="Сортировать по дате">{% translate 'Дата' %} <span class="sort-indicator"></span></th>
-            <th class="col-2 sortable" data-sort="amount" title="Сортировать по сумме">{% translate 'Сумма' %} <span class="sort-indicator"></span></th>
-            <th class="col-2 sortable" data-sort="category" title="Сортировать по категории">{% translate 'Категория' %} <span class="sort-indicator"></span></th>
-            <th class="col-2 sortable" data-sort="account" title="Сортировать по счёту">{% translate 'Счёт' %} <span class="sort-indicator"></span></th>
-            <th class="col-2">
+            <th class="col-2 text-center" data-sort="date" title="Сортировать по дате">{% translate 'Дата' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center" data-sort="amount" title="Сортировать по сумме">{% translate 'Сумма' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center" data-sort="category" title="Сортировать по категории">{% translate 'Категория' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center" data-sort="account" title="Сортировать по счёту">{% translate 'Счёт' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center">
                 <button type="button" class="btn btn-outline-success"
                         data-bs-toggle="modal"
                         data-bs-target="#add-income"
@@ -48,13 +46,12 @@
         <tbody>
         {% for income in income_by_month %}
             <tr>
-                <td title="{{ income.date }}">{{ income.date | date:"F Y" }}</td>
-                <td class="text-nowrap">{{ income.amount | comma }}</td>
-                <td>{% if income.category__parent_category__name %}
-                    <strong>{{ income.category__parent_category__name }} </strong>
-                    \ {% endif %}{{ income.category__name }}</td>
-                <td>{{ income.account__name_account }}</td>
-                <td>
+                <td class="text-center" title="{{ income.date }}">{{ income.date | date:"F Y" }}</td>
+                <td class="text-end text-nowrap">{{ income.amount | comma }}</td>
+                <td class="text-center">{% if income.category__parent_category__name %}
+                    <strong>{{ income.category__parent_category__name }} </strong>\ {% endif %}{{ income.category__name }}</td>
+                <td class="text-center">{{ income.account__name_account }}</td>
+                <td class="text-center">
                     <div class="table-buttons">
                         <a href="{% url 'income:change' income.id %}"
                            class="change-object-button btn btn-info border-0 btn-sm me-1"
@@ -98,33 +95,17 @@
                             </button>
                         </form>
                     </div>
-                    <!-- /.table-buttons -->
                 </td>
-            </tr>
-        {% empty %}
-            <tr>
-                <td colspan="5">{% translate 'Информация о доходах отсутствует!' %}</td>
             </tr>
         {% endfor %}
         </tbody>
-        <tfoot>
-        {% if total_amount_page and total_amount_period %}
-            <tr>
-                <th colspan="5" class="text-end">
-                    <div class="d-flex flex-column align-items-end">
-                        <span><strong>{% translate 'Итого за страницу:' %}</strong> {{ total_amount_page|comma }}</span>
-                        <span><strong>{% translate 'Итого за период:' %}</strong> {{ total_amount_period|comma }}</span>
-                    </div>
-                </th>
-            </tr>
-        {% endif %}
-        </tfoot>
     </table>
 </div>
 
 {% if chart_labels and chart_values %}
 
-<script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
 <script nonce="{{request.csp_nonce}}">
     const labels = JSON.parse(document.getElementById('chart-labels').textContent);
     const values = JSON.parse(document.getElementById('chart-values').textContent);

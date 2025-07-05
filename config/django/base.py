@@ -197,60 +197,72 @@ additional_script_src = list(
     filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
 )
 CONTENT_SECURITY_POLICY = {
-    'EXCLUDE_URL_PREFIXES': ['/admin'],
-    'DIRECTIVES': {
-        'default-src': [
+    "EXCLUDE_URL_PREFIXES": ["/admin"],
+    "DIRECTIVES": {
+        "default-src": [
             SELF,
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.datatables.net",
+            "https://cdnjs.cloudflare.com",
         ]
         + additional_script_src,
-        'script-src': [
+        "script-src": [
             SELF,
             NONCE,
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.datatables.net",
+            "https://cdnjs.cloudflare.com",
         ]
         + additional_script_src,
-        'img-src': [
+        "img-src": [
             SELF,
             NONCE,
-            'data:',
+            "data:",
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.datatables.net",
+            "https://cdnjs.cloudflare.com",
         ],
-        'style-src': [
+        "style-src": [
             SELF,
             NONCE,
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.datatables.net",
+            "https://cdnjs.cloudflare.com",
         ]
         + additional_script_src,
-        'font-src': [
+        "font-src": [
             SELF,
             NONCE,
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.datatables.net",
+            "https://cdnjs.cloudflare.com",
         ]
         + additional_script_src,
-        'frame-ancestors': [
+        "frame-ancestors": [
             SELF,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
+            "https://cdn.jsdelivr.net",
+            "https://unpkg.com",
+            "https://htmx.org",
+            "https://cdn.datatables.net",
+            "https://cdnjs.cloudflare.com",
         ]
         + additional_script_src,
-        'report_uri': [os.getenv('SENTRY_ENDPOINT')],
+        "report_uri": [os.getenv("SENTRY_ENDPOINT")],
     },
 }
 

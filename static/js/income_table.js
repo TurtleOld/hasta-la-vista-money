@@ -1,8 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const incomeTableContainer = document.getElementById('income-table');
-    if (!incomeTableContainer) return;
-
-    const table = incomeTableContainer.querySelector('table');
+    const table = document.getElementById('income-table');
     if (!table) return;
 
     const headers = table.querySelectorAll('th.sortable');
