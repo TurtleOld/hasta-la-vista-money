@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     window.expenseTabulator = new Tabulator('#expense-table', {
+        theme: 'bootstrap5',
         ajaxURL: '/expense/ajax/expense_data/',
         ajaxParams: function() {
             return { group_id: getGroupId() };
@@ -27,38 +28,29 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         placeholder: 'Нет данных для отображения. Добавьте первый расход!',
         columns: [
-            { title: 'Категория', field: 'category_name', headerFilter: 'input',
-                formatter: function(cell) {
-                    const data = cell.getRow().getData();
-                    if (data.is_receipt) {
-                        return `<span class="badge bg-info text-dark">Покупки по чекам</span>`;
-                    }
-                    return cell.getValue();
-                }
-            },
-            { title: 'Счет', field: 'account_name', headerFilter: 'input' },
-            { title: 'Сумма', field: 'amount', formatter: 'money', formatterParams: { decimal: ",", thousand: " ", precision: 2 }, hozAlign: 'right', headerFilter: 'number' },
-            { title: 'Дата', field: 'date', headerFilter: 'input' },
-            { title: 'Пользователь', field: 'user_name'},
+            { title: 'Категория', field: 'category_name', headerFilter: 'input', cssClass: 'text-success' },
+            { title: 'Счет', field: 'account_name', headerFilter: 'input', cssClass: 'text-primary' },
+            { title: 'Сумма', field: 'amount', formatter: 'money', formatterParams: { decimal: ",", thousand: " ", precision: 2 }, hozAlign: 'right', headerFilter: 'number', cssClass: 'fw-bold text-success' },
+            { title: 'Дата', field: 'date', headerFilter: 'input', cssClass: 'text-secondary' },
+            { title: 'Пользователь', field: 'user_name', cssClass: 'text-muted' },
             { title: 'Действия',
                 formatter: function(cell) {
                     const data = cell.getRow().getData();
                     const isOwner = data.user_id === currentUserId;
                     if (data.is_receipt) {
-                        // Для чеков — только иконка/ссылка на чек или бейдж
-                        return `<span class="badge bg-secondary">Чек</span>`;
+                        return `<span class="badge bg-info">Чек</span>`;
                     }
                     let buttons = '';
                     if (isOwner) {
-                        buttons += `<button class="btn btn-sm btn-outline-primary me-1" onclick="editExpense(${data.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>`;
-                        buttons += `<button class="btn btn-sm btn-outline-warning me-1" onclick="copyExpense(${data.id})" title="Копировать"><i class="bi bi-files"></i></button>`;
+                        buttons += `<button class="btn btn-sm btn-outline-success me-1" onclick="editExpense(${data.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>`;
+                        buttons += `<button class="btn btn-sm btn-outline-primary me-1" onclick="copyExpense(${data.id})" title="Копировать"><i class="bi bi-files"></i></button>`;
                         buttons += `<button class="btn btn-sm btn-outline-danger" onclick="deleteExpense(${data.id})" title="Удалить"><i class="bi bi-trash"></i></button>`;
                     } else {
                         buttons += `<span class="text-muted">Только просмотр</span>`;
                     }
                     return buttons;
                 },
-                headerSort: false, hozAlign: 'center'
+                headerSort: false, hozAlign: 'center', cssClass: 'text-center'
             }
         ],
         layout: 'fitColumns',
@@ -74,9 +66,12 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         },
         rowFormatter: function(row) {
-            const data = row.getData();
-            if (data.user_id !== currentUserId) {
-                row.getElement().classList.add('table-foreign');
+            const el = row.getElement();
+            // Мягкие полосы только для чётных строк
+            if(row.getPosition(true) % 2 === 0) {
+                el.classList.add('bg-success', 'bg-opacity-10');
+            } else {
+                el.classList.remove('bg-success', 'bg-opacity-10');
             }
         },
         tableBuilt: function() {
@@ -103,7 +98,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
-// Вспомогательные функции для действий (заглушки)
+// Вспомогательные функции для действий (заглушка)
 function editExpense(id) {
     alert('Редактировать расход: ' + id);
 }

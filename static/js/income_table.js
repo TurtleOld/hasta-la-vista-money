@@ -1,68 +1,315 @@
+/* global Tabulator */
 document.addEventListener('DOMContentLoaded', function () {
+    // Функция получения ID группы
+    function getGroupId() {
+        const groupSelect = document.getElementById('income-group-select');
+        return groupSelect ? groupSelect.value : 'my';
+    }
+
+    // Получаем текущий user id из data-атрибута таблицы
     const table = document.getElementById('income-table');
-    if (!table) return;
+    const currentUserId = table ? parseInt(table.dataset.currentUserId) : null;
 
-    const headers = table.querySelectorAll('th.sortable');
-    let sortDirection = {};
-
-    const validSortTypes = ['amount', 'date', 'category', 'account'];
-
-    function isValidSortType(type) {
-        return validSortTypes.includes(type);
+    if (typeof Tabulator === 'undefined') {
+        console.error('Tabulator не загружен');
+        return;
     }
 
-    function compareRows(a, b, type, dir) {
-        let valA = a, valB = b;
-        if (type === 'amount') {
-            valA = parseFloat(a.replace(/\s/g, '').replace(',', '.'));
-            valB = parseFloat(b.replace(/\s/g, '').replace(',', '.'));
-        } else if (type === 'date') {
-            // Ожидается формат "Месяц Год" или ISO
-            valA = Date.parse(a) || a;
-            valB = Date.parse(b) || b;
-        } else {
-            valA = a.toLowerCase();
-            valB = b.toLowerCase();
-        }
-        if (valA < valB) return dir === 'asc' ? -1 : 1;
-        if (valA > valB) return dir === 'asc' ? 1 : -1;
-        return 0;
+    // Добавляем CSS класс для стилизации
+    if (table) {
+        table.classList.add('income-table');
     }
 
-    headers.forEach((header, idx) => {
-        header.addEventListener('click', function () {
-            const type = header.getAttribute('data-sort');
+    // Показываем skeleton loader до загрузки данных
+    const skeleton = document.getElementById('income-skeleton');
+    if (skeleton) {
+        skeleton.style.display = '';
+    }
 
-            // Валидация типа сортировки
-            if (!isValidSortType(type)) {
-                console.warn('Invalid sort type:', type);
-                return;
+    // Создание Tabulator таблицы
+    window.incomeTabulator = new Tabulator("#income-table", {
+        theme: 'bootstrap5',
+        ajaxURL: '/income/ajax/income_data/',
+        ajaxParams: function() {
+            return {
+                group_id: getGroupId()
+            };
+        },
+        ajaxResponse: function(url, params, response) {
+            if (table) table.classList.remove('d-none');
+            if (skeleton) skeleton.style.display = 'none';
+            return response.data || response;
+        },
+        placeholder: 'Нет данных для отображения. Добавьте первый доход!',
+        columns: [
+            {
+                title: "Категория",
+                field: "category_name",
+                headerFilter: "input",
+                cssClass: 'text-success'
+            },
+            {
+                title: "Счет",
+                field: "account_name",
+                headerFilter: "input",
+                cssClass: 'text-primary'
+            },
+            {
+                title: "Сумма",
+                field: "amount",
+                formatter: "money",
+                formatterParams: {
+                    decimal: ",",
+                    thousand: " ",
+                    precision: 2
+                },
+                headerFilter: "number",
+                hozAlign: "right",
+                cssClass: 'fw-bold text-success'
+            },
+            {
+                title: "Дата",
+                field: "date",
+                headerFilter: "input",
+                cssClass: 'text-secondary'
+            },
+            {
+                title: "Пользователь",
+                field: "user_name",
+                cssClass: 'text-muted'
+            },
+            {
+                title: "Действия",
+                formatter: function(cell) {
+                    const data = cell.getRow().getData();
+                    const isOwner = data.user_id === currentUserId;
+                    let buttons = '';
+                    if (isOwner) {
+                        buttons += `<button class="btn btn-sm btn-outline-success me-1" onclick="editIncome(${data.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>`;
+                        buttons += `<button class="btn btn-sm btn-outline-primary me-1" onclick="copyIncome(${data.id})" title="Копировать"><i class="bi bi-files"></i></button>`;
+                        buttons += `<button class="btn btn-sm btn-outline-danger" onclick="deleteIncome(${data.id})" title="Удалить"><i class="bi bi-trash"></i></button>`;
+                    } else {
+                        buttons += `<span class="text-muted">Только просмотр</span>`;
+                    }
+                    return buttons;
+                },
+                headerSort: false,
+                hozAlign: "center",
+                cssClass: 'text-center'
             }
-
-            const tbody = table.querySelector('tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => row.querySelectorAll('td').length);
-            const dir = sortDirection[type] === 'asc' ? 'desc' : 'asc';
-            sortDirection = {};
-            sortDirection[type] = dir;
-
-            // Сбросить индикаторы
-            headers.forEach(h => h.querySelector('.sort-indicator').textContent = '');
-            header.querySelector('.sort-indicator').textContent = dir === 'asc' ? '▲' : '▼';
-
-            rows.sort((rowA, rowB) => {
-                const cellsA = rowA.querySelectorAll('td');
-                const cellsB = rowB.querySelectorAll('td');
-
-                // Проверка валидности индекса
-                if (idx >= cellsA.length || idx >= cellsB.length) {
-                    return 0;
+        ],
+        layout: "fitColumns",
+        pagination: true,
+        paginationSize: 25,
+        paginationSizeSelector: [10, 25, 50, 100],
+        paginationCounter: "rows",
+        locale: "ru-ru",
+        langs: {
+            "ru-ru": {
+                "pagination": {
+                    "first": "Первая",
+                    "first_title": "Первая страница",
+                    "last": "Последняя",
+                    "last_title": "Последняя страница",
+                    "prev": "Предыдущая",
+                    "prev_title": "Предыдущая страница",
+                    "next": "Следующая",
+                    "next_title": "Следующая страница"
+                },
+                "headerFilters": {
+                    "default": "фильтр столбца",
+                    "columns": {
+                        "name": "фильтр имени"
+                    }
                 }
+            }
+        },
+        rowFormatter: function(row) {
+            const el = row.getElement();
+            // Мягкие полосы только для чётных строк
+            if(row.getPosition(true) % 2 === 0) {
+                el.classList.add('bg-success', 'bg-opacity-10');
+            } else {
+                el.classList.remove('bg-success', 'bg-opacity-10');
+            }
+        },
+        tableBuilt: function() {
+            if (table) table.classList.remove('d-none');
+            if (skeleton) skeleton.style.display = 'none';
+        }
+    });
 
-                let cellA = cellsA[idx].textContent.trim();
-                let cellB = cellsB[idx].textContent.trim();
-                return compareRows(cellA, cellB, type, dir);
-            });
-            rows.forEach(row => tbody.appendChild(row));
+    // Убираем d-none сразу после инициализации (на всякий случай)
+    const tableElem = document.getElementById('income-table');
+    if (tableElem) {
+        tableElem.classList.remove('d-none');
+    }
+
+    // Обработчик изменения группы
+    const groupSelect = document.getElementById('income-group-select');
+    if (groupSelect) {
+        groupSelect.addEventListener('change', function() {
+            window.incomeTabulator.setData('/income/ajax/income_data/', { group_id: getGroupId() });
         });
+    }
+
+    // Показать/скрыть фильтр групп
+    const toggleBtn = document.getElementById('toggle-group-filter');
+    const filterBlock = document.getElementById('income-group-filter-block');
+    if (toggleBtn && filterBlock) {
+        toggleBtn.addEventListener('click', function() {
+            filterBlock.classList.toggle('d-none');
+        });
+    }
+
+    // Обработчик для кнопки добавления нового дохода
+    const addIncomeBtn = document.querySelector('[data-bs-target="#add-income"]');
+    if (addIncomeBtn) {
+        addIncomeBtn.addEventListener('click', function() {
+            // Сбросить форму
+            const form = document.getElementById('income-form');
+            if (form) {
+                form.reset();
+                form.action = '/income/create/';
+            }
+            // Изменить заголовок модального окна
+            const modalTitle = document.querySelector('#add-income .modal-title');
+            if (modalTitle) {
+                modalTitle.textContent = 'Добавить доход';
+            }
+        });
+    }
+
+    // Если произошла ошибка загрузки — скрыть skeleton
+    window.incomeTabulator.on("dataLoadError", function(){
+        if (skeleton) {
+            skeleton.style.display = 'none';
+        }
     });
 });
+
+// Вспомогательные функции
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showNotification(message, type = 'info') {
+    // Простая реализация уведомлений
+    const alertClass = type === 'success' ? 'alert-success' :
+                      type === 'error' ? 'alert-danger' : 'alert-info';
+
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+    alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(alert);
+
+    // Автоматически скрыть через 5 секунд
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.remove();
+        }
+    }, 5000);
+}
+
+// Функции редактирования
+function editIncome(id) {
+    // Открыть модальное окно редактирования
+    const modal = new bootstrap.Modal(document.getElementById('add-income'));
+    // Загрузить данные дохода
+    loadIncomeData(id);
+    modal.show();
+}
+
+function copyIncome(id) {
+    fetch(`/income/${id}/copy/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.incomeTabulator.reloadData();
+            showNotification('Доход скопирован', 'success');
+        } else {
+            showNotification('Ошибка копирования', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Ошибка копирования', 'error');
+    });
+}
+
+function deleteIncome(id) {
+    if (confirm('Вы уверены, что хотите удалить этот доход?')) {
+        fetch(`/income/delete/${id}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.incomeTabulator.reloadData();
+                showNotification('Доход удален', 'success');
+            } else {
+                showNotification('Ошибка удаления', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Ошибка удаления', 'error');
+        });
+    }
+}
+
+function loadIncomeData(id) {
+    fetch(`/income/get/${id}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const income = data.income;
+                const form = document.getElementById('income-form');
+
+                // Заполнить форму данными
+                form.querySelector('[name="category"]').value = income.category_id;
+                form.querySelector('[name="account"]').value = income.account_id;
+                form.querySelector('[name="amount"]').value = income.amount;
+                form.querySelector('[name="date"]').value = income.date;
+
+                // Изменить action формы на редактирование
+                form.action = `/income/change/${id}/`;
+
+                // Изменить заголовок модального окна
+                const modalTitle = document.querySelector('#add-income .modal-title');
+                if (modalTitle) {
+                    modalTitle.textContent = 'Редактировать доход';
+                }
+            } else {
+                showNotification('Ошибка загрузки данных', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('Ошибка загрузки данных', 'error');
+        });
+}
