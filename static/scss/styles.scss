@@ -9,6 +9,7 @@ $table-striped-bg: #d1f5e0 !important;
 @import "fonts";
 @import "mobile";
 @import "loan";
+@import "tabulator_income";
 
 
 .credit-only-field-container {
@@ -920,4 +921,39 @@ div.dtsp-searchPane .dtsp-paneInputButton {
 }
 .dtsp-title {
     display: none !important;
+}
+
+.tabulator {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #dee2e6;
+    font-size: 0.95rem;
+    background: #fff;
+}
+.tabulator-header {
+    background: #f8f9fa;
+    font-weight: bold;
+    border-radius: 8px 8px 0 0;
+}
+.tabulator-row {
+    transition: background 0.2s;
+    width: 100% !important;
+}
+.tabulator-row:nth-child(even) {
+    background: #f6f6f6;
+}
+.tabulator-row:hover {
+    background: #e9ecef;
+}
+.tabulator-cell {
+    padding: 0.5rem 0.75rem;
+}
+.tabulator-footer {
+    background: #f8f9fa;
+    border-radius: 0 0 8px 8px;
+}
+.tabulator .btn {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.9rem;
+    border-radius: 4px;
 }
