@@ -99,13 +99,14 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // Вспомогательные функции для действий (заглушка)
-function editExpense(id) {
+function editExpense(id) {  // eslint-disable-line no-unused-vars
+
     alert('Редактировать расход: ' + id);
 }
-function copyExpense(id) {
+function copyExpense(id) {  // eslint-disable-line no-unused-vars
     alert('Копировать расход: ' + id);
 }
-function deleteExpense(id) {
+function deleteExpense(id) {  // eslint-disable-line no-unused-vars
     if (confirm('Вы уверены, что хотите удалить этот расход?')) {
         alert('Удалить расход: ' + id);
     }

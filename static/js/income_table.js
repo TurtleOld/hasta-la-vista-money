@@ -1,4 +1,4 @@
-/* global Tabulator */
+/* global Tabulator, bootstrap */
 document.addEventListener('DOMContentLoaded', function () {
     // Функция получения ID группы
     function getGroupId() {
@@ -190,11 +190,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Вспомогательные функции
 function getCookie(name) {
+    // Разрешаем только буквы, цифры, дефис и подчёркивание
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        return null;
+    }
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
         const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
+        for (const cookieRaw of cookies) {
+            const cookie = cookieRaw.trim();
             if (cookie.substring(0, name.length + 1) === (name + '=')) {
                 cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
                 break;
@@ -205,21 +209,20 @@ function getCookie(name) {
 }
 
 function showNotification(message, type = 'info') {
-    // Простая реализация уведомлений
     const alertClass = type === 'success' ? 'alert-success' :
                       type === 'error' ? 'alert-danger' : 'alert-info';
-
     const alert = document.createElement('div');
     alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
     alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    alert.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-
+    const span = document.createElement('span');
+    span.textContent = message;
+    alert.appendChild(span);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn-close';
+    closeBtn.setAttribute('data-bs-dismiss', 'alert');
+    alert.appendChild(closeBtn);
     document.body.appendChild(alert);
-
-    // Автоматически скрыть через 5 секунд
     setTimeout(() => {
         if (alert.parentNode) {
             alert.remove();
@@ -228,15 +231,13 @@ function showNotification(message, type = 'info') {
 }
 
 // Функции редактирования
-function editIncome(id) {
-    // Открыть модальное окно редактирования
+function editIncome(id) { // eslint-disable-line no-unused-vars
     const modal = new bootstrap.Modal(document.getElementById('add-income'));
-    // Загрузить данные дохода
     loadIncomeData(id);
     modal.show();
 }
 
-function copyIncome(id) {
+function copyIncome(id) { // eslint-disable-line no-unused-vars
     fetch(`/income/${id}/copy/`, {
         method: 'POST',
         headers: {
@@ -258,7 +259,7 @@ function copyIncome(id) {
     });
 }
 
-function deleteIncome(id) {
+function deleteIncome(id) { // eslint-disable-line no-unused-vars
     if (confirm('Вы уверены, что хотите удалить этот доход?')) {
         fetch(`/income/delete/${id}/`, {
             method: 'POST',
