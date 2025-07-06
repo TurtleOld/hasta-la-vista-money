@@ -17,9 +17,49 @@
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha512-fw7f+TcMjTb7bpbLJZlP8g2Y4XcCyFZW8uy8HsRZsH/SwbMw0plKHFHr99DN3l04VsYNwvzicUX/6qurvIxbxw==" crossorigin="anonymous">
-        <link nonce="{{request.csp_nonce}}" href="https://cdn.datatables.net/v/bs5/dt-2.3.2/af-2.7.0/b-3.2.4/b-colvis-3.2.4/b-print-3.2.4/cr-2.1.1/cc-1.0.6/date-1.5.6/fc-5.0.4/fh-4.0.3/kt-2.12.1/r-3.0.5/rg-1.5.2/rr-1.5.0/sc-2.4.3/sb-1.8.3/sp-2.3.3/sl-3.0.1/sr-1.4.1/datatables.min.css" rel="stylesheet" integrity="sha384-R50pBTTquCFn60/cGWsyT7WRj+HrM4hq0/QLqviYafv7/usoZxwM3oA4FQ/dO47F" crossorigin="anonymous">
-
-
+        <link href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
+        <style nonce="{{request.csp_nonce}}">
+            /* Стили для Tabulator */
+            .tabulator {
+                font-size: 0.9rem;
+                border: 1px solid #dee2e6;
+            }
+            .tabulator-header {
+                background-color: #f8f9fa;
+                border-bottom: 2px solid #dee2e6;
+            }
+            .tabulator-row {
+                border-bottom: 1px solid #dee2e6;
+            }
+            .tabulator-row:hover {
+                background-color: #f8f9fa;
+            }
+            .table-foreign {
+                background-color: #fff3cd !important;
+            }
+            .tabulator-cell {
+                padding: 0.5rem;
+                vertical-align: middle;
+            }
+            .tabulator-footer {
+                background-color: #f8f9fa;
+                border-top: 1px solid #dee2e6;
+            }
+            .tabulator-paginator {
+                background-color: #f8f9fa;
+            }
+            .tabulator-page {
+                border: 1px solid #dee2e6;
+                background-color: white;
+            }
+            .tabulator-page:hover {
+                background-color: #e9ecef;
+            }
+            .tabulator-page[data-page="active"] {
+                background-color: #0d6efd;
+                color: white;
+            }
+        </style>
     {% endblock %}
 </head>
 <body class="bg-white">
@@ -50,8 +90,7 @@
     <script nonce="{{request.csp_nonce}}" src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/jquery-3.7.1.min.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}" src="https://cdn.datatables.net/2.3.2/js/dataTables.js"></script>
-    <script nonce="{{request.csp_nonce}}" src="https://cdn.datatables.net/v/bs5/dt-2.3.2/af-2.7.0/b-3.2.4/b-colvis-3.2.4/b-print-3.2.4/cr-2.1.1/cc-1.0.6/date-1.5.6/fc-5.0.4/fh-4.0.3/kt-2.12.1/r-3.0.5/rg-1.5.2/rr-1.5.0/sc-2.4.3/sb-1.8.3/sp-2.3.3/sl-3.0.1/sr-1.4.1/datatables.min.js" integrity="sha384-4YDbF50GZZm6v6anmZSGTCmdTLVZI6b3/10rmFuBNPLOAQfesKooFho6MCsdVJPM" crossorigin="anonymous"></script>
+    <script nonce="{{request.csp_nonce}}" type="text/javascript" src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}?v={% word_hash %}"></script>
     {% if 'receipts' in request.path %}
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/tokens.js' %}?v={% word_hash %}"></script>
@@ -60,9 +99,12 @@
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/budget.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/income_table.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/income_group_filter.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/expense_group_filter.js' %}?v={% word_hash %}"></script>
+    {% if 'income' in request.path %}
+        <script nonce="{{request.csp_nonce}}" src="{% static 'js/income_table.js' %}?v={% word_hash %}"></script>
+    {% endif %}
+    {% if 'expense' in request.path %}
+        <script nonce="{{request.csp_nonce}}" src="{% static 'js/expense_table.js' %}?v={% word_hash %}"></script>
+    {% endif %}
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/account_group_filter.js' %}?v={% word_hash %}"></script>
     {% if 'loan' in request.path %}
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/loan.js' %}?v={% word_hash %}"></script>

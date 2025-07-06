@@ -11,7 +11,6 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils import formats
-from django.utils.html import escape
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, UpdateView
@@ -439,7 +438,7 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
 
 class IncomeDataAjaxView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
-        group_id = request.GET.get('group_id')
+        group_id = request.GET.get('group_id', 'my')
         user = request.user
         incomes = Income.objects.none()
 
@@ -453,32 +452,46 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
             except Group.DoesNotExist:
                 incomes = Income.objects.none()
 
+        # Подготовка данных для Tabulator
         data = []
         for income in incomes.select_related('category', 'account', 'user').all():
-            context = {
-                'income': income,
-                'csrf_token': request.META.get('CSRF_COOKIE', ''),
-            }
-            actions = render_to_string(
-                'income/_income_actions.html',
-                context,
-                request=request,
+            data.append(
+                {
+                    'id': income.id,
+                    'category_name': income.category.name if income.category else '',
+                    'account_name': income.account.name_account
+                    if income.account
+                    else '',
+                    'amount': float(income.amount),
+                    'date': income.date.strftime('%d.%m.%Y'),
+                    'user_name': income.user.username,
+                    'user_id': income.user.id,
+                },
             )
 
-            data.append(
-                [
-                    income.date.strftime('%B %Y'),
-                    f'{income.amount:,.2f}',
-                    escape(income.category.name if income.category else ''),
-                    escape(income.account.name_account if income.account else ''),
-                    escape(
-                        income.user.get_full_name() or income.user.username
-                        if income.user
-                        else '',
-                    ),
-                    actions,
-                    income.user.id,
-                    escape(income.user.username),
-                ],
-            )
-        return JsonResponse({'data': data})
+        # Tabulator ожидает массив данных напрямую
+        return JsonResponse(data, safe=False)
+
+
+class IncomeGetAjaxView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        income_id = kwargs.get('pk')
+        try:
+            income = Income.objects.get(id=income_id)
+            # Проверяем права доступа
+            if income.user != request.user:
+                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+
+            data = {
+                'success': True,
+                'income': {
+                    'id': income.id,
+                    'date': income.date.strftime('%Y-%m-%d'),
+                    'amount': float(income.amount),
+                    'category_id': income.category.id if income.category else None,
+                    'account_id': income.account.id if income.account else None,
+                },
+            }
+            return JsonResponse(data)
+        except Income.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Доход не найден'})

@@ -12,7 +12,6 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.formats import date_format
-from django.utils.html import escape
 from django.views import View
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
@@ -497,6 +496,7 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
                         'is_receipt': True,
                     },
                 )
+
         all_expenses = list(expenses) + receipt_expense_list
         context = {'expenses': all_expenses, 'request': request}
         html = render_to_string(
@@ -512,43 +512,74 @@ class ExpenseDataAjaxView(LoginRequiredMixin, View):
         group_id = request.GET.get('group_id')
         user = request.user
         expenses = Expense.objects.none()
+        receipt_expense_list = []
 
         if group_id == 'my' or not group_id:
             expenses = Expense.objects.filter(user=user)
+            group_users = [user]
         else:
             try:
                 group = Group.objects.get(pk=group_id)
-                users_in_group = group.user_set.all()
-                expenses = Expense.objects.filter(user__in=users_in_group)
+                group_users = list(group.user_set.all())
+                expenses = Expense.objects.filter(user__in=group_users)
             except Group.DoesNotExist:
+                group_users = []
                 expenses = Expense.objects.none()
+
+        if group_users:
+            receipts = Receipt.objects.filter(
+                user__in=group_users,
+                operation_type=1,
+            ).select_related('account', 'user')
+            for receipt in receipts:
+                print(receipt.total_sum, 'receipt')
+                receipt_expense_list.append(
+                    {
+                        'id': f'receipt_{receipt.pk}',
+                        'date': receipt.receipt_date.strftime('%d.%m.%Y')
+                        if receipt.receipt_date
+                        else '',
+                        'amount': float(receipt.total_sum)
+                        if receipt.total_sum is not None
+                        else 0,
+                        'category_name': 'Покупки по чекам',
+                        'account_name': receipt.account.name_account
+                        if receipt.account
+                        else '',
+                        'user_name': receipt.user.get_full_name()
+                        or receipt.user.username
+                        if receipt.user
+                        else '',
+                        'user_id': receipt.user.pk if receipt.user else None,
+                        'is_receipt': True,
+                        'receipt_id': receipt.pk,
+                        'actions': '',  # Нет кнопок для чеков
+                    },
+                )
 
         data = []
         for expense in expenses.select_related('category', 'account', 'user').all():
-            context = {
-                'expense': expense,
-                'csrf_token': request.META.get('CSRF_COOKIE', ''),
-            }
-            actions = render_to_string(
-                'expense/_expense_actions.html',
-                context,
-                request=request,
+            data.append(
+                {
+                    'id': expense.pk,
+                    'date': expense.date.strftime('%d.%m.%Y'),
+                    'amount': float(expense.amount)
+                    if expense.amount is not None
+                    else 0,
+                    'category_name': expense.category.name if expense.category else '',
+                    'account_name': expense.account.name_account
+                    if expense.account
+                    else '',
+                    'user_name': expense.user.get_full_name() or expense.user.username
+                    if expense.user
+                    else '',
+                    'user_id': expense.user.pk if expense.user else None,
+                    'is_receipt': False,
+                    'receipt_id': None,
+                    'actions': '',  # Будет формироваться на фронте
+                },
             )
 
-            data.append(
-                [
-                    expense.date.strftime('%B %Y'),
-                    f'{expense.amount:,.2f}',
-                    escape(expense.category.name if expense.category else ''),
-                    escape(expense.account.name_account if expense.account else ''),
-                    escape(
-                        expense.user.get_full_name() or expense.user.username
-                        if expense.user
-                        else '',
-                    ),
-                    actions,
-                    expense.user.id,
-                    escape(expense.user.username),
-                ],
-            )
-        return JsonResponse({'data': data})
+        # Склеиваем обычные расходы и чеки
+        all_data = data + receipt_expense_list
+        return JsonResponse({'data': all_data})

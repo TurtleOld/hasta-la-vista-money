@@ -201,6 +201,7 @@ CONTENT_SECURITY_POLICY = {
     'DIRECTIVES': {
         'default-src': [
             SELF,
+            NONCE,
             BASE_URL,
             'https://cdn.jsdelivr.net',
             'https://unpkg.com',
