@@ -1,3 +1,4 @@
+/* global DataTable */
 document.addEventListener('DOMContentLoaded', function () {
     function getGroupId() {
         const groupSelect = document.getElementById('income-group-select');
