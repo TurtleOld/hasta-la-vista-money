@@ -1,0 +1,374 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load csp %}
+{% load static %}
+{% load humanize %}
+{% load l10n %}
+{% load comma %}
+
+{% block title %}{% translate 'Кредиты' %}{% endblock %}
+
+{% block content %}
+<div class="loan-dashboard">
+    <div class="container-fluid">
+        <!-- Header Section -->
+        <div class="loan-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="loan-title">{% translate 'Управление кредитами' %}</h1>
+                    <p class="loan-subtitle">{% translate 'Отслеживайте ваши кредиты, платежи и графики погашения' %}</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{% url 'loan:create' %}" class="btn btn-loan-action btn-payment">
+                        <i class="bi bi-plus-circle me-2"></i>{% translate 'Добавить кредит' %}
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Section -->
+        {% if loan %}
+        <div class="loan-stats">
+            <div class="stat-card">
+                <div class="stat-icon total-loans">
+                    <i class="bi bi-credit-card"></i>
+                </div>
+                <div class="stat-number">
+                    {% if loan %}
+                        {{ loan.count }}
+                    {% else %}
+                        0
+                    {% endif %}
+                </div>
+                <div class="stat-label">{% translate 'Активных кредитов' %}</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon total-amount">
+                    <i class="bi bi-currency-dollar"></i>
+                </div>
+                <div class="stat-number">
+                    {{ total_loan_amount|comma }} ₽
+                </div>
+                <div class="stat-label">{% translate 'Общая сумма кредитов' %}</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon total-interest">
+                    <i class="bi bi-percent"></i>
+                </div>
+                <div class="stat-number">
+                    {{ total_overpayment|comma }} ₽
+                </div>
+                <div class="stat-label">{% translate 'Общая переплата' %}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Help Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card loan-form-container">
+                    <details class="loan-type-info">
+                        <summary class="btn btn-outline-info btn-sm mb-2">
+                            <i class="bi bi-info-circle me-2"></i>{% translate 'Подсказка по расчетам' %}
+                        </summary>
+                        <div class="mt-3">
+                            <p><strong>{% translate 'Предупреждение:' %}</strong> {% translate 'Поскольку каждый банк производит расчет коэффициента самостоятельно, как следствие, возникают различия в округлении получившихся цифр коэффициента. Данные, предоставленные банком и на этой странице, могут не совпадать!' %}</p>
+                            <p>{% translate 'Сведения, указанные банком, являются приоритетными, на текущей странице - справочной информацией для лучшего понимания по планированию бюджета!' %}</p>
+
+                            <h6 class="mt-3">{% translate 'Формулы расчета:' %}</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>{% translate 'Ежемесячная ставка:' %}</strong><br>
+                                    <code>Ежемесячная ставка = Ежегодная ставка / 12 месяцев</code>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>{% translate 'Коэффициент:' %}</strong><br>
+                                    <code>Коэффициент = Ежемесячная ставка * (1 + Ежемесячная ставка) ^ Срок кредита / ((1 + Ежемесячная ставка) ^ Срок кредита - 1)</code>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loans List -->
+        {% if loan %}
+        <div class="row">
+            {% for item_loan in loan %}
+            <div class="col-lg-6 col-xl-4 mb-4">
+                <div class="loan-card">
+                    <div class="loan-card-header">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="loan-number">{% translate 'Кредит №' %} {{ item_loan.pk }}</div>
+                                <div class="loan-status">{{ item_loan.get_type_loan_display }}</div>
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#loan-{{ item_loan.pk }}">
+                                        <i class="bi bi-eye me-2"></i>{% translate 'Просмотр' %}
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#payment-{{ item_loan.pk }}">
+                                        <i class="bi bi-cash me-2"></i>{% translate 'Внести платеж' %}
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form method="post" action="{{ item_loan.get_absolute_url }}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button class="dropdown-item text-danger" type="submit" name="delete_loan_button">
+                                                <i class="bi bi-trash me-2"></i>{% translate 'Удалить' %}
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="loan-card-body">
+                        <div class="loan-info-grid">
+                            <div class="loan-info-item amount">
+                                <div class="info-label">{% translate 'Сумма кредита' %}</div>
+                                <div class="info-value">{{ item_loan.loan_amount|floatformat:0 }} ₽</div>
+                            </div>
+                            <div class="loan-info-item rate">
+                                <div class="info-label">{% translate 'Ставка' %}</div>
+                                <div class="info-value">{{ item_loan.annual_interest_rate }}%</div>
+                            </div>
+                            <div class="loan-info-item period">
+                                <div class="info-label">{% translate 'Срок' %}</div>
+                                <div class="info-value">{{ item_loan.period_loan }} {% translate 'мес.' %}</div>
+                            </div>
+                        </div>
+
+                        <div class="loan-summary">
+                            <div class="summary-row">
+                                <span>{% translate 'Общая сумма к возврату:' %}</span>
+                                <span class="fw-bold">{{ item_loan.calculate_total_amount_loan_with_interest|floatformat:0 }} ₽</span>
+                            </div>
+                            <div class="summary-row">
+                                <span>{% translate 'Переплата:' %}</span>
+                                <span class="fw-bold text-danger">{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }} ₽</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="loan-card-footer">
+                        <div class="action-buttons">
+                            <button class="btn btn-loan-action btn-payment" data-bs-toggle="modal" data-bs-target="#loan-{{ item_loan.pk }}">
+                                <i class="bi bi-eye me-1"></i>{% translate 'График' %}
+                            </button>
+                            <button class="btn btn-loan-action btn-edit" data-bs-toggle="modal" data-bs-target="#payment-{{ item_loan.pk }}">
+                                <i class="bi bi-cash me-1"></i>{% translate 'Платеж' %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="loan-empty">
+            <div class="empty-icon">
+                <i class="bi bi-credit-card"></i>
+            </div>
+            <div class="empty-title">{% translate 'У вас пока нет кредитов' %}</div>
+            <div class="empty-description">{% translate 'Добавьте свой первый кредит для начала отслеживания' %}</div>
+            <a href="{% url 'loan:create' %}" class="btn btn-loan-action btn-payment">
+                <i class="bi bi-plus-circle me-2"></i>{% translate 'Добавить кредит' %}
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Loan Details Modal -->
+{% for item_loan in loan %}
+<div id="loan-{{ item_loan.pk }}" class="modal fade loan-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-credit-card me-2"></i>{% translate 'Кредит №' %} {{ item_loan.pk }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Loan Summary -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title text-primary">{% translate 'Основная информация' %}</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">{% translate 'Сумма' %}</small>
+                                        <div class="fw-bold">{{ item_loan.loan_amount|floatformat:0 }} ₽</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">{% translate 'Ставка' %}</small>
+                                        <div class="fw-bold">{{ item_loan.annual_interest_rate }}%</div>
+                                    </div>
+                                    <div class="col-6 mt-2">
+                                        <small class="text-muted">{% translate 'Срок' %}</small>
+                                        <div class="fw-bold">{{ item_loan.period_loan }} {% translate 'мес.' %}</div>
+                                    </div>
+                                    <div class="col-6 mt-2">
+                                        <small class="text-muted">{% translate 'Тип' %}</small>
+                                        <div class="fw-bold">{{ item_loan.get_type_loan_display }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title text-success">{% translate 'Финансовая сводка' %}</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">{% translate 'К возврату' %}</small>
+                                        <div class="fw-bold text-success">{{ item_loan.calculate_total_amount_loan_with_interest|floatformat:0 }} ₽</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">{% translate 'Переплата' %}</small>
+                                        <div class="fw-bold text-danger">{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }} ₽</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Schedule -->
+                <div class="payment-schedule">
+                    <div class="schedule-header">
+                        <h3><i class="bi bi-calendar3 me-2"></i>{% translate 'График платежей' %}</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table schedule-table">
+                            <thead>
+                                <tr>
+                                    <th>{% translate 'Месяц' %}</th>
+                                    <th>{% translate 'Остаток' %}</th>
+                                    <th>{% translate 'Ежемесячный платеж' %}</th>
+                                    <th>{% translate 'Проценты' %}</th>
+                                    <th>{% translate 'Основной долг' %}</th>
+                                    <th>{% translate 'Статус' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in result_calculate %}
+                                    {% if payment.loan.id == item_loan.pk %}
+                                    <tr class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}paid{% endif %}{% endfor %}">
+                                        <td>{{ payment.date|date:"d.m.Y" }}</td>
+                                        <td>{{ payment.balance|floatformat:0 }} ₽</td>
+                                        <td>{{ payment.monthly_payment|floatformat:2 }} ₽</td>
+                                        <td>{{ payment.interest|floatformat:0 }} ₽</td>
+                                        <td>{{ payment.principal_payment|floatformat:0 }} ₽</td>
+                                        <td>
+                                            {% for payment_make in payment_make_loan %}
+                                                {% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}
+                                                    <span class="badge bg-success">{% translate 'Оплачен' %}</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% translate 'Закрыть' %}</button>
+                <button type="button" class="btn btn-loan-action btn-payment" data-bs-toggle="modal" data-bs-target="#payment-{{ item_loan.pk }}" data-bs-dismiss="modal">
+                    <i class="bi bi-cash me-2"></i>{% translate 'Внести платеж' %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div id="payment-{{ item_loan.pk }}" class="modal fade loan-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-cash me-2"></i>{% translate 'Внести платеж по кредиту №' %}{{ item_loan.pk }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {{ payment_make_loan_form.media }}
+                <form class="ajax-form" method="POST" action="{% url 'loan:payment_create' %}">
+                    {% csrf_token %}
+                    {% if payment_make_loan_form %}
+                        {% for field in payment_make_loan_form %}
+                            <div class="form-group {% if field.errors %} has-error{% endif %}">
+                                {{ field|as_crispy_field }}
+                                {% if field.errors %}
+                                    {% for error in field.errors %}
+                                        <p class="help-block text-danger">{{ error }}</p>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% translate 'Отмена' %}</button>
+                <button type="submit" class="btn btn-loan-action btn-payment" form="payment-form-{{ item_loan.pk }}">
+                    <i class="bi bi-check-circle me-2"></i>{% translate 'Добавить платеж' %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Add loading states to forms
+    document.querySelectorAll('.ajax-form').forEach(function(form) {
+        form.addEventListener('submit', function() {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Загрузка...';
+                submitBtn.disabled = true;
+            }
+        });
+    });
+
+    // Add smooth scrolling to modals
+    document.querySelectorAll('[data-bs-toggle="modal"]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            setTimeout(function() {
+                const modal = document.querySelector('.modal.show');
+                if (modal) {
+                    modal.scrollTop = 0;
+                }
+            }, 300);
+        });
+    });
+});
+</script>
+{% endblock %}

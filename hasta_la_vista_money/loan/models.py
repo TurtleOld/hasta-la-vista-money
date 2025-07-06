@@ -46,26 +46,19 @@ class Loan(models.Model):
         ]
 
     def __str__(self):
-        return _(f'Кредит №{self.id} на сумму {self.loan_amount}')
+        return _(f'Кредит №{self.pk} на сумму {self.loan_amount}')
 
     def get_absolute_url(self):
-        return reverse('loan:delete', args=[self.id])
+        return reverse('loan:delete', args=[self.pk])
 
     @property
     def calculate_sum_monthly_payment(self):
-        monthly_payment = PaymentSchedule.objects.filter(
-            user=self.user,
-            loan_id=self.id,
-        ).aggregate(models.Sum('monthly_payment'))
+        from decimal import Decimal
 
-        total_monthly_payment = monthly_payment.get(
-            'monthly_payment__sum',
-        ) or decimal.Decimal('0.00')
-
-        if self.loan_amount:
-            return total_monthly_payment - decimal.Decimal(self.loan_amount)
-
-        return total_monthly_payment
+        payments = self.payment_schedule_loans.aggregate(
+            total=models.Sum('monthly_payment'),
+        )['total'] or Decimal('0.00')
+        return payments - Decimal(str(self.loan_amount))
 
     @property
     def calculate_total_amount_loan_with_interest(self):

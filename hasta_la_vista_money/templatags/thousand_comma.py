@@ -8,14 +8,13 @@ THOUSAND_MINUS_ONE = 999
 
 
 @register.filter
-def comma(number: float) -> str | None:
+def comma(number) -> str:
     """
     Функция разделения тысячных и миллионных.
-
-    :param number:
-    :type number: float
-    :return: str | None
     """
-    if number:
-        return f'{decimal.Decimal(number):,.2f}'.replace(',', ' ')
-    return decimal.Decimal(0)
+    try:
+        if number is None or number == '':
+            return '—'
+        return f'{decimal.Decimal(str(number)):,.2f}'.replace(',', ' ')
+    except (decimal.InvalidOperation, ValueError, TypeError):
+        return '—'
