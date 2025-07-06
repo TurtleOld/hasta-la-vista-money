@@ -197,72 +197,72 @@ additional_script_src = list(
     filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
 )
 CONTENT_SECURITY_POLICY = {
-    "EXCLUDE_URL_PREFIXES": ["/admin"],
-    "DIRECTIVES": {
-        "default-src": [
+    'EXCLUDE_URL_PREFIXES': ['/admin'],
+    'DIRECTIVES': {
+        'default-src': [
             SELF,
             BASE_URL,
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.datatables.net",
-            "https://cdnjs.cloudflare.com",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
+            'https://cdn.datatables.net',
+            'https://cdnjs.cloudflare.com',
         ]
         + additional_script_src,
-        "script-src": [
+        'script-src': [
             SELF,
             NONCE,
             BASE_URL,
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.datatables.net",
-            "https://cdnjs.cloudflare.com",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
+            'https://cdn.datatables.net',
+            'https://cdnjs.cloudflare.com',
         ]
         + additional_script_src,
-        "img-src": [
+        'img-src': [
             SELF,
             NONCE,
-            "data:",
+            'data:',
             BASE_URL,
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.datatables.net",
-            "https://cdnjs.cloudflare.com",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
+            'https://cdn.datatables.net',
+            'https://cdnjs.cloudflare.com',
         ],
-        "style-src": [
+        'style-src': [
             SELF,
             NONCE,
             BASE_URL,
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.datatables.net",
-            "https://cdnjs.cloudflare.com",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
+            'https://cdn.datatables.net',
+            'https://cdnjs.cloudflare.com',
         ]
         + additional_script_src,
-        "font-src": [
+        'font-src': [
             SELF,
             NONCE,
             BASE_URL,
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.datatables.net",
-            "https://cdnjs.cloudflare.com",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
+            'https://cdn.datatables.net',
+            'https://cdnjs.cloudflare.com',
         ]
         + additional_script_src,
-        "frame-ancestors": [
+        'frame-ancestors': [
             SELF,
-            "https://cdn.jsdelivr.net",
-            "https://unpkg.com",
-            "https://htmx.org",
-            "https://cdn.datatables.net",
-            "https://cdnjs.cloudflare.com",
+            'https://cdn.jsdelivr.net',
+            'https://unpkg.com',
+            'https://htmx.org',
+            'https://cdn.datatables.net',
+            'https://cdnjs.cloudflare.com',
         ]
         + additional_script_src,
-        "report_uri": [os.getenv("SENTRY_ENDPOINT")],
+        'report_uri': [os.getenv('SENTRY_ENDPOINT')],
     },
 }
 
@@ -378,22 +378,22 @@ structlog.configure(
 
 # Taskiq Configuration (Async Task Queue)
 TASKIQ_REDIS_URL = os.environ.get(
-    "TASKIQ_REDIS_URL",
-    "redis://localhost:6379/0",
+    'TASKIQ_REDIS_URL',
+    'redis://localhost:6379/0',
 )
-TASKIQ_BROKER_URL = os.environ.get("TASKIQ_BROKER_URL", TASKIQ_REDIS_URL)
+TASKIQ_BROKER_URL = os.environ.get('TASKIQ_BROKER_URL', TASKIQ_REDIS_URL)
 
 # Taskiq settings
 TASKIQ = {
-    "broker_url": TASKIQ_BROKER_URL,
-    "result_backend_url": TASKIQ_REDIS_URL,
-    "task_default_queue": "default",
-    "task_serializer": "json",
-    "result_serializer": "json",
-    "accept_content": ["json"],
-    "timezone": TIME_ZONE,
-    "enable_utc": True,
-    "task_track_started": True,
-    "task_time_limit": 30 * 60,  # 30 минут
-    "worker_max_tasks_per_child": 1000,
+    'broker_url': TASKIQ_BROKER_URL,
+    'result_backend_url': TASKIQ_REDIS_URL,
+    'task_default_queue': 'default',
+    'task_serializer': 'json',
+    'result_serializer': 'json',
+    'accept_content': ['json'],
+    'timezone': TIME_ZONE,
+    'enable_utc': True,
+    'task_track_started': True,
+    'task_time_limit': 30 * 60,  # 30 минут
+    'worker_max_tasks_per_child': 1000,
 }

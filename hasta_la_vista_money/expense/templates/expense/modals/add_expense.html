@@ -13,7 +13,7 @@
             </div>
             <div class="modal-body p-4">
                 {{ add_expense_form.media }}
-                <form class="ajax-form" method="POST" action="{% url 'expense:create' %}">
+                <form id="add-expense-form" class="ajax-form" method="POST" action="{% url 'expense:create' %}">
                     {% csrf_token %}
                     {% if add_expense_form %}
                         {% for field in add_expense_form %}
@@ -29,6 +29,7 @@
                             </div>
                         {% endfor %}
                     {% endif %}
+                    <div id="add-expense-errors" class="alert alert-danger d-none"></div>
                     <div class="d-grid mt-4">
                         <button type="submit" class="btn btn-success btn-lg">
                             <i class="bi bi-plus-circle me-2"></i>

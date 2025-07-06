@@ -52,7 +52,20 @@ class TestIncome(TestCase):
             'amount': TEST_AMOUNT,
         }
 
-        form = IncomeForm(data=new_income, user=self.user, depth=3)
+        # Get the category queryset for the user
+        income_categories = (
+            IncomeCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
+        form = IncomeForm(
+            data=new_income,
+            user=self.user,
+            depth=3,
+            category_queryset=income_categories,
+        )
         self.assertTrue(form.is_valid())
 
         response = self.client.post(url, data=new_income, follow=True)
@@ -62,18 +75,55 @@ class TestIncome(TestCase):
         """Test income update."""
         self.client.force_login(self.user)
         url = reverse_lazy('income:change', args=(self.income.pk,))
+
+        # Отладочная информация
+        print(f'Test user: {self.user} (pk={self.user.pk})')
+        print(
+            f'Test income_type: {self.income_type} (pk={self.income_type.pk}, user={self.income_type.user})',
+        )
+        print(
+            f'Test income: {self.income} (pk={self.income.pk}, user={self.income.user})',
+        )
+
         update_income = {
-            'user': self.user,
             'category': self.income_type.pk,
             'account': self.account.pk,
-            'date': '2023-06-30 22:31:54',
+            'date': '2023-06-30T22:31',
             'amount': NEW_TEST_AMOUNT,
         }
 
-        form = IncomeForm(data=update_income, user=self.user, depth=3)
+        # Get the category queryset for the user
+        income_categories = (
+            IncomeCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
+        print(f'Available categories for user: {[cat.pk for cat in income_categories]}')
+
+        form = IncomeForm(
+            data=update_income,
+            user=self.user,
+            depth=3,
+            category_queryset=income_categories,
+        )
         self.assertTrue(form.is_valid())
 
-        response = self.client.post(url, form.data)
+        response = self.client.post(url, update_income)
+        if response.status_code != constants.REDIRECTS:
+            # Попробуем вывести ошибки формы из контекста ответа
+            form_in_context = (
+                response.context.get('form')
+                if hasattr(response, 'context') and response.context
+                else None
+            )
+            if form_in_context is not None:
+                print('Form errors:', form_in_context.errors)
+                print('Non-field errors:', form_in_context.non_field_errors())
+            else:
+                print('No form in response context. Response content:')
+                print(response.content.decode())
         self.assertEqual(response.status_code, constants.REDIRECTS)
 
         updated_income = Income.objects.get(pk=self.income.pk)
@@ -97,7 +147,19 @@ class TestIncome(TestCase):
             'parent_category': self.parent_category.pk,
         }
 
-        form = AddCategoryIncomeForm(data=new_category, user=self.user, depth=3)
+        income_categories = (
+            IncomeCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
+        form = AddCategoryIncomeForm(
+            data=new_category,
+            user=self.user,
+            depth=3,
+            category_queryset=income_categories,
+        )
         self.assertTrue(form.is_valid())
 
     def test_category_income_delete(self):
@@ -122,6 +184,14 @@ class TestIncome(TestCase):
 
     def test_income_form_validation(self):
         """Test IncomeForm validation."""
+        # Get the category queryset for the user
+        income_categories = (
+            IncomeCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = IncomeForm(
             data={
                 'category': self.income_type.pk,
@@ -131,11 +201,20 @@ class TestIncome(TestCase):
             },
             user=self.user,
             depth=3,
+            category_queryset=income_categories,
         )
         self.assertTrue(form.is_valid())
 
     def test_income_form_invalid(self):
         """Test IncomeForm with invalid data."""
+        # Get the category queryset for the user
+        income_categories = (
+            IncomeCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = IncomeForm(
             data={
                 'category': self.income_type.pk,
@@ -143,11 +222,20 @@ class TestIncome(TestCase):
             },
             user=self.user,
             depth=3,
+            category_queryset=income_categories,
         )
         self.assertFalse(form.is_valid())
 
     def test_create_category_income_form_validation(self):
         """Test AddCategoryIncomeForm validation."""
+        # Get the category queryset for the user
+        income_categories = (
+            IncomeCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = AddCategoryIncomeForm(
             data={
                 'name': 'Test Category',
@@ -155,6 +243,7 @@ class TestIncome(TestCase):
             },
             user=self.user,
             depth=3,
+            category_queryset=income_categories,
         )
         self.assertTrue(form.is_valid())
 
@@ -388,7 +477,7 @@ class TestIncome(TestCase):
     def test_income_category_create_view_unauthenticated(self):
         """Test IncomeCategoryCreateView for unauthenticated user."""
         response = self.client.get(reverse_lazy('income:create_category'))
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_income_category_delete_view_unauthenticated(self):
         """Test IncomeCategoryDeleteView for unauthenticated user."""

@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('expense', '0003_expense_expense_exp_user_id_31bf86_idx_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -19,6 +18,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='expensecategory',
-            constraint=models.UniqueConstraint(fields=('user', 'name'), name='unique_user_category_expense'),
+            constraint=models.UniqueConstraint(
+                fields=('user', 'name'), name='unique_user_category_expense'
+            ),
         ),
     ]

@@ -104,10 +104,6 @@ class IncomeView(
             category_queryset=income_categories,
         )
 
-        income_form.fields['account'].queryset = (
-            Account.objects.filter(user=user).select_related('user').all()
-        )
-
         income_by_month = income_filter.qs
 
         pages_income = paginator_custom_view(
@@ -229,16 +225,34 @@ class IncomeUpdateView(
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         kwargs['depth'] = self.depth_limit
+
+        # Add category queryset for form validation
+        user = get_object_or_404(User, username=self.request.user)
+        income_categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        kwargs['category_queryset'] = income_categories
+
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         context = super().get_context_data(**kwargs)
-        form_class = self.get_form_class()
-        form = form_class(**self.get_form_kwargs())
-        form.fields['account'].queryset = (
-            Account.objects.filter(user=user).select_related('user').all()
+
+        income_categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
         )
+
+        form_class = self.get_form_class()
+        form_kwargs = self.get_form_kwargs()
+        form_kwargs['category_queryset'] = income_categories
+        form = form_class(**form_kwargs)
         context['income_form'] = form
         return context
 
@@ -334,7 +348,7 @@ class IncomeCategoryView(LoginRequiredMixin, ListView):
         return context
 
 
-class IncomeCategoryCreateView(CreateView):
+class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
     model = IncomeCategory
     template_name = 'income/add_category_income.html'
     form_class = AddCategoryIncomeForm
@@ -343,9 +357,19 @@ class IncomeCategoryCreateView(CreateView):
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
+
+        user = get_object_or_404(User, username=self.request.user)
+        categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         add_category_income_form = AddCategoryIncomeForm(
             user=self.request.user,
             depth=self.depth,
+            category_queryset=categories,
         )
         context['add_category_income_form'] = add_category_income_form
         return context
@@ -393,6 +417,7 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
         group_id = request.GET.get('group_id')
         user = request.user
         incomes = Income.objects.none()
+
         if group_id == 'my' or not group_id:
             incomes = Income.objects.filter(user=user)
         else:
@@ -402,6 +427,7 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
                 incomes = Income.objects.filter(user__in=users_in_group)
             except Group.DoesNotExist:
                 incomes = Income.objects.none()
+
         # Можно добавить сортировку и пагинацию при необходимости
         context = {
             'income_by_month': incomes,
@@ -411,11 +437,12 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
         return HttpResponse(html)
 
 
-class IncomeDataAjaxView(View):
+class IncomeDataAjaxView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         group_id = request.GET.get('group_id')
         user = request.user
         incomes = Income.objects.none()
+
         if group_id == 'my' or not group_id:
             incomes = Income.objects.filter(user=user)
         else:
@@ -425,25 +452,27 @@ class IncomeDataAjaxView(View):
                 incomes = Income.objects.filter(user__in=users_in_group)
             except Group.DoesNotExist:
                 incomes = Income.objects.none()
+
         data = []
-        for income in incomes.select_related('category', 'account').all():
+        for income in incomes.select_related('category', 'account', 'user').all():
+            csrf_token = request.META.get('CSRF_COOKIE', '')
             actions = f"""
                 <div class="table-buttons">
-                    <a href="/income/change/{income.id}/" class="change-object-button btn btn-info border-0 btn-sm me-1" title="Редактировать доход">
+                    <a href="/income/change/{income.pk}/" class="change-object-button btn btn-info border-0 btn-sm me-1" title="Редактировать доход">
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-pencil-fill" viewBox="0 0 16 16">
                             <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"></path>
                         </svg>
                     </a>
-                    <form method="post" action="/income/{income.id}/copy/" style="display:inline;">
-                        <input type="hidden" name="csrfmiddlewaretoken" value="">
+                    <form method="post" action="/income/{income.pk}/copy/" style="display:inline;">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">
                         <button class="btn btn-warning border-0 btn-sm me-1" type="submit" title="Скопировать доход">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16">
                                 <path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"></path>
                             </svg>
                         </button>
                     </form>
-                    <form method="post" action="/income/delete/{income.id}/" style="display:inline;">
-                        <input type="hidden" name="csrfmiddlewaretoken" value="">
+                    <form method="post" action="/income/delete/{income.pk}/" style="display:inline;">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">
                         <button class="remove-object-button btn btn-danger border-0 btn-sm" type="submit" name="delete_income_button" title="Удалить доход">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
                                 <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"></path>
@@ -459,7 +488,12 @@ class IncomeDataAjaxView(View):
                     f'{income.amount:,.2f}',
                     income.category.name if income.category else '',
                     income.account.name_account if income.account else '',
+                    income.user.get_full_name() or income.user.username
+                    if income.user
+                    else '',
                     actions,
+                    income.user.id,
+                    income.user.username,
                 ],
             )
         return JsonResponse({'data': data})

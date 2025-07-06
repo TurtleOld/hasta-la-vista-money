@@ -4,6 +4,10 @@ document.addEventListener('DOMContentLoaded', function () {
         return groupSelect ? groupSelect.value : 'my';
     }
 
+    // Получаем текущий user id из data-атрибута таблицы
+    const table = document.getElementById('income-table');
+    const currentUserId = table ? parseInt(table.dataset.currentUserId) : null;
+
     // Инициализация DataTable только один раз
     window.incomeDataTable = new DataTable('#income-table', {
         ajax: {
@@ -31,20 +35,13 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         },
         order: [[0, 'desc']],
-        columns: [
-            { title: "Дата" },
-            { title: "Сумма" },
-            { title: "Категория" },
-            { title: "Счёт" },
-            { title: "" }
-        ],
         columnDefs: [
             {
                 targets: 2, // Категория
                 searchPanes: { show: true }
             },
             {
-                targets: [0, 1, 3, 4],
+                targets: [0, 1, 3, 4, 5],
                 searchPanes: { show: false }
             },
             {
@@ -56,7 +53,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 }
             }
-        ]
+        ],
+        createdRow: function (row, data, dataIndex) {
+            const rowUserId = parseInt(data[6]);
+            if (currentUserId && rowUserId && rowUserId !== currentUserId) {
+                row.classList.add('table-foreign');
+            }
+        },
+        initComplete: function() {
+            const tableElem = document.getElementById('income-table');
+            if (tableElem) {
+                tableElem.classList.remove('d-none');
+            }
+        }
     });
 
     // При смене группы просто обновляйте данные

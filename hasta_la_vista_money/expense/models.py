@@ -36,8 +36,9 @@ class ExpenseCategory(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "name"], name="unique_user_category_expense"
-            )
+                fields=['user', 'name'],
+                name='unique_user_category_expense',
+            ),
         ]
 
     def __str__(self):

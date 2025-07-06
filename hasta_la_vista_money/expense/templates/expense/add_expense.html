@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6 col-12">
+            <div class="card shadow-lg border-0 rounded-4 animate__animated animate__fadeIn">
+                <div class="card-header bg-success text-white rounded-top-4 d-flex align-items-center gap-2" style="min-height: 70px;">
+                    <span class="display-6 mb-0"><i class="bi bi-graph-down-arrow"></i></span>
+                    <h2 class="mb-0 fw-bold">{% translate 'Добавить расход' %}</h2>
+                </div>
+                <div class="card-body p-4 bg-light rounded-bottom-4">
+                    <form id="add-expense-form" method="POST" action="">
+                        {% csrf_token %}
+                        {% if add_expense_form %}
+                            {% for field in add_expense_form %}
+                                <div class="mb-3">
+                                    {{ field|as_crispy_field }}
+                                    {% if field.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in field.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-success btn-lg shadow-sm">
+                                <i class="bi bi-plus-circle me-2"></i>
+                                {% translate 'Добавить' %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
