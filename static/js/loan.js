@@ -117,7 +117,7 @@ class LoanManager {
                 firstPayment: Math.round((principalPayment + (amount * monthlyRate)) * 100) / 100,
                 lastPayment: Math.round((principalPayment + (principalPayment * monthlyRate)) * 100) / 100,
                 totalPayment: totalPayment,
-                totalInterest: totalPayment - amount,
+                totalInterest: Math.round(totalInterest * 100) / 100,
                 type: 'differentiated'
             };
         }
@@ -138,21 +138,56 @@ class LoanManager {
             }
         }
 
-        let content = '<div class="alert alert-info mt-3">';
-        content += '<h6><i class="bi bi-calculator me-2"></i>Предварительный расчет</h6>';
+        previewElement.innerHTML = '';
+
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-info mt-3';
+
+        const header = document.createElement('h6');
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-calculator me-2';
+        header.appendChild(icon);
+        header.appendChild(document.createTextNode('Предварительный расчет'));
+        alertDiv.appendChild(header);
 
         if (result.type === 'annuity') {
-            content += `<p><strong>Ежемесячный платеж:</strong> ${result.monthlyPayment.toFixed(2)} ₽</p>`;
+            const monthlyPaymentP = document.createElement('p');
+            const monthlyPaymentStrong = document.createElement('strong');
+            monthlyPaymentStrong.textContent = 'Ежемесячный платеж: ';
+            monthlyPaymentP.appendChild(monthlyPaymentStrong);
+            monthlyPaymentP.appendChild(document.createTextNode(`${result.monthlyPayment.toFixed(2)} ₽`));
+            alertDiv.appendChild(monthlyPaymentP);
         } else {
-            content += `<p><strong>Первый платеж:</strong> ${result.firstPayment.toFixed(2)} ₽</p>`;
-            content += `<p><strong>Последний платеж:</strong> ${result.lastPayment.toFixed(2)} ₽</p>`;
+            const firstPaymentP = document.createElement('p');
+            const firstPaymentStrong = document.createElement('strong');
+            firstPaymentStrong.textContent = 'Первый платеж: ';
+            firstPaymentP.appendChild(firstPaymentStrong);
+            firstPaymentP.appendChild(document.createTextNode(`${result.firstPayment.toFixed(2)} ₽`));
+            alertDiv.appendChild(firstPaymentP);
+
+            const lastPaymentP = document.createElement('p');
+            const lastPaymentStrong = document.createElement('strong');
+            lastPaymentStrong.textContent = 'Последний платеж: ';
+            lastPaymentP.appendChild(lastPaymentStrong);
+            lastPaymentP.appendChild(document.createTextNode(`${result.lastPayment.toFixed(2)} ₽`));
+            alertDiv.appendChild(lastPaymentP);
         }
 
-        content += `<p><strong>Общая переплата:</strong> ${result.totalInterest.toFixed(2)} ₽</p>`;
-        content += `<p><strong>Общая сумма к возврату:</strong> ${result.totalPayment.toFixed(2)} ₽</p>`;
-        content += '</div>';
+        const totalInterestP = document.createElement('p');
+        const totalInterestStrong = document.createElement('strong');
+        totalInterestStrong.textContent = 'Общая переплата: ';
+        totalInterestP.appendChild(totalInterestStrong);
+        totalInterestP.appendChild(document.createTextNode(`${result.totalInterest.toFixed(2)} ₽`));
+        alertDiv.appendChild(totalInterestP);
 
-        previewElement.innerHTML = content;
+        const totalPaymentP = document.createElement('p');
+        const totalPaymentStrong = document.createElement('strong');
+        totalPaymentStrong.textContent = 'Общая сумма к возврату: ';
+        totalPaymentP.appendChild(totalPaymentStrong);
+        totalPaymentP.appendChild(document.createTextNode(`${result.totalPayment.toFixed(2)} ₽`));
+        alertDiv.appendChild(totalPaymentP);
+
+        previewElement.appendChild(alertDiv);
     }
 
     /**
@@ -169,8 +204,16 @@ class LoanManager {
                     // Добавить анимацию загрузки
                     const modalBody = modal.querySelector('.modal-body');
                     if (modalBody && !modalBody.querySelector('.loan-loading')) {
-                        modalBody.insertAdjacentHTML('afterbegin',
-                            '<div class="loan-loading"><div class="spinner-border"></div>Загрузка...</div>');
+                        const loadingDiv = document.createElement('div');
+                        loadingDiv.className = 'loan-loading';
+
+                        const spinner = document.createElement('div');
+                        spinner.className = 'spinner-border';
+
+                        loadingDiv.appendChild(spinner);
+                        loadingDiv.appendChild(document.createTextNode('Загрузка...'));
+
+                        modalBody.insertBefore(loadingDiv, modalBody.firstChild);
                     }
                 }
             });
@@ -481,10 +524,16 @@ class LoanManager {
         const notification = document.createElement('div');
         notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
         notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-        notification.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
+
+        // Безопасно добавить сообщение
+        notification.appendChild(document.createTextNode(message));
+
+        // Создать кнопку закрытия
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn-close';
+        closeButton.setAttribute('data-bs-dismiss', 'alert');
+        notification.appendChild(closeButton);
 
         document.body.appendChild(notification);
 
