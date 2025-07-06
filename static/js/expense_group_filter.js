@@ -4,9 +4,12 @@ document.addEventListener('DOMContentLoaded', function () {
         return groupSelect ? groupSelect.value : 'my';
     }
 
-    // Получаем текущий user id из data-атрибута таблицы
     const table = document.getElementById('expense-table');
     const currentUserId = table ? parseInt(table.dataset.currentUserId) : null;
+
+    if (typeof DataTable === 'undefined') {
+        return;
+    }
 
     window.expenseDataTable = new DataTable('#expense-table', {
         ajax: {
@@ -60,8 +63,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         ],
-        createdRow: function (row, data, dataIndex) {
-            // user_id теперь в data[6]
+        createdRow: function (row, data) {
             const rowUserId = parseInt(data[6]);
             if (currentUserId && rowUserId && rowUserId !== currentUserId) {
                 row.classList.add('table-foreign');
@@ -75,7 +77,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // При смене группы просто обновляйте данные
     const groupSelect = document.getElementById('expense-group-select');
     if (groupSelect) {
         groupSelect.addEventListener('change', function () {
@@ -83,7 +84,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Логика для показа/скрытия фильтра
     const toggleBtn = document.getElementById('toggle-group-filter');
     const filterBlock = document.getElementById('expense-group-filter-block');
     if (toggleBtn && filterBlock) {

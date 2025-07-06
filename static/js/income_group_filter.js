@@ -8,7 +8,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const table = document.getElementById('income-table');
     const currentUserId = table ? parseInt(table.dataset.currentUserId) : null;
 
-    // Инициализация DataTable только один раз
+    if (typeof DataTable === 'undefined') {
+        return;
+    }
+
     window.incomeDataTable = new DataTable('#income-table', {
         ajax: {
             url: '/income/ajax/income_data/',
@@ -54,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         ],
-        createdRow: function (row, data, dataIndex) {
+        createdRow: function (row, data) {
             const rowUserId = parseInt(data[6]);
             if (currentUserId && rowUserId && rowUserId !== currentUserId) {
                 row.classList.add('table-foreign');
