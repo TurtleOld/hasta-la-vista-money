@@ -1,3 +1,4 @@
+/* global bootstrap, Chart */
 /**
  * Loan Module JavaScript
  * Обеспечивает интерактивность для кредитного модуля
@@ -196,7 +197,7 @@ class LoanManager {
     setupModals() {
         // Улучшенные модальные окна
         document.querySelectorAll('[data-bs-toggle="modal"]').forEach(button => {
-            button.addEventListener('click', (e) => {
+            button.addEventListener('click', () => {
                 const target = button.getAttribute('data-bs-target');
                 const modal = document.querySelector(target);
 
