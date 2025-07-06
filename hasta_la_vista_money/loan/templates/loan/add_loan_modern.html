@@ -1,0 +1,270 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% translate 'Добавить кредит' %}{% endblock %}
+
+{% block content %}
+<div class="loan-dashboard">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- Header -->
+                <div class="loan-header text-center">
+                    <h1 class="loan-title">{% translate 'Добавить новый кредит' %}</h1>
+                    <p class="loan-subtitle">{% translate 'Заполните информацию о вашем кредите для начала отслеживания' %}</p>
+                </div>
+
+                <!-- Form Container -->
+                <div class="loan-form-container">
+                    <div class="form-header">
+                        <h2><i class="bi bi-credit-card me-2"></i>{% translate 'Информация о кредите' %}</h2>
+                    </div>
+
+                    <!-- Loan Type Information -->
+                    <div class="loan-type-info">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>{% translate 'Не уверены в типе кредита?' %}</strong>
+                        </div>
+                        <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#payment-options">
+                            <i class="bi bi-question-circle me-2"></i>{% translate 'Узнать разницу между типами кредитов' %}
+                        </button>
+                    </div>
+
+                    <!-- Loan Form -->
+                    <form method="POST" action="{% url 'loan:create' %}" class="needs-validation" novalidate>
+                        {% csrf_token %}
+
+                        <div class="row">
+                            <!-- Date Field -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ loan_form.date.id_for_label }}" class="form-label">
+                                        <i class="bi bi-calendar3 me-2"></i>{% translate 'Дата начала кредита' %}
+                                    </label>
+                                    {{ loan_form.date }}
+                                    {% if loan_form.date.help_text %}
+                                        <div class="form-text">{{ loan_form.date.help_text }}</div>
+                                    {% endif %}
+                                    {% if loan_form.date.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in loan_form.date.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Loan Type Field -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ loan_form.type_loan.id_for_label }}" class="form-label">
+                                        <i class="bi bi-diagram-3 me-2"></i>{% translate 'Тип кредита' %}
+                                    </label>
+                                    {{ loan_form.type_loan }}
+                                    {% if loan_form.type_loan.help_text %}
+                                        <div class="form-text">{{ loan_form.type_loan.help_text }}</div>
+                                    {% endif %}
+                                    {% if loan_form.type_loan.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in loan_form.type_loan.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Loan Amount Field -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ loan_form.loan_amount.id_for_label }}" class="form-label">
+                                        <i class="bi bi-currency-dollar me-2"></i>{% translate 'Сумма кредита' %}
+                                    </label>
+                                    <div class="input-group">
+                                        {{ loan_form.loan_amount }}
+                                        <span class="input-group-text">₽</span>
+                                    </div>
+                                    {% if loan_form.loan_amount.help_text %}
+                                        <div class="form-text">{{ loan_form.loan_amount.help_text }}</div>
+                                    {% endif %}
+                                    {% if loan_form.loan_amount.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in loan_form.loan_amount.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Interest Rate Field -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ loan_form.annual_interest_rate.id_for_label }}" class="form-label">
+                                        <i class="bi bi-percent me-2"></i>{% translate 'Годовая процентная ставка' %}
+                                    </label>
+                                    <div class="input-group">
+                                        {{ loan_form.annual_interest_rate }}
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    {% if loan_form.annual_interest_rate.help_text %}
+                                        <div class="form-text">{{ loan_form.annual_interest_rate.help_text }}</div>
+                                    {% endif %}
+                                    {% if loan_form.annual_interest_rate.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in loan_form.annual_interest_rate.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Period Field -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ loan_form.period_loan.id_for_label }}" class="form-label">
+                                        <i class="bi bi-clock me-2"></i>{% translate 'Срок кредита' %}
+                                    </label>
+                                    <div class="input-group">
+                                        {{ loan_form.period_loan }}
+                                        <span class="input-group-text">{% translate 'месяцев' %}</span>
+                                    </div>
+                                    {% if loan_form.period_loan.help_text %}
+                                        <div class="form-text">{{ loan_form.period_loan.help_text }}</div>
+                                    {% endif %}
+                                    {% if loan_form.period_loan.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in loan_form.period_loan.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="form-actions mt-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <a href="{% url 'loan:list' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-2"></i>{% translate 'Назад к списку' %}
+                                </a>
+                                <div class="d-flex gap-2">
+                                    <button type="reset" class="btn btn-outline-warning">
+                                        <i class="bi bi-arrow-clockwise me-2"></i>{% translate 'Сбросить' %}
+                                    </button>
+                                    <button type="submit" class="btn btn-loan-action btn-payment">
+                                        <i class="bi bi-check-circle me-2"></i>{% translate 'Добавить кредит' %}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Quick Tips -->
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary">
+                            <i class="bi bi-lightbulb me-2"></i>{% translate 'Полезные советы' %}
+                        </h6>
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2">
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                {% translate 'Убедитесь, что указали правильную дату начала кредита' %}
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                {% translate 'Проверьте годовую процентную ставку в договоре с банком' %}
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                {% translate 'Срок кредита указывайте в месяцах (например, 12 для года)' %}
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                {% translate 'После добавления кредита автоматически создастся график платежей' %}
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Options Modal -->
+{% include 'loan/modals/payment-options.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.querySelector('.needs-validation');
+    if (form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+    }
+
+    // Real-time calculation preview
+    const loanAmount = document.getElementById('{{ loan_form.loan_amount.id_for_label }}');
+    const interestRate = document.getElementById('{{ loan_form.annual_interest_rate.id_for_label }}');
+    const period = document.getElementById('{{ loan_form.period_loan.id_for_label }}');
+
+    function updatePreview() {
+        if (loanAmount.value && interestRate.value && period.value) {
+            const amount = parseFloat(loanAmount.value);
+            const rate = parseFloat(interestRate.value) / 100 / 12; // Monthly rate
+            const months = parseInt(period.value);
+
+            if (rate > 0 && months > 0) {
+                // Simple calculation for preview
+                const monthlyPayment = amount * (rate * Math.pow(1 + rate, months)) / (Math.pow(1 + rate, months) - 1);
+                const totalPayment = monthlyPayment * months;
+                const totalInterest = totalPayment - amount;
+
+                // Update preview if element exists
+                const previewElement = document.getElementById('calculation-preview');
+                if (previewElement) {
+                    previewElement.innerHTML = `
+                        <div class="alert alert-info">
+                            <strong>{% translate 'Предварительный расчет:' %}</strong><br>
+                            {% translate 'Ежемесячный платеж:' %} ${monthlyPayment.toFixed(0)} ₽<br>
+                            {% translate 'Общая переплата:' %} ${totalInterest.toFixed(0)} ₽<br>
+                            {% translate 'Общая сумма к возврату:' %} ${totalPayment.toFixed(0)} ₽
+                        </div>
+                    `;
+                }
+            }
+        }
+    }
+
+    // Add event listeners for real-time calculation
+    [loanAmount, interestRate, period].forEach(field => {
+        if (field) {
+            field.addEventListener('input', updatePreview);
+        }
+    });
+
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+{% endblock %}

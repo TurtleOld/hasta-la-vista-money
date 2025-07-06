@@ -19,7 +19,7 @@ class LoanForm(BaseForm):
         label=_('Дата'),
         widget=DateTimeInput(
             attrs={
-                'type': 'datetime-local',
+                'type': 'date',
                 'class': 'form-control',
             },
         ),

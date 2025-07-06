@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 
 class LoanView(CustomNoPermissionMixin, SuccessMessageMixin, ListView):
     model = Loan
-    template_name = 'loan/loan.html'
+    template_name = 'loan/loan_modern.html'
     no_permission_url = reverse_lazy('login')
 
     def get_context_data(self, *args, **kwargs):
@@ -34,18 +34,26 @@ class LoanView(CustomNoPermissionMixin, SuccessMessageMixin, ListView):
         ).all()
         payment_make_loan = user.payment_make_loan_users.all()
 
+        # Автоматический расчёт общей суммы кредитов и переплаты
+        total_loan_amount = sum(loan_item.loan_amount for loan_item in loan)
+        total_overpayment = sum(
+            float(loan_item.calculate_sum_monthly_payment) for loan_item in loan
+        )
+
         context = super().get_context_data(**kwargs)
         context['loan_form'] = loan_form
         context['payment_make_loan_form'] = payment_make_loan_form
         context['loan'] = loan
         context['result_calculate'] = result_calculate
         context['payment_make_loan'] = payment_make_loan
+        context['total_loan_amount'] = total_loan_amount
+        context['total_overpayment'] = total_overpayment
 
         return context
 
 
 class LoanCreateView(CustomNoPermissionMixin, SuccessMessageMixin, CreateView):
-    template_name = 'loan/add_loan.html'
+    template_name = 'loan/add_loan_modern.html'
     model = Loan
     form_class = LoanForm
     success_url = reverse_lazy('loan:list')

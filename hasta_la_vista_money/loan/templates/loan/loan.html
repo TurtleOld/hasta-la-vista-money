@@ -101,7 +101,8 @@
 										<div class="modal-body">
 											<h3>{% translate 'График платежей:' %}</h3>
                                             <strong>{% translate 'Общая сумма кредита:' %}</strong> {{ item_loan.calculate_total_amount_loan_with_interest }}
-                                            <strong class="ms-2">{% translate 'Сумма переплаты:' %}</strong> {{ item_loan.calculate_sum_monthly_payment }}
+                                            <strong class="ms-2">{% translate 'Сумма переплаты:' %}</strong>
+											{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }}
 											<table class="table"
 											       aria-describedby="table payment">
 												<thead>
@@ -120,7 +121,7 @@
                                                         <tr>
                                                             <td class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}text-decoration-line-through{% endif %}{% endfor %}">{{ payment.date | date:"d F Y" }}</td>
                                                             <td class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}text-decoration-line-through{% endif %}{% endfor %}">{{ payment.balance }}</td>
-                                                            <td class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}text-decoration-line-through{% endif %}{% endfor %}">{{ payment.monthly_payment }}</td>
+                                                            <td class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}text-decoration-line-through{% endif %}{% endfor %}">{{ payment.monthly_payment|floatformat:2 }}</td>
                                                             <td class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}text-decoration-line-through{% endif %}{% endfor %}">{{ payment.interest }}</td>
                                                             <td class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}text-decoration-line-through{% endif %}{% endfor %}">{{ payment.principal_payment }}</td>
                                                         </tr>

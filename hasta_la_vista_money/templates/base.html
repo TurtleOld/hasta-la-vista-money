@@ -64,5 +64,8 @@
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/income_group_filter.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/expense_group_filter.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/account_group_filter.js' %}?v={% word_hash %}"></script>
+    {% if 'loan' in request.path %}
+        <script nonce="{{request.csp_nonce}}" src="{% static 'js/loan.js' %}?v={% word_hash %}"></script>
+    {% endif %}
 </body>
 </html>
