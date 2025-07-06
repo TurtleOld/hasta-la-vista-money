@@ -4,34 +4,28 @@
 <div class="row">
     <div class="col-xl-12">
         <div class="wrapper-table-income mt-5">
-            {% include "income/income_table.html" %}
-            {% if income_by_month.has_other_pages %}
-                <div class="btn-group mb-5" role="group"
-                     aria-label="Item pagination">
-                    {% if income_by_month.has_previous %}
-                        <a href="?{{ request.GET.urlencode }}&income={{ income_by_month.previous_page_number }}"
-                           class="btn text-danger btn-outline-secondary">&laquo;</a>
-                    {% endif %}
-
-                    {% for page_number in income_by_month.paginator.page_range %}
-                        {% if income_by_month.number == page_number %}
-                            <button class="btn text-dark btn-outline-secondary active">
-                                <span>{{ page_number }} <span class="visually-hidden">(current)</span></span>
-                            </button>
-                        {% elif page_number >= income_by_month.number|add:-5 and page_number <= income_by_month.number|add:5 %}
-                            <a href="?{{ request.GET.urlencode }}&income={{ page_number }}"
-                               class="btn text-dark btn-outline-secondary">
-                                {{ page_number }}
-                            </a>
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if income_by_month.has_next %}
-                        <a href="?{{ request.GET.urlencode }}&income={{ income_by_month.next_page_number }}"
-                           class="btn text-danger btn-outline-secondary">&raquo;</a>
-                    {% endif %}
+            <!-- Селектор групп и кнопки -->
+            <div class="d-flex justify-content-between align-items-center mb-3 px-2 pt-2">
+                <div class="fw-bold">{% translate 'Доходы' %}</div>
+                <div class="ms-auto d-flex align-items-center gap-2">
+                    <button id="toggle-group-filter" class="btn btn-outline-success btn-sm" title="Фильтр по группе" type="button">
+                        <i class="bi bi-funnel"></i>
+                    </button>
+                    <div id="income-group-filter-block" class="d-none">
+                        <label for="income-group-select" class="form-label mb-0">{% translate 'Группа:' %}</label>
+                        <select id="income-group-select" class="form-select form-select-sm d-inline-block w-auto">
+                            <option value="my">{% translate 'Мои' %}</option>
+                            {% for group in user.groups.all %}
+                                <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
-            {% endif %}
+            </div>
+            <!-- AJAX-контейнер для таблицы -->
+            <div id="income-table-block">
+                {% include "income/_income_table_block.html" %}
+            </div>
         </div>
     </div>
 </div>

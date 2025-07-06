@@ -5,7 +5,9 @@ from hasta_la_vista_money.income.views import (
     IncomeCategoryView,
     IncomeCopyView,
     IncomeCreateView,
+    IncomeDataAjaxView,
     IncomeDeleteView,
+    IncomeGroupAjaxView,
     IncomeUpdateView,
     IncomeView,
 )
@@ -40,4 +42,10 @@ urlpatterns = [
         IncomeCopyView.as_view(),
         name='income_copy',
     ),
+    path(
+        'ajax/income_by_group/',
+        IncomeGroupAjaxView.as_view(),
+        name='ajax_income_by_group',
+    ),
+    path('ajax/income_data/', IncomeDataAjaxView.as_view(), name='ajax_income_data'),
 ]

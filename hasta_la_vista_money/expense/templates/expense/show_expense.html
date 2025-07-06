@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% load crispy_forms_tags %}
+{% load static %}
+{% load comma %}
+
+
+{% block title %}{% translate 'Информация о расходах' %}{% endblock %}
+{% block content %}
+    <div class="container">
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="wrapper-table-expense mt-5">
+                    <!-- Селектор групп -->
+                    <div class="d-flex justify-content-between align-items-center mb-3 px-2 pt-2">
+                        <div class="fw-bold">{% translate 'Расходы' %}</div>
+                        <div class="ms-auto d-flex align-items-center gap-2">
+                            <button id="toggle-group-filter" class="btn btn-outline-success btn-sm" title="Фильтр по группе" type="button">
+                                <i class="bi bi-funnel"></i>
+                            </button>
+                            <div id="expense-group-filter-block" class="d-none">
+                                <label for="expense-group-select" class="form-label mb-0">{% translate 'Группа:' %}</label>
+                                <select id="expense-group-select" class="form-select form-select-sm d-inline-block w-auto">
+                                    <option value="my">{% translate 'Мои' %}</option>
+                                    {% for group in user.groups.all %}
+                                        <option value="{{ group.id }}">{{ group.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- AJAX-контейнер для таблицы -->
+                    <div id="expense-table-block">
+                        {% include "expense/_expense_table_block.html" %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

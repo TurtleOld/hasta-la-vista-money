@@ -4,11 +4,14 @@ from typing import Any, Dict, Optional
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils import formats
+from django.utils.html import escape
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, UpdateView
@@ -100,10 +103,6 @@ class IncomeView(
             user=self.request.user,
             depth=depth_limit,
             category_queryset=income_categories,
-        )
-
-        income_form.fields['account'].queryset = (
-            Account.objects.filter(user=user).select_related('user').all()
         )
 
         income_by_month = income_filter.qs
@@ -227,16 +226,34 @@ class IncomeUpdateView(
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         kwargs['depth'] = self.depth_limit
+
+        # Add category queryset for form validation
+        user = get_object_or_404(User, username=self.request.user)
+        income_categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        kwargs['category_queryset'] = income_categories
+
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         context = super().get_context_data(**kwargs)
-        form_class = self.get_form_class()
-        form = form_class(**self.get_form_kwargs())
-        form.fields['account'].queryset = (
-            Account.objects.filter(user=user).select_related('user').all()
+
+        income_categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
         )
+
+        form_class = self.get_form_class()
+        form_kwargs = self.get_form_kwargs()
+        form_kwargs['category_queryset'] = income_categories
+        form = form_class(**form_kwargs)
         context['income_form'] = form
         return context
 
@@ -332,7 +349,7 @@ class IncomeCategoryView(LoginRequiredMixin, ListView):
         return context
 
 
-class IncomeCategoryCreateView(CreateView):
+class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
     model = IncomeCategory
     template_name = 'income/add_category_income.html'
     form_class = AddCategoryIncomeForm
@@ -341,9 +358,19 @@ class IncomeCategoryCreateView(CreateView):
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
+
+        user = get_object_or_404(User, username=self.request.user)
+        categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         add_category_income_form = AddCategoryIncomeForm(
             user=self.request.user,
             depth=self.depth,
+            category_queryset=categories,
         )
         context['add_category_income_form'] = add_category_income_form
         return context
@@ -384,3 +411,74 @@ class IncomeCategoryDeleteView(BaseView, DeleteObjectMixin):
     success_message = constants.SUCCESS_CATEGORY_INCOME_DELETED
     error_message = constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY
     success_url: Optional[str] = reverse_lazy('income:category_list')
+
+
+class IncomeGroupAjaxView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        group_id = request.GET.get('group_id')
+        user = request.user
+        incomes = Income.objects.none()
+
+        if group_id == 'my' or not group_id:
+            incomes = Income.objects.filter(user=user)
+        else:
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                incomes = Income.objects.filter(user__in=users_in_group)
+            except Group.DoesNotExist:
+                incomes = Income.objects.none()
+
+        context = {
+            'income_by_month': incomes,
+            'request': request,
+        }
+        html = render_to_string('income/_income_table_block.html', context)
+        return HttpResponse(html)
+
+
+class IncomeDataAjaxView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        group_id = request.GET.get('group_id')
+        user = request.user
+        incomes = Income.objects.none()
+
+        if group_id == 'my' or not group_id:
+            incomes = Income.objects.filter(user=user)
+        else:
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                incomes = Income.objects.filter(user__in=users_in_group)
+            except Group.DoesNotExist:
+                incomes = Income.objects.none()
+
+        data = []
+        for income in incomes.select_related('category', 'account', 'user').all():
+            context = {
+                'income': income,
+                'csrf_token': request.META.get('CSRF_COOKIE', ''),
+            }
+            actions = render_to_string(
+                'income/_income_actions.html',
+                context,
+                request=request,
+            )
+
+            data.append(
+                [
+                    income.date.strftime('%B %Y'),
+                    f'{income.amount:,.2f}',
+                    escape(income.category.name if income.category else ''),
+                    escape(income.account.name_account if income.account else ''),
+                    escape(
+                        income.user.get_full_name() or income.user.username
+                        if income.user
+                        else '',
+                    ),
+                    actions,
+                    income.user.id,
+                    escape(income.user.username),
+                ],
+            )
+        return JsonResponse({'data': data})

@@ -41,15 +41,26 @@ class TestExpense(TestCase):
         self.client.force_login(self.user)
 
         new_expense = {
-            'user': self.user.pk,
             'account': self.account.pk,
             'category': self.expense_type.pk,
             'date': '2023-12-20T15:30',
             'amount': TEST_AMOUNT,
-            'depth': 3,
         }
 
-        form = AddExpenseForm(data=new_expense, user=self.user, depth=3)
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
+        form = AddExpenseForm(
+            data=new_expense,
+            user=self.user,
+            depth=3,
+            category_queryset=expense_categories,
+        )
         self.assertTrue(form.is_valid())
 
         url = reverse_lazy('expense:create')
@@ -61,15 +72,26 @@ class TestExpense(TestCase):
         self.client.force_login(user=self.user)
         url = reverse_lazy('expense:change', kwargs={'pk': self.expense.pk})
         update_expense = {
-            'user': self.user,
             'account': self.account.pk,
             'category': self.expense_type.pk,
-            'date': '2023-06-30 22:31:54',
+            'date': '2023-06-30T22:31',
             'amount': NEW_TEST_AMOUNT,
-            'depth': 3,
         }
 
-        form = AddExpenseForm(data=update_expense, user=self.user, depth=3)
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
+        form = AddExpenseForm(
+            data=update_expense,
+            user=self.user,
+            depth=3,
+            category_queryset=expense_categories,
+        )
         self.assertTrue(form.is_valid())
 
         response = self.client.post(url, form.data)
@@ -96,7 +118,20 @@ class TestExpense(TestCase):
             'parent_category': self.parent_category.pk,
         }
 
-        form = AddCategoryForm(data=new_category, user=self.user, depth=3)
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
+        form = AddCategoryForm(
+            data=new_category,
+            user=self.user,
+            depth=3,
+            category_queryset=expense_categories,
+        )
         self.assertTrue(form.is_valid())
 
     def test_category_expense_delete(self):
@@ -157,6 +192,14 @@ class TestExpense(TestCase):
 
     def test_add_expense_form_validation(self):
         """Test AddExpenseForm validation."""
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = AddExpenseForm(
             data={
                 'category': self.expense_type.pk,
@@ -166,11 +209,20 @@ class TestExpense(TestCase):
             },
             user=self.user,
             depth=3,
+            category_queryset=expense_categories,
         )
         self.assertTrue(form.is_valid())
 
     def test_add_expense_form_invalid(self):
         """Test AddExpenseForm with invalid data."""
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = AddExpenseForm(
             data={
                 'category': self.expense_type.pk,
@@ -178,11 +230,20 @@ class TestExpense(TestCase):
             },
             user=self.user,
             depth=3,
+            category_queryset=expense_categories,
         )
         self.assertFalse(form.is_valid())
 
     def test_add_expense_form_clean_insufficient_funds(self):
         """Test AddExpenseForm clean method with insufficient funds."""
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = AddExpenseForm(
             data={
                 'category': self.expense_type.pk,
@@ -192,12 +253,21 @@ class TestExpense(TestCase):
             },
             user=self.user,
             depth=3,
+            category_queryset=expense_categories,
         )
         self.assertFalse(form.is_valid())
         self.assertIn('account', form.errors)
 
     def test_add_category_form_validation(self):
         """Test AddCategoryForm validation."""
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = AddCategoryForm(
             data={
                 'name': 'Test Category',
@@ -205,28 +275,47 @@ class TestExpense(TestCase):
             },
             user=self.user,
             depth=3,
+            category_queryset=expense_categories,
         )
         self.assertTrue(form.is_valid())
 
     def test_add_category_form_invalid(self):
         """Test AddCategoryForm with invalid data."""
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = AddCategoryForm(
             data={
                 'name': '',
             },
             user=self.user,
             depth=3,
+            category_queryset=expense_categories,
         )
         self.assertFalse(form.is_valid())
 
     def test_add_category_form_without_parent(self):
         """Test AddCategoryForm without parent category."""
+        # Get the category queryset for the user
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+
         form = AddCategoryForm(
             data={
                 'name': 'Test Category Without Parent',
             },
             user=self.user,
             depth=3,
+            category_queryset=expense_categories,
         )
         self.assertTrue(form.is_valid())
 

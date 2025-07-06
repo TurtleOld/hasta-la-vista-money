@@ -1,0 +1,30 @@
+{% load comma %}
+{% load i18n %}
+<div class="table-responsive">
+    <table id="income-table" class="table table-striped table-hover table-bordered align-middle d-none" data-current-user-id="{{ request.user.id }}">
+        <thead class="table-light">
+        <tr>
+            <th class="col-2 text-center" data-sort="date" title="Сортировать по дате">{% translate 'Дата' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center" data-sort="amount" title="Сортировать по сумме">{% translate 'Сумма' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center" data-sort="category" title="Сортировать по категории">{% translate 'Категория' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center" data-sort="account" title="Сортировать по счёту">{% translate 'Счёт' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center" data-sort="user" title="Сортировать по пользователю">{% translate 'Пользователь' %} <span class="sort-indicator"></span></th>
+            <th class="col-2 text-center">
+                <button type="button" class="btn btn-outline-success ms-2" data-bs-toggle="modal" data-bs-target="#add-income" title="{% translate 'Добавить новую доходную операцию' %}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-graph-up-arrow" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M0 0h1v15h15v1H0V0Zm10 3.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0V4.9l-3.613 4.417a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61L13.445 4H10.5a.5.5 0 0 1-.5-.5Z"></path>
+                    </svg>
+                </button>
+                <a href="{% url 'income:category_list' %}" class="btn btn-outline-success ms-2" title="{% translate 'Добавить категорию' %}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-text-sidebar-reverse" viewBox="0 0 16 16">
+                        <path d="M12.5 3a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h5zm0 3a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h5zm.5 3.5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 .5-.5zm-.5 2.5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h5z"></path>
+                        <path d="M16 2a2 2 0 0 0-2-2H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2zM4 1v14H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h2zm1 0h9a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5V1z"></path>
+                    </svg>
+                </a>
+            </th>
+        </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+</div>

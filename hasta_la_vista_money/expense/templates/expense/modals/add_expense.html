@@ -1,34 +1,41 @@
 {% load i18n %}
 {% load crispy_forms_tags %}
 
-<div id="add-expense" class="ajax-modal modal fade">
+<div id="add-expense" class="ajax-modal modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
+        <div class="modal-content shadow-lg rounded-4">
+            <div class="modal-header bg-success text-white rounded-top-4">
+                <h5 class="modal-title d-flex align-items-center gap-2">
+                    <i class="bi bi-graph-down-arrow"></i>
                     {% translate 'Добавить расход' %}
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"
-                        aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-4">
                 {{ add_expense_form.media }}
-                <form class="ajax-form m-2" method="POST"
-                      action="{% url 'expense:create' %}">
+                <form id="add-expense-form" class="ajax-form" method="POST" action="{% url 'expense:create' %}">
                     {% csrf_token %}
                     {% if add_expense_form %}
                         {% for field in add_expense_form %}
-                            <div class="form-group {% if field.errors %} has-error{% endif %}">
-                                {{ field | as_crispy_field }}
+                            <div class="mb-3">
+                                {{ field|as_crispy_field }}
                                 {% if field.errors %}
-                                    {% for error in field.errors %}
-                                        <p class="help-block">{{ error }}</p>
-                                    {% endfor %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in field.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
                                 {% endif %}
                             </div>
                         {% endfor %}
                     {% endif %}
-                    <button type="submit" class="btn btn-success">{% translate 'Добавить' %}</button>
+                    <div id="add-expense-errors" class="alert alert-danger d-none"></div>
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            {% translate 'Добавить' %}
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

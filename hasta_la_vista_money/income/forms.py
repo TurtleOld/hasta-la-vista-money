@@ -15,12 +15,12 @@ class IncomeForm(BaseForm):
     """Модельная форма отображения доходов на сайте."""
 
     category = ModelChoiceField(
-        queryset=IncomeCategory.objects.all(),
+        queryset=IncomeCategory.objects.none(),
         label=_('Категория дохода'),
         help_text=_('Выберите категорию дохода'),
     )
     account = ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.none(),
         label=_('Счёт списания'),
         help_text=_('Выберите на какой счёт зачислить доход'),
     )
@@ -41,6 +41,16 @@ class IncomeForm(BaseForm):
 
     field = 'category'
 
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        category_queryset = kwargs.pop('category_queryset', None)
+        super().__init__(*args, **kwargs)
+
+        if user:
+            self.fields['account'].queryset = Account.objects.filter(user=user)
+        if category_queryset is not None:
+            self.fields['category'].queryset = category_queryset
+
     def configure_category_choices(self, category_choices):
         self.fields[self.field].choices = category_choices
 
@@ -60,13 +70,20 @@ class AddCategoryIncomeForm(BaseForm):
         help_text=_('Введите название категории дохода для её создания'),
     )
     parent_category = ModelChoiceField(
-        queryset=IncomeCategory.objects.all(),
+        queryset=IncomeCategory.objects.none(),
         label=_('Родительская категория'),
         help_text=_('Выберите родительскую категорию дохода для создаваемой категории'),
         empty_label=_('Нет родительской категории'),
         required=False,
     )
     field = 'parent_category'
+
+    def __init__(self, *args, **kwargs):
+        category_queryset = kwargs.pop('category_queryset', None)
+        super().__init__(*args, **kwargs)
+
+        if category_queryset is not None:
+            self.fields['parent_category'].queryset = category_queryset
 
     class Meta:
         model = IncomeCategory

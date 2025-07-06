@@ -13,7 +13,7 @@ class ExpenseCategory(models.Model):
     )
     name = models.CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,
-        unique=True,
+        unique=False,
     )
     parent_category = models.ForeignKey(
         'self',
@@ -33,6 +33,12 @@ class ExpenseCategory(models.Model):
         ordering = ['name']
         indexes = [
             models.Index(fields=['name']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'name'],
+                name='unique_user_category_expense',
+            ),
         ]
 
     def __str__(self):
