@@ -231,13 +231,13 @@ function showNotification(message, type = 'info') {
 }
 
 // Функции редактирования
-function editIncome(id) { // eslint-disable-line no-unused-vars
+function editIncome(id) { // eslint-disable-line
     const modal = new bootstrap.Modal(document.getElementById('add-income'));
     loadIncomeData(id);
     modal.show();
 }
 
-function copyIncome(id) { // eslint-disable-line no-unused-vars
+function copyIncome(id) { // eslint-disable-line
     fetch(`/income/${id}/copy/`, {
         method: 'POST',
         headers: {
@@ -259,7 +259,7 @@ function copyIncome(id) { // eslint-disable-line no-unused-vars
     });
 }
 
-function deleteIncome(id) { // eslint-disable-line no-unused-vars
+function deleteIncome(id) { // eslint-disable-line
     if (confirm('Вы уверены, что хотите удалить этот доход?')) {
         fetch(`/income/delete/${id}/`, {
             method: 'POST',
