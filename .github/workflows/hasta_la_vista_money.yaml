@@ -44,12 +44,12 @@ jobs:
           python-version: '3.13.5'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@aaefb91b77b597bd6a36e438350868f3b9064d89
+        uses: astral-sh/setup-uv@d4219d1620c011976ed77813dca7d21d6f676d73
         with:
           version: "latest"
 
       - name: Install the latest version of ruff
-        uses: astral-sh/ruff-action@8c3aa952c0bf2052dc2efa4104f42b215b6f1245
+        uses: astral-sh/ruff-action@2b785e352d686a2baa2198503e8021752de27d9a
         with:
           version: "latest"
       - run: ruff check --fix
