@@ -17,9 +17,6 @@ from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.custom_paginator import (
-    paginator_custom_view,
-)
 from hasta_la_vista_money.commonlogic.views import (
     IncomeExpenseCreateViewMixin,
     build_category_tree,
@@ -173,12 +170,8 @@ class ExpenseView(
 
         all_expenses = list(expenses) + receipt_expense_list
 
-        pages_expense = paginator_custom_view(
-            self.request,
-            all_expenses,
-            self.paginate_by,
-            'expenses',
-        )
+        # Pagination removed, as Tabulator is used
+        pages_expense = all_expenses
 
         total_amount_page = sum(
             getattr(income, 'amount', 0) for income in pages_expense

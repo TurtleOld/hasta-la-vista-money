@@ -22,9 +22,6 @@ from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.custom_paginator import (
-    paginator_custom_view,
-)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
@@ -34,7 +31,10 @@ from hasta_la_vista_money.receipts.forms import (
     UploadImageForm,
 )
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
-from hasta_la_vista_money.receipts.services import analyze_image_with_ai
+from hasta_la_vista_money.receipts.services import (
+    analyze_image_with_ai,
+    paginator_custom_view,
+)
 from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)

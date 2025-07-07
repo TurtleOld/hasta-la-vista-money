@@ -4,9 +4,13 @@ import os
 from django.core.files.uploadedfile import UploadedFile
 from dotenv import load_dotenv
 from openai import OpenAI
+from django.core.paginator import Page, Paginator
+from django.db.models import QuerySet
+from typing import Any, Sequence, TypeVar, Union
 
 load_dotenv()
 
+T = TypeVar("T")
 
 def image_to_base64(uploaded_file) -> str:
     """
@@ -101,3 +105,23 @@ def analyze_image_with_ai(image_base64: UploadedFile):
         ],
     )
     return response.choices[0].message.content
+
+
+def paginator_custom_view(
+    request,
+    queryset: Union[QuerySet[Any], list[Any]],
+    paginate_by: int,
+    page_name: str,
+) -> Page[Sequence[T]]:
+    """
+    Кастомный пагинатор для данных.
+
+    :param request
+    :param queryset: QuerySet или список данных
+    :param paginate_by: количество элементов на странице
+    :param page_name: имя параметра страницы в URL
+    :return Page: страница с данными
+    """
+    paginator = Paginator(queryset, paginate_by)
+    num_page = request.GET.get(page_name)
+    return paginator.get_page(num_page)

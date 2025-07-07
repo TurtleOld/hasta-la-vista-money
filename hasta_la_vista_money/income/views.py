@@ -18,9 +18,6 @@ from django.views.generic.edit import CreateView, DeletionMixin
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.custom_paginator import (
-    paginator_custom_view,
-)
 from hasta_la_vista_money.commonlogic.views import (
     IncomeExpenseCreateViewMixin,
     build_category_tree,
@@ -94,12 +91,8 @@ class IncomeView(
 
         income_by_month = income_filter.qs
 
-        pages_income = paginator_custom_view(
-            self.request,
-            income_by_month,
-            self.paginate_by or 10,
-            'income',
-        )
+        # Pagination removed, as Tabulator is used
+        pages_income = income_by_month
 
         total_amount_page = sum(income['amount'] for income in pages_income)
         total_amount_period = sum(income['amount'] for income in income_by_month)
