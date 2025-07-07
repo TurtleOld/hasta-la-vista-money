@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function () { 
+document.addEventListener('DOMContentLoaded', function () {
     var themeIcon = document.getElementById('theme-icon');
     function updateThemeIcon(theme) {
         if (!themeIcon) return;
@@ -36,11 +36,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function getCookie(name) {
-        var cookieValue = null;
+        if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+            return null;
+        }
+        let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
-            var cookies = document.cookie.split(';');
-            for (var i = 0; i < cookies.length; i++) {
-                var cookie = cookies[i].trim();
+            const cookies = document.cookie.split(';');
+            for (const cookieRaw of cookies) {
+                const cookie = cookieRaw.trim();
                 if (cookie.substring(0, name.length + 1) === (name + '=')) {
                     cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
                     break;
