@@ -829,3 +829,15 @@ def groups_not_for_user_ajax(request):
         except User.DoesNotExist:
             pass
     return JsonResponse({'groups': groups})
+
+
+class SwitchThemeView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        user = User.objects.get(pk=request.user.pk)
+        data = json.loads(request.body)
+        theme = data.get('theme')
+        if theme not in ['light', 'dark']:
+            theme = 'light'
+        user.theme = theme
+        user.save()
+        return JsonResponse({'success': True})
