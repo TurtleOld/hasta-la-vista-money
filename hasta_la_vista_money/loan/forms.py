@@ -82,6 +82,7 @@ class LoanForm(BaseForm):
             name_account=_(f'Кредитный счёт на {loan_amount}'),
             balance=loan_amount,
             currency='RU',
+            type_account=Account.TYPE_ACCOUNT_LIST[0][0],
         )
         form.save()
 

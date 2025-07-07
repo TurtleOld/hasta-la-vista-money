@@ -92,18 +92,6 @@ class IncomeView(
             depth=depth_limit,
         )
 
-        income_categories = (
-            IncomeCategory.objects.filter(user=user)
-            .select_related('user')
-            .order_by('parent_category__name', 'name')
-            .all()
-        )
-        income_form = IncomeForm(
-            user=self.request.user,
-            depth=depth_limit,
-            category_queryset=income_categories,
-        )
-
         income_by_month = income_filter.qs
 
         pages_income = paginator_custom_view(
@@ -138,7 +126,6 @@ class IncomeView(
                 'categories': categories,
                 'income_filter': income_filter,
                 'income_by_month': pages_income,
-                'income_form': income_form,
                 'flattened_categories': flattened_categories,
                 'total_amount_page': total_amount_page,
                 'total_amount_period': total_amount_period,
@@ -157,27 +144,55 @@ class IncomeCreateView(
     IncomeExpenseCreateViewMixin,
 ):
     model = Income
+    template_name = 'income/create_income.html'
     no_permission_url = reverse_lazy('login')
     form_class = IncomeForm
     depth_limit = 3
     success_url: Optional[str] = reverse_lazy('income:list')
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        user = get_object_or_404(User, username=self.request.user)
+        income_categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        kwargs['category_queryset'] = income_categories
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        return super().get_context_data(**kwargs)
+
     def form_valid(self, form: Any) -> HttpResponse:
-        if form.is_valid():
-            form_class = self.get_form_class()
-            form = self.get_form(form_class)
-            response_data = create_object_view(
-                form=form,
-                model=IncomeCategory,
-                request=self.request,
-                message=constants.SUCCESS_INCOME_ADDED,
-            )
-            return JsonResponse(response_data)
-        return super().form_valid(form)
+        response_data = create_object_view(
+            form=form,
+            model=IncomeCategory,
+            request=self.request,
+            message=constants.SUCCESS_INCOME_ADDED,
+        )
+        if response_data.get('success'):
+            return HttpResponseRedirect(str(self.success_url))
+        else:
+            for field, errors in response_data.get('errors', {}).items():
+                if field == '__all__':
+                    form.add_error(None, errors[0])
+                else:
+                    for error in errors:
+                        form.add_error(field, error)
+            return self.form_invalid(form)
 
     def form_invalid(self, form):
-        # Передаем объект формы в шаблон
-        return self.render_to_response(self.get_context_data(income_form=form))
+        user = get_object_or_404(User, username=self.request.user)
+        income_categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        form.fields['category'].queryset = income_categories
+        return self.render_to_response(self.get_context_data(form=form))
 
 
 class IncomeCopyView(
@@ -356,8 +371,10 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
     depth = 3
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
+        return super().get_context_data(**kwargs)
 
+    def get_form_kwargs(self) -> Dict[str, Any]:
+        kwargs = super().get_form_kwargs()
         user = get_object_or_404(User, username=self.request.user)
         categories = (
             IncomeCategory.objects.filter(user=user)
@@ -365,19 +382,9 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
             .order_by('parent_category__name', 'name')
             .all()
         )
-
-        add_category_income_form = AddCategoryIncomeForm(
-            user=self.request.user,
-            depth=self.depth,
-            category_queryset=categories,
-        )
-        context['add_category_income_form'] = add_category_income_form
-        return context
-
-    def get_form_kwargs(self) -> Dict[str, Any]:
-        kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         kwargs['depth'] = self.depth
+        kwargs['category_queryset'] = categories
         return kwargs
 
     def form_valid(self, form: Any) -> HttpResponse:
@@ -401,8 +408,7 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
                 'Ошибка при добавлении категории. Проверьте введенные данные.',
             )
         messages.error(self.request, error_message)
-
-        return HttpResponseRedirect(str(reverse_lazy('income:create_category')))
+        return self.render_to_response(self.get_context_data(form=form))
 
 
 class IncomeCategoryDeleteView(BaseView, DeleteObjectMixin):
