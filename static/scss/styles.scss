@@ -11,6 +11,12 @@ $table-striped-bg: #d1f5e0 !important;
 @import "loan";
 
 
+.avatar-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    font-size: 2rem;
+}
 .credit-only-field-container {
     display: none;
 }
@@ -587,7 +593,7 @@ table {
 // --- HEADER STYLES ---
 .navbar {
     backdrop-filter: blur(10px);
-    background: rgba(255, 255, 255, 0.95) !important;
+    //background: rgba(255, 255, 255, 0.95) !important;
 }
 
 .logo {
@@ -656,7 +662,7 @@ table {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background-color: #f8f9fa;
+    //background-color: #f8f9fa;
     color: #6c757d;
 }
 
@@ -923,36 +929,50 @@ div.dtsp-searchPane .dtsp-paneInputButton {
 }
 
 .tabulator {
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    font-size: 0.9rem;
     border: 1px solid #dee2e6;
-    font-size: 0.95rem;
-    background: #fff;
 }
 .tabulator-header {
-    background: #f8f9fa;
-    font-weight: bold;
-    border-radius: 8px 8px 0 0;
+    background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
 }
 .tabulator-row {
-    transition: background 0.2s;
-    width: 100% !important;
-}
-.tabulator-row:nth-child(even) {
-    background: #f6f6f6;
+    border-bottom: 1px solid #dee2e6;
 }
 .tabulator-row:hover {
-    background: #e9ecef;
+    background-color: #f8f9fa;
+    }
+    
+    .table-foreign {
+        background-color: #fff3cd !important;
 }
 .tabulator-cell {
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem;
+        vertical-align: middle;
 }
 .tabulator-footer {
-    background: #f8f9fa;
-    border-radius: 0 0 8px 8px;
+    background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .tabulator-paginator {
+        background-color: #f8f9fa;
+    }
+    
+    .tabulator-page {
+        border: 1px solid #dee2e6;
+        background-color: white;
+    }
+    
+    .tabulator-page:hover {
+        background-color: #e9ecef;
+    }
+    
+    .tabulator-page[data-page="active"] {
+        background-color: #0d6efd;
+        color: white;
 }
-.tabulator .btn {
-    padding: 0.2rem 0.5rem;
-    font-size: 0.9rem;
-    border-radius: 4px;
+// Fade transition for theme change
+body.theme-fade {
+    transition: background-color 0.4s, color 0.4s;
 }

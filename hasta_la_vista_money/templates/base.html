@@ -18,51 +18,9 @@
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha512-fw7f+TcMjTb7bpbLJZlP8g2Y4XcCyFZW8uy8HsRZsH/SwbMw0plKHFHr99DN3l04VsYNwvzicUX/6qurvIxbxw==" crossorigin="anonymous">
         <link href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
-        <style nonce="{{request.csp_nonce}}">
-            /* Стили для Tabulator */
-            .tabulator {
-                font-size: 0.9rem;
-                border: 1px solid #dee2e6;
-            }
-            .tabulator-header {
-                background-color: #f8f9fa;
-                border-bottom: 2px solid #dee2e6;
-            }
-            .tabulator-row {
-                border-bottom: 1px solid #dee2e6;
-            }
-            .tabulator-row:hover {
-                background-color: #f8f9fa;
-            }
-            .table-foreign {
-                background-color: #fff3cd !important;
-            }
-            .tabulator-cell {
-                padding: 0.5rem;
-                vertical-align: middle;
-            }
-            .tabulator-footer {
-                background-color: #f8f9fa;
-                border-top: 1px solid #dee2e6;
-            }
-            .tabulator-paginator {
-                background-color: #f8f9fa;
-            }
-            .tabulator-page {
-                border: 1px solid #dee2e6;
-                background-color: white;
-            }
-            .tabulator-page:hover {
-                background-color: #e9ecef;
-            }
-            .tabulator-page[data-page="active"] {
-                background-color: #0d6efd;
-                color: white;
-            }
-        </style>
     {% endblock %}
 </head>
-<body class="bg-white">
+<body data-bs-theme="{% if user.is_authenticated %}{{ user.theme|default:'light' }}{% else %}light{% endif %}">
     {% if user.is_authenticated %}
         <div class="header">
             {% include 'header.html' %}
@@ -99,6 +57,7 @@
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/budget.js' %}?v={% word_hash %}"></script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/theme.js' %}?v={% word_hash %}"></script>
     {% if 'income' in request.path %}
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/income_table.js' %}?v={% word_hash %}"></script>
     {% endif %}
@@ -109,5 +68,8 @@
     {% if 'loan' in request.path %}
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/loan.js' %}?v={% word_hash %}"></script>
     {% endif %}
+    <script nonce="{{request.csp_nonce}}">
+        window.SET_THEME_URL = "{% url 'users:set_theme' %}";
+    </script>
 </body>
 </html>

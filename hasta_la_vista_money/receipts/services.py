@@ -10,7 +10,8 @@ from typing import Any, Sequence, TypeVar, Union
 
 load_dotenv()
 
-T = TypeVar("T")
+T = TypeVar('T')
+
 
 def image_to_base64(uploaded_file) -> str:
     """

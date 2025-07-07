@@ -16,8 +16,7 @@
                     <div class="card-body">
                         <div class="row align-items-center">
                             <div class="col-auto">
-                                <div class="avatar-circle bg-primary text-white d-flex align-items-center justify-content-center"
-                                     style="width: 80px; height: 80px; border-radius: 50%; font-size: 2rem;">
+                                <div class="avatar-circle bg-primary text-white d-flex align-items-center justify-content-center">
                                     {{ user.username|first|upper }}
                                 </div>
                             </div>
@@ -314,6 +313,13 @@
                                             <a class="btn btn-outline-secondary" href="{% url 'users:export_data' %}">
                                                 <i class="bi bi-download"></i> {% translate 'Экспорт данных' %}
                                             </a>
+                                        </div>
+                                        <hr>
+                                        <h5>{% translate 'Тема' %}</h5>
+                                        <div class="d-grid gap-2">
+                                            <button id="theme-toggle" class="btn btn-outline-secondary">
+                                                <i id="theme-icon" class="bi"></i> {% translate 'Тема' %}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

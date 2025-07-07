@@ -9,6 +9,7 @@ from hasta_la_vista_money.users.views import (
     ListUsers,
     LoginUser,
     SetPasswordUserView,
+    SwitchThemeView,
     UpdateUserView,
     UserStatisticsView,
     groups_for_user_ajax,
@@ -47,4 +48,5 @@ urlpatterns = [
         groups_not_for_user_ajax,
         name='ajax_groups_not_for_user',
     ),
+    path('set-theme/', SwitchThemeView.as_view(), name='set_theme'),
 ]
