@@ -57,7 +57,9 @@
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/budget.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/theme.js' %}?v={% word_hash %}"></script>
+    {% if 'users' in request.path %}
+        <script nonce="{{request.csp_nonce}}" src="{% static 'js/theme.js' %}?v={% word_hash %}"></script>
+    {% endif %}
     {% if 'income' in request.path %}
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/income_table.js' %}?v={% word_hash %}"></script>
     {% endif %}
