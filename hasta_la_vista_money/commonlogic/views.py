@@ -10,10 +10,17 @@ from hasta_la_vista_money.users.models import User
 def build_category_tree(categories, parent_id=None, depth=2, current_depth=1):
     """
     Формирование дерева категория для отображения на сайте.
-
-    Yields:
-        - yield
+    Добавляет поле total_children_count — количество всех вложенных подкатегорий.
     """
+
+    def count_all_descendants(cat_id):
+        count = 0
+        children = [c for c in categories if c['parent_category'] == cat_id]
+        count += len(children)
+        for child in children:
+            count += count_all_descendants(child['id'])
+        return count
+
     for category in categories:
         if category['parent_category'] == parent_id:
             if current_depth < depth:
@@ -28,6 +35,7 @@ def build_category_tree(categories, parent_id=None, depth=2, current_depth=1):
                         depth,
                         current_depth + 1,
                     ),
+                    'total_children_count': count_all_descendants(category['id']),
                 }
             else:
                 yield {
@@ -35,6 +43,7 @@ def build_category_tree(categories, parent_id=None, depth=2, current_depth=1):
                     'name': category['name'],
                     'parent_category': category['parent_category'],
                     'parent_category__name': category['parent_category__name'],
+                    'total_children_count': count_all_descendants(category['id']),
                 }
 
 

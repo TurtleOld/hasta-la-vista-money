@@ -4,59 +4,52 @@
     {% for category in flattened_categories %}
     <li class="list-group-item">
         <div class="d-flex align-items-center">
+            <i class="bi bi-folder text-primary me-2"></i>
             <strong>{{ category.name }}</strong>
-            <form class="form-remove-category-button m-0"
-                  method="post"
-                  action="{% url 'income:delete_category_income' category.id %}">
+            {% if category.total_children_count %}
+                <span class="badge bg-light text-dark ms-2">{{ category.total_children_count }}</span>
+            {% endif %}
+            <form class="form-remove-category-button m-0 ms-auto" method="post" action="{% url 'income:delete_category_income' category.id %}">
                 {% csrf_token %}
-                <button class="remove-object-button btn btn-outline-danger border-0 btn-sm"
-                        data-nonce="{{ request.csp_nonce }}"
-                        type="submit"
-                        name="delete_category_income_button">
-                    {% include 'button_remove.html' %}
+                <button class="remove-object-button btn btn-link text-danger p-0 ms-2" type="submit" name="delete_category_income_button" data-bs-toggle="tooltip" data-bs-placement="top" title="{% translate 'Удалить категорию' %}">
+                    <i class="bi bi-trash"></i>
                 </button>
             </form>
         </div>
-        <!-- /.d-flex align-items-center -->
-
         {% if category.children %}
-        <ul class="list-group list-group-flush">
+        <ul class="list-group list-group-flush ms-3">
             {% for child in category.children %}
             <li class="list-group-item">
                 <div class="d-flex align-items-center">
+                    <i class="bi bi-bookmark text-success me-2"></i>
                     <span>{{ child.name }}</span>
-                    <form class="form-remove-category-button m-0"
-                          method="post"
-                          action="{% url 'income:delete_category_income' child.id %}">
+                    {% if child.total_children_count %}
+                        <span class="badge bg-light text-dark ms-2">{{ child.total_children_count }}</span>
+                    {% endif %}
+                    <form class="form-remove-category-button m-0 ms-auto" method="post" action="{% url 'income:delete_category_income' child.id %}">
                         {% csrf_token %}
-                        <button class="remove-object-button btn btn-outline-danger border-0 btn-sm"
-                                data-nonce="{{ request.csp_nonce }}"
-                                type="submit"
-                                name="delete_category_income_button">
-                            {% include 'button_remove.html' %}
+                        <button class="remove-object-button btn btn-link text-danger p-0 ms-2" type="submit" name="delete_category_income_button" data-bs-toggle="tooltip" data-bs-placement="top" title="{% translate 'Удалить категорию' %}">
+                            <i class="bi bi-trash"></i>
                         </button>
                     </form>
                 </div>
-                <!-- /.d-flex align-items-center -->
                 {% if child.children %}
-                <ul class="list-group list-group-flush">
+                <ul class="list-group list-group-flush ms-4">
                     {% for grandchild in child.children %}
                     <li class="list-group-item">
                         <div class="d-flex align-items-center">
-                            <span>{{ grandchild.name }}</span>
-                            <form class="form-remove-category-button m-0"
-                                  method="post"
-                                  action="{% url 'income:delete_category_income' grandchild.id %}">
+                            <i class="bi bi-folder2-open text-secondary me-2"></i>
+                            <span class="fst-italic">{{ grandchild.name }}</span>
+                            {% if grandchild.total_children_count %}
+                                <span class="badge bg-light text-dark ms-2">{{ grandchild.total_children_count }}</span>
+                            {% endif %}
+                            <form class="form-remove-category-button m-0 ms-auto" method="post" action="{% url 'income:delete_category_income' grandchild.id %}">
                                 {% csrf_token %}
-                                <button class="remove-object-button btn btn-outline-danger border-0 btn-sm"
-                                        data-nonce="{{ request.csp_nonce }}"
-                                        type="submit"
-                                        name="delete_category_income_button">
-                                    {% include 'button_remove.html' %}
+                                <button class="remove-object-button btn btn-link text-danger p-0 ms-2" type="submit" name="delete_category_income_button" data-bs-toggle="tooltip" data-bs-placement="top" title="{% translate 'Удалить категорию' %}">
+                                    <i class="bi bi-trash"></i>
                                 </button>
                             </form>
                         </div>
-                        <!-- /.d-flex align-items-center -->
                     </li>
                     {% endfor %}
                 </ul>

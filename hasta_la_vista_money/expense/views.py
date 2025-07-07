@@ -393,28 +393,19 @@ class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
     success_url: str = reverse_lazy('expense:category_list')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        context = super().get_context_data(**kwargs)
+        return super().get_context_data(**kwargs)
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
         user = get_object_or_404(User, username=self.request.user)
         categories = (
             user.category_expense_users.select_related('user')
             .order_by('parent_category__name', 'name')
             .all()
         )
-
-        add_category_form = AddCategoryForm(
-            user=self.request.user,
-            depth=self.depth,
-            category_queryset=categories,
-        )
-        context['add_category_form'] = add_category_form
-
-        return context
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         kwargs['depth'] = self.depth
+        kwargs['category_queryset'] = categories
         return kwargs
 
     def form_valid(self, form):
@@ -426,7 +417,6 @@ class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
             self.request,
             f'Категория "{category_name}" была успешно добавлена!',
         )
-
         return redirect(self.success_url)
 
     def form_invalid(self, form):
@@ -434,7 +424,7 @@ class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
             self.request,
             'Ошибка при добавлении категории. Проверьте введенные данные.',
         )
-        return redirect(str(self.success_url))
+        return self.render_to_response(self.get_context_data(form=form))
 
 
 class ExpenseCategoryDeleteView(

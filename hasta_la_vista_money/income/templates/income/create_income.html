@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
-{% load i18n %}
 {% load crispy_forms_tags %}
+{% load i18n %}
 
-{% block title %}{% translate 'Добавить расход' %}{% endblock %}
+{% block title %}{% translate 'Добавить новый доход' %}{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
@@ -11,15 +11,15 @@
             <div class="card shadow">
                 <div class="card-header bg-success text-white">
                     <h5 class="card-title mb-0 d-flex align-items-center gap-2">
-                        <i class="bi bi-graph-down-arrow"></i>
-                        {% translate 'Добавить расход' %}
+                        <i class="bi bi-graph-up-arrow"></i>
+                        {% translate 'Добавить новый доход' %}
                     </h5>
                 </div>
                 <div class="card-body p-4">
-                    <form method="POST" action="">
+                    <form method="POST" action="{% url 'income:create' %}">
                         {% csrf_token %}
-                        {% if add_expense_form %}
-                            {% for field in add_expense_form %}
+                        {% if form %}
+                            {% for field in form %}
                                 <div class="mb-3">
                                     {{ field|as_crispy_field }}
                                     {% if field.errors %}
@@ -35,7 +35,7 @@
                         <div class="d-flex gap-2 mt-4">
                             <button type="submit" class="btn btn-success">
                                 <i class="bi bi-plus-circle me-2"></i>
-                                {% translate 'Добавить расход' %}
+                                {% translate 'Добавить доход' %}
                             </button>
                             <a href="{% url 'income:list' %}" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-left me-2"></i>
@@ -48,4 +48,4 @@
         </div>
     </div>
 </div>
-{% endblock %}
+{% endblock %} 

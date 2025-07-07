@@ -20,9 +20,9 @@
                         </select>
                     </div>
                     <!-- Кнопки действий -->
-                    <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#add-income" title="{% translate 'Добавить новую доходную операцию' %}">
+                    <a href="{% url 'income:create' %}" class="btn btn-outline-success btn-sm" title="{% translate 'Добавить новую доходную операцию' %}">
                         <i class="bi bi-graph-up-arrow"></i>
-                    </button>
+                    </a>
                     <a href="{% url 'income:category_list' %}" class="btn btn-outline-success btn-sm" title="{% translate 'Добавить категорию' %}">
                         <i class="bi bi-layout-text-sidebar-reverse"></i>
                     </a>

@@ -430,7 +430,7 @@ class TestExpense(TestCase):
             'parent_category': self.parent_category.pk,
         }
         response = self.client.post(reverse_lazy('expense:create_category'), data)
-        self.assertEqual(response.status_code, constants.REDIRECTS)
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_expense_category_delete_view(self):
         """Test ExpenseCategoryDeleteView functionality."""

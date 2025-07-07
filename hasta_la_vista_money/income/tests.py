@@ -288,7 +288,6 @@ class TestIncome(TestCase):
         self.assertIn('categories', response.context)
         self.assertIn('income_filter', response.context)
         self.assertIn('income_by_month', response.context)
-        self.assertIn('income_form', response.context)
         self.assertIn('flattened_categories', response.context)
 
     def test_income_create_view_form_valid(self):
@@ -303,7 +302,7 @@ class TestIncome(TestCase):
         }
 
         response = self.client.post(reverse_lazy('income:create'), data)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_income_copy_view(self):
         """Test IncomeCopyView functionality."""
@@ -383,7 +382,7 @@ class TestIncome(TestCase):
         }
 
         response = self.client.post(reverse_lazy('income:create_category'), data)
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_category_delete_view(self):
         """Test IncomeCategoryDeleteView functionality."""
