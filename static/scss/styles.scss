@@ -976,3 +976,176 @@ div.dtsp-searchPane .dtsp-paneInputButton {
 body.theme-fade {
     transition: background-color 0.4s, color 0.4s;
 }
+
+// Светлая тема (по умолчанию)
+[data-bs-theme="light"] .tabulator {
+    background-color: #fff;
+    color: #212529;
+}
+
+[data-bs-theme="light"] .tabulator-header {
+    background-color: #f8f9fa;
+}
+
+[data-bs-theme="light"] .tabulator-row {
+    background-color: #fff;
+}
+
+[data-bs-theme="light"] .tabulator-row.tabulator-selected {
+    background-color: #e9ecef;
+}
+
+// Тёмная тема
+[data-bs-theme="dark"] .tabulator {
+    background-color: #23272b !important;
+    color: #f8f9fa !important;
+    border-color: #343a40 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-header {
+    background-color: #23272b !important;
+    color: #f8f9fa !important;
+    border-bottom: 2px solid #343a40 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-col,
+[data-bs-theme="dark"] .tabulator-col-title {
+    background-color: #23272b !important;
+    color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .tabulator-row {
+    background-color: #23272b !important;
+    color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .tabulator-row.tabulator-selected {
+    background-color: #495057 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-cell {
+    color: #f8f9fa !important;
+    border-color: #343a40 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-footer,
+[data-bs-theme="dark"] .tabulator-paginator {
+    background-color: #23272b !important;
+    color: #f8f9fa !important;
+    border-top: 1px solid #343a40 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-pagination {
+    background-color: #23272b !important;
+    color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .tabulator-page,
+[data-bs-theme="dark"] .tabulator-page.active,
+[data-bs-theme="dark"] .tabulator-page:focus {
+    background-color: #343a40 !important;
+    color: #f8f9fa !important;
+    border-color: #495057 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-page:hover {
+    background-color: #495057 !important;
+    color: #fff !important;
+}
+
+[data-bs-theme="dark"] .tabulator-footer select,
+[data-bs-theme="dark"] .tabulator-footer option {
+    background-color: #343a40 !important;
+    color: #f8f9fa !important;
+    border: 1px solid #495057 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-header input,
+[data-bs-theme="dark"] .tabulator-header select {
+    background-color: #343a40 !important;
+    color: #f8f9fa !important;
+    border: 1px solid #495057 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-placeholder {
+    color: #adb5bd !important;
+    background: #23272b !important;
+}
+
+[data-bs-theme="dark"] .tabulator .btn,
+[data-bs-theme="dark"] .tabulator .btn-outline-success,
+[data-bs-theme="dark"] .tabulator .btn-outline-primary,
+[data-bs-theme="dark"] .tabulator .btn-outline-danger {
+    background: transparent !important;
+    color: #f8f9fa !important;
+    border-color: #495057 !important;
+}
+
+[data-bs-theme="dark"] .tabulator-footer,
+[data-bs-theme="dark"] .tabulator-header,
+[data-bs-theme="dark"] .tabulator {
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+[data-bs-theme="dark"] .tabulator-header .text-success {
+    color: #4ade80 !important; // ярко-зелёный, можно заменить на свой
+}
+
+[data-bs-theme="dark"] .tabulator-header .text-primary {
+    color: #60a5fa !important; // ярко-синий, можно заменить на свой
+}
+
+[data-bs-theme="dark"] .tabulator-header .text-secondary {
+    color: #a1a1aa !important; // светло-серый
+}
+
+[data-bs-theme="dark"] .tabulator-header .text-muted {
+    color: #adb5bd !important;
+}
+
+[data-bs-theme="dark"] .tabulator-header .fw-bold {
+    color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .tabulator .btn-outline-success {
+    color: #4ade80 !important; // зелёный
+    border-color: #4ade80 !important;
+}
+
+[data-bs-theme="dark"] .tabulator .btn-outline-primary {
+    color: #60a5fa !important; // синий
+    border-color: #60a5fa !important;
+}
+
+[data-bs-theme="dark"] .tabulator .btn-outline-danger {
+    color: #f87171 !important; // красный
+    border-color: #f87171 !important;
+}
+
+[data-bs-theme="dark"] .tabulator .btn-outline-success:hover,
+[data-bs-theme="dark"] .tabulator .btn-outline-primary:hover,
+[data-bs-theme="dark"] .tabulator .btn-outline-danger:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-bs-theme="dark"] .tabulator .btn-outline-success i {
+    color: #4ade80 !important;
+}
+
+[data-bs-theme="dark"] .tabulator .btn-outline-primary i {
+    color: #60a5fa !important;
+}
+
+[data-bs-theme="dark"] .tabulator .btn-outline-danger i {
+    color: #f87171 !important;
+}
+
+// Светлая тема
+[data-bs-theme="light"] .tabulator .tabulator-alt-row {
+    background-color: #d1e7dd;
+}
+
+// Тёмная тема
+[data-bs-theme="dark"] .tabulator .tabulator-alt-row {
+    background-color: #23272b;
+}

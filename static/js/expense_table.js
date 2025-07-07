@@ -68,10 +68,10 @@ document.addEventListener('DOMContentLoaded', function () {
         rowFormatter: function(row) {
             const el = row.getElement();
             // Мягкие полосы только для чётных строк
-            if(row.getPosition(true) % 2 === 0) {
-                el.classList.add('bg-success', 'bg-opacity-10');
+            if (row.getPosition(true) % 2 === 0) {
+                el.classList.add('tabulator-alt-row');
             } else {
-                el.classList.remove('bg-success', 'bg-opacity-10');
+                el.classList.remove('tabulator-alt-row');
             }
         },
         tableBuilt: function() {
