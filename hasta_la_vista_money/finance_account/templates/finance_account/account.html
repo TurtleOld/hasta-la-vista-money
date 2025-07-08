@@ -86,4 +86,25 @@
             </div>
         </div>
     </div>
+    <div class="row mb-3 ms-1 ">
+        <div class="col-xl-4">
+          <div class="card shadow-sm">
+            <div class="card-header">
+              <h5 class="mb-0"><i class="bi bi-people"></i> {% translate 'Сумма всех счетов вашей группы' %}</h5>
+            </div>
+            <div class="card-body">
+              <p class="fs-4 fw-bold">
+                {{ sum_all_accounts_in_group| comma}} ₽
+              </p>
+              <p class="text-muted mb-0">
+                {% if user_groups %}
+                  {% translate 'Это сумма всех счетов всех пользователей вашей группы.' %}
+                {% else %}
+                  {% translate 'Вы не состоите ни в одной группе. Отображается сумма только ваших счетов.' %}
+                {% endif %}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 {% endblock %}
