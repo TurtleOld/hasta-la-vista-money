@@ -25,6 +25,8 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from django.template.loader import render_to_string
 
+from hasta_la_vista_money.users.models import User
+
 
 class BaseView:
     template_name = 'finance_account/account.html'
@@ -97,6 +99,16 @@ class AccountView(
         # Сумма всех счетов
         sum_all_accounts = accounts.aggregate(total=Sum('balance'))['total'] or 0
 
+        # Сумма всех счетов в группе
+        user_groups = user.groups.all()
+
+        if user_groups.exists():
+            users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
+            sum_all_accounts_in_group = Account.objects.filter(user__in=users_in_groups).aggregate(total=Sum('balance'))['total'] or 0
+        else:
+            sum_all_accounts_in_group = Account.objects.filter(user=user).aggregate(total=Sum('balance'))['total'] or 0
+
+
         context.update(
             {
                 'accounts': accounts,
@@ -108,6 +120,7 @@ class AccountView(
                 'transfer_money_log': transfer_money_log,
                 'sum_all_accounts': sum_all_accounts,
                 'user_groups': self.request.user.groups.all(),
+                'sum_all_accounts_in_group': sum_all_accounts_in_group,
             },
         )
 
