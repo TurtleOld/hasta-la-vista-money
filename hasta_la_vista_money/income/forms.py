@@ -4,14 +4,15 @@ from django.forms import (
     DateTimeInput,
     DecimalField,
     ModelChoiceField,
+    ModelForm,
 )
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.commonlogic.forms import BaseForm
+from hasta_la_vista_money.custom_mixin import CategoryChoicesMixin
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
 
-class IncomeForm(BaseForm):
+class IncomeForm(ModelForm):
     """Модельная форма отображения доходов на сайте."""
 
     category = ModelChoiceField(
@@ -42,14 +43,14 @@ class IncomeForm(BaseForm):
     field = 'category'
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
         category_queryset = kwargs.pop('category_queryset', None)
+        account_queryset = kwargs.pop('account_queryset', None)
         super().__init__(*args, **kwargs)
 
-        if user:
-            self.fields['account'].queryset = Account.objects.filter(user=user)
         if category_queryset is not None:
             self.fields['category'].queryset = category_queryset
+        if account_queryset is not None:
+            self.fields['account'].queryset = account_queryset
 
     def configure_category_choices(self, category_choices):
         self.fields[self.field].choices = category_choices
@@ -64,7 +65,7 @@ class IncomeForm(BaseForm):
         }
 
 
-class AddCategoryIncomeForm(BaseForm):
+class AddCategoryIncomeForm(CategoryChoicesMixin, ModelForm):
     name = CharField(
         label=_('Название категории'),
         help_text=_('Введите название категории дохода для её создания'),

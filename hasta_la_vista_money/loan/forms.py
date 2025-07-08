@@ -7,14 +7,14 @@ from django.forms import (
     DecimalField,
     IntegerField,
     ModelChoiceField,
+    ModelForm,
 )
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.commonlogic.forms import BaseForm
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
 
 
-class LoanForm(BaseForm):
+class LoanForm(ModelForm):
     date = DateTimeField(
         label=_('Дата'),
         widget=DateTimeInput(
@@ -87,7 +87,7 @@ class LoanForm(BaseForm):
         form.save()
 
 
-class PaymentMakeLoanForm(BaseForm):
+class PaymentMakeLoanForm(ModelForm):
     date = DateTimeField(
         label=_('Дата платежа'),
         widget=DateTimeInput(

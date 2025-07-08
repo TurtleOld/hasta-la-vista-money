@@ -6,7 +6,6 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.views import create_object_view
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
@@ -15,6 +14,7 @@ from hasta_la_vista_money.loan.tasks import (
     calculate_differentiated_loan,
 )
 from hasta_la_vista_money.users.models import User
+from django.contrib import messages
 
 logger = structlog.get_logger(__name__)
 
@@ -136,11 +136,37 @@ class PaymentMakeCreateView(CustomNoPermissionMixin, CreateView):
         return kwargs
 
     def post(self, request, *args, **kwargs):
-        payment_make_form = self.form_class(request.user, request.POST)
-        result = create_object_view(
-            form=payment_make_form,
-            model=self.model,
-            request=request,
-            message=constants.SUCCESS_MESSAGE_PAYMENT_MAKE,
-        )
-        return JsonResponse(result)
+        form = self.get_form()
+        if not form.is_valid():
+            return JsonResponse({'success': False, 'errors': form.errors})
+
+        form_instance = form.save(commit=False)
+        cd = form.cleaned_data
+        amount = cd.get('amount')
+        account = cd.get('account')
+        loan = cd.get('loan')
+
+        if not all([amount, account, loan]):
+            return JsonResponse(
+                {
+                    'success': False,
+                    'errors': {'__all__': ['Все поля должны быть заполнены']},
+                }
+            )
+
+        if account.user == request.user:
+            form_instance.user = request.user
+            form_instance.account = account
+            form_instance.loan = loan
+            form_instance.save()
+            messages.success(request, constants.SUCCESS_MESSAGE_PAYMENT_MAKE)
+            return JsonResponse({'success': True})
+        else:
+            return JsonResponse(
+                {
+                    'success': False,
+                    'errors': {
+                        '__all__': ['У вас нет прав для выполнения этого действия']
+                    },
+                }
+            )

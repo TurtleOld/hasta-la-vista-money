@@ -104,10 +104,19 @@ class AccountView(
 
         if user_groups.exists():
             users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
-            sum_all_accounts_in_group = Account.objects.filter(user__in=users_in_groups).aggregate(total=Sum('balance'))['total'] or 0
+            sum_all_accounts_in_group = (
+                Account.objects.filter(user__in=users_in_groups).aggregate(
+                    total=Sum('balance')
+                )['total']
+                or 0
+            )
         else:
-            sum_all_accounts_in_group = Account.objects.filter(user=user).aggregate(total=Sum('balance'))['total'] or 0
-
+            sum_all_accounts_in_group = (
+                Account.objects.filter(user=user).aggregate(total=Sum('balance'))[
+                    'total'
+                ]
+                or 0
+            )
 
         context.update(
             {

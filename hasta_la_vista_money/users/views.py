@@ -20,7 +20,7 @@ from django.views import View
 from django.views.generic import CreateView, TemplateView, UpdateView
 from django.views.generic.edit import FormView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.generate_dates import generate_date_list
+from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.custom_mixin import (
     CustomNoPermissionMixin,
     CustomSuccessURLUserMixin,
@@ -455,7 +455,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             .order_by('-total')[:10]
         )
 
-        from hasta_la_vista_money.commonlogic.views import collect_info_receipt
+        from hasta_la_vista_money.services.views import collect_info_receipt
 
         receipt_info_by_month = collect_info_receipt(user=user)
 

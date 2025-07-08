@@ -1,9 +1,6 @@
-from django.contrib import messages
 from django.db.models import Count, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.shortcuts import get_object_or_404
-from django.views.generic import CreateView
-from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
 
@@ -68,75 +65,6 @@ def collect_info_receipt(user: User) -> QuerySet:
         )
         .order_by('-month')
     )
-
-
-class IncomeExpenseCreateViewMixin(CreateView):
-    depth_limit = None
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        kwargs['depth'] = self.depth_limit
-        return kwargs
-
-
-def create_object_view(
-    form,
-    model,
-    request,
-    message,
-) -> dict[str, bool | dict[str, list[str]]]:
-    """
-    Создание объектов для внесения данных по платежам кредита, расхода и дохода.
-
-    :param form:
-    :param model:
-    :param request:
-    :param message:
-    :return: JsonResponse
-    """
-    if not form.is_valid():
-        return {'success': False, 'errors': form.errors}
-
-    form_instance = form.save(commit=False)
-    cd = form.cleaned_data
-    amount = cd.get('amount')
-    account = cd.get('account')
-    category = cd.get('category')
-
-    if not all([amount, account, category]):
-        return {
-            'success': False,
-            'errors': {'__all__': ['Все поля должны быть заполнены']},
-        }
-
-    selected_account = get_object_or_404(Account, id=account.id)
-    selected_category = get_object_or_404(model, name=category)
-
-    if selected_account.user == request.user:
-        change_account_balance(account, request, amount)
-        form_instance.user = request.user
-        form_instance.category = selected_category
-
-        form_instance.save()
-        messages.success(
-            request,
-            message,
-        )
-        return {'success': True}
-    return {
-        'success': False,
-        'errors': {'__all__': ['У вас нет прав для выполнения этого действия']},
-    }
-
-
-def change_account_balance(account, request, amount):
-    """Изменение баланса счёта."""
-    if 'income' in request.path:
-        account.balance += amount
-    else:
-        account.balance -= amount
-    account.save()
 
 
 def get_queryset_type_income_expenses(type_id, model, form):
