@@ -57,9 +57,8 @@ class TestExpense(TestCase):
 
         form = AddExpenseForm(
             data=new_expense,
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertTrue(form.is_valid())
 
@@ -88,9 +87,8 @@ class TestExpense(TestCase):
 
         form = AddExpenseForm(
             data=update_expense,
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertTrue(form.is_valid())
 
@@ -128,8 +126,6 @@ class TestExpense(TestCase):
 
         form = AddCategoryForm(
             data=new_category,
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
         )
         self.assertTrue(form.is_valid())
@@ -207,9 +203,8 @@ class TestExpense(TestCase):
                 'date': timezone.now().strftime('%Y-%m-%d %H:%M'),
                 'amount': 1000,
             },
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertTrue(form.is_valid())
 
@@ -228,9 +223,8 @@ class TestExpense(TestCase):
                 'category': self.expense_type.pk,
                 'amount': 'invalid_amount',
             },
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertFalse(form.is_valid())
 
@@ -251,9 +245,8 @@ class TestExpense(TestCase):
                 'date': timezone.now().strftime('%Y-%m-%d %H:%M'),
                 'amount': self.account.balance + 1000,
             },
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertFalse(form.is_valid())
         self.assertIn('account', form.errors)
@@ -273,8 +266,6 @@ class TestExpense(TestCase):
                 'name': 'Test Category',
                 'parent_category': self.parent_category.pk,
             },
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
         )
         self.assertTrue(form.is_valid())
@@ -293,8 +284,6 @@ class TestExpense(TestCase):
             data={
                 'name': '',
             },
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
         )
         self.assertFalse(form.is_valid())
@@ -313,8 +302,6 @@ class TestExpense(TestCase):
             data={
                 'name': 'Test Category Without Parent',
             },
-            user=self.user,
-            depth=3,
             category_queryset=expense_categories,
         )
         self.assertTrue(form.is_valid())
@@ -362,21 +349,47 @@ class TestExpense(TestCase):
 
     def test_add_expense_form_configure_category_choices(self):
         """Test AddExpenseForm configure_category_choices method."""
-        form = AddExpenseForm(user=self.user, depth=3)
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        form = AddExpenseForm(
+            category_queryset=expense_categories,
+            account_queryset=Account.objects.filter(user=self.user),
+        )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
         self.assertEqual(form.fields['category'].choices, category_choices)
 
     def test_add_category_form_configure_category_choices(self):
         """Test AddCategoryForm configure_category_choices method."""
-        form = AddCategoryForm(user=self.user, depth=3)
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        form = AddCategoryForm(
+            category_queryset=expense_categories,
+        )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
         self.assertEqual(form.fields['parent_category'].choices, category_choices)
 
     def test_add_expense_form_field_configuration(self):
         """Test AddExpenseForm field configuration."""
-        form = AddExpenseForm(user=self.user, depth=3)
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        form = AddExpenseForm(
+            category_queryset=expense_categories,
+            account_queryset=Account.objects.filter(user=self.user),
+        )
         self.assertIn('category', form.fields)
         self.assertIn('account', form.fields)
         self.assertIn('date', form.fields)
@@ -384,7 +397,15 @@ class TestExpense(TestCase):
 
     def test_add_category_form_field_configuration(self):
         """Test AddCategoryForm field configuration."""
-        form = AddCategoryForm(user=self.user, depth=3)
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=self.user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        form = AddCategoryForm(
+            category_queryset=expense_categories,
+        )
         self.assertIn('name', form.fields)
         self.assertIn('parent_category', form.fields)
 

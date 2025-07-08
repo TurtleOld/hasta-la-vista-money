@@ -1,6 +1,5 @@
 from django.db import models
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.models import CommonIncomeExpense
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
@@ -45,7 +44,18 @@ class ExpenseCategory(models.Model):
         return str(self.name)
 
 
-class Expense(CommonIncomeExpense):
+class Expense(models.Model):
+    date = models.DateTimeField()
+    amount = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=2,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+        blank=True,
+        verbose_name='Date created',
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -62,8 +72,11 @@ class Expense(CommonIncomeExpense):
         related_name='expense_categories',
     )
 
-    class Meta(CommonIncomeExpense.Meta):
-        indexes = CommonIncomeExpense.Meta.indexes + [
+    class Meta:
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['-date']),
+            models.Index(fields=['amount']),
             models.Index(fields=['user', 'date']),
             models.Index(fields=['user', 'category']),
             models.Index(fields=['user', 'account']),

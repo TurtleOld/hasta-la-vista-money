@@ -62,9 +62,8 @@ class TestIncome(TestCase):
 
         form = IncomeForm(
             data=new_income,
-            user=self.user,
-            depth=3,
             category_queryset=income_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertTrue(form.is_valid())
 
@@ -104,9 +103,8 @@ class TestIncome(TestCase):
 
         form = IncomeForm(
             data=update_income,
-            user=self.user,
-            depth=3,
             category_queryset=income_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertTrue(form.is_valid())
 
@@ -156,8 +154,6 @@ class TestIncome(TestCase):
 
         form = AddCategoryIncomeForm(
             data=new_category,
-            user=self.user,
-            depth=3,
             category_queryset=income_categories,
         )
         self.assertTrue(form.is_valid())
@@ -199,9 +195,8 @@ class TestIncome(TestCase):
                 'date': timezone.now().strftime('%Y-%m-%d %H:%M'),
                 'amount': 1000,
             },
-            user=self.user,
-            depth=3,
             category_queryset=income_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertTrue(form.is_valid())
 
@@ -220,9 +215,8 @@ class TestIncome(TestCase):
                 'category': self.income_type.pk,
                 'amount': 'invalid_amount',
             },
-            user=self.user,
-            depth=3,
             category_queryset=income_categories,
+            account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertFalse(form.is_valid())
 
@@ -241,8 +235,6 @@ class TestIncome(TestCase):
                 'name': 'Test Category',
                 'parent_category': self.parent_category.pk,
             },
-            user=self.user,
-            depth=3,
             category_queryset=income_categories,
         )
         self.assertTrue(form.is_valid())
@@ -253,8 +245,6 @@ class TestIncome(TestCase):
             data={
                 'name': '',
             },
-            user=self.user,
-            depth=3,
         )
         self.assertFalse(form.is_valid())
 
@@ -395,14 +385,19 @@ class TestIncome(TestCase):
 
     def test_income_form_configure_category_choices(self):
         """Test IncomeForm configure_category_choices method."""
-        form = IncomeForm(user=self.user, depth=3)
+        form = IncomeForm(
+            category_queryset=IncomeCategory.objects.filter(user=self.user),
+            account_queryset=Account.objects.filter(user=self.user),
+        )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
         self.assertEqual(form.fields['category'].choices, category_choices)
 
     def test_create_category_income_form_configure_category_choices(self):
         """Test AddCategoryIncomeForm configure_category_choices method."""
-        form = AddCategoryIncomeForm(user=self.user, depth=3)
+        form = AddCategoryIncomeForm(
+            category_queryset=IncomeCategory.objects.filter(user=self.user),
+        )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
         self.assertEqual(form.fields['parent_category'].choices, category_choices)
@@ -487,7 +482,10 @@ class TestIncome(TestCase):
 
     def test_income_form_field_configuration(self):
         """Test IncomeForm field configuration."""
-        form = IncomeForm(user=self.user, depth=3)
+        form = IncomeForm(
+            category_queryset=IncomeCategory.objects.filter(user=self.user),
+            account_queryset=Account.objects.filter(user=self.user),
+        )
         self.assertIn('category', form.fields)
         self.assertIn('account', form.fields)
         self.assertIn('date', form.fields)
@@ -495,7 +493,9 @@ class TestIncome(TestCase):
 
     def test_create_category_income_form_field_configuration(self):
         """Test AddCategoryIncomeForm field configuration."""
-        form = AddCategoryIncomeForm(user=self.user, depth=3)
+        form = AddCategoryIncomeForm(
+            category_queryset=IncomeCategory.objects.filter(user=self.user),
+        )
         self.assertIn('name', form.fields)
         self.assertIn('parent_category', form.fields)
 

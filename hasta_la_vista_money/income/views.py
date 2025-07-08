@@ -18,17 +18,14 @@ from django.views.generic.edit import CreateView, DeletionMixin
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.views import (
-    IncomeExpenseCreateViewMixin,
+from hasta_la_vista_money.services.views import (
     build_category_tree,
-    create_object_view,
     get_new_type_operation,
     get_queryset_type_income_expenses,
 )
 from hasta_la_vista_money.custom_mixin import (
     CustomNoPermissionMixin,
     DeleteObjectMixin,
-    UpdateViewMixin,
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.filters import IncomeFilter
@@ -134,7 +131,7 @@ class IncomeCreateView(
     CustomNoPermissionMixin,
     SuccessMessageMixin,
     BaseView,
-    IncomeExpenseCreateViewMixin,
+    CreateView,
 ):
     model = Income
     template_name = 'income/create_income.html'
@@ -145,35 +142,40 @@ class IncomeCreateView(
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        user = get_object_or_404(User, username=self.request.user)
-        income_categories = (
-            IncomeCategory.objects.filter(user=user)
-            .select_related('user')
-            .order_by('parent_category__name', 'name')
-            .all()
-        )
-        kwargs['category_queryset'] = income_categories
+        user = self.request.user
+        kwargs['category_queryset'] = IncomeCategory.objects.filter(user=user)
+        kwargs['account_queryset'] = Account.objects.filter(user=user)
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         return super().get_context_data(**kwargs)
 
     def form_valid(self, form: Any) -> HttpResponse:
-        response_data = create_object_view(
-            form=form,
-            model=IncomeCategory,
-            request=self.request,
-            message=constants.SUCCESS_INCOME_ADDED,
-        )
-        if response_data.get('success'):
+        if not form.is_valid():
+            return self.form_invalid(form)
+
+        form_instance = form.save(commit=False)
+        cd = form.cleaned_data
+        amount = cd.get('amount')
+        account = cd.get('account')
+        category = cd.get('category')
+
+        if not all([amount, account, category]):
+            form.add_error(None, 'Все поля должны быть заполнены')
+            return self.form_invalid(form)
+
+        selected_account = get_object_or_404(Account, id=account.id)
+        selected_category = get_object_or_404(IncomeCategory, name=category)
+
+        if selected_account.user == self.request.user:
+            # Здесь твоя логика изменения баланса, если нужна
+            form_instance.user = self.request.user
+            form_instance.category = selected_category
+            form_instance.save()
+            messages.success(self.request, constants.SUCCESS_INCOME_ADDED)
             return HttpResponseRedirect(str(self.success_url))
         else:
-            for field, errors in response_data.get('errors', {}).items():
-                if field == '__all__':
-                    form.add_error(None, errors[0])
-                else:
-                    for error in errors:
-                        form.add_error(field, error)
+            form.add_error(None, 'У вас нет прав для выполнения этого действия')
             return self.form_invalid(form)
 
     def form_invalid(self, form):
@@ -213,7 +215,6 @@ class IncomeUpdateView(
     SuccessMessageMixin,
     BaseView,
     UpdateView,
-    UpdateViewMixin,
 ):
     model = Income
     template_name = 'income/change_income.html'
@@ -228,23 +229,6 @@ class IncomeUpdateView(
             pk=self.kwargs['pk'],
             user=self.request.user,
         )
-
-    def get_form_kwargs(self) -> Dict[str, Any]:
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        kwargs['depth'] = self.depth_limit
-
-        # Add category queryset for form validation
-        user = get_object_or_404(User, username=self.request.user)
-        income_categories = (
-            IncomeCategory.objects.filter(user=user)
-            .select_related('user')
-            .order_by('parent_category__name', 'name')
-            .all()
-        )
-        kwargs['category_queryset'] = income_categories
-
-        return kwargs
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
@@ -263,6 +247,13 @@ class IncomeUpdateView(
         form = form_class(**form_kwargs)
         context['income_form'] = form
         return context
+
+    def get_form_kwargs(self) -> dict:
+        kwargs = super().get_form_kwargs()
+        user = self.request.user
+        kwargs['category_queryset'] = IncomeCategory.objects.filter(user=user)
+        kwargs['account_queryset'] = Account.objects.filter(user=user)
+        return kwargs
 
     def form_valid(self, form: Any) -> HttpResponse:
         income = get_queryset_type_income_expenses(self.object.id, Income, form)
@@ -375,8 +366,6 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
             .order_by('parent_category__name', 'name')
             .all()
         )
-        kwargs['user'] = self.request.user
-        kwargs['depth'] = self.depth
         kwargs['category_queryset'] = categories
         return kwargs
 

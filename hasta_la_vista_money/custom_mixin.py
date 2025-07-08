@@ -1,8 +1,8 @@
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, QuerySet
 from django.http import HttpRequest
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
@@ -73,3 +73,37 @@ class UpdateViewMixin:
         model = self.get_object()
         form = form_class(instance=model, user=user, depth=depth)
         return {form_name: form}
+
+
+def get_category_choices(
+    queryset: QuerySet[Any],
+    parent=None,
+    level: int = 0,
+    max_level: int = 2,
+) -> Generator[tuple[Any, str], None, None]:
+    """Формируем выбор категории в форме."""
+    for category in queryset.filter(parent_category=parent):
+        yield (category.pk, f'{"  >" * level} {category.name}')
+        if level < max_level - 1:
+            yield from get_category_choices(
+                queryset,
+                parent=category,
+                level=level + 1,
+                max_level=max_level,
+            )
+
+
+class CategoryChoicesMixin:
+    field: str
+
+    def __init__(self, *args, category_queryset=None, depth=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if category_queryset:
+            category_choices = list(
+                get_category_choices(
+                    queryset=category_queryset,
+                    max_level=depth,
+                )
+            )
+            category_choices.insert(0, ('', '----------'))
+            self.fields[self.field].choices = category_choices

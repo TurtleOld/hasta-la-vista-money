@@ -38,20 +38,19 @@ INTERNAL_IPS = [
 
 # Application definition
 LOCAL_APPS = [
-    'hasta_la_vista_money',
-    'hasta_la_vista_money.api',
-    'hasta_la_vista_money.authentication',
-    'hasta_la_vista_money.finance_account',
-    'hasta_la_vista_money.budget',
-    'hasta_la_vista_money.commonlogic',
-    'hasta_la_vista_money.expense',
-    'hasta_la_vista_money.income',
-    'hasta_la_vista_money.loan',
-    'hasta_la_vista_money.receipts',
-    'hasta_la_vista_money.reports',
-    'hasta_la_vista_money.users',
-    'hasta_la_vista_money.templatags.thousand_comma',
-    'hasta_la_vista_money.templatags.generate_hash',
+    "hasta_la_vista_money",
+    "hasta_la_vista_money.api",
+    "hasta_la_vista_money.authentication",
+    "hasta_la_vista_money.finance_account",
+    "hasta_la_vista_money.budget",
+    "hasta_la_vista_money.expense",
+    "hasta_la_vista_money.income",
+    "hasta_la_vista_money.loan",
+    "hasta_la_vista_money.receipts",
+    "hasta_la_vista_money.reports",
+    "hasta_la_vista_money.users",
+    "hasta_la_vista_money.templatetags.thousand_comma",
+    "hasta_la_vista_money.templatetags.generate_hash",
 ]
 
 THIRD_PARTY_APPS = [
@@ -105,21 +104,21 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Templates
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'hasta_la_vista_money', 'templates')],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [os.path.join(BASE_DIR, "hasta_la_vista_money", "templates")],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
-            'libraries': {
-                'comma': 'hasta_la_vista_money.templatags.thousand_comma',
-                'word_hash': 'hasta_la_vista_money.templatags.generate_hash',
-                'dict_get': 'hasta_la_vista_money.templatags.dict_get',
-                'index': 'hasta_la_vista_money.templatags.index',
+            "libraries": {
+                "comma": "hasta_la_vista_money.templatetags.thousand_comma",
+                "word_hash": "hasta_la_vista_money.templatetags.generate_hash",
+                "dict_get": "hasta_la_vista_money.templatetags.dict_get",
+                "index": "hasta_la_vista_money.templatetags.index",
             },
         },
     },

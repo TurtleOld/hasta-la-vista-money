@@ -1,7 +1,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.models import CommonIncomeExpense
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
@@ -32,9 +31,20 @@ class IncomeCategory(models.Model):
         return self.name
 
 
-class Income(CommonIncomeExpense):
+class Income(models.Model):
     """Модель доходов."""
 
+    date = models.DateTimeField()
+    amount = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=2,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+        blank=True,
+        verbose_name=_('Дата создания'),
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -50,15 +60,12 @@ class Income(CommonIncomeExpense):
         on_delete=models.PROTECT,
         related_name='income_categories',
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        null=True,
-        blank=True,
-        verbose_name=_('Дата создания'),
-    )
 
-    class Meta(CommonIncomeExpense.Meta):
+    class Meta:
+        ordering = ['-date']
         indexes = [
+            models.Index(fields=['-date']),
+            models.Index(fields=['amount']),
             models.Index(fields=['user', 'date']),
             models.Index(fields=['user', 'category']),
             models.Index(fields=['user', 'account']),

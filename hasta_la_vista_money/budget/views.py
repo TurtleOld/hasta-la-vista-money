@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
 from hasta_la_vista_money.budget.models import DateList, Planning
-from hasta_la_vista_money.commonlogic.generate_dates import generate_date_list
+from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory

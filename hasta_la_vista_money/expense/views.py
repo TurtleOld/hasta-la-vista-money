@@ -17,8 +17,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.commonlogic.views import (
-    IncomeExpenseCreateViewMixin,
+from hasta_la_vista_money.services.views import (
     build_category_tree,
     get_new_type_operation,
     get_queryset_type_income_expenses,
@@ -102,16 +101,15 @@ class ExpenseView(
             .all()
         )
         add_expense_form = AddExpenseForm(
-            user=self.request.user,
-            depth=depth_limit,
             category_queryset=categories,
+            account_queryset=Account.objects.filter(user=user),
         )
 
         expenses = expense_filter.qs.select_related(
             'user',
             'category',
             'account',
-        ).order_by('-date')
+        )
 
         ReceiptExpense = namedtuple(
             'ReceiptExpense',
@@ -216,7 +214,7 @@ class ExpenseCreateView(
     CustomNoPermissionMixin,
     SuccessMessageMixin,
     ExpenseBaseView,
-    IncomeExpenseCreateViewMixin,
+    CreateView,
 ):
     no_permission_url = reverse_lazy('login')
     template_name = 'expense/add_expense.html'
@@ -226,14 +224,14 @@ class ExpenseCreateView(
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        user = self.request.user
+        user = get_object_or_404(User, username=self.request.user)
         categories = (
-            ExpenseCategory.objects.filter(user=user)
+            user.category_expense_users.select_related('user')
             .order_by('parent_category__name', 'name')
             .all()
         )
         kwargs['category_queryset'] = categories
+        kwargs['account_queryset'] = Account.objects.filter(user=user)
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -273,10 +271,6 @@ class ExpenseUpdateView(
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        kwargs['depth'] = self.depth_limit
-
-        # Add category queryset for form validation
         user = get_object_or_404(User, username=self.request.user)
         categories = (
             user.category_expense_users.select_related('user')
@@ -284,7 +278,7 @@ class ExpenseUpdateView(
             .all()
         )
         kwargs['category_queryset'] = categories
-
+        kwargs['account_queryset'] = Account.objects.filter(user=user)
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -396,8 +390,6 @@ class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
             .order_by('parent_category__name', 'name')
             .all()
         )
-        kwargs['user'] = self.request.user
-        kwargs['depth'] = self.depth
         kwargs['category_queryset'] = categories
         return kwargs
 

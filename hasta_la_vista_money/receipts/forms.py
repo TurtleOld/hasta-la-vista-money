@@ -20,7 +20,6 @@ from django.forms import (
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
 from django_filters.fields import ModelChoiceField
-from hasta_la_vista_money.commonlogic.forms import BaseFieldsForm
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     OPERATION_TYPES,
@@ -159,7 +158,7 @@ class SellerForm(ModelForm[Seller]):
         self.fields['retail_place'].required = False
 
 
-class ProductForm(BaseFieldsForm):
+class ProductForm(ModelForm[Product]):
     """Форма для внесения данных по продуктам."""
 
     product_name = CharField(
@@ -200,7 +199,7 @@ class ProductForm(BaseFieldsForm):
 ProductFormSet = formset_factory(ProductForm, extra=1)
 
 
-class ReceiptForm(BaseFieldsForm):
+class ReceiptForm(ModelForm[Receipt]):
     """Форма для внесения данных по чеку."""
 
     seller = ModelChoiceField(

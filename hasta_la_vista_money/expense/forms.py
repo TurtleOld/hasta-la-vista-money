@@ -3,16 +3,17 @@ from django.forms import (
     DateTimeInput,
     DecimalField,
     ModelChoiceField,
+    ModelForm,
 )
 from django.forms.fields import CharField
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.commonlogic.forms import BaseForm
+from hasta_la_vista_money.custom_mixin import CategoryChoicesMixin
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 
 
-class AddExpenseForm(BaseForm):
+class AddExpenseForm(ModelForm):
     category = ModelChoiceField(
         queryset=ExpenseCategory.objects.none(),
         label=_('Категория расхода'),
@@ -41,14 +42,13 @@ class AddExpenseForm(BaseForm):
     field = 'category'
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
         category_queryset = kwargs.pop('category_queryset', None)
+        account_queryset = kwargs.pop('account_queryset', None)
         super().__init__(*args, **kwargs)
-
-        if user is not None:
-            self.fields['account'].queryset = Account.objects.filter(user=user)
         if category_queryset is not None:
             self.fields['category'].queryset = category_queryset
+        if account_queryset is not None:
+            self.fields['account'].queryset = account_queryset
 
     def configure_category_choices(self, category_choices):
         self.fields[self.field].choices = category_choices
@@ -70,7 +70,7 @@ class AddExpenseForm(BaseForm):
         fields = ['category', 'account', 'date', 'amount']
 
 
-class AddCategoryForm(BaseForm):
+class AddCategoryForm(CategoryChoicesMixin, ModelForm):
     name = CharField(
         label=_('Название категории'),
         help_text=_('Введите название категории расхода для её создания'),
@@ -79,7 +79,7 @@ class AddCategoryForm(BaseForm):
         queryset=ExpenseCategory.objects.none(),
         label=_('Родительская категория'),
         help_text=_(
-            'Выберите родительскую категорию расхода для создаваемой категории',
+            'Выберите родительскую категорию расхода для создаваемой категории'
         ),
         required=False,
         empty_label=_('Нет родительской категории'),
@@ -89,7 +89,6 @@ class AddCategoryForm(BaseForm):
     def __init__(self, *args, **kwargs):
         category_queryset = kwargs.pop('category_queryset', None)
         super().__init__(*args, **kwargs)
-
         if category_queryset is not None:
             self.fields['parent_category'].queryset = category_queryset
 
