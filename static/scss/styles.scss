@@ -348,6 +348,10 @@ table {
     margin-top: 1rem;
 }
 
+[data-bs-theme="dark"] .receipt-summary {
+    background-color: #343a40;
+}
+
 .receipt-summary-row {
     display: flex;
     justify-content: space-between;
@@ -794,11 +798,20 @@ table {
     border-left: 4px solid #1976d2 !important;
 }
 
+[data-bs-theme="dark"] .account-foreign {
+    background-color: #1976d2 !important;
+    border-left: 4px solid #e3f0ff !important;
+}
+
 .account-owner-label {
     font-size: 0.85em;
     color: #1976d2;
     font-style: italic;
     margin-top: 0.25rem;
+}
+
+[data-bs-theme="dark"] .account-owner-label {
+    color: #e3f0ff !important;
 }
 
 .receipt-foreign {
