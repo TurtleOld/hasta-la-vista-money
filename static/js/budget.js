@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         cell.setValue(cell.getOldValue(), true);
                                     });
                                 });
-                                input.addEventListener("blur", function(e){
+                                input.addEventListener("blur", function(){
                                     cancel();
                                 });
                                 return input;
