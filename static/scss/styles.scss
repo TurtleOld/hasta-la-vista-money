@@ -955,7 +955,7 @@ div.dtsp-searchPane .dtsp-paneInputButton {
 .tabulator-row:hover {
     background-color: #f8f9fa;
     }
-    
+
     .table-foreign {
         background-color: #fff3cd !important;
 }
@@ -967,20 +967,20 @@ div.dtsp-searchPane .dtsp-paneInputButton {
     background-color: #f8f9fa;
         border-top: 1px solid #dee2e6;
     }
-    
+
     .tabulator-paginator {
         background-color: #f8f9fa;
     }
-    
+
     .tabulator-page {
         border: 1px solid #dee2e6;
         background-color: white;
     }
-    
+
     .tabulator-page:hover {
         background-color: #e9ecef;
     }
-    
+
     .tabulator-page[data-page="active"] {
         background-color: #0d6efd;
         color: white;
@@ -1161,4 +1161,38 @@ body.theme-fade {
 // Тёмная тема
 [data-bs-theme="dark"] .tabulator .tabulator-alt-row {
     background-color: #23272b;
+}
+
+// --- Вертикальные границы между месяцами (группы колонок) ---
+.tabulator-col-group {
+  border-left: 1.5px solid #444 !important;
+}
+.tabulator-col-group-cols .tabulator-col:last-child {
+  border-right: 2px solid #3a3a3a !important;
+}
+// --- Горизонтальный скролл для таблицы ---
+.tabulator {
+  min-width: 1200px;
+  width: 100%;
+  overflow-x: auto;
+}
+// --- Если таблица в обёртке ---
+.tabulator-scroll-wrapper, .tabulator-scroll-container {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.tabulator-col-content {
+  text-align: center;
+}
+
+[data-bs-theme="dark"] .tabulator .tabulator-footer .tabulator-calcs-holder .tabulator-row {
+  background: #23272b !important;
+}
+[data-bs-theme="dark"] .tabulator .tabulator-footer .tabulator-calcs-holder .tabulator-row .tabulator-cell[tabulator-field="category"]::before {
+  content: "Итог";
+  color: #fff;
+  font-weight: bold;
+  display: block;
+  text-align: left;
 }

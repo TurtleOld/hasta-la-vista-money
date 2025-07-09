@@ -13,76 +13,8 @@
     <div class="d-flex justify-content-start mb-2">
         <a href="{% url 'budget:list' %}" class="btn btn-outline-secondary">← {% translate 'Назад' %}</a>
     </div>
-
-    <div class="table-responsive mb-5">
-        <table class="table table-bordered align-middle text-center budget-table table-sm">
-            <thead class="table-light">
-                <tr>
-                    <th>{% translate 'Категория' %}</th>
-                    {% for m in months %}
-                        <th colspan="4">{{ m|date:"F Y" }}</th>
-                    {% empty %}
-                        <th colspan="4">{% translate 'Нет месяцев' %}</th>
-                    {% endfor %}
-                </tr>
-                <tr>
-                    <th></th>
-                    {% for m in months %}
-                        <th>{% translate 'Факт' %}</th>
-                        <th>{% translate 'План' %}</th>
-                        <th>{% translate 'Δ' %}</th>
-                        <th>%</th>
-                    {% empty %}
-                        <th>{% translate 'Факт' %}</th>
-                        <th>{% translate 'План' %}</th>
-                        <th>{% translate 'Δ' %}</th>
-                        <th>%</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in income_data %}
-                <tr>
-                    <td class="text-start">{{ row.category }}</td>
-                    {% for m in months %}
-                        {% with idx=forloop.counter0 %}
-                        {% with f=row.fact|index:idx p=row.plan|index:idx d=row.diff|index:idx pc=row.percent|index:idx %}
-                        <td>{% if f %}{{ f|comma }}{% else %}&nbsp;{% endif %}</td>
-                        <td class="plan-cell" contenteditable="true"
-                            data-category="{{ row.category }}"
-                            data-category-id="{{ row.category_id }}"
-                            data-category-idx="{{ forloop.parentloop.counter0 }}"
-                            data-month="{{ months|index:idx|date:'Y-m-d' }}"
-                            data-type="income"
-                            data-save-url="{% url 'budget:save_planning' %}"
-                            data-csrf="{{ csrf_token }}"
-                            >
-                            {% if p %}{{ p|comma }}{% else %}{% endif %}
-                        </td>
-                        <td class="{% if d < 0 %}text-danger{% elif d > 0 %}text-success{% else %}text-muted{% endif %}">{% if d %}{{ d|comma }}{% else %}&nbsp;{% endif %}</td>
-                        <td>{% if pc %}{{ pc|floatformat:0 }}%{% else %}&nbsp;{% endif %}</td>
-                        {% endwith %}
-                        {% endwith %}
-                    {% endfor %}
-                </tr>
-                {% empty %}
-                <tr><td colspan="{{ months|length|add:1|default:5 }}" class="text-center text-muted">{% translate 'Нет данных по доходам' %}</td></tr>
-                {% endfor %}
-            </tbody>
-            <tfoot class="table-secondary">
-                <tr>
-                    <th>{% translate 'Итого' %}</th>
-                    {% for m in months %}
-                        {% with idx=forloop.counter0 %}
-                        <td>{{ total_fact_income|index:idx|default:'—'|comma }}</td>
-                        <td>{{ total_plan_income|index:idx|default:'—'|comma }}</td>
-                        <td>{% diff_by_index total_fact_income total_plan_income idx as diff %}{{ diff|default:'—'|comma }}</td>
-                        <td>{% with fact=total_fact_income|index:idx plan=total_plan_income|index:idx %}{% if plan %}{{ fact|div:plan|floatformat:0 }}%{% else %}—{% endif %}{% endwith %}</td>
-                        {% endwith %}
-                    {% endfor %}
-                </tr>
-            </tfoot>
-        </table>
+    <div class="mb-5">
+        <div id="income-budget-table"></div>
     </div>
 </div>
 {% endblock %}

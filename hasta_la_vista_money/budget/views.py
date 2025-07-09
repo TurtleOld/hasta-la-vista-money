@@ -11,11 +11,14 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
 from hasta_la_vista_money.budget.models import DateList, Planning
-from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.users.models import User
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 
 @overload
@@ -139,7 +142,8 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
             month_date = (
                 e['month'].date() if hasattr(e['month'], 'date') else e['month']
             )
-            expense_fact_map[e['category_id']][month_date] = e['total'] or 0
+            month_start = month_date.replace(day=1)
+            expense_fact_map[e['category_id']][month_start] = e['total'] or 0
         total_fact_expense = [0] * len(months)
         for i, m in enumerate(months):
             for cat in expense_categories:
@@ -216,7 +220,9 @@ class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
         ).values('category_income_id', 'date', 'amount')
         income_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
         for p in plans_inc:
-            income_plan_map[p['category_income_id']][p['date']] = p['amount'] or 0
+            income_plan_map[p['category_income_id']][p['date']] = p[
+                'amount'
+            ] or Decimal('0')
 
         income_data = []
         total_plan_income = [0] * len(months)
@@ -493,3 +499,121 @@ class PlanningExpenseDict(TypedDict):
     category_expense_id: int
     date: date
     amount: Decimal
+
+
+class ExpenseBudgetAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        list_dates = DateList.objects.filter(user=user).order_by('date')
+        months = [d.date.replace(day=1) for d in list_dates]
+        expense_categories = list(get_categories(user, 'expense'))
+        expenses = (
+            (
+                Expense.objects.filter(
+                    user=user,
+                    category__in=expense_categories,
+                    date__gte=months[0] if months else None,
+                    date__lte=months[-1] if months else None,
+                )
+                .annotate(month=TruncMonth('date'))
+                .values('category_id', 'month')
+                .annotate(total=Sum('amount'))
+            )
+            if months
+            else []
+        )
+        expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        for e in expenses:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            month_start = month_date.replace(day=1)
+            expense_fact_map[e['category_id']][month_start] = e['total'] or 0
+        plans_expense = Planning.objects.filter(
+            user=user,
+            date__in=months,
+            type='expense',
+            category_expense__in=expense_categories,
+        ).values('category_expense_id', 'date', 'amount')
+        expense_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+        for pln in plans_expense:
+            expense_plan_map[pln['category_expense_id']][pln['date']] = (
+                pln['amount'] or 0
+            )
+        data = []
+        for cat in expense_categories:
+            row = {
+                'category': cat.name,
+                'category_id': cat.id,
+            }
+            for m in months:
+                fact = expense_fact_map[cat.id][m]
+                plan = expense_plan_map[cat.id][m]
+                diff = fact - plan
+                percent = (fact / plan * 100) if plan else None
+                row[f'fact_{m}'] = float(fact) if fact is not None else None
+                row[f'plan_{m}'] = float(plan) if plan is not None else None
+                row[f'diff_{m}'] = float(diff) if diff is not None else None
+                row[f'percent_{m}'] = float(percent) if percent is not None else None
+            data.append(row)
+        return Response({'months': [m.isoformat() for m in months], 'data': data})
+
+
+class IncomeBudgetAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        list_dates = DateList.objects.filter(user=user).order_by('date')
+        months = [d.date.replace(day=1) for d in list_dates]
+        income_categories = list(get_categories(user, 'income'))
+        incomes = (
+            (
+                Income.objects.filter(
+                    user=user,
+                    category__in=income_categories,
+                    date__gte=months[0] if months else None,
+                    date__lte=months[-1] if months else None,
+                )
+                .annotate(month=TruncMonth('date'))
+                .values('category_id', 'month')
+                .annotate(total=Sum('amount'))
+            )
+            if months
+            else []
+        )
+        income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        for e in incomes:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            month_start = month_date.replace(day=1)
+            income_fact_map[e['category_id']][month_start] = e['total'] or 0
+        plans_income = Planning.objects.filter(
+            user=user,
+            date__in=months,
+            type='income',
+            category_income__in=income_categories,
+        ).values('category_income_id', 'date', 'amount')
+        income_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+        for pln in plans_income:
+            income_plan_map[pln['category_income_id']][pln['date']] = pln['amount'] or 0
+        data = []
+        for cat in income_categories:
+            row = {
+                'category': cat.name,
+                'category_id': cat.id,
+            }
+            for m in months:
+                fact = income_fact_map[cat.id][m]
+                plan = income_plan_map[cat.id][m]
+                diff = fact - plan
+                percent = (fact / plan * 100) if plan else None
+                row[f'fact_{m}'] = float(fact) if fact is not None else None
+                row[f'plan_{m}'] = float(plan) if plan is not None else None
+                row[f'diff_{m}'] = float(diff) if diff is not None else None
+                row[f'percent_{m}'] = float(percent) if percent is not None else None
+            data.append(row)
+        return Response({'months': [m.isoformat() for m in months], 'data': data})

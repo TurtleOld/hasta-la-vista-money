@@ -23,4 +23,11 @@ urlpatterns = [
             namespace='receipts',
         ),
     ),
+    path(
+        'budget/',
+        include(
+            'hasta_la_vista_money.budget.urls',
+            namespace='budget',
+        ),
+    ),
 ]
