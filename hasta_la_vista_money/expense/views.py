@@ -17,11 +17,6 @@ from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.services.views import (
-    build_category_tree,
-    get_new_type_operation,
-    get_queryset_type_income_expenses,
-)
 from hasta_la_vista_money.custom_mixin import (
     CustomNoPermissionMixin,
     DeleteObjectMixin,
@@ -32,6 +27,11 @@ from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.services.views import (
+    build_category_tree,
+    get_new_type_operation,
+    get_queryset_type_income_expenses,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -201,9 +201,10 @@ class ExpenseCopyView(
     def post(self, request, *args, **kwargs):
         expense_id = kwargs.get('pk')
         new_expense = get_new_type_operation(Expense, expense_id, request)
-
         valid_expense = get_object_or_404(Expense, pk=new_expense.pk)
-
+        if valid_expense.account:
+            valid_expense.account.balance -= valid_expense.amount
+            valid_expense.account.save()
         messages.success(request, 'Расход успешно скопирован.')
         return redirect(
             reverse_lazy('expense:change', kwargs={'pk': valid_expense.pk}),
@@ -244,6 +245,9 @@ class ExpenseCreateView(
         expense = form.save(commit=False)
         expense.user = self.request.user
         expense.save()
+        if expense.account:
+            expense.account.balance -= expense.amount
+            expense.account.save()
         messages.success(self.request, constants.SUCCESS_EXPENSE_ADDED)
         return super().form_valid(form)
 

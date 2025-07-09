@@ -288,13 +288,35 @@
                                         <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse"
                                              aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#creditCardsAccordion">
                                             <div class="accordion-body">
+                                                <!-- Текущий беспроцентный период -->
+                                                {% if card.current_grace_info %}
+                                                <div class="alert-info mb-3">
+                                                    <h6><i class="bi bi-calendar-check"></i> Текущий беспроцентный период</h6>
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <strong>Период покупок:</strong> {{ card.current_grace_info.purchase_month }}<br>
+                                                            <strong>Конец беспроцентного периода:</strong> {{ card.current_grace_info.grace_end|date:'d.m.Y' }}<br>
+                                                            {% if card.current_grace_info.days_until_due > 0 %}
+                                                                <span class="badge bg-success">Осталось дней: {{ card.current_grace_info.days_until_due }}</span>
+                                                            {% elif card.current_grace_info.is_overdue %}
+                                                                <span class="badge bg-danger">Просрочено!</span>
+                                                            {% endif %}
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <strong>Долг за месяц:</strong> {{ card.current_grace_info.debt_for_month|comma }} {{ card.currency }}<br>
+                                                            <strong>Платежи за период погашения:</strong> {{ card.current_grace_info.payments_for_period|comma }} {{ card.currency }}<br>
+                                                            <strong>Итоговый долг:</strong> {{ card.current_grace_info.final_debt|comma }} {{ card.currency }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+
                                                 <table class="table table-bordered align-middle mb-0">
                                                     <thead class="table-light">
                                                         <tr>
                                                             <th>Лимит</th>
                                                             <th>Долг</th>
                                                             <th>Остаток лимита</th>
-                                                            <th>Ближайший платёж</th>
                                                             <th>История (12 мес.)</th>
                                                         </tr>
                                                     </thead>
@@ -303,37 +325,62 @@
                                                             <td>{{ card.limit|comma }} {{ card.currency }}</td>
                                                             <td>{{ card.debt_now|comma }} {{ card.currency }}</td>
                                                             <td>{{ card.limit_left|comma }} {{ card.currency }}</td>
-                                                            <td>{% if card.payment_due_date %}{{ card.payment_due_date|date:'d.m.Y' }}{% else %}-{% endif %}</td>
                                                             <td style="min-width: 180px;">
                                                                 {% for h in card.history %}
-                                                                    <span class="d-inline-block me-2 small">{{ h.month }}: <span class="fw-semibold">{{ h.debt|comma }}</span></span>
+                                                                    <div class="d-inline-block me-2 mb-1 small">
+                                                                        <span class="fw-semibold">{{ h.month }}:</span>
+                                                                        <span class="{% if h.is_overdue %}text-danger{% else %}text-success{% endif %}">
+                                                                            {{ h.debt|comma }}
+                                                                        </span>
+                                                                        {% if h.is_overdue %}
+                                                                            <i class="bi bi-exclamation-triangle text-danger" title="Просрочено"></i>
+                                                                        {% endif %}
+                                                                    </div>
                                                                 {% endfor %}
                                                             </td>
                                                         </tr>
                                                         {% if card.payment_schedule %}
                                                         <tr>
-                                                            <td colspan="5">
+                                                            <td colspan="4">
                                                                 <div class="mt-2">
-                                                                    <strong>График платежей по грейс-периоду:</strong>
+                                                                    <strong><i class="bi bi-calendar-event"></i> График платежей по беспроцентному периоду:</strong>
                                                                     <div class="table-responsive">
-                                                                        <table class="table table-sm table-bordered align-middle mb-0 mt-1">
-                                                                            <thead class="table-light">
-                                                                                <tr>
-                                                                                    <th>Месяц</th>
-                                                                                    <th>Сумма к оплате</th>
-                                                                                    <th>Дата оплаты</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody>
-                                                                                {% for p in card.payment_schedule %}
-                                                                                <tr>
-                                                                                    <td>{{ p.month }}</td>
-                                                                                    <td>{{ p.sum_expense|comma }} {{ card.currency }}</td>
-                                                                                    <td>{{ p.payment_due }}</td>
-                                                                                </tr>
-                                                                                {% endfor %}
-                                                                            </tbody>
-                                                                        </table>
+                                                                                                                                            <table class="table table-sm table-bordered align-middle mb-0 mt-1">
+                                                                        <thead class="table-light">
+                                                                            <tr>
+                                                                                <th>Месяц покупок</th>
+                                                                                <th>Сумма покупок</th>
+                                                                                <th>Оплачено</th>
+                                                                                <th>Осталось</th>
+                                                                                <th>Дата окончания беспроцентного периода</th>
+                                                                                <th>Статус</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {% for p in card.payment_schedule %}
+                                                                            <tr class="{% if p.is_overdue %}table-danger{% elif p.is_paid %}table-success{% endif %}">
+                                                                                <td>{{ p.month }}</td>
+                                                                                <td>{{ p.sum_expense|comma }} {{ card.currency }}</td>
+                                                                                <td class="text-success">{{ p.payments_made|comma }} {{ card.currency }}</td>
+                                                                                <td class="{% if p.remaining_debt > 0 %}text-danger{% else %}text-success{% endif %}">
+                                                                                    {{ p.remaining_debt|comma }} {{ card.currency }}
+                                                                                </td>
+                                                                                <td>{{ p.payment_due }}</td>
+                                                                                <td>
+                                                                                    {% if p.is_paid %}
+                                                                                        <span class="badge bg-success">Оплачено</span>
+                                                                                    {% elif p.is_overdue %}
+                                                                                        <span class="badge bg-danger">Просрочено</span>
+                                                                                    {% elif p.days_until_due > 0 %}
+                                                                                        <span class="badge bg-warning">Осталось {{ p.days_until_due }} дн.</span>
+                                                                                    {% else %}
+                                                                                        <span class="badge bg-secondary">Неизвестно</span>
+                                                                                    {% endif %}
+                                                                                </td>
+                                                                            </tr>
+                                                                            {% endfor %}
+                                                                        </tbody>
+                                                                    </table>
                                                                     </div>
                                                                 </div>
                                                             </td>
