@@ -56,14 +56,16 @@
     {% endif %}
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/budget.js' %}?v={% word_hash %}"></script>
+    {% if 'budget' in request.path %}
+        <script nonce="{{request.csp_nonce}}" src="{% static 'js/budget.js' %}?v={% word_hash %}"></script>
+    {% endif %}
     {% if 'users' in request.path %}
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/theme.js' %}?v={% word_hash %}"></script>
     {% endif %}
-    {% if 'income' in request.path %}
+    {% if 'income' in request.path and not 'budget' in request.path%}
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/income_table.js' %}?v={% word_hash %}"></script>
     {% endif %}
-    {% if 'expense' in request.path %}
+    {% if 'expense' in request.path and not 'budget' in request.path%}
         <script nonce="{{request.csp_nonce}}" src="{% static 'js/expense_table.js' %}?v={% word_hash %}"></script>
     {% endif %}
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/account_group_filter.js' %}?v={% word_hash %}"></script>

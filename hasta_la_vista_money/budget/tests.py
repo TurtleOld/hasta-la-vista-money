@@ -1,10 +1,10 @@
-import unittest
-from django.test import TestCase, Client
-from django.urls import reverse, resolve
-from django.contrib.auth import get_user_model
-from hasta_la_vista_money.budget.models import Planning, DateList
-from hasta_la_vista_money.budget.apps import BudgetConfig
 from datetime import date
+
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import resolve, reverse
+from hasta_la_vista_money.budget.apps import BudgetConfig
+from hasta_la_vista_money.budget.models import DateList, Planning
 
 User = get_user_model()
 
@@ -20,7 +20,10 @@ class BudgetModelTest(TestCase):
         self.date = date(2024, 1, 1)
         self.datelist = DateList.objects.create(user=self.user, date=self.date)
         self.planning = Planning.objects.create(
-            user=self.user, date=self.date, type='expense', amount=100
+            user=self.user,
+            date=self.date,
+            type='expense',
+            amount=100,
         )
 
     def test_datelist_str(self):
@@ -35,13 +38,16 @@ class BudgetUrlsTest(TestCase):
     def test_urls_resolve(self):
         self.assertEqual(resolve('/budget/').view_name, 'budget:list')
         self.assertEqual(
-            resolve('/budget/generate-date/').view_name, 'budget:generate_date'
+            resolve('/budget/generate-date/').view_name,
+            'budget:generate_date',
         )
         self.assertEqual(
-            resolve('/budget/change_planning/').view_name, 'budget:change_planning'
+            resolve('/budget/change_planning/').view_name,
+            'budget:change_planning',
         )
         self.assertEqual(
-            resolve('/budget/save-planning/').view_name, 'budget:save_planning'
+            resolve('/budget/save-planning/').view_name,
+            'budget:save_planning',
         )
 
 
@@ -86,7 +92,3 @@ class BudgetViewsTest(TestCase):
         self.assertIn(response.status_code, [200, 302])
         if response.status_code == 200 and response.context is not None:
             self.assertIn('chart_plan_execution_income', response.context)
-
-
-if __name__ == '__main__':
-    unittest.main()
