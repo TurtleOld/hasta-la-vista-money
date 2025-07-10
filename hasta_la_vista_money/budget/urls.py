@@ -17,7 +17,7 @@ urlpatterns = [
     path('incomes/', IncomeTableView.as_view(), name='income_table'),
     path('generate-date/', generate_date_list_view, name='generate_date'),
     path(
-        'change_planning/',
+        'change-planning/',
         change_planning,
         name='change_planning',
     ),
