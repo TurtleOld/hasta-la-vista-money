@@ -1,7 +1,7 @@
 /* global Tabulator */
 document.addEventListener('DOMContentLoaded', function () {
     function safeRedirect(url) {
-        if (/^\//.test(url) && !url.includes('//')) {
+        if (/^\/[a-zA-Z0-9/_\-\.]*$/.test(url)) {
             window.location.href = url;
         } else {
             window.location.href = '/login/';
