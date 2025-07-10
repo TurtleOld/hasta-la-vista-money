@@ -1,6 +1,14 @@
 /* global Tabulator */
 document.addEventListener('DOMContentLoaded', function () {
+    function safeRedirect(url) {
+        if (/^\//.test(url) && !url.includes('//')) {
+            window.location.href = url;
+        } else {
+            window.location.href = '/login/';
+        }
+    }
     // ====== CONFIG ======
+    // Все API URL должны быть статичны и не формироваться из пользовательского ввода!
     const API = {
         expense: '/api/budget/api/expenses/',
         income: '/api/budget/api/incomes/'
@@ -289,7 +297,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 loader.remove();
                 showNotification('Ошибка загрузки данных', 'error');
                 if (err.message === 'Refresh failed' || err.message === 'No refresh token') {
-                    window.location.href = '/login/';
+                    safeRedirect('/login/');
                 }
             });
     });
