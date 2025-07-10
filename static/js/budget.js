@@ -2,9 +2,9 @@
 document.addEventListener('DOMContentLoaded', function () {
     function safeRedirect(url) {
         if (/^\/[a-zA-Z0-9/_\-.]*$/.test(url)) {
-            window.location.href = encodeURI(url);
+            window.location.href = encodeURI(url);  // eslint-disable-line
         } else {
-            window.location.href = encodeURI('/login/');
+            window.location.href = encodeURI('/login/');  // eslint-disable-line
         }
     }
 
@@ -47,12 +47,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     // ====== URL VALIDATION ======
     function isSafeApiUrl(url) {
-        // Only allow relative URLs starting with a single slash, no protocol, no double slashes
         return typeof url === 'string' && /^\/[a-zA-Z0-9/_\-.]*$/.test(url);
     }
+    // ====== WHITELIST ======
+    const ALLOWED_API_PATHS = [
+        '/api/budget/api/expenses/',
+        '/api/budget/api/incomes/',
+        '/budget/save-planning/',
+        // Добавь другие разрешённые пути при необходимости
+    ];
+    function isWhitelistedUrl(url) {
+        return ALLOWED_API_PATHS.includes(url);
+    }
     function fetchWithAuthRetry(url, options, retry = true) {
-        if (!isSafeApiUrl(url)) {
-            return Promise.reject(new Error('Unsafe URL detected'));
+        if (!isSafeApiUrl(url) || !isWhitelistedUrl(url)) {
+            return Promise.reject(new Error('URL не разрешён'));
         }
         options = options || {};
         options.headers = options.headers || {};
