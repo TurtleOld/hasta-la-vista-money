@@ -45,7 +45,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 throw new Error('No access token in refresh response');
             });
     }
+    // ====== URL VALIDATION ======
+    function isSafeApiUrl(url) {
+        // Only allow relative URLs starting with a single slash, no protocol, no double slashes
+        return typeof url === 'string' && /^\/[a-zA-Z0-9/_\-.]*$/.test(url);
+    }
     function fetchWithAuthRetry(url, options, retry = true) {
+        if (!isSafeApiUrl(url)) {
+            return Promise.reject(new Error('Unsafe URL detected'));
+        }
         options = options || {};
         options.headers = options.headers || {};
         options.headers['Authorization'] = 'Bearer ' + getJWT();
@@ -87,6 +95,11 @@ document.addEventListener('DOMContentLoaded', function () {
         loader.style.height = '300px';
         container.appendChild(loader);
         // Fetch data
+        if (!isSafeApiUrl(api)) {
+            loader.remove();
+            showNotification('Ошибка: небезопасный API URL', 'error');
+            return;
+        }
         fetchWithAuthRetry(api)
             .then(resp => {
                 if (!resp.ok) throw new Error('API error');

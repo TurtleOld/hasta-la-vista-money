@@ -210,8 +210,14 @@ function getCookie(name) {
 }
 
 function showNotification(message, type = 'info') {
-    const alertClass = type === 'success' ? 'alert-success' :
-                      type === 'error' ? 'alert-danger' : 'alert-info';
+    let alertClass;
+    if (type === 'success') {
+        alertClass = 'alert-success';
+    } else if (type === 'error') {
+        alertClass = 'alert-danger';
+    } else {
+        alertClass = 'alert-info';
+    }
     const alert = document.createElement('div');
     alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
     alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
@@ -334,6 +340,5 @@ document.addEventListener('click', function(e) {
     if (deleteBtn) {
         const id = deleteBtn.dataset.id;
         deleteIncome(id);
-        return;
     }
 });
