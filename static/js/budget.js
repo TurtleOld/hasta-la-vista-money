@@ -1,14 +1,13 @@
 /* global Tabulator */
 document.addEventListener('DOMContentLoaded', function () {
     function safeRedirect(url) {
-        if (/^\/[a-zA-Z0-9/_\-\.]*$/.test(url)) {
-            window.location.href = url;
+        if (/^\/[a-zA-Z0-9/_\-.]*$/.test(url)) {
+            window.location.href = encodeURI(url);
         } else {
-            window.location.href = '/login/';
+            window.location.href = encodeURI('/login/');
         }
     }
-    // ====== CONFIG ======
-    // Все API URL должны быть статичны и не формироваться из пользовательского ввода!
+
     const API = {
         expense: '/api/budget/api/expenses/',
         income: '/api/budget/api/incomes/'
