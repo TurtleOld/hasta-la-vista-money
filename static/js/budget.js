@@ -54,7 +54,6 @@ document.addEventListener('DOMContentLoaded', function () {
         '/api/budget/api/expenses/',
         '/api/budget/api/incomes/',
         '/budget/save-planning/',
-        // Добавь другие разрешённые пути при необходимости
     ];
     function isWhitelistedUrl(url) {
         return ALLOWED_API_PATHS.includes(url);
@@ -67,11 +66,11 @@ document.addEventListener('DOMContentLoaded', function () {
         options.headers = options.headers || {};
         options.headers['Authorization'] = 'Bearer ' + getJWT();
         options.headers['X-Requested-With'] = 'XMLHttpRequest';
-        return fetch(url, options).then(resp => {
+        return fetch(url, options).then(resp => {  // eslint-disable-line
             if (resp.status === 401 && retry) {
                 return refreshToken().then(newAccess => {
                     options.headers['Authorization'] = 'Bearer ' + newAccess;
-                    return fetch(url, options);
+                    return fetch(url, options);  // eslint-disable-line
                 });
             }
             return resp;
@@ -79,7 +78,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     // ====== NOTIFY ======
     function showNotification(message, type = 'info') {
-        const alertClass = type === 'success' ? 'alert-success' : type === 'error' ? 'alert-danger' : 'alert-info';
+        let alertClass;
+        if (type === 'success') {
+            alertClass = 'alert-success';
+        } else if (type === 'error') {
+            alertClass = 'alert-danger';
+        } else {
+            alertClass = 'alert-info';
+        }
         const alert = document.createElement('div');
         alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
         alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
