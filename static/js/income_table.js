@@ -1,10 +1,12 @@
 /* global Tabulator, bootstrap */
+
+// Функция получения ID группы (глобальная)
+function getGroupId() {
+    const groupSelect = document.getElementById('income-group-select');
+    return groupSelect ? groupSelect.value : 'my';
+}
+
 document.addEventListener('DOMContentLoaded', function () {
-    // Функция получения ID группы
-    function getGroupId() {
-        const groupSelect = document.getElementById('income-group-select');
-        return groupSelect ? groupSelect.value : 'my';
-    }
 
     // Получаем текущий user id из data-атрибута таблицы
     const table = document.getElementById('income-table');
@@ -85,9 +87,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     const isOwner = data.user_id === currentUserId;
                     let buttons = '';
                     if (isOwner) {
-                        buttons += `<button class="btn btn-sm btn-outline-success me-1" onclick="editIncome(${data.id})" title="Редактировать"><i class="bi bi-pencil"></i></button>`;
-                        buttons += `<button class="btn btn-sm btn-outline-primary me-1" onclick="copyIncome(${data.id})" title="Копировать"><i class="bi bi-files"></i></button>`;
-                        buttons += `<button class="btn btn-sm btn-outline-danger" onclick="deleteIncome(${data.id})" title="Удалить"><i class="bi bi-trash"></i></button>`;
+                        buttons += `<button class="btn btn-sm btn-outline-success me-1 edit-income-btn" data-id="${data.id}" title="Редактировать"><i class="bi bi-pencil"></i></button>`;
+                        buttons += `<button class="btn btn-sm btn-outline-primary me-1 copy-income-btn" data-id="${data.id}" title="Копировать"><i class="bi bi-files"></i></button>`;
+                        buttons += `<button class="btn btn-sm btn-outline-danger delete-income-btn" data-id="${data.id}" title="Удалить"><i class="bi bi-trash"></i></button>`;
                     } else {
                         buttons += `<span class="text-muted">Только просмотр</span>`;
                     }
@@ -246,7 +248,7 @@ function copyIncome(id) { // eslint-disable-line
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            window.incomeTabulator.reloadData();
+            window.incomeTabulator.setData('/income/ajax/income_data/', { group_id: getGroupId() });
             showNotification('Доход скопирован', 'success');
         } else {
             showNotification('Ошибка копирования', 'error');
@@ -269,7 +271,7 @@ function deleteIncome(id) { // eslint-disable-line
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                window.incomeTabulator.reloadData();
+                window.incomeTabulator.setData('/income/ajax/income_data/', { group_id: getGroupId() });
                 showNotification('Доход удален', 'success');
             } else {
                 showNotification('Ошибка удаления', 'error');
@@ -313,3 +315,25 @@ function loadIncomeData(id) {
             showNotification('Ошибка загрузки данных', 'error');
         });
 }
+
+// Делегирование событий для кнопок действий (CSP-safe)
+document.addEventListener('click', function(e) {
+    const editBtn = e.target.closest('.edit-income-btn');
+    if (editBtn) {
+        const id = editBtn.dataset.id;
+        editIncome(id);
+        return;
+    }
+    const copyBtn = e.target.closest('.copy-income-btn');
+    if (copyBtn) {
+        const id = copyBtn.dataset.id;
+        copyIncome(id);
+        return;
+    }
+    const deleteBtn = e.target.closest('.delete-income-btn');
+    if (deleteBtn) {
+        const id = deleteBtn.dataset.id;
+        deleteIncome(id);
+        return;
+    }
+});

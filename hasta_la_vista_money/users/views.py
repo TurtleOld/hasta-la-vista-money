@@ -20,15 +20,20 @@ from django.views import View
 from django.views.generic import CreateView, TemplateView, UpdateView
 from django.views.generic.edit import FormView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.custom_mixin import (
     CustomNoPermissionMixin,
     CustomSuccessURLUserMixin,
 )
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.prepare import (
+    collect_info_expense,
+    collect_info_income,
+    sort_expense_income,
+)
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
     DeleteUserFromGroupForm,
@@ -459,12 +464,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
 
         receipt_info_by_month = collect_info_receipt(user=user)
 
-        from hasta_la_vista_money.finance_account.prepare import (
-            collect_info_expense,
-            collect_info_income,
-            sort_expense_income,
-        )
-
         income = collect_info_income(user)
         expenses = collect_info_expense(user)
         income_expense = sort_expense_income(expenses, income)
@@ -559,11 +558,6 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             }
 
         def get_credit_card_debt_for_period(card, start_date, end_date):
-            from hasta_la_vista_money.expense.models import Expense
-            from hasta_la_vista_money.income.models import Income
-            from hasta_la_vista_money.receipts.models import Receipt
-
-            # end_date - date, преобразуем в datetime с максимальным временем
             end_datetime = datetime.combine(end_date, time.max)
 
             expense_qs = Expense.objects.filter(
@@ -599,6 +593,11 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             )
             return debt
 
+            # Используем метод из модели Account
+
+        def calculate_grace_period_info(card, purchase_month):
+            return card.calculate_grace_period_info(purchase_month)
+
         credit_cards = accounts.filter(type_account__in=['CreditCard', 'Credit'])
         credit_cards_data = []
         for card in credit_cards:
@@ -606,34 +605,140 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
             history = []
             payment_schedule = []
             today = timezone.now().date().replace(day=1)
+
+            # 1. Собираем все месяцы с долгом (за последние 12 месяцев)
+            months = []
+            months_map = {}
             for i in range(12):
-                start = today - relativedelta(months=11 - i)
-                last_day = monthrange(start.year, start.month)[1]
-                end = start.replace(day=last_day)
-                # Теперь считаем долг только за месяц (прирост)
-                debt = get_credit_card_debt_for_period(card, start, end)
-                history.append({'month': start.strftime('%m.%Y'), 'debt': debt})
-                if card.grace_period_days:
-                    payment_due_date = end + relativedelta(days=card.grace_period_days)
-                    payment_due_date = payment_due_date.replace(
-                        day=monthrange(payment_due_date.year, payment_due_date.month)[
-                            1
-                        ],
-                    )
+                month_date = today - relativedelta(months=11 - i)
+                purchase_start = month_date.replace(day=1)
+                last_day = monthrange(purchase_start.year, purchase_start.month)[1]
+                purchase_end = datetime.combine(
+                    purchase_start.replace(day=last_day),
+                    time.max,
+                )
+                # Считаем только расходы и возвраты (без доходов)
+                expense_sum = (
+                    Expense.objects.filter(
+                        account=card,
+                        date__range=(purchase_start, purchase_end),
+                    ).aggregate(total=Sum('amount'))['total']
+                    or 0
+                )
+                receipt_expense = (
+                    Receipt.objects.filter(
+                        account=card,
+                        receipt_date__range=(purchase_start, purchase_end),
+                        operation_type=1,
+                    ).aggregate(total=Sum('total_sum'))['total']
+                    or 0
+                )
+                receipt_return = (
+                    Receipt.objects.filter(
+                        account=card,
+                        receipt_date__range=(purchase_start, purchase_end),
+                        operation_type=2,
+                    ).aggregate(total=Sum('total_sum'))['total']
+                    or 0
+                )
+                debt_for_month = (
+                    float(expense_sum) + float(receipt_expense) - float(receipt_return)
+                )
+                grace_end_date = purchase_start + relativedelta(months=3)
+                last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[
+                    1
+                ]
+                grace_end = datetime.combine(
+                    grace_end_date.replace(day=last_day_grace),
+                    time.max,
+                )
+                days_until_due = (
+                    (grace_end.date() - timezone.now().date()).days
+                    if timezone.now() <= grace_end
+                    else 0
+                )
+                is_overdue = timezone.now() > grace_end and debt_for_month > 0
+                months.append(
+                    {
+                        'month': purchase_start.strftime('%m.%Y'),
+                        'purchase_start': purchase_start,
+                        'purchase_end': purchase_end,
+                        'grace_end': grace_end,
+                        'debt_for_month': debt_for_month,
+                        'is_overdue': is_overdue,
+                        'days_until_due': days_until_due,
+                    },
+                )
+                months_map[purchase_start.strftime('%m.%Y')] = months[-1]
+                history.append(
+                    {
+                        'month': purchase_start.strftime('%m.%Y'),
+                        'debt': debt_for_month,
+                        'final_debt': 0,  # не используется
+                        'grace_end': grace_end.strftime('%d.%m.%Y'),
+                        'is_overdue': is_overdue,
+                    },
+                )
+
+            # 2. Собираем все платежи (доходы на кредитку) за весь период
+            all_payments = list(
+                Income.objects.filter(account=card)
+                .order_by('date')
+                .values('amount', 'date'),
+            )
+            total_payments = sum([float(p['amount']) for p in all_payments])
+
+            # 3. FIFO-распределение платежей по месяцам
+            payments_left = total_payments
+            for m in months:
+                debt = float(m['debt_for_month'])
+                if debt <= 0:
+                    m['payments_made'] = 0
+                    m['remaining_debt'] = 0
+                    m['is_paid'] = True
+                    continue
+                paid = min(payments_left, debt)
+                m['payments_made'] = paid
+                m['remaining_debt'] = max(debt - paid, 0)
+                m['is_paid'] = m['remaining_debt'] <= 0
+                payments_left -= paid
+                if payments_left < 0:
+                    payments_left = 0
+
+            # 4. Формируем payment_schedule для UI
+            for m in months:
+                if m['debt_for_month'] > 0:
                     payment_schedule.append(
                         {
-                            'month': start.strftime('%m.%Y'),
-                            'sum_expense': debt,
-                            'payment_due': payment_due_date.strftime('%d.%m.%Y'),
+                            'month': m['month'],
+                            'sum_expense': m['debt_for_month'],
+                            'payments_made': m['payments_made'],
+                            'remaining_debt': m['remaining_debt'],
+                            'payment_due': m['grace_end'].strftime('%d.%m.%Y'),
+                            'is_overdue': m['is_overdue'],
+                            'days_until_due': m['days_until_due'],
+                            'is_paid': m['is_paid'],
                         },
                     )
+
+            # Рассчитываем текущий беспроцентный период
+            current_month = today
+            current_grace_info = calculate_grace_period_info(card, current_month)
+            current_grace_info['debt_for_month'] = max(
+                0,
+                current_grace_info.get('debt_for_month', 0),
+            )
+            current_grace_info['final_debt'] = max(
+                0,
+                current_grace_info.get('final_debt', 0),
+            )
             limit_left = (card.limit_credit or 0) - (debt_now or 0)
             credit_cards_data.append(
                 {
                     'name': card.name_account,
                     'limit': card.limit_credit,
                     'debt_now': debt_now,
-                    'payment_due_date': card.payment_due_date,
+                    'current_grace_info': current_grace_info,
                     'history': history,
                     'currency': card.currency,
                     'card_obj': card,
@@ -672,11 +777,9 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         notifications = []
 
-        # Проверяем различные условия для уведомлений
         today = timezone.now().date()
         month_start = today.replace(day=1)
 
-        # Уведомление о низком балансе
         accounts = Account.objects.filter(user=user)
         low_balance_accounts = []
         for account in accounts:
