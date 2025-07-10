@@ -1,5 +1,3 @@
-
-
 def validate_username_unique(value: str) -> None:
     """
     Validator to ensure the username is unique.

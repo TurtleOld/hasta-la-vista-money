@@ -74,6 +74,9 @@
     {% endif %}
     <script nonce="{{request.csp_nonce}}">
         window.SET_THEME_URL = "{% url 'users:set_theme' %}";
+        window.LOGIN_URL = "{% url 'users:login' %}";
+        window.GROUPS_FOR_USER_URL = "{% url 'users:ajax:groups_for_user' %}";
+        window.GROUPS_NOT_FOR_USER_URL = "{% url 'users:ajax:groups_not_for_user' %}";
     </script>
 </body>
 </html>

@@ -284,16 +284,16 @@
                                         <hr>
                                         <h5>Группы</h5>
                                         <div class="d-grid gap-2">
-                                            <a class="btn btn-outline-primary" href="{% url 'users:group_create' %}">
+                                            <a class="btn btn-outline-primary" href="{% url 'users:groups:create' %}">
                                                 <i class="bi bi-people"></i> {% translate "Создать группу" %}
                                             </a>
-                                            <a class="btn btn-outline-danger" href="{% url 'users:group_delete' %}">
+                                            <a class="btn btn-outline-danger" href="{% url 'users:groups:delete' %}">
                                                 <i class="bi bi-person-dash"></i> {% translate "Удалить группу" %}
                                             </a>
-                                            <a class="btn btn-outline-success" href="{% url 'users:add_user_to_group' %}">
+                                            <a class="btn btn-outline-success" href="{% url 'users:groups:add_user' %}">
                                                 <i class="bi bi-person-plus"></i> {% translate "Добавить пользователя в группу" %}
                                             </a>
-                                            <a class="btn btn-outline-dark" href="{% url 'users:del_user_to_group' %}">
+                                            <a class="btn btn-outline-dark" href="{% url 'users:groups:delete_user' %}">
                                                 <i class="bi bi-person-plus"></i>  {% translate "Удалить пользователя из группы" %}
                                             </a>
                                         </div>
