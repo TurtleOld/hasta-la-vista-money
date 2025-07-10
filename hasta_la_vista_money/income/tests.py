@@ -301,7 +301,7 @@ class TestIncome(TestCase):
         response = self.client.post(
             reverse_lazy('income:income_copy', args=[self.income.pk]),
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_update_view_get(self):
         """Test IncomeUpdateView GET request."""
@@ -334,7 +334,7 @@ class TestIncome(TestCase):
         response = self.client.post(
             reverse_lazy('income:delete_income', args=[self.income.pk]),
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_category_view(self):
         """Test IncomeCategoryView functionality."""
@@ -461,7 +461,7 @@ class TestIncome(TestCase):
         response = self.client.post(
             reverse_lazy('income:delete_income', args=[self.income.pk]),
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_category_view_unauthenticated(self):
         """Test IncomeCategoryView for unauthenticated user."""
