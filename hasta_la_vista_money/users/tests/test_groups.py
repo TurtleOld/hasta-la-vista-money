@@ -6,8 +6,6 @@ from hasta_la_vista_money.users.services.groups import (
     get_groups_not_for_user,
     create_group,
     delete_group,
-    add_user_to_group,
-    remove_user_from_group,
 )
 from hasta_la_vista_money.users.forms import (
     GroupCreateForm,
@@ -47,17 +45,26 @@ class GroupsServiceTest(TestCase):
         self.assertFalse(Group.objects.filter(name='NewGroup').exists())
 
     def test_add_and_remove_user_to_group(self):
+        """Test adding and removing user from group using form save methods."""
+        from django.test import RequestFactory
+        from django.contrib.messages.storage.fallback import FallbackStorage
+
+        factory = RequestFactory()
+        request = factory.get('/')
+        setattr(request, 'session', self.client.session)
+        messages = FallbackStorage(request)
+        setattr(request, '_messages', messages)
+
         add_form = AddUserToGroupForm(
             data={'user': self.user.pk, 'group': self.group.pk}
         )
-        add_form.is_valid()
-        add_form.cleaned_data = {'user': self.user, 'group': self.group}
-        add_user_to_group(add_form)
+        self.assertTrue(add_form.is_valid())
+        add_form.save(request)
         self.assertIn(self.group, self.user.groups.all())
+
         remove_form = DeleteUserFromGroupForm(
             data={'user': self.user.pk, 'group': self.group.pk}
         )
-        remove_form.is_valid()
-        remove_form.cleaned_data = {'user': self.user, 'group': self.group}
-        remove_user_from_group(remove_form)
+        self.assertTrue(remove_form.is_valid())
+        remove_form.save(request)
         self.assertNotIn(self.group, self.user.groups.all())

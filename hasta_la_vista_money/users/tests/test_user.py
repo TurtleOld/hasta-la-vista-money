@@ -83,6 +83,8 @@ class TestUser(TestCase):
 
         messages_list = list(response.wsgi_request._messages)
         self.assertEqual(len(messages_list), 1)
-        self.assertIn('Обязательное поле.', str(messages_list[0]))
+        self.assertIn(
+            'Пожалуйста, введите имя пользователя или email.', str(messages_list[0])
+        )
 
         self.assertFalse(response.wsgi_request.user.is_authenticated)

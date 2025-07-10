@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
         userSelect.addEventListener('change', function () {
             const userId = this.value;
             groupSelect.innerHTML = '<option value="">Загрузка...</option>';
-            fetch(`/users/ajax/groups_for_user/?user_id=${userId}`)
+            fetch(`/users/ajax/groups-for-user/?user_id=${userId}`)
                 .then(response => response.json())
                 .then(data => {
                     groupSelect.innerHTML = '';
@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', function() {
         userSelect.addEventListener('change', function () {
             const userId = this.value;
             groupSelect.innerHTML = '<option value="">Загрузка...</option>';
-            fetch(`/users/ajax/groups_not_for_user/?user_id=${userId}`)
+            fetch(`/users/ajax/groups-not-for-user/?user_id=${userId}`)
                 .then(response => response.json())
                 .then(data => {
                     groupSelect.innerHTML = '';
