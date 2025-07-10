@@ -66,11 +66,11 @@ document.addEventListener('DOMContentLoaded', function () {
         options.headers = options.headers || {};
         options.headers['Authorization'] = 'Bearer ' + getJWT();
         options.headers['X-Requested-With'] = 'XMLHttpRequest';
-        return fetch(url, options).then(resp => {
+        return fetch(url, options).then(resp => { // eslint-disable-line
             if (resp.status === 401 && retry) { // eslint-disable-line
                 return refreshToken().then(newAccess => {
                     options.headers['Authorization'] = 'Bearer ' + newAccess;
-                    return fetch(url, options);
+                    return fetch(url, options); // eslint-disable-line
                 }); // eslint-disable-line
             }
             return resp;
