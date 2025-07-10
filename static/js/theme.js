@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(function() {
             document.body.classList.remove('theme-fade');
         }, 400);
-        fetch('/users/set-theme/', {
+        fetch(window.SET_THEME_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
