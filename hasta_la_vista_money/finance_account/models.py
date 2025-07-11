@@ -191,9 +191,13 @@ class Account(TimeStampedModel):
         Returns:
             bool: True if transfer succeeded, False otherwise.
         """
-        from hasta_la_vista_money.finance_account import services as account_services
-
-        return account_services.transfer_money_service(self, to_account, amount)
+        if amount <= self.balance:
+            self.balance -= amount
+            to_account.balance += amount
+            self.save()
+            to_account.save()
+            return True
+        return False
 
     def get_credit_card_debt(
         self,
@@ -212,11 +216,9 @@ class Account(TimeStampedModel):
         Returns:
             Optional[Decimal]: The calculated debt, or None if not a credit account.
         """
-        if self.type_account not in ('CreditCard', 'Credit'):
-            return None
-        from hasta_la_vista_money.finance_account import services as account_services
+        from hasta_la_vista_money.finance_account.services import AccountService
 
-        return account_services.get_credit_card_debt_service(self, start_date, end_date)
+        return AccountService.get_credit_card_debt(self, start_date, end_date)
 
     def calculate_grace_period_info(self, purchase_month: Any) -> Dict[str, Any]:
         """
@@ -230,13 +232,9 @@ class Account(TimeStampedModel):
         Returns:
             dict: Information about the grace period, including dates, debts, and overdue status.
         """
-        if self.type_account not in ('CreditCard', 'Credit'):
-            return {}
-        from hasta_la_vista_money.finance_account import services as account_services
+        from hasta_la_vista_money.finance_account.services import AccountService
 
-        return account_services.calculate_grace_period_info_service(
-            self, purchase_month
-        )
+        return AccountService.calculate_grace_period_info(self, purchase_month)
 
 
 class TransferMoneyLogQuerySet(models.QuerySet):

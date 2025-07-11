@@ -20,8 +20,6 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.base_forms import (
     BaseAccountForm,
     BaseTransferForm,
-    BootstrapFormMixin,
-    CreditFieldsMixin,
     DateFieldMixin,
     FormValidationMixin,
 )
@@ -47,8 +45,8 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     """
 
     name_account = CharField(
-        label=_("Наименование счёта"),
-        help_text=_("Введите наименование счёта. Максимальная длина 250 символов."),
+        label=_('Наименование счёта'),
+        help_text=_('Введите наименование счёта. Максимальная длина 250 символов.'),
         max_length=constants.TWO_HUNDRED_FIFTY,
     )
 
@@ -59,8 +57,8 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     )
 
     limit_credit = DecimalField(
-        label=_("Кредитный лимит"),
-        help_text=_("Введите кредитный лимит"),
+        label=_('Кредитный лимит'),
+        help_text=_('Введите кредитный лимит'),
         required=False,
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
@@ -73,16 +71,16 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     )
 
     grace_period_days = IntegerField(
-        label=_("Длительность льготного периода (дней)"),
+        label=_('Длительность льготного периода (дней)'),
         required=False,
         min_value=0,
         max_value=365,
     )
 
     balance = DecimalField(
-        label=_("Баланс"),
+        label=_('Баланс'),
         help_text=_(
-            "Введите начальный баланс, который есть сейчас на счёту в банке\\в наличной валюте.\nМаксимальная длина 20 символов.",
+            'Введите начальный баланс, который есть сейчас на счёту в банке\\в наличной валюте.\nМаксимальная длина 20 символов.',
         ),
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
@@ -115,10 +113,10 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
 
         if cleaned_data:
             validate_credit_fields_required(
-                type_account=cleaned_data.get("type_account"),
-                limit_credit=cleaned_data.get("limit_credit"),
-                payment_due_date=cleaned_data.get("payment_due_date"),
-                grace_period_days=cleaned_data.get("grace_period_days"),
+                type_account=cleaned_data.get('type_account'),
+                limit_credit=cleaned_data.get('limit_credit'),
+                payment_due_date=cleaned_data.get('payment_due_date'),
+                grace_period_days=cleaned_data.get('grace_period_days'),
             )
 
         return cleaned_data
@@ -155,20 +153,21 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         """
         super().__init__(*args, **kwargs)
 
-        # Configure account choice fields
         user_accounts = Account.objects.filter(user=user)
 
-        self.fields["from_account"] = ModelChoiceField(
-            label=_("Со счёта:"),
+        self.fields['from_account'] = ModelChoiceField(
+            label=_('Со счёта:'),
             queryset=user_accounts,
-            help_text=_("Выберите счёт, с которого будет списана сумма"),
+            help_text=_('Выберите счёт, с которого будет списана сумма'),
         )
 
-        self.fields["to_account"] = ModelChoiceField(
-            label=_("На счёт:"),
+        self.fields['to_account'] = ModelChoiceField(
+            label=_('На счёт:'),
             queryset=user_accounts,
-            help_text=_("Выберите счёт, на который будет зачислена сумма"),
+            help_text=_('Выберите счёт, на который будет зачислена сумма'),
         )
+
+        self.add_bootstrap_classes()
 
     def clean(self) -> Dict[str, Any]:
         """
@@ -183,23 +182,23 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         cleaned_data = super().clean()
 
         if cleaned_data:
-            from_account = cleaned_data.get("from_account")
-            to_account = cleaned_data.get("to_account")
-            amount = cleaned_data.get("amount")
+            from_account = cleaned_data.get('from_account')
+            to_account = cleaned_data.get('to_account')
+            amount = cleaned_data.get('amount')
 
             # Validate accounts are different
             if from_account and to_account:
                 try:
                     validate_different_accounts(from_account, to_account)
                 except Exception as e:
-                    self.add_error("to_account", str(e))
+                    self.add_error('to_account', str(e))
 
             # Validate sufficient balance
             if from_account and amount:
                 try:
                     validate_account_balance(from_account, amount)
                 except Exception as e:
-                    self.add_error("from_account", str(e))
+                    self.add_error('from_account', str(e))
 
         return cleaned_data
 
@@ -217,17 +216,17 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             ValueError: If transfer fails
         """
         if not commit:
-            raise ValueError("Transfer forms must be committed")
+            raise ValueError('Transfer forms must be committed')
 
         cleaned_data = self.cleaned_data
 
         return TransferService.transfer_money(
-            from_account=cleaned_data["from_account"],
-            to_account=cleaned_data["to_account"],
-            amount=cleaned_data["amount"],
-            user=cleaned_data["from_account"].user,
-            exchange_date=cleaned_data.get("exchange_date"),
-            notes=cleaned_data.get("notes"),
+            from_account=cleaned_data['from_account'],
+            to_account=cleaned_data['to_account'],
+            amount=cleaned_data['amount'],
+            user=cleaned_data['from_account'].user,
+            exchange_date=cleaned_data.get('exchange_date'),
+            notes=cleaned_data.get('notes'),
         )
 
     class Meta:
@@ -240,5 +239,5 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             'notes',
         ]
         labels = {
-            "exchange_date": _("Дата перевода"),
+            'exchange_date': _('Дата перевода'),
         }

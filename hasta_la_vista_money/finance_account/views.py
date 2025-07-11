@@ -63,28 +63,12 @@ class AccountView(
         Returns:
             dict: Context for rendering the account list template.
         """
-        try:
-            context = super().get_context_data(**kwargs)
-            context.update(self._get_accounts_context())
-            context.update(self._get_forms_context())
-            context.update(self._get_transfer_log_context())
-            context.update(self._get_sums_context())
-            return context
-        except Exception:
-            logger.error(
-                'Ошибка при формировании контекста счетов',
-                exc_info=True,
-                user_id=getattr(self.request.user, 'id', None),
-            )
-            from django.contrib import messages
-
-            messages.error(
-                self.request,
-                _(
-                    'Произошла ошибка при загрузке счетов. Пожалуйста, попробуйте позже.'
-                ),
-            )
-            return super().get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
+        context.update(self._get_accounts_context())
+        context.update(self._get_forms_context())
+        context.update(self._get_transfer_log_context())
+        context.update(self._get_sums_context())
+        return context
 
     def _get_accounts_context(self) -> Dict[str, Any]:
         """

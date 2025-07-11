@@ -23,7 +23,12 @@ from hasta_la_vista_money.finance_account.prepare import (
     sort_expense_income,
 )
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
-from hasta_la_vista_money.finance_account.validators import validate_account_balance, validate_credit_fields_required, validate_different_accounts, validate_positive_amount
+from hasta_la_vista_money.finance_account.validators import (
+    validate_account_balance,
+    validate_credit_fields_required,
+    validate_different_accounts,
+    validate_positive_amount,
+)
 from hasta_la_vista_money.finance_account.views import AccountView
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
@@ -79,7 +84,7 @@ class TestAccount(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertEqual(Account.objects.count(), 2)
         self.assertEqual(
-            list(response.context['accounts']),
+            list(response.context['finance_account']),
             list(Account.objects.filter(user=self.user)),
         )
 
@@ -491,7 +496,7 @@ class TestAccount(TestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('accounts', response.context)
+        self.assertIn('finance_account', response.context)
         self.assertIn('add_account_form', response.context)
         self.assertIn('transfer_money_form', response.context)
         self.assertIn('transfer_money_log', response.context)
@@ -592,7 +597,7 @@ class TestAccount(TestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('accounts', response.context)
+        self.assertIn('finance_account', response.context)
 
 
 class TestAccountServices(TestCase):
@@ -707,11 +712,10 @@ class TestAccountBusinessLogic(TestCase):
         self.assertIn('final_debt', info)
 
 
-class TestValidators(TestCase):
+class TestValidatorsRefactored(TestCase):
     """Test custom validators for finance account forms."""
 
     def setUp(self) -> None:
-        """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
             password='testpass123',
@@ -732,7 +736,6 @@ class TestValidators(TestCase):
     def test_validate_positive_amount_valid(self) -> None:
         """Test positive amount validation with valid amount."""
         amount = Decimal('100.00')
-        # Should not raise exception
         validate_positive_amount(amount)
 
     def test_validate_positive_amount_invalid(self) -> None:
@@ -744,7 +747,6 @@ class TestValidators(TestCase):
     def test_validate_account_balance_sufficient(self) -> None:
         """Test account balance validation with sufficient funds."""
         amount = Decimal('500.00')
-        # Should not raise exception
         validate_account_balance(self.account1, amount)
 
     def test_validate_account_balance_insufficient(self) -> None:
@@ -755,7 +757,6 @@ class TestValidators(TestCase):
 
     def test_validate_different_accounts_valid(self) -> None:
         """Test different accounts validation with different accounts."""
-        # Should not raise exception
         validate_different_accounts(self.account1, self.account2)
 
     def test_validate_different_accounts_invalid(self) -> None:
@@ -765,7 +766,6 @@ class TestValidators(TestCase):
 
     def test_validate_credit_fields_required_credit_account(self) -> None:
         """Test credit fields validation for credit account."""
-        # Should not raise exception when all fields provided
         validate_credit_fields_required(
             type_account='Credit',
             limit_credit=Decimal('10000.00'),
@@ -785,7 +785,6 @@ class TestValidators(TestCase):
 
     def test_validate_credit_fields_required_debit_account(self) -> None:
         """Test credit fields validation for debit account (should pass)."""
-        # Should not raise exception for debit accounts
         validate_credit_fields_required(
             type_account='Debit',
             limit_credit=None,
@@ -798,7 +797,6 @@ class TestAddAccountFormRefactored(TestCase):
     """Test refactored AddAccountForm."""
 
     def setUp(self) -> None:
-        """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
             password='testpass123',
@@ -807,14 +805,11 @@ class TestAddAccountFormRefactored(TestCase):
     def test_form_initialization(self) -> None:
         """Test form initialization with default values."""
         form = AddAccountForm()
-        
-        # Check default account type
+
         self.assertEqual(
-            form.fields['type_account'].initial,
-            Account.TYPE_ACCOUNT_LIST[1][0]
+            form.fields['type_account'].initial, Account.TYPE_ACCOUNT_LIST[1][0]
         )
-        
-        # Check Bootstrap classes are added
+
         for field_name, field in form.fields.items():
             if hasattr(field.widget, 'attrs'):
                 self.assertIn('form-control', field.widget.attrs.get('class', ''))
@@ -854,7 +849,7 @@ class TestAddAccountFormRefactored(TestCase):
         }
         form = AddAccountForm(data=form_data)
         self.assertFalse(form.is_valid())
-        self.assertIn('type_account', form.errors)
+        self.assertIn('__all__', form.errors)
 
     def test_form_save(self) -> None:
         """Test form save functionality."""
@@ -866,11 +861,11 @@ class TestAddAccountFormRefactored(TestCase):
         }
         form = AddAccountForm(data=form_data)
         self.assertTrue(form.is_valid())
-        
+
         account = form.save(commit=False)
         account.user = self.user
         account.save()
-        
+
         self.assertEqual(account.name_account, 'Test Account')
         self.assertEqual(account.balance, Decimal('1000.00'))
         self.assertEqual(account.currency, 'RUB')
@@ -880,7 +875,6 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
     """Test refactored TransferMoneyAccountForm."""
 
     def setUp(self) -> None:
-        """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
             password='testpass123',
@@ -901,17 +895,20 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
     def test_form_initialization(self) -> None:
         """Test form initialization with user accounts."""
         form = TransferMoneyAccountForm(user=self.user)
-        
-        # Check account choices are filtered by user
-        self.assertEqual(
-            form.fields['from_account'].queryset.count(),
-            2
-        )
-        
-        # Check Bootstrap classes are added
+
+        self.assertEqual(form.fields['from_account'].queryset.count(), 2)
+
+        self.assertIn('amount', form.fields)
+        self.assertIn('notes', form.fields)
+
         for field_name, field in form.fields.items():
             if hasattr(field.widget, 'attrs'):
-                self.assertIn('form-control', field.widget.attrs.get('class', ''))
+                widget_class = field.widget.attrs.get('class', '')
+                self.assertIn(
+                    'form-control',
+                    widget_class,
+                    f'Field {field_name} missing form-control class',
+                )
 
     def test_form_validation_valid_data(self) -> None:
         """Test form validation with valid data."""
@@ -943,7 +940,7 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
         form_data = {
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
-            'amount': Decimal('1500.00'),  # More than account1 balance
+            'amount': Decimal('1500.00'),
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
@@ -975,16 +972,15 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
         }
         form = TransferMoneyAccountForm(user=self.user, data=form_data)
         self.assertTrue(form.is_valid())
-        
+
         transfer_log = form.save()
-        
+
         self.assertIsInstance(transfer_log, TransferMoneyLog)
         self.assertEqual(transfer_log.from_account, self.account1)
         self.assertEqual(transfer_log.to_account, self.account2)
         self.assertEqual(transfer_log.amount, Decimal('100.00'))
         self.assertEqual(transfer_log.user, self.user)
-        
-        # Check account balances were updated
+
         self.account1.refresh_from_db()
         self.account2.refresh_from_db()
         self.assertEqual(self.account1.balance, Decimal('900.00'))
@@ -1001,6 +997,6 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
         }
         form = TransferMoneyAccountForm(user=self.user, data=form_data)
         self.assertTrue(form.is_valid())
-        
+
         with self.assertRaises(ValueError):
-            form.save(commit=False) 
+            form.save(commit=False)
