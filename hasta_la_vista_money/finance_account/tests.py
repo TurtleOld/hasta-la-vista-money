@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.contrib import messages
+from django.forms import ValidationError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -22,6 +23,7 @@ from hasta_la_vista_money.finance_account.prepare import (
     sort_expense_income,
 )
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
+from hasta_la_vista_money.finance_account.validators import validate_account_balance, validate_credit_fields_required, validate_different_accounts, validate_positive_amount
 from hasta_la_vista_money.finance_account.views import AccountView
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
@@ -703,3 +705,302 @@ class TestAccountBusinessLogic(TestCase):
 
         info = self.account1.calculate_grace_period_info(date.today())
         self.assertIn('final_debt', info)
+
+
+class TestValidators(TestCase):
+    """Test custom validators for finance account forms."""
+
+    def setUp(self) -> None:
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123',
+        )
+        self.account1 = Account.objects.create(
+            user=self.user,
+            name_account='Test Account 1',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.account2 = Account.objects.create(
+            user=self.user,
+            name_account='Test Account 2',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+
+    def test_validate_positive_amount_valid(self) -> None:
+        """Test positive amount validation with valid amount."""
+        amount = Decimal('100.00')
+        # Should not raise exception
+        validate_positive_amount(amount)
+
+    def test_validate_positive_amount_invalid(self) -> None:
+        """Test positive amount validation with invalid amount."""
+        amount = Decimal('0.00')
+        with self.assertRaises(ValidationError):
+            validate_positive_amount(amount)
+
+    def test_validate_account_balance_sufficient(self) -> None:
+        """Test account balance validation with sufficient funds."""
+        amount = Decimal('500.00')
+        # Should not raise exception
+        validate_account_balance(self.account1, amount)
+
+    def test_validate_account_balance_insufficient(self) -> None:
+        """Test account balance validation with insufficient funds."""
+        amount = Decimal('1500.00')
+        with self.assertRaises(ValidationError):
+            validate_account_balance(self.account1, amount)
+
+    def test_validate_different_accounts_valid(self) -> None:
+        """Test different accounts validation with different accounts."""
+        # Should not raise exception
+        validate_different_accounts(self.account1, self.account2)
+
+    def test_validate_different_accounts_invalid(self) -> None:
+        """Test different accounts validation with same account."""
+        with self.assertRaises(ValidationError):
+            validate_different_accounts(self.account1, self.account1)
+
+    def test_validate_credit_fields_required_credit_account(self) -> None:
+        """Test credit fields validation for credit account."""
+        # Should not raise exception when all fields provided
+        validate_credit_fields_required(
+            type_account='Credit',
+            limit_credit=Decimal('10000.00'),
+            payment_due_date=timezone.now().date(),
+            grace_period_days=30,
+        )
+
+    def test_validate_credit_fields_required_missing_fields(self) -> None:
+        """Test credit fields validation with missing fields."""
+        with self.assertRaises(ValidationError):
+            validate_credit_fields_required(
+                type_account='Credit',
+                limit_credit=None,
+                payment_due_date=None,
+                grace_period_days=None,
+            )
+
+    def test_validate_credit_fields_required_debit_account(self) -> None:
+        """Test credit fields validation for debit account (should pass)."""
+        # Should not raise exception for debit accounts
+        validate_credit_fields_required(
+            type_account='Debit',
+            limit_credit=None,
+            payment_due_date=None,
+            grace_period_days=None,
+        )
+
+
+class TestAddAccountFormRefactored(TestCase):
+    """Test refactored AddAccountForm."""
+
+    def setUp(self) -> None:
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123',
+        )
+
+    def test_form_initialization(self) -> None:
+        """Test form initialization with default values."""
+        form = AddAccountForm()
+        
+        # Check default account type
+        self.assertEqual(
+            form.fields['type_account'].initial,
+            Account.TYPE_ACCOUNT_LIST[1][0]
+        )
+        
+        # Check Bootstrap classes are added
+        for field_name, field in form.fields.items():
+            if hasattr(field.widget, 'attrs'):
+                self.assertIn('form-control', field.widget.attrs.get('class', ''))
+
+    def test_form_validation_valid_data(self) -> None:
+        """Test form validation with valid data."""
+        form_data = {
+            'name_account': 'Test Account',
+            'type_account': 'Debit',
+            'balance': Decimal('1000.00'),
+            'currency': 'RUB',
+        }
+        form = AddAccountForm(data=form_data)
+        self.assertTrue(form.is_valid())
+
+    def test_form_validation_credit_account_valid(self) -> None:
+        """Test form validation for credit account with all required fields."""
+        form_data = {
+            'name_account': 'Credit Card',
+            'type_account': 'Credit',
+            'limit_credit': Decimal('10000.00'),
+            'payment_due_date': timezone.now().date(),
+            'grace_period_days': 30,
+            'balance': Decimal('0.00'),
+            'currency': 'RUB',
+        }
+        form = AddAccountForm(data=form_data)
+        self.assertTrue(form.is_valid())
+
+    def test_form_validation_credit_account_missing_fields(self) -> None:
+        """Test form validation for credit account with missing fields."""
+        form_data = {
+            'name_account': 'Credit Card',
+            'type_account': 'Credit',
+            'balance': Decimal('0.00'),
+            'currency': 'RUB',
+        }
+        form = AddAccountForm(data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('type_account', form.errors)
+
+    def test_form_save(self) -> None:
+        """Test form save functionality."""
+        form_data = {
+            'name_account': 'Test Account',
+            'type_account': 'Debit',
+            'balance': Decimal('1000.00'),
+            'currency': 'RUB',
+        }
+        form = AddAccountForm(data=form_data)
+        self.assertTrue(form.is_valid())
+        
+        account = form.save(commit=False)
+        account.user = self.user
+        account.save()
+        
+        self.assertEqual(account.name_account, 'Test Account')
+        self.assertEqual(account.balance, Decimal('1000.00'))
+        self.assertEqual(account.currency, 'RUB')
+
+
+class TestTransferMoneyAccountFormRefactored(TestCase):
+    """Test refactored TransferMoneyAccountForm."""
+
+    def setUp(self) -> None:
+        """Set up test data."""
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123',
+        )
+        self.account1 = Account.objects.create(
+            user=self.user,
+            name_account='Test Account 1',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.account2 = Account.objects.create(
+            user=self.user,
+            name_account='Test Account 2',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+
+    def test_form_initialization(self) -> None:
+        """Test form initialization with user accounts."""
+        form = TransferMoneyAccountForm(user=self.user)
+        
+        # Check account choices are filtered by user
+        self.assertEqual(
+            form.fields['from_account'].queryset.count(),
+            2
+        )
+        
+        # Check Bootstrap classes are added
+        for field_name, field in form.fields.items():
+            if hasattr(field.widget, 'attrs'):
+                self.assertIn('form-control', field.widget.attrs.get('class', ''))
+
+    def test_form_validation_valid_data(self) -> None:
+        """Test form validation with valid data."""
+        form_data = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': Decimal('100.00'),
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        self.assertTrue(form.is_valid())
+
+    def test_form_validation_same_accounts(self) -> None:
+        """Test form validation with same source and destination accounts."""
+        form_data = {
+            'from_account': self.account1.pk,
+            'to_account': self.account1.pk,
+            'amount': Decimal('100.00'),
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('to_account', form.errors)
+
+    def test_form_validation_insufficient_funds(self) -> None:
+        """Test form validation with insufficient funds."""
+        form_data = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': Decimal('1500.00'),  # More than account1 balance
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('from_account', form.errors)
+
+    def test_form_validation_negative_amount(self) -> None:
+        """Test form validation with negative amount."""
+        form_data = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': Decimal('-100.00'),
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('amount', form.errors)
+
+    def test_form_save(self) -> None:
+        """Test form save functionality using TransferService."""
+        form_data = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': Decimal('100.00'),
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        self.assertTrue(form.is_valid())
+        
+        transfer_log = form.save()
+        
+        self.assertIsInstance(transfer_log, TransferMoneyLog)
+        self.assertEqual(transfer_log.from_account, self.account1)
+        self.assertEqual(transfer_log.to_account, self.account2)
+        self.assertEqual(transfer_log.amount, Decimal('100.00'))
+        self.assertEqual(transfer_log.user, self.user)
+        
+        # Check account balances were updated
+        self.account1.refresh_from_db()
+        self.account2.refresh_from_db()
+        self.assertEqual(self.account1.balance, Decimal('900.00'))
+        self.assertEqual(self.account2.balance, Decimal('600.00'))
+
+    def test_form_save_without_commit(self) -> None:
+        """Test form save without commit raises error."""
+        form_data = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': Decimal('100.00'),
+            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': 'Test transfer',
+        }
+        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        self.assertTrue(form.is_valid())
+        
+        with self.assertRaises(ValueError):
+            form.save(commit=False) 
