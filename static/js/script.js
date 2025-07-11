@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
         userSelect.addEventListener('change', function () {
             const userId = this.value;
             groupSelect.innerHTML = '<option value="">Загрузка...</option>';
-            fetch(`/users/ajax/groups_for_user/?user_id=${userId}`)
+            fetch(`${window.GROUPS_FOR_USER_URL}?user_id=${userId}`)
                 .then(response => response.json())
                 .then(data => {
                     groupSelect.innerHTML = '';
@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', function() {
         userSelect.addEventListener('change', function () {
             const userId = this.value;
             groupSelect.innerHTML = '<option value="">Загрузка...</option>';
-            fetch(`/users/ajax/groups_not_for_user/?user_id=${userId}`)
+            fetch(`${window.GROUPS_NOT_FOR_USER_URL}?user_id=${userId}`)
                 .then(response => response.json())
                 .then(data => {
                     groupSelect.innerHTML = '';
@@ -375,8 +375,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return fetch('/receipts/api/product-autocomplete/', opts);
             } else if (url === '/authentication/token/refresh/') {
                 return fetch('/authentication/token/refresh/', opts);
-            } else if (url === '/users/login/') {
-                return fetch('/users/login/', opts);
+            } else if (url === window.LOGIN_URL) {
+                return fetch(window.LOGIN_URL, opts);
             } else {
                 throw new Error('Unsafe URL detected');
             }
@@ -419,7 +419,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         localStorage.removeItem('access_token');
                         localStorage.removeItem('refresh_token');
                         alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
-                        window.location.replace('/users/login/');
+                        window.location.replace(window.LOGIN_URL);
                         return response;
                     }
                 }

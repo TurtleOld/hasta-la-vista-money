@@ -7,7 +7,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils import formats
@@ -18,11 +18,6 @@ from django.views.generic.edit import CreateView, DeletionMixin
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.services.views import (
-    build_category_tree,
-    get_new_type_operation,
-    get_queryset_type_income_expenses,
-)
 from hasta_la_vista_money.custom_mixin import (
     CustomNoPermissionMixin,
     DeleteObjectMixin,
@@ -31,6 +26,11 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.services.views import (
+    build_category_tree,
+    get_new_type_operation,
+    get_queryset_type_income_expenses,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -168,7 +168,8 @@ class IncomeCreateView(
         selected_category = get_object_or_404(IncomeCategory, name=category)
 
         if selected_account.user == self.request.user:
-            # Здесь твоя логика изменения баланса, если нужна
+            selected_account.balance += amount
+            selected_account.save()
             form_instance.user = self.request.user
             form_instance.category = selected_category
             form_instance.save()
@@ -200,14 +201,15 @@ class IncomeCopyView(
 
     def post(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
         income_id = kwargs.get('pk')
-        new_income = get_new_type_operation(Income, income_id, request)
-
-        valid_income = get_object_or_404(Income, pk=new_income.pk)
-
-        messages.success(request, _('Расход успешно скопирован.'))
-        return redirect(
-            reverse_lazy('income:change', kwargs={'pk': valid_income.pk}),
-        )
+        try:
+            new_income = get_new_type_operation(Income, income_id, request)
+            valid_income = get_object_or_404(Income, pk=new_income.pk)
+            if valid_income.account:
+                valid_income.account.balance += valid_income.amount
+                valid_income.account.save()
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
 
 
 class IncomeUpdateView(
@@ -292,21 +294,19 @@ class IncomeDeleteView(BaseView, DeleteView, DeletionMixin):
     no_permission_url = reverse_lazy('login')
     success_url: Optional[str] = reverse_lazy('income:list')
 
-    def form_valid(self, form: Any) -> HttpResponse:
+    def post(self, request, *args, **kwargs):
         income = self.get_object()
+        if not isinstance(income, Income):
+            return JsonResponse({'success': False, 'error': 'Invalid income object'})
         account = income.account
         amount = income.amount
-        account_balance = get_object_or_404(Account, id=account.id)
-
+        account_balance = get_object_or_404(Account, id=account.pk)
         if account_balance.user == self.request.user:
             account_balance.balance -= amount
             account_balance.save()
-            messages.success(
-                self.request,
-                constants.SUCCESS_INCOME_DELETED,
-            )
-            return super().form_valid(form)
-        return HttpResponseRedirect(str(self.success_url))
+            income.delete()
+            return JsonResponse({'success': True})
+        return JsonResponse({'success': False, 'error': 'Нет прав'})
 
 
 class IncomeCategoryView(LoginRequiredMixin, ListView):
@@ -445,7 +445,7 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
         for income in incomes.select_related('category', 'account', 'user').all():
             data.append(
                 {
-                    'id': income.id,
+                    'id': income.pk,
                     'category_name': income.category.name if income.category else '',
                     'account_name': income.account.name_account
                     if income.account
@@ -453,7 +453,7 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
                     'amount': float(income.amount),
                     'date': income.date.strftime('%d.%m.%Y'),
                     'user_name': income.user.username,
-                    'user_id': income.user.id,
+                    'user_id': income.user.pk,
                 },
             )
 

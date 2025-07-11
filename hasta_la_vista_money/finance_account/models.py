@@ -1,11 +1,11 @@
 from decimal import Decimal
 
 from django.db import models
+from django.db.models import Sum
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
-from django.db.models import Sum
 
 
 class Account(models.Model):
@@ -67,7 +67,7 @@ class Account(models.Model):
         blank=True,
         verbose_name=_('Длительность льготного периода (дней)'),
         help_text=_(
-            'Для кредитных карт: сколько дней длится беспроцентный период (например, 120)'
+            'Для кредитных карт: сколько дней длится беспроцентный период (например, 120)',
         ),
     )
     created_at = models.DateTimeField(
@@ -106,6 +106,8 @@ class Account(models.Model):
         - Income (доходы) — уменьшают долг
         - Receipt (operation_type=1 — покупка, увеличивает долг; operation_type=2 — возврат, уменьшает долг)
         """
+        from datetime import date, datetime, time
+
         from hasta_la_vista_money.expense.models import Expense
         from hasta_la_vista_money.income.models import Income
         from hasta_la_vista_money.receipts.models import Receipt
@@ -119,9 +121,18 @@ class Account(models.Model):
         receipt_qs = Receipt.objects.filter(account=self)
 
         if start_date and end_date:
-            expense_qs = expense_qs.filter(date__range=(start_date, end_date))
-            income_qs = income_qs.filter(date__range=(start_date, end_date))
-            receipt_qs = receipt_qs.filter(receipt_date__range=(start_date, end_date))
+            # start_date может быть date или datetime
+            if isinstance(start_date, date) and not isinstance(start_date, datetime):
+                start_dt = datetime.combine(start_date, time.min)
+            else:
+                start_dt = start_date
+            if isinstance(end_date, date) and not isinstance(end_date, datetime):
+                end_dt = datetime.combine(end_date, time.max)
+            else:
+                end_dt = end_date
+            expense_qs = expense_qs.filter(date__range=(start_dt, end_dt))
+            income_qs = income_qs.filter(date__range=(start_dt, end_dt))
+            receipt_qs = receipt_qs.filter(receipt_date__range=(start_dt, end_dt))
 
         total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
         total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
@@ -142,6 +153,59 @@ class Account(models.Model):
             total_income + total_receipt_return
         )
         return debt
+
+    def calculate_grace_period_info(self, purchase_month):
+        """
+        Рассчитывает информацию о беспроцентном периоде для кредитной карты.
+
+        Логика: 1 месяц на покупки + 3 месяца на погашение
+        Например: покупки в мае -> погашение до конца августа
+        """
+        from calendar import monthrange
+        from datetime import datetime, time
+
+        from dateutil.relativedelta import relativedelta
+        from django.utils import timezone
+
+        # Начало месяца покупок
+        purchase_start = purchase_month.replace(day=1)
+
+        # Конец месяца покупок (23:59:59)
+        last_day = monthrange(purchase_start.year, purchase_start.month)[1]
+        purchase_end = datetime.combine(purchase_start.replace(day=last_day), time.max)
+
+        # Конец беспроцентного периода (3 месяца после месяца покупок, 23:59:59)
+        grace_end_date = purchase_start + relativedelta(months=3)
+        last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[1]
+        grace_end = datetime.combine(
+            grace_end_date.replace(day=last_day_grace),
+            time.max,
+        )
+
+        # Рассчитываем долг за месяц покупок
+        debt_for_month = self.get_credit_card_debt(purchase_start, purchase_end)
+
+        # Рассчитываем платежи за период погашения
+        payments_start = purchase_end + relativedelta(seconds=1)
+        payments_end = grace_end
+        payments_for_period = self.get_credit_card_debt(payments_start, payments_end)
+
+        # Итоговый долг после беспроцентного периода
+        final_debt = (debt_for_month or 0) + (payments_for_period or 0)
+
+        return {
+            'purchase_month': purchase_start.strftime('%m.%Y'),
+            'purchase_start': purchase_start,
+            'purchase_end': purchase_end,
+            'grace_end': grace_end,
+            'debt_for_month': debt_for_month,
+            'payments_for_period': payments_for_period,
+            'final_debt': final_debt,
+            'is_overdue': timezone.now() > grace_end and final_debt > 0,
+            'days_until_due': (grace_end.date() - timezone.now().date()).days
+            if timezone.now() <= grace_end
+            else 0,
+        }
 
 
 class TransferMoneyLog(models.Model):

@@ -15,12 +15,12 @@ async function ensureValidAccessToken() {
     const access = localStorage.getItem('access_token');
     const refresh = localStorage.getItem('refresh_token');
     if (!access || !refresh) {
-        window.location.replace('/users/login/');
+        window.location.replace(window.LOGIN_URL);
         return false;
     }
     const payload = parseJwt(access);
     if (!payload || !payload.exp) {
-        window.location.replace('/users/login/');
+        window.location.replace(window.LOGIN_URL);
         return false;
     }
     const now = Math.floor(Date.now() / 1000);
@@ -42,11 +42,11 @@ async function ensureValidAccessToken() {
             } else {
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
-                window.location.replace('/users/login/');
+                window.location.replace(window.LOGIN_URL);
                 return false;
             }
         } catch (e) {
-            window.location.replace('/users/login/');
+            window.location.replace(window.LOGIN_URL);
             return false;
         }
     }
@@ -72,7 +72,7 @@ function scheduleAccessTokenRefresh() {
 async function doRefreshToken() {
     const refresh = localStorage.getItem('refresh_token');
     if (!refresh) {
-        window.location.replace('/users/login/');
+        window.location.replace(window.LOGIN_URL);
         return;
     }
     try {
@@ -91,7 +91,7 @@ async function doRefreshToken() {
         } else {
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
-            window.location.replace('/users/login/');
+            window.location.replace(window.LOGIN_URL);
         }
     } catch (e) {
         setTimeout(doRefreshToken, 10000);
