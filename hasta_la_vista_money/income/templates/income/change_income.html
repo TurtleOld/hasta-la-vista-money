@@ -8,12 +8,7 @@
         <div class="row">
             <div class="col-xl-6 position-absolute top-0 mt-5 start-50 translate-middle-x text-light">
                 {{ income_form.media }}
-                <form class="form" method="post">
-                    {% csrf_token %}
-                    {{ income_form | crispy }}
-                    <button type="submit" class="btn btn-success">{% translate 'Сохранить' %}</button>
-                    <a class="btn btn-warning text-light position-absolute end-0" href="{% url 'income:list' %}">{% translate 'Вернуться назад' %}</a>
-                </form>
+                {% include 'income/_income_form.html' with form=income_form action_url=action_url|default:request.path cancel_url=cancel_url|default:cancel_url submit_label=_('Сохранить') cancel_label=_('Вернуться назад') %}
             </div>
             <!-- /.col-xl-12 d-flex justify-content-center -->
         </div>

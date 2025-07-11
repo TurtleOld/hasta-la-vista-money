@@ -1,0 +1,29 @@
+{% load crispy_forms_tags %}
+{% load i18n %}
+<form method="POST" action="{{ action_url }}">
+    {% csrf_token %}
+    {% if form %}
+        {% for field in form %}
+            <div class="mb-3">
+                {{ field|as_crispy_field }}
+                {% if field.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in field.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    {% endif %}
+    <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-plus-circle me-2"></i>
+            {{ submit_label|default:_('Добавить доход') }}
+        </button>
+        <a href="{{ cancel_url }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>
+            {{ cancel_label|default:_('Отмена') }}
+        </a>
+    </div>
+</form>

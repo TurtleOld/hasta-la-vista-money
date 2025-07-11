@@ -1,5 +1,6 @@
 import django_filters
 from django.forms import Select
+from django_filters.widgets import RangeWidget
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
@@ -13,7 +14,7 @@ class IncomeFilter(django_filters.FilterSet):
     )
     date = django_filters.DateFromToRangeFilter(
         label='',
-        widget=django_filters.widgets.RangeWidget(
+        widget=RangeWidget(
             attrs={
                 'class': 'form-control',
                 'type': 'date',
@@ -28,10 +29,7 @@ class IncomeFilter(django_filters.FilterSet):
 
     def __init__(self, *args, **kwargs):
         """
-        Конструктор класса инициализирующий поля формы.
-
-        :param args:
-        :param kwargs:
+        Initialize filter fields for the current user.
         """
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)

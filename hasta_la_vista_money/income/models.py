@@ -2,10 +2,15 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.income.managers import IncomeManager
 from hasta_la_vista_money.users.models import User
 
 
 class IncomeCategory(models.Model):
+    """
+    Income category model with support for user-specific and hierarchical categories.
+    """
+
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -13,7 +18,6 @@ class IncomeCategory(models.Model):
     )
     name = models.CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,
-        unique=True,
     )
     parent_category = models.ForeignKey(
         'self',
@@ -26,13 +30,16 @@ class IncomeCategory(models.Model):
     class Meta:
         ordering = ['parent_category_id']
         indexes = [models.Index(fields=['name'])]
+        unique_together = ('user', 'name')
 
     def __str__(self):
         return self.name
 
 
 class Income(models.Model):
-    """Модель доходов."""
+    """
+    Income model representing user's income records.
+    """
 
     date = models.DateTimeField()
     amount = models.DecimalField(
@@ -60,6 +67,7 @@ class Income(models.Model):
         on_delete=models.PROTECT,
         related_name='income_categories',
     )
+    objects = IncomeManager()
 
     class Meta:
         ordering = ['-date']
