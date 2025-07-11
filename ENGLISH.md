@@ -137,14 +137,92 @@ http://127.0.0.1:8090
 
 #### Environment Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SECRET_KEY` | Django secret key | `base64 /dev/urandom \| head -c50` |
-| `DEBUG` | Debug mode | `false` (production) |
-| `DATABASE_URL` | Database URL | `postgres://user:pass@localhost:5432/db` |
-| `ALLOWED_HOSTS` | Allowed hosts | `localhost,127.0.0.1` |
-| `LANGUAGE_CODE` | Interface language | `ru` |
-| `TIME_ZONE` | Timezone | `Europe/Moscow` |
+## Required Variables
+
+| Variable           | Description                                   | Example/Default Value                        | Required?   |
+|--------------------|-----------------------------------------------|----------------------------------------------|-------------|
+| `SECRET_KEY`       | Django secret key                             | `base64 /dev/urandom \| head -c50`           | Yes         |
+| `DEBUG`            | Debug mode                                    | `false` (production) / `true` (dev)          | Yes         |
+| `ALLOWED_HOSTS`    | Allowed hosts (comma-separated)               | `localhost,127.0.0.1`                        | Yes         |
+
+### For PostgreSQL (if used, otherwise not needed):
+
+| Variable           | Description                                   | Example/Default Value                        | Required?   |
+|--------------------|-----------------------------------------------|----------------------------------------------|-------------|
+| `DATABASE_URL`     | Database URL (PostgreSQL)                     | `postgres://user:pass@localhost:5432/db`     | Yes (if not SQLite) |
+| `POSTGRES_DB`      | DB name (alternative to DATABASE_URL)          | `postgres`                                   | No          |
+| `POSTGRES_USER`    | DB user                                       | `postgres`                                   | No          |
+| `POSTGRES_PASSWORD`| DB password                                   | `postgres`                                   | No          |
+| `POSTGRES_HOST`    | DB host                                       | `localhost`                                  | No          |
+| `POSTGRES_PORT`    | DB port                                       | `5432`                                       | No          |
+
+## Optional Variables
+
+| Variable                  | Description                                   | Example/Default Value                        | Required?   |
+|--------------------------|-----------------------------------------------|----------------------------------------------|-------------|
+| `BASE_URL`               | Base site URL                                 | `http://127.0.0.1:8000/`                     | No          |
+| `CSRF_TRUSTED_ORIGINS`   | Trusted origins for CSRF                      | `https://example.com`                        | No          |
+| `LOCAL_IPS`              | Local IPs for INTERNAL_IPS                    | `127.0.0.1`                                  | No          |
+| `LANGUAGE_CODE`          | Interface language                            | `en`                                         | No          |
+| `TIME_ZONE`              | Timezone                                      | `Europe/Moscow`                              | No          |
+| `SENTRY_DSN`             | Sentry DSN                                    | `<dsn>`                                      | No          |
+| `SENTRY_ENVIRONMENT`     | Sentry environment                            | `production`                                 | No          |
+| `SENTRY_ENDPOINT`        | report_uri for CSP                            | `<url>`                                      | No          |
+| `URL_CSP_SCRIPT_SRC`     | Additional CSP sources                        | `https://mycdn.com`                          | No          |
+| `SESSION_COOKIE_AGE`     | Session cookie lifetime (seconds)              | `31536000`                                   | No          |
+| `SESSION_COOKIE_HTTPONLY`| HttpOnly for session cookie                   | `True`                                       | No          |
+| `SESSION_COOKIE_NAME`    | Session cookie name                           | `sessionid`                                  | No          |
+| `SESSION_COOKIE_SAMESITE`| SameSite for session cookie                   | `Lax`                                        | No          |
+| `SESSION_COOKIE_SECURE`  | Secure for session cookie                     | `False`                                      | No          |
+| `SECURE_SSL_REDIRECT`    | Force HTTPS                                   | `True`                                       | No          |
+| `SECURE_CONTENT_TYPE_NOSNIFF` | MIME sniffing protection                  | `True`                                       | No          |
+| `ACCESS_TOKEN_LIFETIME`  | Access token lifetime (minutes)               | `60`                                         | No          |
+| `REFRESH_TOKEN_LIFETIME` | Refresh token lifetime (days)                 | `7`                                          | No          |
+| `DEBUG_TOOLBAR_ENABLED`  | Enable Debug Toolbar                          | `True`                                       | No          |
+
+### For AI Integration (receipt reading):
+
+| Variable           | Description                                   | Example/Default Value                        | Required?   |
+|--------------------|-----------------------------------------------|----------------------------------------------|-------------|
+| `API_BASE_URL`     | Base URL for AI service                       | `https://models.github.ai/inference`         | No          |
+| `API_KEY`          | API key for AI service                        | `<token>`                                    | No (but needed for AI) |
+| `API_MODEL`        | AI model                                      | `openai/gpt-4o`                              | No          |
+
+## Example .env
+
+```env
+# Required
+SECRET_KEY=your-secret-key-here
+DEBUG=false
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# For PostgreSQL (if not SQLite)
+DATABASE_URL=postgres://username:password@localhost:5432/hasta_la_vista_money
+
+# Optional
+BASE_URL=http://127.0.0.1:8000/
+LANGUAGE_CODE=en
+TIME_ZONE=Europe/Moscow
+SENTRY_DSN=
+SENTRY_ENVIRONMENT=
+SENTRY_ENDPOINT=
+URL_CSP_SCRIPT_SRC=
+SESSION_COOKIE_AGE=31536000
+SESSION_COOKIE_HTTPONLY=True
+SESSION_COOKIE_NAME=sessionid
+SESSION_COOKIE_SAMESITE=Lax
+SESSION_COOKIE_SECURE=False
+SECURE_SSL_REDIRECT=True
+SECURE_CONTENT_TYPE_NOSNIFF=True
+ACCESS_TOKEN_LIFETIME=60
+REFRESH_TOKEN_LIFETIME=7
+DEBUG_TOOLBAR_ENABLED=True
+
+# For AI
+API_BASE_URL=https://models.github.ai/inference
+API_KEY=
+API_MODEL=openai/gpt-4o
+```
 
 ### 📊 Monitoring and Analytics
 
@@ -183,8 +261,8 @@ Read more about the development process in the [contributor guide](https://hasta
 
 ### 📄 License
 
-The project is distributed under the MIT license. See the [LICENSE](LICENSE) file for details.
+The project is distributed under the Apache license. See the [LICENSE](LICENSE) file for details.
 
 ---
 
-**Hasta La Vista, Money!** — your reliable assistant in personal finance management! 💪 
+**Hasta La Vista, Money!** — your reliable assistant in personal finance management! 💪

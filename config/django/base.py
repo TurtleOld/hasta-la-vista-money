@@ -38,19 +38,19 @@ INTERNAL_IPS = [
 
 # Application definition
 LOCAL_APPS = [
-    "hasta_la_vista_money",
-    "hasta_la_vista_money.api",
-    "hasta_la_vista_money.authentication",
-    "hasta_la_vista_money.finance_account",
-    "hasta_la_vista_money.budget",
-    "hasta_la_vista_money.expense",
-    "hasta_la_vista_money.income",
-    "hasta_la_vista_money.loan",
-    "hasta_la_vista_money.receipts",
-    "hasta_la_vista_money.reports",
-    "hasta_la_vista_money.users",
-    "hasta_la_vista_money.templatetags.thousand_comma",
-    "hasta_la_vista_money.templatetags.generate_hash",
+    'hasta_la_vista_money',
+    'hasta_la_vista_money.api',
+    'hasta_la_vista_money.authentication',
+    'hasta_la_vista_money.finance_account',
+    'hasta_la_vista_money.budget',
+    'hasta_la_vista_money.expense',
+    'hasta_la_vista_money.income',
+    'hasta_la_vista_money.loan',
+    'hasta_la_vista_money.receipts',
+    'hasta_la_vista_money.reports',
+    'hasta_la_vista_money.users',
+    'hasta_la_vista_money.templatetags.thousand_comma',
+    'hasta_la_vista_money.templatetags.generate_hash',
 ]
 
 THIRD_PARTY_APPS = [
@@ -104,21 +104,21 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Templates
 TEMPLATES = [
     {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [os.path.join(BASE_DIR, "hasta_la_vista_money", "templates")],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.debug",
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [os.path.join(BASE_DIR, 'hasta_la_vista_money', 'templates')],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
             ],
-            "libraries": {
-                "comma": "hasta_la_vista_money.templatetags.thousand_comma",
-                "word_hash": "hasta_la_vista_money.templatetags.generate_hash",
-                "dict_get": "hasta_la_vista_money.templatetags.dict_get",
-                "index": "hasta_la_vista_money.templatetags.index",
+            'libraries': {
+                'comma': 'hasta_la_vista_money.templatetags.thousand_comma',
+                'word_hash': 'hasta_la_vista_money.templatetags.generate_hash',
+                'dict_get': 'hasta_la_vista_money.templatetags.dict_get',
+                'index': 'hasta_la_vista_money.templatetags.index',
             },
         },
     },
@@ -127,33 +127,38 @@ TEMPLATES = [
 CONN_MAX_AGE = 500
 
 # Database
-DATABASES: Dict[str, Any] = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('POSTGRES_DB', 'postgres'),
-        'USER': os.getenv('POSTGRES_USER', 'postgres'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
-        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
-        'PORT': os.getenv('POSTGRES_PORT', '5432'),
-        'CONN_MAX_AGE': CONN_MAX_AGE,
-    },
-}
-
-if os.environ.get('GITHUB_WORKFLOW'):
-    DATABASES = {
+if os.getenv('DATABASE_URL') or os.getenv('POSTGRES_DB'):
+    DATABASES: Dict[str, Any] = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'github_actions',
-            'USER': 'postgres',
-            'PASSWORD': 'postgres',
-            'HOST': '127.0.0.1',
-            'PORT': '5432',
+            'NAME': os.getenv('POSTGRES_DB', 'postgres'),
+            'USER': os.getenv('POSTGRES_USER', 'postgres'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
+            'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+            'CONN_MAX_AGE': CONN_MAX_AGE,
         },
     }
-
-
-if os.getenv('DATABASE_URL'):
-    DATABASES['default'] = dict(dj_database_url.config(conn_max_age=CONN_MAX_AGE))
+    if os.environ.get('GITHUB_WORKFLOW'):
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': 'github_actions',
+                'USER': 'postgres',
+                'PASSWORD': 'postgres',
+                'HOST': '127.0.0.1',
+                'PORT': '5432',
+            },
+        }
+    if os.getenv('DATABASE_URL'):
+        DATABASES['default'] = dict(dj_database_url.config(conn_max_age=CONN_MAX_AGE))
+else:
+    DATABASES: Dict[str, Any] = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        },
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -171,8 +176,8 @@ AUTHENTICATION_BACKENDS = (
 )
 
 # Internationalization
-LANGUAGE_CODE = 'ru-RU'
-TIME_ZONE = 'Europe/Moscow'
+LANGUAGE_CODE = os.getenv('LANGUAGE_CODE', 'ru-RU')
+TIME_ZONE = os.getenv('TIME_ZONE', 'Europe/Moscow')
 USE_I18N = True
 USE_TZ = False
 LANGUAGES = (
@@ -192,6 +197,13 @@ STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Content Security Policy (CSP)
+CSP_CDN_URLS = [
+    'https://cdn.jsdelivr.net',
+    'https://unpkg.com',
+    'https://htmx.org',
+    'https://cdn.datatables.net',
+    'https://cdnjs.cloudflare.com',
+]
 additional_script_src = list(
     filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
 )
@@ -202,22 +214,14 @@ CONTENT_SECURITY_POLICY = {
             SELF,
             NONCE,
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
-            'https://cdn.datatables.net',
-            'https://cdnjs.cloudflare.com',
+            *CSP_CDN_URLS,
         ]
         + additional_script_src,
         'script-src': [
             SELF,
             NONCE,
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
-            'https://cdn.datatables.net',
-            'https://cdnjs.cloudflare.com',
+            *CSP_CDN_URLS,
         ]
         + additional_script_src,
         'img-src': [
@@ -225,41 +229,25 @@ CONTENT_SECURITY_POLICY = {
             NONCE,
             'data:',
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
-            'https://cdn.datatables.net',
-            'https://cdnjs.cloudflare.com',
+            *CSP_CDN_URLS,
         ],
         'style-src': [
             SELF,
             NONCE,
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
-            'https://cdn.datatables.net',
-            'https://cdnjs.cloudflare.com',
+            *CSP_CDN_URLS,
         ]
         + additional_script_src,
         'font-src': [
             SELF,
             NONCE,
             BASE_URL,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
-            'https://cdn.datatables.net',
-            'https://cdnjs.cloudflare.com',
+            *CSP_CDN_URLS,
         ]
         + additional_script_src,
         'frame-ancestors': [
             SELF,
-            'https://cdn.jsdelivr.net',
-            'https://unpkg.com',
-            'https://htmx.org',
-            'https://cdn.datatables.net',
-            'https://cdnjs.cloudflare.com',
+            *CSP_CDN_URLS,
         ]
         + additional_script_src,
         'report_uri': [os.getenv('SENTRY_ENDPOINT')],
@@ -282,13 +270,15 @@ REST_FRAMEWORK = {
 
 # Sentry
 RATE = 0.01
-sentry_sdk.init(
-    dsn=os.getenv('SENTRY_DSN'),
-    integrations=[DjangoIntegration()],
-    auto_session_tracking=False,
-    traces_sample_rate=RATE,
-    environment=os.getenv('SENTRY_ENVIRONMENT'),
-)
+SENTRY_DSN = os.getenv('SENTRY_DSN')
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        auto_session_tracking=False,
+        traces_sample_rate=RATE,
+        environment=os.getenv('SENTRY_ENVIRONMENT'),
+    )
 
 # Rosetta
 ROSETTA_ENABLE_TRANSLATION_SUGGESTIONS = True
@@ -375,25 +365,3 @@ structlog.configure(
     logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=True,
 )
-
-# Taskiq Configuration (Async Task Queue)
-TASKIQ_REDIS_URL = os.environ.get(
-    'TASKIQ_REDIS_URL',
-    'redis://localhost:6379/0',
-)
-TASKIQ_BROKER_URL = os.environ.get('TASKIQ_BROKER_URL', TASKIQ_REDIS_URL)
-
-# Taskiq settings
-TASKIQ = {
-    'broker_url': TASKIQ_BROKER_URL,
-    'result_backend_url': TASKIQ_REDIS_URL,
-    'task_default_queue': 'default',
-    'task_serializer': 'json',
-    'result_serializer': 'json',
-    'accept_content': ['json'],
-    'timezone': TIME_ZONE,
-    'enable_utc': True,
-    'task_track_started': True,
-    'task_time_limit': 30 * 60,  # 30 минут
-    'worker_max_tasks_per_child': 1000,
-}

@@ -20,7 +20,7 @@ $(document).ready(function () {
             console.log("Data:", { planning: newPlanningValue, date, category });
 
             $.ajax({
-                url: 'change_planning/',
+                url: 'change-planning/',
                 type: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

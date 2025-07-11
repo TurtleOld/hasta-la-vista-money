@@ -42,7 +42,7 @@ class BudgetUrlsTest(TestCase):
             'budget:generate_date',
         )
         self.assertEqual(
-            resolve('/budget/change_planning/').view_name,
+            resolve('/budget/change-planning/').view_name,
             'budget:change_planning',
         )
         self.assertEqual(

@@ -1,11 +1,9 @@
 import json
-from collections import defaultdict
 from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List, TypedDict, Union, overload
+from typing import Any, Dict, TypedDict, Union, overload
 
-from django.db.models import QuerySet, Sum
-from django.db.models.functions import TruncMonth
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -19,6 +17,14 @@ from hasta_la_vista_money.users.models import User
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from hasta_la_vista_money.budget.services.budget import (
+    get_categories,
+    aggregate_budget_data,
+    aggregate_expense_table,
+    aggregate_income_table,
+    aggregate_expense_api,
+    aggregate_income_api,
+)
 
 
 @overload
@@ -98,182 +104,41 @@ def get_plan_amount(
     return plan.amount if plan else 0
 
 
-def get_categories(user: User, type_: str) -> QuerySet:
-    if type_ == 'expense':
-        return user.category_expense_users.filter(parent_category=None).order_by('name')
-    else:
-        return user.category_income_users.filter(parent_category=None).order_by('name')
-
-
 class BaseView:
     template_name = 'budget.html'
 
 
-class BudgetView(CustomNoPermissionMixin, BaseView, ListView):
-    model = Planning
+class BudgetContextMixin:
+    """
+    Mixin to provide user, months, expense and income categories for budget views.
+    """
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
+    def get_budget_context(self):
         user = get_object_or_404(User, username=self.request.user)
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date for d in list_dates]
-
         expense_categories = list(get_categories(user, 'expense'))
         income_categories = list(get_categories(user, 'income'))
+        return user, months, expense_categories, income_categories
 
-        if months:
-            expenses: Union[QuerySet[Expense, Dict[str, Any]], List[Dict[str, Any]]] = (
-                Expense.objects.filter(
-                    user=user,
-                    category__in=expense_categories,
-                    date__gte=months[0],
-                    date__lte=months[-1],
-                )
-                .annotate(month=TruncMonth('date'))
-                .values('category_id', 'month')
-                .annotate(total=Sum('amount'))
+
+class BudgetView(CustomNoPermissionMixin, BudgetContextMixin, BaseView, ListView):
+    model = Planning
+
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        """
+        Returns context data for the budget page, using aggregated data from service layer.
+        """
+        context = super().get_context_data(**kwargs)
+        user, months, expense_categories, income_categories = self.get_budget_context()
+        context.update(
+            aggregate_budget_data(
+                user=user,
+                months=months,
+                expense_categories=expense_categories,
+                income_categories=income_categories,
             )
-        else:
-            expenses = []
-        expense_fact_map: Dict[int, Dict[date, int]] = defaultdict(
-            lambda: defaultdict(lambda: 0),
         )
-        for e in expenses:
-            month_date = (
-                e['month'].date() if hasattr(e['month'], 'date') else e['month']
-            )
-            month_start = month_date.replace(day=1)
-            expense_fact_map[e['category_id']][month_start] = e['total'] or 0
-        total_fact_expense = [0] * len(months)
-        for i, m in enumerate(months):
-            for cat in expense_categories:
-                total_fact_expense[i] += expense_fact_map[cat.id][m]
-
-        plans_exp = Planning.objects.filter(
-            user=user,
-            date__in=months,
-            type='expense',
-            category_expense__in=expense_categories,
-        ).values('category_expense_id', 'date', 'amount')
-        expense_plan_map: Dict[int, Dict[date, int]] = defaultdict(
-            lambda: defaultdict(lambda: 0),
-        )
-        for p in plans_exp:
-            expense_plan_map[p['category_expense_id']][p['date']] = p['amount'] or 0
-
-        expense_data = []
-        total_plan_expense = [0] * len(months)
-        for cat in expense_categories:
-            row = {
-                'category': cat.name,
-                'category_id': cat.id,
-                'fact': [],
-                'plan': [],
-                'diff': [],
-                'percent': [],
-            }
-            for i, m in enumerate(months):
-                fact = expense_fact_map[cat.id][m]
-                plan = expense_plan_map[cat.id][m]
-                diff = fact - plan
-                percent = (fact / plan * 100) if plan else None
-                row['fact'].append(fact)
-                row['plan'].append(plan)
-                row['diff'].append(diff)
-                row['percent'].append(percent)
-                total_plan_expense[i] += plan or 0
-            expense_data.append(row)
-
-        income_queryset: Union[QuerySet[Income, Dict[str, Any]], List[Dict[str, Any]]]
-        if months:
-            income_queryset = (
-                Income.objects.filter(
-                    user=user,
-                    category__in=income_categories,
-                    date__gte=months[0],
-                    date__lte=months[-1],
-                )
-                .annotate(month=TruncMonth('date'))
-                .values('category_id', 'month')
-                .annotate(total=Sum('amount'))
-            )
-        else:
-            income_queryset = []
-        income_fact_map: Dict[int, Dict[date, Decimal]] = defaultdict(
-            lambda: defaultdict(lambda: Decimal('0')),
-        )
-        for e in income_queryset:
-            month_date = (
-                e['month'].date() if hasattr(e['month'], 'date') else e['month']
-            )
-            income_fact_map[e['category_id']][month_date] = e['total'] or Decimal('0')
-        total_fact_income = [0] * len(months)
-        for i, m in enumerate(months):
-            for cat in income_categories:
-                total_fact_income[i] += income_fact_map[cat.id][m]
-
-        plans_inc = Planning.objects.filter(
-            user=user,
-            date__in=months,
-            type='income',
-            category_income__in=income_categories,
-        ).values('category_income_id', 'date', 'amount')
-        income_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for p in plans_inc:
-            income_plan_map[p['category_income_id']][p['date']] = p[
-                'amount'
-            ] or Decimal('0')
-
-        income_data = []
-        total_plan_income = [0] * len(months)
-        for cat in income_categories:
-            row = {
-                'category': cat.name,
-                'category_id': cat.id,
-                'fact': [],
-                'plan': [],
-                'diff': [],
-                'percent': [],
-            }
-            for i, m in enumerate(months):
-                fact = income_fact_map[cat.id][m]
-                plan = income_plan_map[cat.id][m]
-                diff = fact - plan
-                percent = (fact / plan * 100) if plan else None
-                row['fact'].append(fact)
-                row['plan'].append(plan)
-                row['diff'].append(diff)
-                row['percent'].append(percent)
-                total_plan_income[i] += plan
-            income_data.append(row)
-
-        chart_labels = [m.strftime('%b %Y') for m in months]
-        chart_plan_execution_income = []
-        chart_plan_execution_expense = []
-        for i in range(len(months)):
-            if total_plan_income[i] > 0:
-                income_percent = (total_fact_income[i] / total_plan_income[i]) * 100
-            else:
-                income_percent = 0 if total_fact_income[i] == 0 else 100
-            chart_plan_execution_income.append(float(income_percent))
-
-            if total_plan_expense[i] > 0:
-                expense_percent = (total_fact_expense[i] / total_plan_expense[i]) * 100
-            else:
-                expense_percent = 0 if total_fact_expense[i] == 0 else 100
-            chart_plan_execution_expense.append(float(expense_percent))
-
-        context['chart_labels'] = chart_labels
-        context['chart_plan_execution_income'] = chart_plan_execution_income
-        context['chart_plan_execution_expense'] = chart_plan_execution_expense
-        context['months'] = months
-        context['expense_data'] = expense_data
-        context['income_data'] = income_data
-        context['total_fact_expense'] = total_fact_expense
-        context['total_plan_expense'] = total_plan_expense
-        context['total_fact_income'] = total_fact_income
-        context['total_plan_income'] = total_plan_income
-
         return context
 
 
@@ -344,154 +209,43 @@ def save_planning(request):
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
 
-class ExpenseTableView(CustomNoPermissionMixin, BaseView, ListView):
+class ExpenseTableView(CustomNoPermissionMixin, BudgetContextMixin, BaseView, ListView):
     model = Planning
     template_name = 'expense_table.html'
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        """
+        Returns context data for the expense table page, using aggregated data from service layer.
+        """
         context = super().get_context_data(**kwargs)
-        user = get_object_or_404(User, username=self.request.user)
-        list_dates = DateList.objects.filter(user=user).order_by('date')
-        months = [d.date for d in list_dates]
-        expense_categories = list(get_categories(user, 'expense'))
-        if months:
-            expenses: Union[QuerySet[Expense, Dict[str, Any]], List[Dict[str, Any]]] = (
-                Expense.objects.filter(
-                    user=user,
-                    category__in=expense_categories,
-                    date__gte=months[0],
-                    date__lte=months[-1],
-                )
-                .annotate(month=TruncMonth('date'))
-                .values('category_id', 'month')
-                .annotate(total=Sum('amount'))
+        user, months, expense_categories, _ = self.get_budget_context()
+        context.update(
+            aggregate_expense_table(
+                user=user,
+                months=months,
+                expense_categories=expense_categories,
             )
-        else:
-            expenses: Union[
-                QuerySet[Expense, Dict[str, Any]],
-                List[Dict[str, Any]],
-            ] = []
-        expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for e in expenses:
-            month_date = (
-                e['month'].date() if hasattr(e['month'], 'date') else e['month']
-            )
-            expense_fact_map[e['category_id']][month_date] = e['total'] or 0
-        plans_expense: QuerySet[Planning, dict[str, Any]] = Planning.objects.filter(
-            user=user,
-            date__in=months,
-            type='expense',
-            category_expense__in=expense_categories,
-        ).values('category_expense_id', 'date', 'amount')
-        expense_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for pln in plans_expense:
-            expense_plan_map[pln['category_expense_id']][pln['date']] = (
-                pln['amount'] or 0
-            )
-        expense_data = []
-        total_fact_expense: list[int] = [0] * len(months)
-        total_plan_expense: list[int] = [0] * len(months)
-        for cat in expense_categories:
-            row = {
-                'category': cat.name,
-                'category_id': cat.id,
-                'fact': [],
-                'plan': [],
-                'diff': [],
-                'percent': [],
-            }
-            for i, m in enumerate(months):
-                fact: int = expense_fact_map[cat.id][m]
-                plan: int = expense_plan_map[cat.id][m]
-                diff = fact - plan
-                percent = (fact / plan * 100) if plan else None
-                row['fact'].append(fact)
-                row['plan'].append(plan)
-                row['diff'].append(diff)
-                row['percent'].append(percent)
-                total_fact_expense[i] += fact
-                total_plan_expense[i] += plan
-            expense_data.append(row)
-        context['months'] = months
-        context['expense_data'] = expense_data
-        context['total_fact_expense'] = total_fact_expense
-        context['total_plan_expense'] = total_plan_expense
+        )
         return context
 
 
-class IncomeTableView(CustomNoPermissionMixin, BaseView, ListView):
+class IncomeTableView(CustomNoPermissionMixin, BudgetContextMixin, BaseView, ListView):
     model = Planning
     template_name = 'income_table.html'
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        """
+        Returns context data for the income table page, using aggregated data from service layer.
+        """
         context = super().get_context_data(**kwargs)
-        user = get_object_or_404(User, username=self.request.user)
-        list_dates = DateList.objects.filter(user=user).order_by('date')
-        months: List[date] = [d.date for d in list_dates]
-        income_categories = list(get_categories(user, 'income'))
-        if months:
-            income_queryset = (
-                Income.objects.filter(
-                    user=user,
-                    category__in=income_categories,
-                    date__gte=months[0],
-                    date__lte=months[-1],
-                )
-                .annotate(month=TruncMonth('date'))
-                .values('category_id', 'month')
-                .annotate(total=Sum('amount'))
+        user, months, _, income_categories = self.get_budget_context()
+        context.update(
+            aggregate_income_table(
+                user=user,
+                months=months,
+                income_categories=income_categories,
             )
-        else:
-            income_queryset = Income.objects.none()
-        income_fact_map: Dict[int, Dict[date, Decimal]] = defaultdict(
-            lambda: defaultdict(lambda: Decimal('0')),
         )
-        for e in income_queryset:
-            month_date = (
-                e['month'].date() if hasattr(e['month'], 'date') else e['month']
-            )
-            income_fact_map[e['category_id']][month_date] = e['total'] or Decimal('0')
-        plans_inc = Planning.objects.filter(
-            user=user,
-            date__in=months,
-            type='income',
-            category_income__in=income_categories,
-        ).values('category_income_id', 'date', 'amount')
-        income_plan_map: Dict[int, Dict[date, Decimal]] = defaultdict(
-            lambda: defaultdict(lambda: Decimal('0')),
-        )
-        for p in plans_inc:
-            income_plan_map[p['category_income_id']][p['date']] = p[
-                'amount'
-            ] or Decimal('0')
-        income_data: List[Dict[str, Any]] = []
-        total_fact_income: List[Decimal] = [Decimal('0')] * len(months)
-        total_plan_income: List[Decimal] = [Decimal('0')] * len(months)
-        for cat in income_categories:
-            row: Dict[str, Any] = {
-                'category': cat.name,
-                'category_id': cat.id,
-                'fact': [],
-                'plan': [],
-                'diff': [],
-                'percent': [],
-            }
-            for i, m in enumerate(months):
-                fact = income_fact_map[cat.id][m]
-                plan = income_plan_map[cat.id][m]
-                diff = fact - plan
-                percent = (fact / plan * 100) if plan else None
-                row['fact'].append(fact)
-                row['plan'].append(plan)
-                row['diff'].append(diff)
-                row['percent'].append(percent)
-                total_fact_income[i] += fact
-                total_plan_income[i] += plan
-            income_data.append(row)
-        context['months'] = months
-        context['income_data'] = income_data
-        context['total_fact_income'] = total_fact_income
-        context['total_plan_income'] = total_plan_income
         return context
 
 
@@ -505,115 +259,35 @@ class ExpenseBudgetAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        """
+        Returns aggregated expense data for API response.
+        """
         user = request.user
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date.replace(day=1) for d in list_dates]
         expense_categories = list(get_categories(user, 'expense'))
-        expenses = (
-            (
-                Expense.objects.filter(
-                    user=user,
-                    category__in=expense_categories,
-                    date__gte=months[0] if months else None,
-                    date__lte=months[-1] if months else None,
-                )
-                .annotate(month=TruncMonth('date'))
-                .values('category_id', 'month')
-                .annotate(total=Sum('amount'))
-            )
-            if months
-            else []
-        )
-        expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for e in expenses:
-            month_date = (
-                e['month'].date() if hasattr(e['month'], 'date') else e['month']
-            )
-            month_start = month_date.replace(day=1)
-            expense_fact_map[e['category_id']][month_start] = e['total'] or 0
-        plans_expense = Planning.objects.filter(
+        data = aggregate_expense_api(
             user=user,
-            date__in=months,
-            type='expense',
-            category_expense__in=expense_categories,
-        ).values('category_expense_id', 'date', 'amount')
-        expense_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for pln in plans_expense:
-            expense_plan_map[pln['category_expense_id']][pln['date']] = (
-                pln['amount'] or 0
-            )
-        data = []
-        for cat in expense_categories:
-            row = {
-                'category': cat.name,
-                'category_id': cat.id,
-            }
-            for m in months:
-                fact = expense_fact_map[cat.id][m]
-                plan = expense_plan_map[cat.id][m]
-                diff = fact - plan
-                percent = (fact / plan * 100) if plan else None
-                row[f'fact_{m}'] = float(fact) if fact is not None else None
-                row[f'plan_{m}'] = float(plan) if plan is not None else None
-                row[f'diff_{m}'] = float(diff) if diff is not None else None
-                row[f'percent_{m}'] = float(percent) if percent is not None else None
-            data.append(row)
-        return Response({'months': [m.isoformat() for m in months], 'data': data})
+            months=months,
+            expense_categories=expense_categories,
+        )
+        return Response(data)
 
 
 class IncomeBudgetAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        """
+        Returns aggregated income data for API response.
+        """
         user = request.user
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date.replace(day=1) for d in list_dates]
         income_categories = list(get_categories(user, 'income'))
-        incomes = (
-            (
-                Income.objects.filter(
-                    user=user,
-                    category__in=income_categories,
-                    date__gte=months[0] if months else None,
-                    date__lte=months[-1] if months else None,
-                )
-                .annotate(month=TruncMonth('date'))
-                .values('category_id', 'month')
-                .annotate(total=Sum('amount'))
-            )
-            if months
-            else []
-        )
-        income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for e in incomes:
-            month_date = (
-                e['month'].date() if hasattr(e['month'], 'date') else e['month']
-            )
-            month_start = month_date.replace(day=1)
-            income_fact_map[e['category_id']][month_start] = e['total'] or 0
-        plans_income = Planning.objects.filter(
+        data = aggregate_income_api(
             user=user,
-            date__in=months,
-            type='income',
-            category_income__in=income_categories,
-        ).values('category_income_id', 'date', 'amount')
-        income_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
-        for pln in plans_income:
-            income_plan_map[pln['category_income_id']][pln['date']] = pln['amount'] or 0
-        data = []
-        for cat in income_categories:
-            row = {
-                'category': cat.name,
-                'category_id': cat.id,
-            }
-            for m in months:
-                fact = income_fact_map[cat.id][m]
-                plan = income_plan_map[cat.id][m]
-                diff = fact - plan
-                percent = (fact / plan * 100) if plan else None
-                row[f'fact_{m}'] = float(fact) if fact is not None else None
-                row[f'plan_{m}'] = float(plan) if plan is not None else None
-                row[f'diff_{m}'] = float(diff) if diff is not None else None
-                row[f'percent_{m}'] = float(percent) if percent is not None else None
-            data.append(row)
-        return Response({'months': [m.isoformat() for m in months], 'data': data})
+            months=months,
+            income_categories=income_categories,
+        )
+        return Response(data)
