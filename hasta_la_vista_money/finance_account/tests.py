@@ -599,16 +599,16 @@ class TestAccountServices(TestCase):
     """
 
     fixtures = [
-        "users.yaml",
-        "finance_account.yaml",
-        "expense.yaml",
-        "expense_cat.yaml",
-        "income.yaml",
-        "income_cat.yaml",
-        "loan.yaml",
-        "receipt_receipt.yaml",
-        "receipt_product.yaml",
-        "receipt_seller.yaml",
+        'users.yaml',
+        'finance_account.yaml',
+        'expense.yaml',
+        'expense_cat.yaml',
+        'income.yaml',
+        'income_cat.yaml',
+        'loan.yaml',
+        'receipt_receipt.yaml',
+        'receipt_product.yaml',
+        'receipt_seller.yaml',
     ]
 
     def setUp(self) -> None:
@@ -624,13 +624,13 @@ class TestAccountServices(TestCase):
         """Test that get_accounts_for_user_or_group returns only user's accounts when group_id is None or 'my'."""
         accounts = account_services.get_accounts_for_user_or_group(self.user, None)
         self.assertTrue(all(acc.user == self.user for acc in accounts))
-        accounts_my = account_services.get_accounts_for_user_or_group(self.user, "my")
+        accounts_my = account_services.get_accounts_for_user_or_group(self.user, 'my')
         self.assertTrue(all(acc.user == self.user for acc in accounts_my))
 
     def test_get_accounts_for_group(self):
         """Test that get_accounts_for_user_or_group returns all accounts for users in the group."""
         if not self.group_id:
-            self.skipTest("User has no group for group test")
+            self.skipTest('User has no group for group test')
         accounts = account_services.get_accounts_for_user_or_group(
             self.user, self.group_id
         )
@@ -649,3 +649,57 @@ class TestAccountServices(TestCase):
         logs = account_services.get_transfer_money_log(self.user)
         self.assertTrue(all(log.user == self.user for log in logs))
         self.assertLessEqual(len(logs), 10)
+
+
+class TestAccountBusinessLogic(TestCase):
+    """
+    Unit tests for Account model business logic methods: transfer_money, get_credit_card_debt, calculate_grace_period_info.
+    """
+
+    fixtures = [
+        'users.yaml',
+        'finance_account.yaml',
+        'expense.yaml',
+        'expense_cat.yaml',
+        'income.yaml',
+        'income_cat.yaml',
+    ]
+
+    def setUp(self):
+        self.user = User.objects.get(id=1)
+        self.account1 = Account.objects.get(name_account='Банковская карта')
+        self.account2 = Account.objects.get(name_account='Основной счёт')
+        self.account1.user = self.user
+        self.account2.user = self.user
+        self.account1.save()
+        self.account2.save()
+
+    def test_transfer_money_success(self):
+        amount = Decimal('100')
+        initial_balance_1 = self.account1.balance
+        initial_balance_2 = self.account2.balance
+        result = self.account1.transfer_money(self.account2, amount)
+        self.account1.refresh_from_db()
+        self.account2.refresh_from_db()
+        self.assertTrue(result)
+        self.assertEqual(self.account1.balance, initial_balance_1 - amount)
+        self.assertEqual(self.account2.balance, initial_balance_2 + amount)
+
+    def test_transfer_money_insufficient(self):
+        amount = self.account1.balance + Decimal('1')
+        result = self.account1.transfer_money(self.account2, amount)
+        self.assertFalse(result)
+
+    def test_get_credit_card_debt(self):
+        self.account1.type_account = 'CreditCard'
+        self.account1.save()
+        debt = self.account1.get_credit_card_debt()
+        self.assertIsInstance(debt, Decimal)
+
+    def test_calculate_grace_period_info(self):
+        self.account1.type_account = 'CreditCard'
+        self.account1.save()
+        from datetime import date
+
+        info = self.account1.calculate_grace_period_info(date.today())
+        self.assertIn('final_debt', info)

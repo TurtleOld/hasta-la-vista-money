@@ -16,7 +16,7 @@ from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
 )
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
 from django.template.loader import render_to_string
 
 from hasta_la_vista_money.users.models import User
@@ -51,7 +51,7 @@ class AccountView(
     and displays recent transfer logs and account balances.
     """
 
-    context_object_name = "finance_account"
+    context_object_name = 'finance_account'
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         """
@@ -70,18 +70,18 @@ class AccountView(
             context.update(self._get_transfer_log_context())
             context.update(self._get_sums_context())
             return context
-        except Exception as exc:
+        except Exception:
             logger.error(
-                "Ошибка при формировании контекста счетов",
+                'Ошибка при формировании контекста счетов',
                 exc_info=True,
-                user_id=getattr(self.request.user, "id", None),
+                user_id=getattr(self.request.user, 'id', None),
             )
             from django.contrib import messages
 
             messages.error(
                 self.request,
                 _(
-                    "Произошла ошибка при загрузке счетов. Пожалуйста, попробуйте позже."
+                    'Произошла ошибка при загрузке счетов. Пожалуйста, попробуйте позже.'
                 ),
             )
             return super().get_context_data(**kwargs)
@@ -96,8 +96,8 @@ class AccountView(
         user = self.request.user
         accounts = self.get_accounts(user)
         return {
-            "accounts": accounts,
-            "user_groups": user.groups.all(),
+            'accounts': accounts,
+            'user_groups': user.groups.all(),
         }
 
     def _get_forms_context(self) -> Dict[str, Any]:
@@ -109,15 +109,15 @@ class AccountView(
         """
         user = self.request.user
         account_transfer_money = (
-            Account.objects.filter(user=user).select_related("user").all()
+            Account.objects.by_user(user).select_related('user').all()
         )
         initial_form_data = {
             'from_account': account_transfer_money.first(),
             'to_account': account_transfer_money.first(),
         }
         return {
-            "add_account_form": AddAccountForm(),
-            "transfer_money_form": TransferMoneyAccountForm(
+            'add_account_form': AddAccountForm(),
+            'transfer_money_form': TransferMoneyAccountForm(
                 user=user,
                 initial=initial_form_data,
             ),
@@ -131,9 +131,9 @@ class AccountView(
             dict: Recent transfer logs for the current user.
         """
         user = self.request.user
-        transfer_money_log = account_services.get_transfer_money_log(user)
+        transfer_money_log = TransferMoneyLog.objects.by_user(user)
         return {
-            "transfer_money_log": transfer_money_log,
+            'transfer_money_log': transfer_money_log,
         }
 
     def _get_sums_context(self) -> Dict[str, Any]:
@@ -144,21 +144,21 @@ class AccountView(
             dict: Total balances for user and group accounts.
         """
         user = self.request.user
-        accounts = self.get_accounts(user)
+        accounts = Account.objects.by_user(user)
         sum_all_accounts = account_services.get_sum_all_accounts(accounts)
         user_groups = user.groups.all()
         if user_groups.exists():
             users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.filter(user__in=users_in_groups).select_related("user")
+                Account.objects.filter(user__in=users_in_groups).select_related('user')
             )
         else:
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.filter(user=user).select_related("user")
+                Account.objects.by_user(user).select_related('user')
             )
         return {
-            "sum_all_accounts": sum_all_accounts,
-            "sum_all_accounts_in_group": sum_all_accounts_in_group,
+            'sum_all_accounts': sum_all_accounts,
+            'sum_all_accounts_in_group': sum_all_accounts_in_group,
         }
 
 
@@ -214,15 +214,15 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
             account.save()
             messages.success(self.request, self.success_message)
             return HttpResponseRedirect(self.get_success_url())
-        except Exception as exc:
+        except Exception:
             logger.error(
-                "Ошибка при создании счета",
+                'Ошибка при создании счета',
                 exc_info=True,
-                user_id=getattr(self.request.user, "id", None),
+                user_id=getattr(self.request.user, 'id', None),
             )
             messages.error(
                 self.request,
-                _("Не удалось создать счет. Пожалуйста, попробуйте позже."),
+                _('Не удалось создать счет. Пожалуйста, попробуйте позже.'),
             )
             return HttpResponseRedirect(self.get_success_url())
 
@@ -257,20 +257,20 @@ class ChangeAccountView(
             context = super().get_context_data(**kwargs)
             form_class = self.get_form_class()
             form = form_class(**self.get_form_kwargs())
-            context["add_account_form"] = form
+            context['add_account_form'] = form
             return context
-        except Exception as exc:
+        except Exception:
             logger.error(
-                "Ошибка при формировании контекста изменения счета",
+                'Ошибка при формировании контекста изменения счета',
                 exc_info=True,
-                user_id=getattr(self.request.user, "id", None),
+                user_id=getattr(self.request.user, 'id', None),
             )
             from django.contrib import messages
 
             messages.error(
                 self.request,
                 _(
-                    "Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте позже."
+                    'Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте позже.'
                 ),
             )
             return super().get_context_data(**kwargs)
@@ -306,28 +306,28 @@ class TransferMoneyAccountView(
 
             if (
                 form.is_valid()
-                and request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
+                and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
             ):
                 try:
                     form.save()
                     messages.success(request, self.success_message)
-                    return JsonResponse({"success": True})
+                    return JsonResponse({'success': True})
                 except ValidationError as e:
-                    return JsonResponse({"success": False, "errors": str(e)})
+                    return JsonResponse({'success': False, 'errors': str(e)})
             else:
-                return JsonResponse({"success": False, "errors": form.errors})
-        except Exception as exc:
+                return JsonResponse({'success': False, 'errors': form.errors})
+        except Exception:
             logger.error(
-                "Ошибка при переводе средств между счетами",
+                'Ошибка при переводе средств между счетами',
                 exc_info=True,
-                user_id=getattr(request.user, "id", None),
+                user_id=getattr(request.user, 'id', None),
             )
             return JsonResponse(
                 {
-                    "success": False,
-                    "errors": str(
+                    'success': False,
+                    'errors': str(
                         _(
-                            "Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже."
+                            'Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже.'
                         )
                     ),
                 },
@@ -375,23 +375,23 @@ class AjaxAccountsByGroupView(View):
                 account_services.get_accounts_for_user_or_group
             )(user, group_id)
             html = await sync_to_async(render_to_string)(
-                "finance_account/_account_cards_block.html",
-                {"accounts": accounts, "request": request},
+                'finance_account/_account_cards_block.html',
+                {'accounts': accounts, 'request': request},
             )
             return HttpResponse(html)
-        except Exception as exc:
+        except Exception:
             logger.error(
-                "Ошибка при получении счетов по группе",
+                'Ошибка при получении счетов по группе',
                 exc_info=True,
                 group_id=group_id,
-                user_id=getattr(user, "id", None),
+                user_id=getattr(user, 'id', None),
             )
             return JsonResponse(
                 {
-                    "success": False,
-                    "error": str(
+                    'success': False,
+                    'error': str(
                         _(
-                            "Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже."
+                            'Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже.'
                         )
                     ),
                 },

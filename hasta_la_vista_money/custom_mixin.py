@@ -2,7 +2,6 @@ from typing import Any, Generator, Optional
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
-from django.http import HttpRequest
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import DeleteView

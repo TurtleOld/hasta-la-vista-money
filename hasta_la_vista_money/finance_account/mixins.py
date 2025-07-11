@@ -5,10 +5,12 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 from django.db.models import QuerySet
 
+
 class GroupAccountMixin:
     """
     Mixin to provide group_id and accounts queryset for a user or group.
     """
+
     request: HttpRequest
 
     def get_group_id(self) -> Optional[str]:
@@ -16,4 +18,4 @@ class GroupAccountMixin:
 
     def get_accounts(self, user: User) -> QuerySet[Account]:
         group_id = self.get_group_id()
-        return account_services.get_accounts_for_user_or_group(user, group_id) 
+        return account_services.get_accounts_for_user_or_group(user, group_id)

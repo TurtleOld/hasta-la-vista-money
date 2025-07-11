@@ -1,14 +1,93 @@
 from decimal import Decimal
+from typing import Optional, Dict, Any, TYPE_CHECKING
 
 from django.db import models
-from django.db.models import Sum
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
 
 
-class Account(models.Model):
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User
+    from datetime import date
+
+
+class AccountQuerySet(models.QuerySet):
+    """
+    Custom QuerySet for Account model with common filters.
+    """
+
+    def credit(self) -> 'AccountQuerySet':
+        """Return only credit accounts and credit cards."""
+        return self.filter(type_account__in=['Credit', 'CreditCard'])
+
+    def debit(self) -> 'AccountQuerySet':
+        """Return only debit accounts, debit cards, and cash."""
+        return self.filter(type_account__in=['Debit', 'DebitCard', 'CASH'])
+
+    def by_user(self, user: 'User') -> 'AccountQuerySet':
+        """Return accounts belonging to the given user."""
+        return self.filter(user=user)
+
+    def by_currency(self, currency: str) -> 'AccountQuerySet':
+        """Return accounts with the specified currency code (e.g., 'RUB')."""
+        return self.filter(currency=currency)
+
+    def by_type(self, type_account: str) -> 'AccountQuerySet':
+        """Return accounts of the specified type (e.g., 'CreditCard')."""
+        return self.filter(type_account=type_account)
+
+
+class AccountManager(models.Manager):
+    """
+    Custom manager for Account model, exposing common filters via QuerySet.
+    """
+
+    def get_queryset(self) -> AccountQuerySet:
+        return AccountQuerySet(self.model, using=self._db)
+
+    def credit(self) -> AccountQuerySet:
+        """Shortcut for Account.objects.credit()."""
+        return self.get_queryset().credit()
+
+    def debit(self) -> AccountQuerySet:
+        """Shortcut for Account.objects.debit()."""
+        return self.get_queryset().debit()
+
+    def by_user(self, user: 'User') -> AccountQuerySet:
+        return self.get_queryset().by_user(user)
+
+    def by_currency(self, currency: str) -> AccountQuerySet:
+        return self.get_queryset().by_currency(currency)
+
+    def by_type(self, type_account: str) -> AccountQuerySet:
+        return self.get_queryset().by_type(type_account)
+
+
+class TimeStampedModel(models.Model):
+    """
+    Abstract base class with a created_at timestamp.
+    """
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+        blank=True,
+        verbose_name=_('Дата и время создания'),
+    )
+
+    class Meta:
+        abstract = True
+
+
+class Account(TimeStampedModel):
+    """
+    Represents a user's financial account, which can be a credit/debit account, card, or cash.
+    Stores balance, currency, type, and credit-related fields.
+    Provides methods for money transfer and credit card debt calculations.
+    """
+
     CURRENCY_LIST = [
         ('RUB', _('Российский рубль')),
         ('USD', _('Доллар США')),
@@ -46,7 +125,12 @@ class Account(models.Model):
         decimal_places=2,
         default=0,
     )
-    currency = models.CharField(choices=CURRENCY_LIST)
+    currency = models.CharField(
+        choices=CURRENCY_LIST,
+        default='RUB',
+        verbose_name=_('Валюта'),
+        help_text=_('Валюта счёта (например, RUB, USD)'),
+    )
     limit_credit = models.DecimalField(
         max_digits=constants.TWENTY,
         decimal_places=2,
@@ -70,145 +154,126 @@ class Account(models.Model):
             'Для кредитных карт: сколько дней длится беспроцентный период (например, 120)',
         ),
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        null=True,
-        blank=True,
-        verbose_name=_('Дата и время создания'),
-    )
+
+    objects = AccountManager.from_queryset(AccountQuerySet)()
 
     class Meta:
         db_table = 'account'
         ordering = ['name_account']
-        indexes = [models.Index(fields=['name_account'])]
+        indexes = [
+            models.Index(fields=['name_account']),
+            models.Index(fields=['user']),
+            models.Index(fields=['type_account']),
+            models.Index(fields=['currency']),
+        ]
 
     def __str__(self) -> str:
+        """
+        Returns the string representation of the account (its name).
+        """
         return f'{self.name_account}'
 
     def get_absolute_url(self) -> str:
+        """
+        Returns the absolute URL to edit this account in the admin or UI.
+        """
         return reverse('finance_account:change', args=[self.id])
 
     def transfer_money(self, to_account: 'Account', amount: Decimal) -> bool:
-        if amount <= self.balance:
-            self.balance -= amount
-            to_account.balance += amount
-            self.save()
-            to_account.save()
-            return True
-        return False
-
-    def get_credit_card_debt(self, start_date=None, end_date=None):
         """
-        Возвращает сумму долга по кредитной карте (или кредитному счёту) за указанный период.
-        Если период не указан — считает на текущий момент.
-        Учитывает:
-        - Expense (расходы) — увеличивают долг
-        - Income (доходы) — уменьшают долг
-        - Receipt (operation_type=1 — покупка, увеличивает долг; operation_type=2 — возврат, уменьшает долг)
+        Transfers a specified amount of money from this account to another account.
+        Returns True if the transfer was successful, False otherwise (e.g., insufficient funds).
+
+        Args:
+            to_account (Account): The account to transfer money to.
+            amount (Decimal): The amount to transfer.
+
+        Returns:
+            bool: True if transfer succeeded, False otherwise.
         """
-        from datetime import date, datetime, time
+        from hasta_la_vista_money.finance_account import services as account_services
 
-        from hasta_la_vista_money.expense.models import Expense
-        from hasta_la_vista_money.income.models import Income
-        from hasta_la_vista_money.receipts.models import Receipt
+        return account_services.transfer_money_service(self, to_account, amount)
 
-        # Только для кредитных карт и кредитных счетов
+    def get_credit_card_debt(
+        self,
+        start_date: Optional[Any] = None,
+        end_date: Optional[Any] = None,
+    ) -> Optional[Decimal]:
+        """
+        Calculates the credit card (or credit account) debt for a given period.
+        If no period is specified, calculates the current debt.
+        Considers expenses, incomes, and receipts (purchases and returns).
+
+        Args:
+            start_date (date|datetime|None): Start of the period (inclusive).
+            end_date (date|datetime|None): End of the period (inclusive).
+
+        Returns:
+            Optional[Decimal]: The calculated debt, or None if not a credit account.
+        """
         if self.type_account not in ('CreditCard', 'Credit'):
             return None
+        from hasta_la_vista_money.finance_account import services as account_services
 
-        expense_qs = Expense.objects.filter(account=self)
-        income_qs = Income.objects.filter(account=self)
-        receipt_qs = Receipt.objects.filter(account=self)
+        return account_services.get_credit_card_debt_service(self, start_date, end_date)
 
-        if start_date and end_date:
-            # start_date может быть date или datetime
-            if isinstance(start_date, date) and not isinstance(start_date, datetime):
-                start_dt = datetime.combine(start_date, time.min)
-            else:
-                start_dt = start_date
-            if isinstance(end_date, date) and not isinstance(end_date, datetime):
-                end_dt = datetime.combine(end_date, time.max)
-            else:
-                end_dt = end_date
-            expense_qs = expense_qs.filter(date__range=(start_dt, end_dt))
-            income_qs = income_qs.filter(date__range=(start_dt, end_dt))
-            receipt_qs = receipt_qs.filter(receipt_date__range=(start_dt, end_dt))
-
-        total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
-        total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
-        total_receipt_expense = (
-            receipt_qs.filter(operation_type=1).aggregate(total=Sum('total_sum'))[
-                'total'
-            ]
-            or 0
-        )
-        total_receipt_return = (
-            receipt_qs.filter(operation_type=2).aggregate(total=Sum('total_sum'))[
-                'total'
-            ]
-            or 0
-        )
-
-        debt = (total_expense + total_receipt_expense) - (
-            total_income + total_receipt_return
-        )
-        return debt
-
-    def calculate_grace_period_info(self, purchase_month):
+    def calculate_grace_period_info(self, purchase_month: Any) -> Dict[str, Any]:
         """
-        Рассчитывает информацию о беспроцентном периоде для кредитной карты.
+        Calculates grace period information for a credit card.
+        Logic: 1 month for purchases + 3 months for repayment.
+        Example: purchases in May -> repayment due by end of August.
 
-        Логика: 1 месяц на покупки + 3 месяца на погашение
-        Например: покупки в мае -> погашение до конца августа
+        Args:
+            purchase_month (date|datetime): The month of purchases (first day of month).
+
+        Returns:
+            dict: Information about the grace period, including dates, debts, and overdue status.
         """
-        from calendar import monthrange
-        from datetime import datetime, time
+        if self.type_account not in ('CreditCard', 'Credit'):
+            return {}
+        from hasta_la_vista_money.finance_account import services as account_services
 
-        from dateutil.relativedelta import relativedelta
-        from django.utils import timezone
-
-        # Начало месяца покупок
-        purchase_start = purchase_month.replace(day=1)
-
-        # Конец месяца покупок (23:59:59)
-        last_day = monthrange(purchase_start.year, purchase_start.month)[1]
-        purchase_end = datetime.combine(purchase_start.replace(day=last_day), time.max)
-
-        # Конец беспроцентного периода (3 месяца после месяца покупок, 23:59:59)
-        grace_end_date = purchase_start + relativedelta(months=3)
-        last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[1]
-        grace_end = datetime.combine(
-            grace_end_date.replace(day=last_day_grace),
-            time.max,
+        return account_services.calculate_grace_period_info_service(
+            self, purchase_month
         )
 
-        # Рассчитываем долг за месяц покупок
-        debt_for_month = self.get_credit_card_debt(purchase_start, purchase_end)
 
-        # Рассчитываем платежи за период погашения
-        payments_start = purchase_end + relativedelta(seconds=1)
-        payments_end = grace_end
-        payments_for_period = self.get_credit_card_debt(payments_start, payments_end)
+class TransferMoneyLogQuerySet(models.QuerySet):
+    """
+    Custom QuerySet for TransferMoneyLog model with common filters.
+    """
 
-        # Итоговый долг после беспроцентного периода
-        final_debt = (debt_for_month or 0) + (payments_for_period or 0)
+    def by_user(self, user: 'User') -> 'TransferMoneyLogQuerySet':
+        """Return transfer logs for the given user."""
+        return self.filter(user=user)
 
-        return {
-            'purchase_month': purchase_start.strftime('%m.%Y'),
-            'purchase_start': purchase_start,
-            'purchase_end': purchase_end,
-            'grace_end': grace_end,
-            'debt_for_month': debt_for_month,
-            'payments_for_period': payments_for_period,
-            'final_debt': final_debt,
-            'is_overdue': timezone.now() > grace_end and final_debt > 0,
-            'days_until_due': (grace_end.date() - timezone.now().date()).days
-            if timezone.now() <= grace_end
-            else 0,
-        }
+    def by_date_range(self, start: 'date', end: 'date') -> 'TransferMoneyLogQuerySet':
+        """Return transfer logs within the specified date range (inclusive)."""
+        return self.filter(exchange_date__date__gte=start, exchange_date__date__lte=end)
 
 
-class TransferMoneyLog(models.Model):
+class TransferMoneyLogManager(models.Manager):
+    """
+    Custom manager for TransferMoneyLog model, exposing common filters via QuerySet.
+    """
+
+    def get_queryset(self) -> TransferMoneyLogQuerySet:
+        return TransferMoneyLogQuerySet(self.model, using=self._db)
+
+    def by_user(self, user: 'User') -> TransferMoneyLogQuerySet:
+        return self.get_queryset().by_user(user)
+
+    def by_date_range(self, start: 'date', end: 'date') -> TransferMoneyLogQuerySet:
+        return self.get_queryset().by_date_range(start, end)
+
+
+class TransferMoneyLog(TimeStampedModel):
+    """
+    Stores logs of money transfers between accounts, including user, source, destination, amount, and notes.
+    Used for auditing and tracking account movements.
+    """
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -229,18 +294,27 @@ class TransferMoneyLog(models.Model):
         decimal_places=constants.TWO,
     )
     exchange_date = models.DateTimeField()
-    notes = models.TextField(blank=True)
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        null=True,
+    notes = models.TextField(
         blank=True,
-        verbose_name='Date created',
+        verbose_name=_('Примечания'),
+        help_text=_('Дополнительная информация о переводе'),
     )
+
+    objects = TransferMoneyLogManager.from_queryset(TransferMoneyLogQuerySet)()
 
     class Meta:
         ordering = ['-exchange_date']
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['from_account']),
+            models.Index(fields=['to_account']),
+            models.Index(fields=['exchange_date']),
+        ]
 
     def __str__(self) -> str:
+        """
+        Returns a human-readable string describing the transfer log entry.
+        """
         return _(
             ''.join(
                 (
