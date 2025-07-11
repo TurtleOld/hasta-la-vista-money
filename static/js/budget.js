@@ -1,10 +1,14 @@
 /* global Tabulator */
 document.addEventListener('DOMContentLoaded', function () {
     function safeRedirect(url) {
+        // Validate URL format before redirect
         if (/^\/[a-zA-Z0-9/_\-.]*$/.test(url)) {
-            window.location.href = encodeURI(url);  // eslint-disable-line
+            const safeUrl = encodeURI(url);
+            window.location.href = safeUrl;  // eslint-disable-line
         } else {
-            window.location.href = encodeURI('/login/');  // eslint-disable-line
+            // Default to login page if URL is not safe
+            const loginUrl = encodeURI('/login/');
+            window.location.href = loginUrl;  // eslint-disable-line
         }
     }
 
@@ -28,7 +32,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function refreshToken() {
         const refresh = localStorage.getItem('refresh_token');
         if (!refresh) return Promise.reject('No refresh token');
-        return fetch('/api/token/refresh/', {
+        // Hardcoded URL for token refresh - no user input
+        const refreshUrl = '/api/token/refresh/';
+        return fetch(refreshUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh })
@@ -58,23 +64,53 @@ document.addEventListener('DOMContentLoaded', function () {
     function isWhitelistedUrl(url) {
         return ALLOWED_API_PATHS.includes(url);
     }
-    function fetchWithAuthRetry(url, options, retry = true) {
-        if (!isSafeApiUrl(url) || !isWhitelistedUrl(url)) {
+
+    function safeFetchExpenses(options, retry = true) {
+        return performSafeFetch('/api/budget/api/expenses/', options, retry);
+    }
+
+    function safeFetchIncomes(options, retry = true) {
+        return performSafeFetch('/api/budget/api/incomes/', options, retry);
+    }
+
+    function safeFetchSavePlanning(options, retry = true) {
+        return performSafeFetch('/budget/save-planning/', options, retry);
+    }
+
+    function performSafeFetch(hardcodedUrl, options, retry = true) {
+        if (!isSafeApiUrl(hardcodedUrl) || !isWhitelistedUrl(hardcodedUrl)) {
             return Promise.reject(new Error('URL не разрешён'));
         }
+
         options = options || {};
         options.headers = options.headers || {};
         options.headers['Authorization'] = 'Bearer ' + getJWT();
         options.headers['X-Requested-With'] = 'XMLHttpRequest';
-        return fetch(url, options).then(resp => { // eslint-disable-line
-            if (resp.status === 401 && retry) { // eslint-disable-line
+        return fetch(hardcodedUrl, options).then(resp => { 
+            if (resp.status === 401 && retry) { 
                 return refreshToken().then(newAccess => {
                     options.headers['Authorization'] = 'Bearer ' + newAccess;
-                    return fetch(url, options); // eslint-disable-line
-                }); // eslint-disable-line
+                    return fetch(hardcodedUrl, options); 
+                }); 
             }
             return resp;
         });
+    }
+
+    function fetchWithAuthRetry(url, options, retry = true) {
+        if (!isSafeApiUrl(url) || !isWhitelistedUrl(url)) {
+            return Promise.reject(new Error('URL не разрешён'));
+        }
+
+        if (url === '/api/budget/api/expenses/') {
+            return safeFetchExpenses(options, retry);
+        } else if (url === '/api/budget/api/incomes/') {
+            return safeFetchIncomes(options, retry);
+        } else if (url === '/budget/save-planning/') {
+            return safeFetchSavePlanning(options, retry);
+        }
+
+        return Promise.reject(new Error('URL не разрешён'));
     }
     // ====== NOTIFY ======
     function showNotification(message, type = 'info') {
@@ -115,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotification('Ошибка: небезопасный API URL', 'error');
             return;
         }
-        fetchWithAuthRetry(api)
+        (api === '/api/budget/api/expenses/' ? safeFetchExpenses() : safeFetchIncomes())
             .then(resp => {
                 if (!resp.ok) throw new Error('API error');
                 return resp.json();
@@ -162,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         const row = cell.getRow().getData();
                                         const category_id = row.category_id;
                                         const month = field.replace('plan_', '');
-                                        fetchWithAuthRetry('/budget/save-planning/', {
+                                        safeFetchSavePlanning({
                                             method: 'POST',
                                             headers: {
                                                 'Content-Type': 'application/json',
@@ -288,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         const category_id = row.category_id;
                         const month = field.replace('plan_', '');
                         console.log('[cellEdited] value:', value, 'category_id:', category_id, 'month:', month, 'type:', type);
-                        fetchWithAuthRetry('/budget/save-planning/', {
+                        safeFetchSavePlanning({
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
