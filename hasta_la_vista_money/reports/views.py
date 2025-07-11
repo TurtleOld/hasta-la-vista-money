@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Any, Dict
 
 from django.contrib.messages.views import SuccessMessageMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from django.shortcuts import get_object_or_404, render
@@ -10,13 +11,12 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView
 from hasta_la_vista_money.budget.models import DateList
-from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
 
 
-class ReportView(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
+class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
     template_name = 'reports/reports.html'
     no_permission_url = reverse_lazy('login')
     success_url = reverse_lazy('reports:list')

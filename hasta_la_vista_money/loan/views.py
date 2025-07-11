@@ -1,12 +1,12 @@
 import structlog
 from django.contrib.messages.views import SuccessMessageMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
 from hasta_la_vista_money.loan.tasks import (
@@ -19,7 +19,7 @@ from django.contrib import messages
 logger = structlog.get_logger(__name__)
 
 
-class LoanView(CustomNoPermissionMixin, SuccessMessageMixin, ListView):
+class LoanView(LoginRequiredMixin, SuccessMessageMixin, ListView):
     model = Loan
     template_name = 'loan/loan_modern.html'
     no_permission_url = reverse_lazy('login')
@@ -52,7 +52,7 @@ class LoanView(CustomNoPermissionMixin, SuccessMessageMixin, ListView):
         return context
 
 
-class LoanCreateView(CustomNoPermissionMixin, SuccessMessageMixin, CreateView):
+class LoanCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
     template_name = 'loan/add_loan_modern.html'
     model = Loan
     form_class = LoanForm
@@ -105,7 +105,7 @@ class LoanCreateView(CustomNoPermissionMixin, SuccessMessageMixin, CreateView):
         return redirect(self.success_url)
 
 
-class LoanDeleteView(CustomNoPermissionMixin, SuccessMessageMixin, DeleteView):
+class LoanDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
     template_name = 'loan/loan.html'
     model = Loan
     success_url = reverse_lazy('loan:list')
@@ -123,7 +123,7 @@ class LoanDeleteView(CustomNoPermissionMixin, SuccessMessageMixin, DeleteView):
         return super().form_valid(form)
 
 
-class PaymentMakeCreateView(CustomNoPermissionMixin, CreateView):
+class PaymentMakeCreateView(LoginRequiredMixin, CreateView):
     template_name = 'loan/loan.html'
     model = PaymentMakeLoan
     form_class = PaymentMakeLoanForm

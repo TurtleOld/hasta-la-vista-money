@@ -18,7 +18,6 @@ from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import (
-    CustomNoPermissionMixin,
     DeleteObjectMixin,
     UpdateViewMixin,
 )
@@ -49,7 +48,7 @@ class ExpenseCategoryBaseView(BaseView):
 
 
 class ExpenseView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     ExpenseBaseView,
     SuccessMessageMixin,
     FilterView,
@@ -191,7 +190,7 @@ class ExpenseView(
 
 
 class ExpenseCopyView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     ExpenseBaseView,
     View,
@@ -212,7 +211,7 @@ class ExpenseCopyView(
 
 
 class ExpenseCreateView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     ExpenseBaseView,
     CreateView,
@@ -256,7 +255,7 @@ class ExpenseCreateView(
 
 
 class ExpenseUpdateView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     ExpenseBaseView,
     UpdateView,

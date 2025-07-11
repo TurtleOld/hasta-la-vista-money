@@ -18,10 +18,7 @@ from django.views.generic.edit import CreateView, DeletionMixin
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.custom_mixin import (
-    CustomNoPermissionMixin,
-    DeleteObjectMixin,
-)
+from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
@@ -44,7 +41,7 @@ class IncomeCategoryBaseView(BaseView):
 
 
 class IncomeView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     BaseView,
     FilterView,
@@ -128,7 +125,7 @@ class IncomeView(
 
 
 class IncomeCreateView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     BaseView,
     CreateView,
@@ -192,7 +189,7 @@ class IncomeCreateView(
 
 
 class IncomeCopyView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     BaseView,
     View,
@@ -213,7 +210,7 @@ class IncomeCopyView(
 
 
 class IncomeUpdateView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     BaseView,
     UpdateView,

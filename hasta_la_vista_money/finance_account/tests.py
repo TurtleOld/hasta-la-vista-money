@@ -25,6 +25,7 @@ from hasta_la_vista_money.finance_account.serializers import AccountSerializer
 from hasta_la_vista_money.finance_account.views import AccountView
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.finance_account import services as account_services
 
 BALANCE_TEST = 250000
 NEW_BALANCE_TEST = 450000
@@ -590,3 +591,61 @@ class TestAccount(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('accounts', response.context)
+
+
+class TestAccountServices(TestCase):
+    """
+    Unit tests for account service functions (get_accounts_for_user_or_group, get_sum_all_accounts, get_transfer_money_log).
+    """
+
+    fixtures = [
+        "users.yaml",
+        "finance_account.yaml",
+        "expense.yaml",
+        "expense_cat.yaml",
+        "income.yaml",
+        "income_cat.yaml",
+        "loan.yaml",
+        "receipt_receipt.yaml",
+        "receipt_product.yaml",
+        "receipt_seller.yaml",
+    ]
+
+    def setUp(self) -> None:
+        self.user = User.objects.get(id=1)
+        self.account1 = Account.objects.filter(user=self.user).first()
+        self.group = self.user.groups.first()
+        if self.group:
+            self.group_id = str(self.group.id)
+        else:
+            self.group_id = None
+
+    def test_get_accounts_for_user(self):
+        """Test that get_accounts_for_user_or_group returns only user's accounts when group_id is None or 'my'."""
+        accounts = account_services.get_accounts_for_user_or_group(self.user, None)
+        self.assertTrue(all(acc.user == self.user for acc in accounts))
+        accounts_my = account_services.get_accounts_for_user_or_group(self.user, "my")
+        self.assertTrue(all(acc.user == self.user for acc in accounts_my))
+
+    def test_get_accounts_for_group(self):
+        """Test that get_accounts_for_user_or_group returns all accounts for users in the group."""
+        if not self.group_id:
+            self.skipTest("User has no group for group test")
+        accounts = account_services.get_accounts_for_user_or_group(
+            self.user, self.group_id
+        )
+        group_users = list(self.group.user_set.all())
+        self.assertTrue(all(acc.user in group_users for acc in accounts))
+
+    def test_get_sum_all_accounts(self):
+        """Test that get_sum_all_accounts returns correct sum for queryset."""
+        accounts = Account.objects.filter(user=self.user)
+        expected_sum = sum(acc.balance for acc in accounts)
+        result = account_services.get_sum_all_accounts(accounts)
+        self.assertEqual(result, expected_sum)
+
+    def test_get_transfer_money_log(self):
+        """Test that get_transfer_money_log returns recent logs for user."""
+        logs = account_services.get_transfer_money_log(self.user)
+        self.assertTrue(all(log.user == self.user for log in logs))
+        self.assertLessEqual(len(logs), 10)
