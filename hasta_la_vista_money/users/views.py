@@ -13,10 +13,7 @@ from django.views import View
 from django.views.generic import CreateView, TemplateView, UpdateView
 from django.views.generic.edit import FormView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.custom_mixin import (
-    CustomNoPermissionMixin,
-    CustomSuccessURLUserMixin,
-)
+from hasta_la_vista_money.custom_mixin import CustomSuccessURLUserMixin
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
     DeleteUserFromGroupForm,
@@ -55,7 +52,7 @@ class IndexView(TemplateView):
         return redirect('login')
 
 
-class ListUsers(CustomNoPermissionMixin, SuccessMessageMixin, TemplateView):
+class ListUsers(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
     model = User
     template_name = 'users/profile.html'
     context_object_name = 'users'

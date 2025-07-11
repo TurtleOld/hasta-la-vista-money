@@ -1,31 +1,31 @@
 from typing import Any, Dict
 
 from django.contrib import messages
-from django.contrib.auth.models import Group
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
-from django.db.models import Sum
 from django.http import HttpResponseRedirect, JsonResponse, HttpResponse
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.custom_mixin import (
-    CustomNoPermissionMixin,
-    DeleteObjectMixin,
-)
+from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
+from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
 )
-from hasta_la_vista_money.finance_account.models import (
-    Account,
-    TransferMoneyLog,
-)
+from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
 from django.template.loader import render_to_string
 
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.finance_account import services as account_services
+from asgiref.sync import sync_to_async
+import structlog
+from django.utils.translation import gettext_lazy as _
+
+logger = structlog.get_logger(__name__)
 
 
 class BaseView:
@@ -38,115 +38,119 @@ class AccountBaseView(BaseView):
 
 
 class AccountView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
+    GroupAccountMixin,
     SuccessMessageMixin,
     AccountBaseView,
     ListView,
 ):
     """
-    Представление отображающее список счетов.
+    Displays a list of user or group accounts with related forms and statistics.
 
-    Attributes:
-        context_object_name (str): Имя переменной контекста, передаваемой в шаблон.
-        no_permission_url (str): URL для перенаправления пользователя, если у него нет доступа.
+    Shows all accounts for the current user or selected group, provides forms for adding and transferring accounts,
+    and displays recent transfer logs and account balances.
     """
 
     context_object_name = 'finance_account'
-    no_permission_url = reverse_lazy('login')
 
-    def get_context_data(self, **kwargs) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         """
-        Собирает контекст данных для отображения на странице счетов.
+        Build the context for the account list page, including accounts, forms, logs, and statistics.
 
-        Parameters:
-            kwargs (dict): Дополнительные параметры контекста.
+        Args:
+            **kwargs: Additional context parameters.
 
         Returns:
-            Контекст данных для отображения на странице.
+            dict: Context for rendering the account list template.
         """
         context = super().get_context_data(**kwargs)
+        context.update(self._get_accounts_context())
+        context.update(self._get_forms_context())
+        context.update(self._get_transfer_log_context())
+        context.update(self._get_sums_context())
+        return context
 
-        if not self.request.user.is_authenticated:
-            return context
+    def _get_accounts_context(self) -> Dict[str, Any]:
+        """
+        Get context with accounts and user groups.
 
+        Returns:
+            dict: Accounts and user groups for the current user.
+        """
         user = self.request.user
-        group_id = self.request.GET.get('group_id')
-        if group_id and group_id != 'my':
-            try:
-                group = Group.objects.get(pk=group_id)
-                users_in_group = group.user_set.all()
-                accounts = Account.objects.filter(user__in=users_in_group)
-            except Group.DoesNotExist:
-                accounts = Account.objects.none()
-        else:
-            accounts = Account.objects.filter(user=user)
+        accounts = self.get_accounts(user)
+        return {
+            'accounts': accounts,
+            'user_groups': user.groups.all(),
+        }
 
+    def _get_forms_context(self) -> Dict[str, Any]:
+        """
+        Get context with forms for adding and transferring accounts.
+
+        Returns:
+            dict: Forms for account creation and money transfer.
+        """
+        user = self.request.user
         account_transfer_money = (
-            Account.objects.filter(user=user).select_related('user').all()
+            Account.objects.by_user(user).select_related('user').all()
         )
         initial_form_data = {
             'from_account': account_transfer_money.first(),
             'to_account': account_transfer_money.first(),
         }
+        return {
+            'add_account_form': AddAccountForm(),
+            'transfer_money_form': TransferMoneyAccountForm(
+                user=user,
+                initial=initial_form_data,
+            ),
+        }
 
-        # Журнал переводов
-        transfer_money_log = (
-            TransferMoneyLog.objects.filter(user=user)
-            .select_related('to_account', 'from_account')
-            .order_by('-created_at')[:10]
-        )
+    def _get_transfer_log_context(self) -> Dict[str, Any]:
+        """
+        Get context with recent transfer logs.
 
-        # Сумма всех счетов
-        sum_all_accounts = accounts.aggregate(total=Sum('balance'))['total'] or 0
+        Returns:
+            dict: Recent transfer logs for the current user.
+        """
+        user = self.request.user
+        transfer_money_log = TransferMoneyLog.objects.by_user(user)
+        return {
+            'transfer_money_log': transfer_money_log,
+        }
 
-        # Сумма всех счетов в группе
+    def _get_sums_context(self) -> Dict[str, Any]:
+        """
+        Get context with account balance statistics.
+
+        Returns:
+            dict: Total balances for user and group accounts.
+        """
+        user = self.request.user
+        accounts = Account.objects.by_user(user)
+        sum_all_accounts = account_services.get_sum_all_accounts(accounts)
         user_groups = user.groups.all()
-
         if user_groups.exists():
             users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
-            sum_all_accounts_in_group = (
-                Account.objects.filter(user__in=users_in_groups).aggregate(
-                    total=Sum('balance')
-                )['total']
-                or 0
+            sum_all_accounts_in_group = account_services.get_sum_all_accounts(
+                Account.objects.filter(user__in=users_in_groups).select_related('user')
             )
         else:
-            sum_all_accounts_in_group = (
-                Account.objects.filter(user=user).aggregate(total=Sum('balance'))[
-                    'total'
-                ]
-                or 0
+            sum_all_accounts_in_group = account_services.get_sum_all_accounts(
+                Account.objects.by_user(user).select_related('user')
             )
-
-        context.update(
-            {
-                'accounts': accounts,
-                'add_account_form': AddAccountForm(),
-                'transfer_money_form': TransferMoneyAccountForm(
-                    user=self.request.user,
-                    initial=initial_form_data,
-                ),
-                'transfer_money_log': transfer_money_log,
-                'sum_all_accounts': sum_all_accounts,
-                'user_groups': self.request.user.groups.all(),
-                'sum_all_accounts_in_group': sum_all_accounts_in_group,
-            },
-        )
-
-        return context
+        return {
+            'sum_all_accounts': sum_all_accounts,
+            'sum_all_accounts_in_group': sum_all_accounts_in_group,
+        }
 
 
-class AccountCreateView(CreateView):
+class AccountCreateView(LoginRequiredMixin, CreateView):
     """
-    Представление для создания нового счёта.
+    Handles creation of a new account for the current user.
 
-    Это представление использует форму для создания нового счета, проверяет её
-    на валидность и сохраняет данные в случае успеха. Возвращает JSON-ответ с
-    результатом операции.
-
-    Attributes:
-        form_class (AddAccountForm): Форма для создания нового счета.
-        no_permission_url (str): URL, на который перенаправляется пользователь, если у него нет прав.
+    Presents a form for account creation, validates and saves the account, and provides user feedback.
     """
 
     form_class = AddAccountForm
@@ -155,99 +159,171 @@ class AccountCreateView(CreateView):
     no_permission_url = reverse_lazy('login')
     success_message = constants.SUCCESS_MESSAGE_ADDED_ACCOUNT
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        """
+        Add the account creation form to the context.
+
+        Args:
+            **kwargs: Additional context parameters.
+
+        Returns:
+            dict: Context with the account creation form.
+        """
         context = super().get_context_data(**kwargs)
         context['add_account_form'] = AddAccountForm()
         return context
 
-    def get_success_url(self):
+    def get_success_url(self) -> str:
+        """
+        Get the URL to redirect to after successful account creation.
+
+        Returns:
+            str: Success redirect URL.
+        """
         return reverse_lazy('applications:list')
 
-    def form_valid(self, form):
-        account = form.save(commit=False)
-        account.user = self.request.user
-        account.save()
-        messages.success(self.request, self.success_message)
-        return HttpResponseRedirect(self.get_success_url())
+    def form_valid(self, form: AddAccountForm) -> HttpResponseRedirect:
+        """
+        Save the new account and handle success or error feedback.
+
+        Args:
+            form (AddAccountForm): The validated account creation form.
+
+        Returns:
+            HttpResponseRedirect: Redirect response after processing the form.
+        """
+        try:
+            account = form.save(commit=False)
+            account.user = self.request.user
+            account.save()
+            messages.success(self.request, self.success_message)
+            return HttpResponseRedirect(self.get_success_url())
+        except Exception:
+            logger.error(
+                'Ошибка при создании счета',
+                exc_info=True,
+                user_id=getattr(self.request.user, 'id', None),
+            )
+            messages.error(
+                self.request,
+                _('Не удалось создать счет. Пожалуйста, попробуйте позже.'),
+            )
+            return HttpResponseRedirect(self.get_success_url())
 
 
 class ChangeAccountView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     AccountBaseView,
     UpdateView,
 ):
     """
-    Представление для изменения существующего счета.
+    Handles editing of an existing account.
 
-    Это представление позволяет пользователю редактировать данные уже созданного
-    счета. После успешного редактирования выводится сообщение об успешной операции.
-
-    Attributes:
-        form_class (AddAccountForm): Форма для редактирования счета.
-        template_name (str): Имя шаблона, используемого для отображения страницы редактирования счета.
-        success_message (str): Сообщение, которое отображается после успешного обновления счета.
+    Presents a form for editing account details and provides user feedback on success or error.
     """
 
     form_class = AddAccountForm
     template_name = 'finance_account/change_account.html'
     success_message = constants.SUCCESS_MESSAGE_CHANGED_ACCOUNT
 
-    def get_context_data(self, **kwargs) -> dict:
+    def get_context_data(self, **kwargs: Any) -> dict:
         """
-        Добавляет дополнительные данные в контекст шаблона.
-        Включает форму для редактирования счета в контекст.
+        Add the account edit form to the context.
+
+        Args:
+            **kwargs: Additional context parameters.
 
         Returns:
-            Контекст с добавленной формой редактирования счета.
+            dict: Context with the account edit form.
         """
-        context = super().get_context_data(**kwargs)
-        form_class = self.get_form_class()
-        form = form_class(**self.get_form_kwargs())
-        context['add_account_form'] = form
-        return context
+        try:
+            context = super().get_context_data(**kwargs)
+            form_class = self.get_form_class()
+            form = form_class(**self.get_form_kwargs())
+            context['add_account_form'] = form
+            return context
+        except Exception:
+            logger.error(
+                'Ошибка при формировании контекста изменения счета',
+                exc_info=True,
+                user_id=getattr(self.request.user, 'id', None),
+            )
+            from django.contrib import messages
+
+            messages.error(
+                self.request,
+                _(
+                    'Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте позже.'
+                ),
+            )
+            return super().get_context_data(**kwargs)
 
 
 class TransferMoneyAccountView(
-    CustomNoPermissionMixin,
+    LoginRequiredMixin,
     SuccessMessageMixin,
     AccountBaseView,
     View,
 ):
     """
-    Представление для перевода средств между счетами.
+    Handles money transfers between user accounts.
+
+    Validates and processes money transfer requests, providing user feedback and error handling.
     """
 
     form_class = TransferMoneyAccountForm
     success_message = constants.SUCCESS_MESSAGE_TRANSFER_MONEY
 
-    def post(self, request: WSGIRequest, *args, **kwargs) -> JsonResponse:
-        form = self.form_class(user=request.user, data=request.POST)
+    def post(self, request: WSGIRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        """
+        Process a POST request to transfer money between accounts.
 
-        if (
-            form.is_valid()
-            and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
-        ):
-            try:
-                form.save()
-                messages.success(request, self.success_message)
-                return JsonResponse({'success': True})
-            except ValidationError as e:
-                return JsonResponse({'success': False, 'errors': str(e)})
-        else:
-            return JsonResponse({'success': False, 'errors': form.errors})
+        Args:
+            request (WSGIRequest): The HTTP request object.
+
+        Returns:
+            JsonResponse: JSON response indicating success or error.
+        """
+        try:
+            form = self.form_class(user=request.user, data=request.POST)
+
+            if (
+                form.is_valid()
+                and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
+            ):
+                try:
+                    form.save()
+                    messages.success(request, self.success_message)
+                    return JsonResponse({'success': True})
+                except ValidationError as e:
+                    return JsonResponse({'success': False, 'errors': str(e)})
+            else:
+                return JsonResponse({'success': False, 'errors': form.errors})
+        except Exception:
+            logger.error(
+                'Ошибка при переводе средств между счетами',
+                exc_info=True,
+                user_id=getattr(request.user, 'id', None),
+            )
+            return JsonResponse(
+                {
+                    'success': False,
+                    'errors': str(
+                        _(
+                            'Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже.'
+                        )
+                    ),
+                },
+                status=500,
+            )
 
 
-class DeleteAccountView(DeleteObjectMixin):
+class DeleteAccountView(LoginRequiredMixin, DeleteObjectMixin):
     """
-    Представление для удаления счета.
+    Handles deletion of an account.
 
-    Это представление обрабатывает удаление счета и возвращает соответствующее
-    сообщение об успехе или неудаче операции.
-
-    Attributes:
-        success_message (str): Сообщение, отображаемое при успешном удалении счета.
-        error_message (str): Сообщение, отображаемое при неудаче удаления счета.
+    Deletes the specified account and provides user feedback on success or failure.
     """
 
     model = Account
@@ -258,21 +334,50 @@ class DeleteAccountView(DeleteObjectMixin):
 
 
 class AjaxAccountsByGroupView(View):
-    def get(self, request, *args, **kwargs):
+    """
+    Returns rendered HTML for accounts filtered by group via AJAX.
+
+    Handles asynchronous requests for account cards, with error logging and user-friendly error messages.
+    """
+
+    async def get(
+        self, request: WSGIRequest, *args: Any, **kwargs: Any
+    ) -> HttpResponse:
+        """
+        Handle GET request for accounts by group via AJAX.
+
+        Args:
+            request (WSGIRequest): The HTTP request object.
+
+        Returns:
+            HttpResponse: Rendered HTML or JSON error response.
+        """
         group_id = request.GET.get('group_id')
         user = request.user
-        accounts = Account.objects.none()
-        if group_id == 'my' or not group_id:
-            accounts = Account.objects.filter(user=user)
-        else:
-            try:
-                group = Group.objects.get(pk=group_id)
-                users_in_group = group.user_set.all()
-                accounts = Account.objects.filter(user__in=users_in_group)
-            except Group.DoesNotExist:
-                accounts = Account.objects.none()
-        html = render_to_string(
-            'finance_account/_account_cards_block.html',
-            {'accounts': accounts, 'request': request},
-        )
-        return HttpResponse(html)
+        try:
+            accounts = await sync_to_async(
+                account_services.get_accounts_for_user_or_group
+            )(user, group_id)
+            html = await sync_to_async(render_to_string)(
+                'finance_account/_account_cards_block.html',
+                {'accounts': accounts, 'request': request},
+            )
+            return HttpResponse(html)
+        except Exception:
+            logger.error(
+                'Ошибка при получении счетов по группе',
+                exc_info=True,
+                group_id=group_id,
+                user_id=getattr(user, 'id', None),
+            )
+            return JsonResponse(
+                {
+                    'success': False,
+                    'error': str(
+                        _(
+                            'Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже.'
+                        )
+                    ),
+                },
+                status=500,
+            )

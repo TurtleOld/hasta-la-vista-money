@@ -2,14 +2,14 @@ import json
 from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, TypedDict, Union, overload
-
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
 from hasta_la_vista_money.budget.models import DateList, Planning
-from hasta_la_vista_money.custom_mixin import CustomNoPermissionMixin
+
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.services.generate_dates import generate_date_list
@@ -122,7 +122,7 @@ class BudgetContextMixin:
         return user, months, expense_categories, income_categories
 
 
-class BudgetView(CustomNoPermissionMixin, BudgetContextMixin, BaseView, ListView):
+class BudgetView(LoginRequiredMixin, BudgetContextMixin, BaseView, ListView):
     model = Planning
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
@@ -209,7 +209,7 @@ def save_planning(request):
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
 
-class ExpenseTableView(CustomNoPermissionMixin, BudgetContextMixin, BaseView, ListView):
+class ExpenseTableView(LoginRequiredMixin, BudgetContextMixin, BaseView, ListView):
     model = Planning
     template_name = 'expense_table.html'
 
@@ -229,7 +229,7 @@ class ExpenseTableView(CustomNoPermissionMixin, BudgetContextMixin, BaseView, Li
         return context
 
 
-class IncomeTableView(CustomNoPermissionMixin, BudgetContextMixin, BaseView, ListView):
+class IncomeTableView(LoginRequiredMixin, BudgetContextMixin, BaseView, ListView):
     model = Planning
     template_name = 'income_table.html'
 
