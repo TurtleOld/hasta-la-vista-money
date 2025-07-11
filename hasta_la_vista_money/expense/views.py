@@ -1,17 +1,12 @@
-from collections import namedtuple
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Sum
-from django.db.models.functions import ExtractYear, TruncMonth
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
-from django.utils.formats import date_format
 from django.views import View
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
@@ -24,26 +19,31 @@ from hasta_la_vista_money.custom_mixin import (
 from hasta_la_vista_money.expense.filters import ExpenseFilter
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import Receipt
-from hasta_la_vista_money.services.views import (
-    build_category_tree,
-    get_new_type_operation,
-    get_queryset_type_income_expenses,
+from hasta_la_vista_money.expense.services import (
+    ExpenseService,
+    ExpenseCategoryService,
+    ReceiptExpenseService,
 )
+from hasta_la_vista_money.services.views import build_category_tree
 from hasta_la_vista_money.users.models import User
 
 
 class BaseView:
+    """Base view class with common configuration."""
+
     template_name = 'expense/show_expense.html'
     success_url: Optional[str] = reverse_lazy('expense:list')
 
 
 class ExpenseBaseView(BaseView):
+    """Base view for expense-related operations."""
+
     model = Expense
 
 
 class ExpenseCategoryBaseView(BaseView):
+    """Base view for expense category operations."""
+
     model = ExpenseCategory
 
 
@@ -53,138 +53,75 @@ class ExpenseView(
     SuccessMessageMixin,
     FilterView,
 ):
+    """Main expense list view with filtering and pagination."""
+
     paginate_by = 10
     context_object_name = 'expense'
     filterset_class = ExpenseFilter
     no_permission_url = reverse_lazy('login')
 
-    def get_context_data(self, *args, **kwargs) -> dict[str, Any]:
+    def get_context_data(self, *args, **kwargs) -> Dict[str, Any]:
         """
-        Метод отображения расходов по месяцам на странице.
+        Get context data for expense list view.
 
-        :return: Рендеринг данных на странице сайта.
+        Returns:
+            Dict containing expense data, categories, and forms.
         """
         context = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
-        depth_limit = 3
 
-        # Get receipt expense category if it exists
-        receipt_category = ExpenseCategory.objects.filter(
-            user=user,
-            name='Покупки по чекам',
-        ).first()
+        # Get services
+        expense_service = ExpenseService(user)
+        receipt_service = ReceiptExpenseService(user)
 
-        expense_categories = (
-            user.category_expense_users.select_related('user')
-            .values(
-                'id',
-                'name',
-                'parent_category',
-                'parent_category__name',
-            )
-            .order_by('name', 'parent_category')
-            .all()
-        )
+        # Get expense data
         expense_filter = ExpenseFilter(
             self.request.GET,
             queryset=Expense.objects.all(),
             user=self.request.user,
         )
-        flattened_categories = build_category_tree(
-            expense_categories,
-            depth=depth_limit,
-        )
-        categories = (
-            user.category_expense_users.select_related('user')
-            .order_by('parent_category__name', 'name')
-            .all()
-        )
-        add_expense_form = AddExpenseForm(
-            category_queryset=categories,
-            account_queryset=Account.objects.filter(user=user),
-        )
-
         expenses = expense_filter.qs.select_related(
             'user',
             'category',
             'account',
         )
 
-        ReceiptExpense = namedtuple(
-            'ReceiptExpense',
-            [
-                'id',
-                'date',
-                'amount',
-                'category',
-                'account',
-                'user',
-                'is_receipt',
-                'date_label',
-            ],
-        )
-        receipt_expenses = (
-            Receipt.objects.filter(
-                user=user,
-                operation_type=1,
-            )
-            .annotate(
-                month=TruncMonth('receipt_date'),
-                year=ExtractYear('receipt_date'),
-            )
-            .values(
-                'month',
-                'year',
-                'account__id',
-                'account__name_account',
-                'total_sum',
-            )
-            .order_by('-year', '-month')
-        )
-        receipt_expense_list = []
-        if receipt_category:  # Only process receipts if category exists
-            for receipt in receipt_expenses:
-                month_date = receipt['month']
-                date_label = date_format(month_date, 'F Y')
-                category_obj = receipt_category
-                account_obj = type(
-                    'AccountObj',
-                    (),
-                    {'name_account': receipt['account__name_account']},
-                )()
-                receipt_expense_list.append(
-                    ReceiptExpense(
-                        id=f'receipt_{month_date.year}{month_date.strftime("%m")}_{receipt["account__name_account"]}',
-                        date=month_date,
-                        amount=receipt['total_sum'],
-                        category=category_obj,
-                        account=account_obj,
-                        user=user,
-                        is_receipt=True,
-                        date_label=date_label,
-                    ),
-                )
+        # Get receipt expenses
+        receipt_expenses = receipt_service.get_receipt_expenses()
 
-        all_expenses = list(expenses) + receipt_expense_list
+        # Combine expenses and receipts
+        all_expenses = list(expenses) + receipt_expenses
 
-        # Pagination removed, as Tabulator is used
-        pages_expense = all_expenses
-
+        # Calculate totals
         total_amount_page = sum(
-            getattr(income, 'amount', 0) for income in pages_expense
+            getattr(expense, 'amount', 0) for expense in all_expenses
         )
         total_amount_period = sum(
-            getattr(income, 'amount', 0) for income in all_expenses
+            getattr(expense, 'amount', 0) for expense in all_expenses
         )
 
-        context['expense_filter'] = expense_filter
-        context['categories'] = expense_categories
-        context['expenses'] = pages_expense
-        context['add_expense_form'] = add_expense_form
-        context['flattened_categories'] = flattened_categories
-        context['total_amount_page'] = total_amount_page
-        context['total_amount_period'] = total_amount_period
-        context['request'] = self.request
+        # Get categories
+        expense_categories = expense_service.get_categories()
+        flattened_categories = build_category_tree(
+            expense_categories,
+            depth=3,
+        )
+
+        # Get form
+        add_expense_form = expense_service.get_expense_form()
+
+        context.update(
+            {
+                'expense_filter': expense_filter,
+                'categories': expense_categories,
+                'expenses': all_expenses,
+                'add_expense_form': add_expense_form,
+                'flattened_categories': flattened_categories,
+                'total_amount_page': total_amount_page,
+                'total_amount_period': total_amount_period,
+                'request': self.request,
+            }
+        )
 
         return context
 
@@ -195,19 +132,24 @@ class ExpenseCopyView(
     ExpenseBaseView,
     View,
 ):
+    """View for copying an existing expense."""
+
     no_permission_url = reverse_lazy('login')
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs) -> HttpResponse:
+        """Handle POST request to copy an expense."""
         expense_id = kwargs.get('pk')
-        new_expense = get_new_type_operation(Expense, expense_id, request)
-        valid_expense = get_object_or_404(Expense, pk=new_expense.pk)
-        if valid_expense.account:
-            valid_expense.account.balance -= valid_expense.amount
-            valid_expense.account.save()
-        messages.success(request, 'Расход успешно скопирован.')
-        return redirect(
-            reverse_lazy('expense:change', kwargs={'pk': valid_expense.pk}),
-        )
+        expense_service = ExpenseService(request.user)
+
+        try:
+            new_expense = expense_service.copy_expense(expense_id)
+            messages.success(request, 'Расход успешно скопирован.')
+            return redirect(
+                reverse_lazy('expense:change', kwargs={'pk': new_expense.pk}),
+            )
+        except Exception as e:
+            messages.error(request, f'Ошибка при копировании расхода: {str(e)}')
+            return redirect('expense:list')
 
 
 class ExpenseCreateView(
@@ -216,41 +158,41 @@ class ExpenseCreateView(
     ExpenseBaseView,
     CreateView,
 ):
+    """View for creating a new expense."""
+
     no_permission_url = reverse_lazy('login')
     template_name = 'expense/add_expense.html'
     form_class = AddExpenseForm
-    depth_limit = 3
     success_url: Optional[str] = reverse_lazy('expense:list')
 
-    def get_form_kwargs(self):
+    def get_form_kwargs(self) -> Dict[str, Any]:
+        """Get form kwargs with user-specific querysets."""
         kwargs = super().get_form_kwargs()
-        user = get_object_or_404(User, username=self.request.user)
-        categories = (
-            user.category_expense_users.select_related('user')
-            .order_by('parent_category__name', 'name')
-            .all()
-        )
-        kwargs['category_queryset'] = categories
-        kwargs['account_queryset'] = Account.objects.filter(user=user)
+        expense_service = ExpenseService(self.request.user)
+        kwargs.update(expense_service.get_form_querysets())
         return kwargs
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs) -> Dict[str, Any]:
+        """Get context data for expense creation form."""
         context = super().get_context_data(**kwargs)
         if 'add_expense_form' not in context:
             context['add_expense_form'] = self.get_form()
         return context
 
-    def form_valid(self, form):
-        expense = form.save(commit=False)
-        expense.user = self.request.user
-        expense.save()
-        if expense.account:
-            expense.account.balance -= expense.amount
-            expense.account.save()
-        messages.success(self.request, constants.SUCCESS_EXPENSE_ADDED)
-        return super().form_valid(form)
+    def form_valid(self, form) -> HttpResponse:
+        """Handle valid form submission."""
+        expense_service = ExpenseService(self.request.user)
 
-    def form_invalid(self, form):
+        try:
+            expense_service.create_expense(form)
+            messages.success(self.request, constants.SUCCESS_EXPENSE_ADDED)
+            return super().form_valid(form)
+        except Exception as e:
+            messages.error(self.request, f'Ошибка при создании расхода: {str(e)}')
+            return self.form_invalid(form)
+
+    def form_invalid(self, form) -> HttpResponse:
+        """Handle invalid form submission."""
         return self.render_to_response(self.get_context_data(add_expense_form=form))
 
 
@@ -261,153 +203,121 @@ class ExpenseUpdateView(
     UpdateView,
     UpdateViewMixin,
 ):
+    """View for updating an existing expense."""
+
     template_name = 'expense/change_expense.html'
     form_class = AddExpenseForm
     no_permission_url = reverse_lazy('login')
 
-    def get_object(self, queryset=None):
+    def get_object(self, queryset=None) -> Expense:
+        """Get the expense object to update."""
         return get_object_or_404(
             Expense,
             pk=self.kwargs['pk'],
             user=self.request.user,
         )
 
-    def get_form_kwargs(self):
+    def get_form_kwargs(self) -> Dict[str, Any]:
+        """Get form kwargs with user-specific querysets."""
         kwargs = super().get_form_kwargs()
-        user = get_object_or_404(User, username=self.request.user)
-        categories = (
-            user.category_expense_users.select_related('user')
-            .order_by('parent_category__name', 'name')
-            .all()
-        )
-        kwargs['category_queryset'] = categories
-        kwargs['account_queryset'] = Account.objects.filter(user=user)
+        expense_service = ExpenseService(self.request.user)
+        kwargs.update(expense_service.get_form_querysets())
         return kwargs
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs) -> Dict[str, Any]:
+        """Get context data for expense update form."""
         context = super().get_context_data(**kwargs)
-        form = self.get_form()
-        context['add_expense_form'] = form
+        context['add_expense_form'] = self.get_form()
         return context
 
-    def form_valid(self, form):
-        expense = get_queryset_type_income_expenses(
-            self.object.id,
-            Expense,
-            form,
-        )
+    def form_valid(self, form) -> HttpResponse:
+        """Handle valid form submission."""
+        expense_service = ExpenseService(self.request.user)
 
-        amount = form.cleaned_data.get('amount')
-        account = form.cleaned_data.get('account')
-        account_balance = get_object_or_404(Account, id=account.id)
-        old_account_balance = get_object_or_404(Account, id=expense.account.id)
-
-        if account_balance.user == self.request.user:
-            if expense:
-                old_amount = expense.amount
-                account_balance.balance += old_amount
-
-            if expense.account != account:
-                old_account_balance.balance += amount
-                account_balance.balance -= amount
-
-            old_account_balance.save()
-            account_balance.balance -= amount
-            account_balance.save()
-
-            expense.user = self.request.user
-            expense.amount = amount
-            expense.save()
-
-            messages.success(
-                self.request,
-                constants.SUCCESS_EXPENSE_UPDATE,
-            )
+        try:
+            expense_service.update_expense(self.object, form)
+            messages.success(self.request, constants.SUCCESS_EXPENSE_UPDATE)
             return super().form_valid(form)
+        except Exception as e:
+            messages.error(self.request, f'Ошибка при обновлении расхода: {str(e)}')
+            return self.form_invalid(form)
 
 
 class ExpenseDeleteView(LoginRequiredMixin, ExpenseBaseView, DetailView, DeleteView):
+    """View for deleting an expense."""
+
     context_object_name = 'expense'
     no_permission_url = reverse_lazy('login')
 
-    def form_valid(self, form):
-        expense = self.get_object()
-        account = expense.account
-        amount = expense.amount
-        account_balance = get_object_or_404(Account, id=account.id)
+    def form_valid(self, form) -> HttpResponse:
+        """Handle valid form submission for deletion."""
+        expense_service = ExpenseService(self.request.user)
 
-        if account_balance.user == self.request.user:
-            account_balance.balance += amount
-            account_balance.save()
-            messages.success(
-                self.request,
-                constants.SUCCESS_EXPENSE_DELETED,
-            )
+        try:
+            expense_service.delete_expense(self.get_object())
+            messages.success(self.request, constants.SUCCESS_EXPENSE_DELETED)
             return super().form_valid(form)
+        except Exception as e:
+            messages.error(self.request, f'Ошибка при удалении расхода: {str(e)}')
+            return redirect('expense:list')
 
 
 class ExpenseCategoryView(LoginRequiredMixin, ListView):
+    """View for displaying expense categories."""
+
     template_name = 'expense/show_category_expense.html'
     model = ExpenseCategory
     depth = 3
 
-    def get_context_data(self, **kwargs) -> dict[str, Any]:
+    def get_context_data(self, **kwargs) -> Dict[str, Any]:
+        """Get context data for category list."""
         user = get_object_or_404(User, username=self.request.user)
-        expense_categories = (
-            user.category_expense_users.select_related('user')
-            .values(
-                'id',
-                'name',
-                'parent_category',
-                'parent_category__name',
-            )
-            .order_by('name', 'parent_category')
-            .all()
-        )
+        category_service = ExpenseCategoryService(user)
+
+        expense_categories = category_service.get_categories()
         flattened_categories = build_category_tree(
             expense_categories,
             depth=self.depth,
         )
+
         context = super().get_context_data(**kwargs)
-
         context['flattened_categories'] = flattened_categories
-
         return context
 
 
 class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
+    """View for creating a new expense category."""
+
     model = ExpenseCategory
     template_name = 'expense/add_category_expense.html'
     form_class = AddCategoryForm
-    depth = 3
     success_url: str = reverse_lazy('expense:category_list')
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        return super().get_context_data(**kwargs)
-
-    def get_form_kwargs(self):
+    def get_form_kwargs(self) -> Dict[str, Any]:
+        """Get form kwargs with user-specific queryset."""
         kwargs = super().get_form_kwargs()
-        user = get_object_or_404(User, username=self.request.user)
-        categories = (
-            user.category_expense_users.select_related('user')
-            .order_by('parent_category__name', 'name')
-            .all()
-        )
-        kwargs['category_queryset'] = categories
+        category_service = ExpenseCategoryService(self.request.user)
+        kwargs['category_queryset'] = category_service.get_categories_queryset()
         return kwargs
 
-    def form_valid(self, form):
-        category_name = self.request.POST.get('name')
-        category_form = form.save(commit=False)
-        category_form.user = self.request.user
-        category_form.save()
-        messages.success(
-            self.request,
-            f'Категория "{category_name}" была успешно добавлена!',
-        )
-        return redirect(self.success_url)
+    def form_valid(self, form) -> HttpResponse:
+        """Handle valid form submission."""
+        category_service = ExpenseCategoryService(self.request.user)
 
-    def form_invalid(self, form):
+        try:
+            category_name = self.request.POST.get('name')
+            category_service.create_category(form)
+            messages.success(
+                self.request,
+                f'Категория "{category_name}" была успешно добавлена!',
+            )
+            return redirect(self.success_url)
+        except Exception as e:
+            messages.error(self.request, f'Ошибка при создании категории: {str(e)}')
+            return self.form_invalid(form)
+
+    def form_invalid(self, form) -> HttpResponse:
+        """Handle invalid form submission."""
         messages.error(
             self.request,
             'Ошибка при добавлении категории. Проверьте введенные данные.',
@@ -415,149 +325,44 @@ class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class ExpenseCategoryDeleteView(
-    ExpenseCategoryBaseView,
-    DeleteObjectMixin,
-):
+class ExpenseCategoryDeleteView(ExpenseCategoryBaseView, DeleteObjectMixin):
+    """View for deleting an expense category."""
+
     success_message = constants.SUCCESS_CATEGORY_EXPENSE_DELETED
     error_message = constants.ACCESS_DENIED_DELETE_EXPENSE_CATEGORY
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
 
 class ExpenseGroupAjaxView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
-        group_id = request.GET.get('group_id')
-        user = request.user
-        expenses = Expense.objects.none()
-        receipt_expense_list = []
-        if not group_id or group_id == 'my':
-            expenses = Expense.objects.filter(user=user)
-            group_users = [user]
-        else:
-            if user.groups.filter(id=group_id).exists():
-                group_users = list(User.objects.filter(groups__id=group_id))
-                expenses = Expense.objects.filter(user__in=group_users)
-            else:
-                group_users = []
-        expenses = expenses.select_related('user', 'category', 'account').order_by(
-            '-date',
-        )
-        if group_users:
-            receipt_expenses = (
-                Receipt.objects.filter(user__in=group_users, operation_type=1)
-                .annotate(
-                    month=TruncMonth('receipt_date'),
-                    year=ExtractYear('receipt_date'),
-                )
-                .values('month', 'year', 'account__id', 'account__name_account', 'user')
-                .annotate(amount=Sum('total_sum'))
-                .order_by('-year', '-month')
-            )
-            for receipt in receipt_expenses:
-                month_date = receipt['month']
-                date_label = month_date.strftime('%B %Y') if month_date else ''
-                receipt_user = User.objects.get(id=receipt['user'])
-                receipt_expense_list.append(
-                    {
-                        'id': f'receipt_{receipt["year"]}{month_date.strftime("%m")}_{receipt["account__name_account"]}_{receipt["user"]}',
-                        'date': month_date,
-                        'date_label': date_label,
-                        'amount': receipt['amount'],
-                        'category': {
-                            'name': 'Покупки по чекам',
-                            'parent_category': None,
-                        },
-                        'account': {'name_account': receipt['account__name_account']},
-                        'user': receipt_user,  # всегда объект User
-                        'is_receipt': True,
-                    },
-                )
+    """AJAX view for getting expenses by group."""
 
-        all_expenses = list(expenses) + receipt_expense_list
-        context = {'expenses': all_expenses, 'request': request}
-        html = render_to_string(
-            'expense/_expense_table_block.html',
-            context,
-            request=request,
-        )
-        return HttpResponse(html)
+    def get(self, request, *args, **kwargs) -> HttpResponse:
+        """Handle GET request for group expenses."""
+        group_id = request.GET.get('group_id')
+        expense_service = ExpenseService(request.user)
+
+        try:
+            all_expenses = expense_service.get_expenses_by_group(group_id)
+            context = {'expenses': all_expenses, 'request': request}
+            html = render_to_string(
+                'expense/_expense_table_block.html',
+                context,
+                request=request,
+            )
+            return HttpResponse(html)
+        except Exception as e:
+            return HttpResponse(f'Ошибка: {str(e)}', status=500)
 
 
 class ExpenseDataAjaxView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
+    """AJAX view for getting expense data as JSON."""
+
+    def get(self, request, *args, **kwargs) -> JsonResponse:
+        """Handle GET request for expense data."""
         group_id = request.GET.get('group_id')
-        user = request.user
-        expenses = Expense.objects.none()
-        receipt_expense_list = []
+        expense_service = ExpenseService(request.user)
 
-        if group_id == 'my' or not group_id:
-            expenses = Expense.objects.filter(user=user)
-            group_users = [user]
-        else:
-            try:
-                group = Group.objects.get(pk=group_id)
-                group_users = list(group.user_set.all())
-                expenses = Expense.objects.filter(user__in=group_users)
-            except Group.DoesNotExist:
-                group_users = []
-                expenses = Expense.objects.none()
-
-        if group_users:
-            receipts = Receipt.objects.filter(
-                user__in=group_users,
-                operation_type=1,
-            ).select_related('account', 'user')
-            for receipt in receipts:
-                print(receipt.total_sum, 'receipt')
-                receipt_expense_list.append(
-                    {
-                        'id': f'receipt_{receipt.pk}',
-                        'date': receipt.receipt_date.strftime('%d.%m.%Y')
-                        if receipt.receipt_date
-                        else '',
-                        'amount': float(receipt.total_sum)
-                        if receipt.total_sum is not None
-                        else 0,
-                        'category_name': 'Покупки по чекам',
-                        'account_name': receipt.account.name_account
-                        if receipt.account
-                        else '',
-                        'user_name': receipt.user.get_full_name()
-                        or receipt.user.username
-                        if receipt.user
-                        else '',
-                        'user_id': receipt.user.pk if receipt.user else None,
-                        'is_receipt': True,
-                        'receipt_id': receipt.pk,
-                        'actions': '',  # Нет кнопок для чеков
-                    },
-                )
-
-        data = []
-        for expense in expenses.select_related('category', 'account', 'user').all():
-            data.append(
-                {
-                    'id': expense.pk,
-                    'date': expense.date.strftime('%d.%m.%Y'),
-                    'amount': float(expense.amount)
-                    if expense.amount is not None
-                    else 0,
-                    'category_name': expense.category.name if expense.category else '',
-                    'account_name': expense.account.name_account
-                    if expense.account
-                    else '',
-                    'user_name': expense.user.get_full_name() or expense.user.username
-                    if expense.user
-                    else '',
-                    'user_id': expense.user.pk if expense.user else None,
-                    'is_receipt': False,
-                    'receipt_id': None,
-                    'actions': '',  # Будет формироваться на фронте
-                },
-            )
-
-        # Склеиваем обычные расходы и чеки
-        all_data = data + receipt_expense_list
-        return JsonResponse({'data': all_data})
+        try:
+            all_data = expense_service.get_expense_data(group_id)
+            return JsonResponse({'data': all_data})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
