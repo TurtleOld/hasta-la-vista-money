@@ -97,21 +97,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function fetchWithAuthRetry(url, options, retry = true) {
-        if (!isSafeApiUrl(url) || !isWhitelistedUrl(url)) {
-            return Promise.reject(new Error('URL не разрешён'));
-        }
-
-        if (url === '/api/budget/api/expenses/') {
-            return safeFetchExpenses(options, retry);
-        } else if (url === '/api/budget/api/incomes/') {
-            return safeFetchIncomes(options, retry);
-        } else if (url === '/budget/save-planning/') {
-            return safeFetchSavePlanning(options, retry);
-        }
-
-        return Promise.reject(new Error('URL не разрешён'));
-    }
     // ====== NOTIFY ======
     function showNotification(message, type = 'info') {
         let alertClass;
