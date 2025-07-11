@@ -16,36 +16,10 @@
                     </h5>
                 </div>
                 <div class="card-body p-4">
-                    <form method="POST" action="{% url 'income:create' %}">
-                        {% csrf_token %}
-                        {% if form %}
-                            {% for field in form %}
-                                <div class="mb-3">
-                                    {{ field|as_crispy_field }}
-                                    {% if field.errors %}
-                                        <div class="invalid-feedback d-block">
-                                            {% for error in field.errors %}
-                                                {{ error }}
-                                            {% endfor %}
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                        <div class="d-flex gap-2 mt-4">
-                            <button type="submit" class="btn btn-success">
-                                <i class="bi bi-plus-circle me-2"></i>
-                                {% translate 'Добавить доход' %}
-                            </button>
-                            <a href="{% url 'income:list' %}" class="btn btn-outline-secondary">
-                                <i class="bi bi-arrow-left me-2"></i>
-                                {% translate 'Отмена' %}
-                            </a>
-                        </div>
-                    </form>
+                    {% include 'income/_income_form.html' with form=form action_url=action_url|default:request.path cancel_url=cancel_url|default:cancel_url submit_label=_('Добавить доход') cancel_label=_('Отмена') %}
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}
