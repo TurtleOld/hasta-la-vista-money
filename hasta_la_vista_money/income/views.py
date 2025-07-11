@@ -292,6 +292,9 @@ class IncomeUpdateView(
         form_kwargs['category_queryset'] = income_categories
         form = form_class(**form_kwargs)
         context['income_form'] = form
+        context['cancel_url'] = (
+            str(self.success_url) if self.success_url else reverse_lazy('income:list')
+        )
         return context
 
     def get_form_kwargs(self) -> dict:
