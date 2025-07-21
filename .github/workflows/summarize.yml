@@ -32,7 +32,7 @@ jobs:
 
       - name: Run AI inference
         id: inference
-        uses: actions/ai-inference@v1.2.2
+        uses: actions/ai-inference@v1.2.3
         with:
           prompt: |
             Summarize the following GitHub issue in one paragraph:
