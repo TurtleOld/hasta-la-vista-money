@@ -1,22 +1,19 @@
+from typing import Any, Optional
+
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import Group
-from django.forms import (
-    CharField,
-    ModelForm,
-    PasswordInput,
-)
+from django.forms import CharField, ModelForm, PasswordInput
+from django.http import HttpRequest
+from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
-from django.utils.translation import gettext_lazy as _
-from typing import Any, Optional
 from hasta_la_vista_money.users.services.groups import (
     add_user_to_group,
     remove_user_from_group,
 )
 from hasta_la_vista_money.users.validators import validate_username_unique
-from django.http import HttpRequest
 
 
 class UserLoginForm(AuthenticationForm):
@@ -32,11 +29,9 @@ class UserLoginForm(AuthenticationForm):
         label=_('Имя пользователя или Email'),
         widget=forms.TextInput(
             attrs={
-                'placeholder': _('Имя пользователя или Email'),
                 'class': 'form-control',
-            }
+            },
         ),
-        help_text=_('Введите имя пользователя или email.'),
         error_messages={
             'required': _('Пожалуйста, введите имя пользователя или email.'),
         },
@@ -46,11 +41,9 @@ class UserLoginForm(AuthenticationForm):
         strip=False,
         widget=PasswordInput(
             attrs={
-                'placeholder': _('Пароль'),
                 'class': 'form-control',
-            }
+            },
         ),
-        help_text=_('Введите ваш пароль.'),
         error_messages={
             'required': _('Пожалуйста, введите пароль.'),
         },
@@ -81,13 +74,13 @@ class RegisterUserForm(UserCreationForm[User]):
                 attrs={
                     'placeholder': _('Имя пользователя'),
                     'class': 'form-control',
-                }
+                },
             ),
             'email': forms.EmailInput(
                 attrs={
                     'placeholder': _('Email'),
                     'class': 'form-control',
-                }
+                },
             ),
         }
         help_texts = {
@@ -128,25 +121,25 @@ class UpdateUserForm(ModelForm):
                 attrs={
                     'class': 'form-control',
                     'placeholder': _('Имя пользователя'),
-                }
+                },
             ),
             'email': forms.EmailInput(
                 attrs={
                     'class': 'form-control',
                     'placeholder': _('Email'),
-                }
+                },
             ),
             'first_name': forms.TextInput(
                 attrs={
                     'class': 'form-control',
                     'placeholder': _('Имя'),
-                }
+                },
             ),
             'last_name': forms.TextInput(
                 attrs={
                     'class': 'form-control',
                     'placeholder': _('Фамилия'),
-                }
+                },
             ),
         }
         help_texts = {
@@ -179,8 +172,8 @@ class GroupCreateForm(ModelForm):
                 attrs={
                     'class': 'form-control',
                     'placeholder': _('Название группы'),
-                }
-            )
+                },
+            ),
         }
         help_texts = {
             'name': _('Введите уникальное название группы.'),
@@ -269,7 +262,7 @@ class AddUserToGroupForm(UserGroupBaseForm):
         super().__init__(*args, **kwargs)
         if self.user_instance:
             self.fields['group'].queryset = Group.objects.exclude(
-                id__in=self.user_instance.groups.values_list('id', flat=True)
+                id__in=self.user_instance.groups.values_list('id', flat=True),
             )
         else:
             self.fields['group'].queryset = Group.objects.none()
@@ -279,7 +272,9 @@ class AddUserToGroupForm(UserGroupBaseForm):
         Calls the service to add the user to the group, passing request for messages.
         """
         add_user_to_group(
-            request, self.cleaned_data['user'], self.cleaned_data['group']
+            request,
+            self.cleaned_data['user'],
+            self.cleaned_data['group'],
         )
 
 
@@ -300,5 +295,7 @@ class DeleteUserFromGroupForm(UserGroupBaseForm):
         Calls the service to remove the user from the group, passing request for messages.
         """
         remove_user_from_group(
-            request, self.cleaned_data['user'], self.cleaned_data['group']
+            request,
+            self.cleaned_data['user'],
+            self.cleaned_data['group'],
         )

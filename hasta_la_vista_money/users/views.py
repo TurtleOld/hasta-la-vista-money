@@ -1,4 +1,5 @@
 import json
+
 from django.contrib import messages
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -24,25 +25,27 @@ from hasta_la_vista_money.users.forms import (
     UserLoginForm,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.statistics import get_user_statistics
+from hasta_la_vista_money.users.services.auth import login_user
 from hasta_la_vista_money.users.services.detailed_statistics import (
     get_user_detailed_statistics,
 )
-from hasta_la_vista_money.users.services.notifications import get_user_notifications
 from hasta_la_vista_money.users.services.export import get_user_export_data
 from hasta_la_vista_money.users.services.groups import (
+    add_user_to_group,
     create_group,
     delete_group,
-    add_user_to_group,
     get_groups_not_for_user,
     get_user_groups,
     remove_user_from_group,
 )
-from hasta_la_vista_money.users.services.auth import login_user
-from hasta_la_vista_money.users.services.theme import set_user_theme
-from hasta_la_vista_money.users.services.registration import register_user
-from hasta_la_vista_money.users.services.profile import update_user_profile
+from hasta_la_vista_money.users.services.notifications import (
+    get_user_notifications,
+)
 from hasta_la_vista_money.users.services.password import set_user_password
+from hasta_la_vista_money.users.services.profile import update_user_profile
+from hasta_la_vista_money.users.services.registration import register_user
+from hasta_la_vista_money.users.services.statistics import get_user_statistics
+from hasta_la_vista_money.users.services.theme import set_user_theme
 
 
 class IndexView(TemplateView):
@@ -82,10 +85,31 @@ class LoginUser(SuccessMessageMixin, LoginView):
     next_page = reverse_lazy('applications:list')
     redirect_authenticated_user = True
 
+    def dispatch(self, request, *args, **kwargs):
+        if hasattr(request, 'axes_locked_out'):
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse(
+                    {
+                        'success': False,
+                        'error': 'Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.',
+                    },
+                    status=429,
+                )
+            else:
+                messages.error(
+                    request,
+                    'Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.',
+                )
+                return self.render_to_response(self.get_context_data())
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['button_text'] = _('Войти')
-        context['user_login_form'] = UserLoginForm()
+        if 'form' in context:
+            context['user_login_form'] = context['form']
+        else:
+            context['user_login_form'] = UserLoginForm()
         if hasattr(self, 'jwt_access_token'):
             context['jwt_access_token'] = self.jwt_access_token
         if hasattr(self, 'jwt_refresh_token'):
@@ -94,28 +118,64 @@ class LoginUser(SuccessMessageMixin, LoginView):
 
     def form_valid(self, form):
         result = login_user(self.request, form, self.success_message)
+        is_ajax = self.request.headers.get('x-requested-with') == 'XMLHttpRequest'
+
         if result['success']:
             self.jwt_access_token = result['access']
             self.jwt_refresh_token = result['refresh']
-            if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse(
+            if is_ajax:
+                response = JsonResponse(
                     {
-                        'access': self.jwt_access_token,
-                        'refresh': self.jwt_refresh_token,
                         'redirect_url': self.get_success_url(),
                     },
                 )
-            return redirect(self.get_success_url())
+                from hasta_la_vista_money.authentication.authentication import (
+                    set_auth_cookies,
+                )
+
+                response = set_auth_cookies(
+                    response,
+                    self.jwt_access_token,
+                    self.jwt_refresh_token,
+                )
+                return response
+            else:
+                response = redirect(self.get_success_url())
+                from hasta_la_vista_money.authentication.authentication import (
+                    set_auth_cookies,
+                )
+
+                response = set_auth_cookies(
+                    response,
+                    self.jwt_access_token,
+                    self.jwt_refresh_token,
+                )
+                return response
+
+        error_message = 'Неправильный логин или пароль!'
+        messages.error(self.request, error_message)
+
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': error_message})
+        form.add_error(None, error_message)
         return self.form_invalid(form)
 
     def form_invalid(self, form):
-        if form.errors:
-            error_message = list(form.errors.values())[0][0]
-            if isinstance(error_message, str):
-                messages.error(self.request, error_message)
-            else:
-                messages.error(self.request, str(error_message))
-        return super().form_invalid(form)
+        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            errors = {}
+            for field, field_errors in form.errors.items():
+                error_msg = field_errors[0] if field_errors else ''
+                errors[field] = error_msg
+                if error_msg and field != '__all__':
+                    messages.error(self.request, f'{field}: {error_msg}')
+
+            if form.non_field_errors():
+                for error in form.non_field_errors():
+                    messages.error(self.request, str(error))
+
+            return JsonResponse({'success': False, 'errors': errors})
+
+        return self.render_to_response(self.get_context_data(form=form))
 
 
 class LogoutUser(LogoutView, SuccessMessageMixin):
@@ -125,7 +185,13 @@ class LogoutUser(LogoutView, SuccessMessageMixin):
             messages.SUCCESS,
             constants.SUCCESS_MESSAGE_LOGOUT,
         )
-        return super().dispatch(request, *args, **kwargs)
+        response = super().dispatch(request, *args, **kwargs)
+        from hasta_la_vista_money.authentication.authentication import (
+            clear_auth_cookies,
+        )
+
+        response = clear_auth_cookies(response)
+        return response
 
 
 class CreateUser(SuccessMessageMixin, CreateView):

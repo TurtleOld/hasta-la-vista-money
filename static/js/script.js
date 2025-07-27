@@ -141,14 +141,39 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch(formAction, {
                 method: 'POST',
                 body: formData,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'include'
             });
+
+            if (response.status === 429) {
+                if (response.headers.get('content-type')?.includes('application/json')) {
+                    const data = await response.json();
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert('Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.');
+                    }
+                } else {
+                    alert('Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.');
+                }
+                return;
+            }
+
+            if (response.status >= 400 && response.status < 500) {
+                alert('Произошла ошибка при входе. Попробуйте еще раз.');
+                window.location.reload();
+                return;
+            }
+
+            if (response.status >= 500) {
+                alert('Произошла ошибка на сервере. Попробуйте позже.');
+                window.location.reload();
+                return;
+            }
+
             if (response.headers.get('content-type')?.includes('application/json')) {
                 const data = await response.json();
-                if (data.access && data.refresh && data.redirect_url) {
-                    localStorage.setItem('access_token', data.access);
-                    localStorage.setItem('refresh_token', data.refresh);
-
+                if (data.redirect_url) {
                     try {
                         const redirectUrl = new URL(data.redirect_url, window.location.origin);
                         if (redirectUrl.origin !== window.location.origin) {
@@ -160,8 +185,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         alert('Ошибка: неверный формат URL редиректа');
                         return;
                     }
+                } else if (data.success === false) {
+                    window.location.reload();
                 } else {
-                    alert('Ошибка входа. Проверьте логин и пароль.');
+                    window.location.reload();
                 }
             } else {
                 window.location.reload();
@@ -274,6 +301,13 @@ document.addEventListener('DOMContentLoaded', function() {
         window.tokens.ensureValidAccessToken().then(valid => {
             if (valid) {
                 window.tokens.scheduleAccessTokenRefresh();
+            } else {
+                // Если JWT токены невалидны, но Django сессия валидна, попробуем обновить токены
+                window.tokens.refreshTokensIfNeeded().then(refreshed => {
+                    if (refreshed) {
+                        window.tokens.scheduleAccessTokenRefresh();
+                    }
+                });
             }
         });
     }
@@ -362,6 +396,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const allowedPaths = [
             '/receipts/api/product-autocomplete/',
             '/authentication/token/refresh/',
+            '/authentication/token/session/',
             '/users/login/'
         ];
 
@@ -375,6 +410,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return fetch('/receipts/api/product-autocomplete/', opts);
             } else if (url === '/authentication/token/refresh/') {
                 return fetch('/authentication/token/refresh/', opts);
+            } else if (url === '/authentication/token/session/') {
+                return fetch('/authentication/token/session/', opts);
             } else if (url === window.LOGIN_URL) {
                 return fetch(window.LOGIN_URL, opts);
             } else {
@@ -396,32 +433,53 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const path = urlObj.pathname + urlObj.search + urlObj.hash;
 
-            let token = localStorage.getItem('access_token');
-            if (!options.headers) options.headers = {};
-            if (token) options.headers['Authorization'] = 'Bearer ' + token;
+            options.credentials = 'include';
 
             let response = await ultraSafeFetch(path, options);
 
             if (response.status === 401) {
-                const refresh = localStorage.getItem('refresh_token');
-                if (refresh) {
-                    const refreshResp = await fetch('/authentication/token/refresh/', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ refresh })
-                    });
-                    if (refreshResp.ok) {
-                        const data = await refreshResp.json();
-                        localStorage.setItem('access_token', data.access);
-                        options.headers['Authorization'] = 'Bearer ' + data.access;
-                        return ultraSafeFetch(path, options);
-                    } else {
-                        localStorage.removeItem('access_token');
-                        localStorage.removeItem('refresh_token');
-                        alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
-                        window.location.replace(window.LOGIN_URL);
+                const refreshResp = await fetch('/authentication/token/refresh/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                if (refreshResp.ok) {
+                    return ultraSafeFetch(path, options);
+                } else {
+                    // Проверяем Django сессию перед редиректом
+                    try {
+                        const sessionResponse = await fetch(window.location.pathname, {
+                            method: 'GET',
+                            credentials: 'include',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+
+                        if (sessionResponse.ok) {
+                            // Django сессия валидна, но JWT токены истекли
+                            // Попробуем обновить токены
+                            const refreshed = await window.tokens.refreshTokensIfNeeded();
+                            if (refreshed) {
+                                // Токены обновлены, повторим запрос
+                                return ultraSafeFetch(path, options);
+                            } else {
+                                // Не удалось обновить токены, но Django сессия валидна
+                                // Возвращаем ошибку 401, но не перенаправляем
+                                return response;
+                            }
+                        }
+
+                        if (sessionResponse.status === 302) {
+                            // Django сессия тоже истекла
+                            alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
+                            window.location.replace(window.LOGIN_URL);
+                            return response;
+                        }
+                    } catch (e) {
+                        // В случае ошибки сети, предполагаем что сессия валидна
                         return response;
                     }
+
+                    return response;
                 }
             }
             return response;

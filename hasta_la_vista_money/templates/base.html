@@ -28,15 +28,15 @@
         {% if messages %}
             {% for message in messages %}
                 <div class="alert container position-absolute start-50 translate-middle mt-5 text-center z-3 {% if message.tags %}{{ message.tags }}{% endif %}">
-                    <span{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</span>
+                    <span{% if message.tags %} class="{{ message.tags }} p-2 "{% endif %}>{{ message }}</span>
                 </div>
             {% endfor %}
         {% endif %}
-    {% elif not user.last_login %}
+    {% else %}
         {% if messages %}
             {% for message in messages %}
-                <div class="alert container position-absolute start-50 translate-middle mt-5 text-center z-3 {% if message.tags %}{{ message.tags }}{% endif %}">
-                    <span{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</span>
+                <div class="alert container position-absolute start-50 translate-middle text-center z-3 {% if message.tags %}{{ message.tags }}{% endif %}">
+                    <span{% if message.tags %} class="{{ message.tags }} p-2 "{% endif %}>{{ message }}</span>
                 </div>
             {% endfor %}
         {% endif %}
