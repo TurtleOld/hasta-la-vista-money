@@ -1,6 +1,7 @@
-from django.contrib.auth import authenticate, login
-from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib import messages
+from django.contrib.auth import authenticate, login
+from hasta_la_vista_money.authentication.authentication import set_auth_cookies
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 def login_user(request, form, success_message):
@@ -25,5 +26,9 @@ def login_user(request, form, success_message):
             'success': True,
         }
     else:
-        messages.error(request, 'Неправильный логин или пароль!')
         return {'success': False}
+
+
+def set_auth_cookies_in_response(response, access_token, refresh_token=None):
+    """Helper function to set JWT cookies in a response"""
+    return set_auth_cookies(response, access_token, refresh_token)

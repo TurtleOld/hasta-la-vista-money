@@ -22,40 +22,38 @@ document.addEventListener('DOMContentLoaded', function () {
     ];
     // ====== JWT ======
     function getJWT() {
-        let token = localStorage.getItem('access_token');
-        if (!token) {
-            const m = document.cookie.match(/(?:^|; )access_token=([^;]*)/);
-            if (m) token = decodeURIComponent(m[1]);
-        }
-        return token || '';
+        // Get token from cookie
+        const m = document.cookie.match(/(?:^|; )access_token=([^;]*)/);
+        if (m) return decodeURIComponent(m[1]);
+        return '';
     }
     function refreshToken() {
-        const refresh = localStorage.getItem('refresh_token');
+        // Get refresh token from cookie
+        const m = document.cookie.match(/(?:^|; )refresh_token=([^;]*)/);
+        const refresh = m ? decodeURIComponent(m[1]) : null;
+
         if (!refresh) return Promise.reject('No refresh token');
-        // Hardcoded URL for token refresh - no user input
         const refreshUrl = '/api/token/refresh/';
         return fetch(refreshUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh })
+            credentials: 'include'
         })
             .then(resp => {
                 if (!resp.ok) throw new Error('Refresh failed');
                 return resp.json();
             })
             .then(data => {
-                if (data.access) {
-                    localStorage.setItem('access_token', data.access);
-                    return data.access;
+                if (data.success) {
+                    // Tokens are now in HttpOnly cookies, no need to store in localStorage
+                    return getJWT();
                 }
                 throw new Error('No access token in refresh response');
             });
     }
-    // ====== URL VALIDATION ======
     function isSafeApiUrl(url) {
         return typeof url === 'string' && /^\/[a-zA-Z0-9/_\-.]*$/.test(url);
     }
-    // ====== WHITELIST ======
     const ALLOWED_API_PATHS = [
         '/api/budget/api/expenses/',
         '/api/budget/api/incomes/',
@@ -87,17 +85,16 @@ document.addEventListener('DOMContentLoaded', function () {
         options.headers['Authorization'] = 'Bearer ' + getJWT();
         options.headers['X-Requested-With'] = 'XMLHttpRequest';
         return fetch(hardcodedUrl, options).then(resp => { // eslint-disable-line
-            if (resp.status === 401 && retry) { 
+            if (resp.status === 401 && retry) {
                 return refreshToken().then(newAccess => {
                     options.headers['Authorization'] = 'Bearer ' + newAccess;
                     return fetch(hardcodedUrl, options); // eslint-disable-line
-                }); 
+                });
             }
             return resp;
         });
     }
 
-    // ====== NOTIFY ======
     function showNotification(message, type = 'info') {
         let alertClass;
         if (type === 'success') {

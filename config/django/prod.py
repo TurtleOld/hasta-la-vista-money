@@ -19,8 +19,24 @@ SECURE_CONTENT_TYPE_NOSNIFF = os.environ.get(
 )
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60'))),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7'))),
+    'ACCESS_TOKEN_LIFETIME': timedelta(
+        minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60')),
+    ),
+    'REFRESH_TOKEN_LIFETIME': timedelta(
+        days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7')),
+    ),
+    'AUTH_COOKIE': 'access_token',
+    'AUTH_COOKIE_REFRESH': 'refresh_token',
+    'AUTH_COOKIE_DOMAIN': None,
+    'AUTH_COOKIE_SECURE': True,
+    'AUTH_COOKIE_HTTP_ONLY': True,
+    'AUTH_COOKIE_PATH': '/',
+    'AUTH_COOKIE_SAMESITE': 'Lax',
+    'AUTH_COOKIE_MAX_AGE': int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60')) * 60,
+    'AUTH_COOKIE_REFRESH_MAX_AGE': int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7'))
+    * 24
+    * 60
+    * 60,
 }
 
 LOGGING = {
