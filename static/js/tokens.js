@@ -11,51 +11,123 @@ function parseJwt(token) {
     }
 }
 
-async function ensureValidAccessToken() {
-    const access = localStorage.getItem('access_token');
-    const refresh = localStorage.getItem('refresh_token');
-    if (!access || !refresh) {
-        window.location.replace(window.LOGIN_URL);
-        return false;
-    }
-    const payload = parseJwt(access);
-    if (!payload || !payload.exp) {
-        window.location.replace(window.LOGIN_URL);
-        return false;
-    }
-    const now = Math.floor(Date.now() / 1000);
-    const secondsLeft = payload.exp - now;
-    if (secondsLeft <= 30) {
-        try {
-            const resp = await fetch('/authentication/token/refresh/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh })
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                localStorage.setItem('access_token', data.access);
-                if (data.refresh) {
-                    localStorage.setItem('refresh_token', data.refresh);
-                }
-                return true;
-            } else {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                window.location.replace(window.LOGIN_URL);
-                return false;
-            }
-        } catch (e) {
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+}
+
+async function checkDjangoSession() {
+    try {
+        const response = await fetch(window.location.pathname, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+
+        if (response.ok) {
+            return true;
+        }
+
+        if (response.status === 302) {
             window.location.replace(window.LOGIN_URL);
             return false;
         }
+    } catch (e) {
+        return true;
     }
-    return true;
+
+    return false;
+}
+
+async function handleNoTokens() {
+    const sessionValid = await checkDjangoSession();
+    if (sessionValid) {
+        return true;
+    }
+
+    try {
+        const response = await fetch('/authentication/token/session/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            return true;
+        }
+    } catch (e) {
+        // Ignore errors
+    }
+    return false;
+}
+
+async function handleInvalidToken() {
+    const sessionValid = await checkDjangoSession();
+    if (sessionValid) {
+        return true;
+    }
+
+    try {
+        const response = await fetch('/authentication/token/refresh/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            return true;
+        }
+    } catch (e) {
+        // Ignore errors
+    }
+    return false;
+}
+
+async function handleExpiringToken(secondsLeft) {
+    if (secondsLeft > 30) {
+        return true;
+    }
+
+    try {
+        const resp = await fetch('/authentication/token/refresh/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+        if (resp.ok) {
+            return true;
+        }
+    } catch (e) {
+        // Ignore errors
+    }
+
+    return await checkDjangoSession();
+}
+
+async function ensureValidAccessToken() {
+    const access = getCookie('access_token');
+    const refresh = getCookie('refresh_token');
+
+    if (!access || !refresh) {
+        return await handleNoTokens();
+    }
+
+    const payload = parseJwt(access);
+    if (!payload || !payload.exp) {
+        return await handleInvalidToken();
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const secondsLeft = payload.exp - now;
+
+    return await handleExpiringToken(secondsLeft);
 }
 
 function scheduleAccessTokenRefresh() {
-    const access = localStorage.getItem('access_token');
-    const refresh = localStorage.getItem('refresh_token');
+    const access = getCookie('access_token');
+    const refresh = getCookie('refresh_token');
     if (!access || !refresh) return;
     const payload = parseJwt(access);
     if (!payload || !payload.exp) return;
@@ -70,37 +142,129 @@ function scheduleAccessTokenRefresh() {
 }
 
 async function doRefreshToken() {
-    const refresh = localStorage.getItem('refresh_token');
+    const refresh = getCookie('refresh_token');
     if (!refresh) {
-        window.location.replace(window.LOGIN_URL);
+        try {
+            const response = await fetch(window.location.pathname, {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            if (response.ok) {
+                return;
+            }
+
+            if (response.status === 302) {
+                window.location.replace(window.LOGIN_URL);
+                return;
+            }
+        } catch (e) {
+            return;
+        }
+
         return;
     }
     try {
         const resp = await fetch('/authentication/token/refresh/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh })
+            credentials: 'include'
         });
         if (resp.ok) {
-            const data = await resp.json();
-            localStorage.setItem('access_token', data.access);
-            if (data.refresh) {
-                localStorage.setItem('refresh_token', data.refresh);
-            }
             scheduleAccessTokenRefresh();
         } else {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            window.location.replace(window.LOGIN_URL);
+            try {
+                const response = await fetch(window.location.pathname, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+
+                if (response.ok) {
+                    return;
+                }
+
+                if (response.status === 302) {
+                    window.location.replace(window.LOGIN_URL);
+                    return;
+                }
+            } catch (e) {
+                return;
+            }
         }
     } catch (e) {
         setTimeout(doRefreshToken, 10000);
     }
 }
 
+async function refreshTokensIfNeeded() {
+    const access = getCookie('access_token');
+    const refresh = getCookie('refresh_token');
+
+    if (!access || !refresh) {
+        try {
+            const response = await fetch('/authentication/token/session/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                // Токены успешно получены
+                return true;
+            }
+        } catch (e) {
+            // Игнорируем ошибки
+        }
+        return false;
+    }
+
+    const payload = parseJwt(access);
+    if (!payload || !payload.exp) {
+        try {
+            const response = await fetch('/authentication/token/refresh/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                return true;
+            }
+        } catch (e) {
+            // Игнорируем ошибки
+        }
+        return false;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const secondsLeft = payload.exp - now;
+
+    if (secondsLeft <= 30) {
+        try {
+            const response = await fetch('/authentication/token/refresh/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                return true;
+            }
+        } catch (e) {
+            // Игнорируем ошибки
+        }
+        return false;
+    }
+
+    return true;
+}
+
 window.tokens = {
     ensureValidAccessToken,
     scheduleAccessTokenRefresh,
     doRefreshToken,
-    parseJwt
+    parseJwt,
+    refreshTokensIfNeeded
 };

@@ -24,18 +24,68 @@ document.addEventListener('DOMContentLoaded', function () {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
             },
+            credentials: 'include' // Включаем cookies для JWT аутентификации
         })
-            .then(response => response.text())
+            .then(response => {
+                if (response.status === 401) {
+                    // Проверяем Django сессию перед редиректом
+                    return fetch(window.location.pathname, {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    }).then(sessionResponse => {
+                        if (sessionResponse.ok) {
+                            // Django сессия валидна, но JWT токены истекли
+                            // Попробуем обновить токены
+                            return window.tokens.refreshTokensIfNeeded().then(refreshed => {
+                                if (refreshed) {
+                                    // Токены обновлены, повторим запрос
+                                    return fetch('/receipts/ajax/receipts_by_group/?' + params.toString(), {
+                                        headers: {
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                        },
+                                        credentials: 'include'
+                                    });
+                                } else {
+                                    // Не удалось обновить токены, но Django сессия валидна
+                                    throw new Error('JWT tokens expired but Django session is valid');
+                                }
+                            });
+                        }
+
+                        if (sessionResponse.status === 302) {
+                            // Django сессия тоже истекла
+                            window.location.replace('/login/');
+                            return null;
+                        }
+
+                        // В случае других ошибок, предполагаем что сессия валидна
+                        throw new Error('JWT tokens expired but Django session is valid');
+                    });
+                }
+                return response.text();
+            })
             .then(html => {
-                const block = document.querySelector('#receipts-block');
-                if (block) {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');  // eslint-disable-line
-                    // Ожидаем, что receipts_block.html — это один корневой div
-                    const newContent = doc.body.firstElementChild;
-                    if (newContent) {
-                        block.replaceWith(newContent);
+                if (html) {
+                    const block = document.querySelector('#receipts-block');
+                    if (block) {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');  // eslint-disable-line
+                        // Ожидаем, что receipts_block.html — это один корневой div
+                        const newContent = doc.body.firstElementChild;
+                        if (newContent) {
+                            block.replaceWith(newContent);
+                        }
                     }
+                }
+            })
+            .catch(error => {
+                if (error.message === 'JWT tokens expired but Django session is valid') {
+                    // JWT токены истекли, но Django сессия валидна
+                    // Можно попробовать обновить токены или просто игнорировать ошибку
+                    console.log('JWT tokens expired, but Django session is valid');
+                } else {
+                    console.error('Error loading receipts:', error);
                 }
             });
     }

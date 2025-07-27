@@ -60,10 +60,8 @@ class TestUser(TestCase):
 
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-        messages_list = list(response.wsgi_request._messages)
-        self.assertEqual(len(messages_list), 1)
-        self.assertEqual(
-            str(messages_list[0]),
+        self.assertContains(
+            response,
             'Пожалуйста, введите правильные имя пользователя и пароль. Оба поля могут быть чувствительны к регистру.',
         )
 
@@ -78,13 +76,6 @@ class TestUser(TestCase):
                 'password': '',
             },
         )
-
         self.assertEqual(response.status_code, 200)
-
-        messages_list = list(response.wsgi_request._messages)
-        self.assertEqual(len(messages_list), 1)
-        self.assertIn(
-            'Пожалуйста, введите имя пользователя или email.', str(messages_list[0])
-        )
-
+        self.assertContains(response, 'Пожалуйста, введите имя пользователя или email.')
         self.assertFalse(response.wsgi_request.user.is_authenticated)

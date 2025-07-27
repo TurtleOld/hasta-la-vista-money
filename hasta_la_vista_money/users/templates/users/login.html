@@ -11,7 +11,27 @@
         <form method="post" class="form text-body-secondary">
             {% csrf_token %}
             <p class="my-4">
-                {{ user_login_form | crispy }}
+                {% if user_login_form %}
+                    {% for field in user_login_form %}
+                        <div class="mb-3">
+                            {{ field|as_crispy_field }}
+                            {% if field.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in field.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                    {% if user_login_form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in user_login_form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endif %}
             </p>
             <div class="row align-items-center justify-content-center">
                 <div class="row justify-content-center align-items-center">
@@ -21,12 +41,8 @@
         </form>
     </div>
 
-{% if jwt_access_token and redirect_to %}
+{% if redirect_to %}
 <script nonce="{{request.csp_nonce}}">
-  localStorage.setItem('access_token', '{{ jwt_access_token }}');
-  {% if jwt_refresh_token %}
-  localStorage.setItem('refresh_token', '{{ jwt_refresh_token }}');
-  {% endif %}
   window.location.href = "{{ redirect_to }}";
 </script>
 {% endif %}
