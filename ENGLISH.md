@@ -52,7 +52,6 @@
 - Data export in JSON format
 
 #### 👤 **Personal Profile**
-- **Extended Information**: email, first name, last name
 - **Statistics Dashboard**: total balance, monthly income/expenses, savings
 - **Tab System**: personal information, statistics, recent operations, settings
 - **Detailed Analytics**: 6-month charts, top categories, savings percentage
@@ -92,14 +91,10 @@ cd hasta-la-vista-money
 2. **Create a `.env` file in the project root:**
 ```bash
 # Required settings
-SECRET_KEY=your-secret-key-here
+SECRET_KEY=your-secret-key-here  # You can generate it with: make secretkey
 DEBUG=false
 DATABASE_URL=postgres://username:password@localhost:5432/hasta_la_vista_money
 ALLOWED_HOSTS=localhost,127.0.0.1
-
-# Additional settings (optional)
-LANGUAGE_CODE=ru
-TIME_ZONE=Europe/Moscow
 ```
 
 3. **Start the application:**
@@ -173,96 +168,4 @@ http://127.0.0.1:8090
 | `SESSION_COOKIE_HTTPONLY`| HttpOnly for session cookie                   | `True`                                       | No          |
 | `SESSION_COOKIE_NAME`    | Session cookie name                           | `sessionid`                                  | No          |
 | `SESSION_COOKIE_SAMESITE`| SameSite for session cookie                   | `Lax`                                        | No          |
-| `SESSION_COOKIE_SECURE`  | Secure for session cookie                     | `False`                                      | No          |
-| `SECURE_SSL_REDIRECT`    | Force HTTPS                                   | `True`                                       | No          |
-| `SECURE_CONTENT_TYPE_NOSNIFF` | MIME sniffing protection                  | `True`                                       | No          |
-| `ACCESS_TOKEN_LIFETIME`  | Access token lifetime (minutes)               | `60`                                         | No          |
-| `REFRESH_TOKEN_LIFETIME` | Refresh token lifetime (days)                 | `7`                                          | No          |
-| `DEBUG_TOOLBAR_ENABLED`  | Enable Debug Toolbar                          | `True`                                       | No          |
-
-### For AI Integration (receipt reading):
-
-| Variable           | Description                                   | Example/Default Value                        | Required?   |
-|--------------------|-----------------------------------------------|----------------------------------------------|-------------|
-| `API_BASE_URL`     | Base URL for AI service                       | `https://models.github.ai/inference`         | No          |
-| `API_KEY`          | API key for AI service                        | `<token>`                                    | No (but needed for AI) |
-| `API_MODEL`        | AI model                                      | `openai/gpt-4o`                              | No          |
-
-## Example .env
-
-```env
-# Required
-SECRET_KEY=your-secret-key-here
-DEBUG=false
-ALLOWED_HOSTS=localhost,127.0.0.1
-
-# For PostgreSQL (if not SQLite)
-DATABASE_URL=postgres://username:password@localhost:5432/hasta_la_vista_money
-
-# Optional
-BASE_URL=http://127.0.0.1:8000/
-LANGUAGE_CODE=en
-TIME_ZONE=Europe/Moscow
-SENTRY_DSN=
-SENTRY_ENVIRONMENT=
-SENTRY_ENDPOINT=
-URL_CSP_SCRIPT_SRC=
-SESSION_COOKIE_AGE=31536000
-SESSION_COOKIE_HTTPONLY=True
-SESSION_COOKIE_NAME=sessionid
-SESSION_COOKIE_SAMESITE=Lax
-SESSION_COOKIE_SECURE=False
-SECURE_SSL_REDIRECT=True
-SECURE_CONTENT_TYPE_NOSNIFF=True
-ACCESS_TOKEN_LIFETIME=60
-REFRESH_TOKEN_LIFETIME=7
-DEBUG_TOOLBAR_ENABLED=True
-
-# For AI
-API_BASE_URL=https://models.github.ai/inference
-API_KEY=
-API_MODEL=openai/gpt-4o
-```
-
-### 📊 Monitoring and Analytics
-
-The application provides built-in monitoring tools:
-- Logging of all operations
-- Performance tracking
-- Error monitoring
-- Usage statistics
-
-### 🔒 Security
-
-- CSRF attack protection
-- Content Security Policy (CSP)
-- Secure authentication
-- Validation of all input data
-- SQL injection protection
-- Secure password storage
-
-### 📚 Documentation
-
-Detailed documentation is available on [Read the Docs](https://hasta-la-vista-money.readthedocs.io/):
-- [User Guide](https://hasta-la-vista-money.readthedocs.io/)
-- [Developer Guide](https://hasta-la-vista-money.readthedocs.io/contribute/)
-- [API Documentation](https://hasta-la-vista-money.readthedocs.io/api/)
-
-### 🤝 Contributing
-
-We welcome contributions to the project! If you want to help:
-
-1. Fork the repository
-2. Create a branch for a new feature
-3. Make changes
-4. Create a Pull Request
-
-Read more about the development process in the [contributor guide](https://hasta-la-vista-money.readthedocs.io/contribute/).
-
-### 📄 License
-
-The project is distributed under the Apache license. See the [LICENSE](LICENSE) file for details.
-
----
-
-**Hasta La Vista, Money!** — your reliable assistant in personal finance management! 💪
+| `SESSION_COOKIE_SECURE`
