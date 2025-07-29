@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, HttpRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
@@ -26,13 +26,23 @@ from hasta_la_vista_money.expense.services import (
 )
 from hasta_la_vista_money.services.views import build_category_tree
 from hasta_la_vista_money.users.models import User
+from django.contrib.auth.models import AnonymousUser, AbstractBaseUser
+from abc import ABC, abstractmethod
 
 
-class BaseView:
+class AbstractExpenseView(ABC):
+    @property
+    @abstractmethod
+    def template_name(self) -> str: ...
+
+    @property
+    @abstractmethod
+    def success_url(self) -> str: ...
+
+
+class BaseView(AbstractExpenseView):
     """Base view class with common configuration."""
-
-    template_name = 'expense/show_expense.html'
-    success_url: Optional[str] = reverse_lazy('expense:list')
+    pass
 
 
 class ExpenseBaseView(BaseView):
@@ -40,11 +50,27 @@ class ExpenseBaseView(BaseView):
 
     model = Expense
 
+    @property
+    def template_name(self) -> str:
+        return "expense/show_expense.html"
+
+    @property
+    def success_url(self) -> str:
+        return reverse_lazy("expense:list")
+
 
 class ExpenseCategoryBaseView(BaseView):
     """Base view for expense category operations."""
 
     model = ExpenseCategory
+
+    @property
+    def template_name(self) -> str:
+        return "expense/show_category_expense.html"
+
+    @property
+    def success_url(self) -> str:
+        return reverse_lazy("expense:category_list")
 
 
 class ExpenseView(
@@ -328,15 +354,17 @@ class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
 class ExpenseCategoryDeleteView(ExpenseCategoryBaseView, DeleteObjectMixin):
     """View for deleting an expense category."""
 
-    success_message = constants.SUCCESS_CATEGORY_EXPENSE_DELETED
-    error_message = constants.ACCESS_DENIED_DELETE_EXPENSE_CATEGORY
+    success_message = str(constants.SUCCESS_CATEGORY_EXPENSE_DELETED)
+    error_message = str(constants.ACCESS_DENIED_DELETE_EXPENSE_CATEGORY)
 
 
 class ExpenseGroupAjaxView(LoginRequiredMixin, View):
     """AJAX view for getting expenses by group."""
 
-    def get(self, request, *args, **kwargs) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET request for group expenses."""
+        if not isinstance(request.user, User):
+            return HttpResponseForbidden("Вы не авторизованы")
         group_id = request.GET.get('group_id')
         expense_service = ExpenseService(request.user)
 
@@ -356,8 +384,10 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
 class ExpenseDataAjaxView(LoginRequiredMixin, View):
     """AJAX view for getting expense data as JSON."""
 
-    def get(self, request, *args, **kwargs) -> JsonResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         """Handle GET request for expense data."""
+        if not isinstance(request.user, User):
+            return JsonResponse({"error": "Вы не авторизованы"}, status=403)
         group_id = request.GET.get('group_id')
         expense_service = ExpenseService(request.user)
 
