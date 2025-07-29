@@ -7,6 +7,8 @@ nav:
       - Installation: index.md
       - Registration: registration.md
     - Getting Started:
+      - User Management:
+        - Users Documentation: users/users_documentation.md
       - Accounts management page:
         - Account Summary Page: finance_account/finance_account.md
       - Receipts management page:
