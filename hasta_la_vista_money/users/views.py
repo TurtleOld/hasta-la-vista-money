@@ -1,11 +1,17 @@
 import json
+from typing import Any, Dict
 
 from django.contrib import messages
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
-from django.http import HttpResponse, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBase,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -31,7 +37,6 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
 )
 from hasta_la_vista_money.users.services.export import get_user_export_data
 from hasta_la_vista_money.users.services.groups import (
-    add_user_to_group,
     create_group,
     delete_group,
     get_groups_not_for_user,
@@ -194,25 +199,33 @@ class LogoutUser(LogoutView, SuccessMessageMixin):
         return response
 
 
-class CreateUser(SuccessMessageMixin, CreateView):
+class CreateUser(
+    SuccessMessageMixin[RegisterUserForm],
+    CreateView[User, RegisterUserForm],
+):
     model = User
     template_name = 'users/registration.html'
     form_class = RegisterUserForm
     success_message = constants.SUCCESS_MESSAGE_REGISTRATION
     success_url = reverse_lazy('login')
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponseBase:
         if User.objects.filter(is_superuser=True).exists():
             return redirect('login')
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context['title'] = _('Форма регистрации')
         context['button_text'] = _('Регистрация')
         return context
 
-    def form_valid(self, form):
+    def form_valid(self, form: RegisterUserForm) -> HttpResponse:
         response = super().form_valid(form)
         register_user(form)
         return response
@@ -220,20 +233,20 @@ class CreateUser(SuccessMessageMixin, CreateView):
 
 class UpdateUserView(
     CustomSuccessURLUserMixin,
-    SuccessMessageMixin,
-    UpdateView,
+    SuccessMessageMixin[UpdateUserForm],
+    UpdateView[User, UpdateUserForm],
 ):
     model = User
     template_name = 'users/profile.html'
     form_class = UpdateUserForm
     success_message = constants.SUCCESS_MESSAGE_CHANGED_PROFILE
 
-    def get_form(self, form_class=None):
+    def get_form(self, form_class: Any = None) -> UpdateUserForm:
         form = super().get_form(form_class)
         form.instance = self.request.user
         return form
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         user_update = self.get_form()
         valid_form = (
             user_update.is_valid()
@@ -242,7 +255,7 @@ class UpdateUserView(
         if valid_form:
             update_user_profile(user_update)
             messages.success(request, self.success_message)
-            response_data = {'success': True}
+            response_data = {'success': True, 'errors': {}}
         else:
             response_data = {'success': False, 'errors': user_update.errors}
         return JsonResponse(response_data)
@@ -252,20 +265,20 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
     template_name = 'users/set_password.html'
     form_class = SetPasswordForm
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = get_object_or_404(User, pk=self.request.user.pk)
         if self.request.method == 'POST':
-            context['form_password'] = self.form_class(
+            context['form_password'] = SetPasswordForm(
                 user=user,
                 data=self.request.POST,
             )
             context['user'] = user
         else:
-            context['form_password'] = self.form_class(user=user)
+            context['form_password'] = SetPasswordForm(user=user)
         return context
 
-    def form_valid(self, form):
+    def form_valid(self, form: SetPasswordForm[User]) -> HttpResponse:
         set_user_password(form, self.request)
         messages.success(
             self.request,
@@ -273,17 +286,21 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
         )
         return super().form_valid(form)
 
-    def get_success_url(self):
-        return reverse_lazy(
-            'users:profile',
-            kwargs={'pk': self.request.user.pk},
+    def get_success_url(self) -> str:
+        return str(
+            reverse_lazy(
+                'users:profile',
+                kwargs={'pk': self.request.user.pk},
+            ),
         )
 
 
 class ExportUserDataView(LoginRequiredMixin, View):
     """Представление для экспорта данных пользователя"""
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if not isinstance(request.user, User):
+            return HttpResponse('Unauthorized', status=401)
         user_data = get_user_export_data(request.user)
         response = HttpResponse(
             json.dumps(user_data, ensure_ascii=False, indent=2, default=str),
@@ -300,10 +317,11 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
 
     template_name = 'users/statistics.html'
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context.update(get_user_detailed_statistics(user))
+        if isinstance(user, User):
+            context.update(get_user_detailed_statistics(user).items())
         return context
 
 
@@ -312,67 +330,96 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
 
     template_name = 'users/notifications.html'
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context['notifications'] = get_user_notifications(user)
+        if isinstance(user, User):
+            context['notifications'] = get_user_notifications(user)
         context['user'] = user
         return context
 
 
-class GroupCreateView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+class GroupCreateView(
+    LoginRequiredMixin,
+    SuccessMessageMixin[GroupCreateForm],
+    FormView[GroupCreateForm],
+):
     template_name = 'users/group_create.html'
     form_class = GroupCreateForm
     success_message = _('Группа успешно создана')
 
-    def form_valid(self, form):
+    def form_valid(self, form: GroupCreateForm) -> HttpResponse:
         create_group(form)
         return super().form_valid(form)
 
-    def get_success_url(self):
-        return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
+    def get_success_url(self) -> str:
+        return str(
+            reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk or 0}),
+        )
 
 
-class GroupDeleteView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+class GroupDeleteView(
+    LoginRequiredMixin,
+    SuccessMessageMixin[GroupDeleteForm],
+    FormView[GroupDeleteForm],
+):
     template_name = 'users/group_delete.html'
     form_class = GroupDeleteForm
     success_message = _('Группа успешно удалена.')
 
-    def form_valid(self, form):
+    def form_valid(self, form: GroupDeleteForm) -> HttpResponse:
         delete_group(form)
         return super().form_valid(form)
 
-    def get_success_url(self):
-        return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
+    def get_success_url(self) -> str:
+        return str(
+            reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk or 0}),
+        )
 
 
-class AddUserToGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+class AddUserToGroupView(
+    LoginRequiredMixin,
+    SuccessMessageMixin[AddUserToGroupForm],
+    FormView[AddUserToGroupForm],
+):
     template_name = 'users/add_user_to_group.html'
     form_class = AddUserToGroupForm
     success_message = _('Пользователь успешно добавлен в группу')
 
-    def form_valid(self, form):
-        add_user_to_group(form)
+    def form_valid(self, form: AddUserToGroupForm) -> HttpResponse:
+        form.save(self.request)
         return super().form_valid(form)
 
-    def get_success_url(self):
-        return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
+    def get_success_url(self) -> str:
+        return str(
+            reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk or 0}),
+        )
 
 
-class DeleteUserFromGroupView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+class DeleteUserFromGroupView(
+    LoginRequiredMixin,
+    SuccessMessageMixin[DeleteUserFromGroupForm],
+    FormView[DeleteUserFromGroupForm],
+):
     template_name = 'users/delete_user_from_group.html'
     form_class = DeleteUserFromGroupForm
     success_message = _('Пользователь успешно удален из группы')
 
-    def form_valid(self, form):
-        remove_user_from_group(form)
+    def form_valid(self, form: DeleteUserFromGroupForm) -> HttpResponse:
+        remove_user_from_group(
+            self.request,
+            form.cleaned_data['user'],
+            form.cleaned_data['group'],
+        )
         return super().form_valid(form)
 
-    def get_success_url(self):
-        return reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk})
+    def get_success_url(self) -> str:
+        return str(
+            reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk or 0}),
+        )
 
 
-def groups_for_user_ajax(request):
+def groups_for_user_ajax(request: HttpRequest) -> JsonResponse:
     user_id = request.GET.get('user_id')
     groups = []
     if user_id:
@@ -384,7 +431,7 @@ def groups_for_user_ajax(request):
     return JsonResponse({'groups': groups})
 
 
-def groups_not_for_user_ajax(request):
+def groups_not_for_user_ajax(request: HttpRequest) -> JsonResponse:
     user_id = request.GET.get('user_id')
     groups = []
     if user_id:
@@ -397,8 +444,8 @@ def groups_not_for_user_ajax(request):
 
 
 class SwitchThemeView(LoginRequiredMixin, View):
-    def post(self, request, *args, **kwargs):
-        user = User.objects.get(pk=request.user.pk)
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        user = User.objects.get(pk=request.user.pk or 0)
         data = json.loads(request.body)
         theme = data.get('theme')
         set_user_theme(user, theme)

@@ -1,29 +1,31 @@
 from typing import Any, Dict
 
+import structlog
+from asgiref.sync import sync_to_async
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
-from django.http import HttpResponseRedirect, JsonResponse, HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.template.loader import render_to_string
 from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import CreateView, ListView, UpdateView
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
-from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
+from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
 )
-from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
-from django.template.loader import render_to_string
-
+from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.finance_account import services as account_services
-from asgiref.sync import sync_to_async
-import structlog
-from django.utils.translation import gettext_lazy as _
 
 logger = structlog.get_logger(__name__)
 
@@ -134,11 +136,11 @@ class AccountView(
         if user_groups.exists():
             users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.filter(user__in=users_in_groups).select_related('user')
+                Account.objects.filter(user__in=users_in_groups).select_related('user'),
             )
         else:
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.by_user(user).select_related('user')
+                Account.objects.by_user(user).select_related('user'),
             )
         return {
             'sum_all_accounts': sum_all_accounts,
@@ -254,7 +256,7 @@ class ChangeAccountView(
             messages.error(
                 self.request,
                 _(
-                    'Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте позже.'
+                    'Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте позже.',
                 ),
             )
             return super().get_context_data(**kwargs)
@@ -311,15 +313,15 @@ class TransferMoneyAccountView(
                     'success': False,
                     'errors': str(
                         _(
-                            'Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже.'
-                        )
+                            'Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже.',
+                        ),
                     ),
                 },
                 status=500,
             )
 
 
-class DeleteAccountView(LoginRequiredMixin, DeleteObjectMixin):
+class DeleteAccountView(DeleteObjectMixin, LoginRequiredMixin, DeleteView):
     """
     Handles deletion of an account.
 
@@ -341,7 +343,10 @@ class AjaxAccountsByGroupView(View):
     """
 
     async def get(
-        self, request: WSGIRequest, *args: Any, **kwargs: Any
+        self,
+        request: WSGIRequest,
+        *args: Any,
+        **kwargs: Any,
     ) -> HttpResponse:
         """
         Handle GET request for accounts by group via AJAX.
@@ -356,7 +361,7 @@ class AjaxAccountsByGroupView(View):
         user = request.user
         try:
             accounts = await sync_to_async(
-                account_services.get_accounts_for_user_or_group
+                account_services.get_accounts_for_user_or_group,
             )(user, group_id)
             html = await sync_to_async(render_to_string)(
                 'finance_account/_account_cards_block.html',
@@ -375,8 +380,8 @@ class AjaxAccountsByGroupView(View):
                     'success': False,
                     'error': str(
                         _(
-                            'Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже.'
-                        )
+                            'Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже.',
+                        ),
                     ),
                 },
                 status=500,

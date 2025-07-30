@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.http import HttpResponseBase
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
@@ -58,7 +59,7 @@ def set_auth_cookies(response, access_token, refresh_token=None):
     return response
 
 
-def clear_auth_cookies(response):
+def clear_auth_cookies(response: HttpResponseBase) -> HttpResponseBase:
     """Clear JWT token cookies from the response"""
     from django.conf import settings
 
