@@ -278,7 +278,7 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
             context['form_password'] = SetPasswordForm(user=user)
         return context
 
-    def form_valid(self, form: SetPasswordForm[User]) -> HttpResponse:
+    def form_valid(self, form: SetPasswordForm) -> HttpResponse:
         set_user_password(form, self.request)
         messages.success(
             self.request,
