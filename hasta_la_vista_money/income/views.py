@@ -52,7 +52,7 @@ class IncomeView(
     LoginRequiredMixin,
     SuccessMessageMixin,
     BaseView,
-    FilterView,
+    FilterView[Income, IncomeFilter],
 ):
     """
     View for displaying user's incomes with filtering and chart data.

@@ -6,6 +6,7 @@ from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
+from django.forms import BaseForm
 from django.http import (
     HttpRequest,
     HttpResponse,
@@ -20,6 +21,10 @@ from django.views import View
 from django.views.generic import CreateView, TemplateView, UpdateView
 from django.views.generic.edit import FormView
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.authentication.authentication import (
+    clear_auth_cookies,
+    set_auth_cookies,
+)
 from hasta_la_vista_money.custom_mixin import CustomSuccessURLUserMixin
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
@@ -54,19 +59,22 @@ from hasta_la_vista_money.users.services.theme import set_user_theme
 
 
 class IndexView(TemplateView):
-    def dispatch(self, request, *args, **kwargs):
+
+    def dispatch(
+        self, request: HttpRequest, *args: Any, **kwargs: Any
+    ) -> HttpResponseBase:
         if request.user.is_authenticated:
             return redirect('applications:list')
         return redirect('login')
 
 
-class ListUsers(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
+class ListUsers(LoginRequiredMixin, SuccessMessageMixin[BaseForm], TemplateView):
     model = User
     template_name = 'users/profile.html'
     context_object_name = 'users'
     no_permission_url = reverse_lazy('login')
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         if self.request.user.is_authenticated:
             user_update = UpdateUserForm(instance=self.request.user)
@@ -82,7 +90,7 @@ class ListUsers(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
         return context
 
 
-class LoginUser(SuccessMessageMixin, LoginView):
+class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
     model = User
     template_name = 'users/login.html'
     form_class = UserLoginForm
@@ -90,7 +98,9 @@ class LoginUser(SuccessMessageMixin, LoginView):
     next_page = reverse_lazy('applications:list')
     redirect_authenticated_user = True
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(
+        self, request: HttpRequest, *args: Any, **kwargs: Any
+    ) -> HttpResponseBase:
         if hasattr(request, 'axes_locked_out'):
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse(
@@ -108,7 +118,7 @@ class LoginUser(SuccessMessageMixin, LoginView):
                 return self.render_to_response(self.get_context_data())
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context['button_text'] = _('Войти')
         if 'form' in context:
@@ -121,41 +131,28 @@ class LoginUser(SuccessMessageMixin, LoginView):
             context['jwt_refresh_token'] = self.jwt_refresh_token
         return context
 
-    def form_valid(self, form):
-        result = login_user(self.request, form, self.success_message)
+    def form_valid(self, form: Any) -> HttpResponse:
+        result = login_user(self.request, form, str(self.success_message))
         is_ajax = self.request.headers.get('x-requested-with') == 'XMLHttpRequest'
 
         if result['success']:
             self.jwt_access_token = result['access']
             self.jwt_refresh_token = result['refresh']
             if is_ajax:
-                response = JsonResponse(
+                response: HttpResponse = JsonResponse(
                     {
-                        'redirect_url': self.get_success_url(),
+                        "redirect_url": self.get_success_url(),
                     },
                 )
-                from hasta_la_vista_money.authentication.authentication import (
-                    set_auth_cookies,
-                )
-
-                response = set_auth_cookies(
-                    response,
-                    self.jwt_access_token,
-                    self.jwt_refresh_token,
-                )
-                return response
             else:
                 response = redirect(self.get_success_url())
-                from hasta_la_vista_money.authentication.authentication import (
-                    set_auth_cookies,
-                )
 
-                response = set_auth_cookies(
-                    response,
-                    self.jwt_access_token,
-                    self.jwt_refresh_token,
-                )
-                return response
+            response = set_auth_cookies(
+                response,
+                self.jwt_access_token,
+                self.jwt_refresh_token,
+            )
+            return response
 
         error_message = 'Неправильный логин или пароль!'
         messages.error(self.request, error_message)
@@ -165,7 +162,7 @@ class LoginUser(SuccessMessageMixin, LoginView):
         form.add_error(None, error_message)
         return self.form_invalid(form)
 
-    def form_invalid(self, form):
+    def form_invalid(self, form: Any) -> HttpResponse:
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             errors = {}
             for field, field_errors in form.errors.items():
@@ -183,18 +180,15 @@ class LoginUser(SuccessMessageMixin, LoginView):
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class LogoutUser(LogoutView, SuccessMessageMixin):
-    def dispatch(self, request, *args, **kwargs):
+class LogoutUser(LogoutView, SuccessMessageMixin[BaseForm]):
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         messages.add_message(
             request,
             messages.SUCCESS,
             constants.SUCCESS_MESSAGE_LOGOUT,
         )
         response = super().dispatch(request, *args, **kwargs)
-        from hasta_la_vista_money.authentication.authentication import (
-            clear_auth_cookies,
-        )
-
         response = clear_auth_cookies(response)
         return response
 
@@ -278,7 +272,7 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
             context['form_password'] = SetPasswordForm(user=user)
         return context
 
-    def form_valid(self, form: SetPasswordForm) -> HttpResponse:
+    def form_valid(self, form: SetPasswordForm) -> HttpResponse:  # type: ignore[type-arg]
         set_user_password(form, self.request)
         messages.success(
             self.request,

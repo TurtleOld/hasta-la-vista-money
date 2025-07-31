@@ -34,6 +34,8 @@ dependencies = [
     "django-structlog>=9.1.1",
     "granian[reload]>=2.3.4",
     "django-extensions>=4.1",
+    "djangorestframework-stubs>=3.16.1",
+    "django-stubs>=5.2.1",
 ]
 
 [project.optional-dependencies]
@@ -74,27 +76,4 @@ exclude = [
     ".git"
 ]
 
-[mypy]
-module = 'django.*'
-ignore_missing_imports = true
-strict = true
-strict_bytes = true
-local_partial_types = true
-warn_unreachable = true
 
-enable_error_code = [
-  "truthy-bool",
-  "truthy-iterable",
-  "redundant-expr",
-  "unused-awaitable",
-  "ignore-without-code",
-  "possibly-undefined",
-  "redundant-self",
-  "explicit-override",
-  "mutable-override",
-  "unimported-reveal",
-  "deprecated",
-]
-
-[tool.django-stubs]
-django_settings_module = 'config.django.base'

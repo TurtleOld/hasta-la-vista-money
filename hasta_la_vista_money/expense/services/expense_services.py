@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, cast
 
 from django.contrib.auth.models import Group
 from django.db.models import Sum
@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.formats import date_format
 from django.db.models.query import QuerySet
 
-from hasta_la_vista_money.expense.forms import AddExpenseForm
+from hasta_la_vista_money.expense.forms import AddExpenseForm, AddCategoryForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
@@ -27,19 +27,18 @@ class ExpenseService:
 
     def get_categories(self) -> List[Dict[str, Any]]:
         """Get expense categories for the user."""
-        return (
-            self.user.category_expense_users.select_related('user')
+        return list(  # type: ignore[arg-type]
+            self.user.category_expense_users.select_related("user")
             .values(
-                'id',
-                'name',
-                'parent_category',
-                'parent_category__name',
+                "id",
+                "name",
+                "parent_category",
+                "parent_category__name",
             )
-            .order_by('name', 'parent_category')
-            .all()
+            .order_by("name", "parent_category")
         )
 
-    def get_categories_queryset(self) -> QuerySet:
+    def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
         return (
             self.user.category_expense_users.select_related('user')
@@ -217,19 +216,16 @@ class ExpenseCategoryService:
 
     def get_categories(self) -> List[Dict[str, Any]]:
         """Get expense categories for the user."""
-        return (
-            self.user.category_expense_users.select_related('user')
-            .values(
-                'id',
-                'name',
-                'parent_category',
-                'parent_category__name',
+        return cast(
+            List[Dict[str, Any]],
+            list(
+                self.user.category_expense_users
+                .values("id", "name", "parent_category", "parent_category__name")
+                .order_by("name", "parent_category")
             )
-            .order_by('name', 'parent_category')
-            .all()
         )
 
-    def get_categories_queryset(self) -> QuerySet:
+    def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
         return (
             self.user.category_expense_users.select_related('user')
@@ -237,7 +233,7 @@ class ExpenseCategoryService:
             .all()
         )
 
-    def create_category(self, form) -> ExpenseCategory:
+    def create_category(self, form: AddCategoryForm) -> ExpenseCategory:
         """Create a new expense category."""
         category = form.save(commit=False)
         category.user = self.user

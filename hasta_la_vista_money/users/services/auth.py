@@ -3,7 +3,7 @@ from typing import Any, Dict
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.forms import AuthenticationForm
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from hasta_la_vista_money.authentication.authentication import set_auth_cookies
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -37,6 +37,6 @@ def login_user(
         return {'success': False}
 
 
-def set_auth_cookies_in_response(response, access_token, refresh_token=None):
+def set_auth_cookies_in_response(response: HttpResponse, access_token: str, refresh_token: str | None = None) -> HttpResponse:
     """Helper function to set JWT cookies in a response"""
     return set_auth_cookies(response, access_token, refresh_token)

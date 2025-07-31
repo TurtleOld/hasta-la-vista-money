@@ -10,7 +10,7 @@ class ExpenseCategory(models.Model):
         on_delete=models.PROTECT,
         related_name='category_expense_users',
     )
-    name = models.CharField(
+    name  = models.CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,
         unique=False,
     )
@@ -40,7 +40,7 @@ class ExpenseCategory(models.Model):
             ),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.name)
 
 
@@ -54,22 +54,22 @@ class Expense(models.Model):
         auto_now_add=True,
         null=True,
         blank=True,
-        verbose_name='Date created',
+        verbose_name="Date created",
     )
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
-        related_name='expense_users',
+        related_name="expense_users",
     )
     account = models.ForeignKey(
         Account,
         on_delete=models.PROTECT,
-        related_name='expense_accounts',
+        related_name="expense_accounts",
     )
     category = models.ForeignKey(
         ExpenseCategory,
         on_delete=models.PROTECT,
-        related_name='expense_categories',
+        related_name="expense_categories",
     )
 
     class Meta:
@@ -83,5 +83,5 @@ class Expense(models.Model):
             models.Index(fields=['date', 'amount']),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.category)
