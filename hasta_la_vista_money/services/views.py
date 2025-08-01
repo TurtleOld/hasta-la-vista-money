@@ -1,16 +1,23 @@
+from typing import Any, Dict, Generator, List, Optional
+
 from django.db.models import Count, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.shortcuts import get_object_or_404
 from hasta_la_vista_money.users.models import User
 
 
-def build_category_tree(categories, parent_id=None, depth=2, current_depth=1):
+def build_category_tree(
+    categories: List[Dict[str, Any]],
+    parent_id: Optional[int] = None,
+    depth: int = 2,
+    current_depth: int = 1,
+) -> Generator[Dict[str, Any], None, None]:
     """
     Формирование дерева категория для отображения на сайте.
     Добавляет поле total_children_count — количество всех вложенных подкатегорий.
     """
 
-    def count_all_descendants(cat_id):
+    def count_all_descendants(cat_id: int) -> int:
         count = 0
         children = [c for c in categories if c['parent_category'] == cat_id]
         count += len(children)

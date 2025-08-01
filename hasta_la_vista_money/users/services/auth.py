@@ -1,10 +1,18 @@
+from typing import Any, Dict
+
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
+from django.contrib.auth.forms import AuthenticationForm
+from django.http import HttpRequest
 from hasta_la_vista_money.authentication.authentication import set_auth_cookies
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
-def login_user(request, form, success_message):
+def login_user(
+    request: HttpRequest,
+    form: AuthenticationForm,
+    success_message: str,
+) -> Dict[str, Any]:
     username = form.cleaned_data['username']
     password = form.cleaned_data['password']
     user = authenticate(
