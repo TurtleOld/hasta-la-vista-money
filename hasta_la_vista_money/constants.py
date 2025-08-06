@@ -47,6 +47,14 @@ SUCCESS_MESSAGE_CREATE_SELLER: Final = _(
     'Новый продавец успешно добавлен!',
 )
 
+# Шаблоны
+EXPENSE_CATEGORY_TEMPLATE: Final = 'expense/show_category_expense.html'
+EXPENSE_TEMPLATE: Final = 'expense/show_expense.html'
+
+# URL names
+EXPENSE_CATEGORY_LIST_URL: Final = 'expense:category_list'
+EXPENSE_LIST_URL: Final = 'expense:list'
+
 ANOTHER_ACCRUAL_ACCOUNT: Final = _(
     'Нельзя выбирать одинаковые счета для перевода.',
 )
@@ -83,6 +91,7 @@ ACCESS_DENIED_DELETE_EXPENSE_CATEGORY: Final = _(
 ACCESS_DENIED_DELETE_INCOME_CATEGORY: Final = _(
     'Категория не может быть удалена, так как связана с доходом',
 )
+USER_MUST_BE_AUTHENTICATED: Final = _('Пользователь должен быть авторизован')
 SUCCESS_MESSAGE_TRANSFER_MONEY: Final = _('Средства успешно переведены')
 SUCCESS_MESSAGE_INSUFFICIENT_FUNDS: Final = _('Недостаточно средств')
 SUCCESS_MESSAGE_LOAN_CREATE: Final = _('Кредит успешно добавлен')

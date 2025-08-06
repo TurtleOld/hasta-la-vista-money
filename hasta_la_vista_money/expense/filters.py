@@ -1,3 +1,5 @@
+from typing import Any, Dict, List
+
 import django_filters
 from django.forms import Select
 from django.utils.formats import date_format
@@ -29,7 +31,7 @@ class ExpenseFilter(django_filters.FilterSet):
         widget=Select(attrs={'class': 'form-control mb-4'}),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Конструктор класса инициализирующий поля формы.
 
@@ -46,12 +48,12 @@ class ExpenseFilter(django_filters.FilterSet):
         )
 
     @property
-    def qs(self):
+    def qs(self) -> Any:
         """Возвращает QuerySet с фильтрацией по пользователю."""
         queryset = super().qs
         return queryset.filter(user=self.user).distinct()
 
-    def get_expenses_with_annotations(self):
+    def get_expenses_with_annotations(self) -> List[Dict[str, Any]]:
         """Возвращает список расходов с дополнительными полями для отображения."""
         queryset = self.qs
         expenses = queryset.values(

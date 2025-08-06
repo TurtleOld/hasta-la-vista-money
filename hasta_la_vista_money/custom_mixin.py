@@ -1,22 +1,22 @@
-from typing import Any, Generator, Optional
+from typing import Any, Generator
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.views.generic import DeleteView
 
 
-class DeleteObjectMixin(DeleteView):
-    model = Optional[None]
-    success_url = None
+class DeleteObjectMixin:
+    """Mixin for handling object deletion with custom error handling."""
+
     success_message = ''
     error_message = ''
 
     def form_valid(self, form):
+        """Override form_valid to handle ProtectedError."""
         try:
-            category = self.get_object()
-            category.delete()
+            obj = self.get_object()
+            obj.delete()
             messages.success(
                 self.request,
                 self.success_message,
@@ -27,7 +27,7 @@ class DeleteObjectMixin(DeleteView):
                 self.request,
                 self.error_message,
             )
-            return redirect(self.success_url)
+            return redirect(self.get_success_url())
 
 
 class CustomSuccessURLUserMixin:
@@ -87,8 +87,8 @@ class CategoryChoicesMixin:
             category_choices = list(
                 get_category_choices(
                     queryset=category_queryset,
-                    max_level=depth,
-                )
+                    max_level=depth or 2,
+                ),
             )
             category_choices.insert(0, ('', '----------'))
             self.fields[self.field].choices = category_choices

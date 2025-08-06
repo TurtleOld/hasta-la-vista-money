@@ -6,6 +6,7 @@ from django.db.models import Sum
 from django.db.models.functions import ExtractYear, TruncMonth
 from django.shortcuts import get_object_or_404
 from django.utils.formats import date_format
+from django.db.models.query import QuerySet
 
 from hasta_la_vista_money.expense.forms import AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
@@ -38,7 +39,7 @@ class ExpenseService:
             .all()
         )
 
-    def get_categories_queryset(self):
+    def get_categories_queryset(self) -> QuerySet:
         """Get categories queryset for forms."""
         return (
             self.user.category_expense_users.select_related('user')
@@ -228,7 +229,7 @@ class ExpenseCategoryService:
             .all()
         )
 
-    def get_categories_queryset(self):
+    def get_categories_queryset(self) -> QuerySet:
         """Get categories queryset for forms."""
         return (
             self.user.category_expense_users.select_related('user')
