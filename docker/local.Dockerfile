@@ -1,6 +1,6 @@
 # This docker file is used for production
 # Creating image based on official python3 image
-FROM python:3.13.5
+FROM python:3.13.6
 
 RUN pip install uv==0.7.13
 
