@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.db.models.query import QuerySet
 from hasta_la_vista_money.expense.forms import AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
@@ -27,7 +27,9 @@ class TestExpenseService(TestCase):
         self.account = Account.objects.get(pk=1)
         self.expense = Expense.objects.get(pk=1)
         self.expense_category = ExpenseCategory.objects.get(pk=1)
-        self.service = ExpenseService(self.user)
+        self.factory = RequestFactory()
+        self.request = self.factory.get("/")
+        self.service = ExpenseService(self.user, self.request)
 
     def test_get_categories(self) -> None:
         """Test getting expense categories."""
@@ -178,7 +180,9 @@ class TestReceiptExpenseService(TestCase):
     def setUp(self) -> None:
         """Set up test data."""
         self.user = User.objects.get(pk=1)
-        self.service = ReceiptExpenseService(self.user)
+        self.factory = RequestFactory()
+        self.request = self.factory.get("/")
+        self.service = ReceiptExpenseService(self.user, self.request)
 
     def test_get_receipt_expenses_no_category(self) -> None:
         """Test getting receipt expenses when category doesn't exist."""

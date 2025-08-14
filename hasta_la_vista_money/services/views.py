@@ -1,7 +1,8 @@
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Type
 
-from django.db.models import Count, QuerySet, Sum
+from django.db.models import Count, QuerySet, Sum, Model
 from django.db.models.functions import TruncMonth
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from hasta_la_vista_money.users.models import User
 
@@ -81,7 +82,9 @@ def get_queryset_type_income_expenses(type_id, model, form):
     return form.save(commit=False)
 
 
-def get_new_type_operation(model, id_type_operation, request):
+def get_new_type_operation(
+    model: Type[Model], id_type_operation: int, request: HttpRequest
+) -> Model:
     """Get new type operation."""
     expense = get_object_or_404(model, pk=id_type_operation, user=request.user)
     if 'income' in request.path:

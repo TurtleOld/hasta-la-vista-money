@@ -100,8 +100,8 @@ class ExpenseView(
         context: Dict[str, Any] = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
 
-        expense_service = ExpenseService(user)
-        receipt_service = ReceiptExpenseService(user)
+        expense_service = ExpenseService(user, self.request)
+        receipt_service = ReceiptExpenseService(user, self.request)
 
         expense_filter: ExpenseFilter = ExpenseFilter(
             self.request.GET,
@@ -164,7 +164,7 @@ class ExpenseCopyView(
         if not isinstance(request.user, User):
             return HttpResponseForbidden(constants.USER_MUST_BE_AUTHENTICATED)
         expense_id = kwargs.get('pk')
-        expense_service = ExpenseService(request.user)
+        expense_service = ExpenseService(request.user, request)
 
         if expense_id is None:
             messages.error(request, _('Некорректный идентификатор расхода.'))
@@ -202,7 +202,7 @@ class ExpenseCreateView(
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
             raise ValueError('User must be authenticated')
-        expense_service = ExpenseService(self.request.user)
+        expense_service = ExpenseService(self.request.user, self.request)
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
 
@@ -217,7 +217,7 @@ class ExpenseCreateView(
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
             raise ValueError('User must be authenticated')
-        expense_service = ExpenseService(self.request.user)
+        expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.create_expense(form)
@@ -261,7 +261,7 @@ class ExpenseUpdateView(
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
             raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = ExpenseService(self.request.user)
+        expense_service = ExpenseService(self.request.user, self.request)
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
 
@@ -275,7 +275,7 @@ class ExpenseUpdateView(
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
             raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = ExpenseService(self.request.user)
+        expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.update_expense(self.object, form)
@@ -306,7 +306,7 @@ class ExpenseDeleteView(
         """Handle valid form submission for deletion."""
         if not isinstance(self.request.user, User):
             raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = ExpenseService(self.request.user)
+        expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.delete_expense(self.get_object())
@@ -330,7 +330,7 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         """Get context data for category list."""
         user = get_object_or_404(User, username=self.request.user)
-        category_service = ExpenseCategoryService(user)
+        category_service = ExpenseCategoryService(user, self.request)
 
         expense_categories = category_service.get_categories()
         flattened_categories = build_category_tree(
@@ -356,7 +356,7 @@ class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView[ExpenseCategory, 
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
             raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
-        category_service = ExpenseCategoryService(self.request.user)
+        category_service = ExpenseCategoryService(self.request.user, self.request)
         kwargs['category_queryset'] = category_service.get_categories_queryset()
         return kwargs
 
@@ -364,7 +364,7 @@ class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView[ExpenseCategory, 
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
             raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
-        category_service = ExpenseCategoryService(self.request.user)
+        category_service = ExpenseCategoryService(self.request.user, self.request)
 
         try:
             category_name = self.request.POST.get('name')
@@ -414,7 +414,7 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
         if not isinstance(request.user, User):
             return HttpResponseForbidden(_('Вы не авторизованы'))
         group_id = request.GET.get('group_id')
-        expense_service = ExpenseService(request.user)
+        expense_service = ExpenseService(request.user, request)
 
         try:
             all_expenses = expense_service.get_expenses_by_group(group_id)
@@ -437,7 +437,7 @@ class ExpenseDataAjaxView(LoginRequiredMixin, View):
         if not isinstance(request.user, User):
             return JsonResponse({'error': _('Вы не авторизованы')}, status=403)
         group_id = request.GET.get('group_id')
-        expense_service = ExpenseService(request.user)
+        expense_service = ExpenseService(request.user, request)
 
         try:
             all_data = expense_service.get_expense_data(group_id)

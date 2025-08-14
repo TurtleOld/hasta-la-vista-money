@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING, cast
 from django.contrib.auth.models import Group
 from django.db.models import Sum
 from django.db.models.functions import ExtractYear, TruncMonth
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils.formats import date_format
 from django.db.models.query import QuerySet
@@ -22,12 +23,13 @@ from hasta_la_vista_money.users.models import User
 class ExpenseService:
     """Service class for expense-related operations."""
 
-    def __init__(self, user: User):
+    def __init__(self, user: User, request: HttpRequest):
         self.user = user
+        self.request = request
 
-    def get_categories(self) -> List[Dict[str, Any]]:
+    def get_categories(self) -> QuerySet[ExpenseCategory]:
         """Get expense categories for the user."""
-        return list(  # type: ignore[arg-type]
+        return (
             self.user.category_expense_users.select_related("user")
             .values(
                 "id",
@@ -55,7 +57,7 @@ class ExpenseService:
 
     def get_expense_form(self) -> AddExpenseForm:
         """Get expense form with user-specific querysets."""
-        return AddExpenseForm(
+        return AddExpenseForm(  # type: ignore[call-untyped]
             category_queryset=self.get_categories_queryset(),
             account_queryset=Account.objects.filter(user=self.user),
         )
@@ -123,7 +125,7 @@ class ExpenseService:
 
     def copy_expense(self, expense_id: int) -> Expense:
         """Copy an existing expense."""
-        new_expense = get_new_type_operation(Expense, expense_id, self.user)
+        new_expense = get_new_type_operation(Expense, expense_id, self.request)
         valid_expense = get_object_or_404(Expense, pk=new_expense.pk)
 
         if valid_expense.account:
@@ -152,7 +154,7 @@ class ExpenseService:
         )
 
         if group_users:
-            receipt_service = ReceiptExpenseService(self.user)
+            receipt_service = ReceiptExpenseService(self.user, self.request)
             receipt_expense_list = receipt_service.get_receipt_expenses_by_users(
                 group_users
             )
@@ -177,7 +179,7 @@ class ExpenseService:
                 expenses = Expense.objects.none()
 
         if group_users:
-            receipt_service = ReceiptExpenseService(self.user)
+            receipt_service = ReceiptExpenseService(self.user, self.request)
             receipt_expense_list = receipt_service.get_receipt_data_by_users(
                 group_users
             )
@@ -211,19 +213,15 @@ class ExpenseService:
 class ExpenseCategoryService:
     """Service class for expense category operations."""
 
-    def __init__(self, user: User):
+    def __init__(self, user: User, request: HttpRequest):
         self.user = user
+        self.request = request
 
-    def get_categories(self) -> List[Dict[str, Any]]:
+    def get_categories(self) -> QuerySet[ExpenseCategory]:
         """Get expense categories for the user."""
-        return cast(
-            List[Dict[str, Any]],
-            list(
-                self.user.category_expense_users
-                .values("id", "name", "parent_category", "parent_category__name")
-                .order_by("name", "parent_category")
-            )
-        )
+        return self.user.category_expense_users.select_related(
+            "parent_category"
+        ).order_by("name", "parent_category")
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
@@ -244,8 +242,9 @@ class ExpenseCategoryService:
 class ReceiptExpenseService:
     """Service class for receipt expense operations."""
 
-    def __init__(self, user: User):
+    def __init__(self, user: User, request: HttpRequest):
         self.user = user
+        self.request = request
 
     def get_receipt_expenses(self) -> List[Any]:
         """Get receipt expenses for the user."""
