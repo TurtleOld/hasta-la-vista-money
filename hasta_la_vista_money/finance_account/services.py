@@ -163,40 +163,40 @@ class AccountService:
         account: Account, purchase_month: Any
     ) -> Dict[str, Any]:
         """
-        Calculates grace period information for a credit card.
-        Logic: 1 month for purchases + 3 months for repayment.
-        Example: purchases in May -> repayment due by end of August.
+        Calculate grace period information for a credit card.
 
-        Args:
-            account: The credit account
-            purchase_month: The month of purchases (first day of month)
-
-        Returns:
-            dict: Information about the grace period, including dates, debts, and overdue status
+        Bank-dependent logic:
+        - Sberbank: current domain logic applies (1 month for purchases + 3 months for repayment).
+        - Other banks: placeholder for now (repayment due at the end of the purchase month) until specific rules are implemented.
         """
         if account.type_account not in ('CreditCard', 'Credit'):
             return {}
 
         purchase_start = purchase_month.replace(day=1)
-
         last_day = monthrange(purchase_start.year, purchase_start.month)[1]
         purchase_end = datetime.combine(purchase_start.replace(day=last_day), time.max)
 
-        grace_end_date = purchase_start + relativedelta(months=3)
-        last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[1]
-        grace_end = datetime.combine(
-            grace_end_date.replace(day=last_day_grace),
-            time.max,
-        )
+        # Для Сбербанка используем текущую доменную логику (1+3 месяца)
+        if account.bank == "SBERBANK":
+            grace_end_date = purchase_start + relativedelta(months=3)
+            last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[1]
+            grace_end = datetime.combine(
+                grace_end_date.replace(day=last_day_grace),
+                time.max,
+            )
+            payments_start = purchase_end + relativedelta(seconds=1)
+            payments_end = grace_end
+            payments_for_period = AccountService.get_credit_card_debt(
+                account, payments_start, payments_end
+            )
+        else:
+            # Заглушка для других банков: до внедрения их правил погашения
+            # считаем, что погашение происходит в конце месяца покупок.
+            grace_end = purchase_end
+            payments_for_period = 0
 
         debt_for_month = AccountService.get_credit_card_debt(
             account, purchase_start, purchase_end
-        )
-
-        payments_start = purchase_end + relativedelta(seconds=1)
-        payments_end = grace_end
-        payments_for_period = AccountService.get_credit_card_debt(
-            account, payments_start, payments_end
         )
 
         final_debt = (debt_for_month or 0) + (payments_for_period or 0)

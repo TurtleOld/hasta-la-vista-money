@@ -48,6 +48,7 @@ def validate_different_accounts(from_account: Account, to_account: Account) -> N
 
 def validate_credit_fields_required(
     type_account: str,
+    bank: str,
     limit_credit: Any = None,
     payment_due_date: Any = None,
     grace_period_days: Any = None,
@@ -71,6 +72,11 @@ def validate_credit_fields_required(
             raise ValidationError(
                 _('Кредитный лимит обязателен для кредитных счетов'),
                 code='credit_limit_required',
+            )
+        if not bank:
+            raise ValidationError(
+                _('Банк обязателен для кредитных счетов'),
+                code='bank_required',
             )
         if not payment_due_date:
             raise ValidationError(

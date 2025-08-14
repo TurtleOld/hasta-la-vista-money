@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, TYPE_CHECKING
 
 from django.db import models
 from django.urls import reverse
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
 
@@ -105,6 +105,11 @@ class Account(TimeStampedModel):
         ('DebitCard', _('Дебетовая карта')),
         ('CASH', _('Наличные')),
     ]
+    BANK_LIST = [
+        ("-", _("—")),  # Default value - dash
+        ("SBERBANK", _("Сбербанк")),
+        ("RAIFFAISENBANK", _("Райффайзенбанк")),
+    ]
 
     user = models.ForeignKey(
         User,
@@ -119,6 +124,12 @@ class Account(TimeStampedModel):
         choices=TYPE_ACCOUNT_LIST,
         default=TYPE_ACCOUNT_LIST[1][0],
         verbose_name=_('Тип счёта'),
+    )
+    bank = models.CharField(
+        choices=BANK_LIST,
+        default="-",
+        verbose_name=_("Банк"),
+        help_text=_("Банк, выпустивший карту или обслуживающий счёт"),
     )
     balance = models.DecimalField(
         max_digits=constants.TWENTY,

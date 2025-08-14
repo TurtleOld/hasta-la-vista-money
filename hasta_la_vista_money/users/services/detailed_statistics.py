@@ -197,12 +197,20 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
             debt_for_month = (
                 float(expense_sum) + float(receipt_expense) - float(receipt_return)
             )
-            grace_end_date = purchase_start + relativedelta(months=3)
-            last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[1]
-            grace_end = datetime.combine(
-                grace_end_date.replace(day=last_day_grace),
-                time.max,
-            )
+            # Банко-зависимый расчёт льготного периода.
+            # Для Сбербанка: 1 месяц на покупки + 3 месяца на погашение (текущая доменная логика).
+            # Для остальных банков пока заглушка: срок погашения — конец месяца покупок.
+            if getattr(card, "bank", None) == "SBERBANK":
+                grace_end_date = purchase_start + relativedelta(months=3)
+                last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[
+                    1
+                ]
+                grace_end = datetime.combine(
+                    grace_end_date.replace(day=last_day_grace),
+                    time.max,
+                )
+            else:
+                grace_end = purchase_end
             days_until_due = (
                 (grace_end.date() - timezone.now().date()).days
                 if timezone.now() <= grace_end

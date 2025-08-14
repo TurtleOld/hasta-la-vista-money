@@ -56,6 +56,13 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         help_text=_('Выберите из списка тип счёта'),
     )
 
+    bank = ChoiceField(
+        choices=Account.BANK_LIST,
+        label=_("Банк"),
+        help_text=_("Выберите банк, выпустивший карту или обслуживающий счёт"),
+        required=False,
+    )
+
     limit_credit = DecimalField(
         label=_('Кредитный лимит'),
         help_text=_('Введите кредитный лимит'),
@@ -114,6 +121,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         if cleaned_data:
             validate_credit_fields_required(
                 type_account=cleaned_data.get('type_account'),
+                bank=cleaned_data.get('bank'),
                 limit_credit=cleaned_data.get('limit_credit'),
                 payment_due_date=cleaned_data.get('payment_due_date'),
                 grace_period_days=cleaned_data.get('grace_period_days'),
@@ -124,13 +132,14 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     class Meta:
         model = Account
         fields = [
-            'name_account',
-            'type_account',
-            'limit_credit',
-            'payment_due_date',
-            'grace_period_days',
-            'balance',
-            'currency',
+            "name_account",
+            "type_account",
+            "bank",
+            "limit_credit",
+            "payment_due_date",
+            "grace_period_days",
+            "balance",
+            "currency",
         ]
 
 
