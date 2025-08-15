@@ -7,10 +7,10 @@ from django.db.models import Sum
 from django.utils import timezone
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.income.models import Income
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
+from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.finance_account.prepare import (
     collect_info_expense,
@@ -199,6 +199,7 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
             )
             # Банко-зависимый расчёт льготного периода.
             # Для Сбербанка: 1 месяц на покупки + 3 месяца на погашение (текущая доменная логика).
+            # Для Райффайзенбанка: 110 дней с первой покупки.
             # Для остальных банков пока заглушка: срок погашения — конец месяца покупок.
             if getattr(card, "bank", None) == "SBERBANK":
                 grace_end_date = purchase_start + relativedelta(months=3)
@@ -209,6 +210,17 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
                     grace_end_date.replace(day=last_day_grace),
                     time.max,
                 )
+            elif getattr(card, "bank", None) == "RAIFFAISENBANK":
+                # Для Райффайзенбанка используем специальную логику
+                raiffeisen_schedule = (
+                    AccountService.calculate_raiffeisenbank_payment_schedule(
+                        card, purchase_start
+                    )
+                )
+                if raiffeisen_schedule:
+                    grace_end = raiffeisen_schedule["grace_end_date"]
+                else:
+                    grace_end = purchase_end
             else:
                 grace_end = purchase_end
             days_until_due = (
@@ -229,13 +241,24 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
                 }
             )
             months_map[purchase_start.strftime('%m.%Y')] = months[-1]
+            # Для Райффайзенбанка рассчитываем итоговый долг с учётом минимальных платежей
+            final_debt = debt_for_month
+            if getattr(card, "bank", None) == "RAIFFAISENBANK" and debt_for_month > 0:
+                raiffeisen_schedule = (
+                    AccountService.calculate_raiffeisenbank_payment_schedule(
+                        card, purchase_start
+                    )
+                )
+                if raiffeisen_schedule:
+                    final_debt = raiffeisen_schedule["final_debt"]
+
             history.append(
                 {
-                    'month': purchase_start.strftime('%m.%Y'),
-                    'debt': debt_for_month,
-                    'final_debt': 0,
-                    'grace_end': grace_end.strftime('%d.%m.%Y'),
-                    'is_overdue': is_overdue,
+                    "month": purchase_start.strftime("%m.%Y"),
+                    "debt": debt_for_month,
+                    "final_debt": final_debt,
+                    "grace_end": grace_end.strftime("%d.%m.%Y"),
+                    "is_overdue": is_overdue,
                 }
             )
         all_payments = list(
@@ -261,16 +284,25 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
                 payments_left = 0
         for m in months:
             if m['debt_for_month'] > 0:
+                # Для Райффайзенбанка используем правильную дату окончания льготного периода
+                payment_due_date = m["grace_end"].strftime("%d.%m.%Y")
+                if getattr(card, "bank", None) == "RAIFFAISENBANK":
+                    # Находим соответствующую запись в истории для правильной даты
+                    for h in history:
+                        if h["month"] == m["month"]:
+                            payment_due_date = h["grace_end"]
+                            break
+
                 payment_schedule.append(
                     {
-                        'month': m['month'],
-                        'sum_expense': m['debt_for_month'],
-                        'payments_made': m['payments_made'],
-                        'remaining_debt': m['remaining_debt'],
-                        'payment_due': m['grace_end'].strftime('%d.%m.%Y'),
-                        'is_overdue': m['is_overdue'],
-                        'days_until_due': m['days_until_due'],
-                        'is_paid': m['is_paid'],
+                        "month": m["month"],
+                        "sum_expense": m["debt_for_month"],
+                        "payments_made": m["payments_made"],
+                        "remaining_debt": m["remaining_debt"],
+                        "payment_due": payment_due_date,
+                        "is_overdue": m["is_overdue"],
+                        "days_until_due": m["days_until_due"],
+                        "is_paid": m["is_paid"],
                     }
                 )
         current_month = today_month

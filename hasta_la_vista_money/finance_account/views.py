@@ -1,3 +1,10 @@
+"""Views for finance account management.
+
+This module provides Django views for managing financial accounts including
+listing, creation, editing, deletion, and money transfer operations. Includes
+comprehensive error handling, user authentication, and AJAX support.
+"""
+
 from typing import Any, Dict
 
 import structlog
@@ -31,11 +38,15 @@ logger = structlog.get_logger(__name__)
 
 
 class BaseView:
+    """Base view class with common template and success URL configuration."""
+
     template_name = 'finance_account/account.html'
     success_url = reverse_lazy('finance_account:list')
 
 
 class AccountBaseView(BaseView):
+    """Base view class for account-related operations."""
+
     model = Account
 
 
@@ -46,18 +57,20 @@ class AccountView(
     AccountBaseView,
     ListView,
 ):
-    """
-    Displays a list of user or group accounts with related forms and statistics.
+    """Display a list of user or group accounts with related forms and statistics.
 
     Shows all accounts for the current user or selected group, provides forms for adding and transferring accounts,
-    and displays recent transfer logs and account balances.
+    and displays recent transfer logs and account balances. Supports group-based filtering and comprehensive
+    financial data presentation.
     """
 
     context_object_name = 'finance_account'
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        """
-        Build the context for the account list page, including accounts, forms, logs, and statistics.
+        """Build the context for the account list page, including accounts, forms, logs, and statistics.
+
+        Aggregates data from multiple sources to provide a comprehensive view of the user's
+        financial accounts and related operations.
 
         Args:
             **kwargs: Additional context parameters.

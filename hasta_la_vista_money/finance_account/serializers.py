@@ -1,8 +1,20 @@
+"""Serializers for finance account models.
+
+This module provides Django REST Framework serializers for converting
+finance account models to and from JSON format for API communication.
+"""
+
 from hasta_la_vista_money.finance_account.models import Account
 from rest_framework import serializers
 
 
 class AccountSerializer(serializers.ModelSerializer):
+    """Serializer for Account model.
+
+    Converts Account model instances to JSON format for API responses,
+    including essential account information like name, balance, and currency.
+    """
+
     class Meta:
         model = Account
         fields = ['id', 'name_account', 'balance', 'currency']

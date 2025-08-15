@@ -159,6 +159,58 @@ class AccountService:
         return debt
 
     @staticmethod
+    def _get_first_purchase_in_month(
+        account: Account, month_start: datetime
+    ) -> Optional[datetime]:
+        """
+        Находит дату первой покупки в указанном месяце для кредитной карты.
+
+        Ищет среди расходов и чеков (покупки), возвращает самую раннюю дату.
+        Используется для расчёта льготного периода Райффайзенбанка.
+
+        Args:
+            account: Счёт для поиска покупок
+            month_start: Начало месяца (datetime с днём 1)
+
+        Returns:
+            datetime: Дата первой покупки или None, если покупок нет
+        """
+        month_end = datetime.combine(
+            month_start.replace(day=monthrange(month_start.year, month_start.month)[1]),
+            time.max,
+        )
+
+        # Ищем среди расходов
+        first_expense = (
+            Expense.objects.filter(
+                account=account, date__range=(month_start, month_end)
+            )
+            .order_by("date")
+            .first()
+        )
+
+        # Ищем среди чеков (покупки)
+        first_receipt = (
+            Receipt.objects.filter(
+                account=account,
+                operation_type=1,  # Покупки
+                receipt_date__range=(month_start, month_end),
+            )
+            .order_by("receipt_date")
+            .first()
+        )
+
+        # Сравниваем даты и возвращаем самую раннюю
+        if first_expense and first_receipt:
+            return min(first_expense.date, first_receipt.receipt_date)
+        elif first_expense:
+            return first_expense.date
+        elif first_receipt:
+            return first_receipt.receipt_date
+        else:
+            return None
+
+    @staticmethod
     def calculate_grace_period_info(
         account: Account, purchase_month: Any
     ) -> Dict[str, Any]:
@@ -167,6 +219,7 @@ class AccountService:
 
         Bank-dependent logic:
         - Sberbank: current domain logic applies (1 month for purchases + 3 months for repayment).
+        - Raiffeisenbank: 110 days from the first purchase date in the month.
         - Other banks: placeholder for now (repayment due at the end of the purchase month) until specific rules are implemented.
         """
         if account.type_account not in ('CreditCard', 'Credit'):
@@ -186,18 +239,44 @@ class AccountService:
             )
             payments_start = purchase_end + relativedelta(seconds=1)
             payments_end = grace_end
-            payments_for_period = AccountService.get_credit_card_debt(
-                account, payments_start, payments_end
+        elif account.bank == "RAIFFAISENBANK":
+            # Для Райффайзенбанка: 110 дней с даты первой покупки
+            # Находим первую покупку в месяце для определения точки отсчёта
+            first_purchase = AccountService._get_first_purchase_in_month(
+                account, purchase_start
             )
+
+            if first_purchase:
+                # Отсчитываем 110 дней с даты первой покупки
+                grace_end = first_purchase + relativedelta(days=110)
+                # Устанавливаем время на конец дня для корректного сравнения
+                grace_end = datetime.combine(grace_end.date(), time.max)
+            else:
+                # Если покупок нет, используем конец месяца как fallback
+                grace_end = purchase_end
+
+            # Платежи за период начинаются после окончания месяца покупок
+            payments_start = purchase_end + relativedelta(seconds=1)
+            payments_end = grace_end
         else:
-            # Заглушка для других банков: до внедрения их правил погашения
-            # считаем, что погашение происходит в конце месяца покупок.
             grace_end = purchase_end
-            payments_for_period = 0
+            payments_start = purchase_end + relativedelta(seconds=1)
+            payments_end = grace_end
 
         debt_for_month = AccountService.get_credit_card_debt(
             account, purchase_start, purchase_end
         )
+
+        if account.bank == "SBERBANK":
+            payments_for_period = AccountService.get_credit_card_debt(
+                account, payments_start, payments_end
+            )
+        elif account.bank == "RAIFFAISENBANK":
+            payments_for_period = AccountService.get_credit_card_debt(
+                account, payments_start, payments_end
+            )
+        else:
+            payments_for_period = 0
 
         final_debt = (debt_for_month or 0) + (payments_for_period or 0)
 
@@ -217,6 +296,106 @@ class AccountService:
             ),
         }
 
+    @staticmethod
+    def calculate_raiffeisenbank_payment_schedule(
+        account: Account, purchase_month: Any
+    ) -> Dict[str, Any]:
+        """
+        Рассчитывает детальный график платежей для кредитной карты Райффайзенбанка.
+
+        Включает:
+        - Даты ежемесячных выписок (2-го числа каждого месяца)
+        - Суммы минимальных платежей (3% от остатка)
+        - Итоговую сумму долга на конец льготного периода
+
+        Args:
+            account: Кредитная карта Райффайзенбанка
+            purchase_month: Месяц покупок (datetime)
+
+        Returns:
+            Dict с информацией о графике платежей
+        """
+        if (
+            account.type_account not in ("CreditCard", "Credit")
+            or account.bank != "RAIFFAISENBANK"
+        ):
+            return {}
+
+        purchase_start = purchase_month.replace(day=1)
+        last_day = monthrange(purchase_start.year, purchase_start.month)[1]
+        purchase_end = datetime.combine(purchase_start.replace(day=last_day), time.max)
+
+        # Находим первую покупку в месяце
+        first_purchase = AccountService._get_first_purchase_in_month(
+            account, purchase_start
+        )
+
+        if not first_purchase:
+            return {}
+
+        # Рассчитываем даты выписок (2-го числа каждого месяца, начиная со следующего)
+        first_statement_date = first_purchase.replace(day=2)
+        if first_statement_date <= first_purchase:
+            # Если 2-е число уже прошло, берём следующий месяц
+            first_statement_date = (
+                first_statement_date + relativedelta(months=1)
+            ).replace(day=2)
+
+        # Рассчитываем даты трёх выписок
+        statement_dates = []
+        current_date = first_statement_date
+        for i in range(3):
+            statement_dates.append(current_date)
+            current_date = current_date + relativedelta(months=1)
+
+        # Рассчитываем минимальные платежи и остатки
+        payments_schedule = []
+        remaining_debt = (
+            AccountService.get_credit_card_debt(account, purchase_start, purchase_end)
+            or 0
+        )
+
+        for i, statement_date in enumerate(statement_dates):
+            # Минимальный платёж 3% от остатка
+            min_payment = remaining_debt * Decimal("0.03")
+
+            # Срок оплаты - 20 дней с даты выписки
+            payment_due_date = statement_date + relativedelta(days=20)
+
+            payments_schedule.append(
+                {
+                    "statement_date": statement_date,
+                    "payment_due_date": payment_due_date,
+                    "remaining_debt": remaining_debt,
+                    "min_payment": min_payment,
+                    "statement_number": i + 1,
+                }
+            )
+
+            # Остаток после минимального платежа
+            remaining_debt = remaining_debt - min_payment
+
+        # Конец льготного периода (110 дней с первой покупки)
+        grace_end = first_purchase + relativedelta(days=110)
+        grace_end = datetime.combine(grace_end.date(), time.max)
+
+        return {
+            "first_purchase_date": first_purchase,
+            "grace_end_date": grace_end,
+            "total_initial_debt": AccountService.get_credit_card_debt(
+                account, purchase_start, purchase_end
+            )
+            or 0,
+            "final_debt": remaining_debt,  # Остаток после всех минимальных платежей
+            "payments_schedule": payments_schedule,
+            "days_until_grace_end": (
+                (grace_end.date() - timezone.now().date()).days
+                if timezone.now() <= grace_end
+                else 0
+            ),
+            "is_overdue": timezone.now() > grace_end and remaining_debt > 0,
+        }
+
 
 def get_accounts_for_user_or_group(user, group_id=None):
     if not group_id or group_id == 'my':
@@ -233,6 +412,4 @@ def get_sum_all_accounts(accounts):
 
 def get_transfer_money_log(user, limit=10):
     """Get recent transfer logs for a user."""
-    from hasta_la_vista_money.finance_account.models import TransferMoneyLog
-
     return TransferMoneyLog.objects.filter(user=user).order_by('-exchange_date')[:limit]
