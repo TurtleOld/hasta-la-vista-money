@@ -49,7 +49,7 @@ jobs:
           version: "latest"
 
       - name: Install the latest version of ruff
-        uses: astral-sh/ruff-action@57714a7c8a2e59f32539362ba31877a1957dded1
+        uses: astral-sh/ruff-action@fbc7e4525b98c5a6c8104fbd7bba4f06eab4f853
         with:
           version: "latest"
       - run: ruff check --fix
