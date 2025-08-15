@@ -37,6 +37,8 @@ def login_user(
         return {'success': False}
 
 
-def set_auth_cookies_in_response(response: HttpResponse, access_token: str, refresh_token: str | None = None) -> HttpResponse:
+def set_auth_cookies_in_response(
+    response: HttpResponse, access_token: str, refresh_token: str | None = None
+) -> HttpResponse:
     """Helper function to set JWT cookies in a response"""
     return set_auth_cookies(response, access_token, refresh_token)

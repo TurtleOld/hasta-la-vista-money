@@ -33,7 +33,6 @@ from hasta_la_vista_money.finance_account.views import AccountView
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.finance_account import services as account_services
-from hasta_la_vista_money.finance_account.models import TransferMoneyLog
 
 BALANCE_TEST = 250000
 NEW_BALANCE_TEST = 450000
@@ -768,9 +767,9 @@ class TestValidatorsRefactored(TestCase):
     def test_validate_credit_fields_required_credit_account(self) -> None:
         """Test credit fields validation for credit account."""
         validate_credit_fields_required(
-            type_account="Credit",
-            bank="SBERBANK",
-            limit_credit=Decimal("10000.00"),
+            type_account='Credit',
+            bank='SBERBANK',
+            limit_credit=Decimal('10000.00'),
             payment_due_date=timezone.now().date(),
             grace_period_days=30,
         )
@@ -779,7 +778,7 @@ class TestValidatorsRefactored(TestCase):
         """Test credit fields validation with missing fields."""
         with self.assertRaises(ValidationError):
             validate_credit_fields_required(
-                type_account="Credit",
+                type_account='Credit',
                 bank=None,
                 limit_credit=None,
                 payment_due_date=None,
@@ -789,7 +788,7 @@ class TestValidatorsRefactored(TestCase):
     def test_validate_credit_fields_required_debit_account(self) -> None:
         """Test credit fields validation for debit account (should pass)."""
         validate_credit_fields_required(
-            type_account="Debit",
+            type_account='Debit',
             bank=None,
             limit_credit=None,
             payment_due_date=None,
@@ -832,14 +831,14 @@ class TestAddAccountFormRefactored(TestCase):
     def test_form_validation_credit_account_valid(self) -> None:
         """Test form validation for credit account with all required fields."""
         form_data = {
-            "name_account": "Credit Card",
-            "type_account": "Credit",
-            "bank": "SBERBANK",
-            "limit_credit": Decimal("10000.00"),
-            "payment_due_date": timezone.now().date(),
-            "grace_period_days": 30,
-            "balance": Decimal("0.00"),
-            "currency": "RUB",
+            'name_account': 'Credit Card',
+            'type_account': 'Credit',
+            'bank': 'SBERBANK',
+            'limit_credit': Decimal('10000.00'),
+            'payment_due_date': timezone.now().date(),
+            'grace_period_days': 30,
+            'balance': Decimal('0.00'),
+            'currency': 'RUB',
         }
         form = AddAccountForm(data=form_data)
         self.assertTrue(form.is_valid())

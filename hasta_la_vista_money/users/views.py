@@ -59,7 +59,6 @@ from hasta_la_vista_money.users.services.theme import set_user_theme
 
 
 class IndexView(TemplateView):
-
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
     ) -> HttpResponseBase:
@@ -141,7 +140,7 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
             if is_ajax:
                 response: HttpResponse = JsonResponse(
                     {
-                        "redirect_url": self.get_success_url(),
+                        'redirect_url': self.get_success_url(),
                     },
                 )
             else:
@@ -181,7 +180,6 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
 
 
 class LogoutUser(LogoutView, SuccessMessageMixin[BaseForm]):
-
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         messages.add_message(
             request,

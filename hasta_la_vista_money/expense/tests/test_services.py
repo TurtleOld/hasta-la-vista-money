@@ -28,7 +28,7 @@ class TestExpenseService(TestCase):
         self.expense = Expense.objects.get(pk=1)
         self.expense_category = ExpenseCategory.objects.get(pk=1)
         self.factory = RequestFactory()
-        self.request = self.factory.get("/")
+        self.request = self.factory.get('/')
         self.service = ExpenseService(self.user, self.request)
 
     def test_get_categories(self) -> None:
@@ -181,7 +181,7 @@ class TestReceiptExpenseService(TestCase):
         """Set up test data."""
         self.user = User.objects.get(pk=1)
         self.factory = RequestFactory()
-        self.request = self.factory.get("/")
+        self.request = self.factory.get('/')
         self.service = ReceiptExpenseService(self.user, self.request)
 
     def test_get_receipt_expenses_no_category(self) -> None:

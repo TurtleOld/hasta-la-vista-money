@@ -27,7 +27,7 @@ class SessionTokenObtainView(APIView):
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:
             if not isinstance(request.user, User):
-                raise ValueError(_("Пользователь не авторизован"))
+                raise ValueError(_('Пользователь не авторизован'))
             refresh = RefreshToken.for_user(request.user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
@@ -78,15 +78,15 @@ class CookieTokenRefreshView(TokenRefreshView):
             return clear_auth_cookies(response)
 
         try:
-            serializer = self.get_serializer(data={"refresh": refresh_token})
+            serializer = self.get_serializer(data={'refresh': refresh_token})
             serializer.is_valid(raise_exception=True)
             refresh = serializer.validated_data
 
             response = Response({'success': True})
             response = set_auth_cookies(
                 response,
-                refresh["access"],
-                refresh.get("refresh", refresh_token),
+                refresh['access'],
+                refresh.get('refresh', refresh_token),
             )
 
             return response

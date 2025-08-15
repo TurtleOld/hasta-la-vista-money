@@ -60,8 +60,8 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
 
     bank = ChoiceField(
         choices=Account.BANK_LIST,
-        label=_("Банк"),
-        help_text=_("Выберите банк, выпустивший карту или обслуживающий счёт"),
+        label=_('Банк'),
+        help_text=_('Выберите банк, выпустивший карту или обслуживающий счёт'),
         required=False,
     )
 
@@ -137,14 +137,14 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     class Meta:
         model = Account
         fields = [
-            "name_account",
-            "type_account",
-            "bank",
-            "limit_credit",
-            "payment_due_date",
-            "grace_period_days",
-            "balance",
-            "currency",
+            'name_account',
+            'type_account',
+            'bank',
+            'limit_credit',
+            'payment_due_date',
+            'grace_period_days',
+            'balance',
+            'currency',
         ]
 
 

@@ -106,9 +106,9 @@ class Account(TimeStampedModel):
         ('CASH', _('Наличные')),
     ]
     BANK_LIST = [
-        ("-", _("—")),  # Default value - dash
-        ("SBERBANK", _("Сбербанк")),
-        ("RAIFFAISENBANK", _("Райффайзенбанк")),
+        ('-', _('—')),  # Default value - dash
+        ('SBERBANK', _('Сбербанк')),
+        ('RAIFFAISENBANK', _('Райффайзенбанк')),
     ]
 
     user = models.ForeignKey(
@@ -127,9 +127,9 @@ class Account(TimeStampedModel):
     )
     bank = models.CharField(
         choices=BANK_LIST,
-        default="-",
-        verbose_name=_("Банк"),
-        help_text=_("Банк, выпустивший карту или обслуживающий счёт"),
+        default='-',
+        verbose_name=_('Банк'),
+        help_text=_('Банк, выпустивший карту или обслуживающий счёт'),
     )
     balance = models.DecimalField(
         max_digits=constants.TWENTY,

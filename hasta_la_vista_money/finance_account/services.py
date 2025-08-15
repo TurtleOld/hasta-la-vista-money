@@ -185,7 +185,7 @@ class AccountService:
             Expense.objects.filter(
                 account=account, date__range=(month_start, month_end)
             )
-            .order_by("date")
+            .order_by('date')
             .first()
         )
 
@@ -196,7 +196,7 @@ class AccountService:
                 operation_type=1,  # Покупки
                 receipt_date__range=(month_start, month_end),
             )
-            .order_by("receipt_date")
+            .order_by('receipt_date')
             .first()
         )
 
@@ -230,7 +230,7 @@ class AccountService:
         purchase_end = datetime.combine(purchase_start.replace(day=last_day), time.max)
 
         # Для Сбербанка используем текущую доменную логику (1+3 месяца)
-        if account.bank == "SBERBANK":
+        if account.bank == 'SBERBANK':
             grace_end_date = purchase_start + relativedelta(months=3)
             last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[1]
             grace_end = datetime.combine(
@@ -239,7 +239,7 @@ class AccountService:
             )
             payments_start = purchase_end + relativedelta(seconds=1)
             payments_end = grace_end
-        elif account.bank == "RAIFFAISENBANK":
+        elif account.bank == 'RAIFFAISENBANK':
             # Для Райффайзенбанка: 110 дней с даты первой покупки
             # Находим первую покупку в месяце для определения точки отсчёта
             first_purchase = AccountService._get_first_purchase_in_month(
@@ -267,11 +267,11 @@ class AccountService:
             account, purchase_start, purchase_end
         )
 
-        if account.bank == "SBERBANK":
+        if account.bank == 'SBERBANK':
             payments_for_period = AccountService.get_credit_card_debt(
                 account, payments_start, payments_end
             )
-        elif account.bank == "RAIFFAISENBANK":
+        elif account.bank == 'RAIFFAISENBANK':
             payments_for_period = AccountService.get_credit_card_debt(
                 account, payments_start, payments_end
             )
@@ -316,8 +316,8 @@ class AccountService:
             Dict с информацией о графике платежей
         """
         if (
-            account.type_account not in ("CreditCard", "Credit")
-            or account.bank != "RAIFFAISENBANK"
+            account.type_account not in ('CreditCard', 'Credit')
+            or account.bank != 'RAIFFAISENBANK'
         ):
             return {}
 
@@ -357,18 +357,18 @@ class AccountService:
 
         for i, statement_date in enumerate(statement_dates):
             # Минимальный платёж 3% от остатка
-            min_payment = remaining_debt * Decimal("0.03")
+            min_payment = remaining_debt * Decimal('0.03')
 
             # Срок оплаты - 20 дней с даты выписки
             payment_due_date = statement_date + relativedelta(days=20)
 
             payments_schedule.append(
                 {
-                    "statement_date": statement_date,
-                    "payment_due_date": payment_due_date,
-                    "remaining_debt": remaining_debt,
-                    "min_payment": min_payment,
-                    "statement_number": i + 1,
+                    'statement_date': statement_date,
+                    'payment_due_date': payment_due_date,
+                    'remaining_debt': remaining_debt,
+                    'min_payment': min_payment,
+                    'statement_number': i + 1,
                 }
             )
 
@@ -380,20 +380,20 @@ class AccountService:
         grace_end = datetime.combine(grace_end.date(), time.max)
 
         return {
-            "first_purchase_date": first_purchase,
-            "grace_end_date": grace_end,
-            "total_initial_debt": AccountService.get_credit_card_debt(
+            'first_purchase_date': first_purchase,
+            'grace_end_date': grace_end,
+            'total_initial_debt': AccountService.get_credit_card_debt(
                 account, purchase_start, purchase_end
             )
             or 0,
-            "final_debt": remaining_debt,  # Остаток после всех минимальных платежей
-            "payments_schedule": payments_schedule,
-            "days_until_grace_end": (
+            'final_debt': remaining_debt,  # Остаток после всех минимальных платежей
+            'payments_schedule': payments_schedule,
+            'days_until_grace_end': (
                 (grace_end.date() - timezone.now().date()).days
                 if timezone.now() <= grace_end
                 else 0
             ),
-            "is_overdue": timezone.now() > grace_end and remaining_debt > 0,
+            'is_overdue': timezone.now() > grace_end and remaining_debt > 0,
         }
 
 

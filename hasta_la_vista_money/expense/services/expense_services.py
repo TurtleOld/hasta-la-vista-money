@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, cast
+from typing import Any, Dict, List, Optional
 
 from django.contrib.auth.models import Group
 from django.db.models import Sum
@@ -30,14 +30,14 @@ class ExpenseService:
     def get_categories(self) -> QuerySet[ExpenseCategory]:
         """Get expense categories for the user."""
         return (
-            self.user.category_expense_users.select_related("user")
+            self.user.category_expense_users.select_related('user')
             .values(
-                "id",
-                "name",
-                "parent_category",
-                "parent_category__name",
+                'id',
+                'name',
+                'parent_category',
+                'parent_category__name',
             )
-            .order_by("name", "parent_category")
+            .order_by('name', 'parent_category')
         )
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
@@ -220,8 +220,8 @@ class ExpenseCategoryService:
     def get_categories(self) -> QuerySet[ExpenseCategory]:
         """Get expense categories for the user."""
         return self.user.category_expense_users.select_related(
-            "parent_category"
-        ).order_by("name", "parent_category")
+            'parent_category'
+        ).order_by('name', 'parent_category')
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""

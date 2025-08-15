@@ -24,4 +24,4 @@ class Migration(migrations.Migration):
                 verbose_name='Банк',
             ),
         ),
-    ] 
+    ]
