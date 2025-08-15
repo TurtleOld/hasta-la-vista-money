@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.contrib.auth.models import AbstractBaseUser
 from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
 from rest_framework.request import Request
