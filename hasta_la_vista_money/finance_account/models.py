@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from django.db import models
 from django.urls import reverse
@@ -7,10 +7,10 @@ from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
 
-
 if TYPE_CHECKING:
-    from hasta_la_vista_money.users.models import User
     from datetime import date
+
+    from hasta_la_vista_money.users.models import User
 
 
 class AccountQuerySet(models.QuerySet):
@@ -227,7 +227,9 @@ class Account(TimeStampedModel):
         Returns:
             Optional[Decimal]: The calculated debt, or None if not a credit account.
         """
-        from hasta_la_vista_money.finance_account.services import AccountService
+        from hasta_la_vista_money.finance_account.services import (
+            AccountService,
+        )
 
         return AccountService.get_credit_card_debt(self, start_date, end_date)
 
@@ -243,7 +245,9 @@ class Account(TimeStampedModel):
         Returns:
             dict: Information about the grace period, including dates, debts, and overdue status.
         """
-        from hasta_la_vista_money.finance_account.services import AccountService
+        from hasta_la_vista_money.finance_account.services import (
+            AccountService,
+        )
 
         return AccountService.calculate_grace_period_info(self, purchase_month)
 
@@ -324,13 +328,13 @@ class TransferMoneyLog(TimeStampedModel):
         """
         Returns a human-readable string describing the transfer log entry.
         """
-        return _(
-            ''.join(
-                (
-                    f'{self.exchange_date:%d-%m-%Y %H:%M}. '
-                    f'Перевод суммы {self.amount} '
-                    f'со счёта "{self.from_account}" '
-                    f'на счёт "{self.to_account}". ',
-                ),
+        return str(
+            _(
+                '{date}. Перевод суммы {amount} со счёта "{from_account}" на счёт "{to_account}". ',
+            ).format(
+                date=self.exchange_date.strftime('%d-%m-%Y %H:%M'),
+                amount=self.amount,
+                from_account=self.from_account,
+                to_account=self.to_account,
             ),
         )
