@@ -4,12 +4,11 @@ from typing import Any, Dict, List, Optional
 from django.contrib.auth.models import Group
 from django.db.models import Sum
 from django.db.models.functions import ExtractYear, TruncMonth
+from django.db.models.query import QuerySet
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils.formats import date_format
-from django.db.models.query import QuerySet
-
-from hasta_la_vista_money.expense.forms import AddExpenseForm, AddCategoryForm
+from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
@@ -150,13 +149,13 @@ class ExpenseService:
                 group_users = []
 
         expenses = expenses.select_related('user', 'category', 'account').order_by(
-            '-date'
+            '-date',
         )
 
         if group_users:
             receipt_service = ReceiptExpenseService(self.user, self.request)
             receipt_expense_list = receipt_service.get_receipt_expenses_by_users(
-                group_users
+                group_users,
             )
 
         return list(expenses) + receipt_expense_list
@@ -181,7 +180,7 @@ class ExpenseService:
         if group_users:
             receipt_service = ReceiptExpenseService(self.user, self.request)
             receipt_expense_list = receipt_service.get_receipt_data_by_users(
-                group_users
+                group_users,
             )
 
         data = []
@@ -204,7 +203,7 @@ class ExpenseService:
                     'is_receipt': False,
                     'receipt_id': None,
                     'actions': '',  # Will be generated on frontend
-                }
+                },
             )
 
         return data + receipt_expense_list
@@ -219,9 +218,16 @@ class ExpenseCategoryService:
 
     def get_categories(self) -> QuerySet[ExpenseCategory]:
         """Get expense categories for the user."""
-        return self.user.category_expense_users.select_related(
-            'parent_category'
-        ).order_by('name', 'parent_category')
+        return (
+            self.user.category_expense_users.select_related('parent_category')
+            .values(
+                'id',
+                'name',
+                'parent_category',
+                'parent_category__name',
+            )
+            .order_by('name', 'parent_category')
+        )
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
@@ -345,7 +351,7 @@ class ReceiptExpenseService:
                     'account': {'name_account': receipt['account__name_account']},
                     'user': receipt_user,
                     'is_receipt': True,
-                }
+                },
             )
 
         return receipt_expense_list
@@ -379,7 +385,7 @@ class ReceiptExpenseService:
                     'is_receipt': True,
                     'receipt_id': receipt.pk,
                     'actions': '',  # No buttons for receipts
-                }
+                },
             )
 
         return receipt_expense_list

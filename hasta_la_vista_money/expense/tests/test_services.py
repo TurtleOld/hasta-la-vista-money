@@ -1,10 +1,10 @@
-from django.test import TestCase, RequestFactory
 from django.db.models.query import QuerySet
+from django.test import RequestFactory, TestCase
 from hasta_la_vista_money.expense.forms import AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.expense.services import (
-    ExpenseService,
     ExpenseCategoryService,
+    ExpenseService,
     ReceiptExpenseService,
 )
 from hasta_la_vista_money.finance_account.models import Account
@@ -136,7 +136,9 @@ class TestExpenseCategoryService(TestCase):
         """Set up test data."""
         self.user = User.objects.get(pk=1)
         self.parent_category = ExpenseCategory.objects.get(name='ЖКХ')
-        self.service = ExpenseCategoryService(self.user)
+        self.factory = RequestFactory()
+        self.request = self.factory.get('/')
+        self.service = ExpenseCategoryService(self.user, self.request)
 
     def test_get_categories(self) -> None:
         """Test getting expense categories."""
