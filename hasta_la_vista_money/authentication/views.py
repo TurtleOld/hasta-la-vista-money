@@ -1,8 +1,12 @@
+from typing import Any
+from rest_framework.request import Request
+from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.authentication.authentication import (
     clear_auth_cookies,
     get_refresh_token_from_cookie,
     set_auth_cookies,
 )
+from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -20,9 +24,10 @@ class SessionTokenObtainView(APIView):
 
     permission_classes = (IsAuthenticated,)
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:
-            # Generate new tokens for the authenticated user
+            if not isinstance(request.user, User):
+                raise ValueError(_('Пользователь не авторизован'))
             refresh = RefreshToken.for_user(request.user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
@@ -40,12 +45,10 @@ class SessionTokenObtainView(APIView):
 class CookieTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view that sets HttpOnly cookies"""
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:
-            # Get tokens using the parent class method
             response = super().post(request, *args, **kwargs)
 
-            # Set tokens as HttpOnly cookies
             if response.data:
                 access_token = response.data.get('access')
                 refresh_token = response.data.get('refresh')
@@ -64,7 +67,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
 class CookieTokenRefreshView(TokenRefreshView):
     """Custom token refresh view that works with HttpOnly cookies"""
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         refresh_token = get_refresh_token_from_cookie(request)
 
         if not refresh_token:
@@ -75,7 +78,9 @@ class CookieTokenRefreshView(TokenRefreshView):
             return clear_auth_cookies(response)
 
         try:
-            refresh = self.get_serializer().validate({'refresh': refresh_token})
+            serializer = self.get_serializer(data={'refresh': refresh_token})
+            serializer.is_valid(raise_exception=True)
+            refresh = serializer.validated_data
 
             response = Response({'success': True})
             response = set_auth_cookies(

@@ -40,7 +40,7 @@ class ExpenseCategory(models.Model):
             ),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.name)
 
 
@@ -83,5 +83,5 @@ class Expense(models.Model):
             models.Index(fields=['date', 'amount']),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.category)
