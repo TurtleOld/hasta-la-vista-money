@@ -1,54 +1,56 @@
-name: hlvm
+name: hlvm-dev
 
 services:
   db:
-    container_name: hlvm_db
-    image: postgres:latest
+    image: postgres:15
     volumes:
-      - ${LOCATION:-./app_data}/postgres:/var/lib/postgresql/data
-    env_file:
-      - .env
+      - postgres_data:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-hlvm}
+    env_file:
+      - .env
     ports:
       - "5433:5432"
     restart: always
     networks:
       - default
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   hlvm-server:
-    container_name: hlvm_server
-    image: ghcr.io/turtleold/hasta-la-vista-money:main
     build:
       context: ./
       dockerfile: docker/production.Dockerfile
+    image: ghcr.io/turtleold/hasta-la-vista-money:main
     volumes:
-      - ${LOCATION:-./app_data}/static:/app/static
-    command: sh -c ".venv/bin/python manage.py migrate && .venv/bin/python manage.py collectstatic --noinput --clear && .venv/bin/granian --interface asgi config.asgi:application --port 8001 --host 0.0.0.0"
-    expose:
-      - "8001"
+      - static_volume:/app/static
+    command: >
+      sh -c "
+      .venv/bin/python manage.py migrate &&
+      .venv/bin/python manage.py collectstatic --noinput --clear &&
+      .venv/bin/granian --interface asgi config.asgi:application --port 8001 --host 0.0.0.0
+      "
+    ports:
+      - "8001:8001"
     env_file:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
-      SECRET_KEY: ${SECRET_KEY:-}
+      SECRET_KEY: ${SECRET_KEY:-change_me}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
-      BASE_URL: ${BASE_URL:-http://127.0.0.1:8090}
-      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      BASE_URL: ${BASE_URL:-http://127.0.0.1:8001}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://127.0.0.1:8001}
       SENTRY_DSN: ${SENTRY_DSN:-}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-development}
       SENTRY_ENDPOINT: ${SENTRY_ENDPOINT:-}
     depends_on:
       db:
         condition: service_healthy
-    restart: on-failure
     networks:
       - default
     healthcheck:
@@ -56,6 +58,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
   nginx:
     image: nginx:alpine
     ports:
@@ -65,12 +68,13 @@ services:
       - ${LOCATION:-./app_data}/static:/app/static
     depends_on:
       - hlvm-server
-    restart: always
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+  static_volume:
+
 networks:
   default:
     driver: bridge
-    attachable: true
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.31.0.0/16
