@@ -325,7 +325,7 @@
                                                             <td>{{ card.limit|comma }} {{ card.currency }}</td>
                                                             <td>{{ card.debt_now|comma }} {{ card.currency }}</td>
                                                             <td>{{ card.limit_left|comma }} {{ card.currency }}</td>
-                                                            <td style="min-width: 180px;">
+                                                            <td class="min-width-180">
                                                                 {% for h in card.history %}
                                                                     <div class="d-inline-block me-2 mb-1 small">
                                                                         <span class="fw-semibold">{{ h.month }}:</span>

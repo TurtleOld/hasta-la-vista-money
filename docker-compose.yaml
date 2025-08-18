@@ -28,7 +28,7 @@ services:
       dockerfile: docker/production.Dockerfile
     image: ghcr.io/turtleold/hasta-la-vista-money:main
     volumes:
-      - static_volume:/app/static
+      - ${LOCATION:-./app_data}/staticfiles:/app/staticfiles
     command: >
       sh -c "
       .venv/bin/python manage.py migrate &&
@@ -65,7 +65,7 @@ services:
       - "8090:80"
     volumes:
       - ${CONF_PATH:-./nginx}/nginx.conf:/etc/nginx/nginx.conf
-      - ${LOCATION:-./app_data}/static:/app/static
+      - ${LOCATION:-./app_data}/staticfiles:/app/staticfiles
     depends_on:
       - hlvm-server
     networks:
