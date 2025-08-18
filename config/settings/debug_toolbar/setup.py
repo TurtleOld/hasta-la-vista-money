@@ -1,6 +1,7 @@
 import logging
 
 from django.urls import include, path
+from typing import List, Tuple, Optional
 
 logger = logging.getLogger('configuration')
 
@@ -42,7 +43,11 @@ class DebugToolbarSetup:
     """
 
     @staticmethod
-    def do_settings(INSTALLED_APPS, MIDDLEWARE, middleware_position=None):
+    def do_settings(
+        INSTALLED_APPS: List[str],
+        MIDDLEWARE: List[str],
+        middleware_position: Optional[int] = None,
+    ) -> Tuple[List[str], List[str]]:
         _show_toolbar: bool = show_toolbar()
         logger.info(f'Django Debug Toolbar in use: {_show_toolbar}')
 

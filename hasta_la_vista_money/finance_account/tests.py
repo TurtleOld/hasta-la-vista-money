@@ -768,6 +768,7 @@ class TestValidatorsRefactored(TestCase):
         """Test credit fields validation for credit account."""
         validate_credit_fields_required(
             type_account='Credit',
+            bank='SBERBANK',
             limit_credit=Decimal('10000.00'),
             payment_due_date=timezone.now().date(),
             grace_period_days=30,
@@ -778,6 +779,7 @@ class TestValidatorsRefactored(TestCase):
         with self.assertRaises(ValidationError):
             validate_credit_fields_required(
                 type_account='Credit',
+                bank=None,
                 limit_credit=None,
                 payment_due_date=None,
                 grace_period_days=None,
@@ -787,6 +789,7 @@ class TestValidatorsRefactored(TestCase):
         """Test credit fields validation for debit account (should pass)."""
         validate_credit_fields_required(
             type_account='Debit',
+            bank=None,
             limit_credit=None,
             payment_due_date=None,
             grace_period_days=None,
@@ -830,6 +833,7 @@ class TestAddAccountFormRefactored(TestCase):
         form_data = {
             'name_account': 'Credit Card',
             'type_account': 'Credit',
+            'bank': 'SBERBANK',
             'limit_credit': Decimal('10000.00'),
             'payment_due_date': timezone.now().date(),
             'grace_period_days': 30,

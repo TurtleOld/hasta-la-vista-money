@@ -95,6 +95,9 @@ class AddCategoryForm(CategoryChoicesMixin, ModelForm):
     def configure_category_choices(self, category_choices):
         self.fields[self.field].choices = category_choices
 
+    def save(self, commit=True) -> ExpenseCategory:
+        return super().save(commit=commit)
+
     class Meta:
         model = ExpenseCategory
         fields = ['name', 'parent_category']

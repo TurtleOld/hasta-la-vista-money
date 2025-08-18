@@ -49,7 +49,7 @@ class ReceiptView(
     LoginRequiredMixin,
     BaseView,
     SuccessMessageMixin,
-    FilterView,
+    FilterView[Receipt, ReceiptFilter],  # type: ignore[misc]
 ):
     """Класс представления чека на сайте."""
 
