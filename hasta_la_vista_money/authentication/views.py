@@ -1,14 +1,15 @@
 from typing import Any
-from rest_framework.request import Request
-from hasta_la_vista_money.users.models import User
+
+from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.authentication.authentication import (
     clear_auth_cookies,
     get_refresh_token_from_cookie,
     set_auth_cookies,
 )
-from django.utils.translation import gettext_lazy as _
+from hasta_la_vista_money.users.models import User
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken
@@ -55,7 +56,12 @@ class CookieTokenObtainPairView(TokenObtainPairView):
 
                 if access_token and refresh_token:
                     response = set_auth_cookies(response, access_token, refresh_token)
-                    response.data = {'success': True}
+                    # Return tokens in JSON for mobile apps, but keep cookies for web
+                    response.data = {
+                        'success': True,
+                        'access': access_token,
+                        'refresh': refresh_token,
+                    }
 
             return response
 

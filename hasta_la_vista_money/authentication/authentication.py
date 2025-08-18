@@ -1,12 +1,12 @@
+from typing import Optional, TypeVar, Union, cast
+
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
-from rest_framework.request import Request
-from rest_framework_simplejwt.tokens import Token
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from typing import Optional, TypeVar, Union, cast
-
 from hasta_la_vista_money.users.models import User
+from rest_framework.request import Request
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.tokens import Token
 
 T = TypeVar('T', bound=HttpResponse)
 
@@ -21,32 +21,35 @@ class CookieJWTAuthentication(JWTAuthentication):
         if header is not None:
             raw_token = self.get_raw_token(header)
 
-            if raw_token is None:
-                cookie_token = request.COOKIES.get(
-                    str(settings.SIMPLE_JWT['AUTH_COOKIE'])
-                )
+        if raw_token is None:
+            cookie_token = request.COOKIES.get(str(settings.SIMPLE_JWT['AUTH_COOKIE']))
             if cookie_token is None:
                 return None
             raw_token = cookie_token.encode('utf-8')
 
-        validated_token = self.get_validated_token(raw_token)
-        user = self.get_user(validated_token)
+        try:
+            validated_token = self.get_validated_token(raw_token)
+            user = self.get_user(validated_token)
 
-        if not isinstance(user, User):
-            raise ValueError(
-                _('Ожидался экземпляр User, получен {type_name}').format(
-                    type_name=type(user)
+            if not isinstance(user, User):
+                raise ValueError(
+                    _('Ожидался экземпляр User, получен {type_name}').format(
+                        type_name=type(user),
+                    ),
                 )
-            )
 
-        return user, validated_token
+            return user, validated_token
+        except Exception:
+            return None
 
     def authenticate_header(self, request: Request) -> str:
         return 'Bearer realm="api"'
 
 
 def set_auth_cookies(
-    response: T, access_token: str, refresh_token: str | None = None
+    response: T,
+    access_token: str,
+    refresh_token: str | None = None,
 ) -> T:
     """Set JWT tokens as HttpOnly cookies in the response"""
     jwt_settings = settings.SIMPLE_JWT

@@ -55,6 +55,7 @@ LOCAL_APPS = [
 
 THIRD_PARTY_APPS = [
     'axes',
+    'corsheaders',
     'csp',
     'crispy_forms',
     'crispy_bootstrap5',
@@ -82,6 +83,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -154,9 +156,9 @@ if os.getenv('DATABASE_URL') or os.getenv('POSTGRES_DB'):
         DATABASES['default'] = dict(dj_database_url.config(conn_max_age=CONN_MAX_AGE))
 else:
     DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
         },
     }
 
@@ -259,6 +261,16 @@ AUTH_USER_MODEL = 'users.User'
 LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/login/'
 LOGOUT_REDIRECT_URL = '/login'
+
+# CORS settings for mobile app
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+]
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 # REST Framework
 REST_FRAMEWORK = {
