@@ -1,8 +1,10 @@
-from typing import List, Dict
-from django.contrib.auth.models import Group
-from hasta_la_vista_money.users.models import User
-from django.utils.translation import gettext_lazy as _
+from typing import Dict, List
+
 from django.contrib import messages
+from django.contrib.auth.models import Group
+from django.http import HttpRequest
+from django.utils.translation import gettext_lazy as _
+from hasta_la_vista_money.users.models import User
 
 
 def get_user_groups(user: User) -> List[Dict]:
@@ -12,8 +14,9 @@ def get_user_groups(user: User) -> List[Dict]:
 def get_groups_not_for_user(user: User) -> List[Dict]:
     return list(
         Group.objects.exclude(id__in=user.groups.values_list('id', flat=True)).values(
-            'id', 'name'
-        )
+            'id',
+            'name',
+        ),
     )
 
 
@@ -37,7 +40,7 @@ def add_user_to_group(request, user: User, group: Group) -> None:
     messages.success(request, _('Пользователь успешно добавлен в группу.'))
 
 
-def remove_user_from_group(request, user: User, group: Group) -> None:
+def remove_user_from_group(request: HttpRequest, user: User, group: Group) -> None:
     """
     Service to remove a user from a group with checks and user messages.
     """

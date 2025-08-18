@@ -13,7 +13,7 @@ dependencies = [
     "whitenoise>=6.0.0",
     "django-filter>=25.1",
     "PyYAML>=6.0",
-    "django==5.2.4",
+    "django==5.2.5",
     "urllib3>=2.0.2",
     "django-csp>=4.0",
     "channels>=4.0.0",
@@ -34,6 +34,9 @@ dependencies = [
     "django-structlog>=9.1.1",
     "granian[reload]>=2.3.4",
     "django-extensions>=4.1",
+    "djangorestframework-stubs>=3.16.1",
+    "django-stubs>=5.2.1",
+    "django-cors-headers>=4.7.0",
 ]
 
 [project.optional-dependencies]
@@ -73,28 +76,3 @@ exclude = [
     ".venv",
     ".git"
 ]
-
-[mypy]
-module = 'django.*'
-ignore_missing_imports = true
-strict = true
-strict_bytes = true
-local_partial_types = true
-warn_unreachable = true
-
-enable_error_code = [
-  "truthy-bool",
-  "truthy-iterable",
-  "redundant-expr",
-  "unused-awaitable",
-  "ignore-without-code",
-  "possibly-undefined",
-  "redundant-self",
-  "explicit-override",
-  "mutable-override",
-  "unimported-reveal",
-  "deprecated",
-]
-
-[tool.django-stubs]
-django_settings_module = 'config.django.base'

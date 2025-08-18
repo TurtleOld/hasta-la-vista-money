@@ -52,7 +52,7 @@ class IncomeView(
     LoginRequiredMixin,
     SuccessMessageMixin,
     BaseView,
-    FilterView,
+    FilterView[Income, IncomeFilter],
 ):
     """
     View for displaying user's incomes with filtering and chart data.
@@ -92,7 +92,7 @@ class IncomeView(
         )
 
         flattened_categories = build_category_tree(
-            categories,
+            list(categories),
             depth=depth_limit,
         )
 
@@ -386,7 +386,7 @@ class IncomeCategoryView(LoginRequiredMixin, ListView):
             .all()
         )
         flattened_categories = build_category_tree(
-            categories,
+            list(categories),
             depth=self.depth,
         )
         context = super().get_context_data(**kwargs)
@@ -461,7 +461,7 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class IncomeCategoryDeleteView(BaseView, DeleteObjectMixin):
+class IncomeCategoryDeleteView(DeleteObjectMixin, BaseView, DeleteView):
     """
     View for deleting an income category.
     """

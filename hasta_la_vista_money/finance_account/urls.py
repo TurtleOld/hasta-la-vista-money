@@ -1,3 +1,9 @@
+"""URL configuration for finance account management.
+
+This module defines the URL patterns for finance account operations including
+account listing, creation, editing, deletion, money transfers, and API endpoints.
+"""
+
 from django.urls import path
 from hasta_la_vista_money.finance_account.apis import AccountListCreateAPIView
 from hasta_la_vista_money.finance_account.views import (
