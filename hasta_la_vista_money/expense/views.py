@@ -1,38 +1,51 @@
-from typing import Any, Dict, Optional
+from abc import ABC, abstractmethod
+from typing import Any, Dict
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
-from django.http import HttpResponse, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseForbidden,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.custom_mixin import (
-    DeleteObjectMixin,
-    UpdateViewMixin,
-)
+from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.expense.filters import ExpenseFilter
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.expense.services import (
-    ExpenseService,
     ExpenseCategoryService,
+    ExpenseService,
     ReceiptExpenseService,
 )
 from hasta_la_vista_money.services.views import build_category_tree
 from hasta_la_vista_money.users.models import User
 
 
-class BaseView:
+class AbstractExpenseView(ABC):
+    @property
+    @abstractmethod
+    def template_name(self) -> str: ...
+
+    @property
+    @abstractmethod
+    def success_url(self) -> str: ...
+
+
+class BaseView(AbstractExpenseView):
     """Base view class with common configuration."""
 
-    template_name = 'expense/show_expense.html'
-    success_url: Optional[str] = reverse_lazy('expense:list')
+    pass
 
 
 class ExpenseBaseView(BaseView):
@@ -40,42 +53,57 @@ class ExpenseBaseView(BaseView):
 
     model = Expense
 
+    @property
+    def template_name(self) -> str:
+        return constants.EXPENSE_TEMPLATE
+
+    @property
+    def success_url(self) -> str:
+        return str(reverse_lazy(constants.EXPENSE_LIST_URL))
+
 
 class ExpenseCategoryBaseView(BaseView):
     """Base view for expense category operations."""
 
     model = ExpenseCategory
 
+    @property
+    def template_name(self) -> str:
+        return constants.EXPENSE_CATEGORY_TEMPLATE
+
+    @property
+    def success_url(self) -> str:
+        return str(reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL))
+
 
 class ExpenseView(
     LoginRequiredMixin,
-    ExpenseBaseView,
-    SuccessMessageMixin,
-    FilterView,
+    SuccessMessageMixin[AddExpenseForm],
+    FilterView[Expense, ExpenseFilter],  # type: ignore[misc]
 ):
     """Main expense list view with filtering and pagination."""
 
+    model = Expense
+    template_name = constants.EXPENSE_TEMPLATE
     paginate_by = 10
     context_object_name = 'expense'
     filterset_class = ExpenseFilter
     no_permission_url = reverse_lazy('login')
 
-    def get_context_data(self, *args, **kwargs) -> Dict[str, Any]:
+    def get_context_data(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         """
         Get context data for expense list view.
 
         Returns:
             Dict containing expense data, categories, and forms.
         """
-        context = super().get_context_data(**kwargs)
+        context: Dict[str, Any] = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
 
-        # Get services
-        expense_service = ExpenseService(user)
-        receipt_service = ReceiptExpenseService(user)
+        expense_service = ExpenseService(user, self.request)
+        receipt_service = ReceiptExpenseService(user, self.request)
 
-        # Get expense data
-        expense_filter = ExpenseFilter(
+        expense_filter: ExpenseFilter = ExpenseFilter(
             self.request.GET,
             queryset=Expense.objects.all(),
             user=self.request.user,
@@ -86,13 +114,10 @@ class ExpenseView(
             'account',
         )
 
-        # Get receipt expenses
         receipt_expenses = receipt_service.get_receipt_expenses()
 
-        # Combine expenses and receipts
         all_expenses = list(expenses) + receipt_expenses
 
-        # Calculate totals
         total_amount_page = sum(
             getattr(expense, 'amount', 0) for expense in all_expenses
         )
@@ -100,14 +125,12 @@ class ExpenseView(
             getattr(expense, 'amount', 0) for expense in all_expenses
         )
 
-        # Get categories
         expense_categories = expense_service.get_categories()
         flattened_categories = build_category_tree(
             expense_categories,
             depth=3,
         )
 
-        # Get form
         add_expense_form = expense_service.get_expense_form()
 
         context.update(
@@ -120,7 +143,7 @@ class ExpenseView(
                 'total_amount_page': total_amount_page,
                 'total_amount_period': total_amount_period,
                 'request': self.request,
-            }
+            },
         )
 
         return context
@@ -128,7 +151,7 @@ class ExpenseView(
 
 class ExpenseCopyView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
+    SuccessMessageMixin[AddExpenseForm],
     ExpenseBaseView,
     View,
 ):
@@ -136,80 +159,96 @@ class ExpenseCopyView(
 
     no_permission_url = reverse_lazy('login')
 
-    def post(self, request, *args, **kwargs) -> HttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle POST request to copy an expense."""
+        if not isinstance(request.user, User):
+            return HttpResponseForbidden(constants.USER_MUST_BE_AUTHENTICATED)
         expense_id = kwargs.get('pk')
-        expense_service = ExpenseService(request.user)
+        expense_service = ExpenseService(request.user, request)
+
+        if expense_id is None:
+            messages.error(request, _('Некорректный идентификатор расхода.'))
+            return redirect(constants.EXPENSE_LIST_URL)
 
         try:
-            new_expense = expense_service.copy_expense(expense_id)
-            messages.success(request, 'Расход успешно скопирован.')
+            new_expense = expense_service.copy_expense(int(expense_id))
+            messages.success(request, _('Расход успешно скопирован.'))
             return redirect(
                 reverse_lazy('expense:change', kwargs={'pk': new_expense.pk}),
             )
         except Exception as e:
-            messages.error(request, f'Ошибка при копировании расхода: {str(e)}')
-            return redirect('expense:list')
+            messages.error(
+                request,
+                _('Ошибка при копировании расхода: {error}').format(error=str(e)),
+            )
+            return redirect(constants.EXPENSE_LIST_URL)
 
 
 class ExpenseCreateView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
-    ExpenseBaseView,
-    CreateView,
+    SuccessMessageMixin[AddExpenseForm],
+    CreateView[Expense, Any],
 ):
     """View for creating a new expense."""
 
-    no_permission_url = reverse_lazy('login')
+    model = Expense
     template_name = 'expense/add_expense.html'
     form_class = AddExpenseForm
-    success_url: Optional[str] = reverse_lazy('expense:list')
+    success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
+    no_permission_url = reverse_lazy('login')
 
     def get_form_kwargs(self) -> Dict[str, Any]:
         """Get form kwargs with user-specific querysets."""
         kwargs = super().get_form_kwargs()
-        expense_service = ExpenseService(self.request.user)
+        if not isinstance(self.request.user, User):
+            raise ValueError('User must be authenticated')
+        expense_service = ExpenseService(self.request.user, self.request)
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
 
-    def get_context_data(self, **kwargs) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         """Get context data for expense creation form."""
         context = super().get_context_data(**kwargs)
         if 'add_expense_form' not in context:
             context['add_expense_form'] = self.get_form()
         return context
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission."""
-        expense_service = ExpenseService(self.request.user)
+        if not isinstance(self.request.user, User):
+            raise ValueError('User must be authenticated')
+        expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.create_expense(form)
             messages.success(self.request, constants.SUCCESS_EXPENSE_ADDED)
             return super().form_valid(form)
         except Exception as e:
-            messages.error(self.request, f'Ошибка при создании расхода: {str(e)}')
+            messages.error(
+                self.request,
+                _('Ошибка при создании расхода: {error}').format(error=str(e)),
+            )
             return self.form_invalid(form)
 
-    def form_invalid(self, form) -> HttpResponse:
+    def form_invalid(self, form: Any) -> HttpResponse:
         """Handle invalid form submission."""
         return self.render_to_response(self.get_context_data(add_expense_form=form))
 
 
 class ExpenseUpdateView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
-    ExpenseBaseView,
-    UpdateView,
-    UpdateViewMixin,
+    SuccessMessageMixin[AddExpenseForm],
+    UpdateView[Expense, AddExpenseForm],
 ):
     """View for updating an existing expense."""
 
+    model = Expense
     template_name = 'expense/change_expense.html'
     form_class = AddExpenseForm
+    success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
     no_permission_url = reverse_lazy('login')
 
-    def get_object(self, queryset=None) -> Expense:
+    def get_object(self, queryset: Any = None) -> Expense:
         """Get the expense object to update."""
         return get_object_or_404(
             Expense,
@@ -220,59 +259,78 @@ class ExpenseUpdateView(
     def get_form_kwargs(self) -> Dict[str, Any]:
         """Get form kwargs with user-specific querysets."""
         kwargs = super().get_form_kwargs()
-        expense_service = ExpenseService(self.request.user)
+        if not isinstance(self.request.user, User):
+            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+        expense_service = ExpenseService(self.request.user, self.request)
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
 
-    def get_context_data(self, **kwargs) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         """Get context data for expense update form."""
         context = super().get_context_data(**kwargs)
         context['add_expense_form'] = self.get_form()
         return context
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission."""
-        expense_service = ExpenseService(self.request.user)
+        if not isinstance(self.request.user, User):
+            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+        expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.update_expense(self.object, form)
             messages.success(self.request, constants.SUCCESS_EXPENSE_UPDATE)
             return super().form_valid(form)
         except Exception as e:
-            messages.error(self.request, f'Ошибка при обновлении расхода: {str(e)}')
+            messages.error(
+                self.request,
+                _('Ошибка при обновлении расхода: {error}').format(error=str(e)),
+            )
             return self.form_invalid(form)
 
 
-class ExpenseDeleteView(LoginRequiredMixin, ExpenseBaseView, DetailView, DeleteView):
+class ExpenseDeleteView(
+    LoginRequiredMixin,
+    DetailView[Expense],
+    DeleteView[Expense, Any],
+):
     """View for deleting an expense."""
 
+    model = Expense
+    template_name = constants.EXPENSE_TEMPLATE
+    success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
     context_object_name = 'expense'
     no_permission_url = reverse_lazy('login')
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission for deletion."""
-        expense_service = ExpenseService(self.request.user)
+        if not isinstance(self.request.user, User):
+            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+        expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.delete_expense(self.get_object())
             messages.success(self.request, constants.SUCCESS_EXPENSE_DELETED)
             return super().form_valid(form)
         except Exception as e:
-            messages.error(self.request, f'Ошибка при удалении расхода: {str(e)}')
-            return redirect('expense:list')
+            messages.error(
+                self.request,
+                _('Ошибка при удалении расхода: {error}').format(error=str(e)),
+            )
+            return redirect(constants.EXPENSE_LIST_URL)
 
 
-class ExpenseCategoryView(LoginRequiredMixin, ListView):
+class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
     """View for displaying expense categories."""
 
-    template_name = 'expense/show_category_expense.html'
+    template_name = constants.EXPENSE_CATEGORY_TEMPLATE
     model = ExpenseCategory
     depth = 3
 
-    def get_context_data(self, **kwargs) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         """Get context data for category list."""
         user = get_object_or_404(User, username=self.request.user)
-        category_service = ExpenseCategoryService(user)
+        category_service = ExpenseCategoryService(user, self.request)
 
         expense_categories = category_service.get_categories()
         flattened_categories = build_category_tree(
@@ -285,60 +343,78 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView):
         return context
 
 
-class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView):
+class ExpenseCategoryCreateView(LoginRequiredMixin, CreateView[ExpenseCategory, Any]):
     """View for creating a new expense category."""
 
     model = ExpenseCategory
     template_name = 'expense/add_category_expense.html'
     form_class = AddCategoryForm
-    success_url: str = reverse_lazy('expense:category_list')
+    success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
 
     def get_form_kwargs(self) -> Dict[str, Any]:
         """Get form kwargs with user-specific queryset."""
         kwargs = super().get_form_kwargs()
-        category_service = ExpenseCategoryService(self.request.user)
+        if not isinstance(self.request.user, User):
+            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+        category_service = ExpenseCategoryService(self.request.user, self.request)
         kwargs['category_queryset'] = category_service.get_categories_queryset()
         return kwargs
 
-    def form_valid(self, form) -> HttpResponse:
+    def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission."""
-        category_service = ExpenseCategoryService(self.request.user)
+        if not isinstance(self.request.user, User):
+            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+        category_service = ExpenseCategoryService(self.request.user, self.request)
 
         try:
             category_name = self.request.POST.get('name')
             category_service.create_category(form)
             messages.success(
                 self.request,
-                f'Категория "{category_name}" была успешно добавлена!',
+                _('Категория "{category_name}" была успешно добавлена!').format(
+                    category_name=category_name,
+                ),
             )
-            return redirect(self.success_url)
+            return redirect(self.get_success_url())
         except Exception as e:
-            messages.error(self.request, f'Ошибка при создании категории: {str(e)}')
+            messages.error(
+                self.request,
+                _('Ошибка при создании категории: {error}').format(error=str(e)),
+            )
             return self.form_invalid(form)
 
-    def form_invalid(self, form) -> HttpResponse:
+    def form_invalid(self, form: Any) -> HttpResponse:
         """Handle invalid form submission."""
         messages.error(
             self.request,
-            'Ошибка при добавлении категории. Проверьте введенные данные.',
+            _('Ошибка при добавлении категории. Проверьте введенные данные.'),
         )
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class ExpenseCategoryDeleteView(ExpenseCategoryBaseView, DeleteObjectMixin):
+class ExpenseCategoryDeleteView(
+    DeleteObjectMixin,
+    LoginRequiredMixin,
+    DeleteView[ExpenseCategory, Any],
+):
     """View for deleting an expense category."""
 
-    success_message = constants.SUCCESS_CATEGORY_EXPENSE_DELETED
-    error_message = constants.ACCESS_DENIED_DELETE_EXPENSE_CATEGORY
+    model = ExpenseCategory
+    template_name = constants.EXPENSE_CATEGORY_TEMPLATE
+    success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
+    success_message = str(constants.SUCCESS_CATEGORY_EXPENSE_DELETED)
+    error_message = str(constants.ACCESS_DENIED_DELETE_EXPENSE_CATEGORY)
 
 
 class ExpenseGroupAjaxView(LoginRequiredMixin, View):
     """AJAX view for getting expenses by group."""
 
-    def get(self, request, *args, **kwargs) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET request for group expenses."""
+        if not isinstance(request.user, User):
+            return HttpResponseForbidden(_('Вы не авторизованы'))
         group_id = request.GET.get('group_id')
-        expense_service = ExpenseService(request.user)
+        expense_service = ExpenseService(request.user, request)
 
         try:
             all_expenses = expense_service.get_expenses_by_group(group_id)
@@ -350,16 +426,18 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
             )
             return HttpResponse(html)
         except Exception as e:
-            return HttpResponse(f'Ошибка: {str(e)}', status=500)
+            return HttpResponse(_('Ошибка: {error}').format(error=str(e)), status=500)
 
 
 class ExpenseDataAjaxView(LoginRequiredMixin, View):
     """AJAX view for getting expense data as JSON."""
 
-    def get(self, request, *args, **kwargs) -> JsonResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         """Handle GET request for expense data."""
+        if not isinstance(request.user, User):
+            return JsonResponse({'error': _('Вы не авторизованы')}, status=403)
         group_id = request.GET.get('group_id')
-        expense_service = ExpenseService(request.user)
+        expense_service = ExpenseService(request.user, request)
 
         try:
             all_data = expense_service.get_expense_data(group_id)

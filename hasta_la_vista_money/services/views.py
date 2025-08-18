@@ -1,24 +1,37 @@
-from django.db.models import Count, QuerySet, Sum
+from typing import Any, Dict, Generator, List, Optional, Type, Union
+
+from django.db.models import Count, Model, QuerySet, Sum
 from django.db.models.functions import TruncMonth
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from hasta_la_vista_money.users.models import User
 
 
-def build_category_tree(categories, parent_id=None, depth=2, current_depth=1):
+def build_category_tree(
+    categories: Union[List[Dict[str, Any]], QuerySet],
+    parent_id: Optional[int] = None,
+    depth: int = 2,
+    current_depth: int = 1,
+) -> Generator[Dict[str, Any], None, None]:
     """
     Формирование дерева категория для отображения на сайте.
     Добавляет поле total_children_count — количество всех вложенных подкатегорий.
     """
+    # Convert QuerySet to list if needed
+    if hasattr(categories, 'values'):  # It's a QuerySet
+        categories_list = list(categories)
+    else:
+        categories_list = categories
 
-    def count_all_descendants(cat_id):
+    def count_all_descendants(cat_id: int) -> int:
         count = 0
-        children = [c for c in categories if c['parent_category'] == cat_id]
+        children = [c for c in categories_list if c['parent_category'] == cat_id]
         count += len(children)
         for child in children:
             count += count_all_descendants(child['id'])
         return count
 
-    for category in categories:
+    for category in categories_list:
         if category['parent_category'] == parent_id:
             if current_depth < depth:
                 yield {
@@ -27,7 +40,7 @@ def build_category_tree(categories, parent_id=None, depth=2, current_depth=1):
                     'parent_category': category['parent_category'],
                     'parent_category__name': category['parent_category__name'],
                     'children': build_category_tree(
-                        categories,
+                        categories_list,
                         category['id'],
                         depth,
                         current_depth + 1,
@@ -74,7 +87,11 @@ def get_queryset_type_income_expenses(type_id, model, form):
     return form.save(commit=False)
 
 
-def get_new_type_operation(model, id_type_operation, request):
+def get_new_type_operation(
+    model: Type[Model],
+    id_type_operation: int,
+    request: HttpRequest,
+) -> Model:
     """Get new type operation."""
     expense = get_object_or_404(model, pk=id_type_operation, user=request.user)
     if 'income' in request.path:

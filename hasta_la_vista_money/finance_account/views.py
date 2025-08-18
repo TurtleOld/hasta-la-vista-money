@@ -1,39 +1,52 @@
+"""Views for finance account management.
+
+This module provides Django views for managing financial accounts including
+listing, creation, editing, deletion, and money transfer operations. Includes
+comprehensive error handling, user authentication, and AJAX support.
+"""
+
 from typing import Any, Dict
 
+import structlog
+from asgiref.sync import sync_to_async
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
-from django.http import HttpResponseRedirect, JsonResponse, HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.template.loader import render_to_string
 from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import CreateView, ListView, UpdateView
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
-from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
+from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
 )
-from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
-from django.template.loader import render_to_string
-
+from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.finance_account import services as account_services
-from asgiref.sync import sync_to_async
-import structlog
-from django.utils.translation import gettext_lazy as _
 
 logger = structlog.get_logger(__name__)
 
 
 class BaseView:
+    """Base view class with common template and success URL configuration."""
+
     template_name = 'finance_account/account.html'
     success_url = reverse_lazy('finance_account:list')
 
 
 class AccountBaseView(BaseView):
+    """Base view class for account-related operations."""
+
     model = Account
 
 
@@ -44,18 +57,20 @@ class AccountView(
     AccountBaseView,
     ListView,
 ):
-    """
-    Displays a list of user or group accounts with related forms and statistics.
+    """Display a list of user or group accounts with related forms and statistics.
 
     Shows all accounts for the current user or selected group, provides forms for adding and transferring accounts,
-    and displays recent transfer logs and account balances.
+    and displays recent transfer logs and account balances. Supports group-based filtering and comprehensive
+    financial data presentation.
     """
 
     context_object_name = 'finance_account'
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        """
-        Build the context for the account list page, including accounts, forms, logs, and statistics.
+        """Build the context for the account list page, including accounts, forms, logs, and statistics.
+
+        Aggregates data from multiple sources to provide a comprehensive view of the user's
+        financial accounts and related operations.
 
         Args:
             **kwargs: Additional context parameters.
@@ -134,11 +149,11 @@ class AccountView(
         if user_groups.exists():
             users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.filter(user__in=users_in_groups).select_related('user')
+                Account.objects.filter(user__in=users_in_groups).select_related('user'),
             )
         else:
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.by_user(user).select_related('user')
+                Account.objects.by_user(user).select_related('user'),
             )
         return {
             'sum_all_accounts': sum_all_accounts,
@@ -254,7 +269,7 @@ class ChangeAccountView(
             messages.error(
                 self.request,
                 _(
-                    'Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте позже.'
+                    'Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте позже.',
                 ),
             )
             return super().get_context_data(**kwargs)
@@ -311,15 +326,15 @@ class TransferMoneyAccountView(
                     'success': False,
                     'errors': str(
                         _(
-                            'Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже.'
-                        )
+                            'Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже.',
+                        ),
                     ),
                 },
                 status=500,
             )
 
 
-class DeleteAccountView(LoginRequiredMixin, DeleteObjectMixin):
+class DeleteAccountView(DeleteObjectMixin, LoginRequiredMixin, DeleteView):
     """
     Handles deletion of an account.
 
@@ -341,7 +356,10 @@ class AjaxAccountsByGroupView(View):
     """
 
     async def get(
-        self, request: WSGIRequest, *args: Any, **kwargs: Any
+        self,
+        request: WSGIRequest,
+        *args: Any,
+        **kwargs: Any,
     ) -> HttpResponse:
         """
         Handle GET request for accounts by group via AJAX.
@@ -356,7 +374,7 @@ class AjaxAccountsByGroupView(View):
         user = request.user
         try:
             accounts = await sync_to_async(
-                account_services.get_accounts_for_user_or_group
+                account_services.get_accounts_for_user_or_group,
             )(user, group_id)
             html = await sync_to_async(render_to_string)(
                 'finance_account/_account_cards_block.html',
@@ -375,8 +393,8 @@ class AjaxAccountsByGroupView(View):
                     'success': False,
                     'error': str(
                         _(
-                            'Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже.'
-                        )
+                            'Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже.',
+                        ),
                     ),
                 },
                 status=500,
