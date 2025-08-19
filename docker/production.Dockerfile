@@ -4,10 +4,10 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl=8.15.0 \
+    curl>=8.0 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install uv
+RUN curl -sSL https://install.python-poetry.org | python3 -
 
 COPY pyproject.toml uv.lock ./
 
