@@ -4,24 +4,23 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("finance_account", "0011_add_account_bank_field"),
+        ('finance_account', '0011_add_account_bank_field'),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name="account",
-            name="bank",
+            model_name='account',
+            name='bank',
             field=models.CharField(
                 choices=[
-                    ("-", "—"),
-                    ("SBERBANK", "Сбербанк"),
-                    ("RAIFFAISENBANK", "Райффайзенбанк"),
+                    ('-', '—'),
+                    ('SBERBANK', 'Сбербанк'),
+                    ('RAIFFAISENBANK', 'Райффайзенбанк'),
                 ],
-                default="-",
-                help_text="Банк, выпустивший карту или обслуживающий счёт",
-                verbose_name="Банк",
+                default='-',
+                help_text='Банк, выпустивший карту или обслуживающий счёт',
+                verbose_name='Банк',
             ),
         ),
     ]

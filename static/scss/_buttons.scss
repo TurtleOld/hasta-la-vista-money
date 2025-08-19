@@ -1,5 +1,21 @@
 @import "buttons_outline";
 
+// Utility classes for replacing inline styles
+.d-inline {
+  display: inline !important;
+}
+
+.preview-image {
+  max-height: 300px;
+}
+
+.min-width-180 {
+  min-width: 180px;
+}
+
+.emoji-large {
+  font-size: 2rem;
+}
 .btn-pink {
   --bs-btn-color: #000;
   --bs-btn-bg: #ffc0cb;

@@ -5,20 +5,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("income", "0005_income_income_inco_date_2adb4a_idx_and_more"),
+        ('income', '0005_income_income_inco_date_2adb4a_idx_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name="incomecategory",
-            name="name",
+            model_name='incomecategory',
+            name='name',
             field=models.CharField(max_length=250),
         ),
         migrations.AlterUniqueTogether(
-            name="incomecategory",
-            unique_together={("user", "name")},
+            name='incomecategory',
+            unique_together={('user', 'name')},
         ),
     ]
