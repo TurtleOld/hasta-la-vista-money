@@ -20,11 +20,13 @@ RUN adduser --disabled-password --gecos '' appuser
 
 COPY . .
 
-# Create necessary directories and set proper ownership for entire app directory
-RUN mkdir -p /app/staticfiles /app/logs && \
+# Create logs directory and set ownership for app directory
+RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
 USER appuser
-RUN .venv/bin/python manage.py collectstatic --noinput --clear
+# Create staticfiles directory as appuser and run collectstatic
+RUN mkdir -p /app/staticfiles && \
+    .venv/bin/python manage.py collectstatic --noinput --clear
 
 CMD [".venv/bin/granian", "--interface", "asgi", "config.asgi:application", "--port", "8001", "--host", "0.0.0.0"]
