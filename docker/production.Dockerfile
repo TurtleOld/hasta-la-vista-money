@@ -16,17 +16,15 @@ COPY pyproject.toml uv.lock ./
 
 RUN uv venv .venv && uv pip install -e '.[dev]'
 
+RUN adduser --disabled-password --gecos '' appuser
+
 COPY . .
 
-# Create staticfiles directory
-RUN mkdir -p /app/staticfiles
+# Create necessary directories and set proper ownership
+RUN mkdir -p /app/staticfiles /app/logs && \
+    chown -R appuser:appuser /app/staticfiles /app/logs
 
+USER appuser
 RUN .venv/bin/python manage.py collectstatic --noinput --clear
-
-RUN adduser --disabled-password --gecos '' appuser && chown -R appuser /app
-USER appuser
-USER root
-RUN chown -R appuser:appuser /app/staticfiles
-USER appuser
 
 CMD [".venv/bin/granian", "--interface", "asgi", "config.asgi:application", "--port", "8001", "--host", "0.0.0.0"]
