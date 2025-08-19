@@ -20,7 +20,9 @@ RUN adduser --disabled-password --gecos '' appuser
 
 COPY . .
 
-RUN mkdir -p /app/staticfiles && chown -R appuser:appuser /app/staticfiles
+# Create necessary directories and set proper ownership
+RUN mkdir -p /app/staticfiles /app/logs && \
+    chown -R appuser:appuser /app/staticfiles /app/logs
 
 USER appuser
 RUN .venv/bin/python manage.py collectstatic --noinput --clear
