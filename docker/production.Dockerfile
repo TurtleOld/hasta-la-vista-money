@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
+# Add uv to PATH
+ENV PATH="/root/.local/bin:$PATH"
+
 COPY pyproject.toml uv.lock ./
 
 RUN uv venv .venv && uv pip install -e '.[dev]'
