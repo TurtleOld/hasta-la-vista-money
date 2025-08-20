@@ -33,19 +33,20 @@ COPY pyproject.toml uv.lock ./
 
 RUN uv venv .venv && uv pip install -e '.[dev]'
 
-RUN adduser --disabled-password --gecos '' appuser
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup appuser
 
 COPY --from=builder /app /app
 COPY --from=builder /app/staticfiles /app/staticfiles
 
-RUN chown -R appuser:appuser /app && \
+RUN chown -R appuser:appgroup /app && \
     chmod +x /app/.venv/bin/granian && \
     chmod +x /app/.venv/bin/python && \
     chmod -R 755 /app/staticfiles
 
 USER appuser
 
-COPY --chown=appuser:appuser docker/entrypoint.sh /app/entrypoint.sh
+COPY --chown=appuser:appgroup docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
