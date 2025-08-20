@@ -43,6 +43,14 @@ migrate:
 docker-build: .env
 		docker compose build
 
+.PHONY: docker-build-prod
+docker-build-prod:
+		docker build -f docker/production.Dockerfile -t hasta-la-vista-money:prod .
+
+.PHONY: docker-test-prod
+docker-test-prod:
+		docker run --rm -p 8001:8001 hasta-la-vista-money:prod
+
 .PHONY: docker-up
 docker-up:
 		@[ -f ./.env ] && \
