@@ -13,7 +13,6 @@ echo "Database is up - executing migrations"
 
 echo "Creating staticfiles directory with proper permissions"
 mkdir -p /app/staticfiles
-chmod -R 755 /app/staticfiles
 
 echo "Collecting static files"
 .venv/bin/python manage.py collectstatic --noinput --clear

@@ -33,7 +33,8 @@ COPY pyproject.toml uv.lock ./
 
 RUN uv venv .venv && uv pip install -e '.[dev]'
 
-RUN adduser --disabled-password --gecos '' appuser
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup appuser
 
 COPY --from=builder /app /app
 COPY --from=builder /app/staticfiles /app/staticfiles
