@@ -4,9 +4,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl>=8.0 \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ENV PATH="/root/.local/bin:$PATH"
 
@@ -25,9 +24,8 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl>=8.0 \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ENV PATH="/root/.local/bin:$PATH"
 
@@ -42,7 +40,8 @@ COPY --from=builder /app/staticfiles /app/staticfiles
 
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/.venv/bin/granian && \
-    chmod +x /app/.venv/bin/python
+    chmod +x /app/.venv/bin/python && \
+    chmod -R 755 /app/staticfiles
 
 USER appuser
 
