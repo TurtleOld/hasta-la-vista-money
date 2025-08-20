@@ -60,7 +60,10 @@ from hasta_la_vista_money.users.services.theme import set_user_theme
 
 class IndexView(TemplateView):
     def dispatch(
-        self, request: HttpRequest, *args: Any, **kwargs: Any
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
     ) -> HttpResponseBase:
         if request.user.is_authenticated:
             return redirect('applications:list')
@@ -98,7 +101,10 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
     redirect_authenticated_user = True
 
     def dispatch(
-        self, request: HttpRequest, *args: Any, **kwargs: Any
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
     ) -> HttpResponseBase:
         if hasattr(request, 'axes_locked_out'):
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -442,3 +448,11 @@ class SwitchThemeView(LoginRequiredMixin, View):
         theme = data.get('theme')
         set_user_theme(user, theme)
         return JsonResponse({'success': True})
+
+
+class HealthCheckView(View):
+    """Simple health check endpoint for Docker containers."""
+
+    def get(self, request):
+        """Return simple health status."""
+        return JsonResponse({'status': 'healthy'}, status=200)
