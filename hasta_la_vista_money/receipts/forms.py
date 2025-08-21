@@ -30,8 +30,6 @@ from hasta_la_vista_money.receipts.models import (
 
 
 class ReceiptFilter(django_filters.FilterSet):
-    """Класс представляющий фильтр чеков на сайте."""
-
     name_seller = django_filters.ModelChoiceFilter(
         queryset=Seller.objects.all(),
         field_name='seller__name_seller',
@@ -81,12 +79,6 @@ class ReceiptFilter(django_filters.FilterSet):
     )
 
     def __init__(self, *args, **kwargs):
-        """
-        Конструктор класса инициализирующий поля формы.
-
-        :param args:
-        :param kwargs:
-        """
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
@@ -130,8 +122,6 @@ class ReceiptFilter(django_filters.FilterSet):
 
 
 class SellerForm(ModelForm[Seller]):
-    """Класс формы продавца."""
-
     name_seller = CharField(label=_('Имя продавца'))
     retail_place_address = CharField(
         label=_('Адрес места покупки'),
@@ -147,20 +137,12 @@ class SellerForm(ModelForm[Seller]):
         fields = ['name_seller', 'retail_place_address', 'retail_place']
 
     def __init__(self, *args, **kwargs):
-        """
-        Конструктов класса инициализирующий поля формы.
-
-        :param args:
-        :param kwargs:
-        """
         super().__init__(*args, **kwargs)
         self.fields['retail_place_address'].required = False
         self.fields['retail_place'].required = False
 
 
 class ProductForm(ModelForm[Product]):
-    """Форма для внесения данных по продуктам."""
-
     product_name = CharField(
         label=_('Наименование продукта'),
         help_text=_('Укажите наименование продукта'),
@@ -200,8 +182,6 @@ ProductFormSet = formset_factory(ProductForm, extra=1)
 
 
 class ReceiptForm(ModelForm[Receipt]):
-    """Форма для внесения данных по чеку."""
-
     seller = ModelChoiceField(
         queryset=Seller.objects.all(),
         label=_('Имя продавца'),
@@ -276,12 +256,12 @@ class UploadImageForm(Form):
         widget=Select(attrs={'class': 'form-control'}),
     )
     file = FileField(
-        label=_('Выберите файл'),
+        label=_("Выберите файл"),
         widget=ClearableFileInput(
             attrs={
-                'class': 'form-control',
-                'accept': '.jpg,.jpeg,.png',
-                'data-max-size': '5242880',  # 5MB в байтах
+                "class": "form-control",
+                "accept": ".jpg,.jpeg,.png",
+                "data-max-size": "5242880",
             },
         ),
         validators=[validate_image_jpg_png],
@@ -296,7 +276,6 @@ class UploadImageForm(Form):
     def clean_file(self):
         file = self.cleaned_data.get('file')
         if file:
-            # Проверка размера файла (5MB)
             if file.size > 5 * 1024 * 1024:
                 raise ValidationError(_('Размер файла не должен превышать 5MB'))
         return file

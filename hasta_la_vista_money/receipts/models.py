@@ -15,8 +15,6 @@ OPERATION_TYPES = (
 
 
 class Seller(models.Model):
-    """Модель продавца."""
-
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -47,8 +45,6 @@ class Seller(models.Model):
 
 
 class Product(models.Model):
-    """Модель продуктов."""
-
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -86,8 +82,6 @@ class Product(models.Model):
 
 
 class Receipt(models.Model):
-    """Модель чека."""
-
     receipt_date = models.DateTimeField()
     number_receipt = models.IntegerField(default=None, null=True)
     nds10 = models.DecimalField(

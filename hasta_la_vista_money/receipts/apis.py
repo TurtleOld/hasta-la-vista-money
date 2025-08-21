@@ -1,5 +1,6 @@
 import decimal
 import json
+from datetime import datetime
 
 from django.db.models import QuerySet
 from hasta_la_vista_money.finance_account.models import Account
@@ -87,7 +88,14 @@ class SellerCreateAPIView(APIView):
 
 class ReceiptCreateAPIView(ListCreateAPIView):
     def post(self, request, *args, **kwargs):
-        request_data = json.loads(request.body)
+        try:
+            request_data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return Response(
+                "Invalid JSON data",
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         user_id = request_data.get('user')
         account_id = request_data.get('finance_account')
         receipt_date = request_data.get('receipt_date')
@@ -114,43 +122,86 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             ).first()
 
             if not check_existing_receipt:
-                user = User.objects.get(id=user_id)
+                try:
+                    user = User.objects.get(id=user_id)
+                except User.DoesNotExist:
+                    return Response(
+                        f"User with id {user_id} does not exist",
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                try:
+                    account = Account.objects.get(id=account_id, user=user)
+                except Account.DoesNotExist:
+                    return Response(
+                        f"Account with id {account_id} does not exist or does not belong to user {user_id}",
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 seller_data['user'] = user
-                account = Account.objects.get(id=account_id)
+
                 account.balance -= decimal.Decimal(total_sum)
                 account.save()
+
                 request_data['account'] = account
                 seller = Seller.objects.create(**seller_data)
+
+                if isinstance(receipt_date, str):
+                    receipt_date = datetime.fromisoformat(
+                        receipt_date.replace("Z", "+00:00")
+                    )
+
                 receipt = Receipt.objects.create(
                     user=user,
                     account=account,
                     receipt_date=receipt_date,
                     seller=seller,
-                    total_sum=total_sum,
+                    total_sum=decimal.Decimal(str(total_sum)),
                     number_receipt=number_receipt,
                     operation_type=operation_type,
-                    nds10=nds10,
-                    nds20=nds20,
+                    nds10=decimal.Decimal(str(nds10)) if nds10 else None,
+                    nds20=decimal.Decimal(str(nds20)) if nds20 else None,
                 )
 
-                products_data = []
+                products_objects = []
                 for product_data in products_data:
-                    product_data.pop('receipt', None)
-                    product_data['user'] = user
-                    products_data.append(Product(**product_data))
+                    product_data_copy = product_data.copy()
+                    product_data_copy.pop("receipt", None)
+                    product_data_copy["user"] = user
 
-                products = Product.objects.bulk_create(products_data)
+                    if "price" in product_data_copy:
+                        product_data_copy["price"] = decimal.Decimal(
+                            str(product_data_copy["price"])
+                        )
+                    if "quantity" in product_data_copy:
+                        product_data_copy["quantity"] = decimal.Decimal(
+                            str(product_data_copy["quantity"])
+                        )
+                    if "amount" in product_data_copy:
+                        product_data_copy["amount"] = decimal.Decimal(
+                            str(product_data_copy["amount"])
+                        )
 
+                    if (
+                        "category" in product_data_copy
+                        and product_data_copy["category"] is None
+                    ):
+                        product_data_copy["category"] = ""
+
+                    products_objects.append(Product(**product_data_copy))
+
+                products = Product.objects.bulk_create(products_objects)
                 receipt.product.set(products)
 
                 return Response(
                     ReceiptSerializer(receipt).data,
                     status=status.HTTP_201_CREATED,
                 )
-            return Response(
-                'Такой чек уже был добавлен ранее',
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            else:
+                return Response(
+                    "Такой чек уже был добавлен ранее",
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         except Exception as error:
             return Response(
                 str(error),

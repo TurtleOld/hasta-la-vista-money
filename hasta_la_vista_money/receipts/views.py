@@ -51,8 +51,6 @@ class ReceiptView(
     SuccessMessageMixin,
     FilterView[Receipt, ReceiptFilter],  # type: ignore[misc]
 ):
-    """Класс представления чека на сайте."""
-
     paginate_by = 10
     model = Receipt
     filterset_class = ReceiptFilter
@@ -129,7 +127,6 @@ class ReceiptView(
             'receipts',
         )
 
-        # Paginator receipts table
         pages_receipt_table = paginator_custom_view(
             self.request,
             receipt_info_by_month,
@@ -180,12 +177,6 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
     success_message = constants.SUCCESS_MESSAGE_CREATE_RECEIPT
 
     def __init__(self, *args, **kwargs):
-        """
-        Конструктов класса инициализирующий аргументы класса.
-
-        :param args:
-        :param kwargs:
-        """
         self.request = None
         super().__init__(*args, **kwargs)
 
@@ -347,8 +338,6 @@ class ProductByMonthView(LoginRequiredMixin, ListView):
 
 
 class UploadImageView(LoginRequiredMixin, FormView):
-    """Классическая синхронная обработка загрузки и обработки изображений чеков."""
-
     template_name = 'receipts/upload_image.html'
     form_class = UploadImageForm
     success_url = reverse_lazy('receipts:list')

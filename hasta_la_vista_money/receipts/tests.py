@@ -29,8 +29,6 @@ from rest_framework.test import APITestCase
 
 
 class TestReceipt(TestCase):
-    """Тесты для модели и представлений чеков."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
@@ -40,7 +38,6 @@ class TestReceipt(TestCase):
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
         self.user2 = User.objects.get(pk=2)
         self.account = Account.objects.get(pk=1)
@@ -49,17 +46,14 @@ class TestReceipt(TestCase):
         self.product = Product.objects.get(pk=1)
 
     def test_receipt_list(self):
-        """Тест отображения списка чеков."""
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_receipt_create(self):
-        """Тест создания чека."""
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:create')
 
-        # Создаём необходимые объекты для формы
         new_seller_data = {
             'user': self.user,
             'name_seller': 'ООО Рога и Копыта',
@@ -89,24 +83,20 @@ class TestReceipt(TestCase):
         self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_receipt_delete(self):
-        """Тест удаления чека."""
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:delete', kwargs={'pk': self.receipt.pk})
         response = self.client.post(url)
         self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_receipt_list_unauthorized(self):
-        """Тест доступа к списку чеков без авторизации."""
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertRedirects(response, '/login/?next=/receipts/')
 
     def test_receipt_create_unauthorized(self):
-        """Тест создания чека без авторизации."""
         response = self.client.get(reverse_lazy('receipts:create'))
         self.assertRedirects(response, '/login/?next=/receipts/create/')
 
     def test_receipt_delete_unauthorized(self):
-        """Тест удаления чека без авторизации."""
         response = self.client.get(
             reverse_lazy('receipts:delete', kwargs={'pk': self.receipt.pk}),
         )
@@ -114,19 +104,15 @@ class TestReceipt(TestCase):
 
 
 class TestSeller(TestCase):
-    """Тесты для модели и представлений продавцов."""
-
     fixtures = [
         'users.yaml',
         'receipt_seller.yaml',
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
 
     def test_seller_creation(self):
-        """Тест создания продавца."""
         seller_data = {
             'name_seller': 'Тестовый магазин',
             'retail_place_address': 'ул. Тестовая, 1',
@@ -137,12 +123,10 @@ class TestSeller(TestCase):
         self.assertEqual(seller.user, self.user)
 
     def test_seller_str_representation(self):
-        """Тест строкового представления продавца."""
         seller = Seller.objects.create(user=self.user, name_seller='Тестовый продавец')
         self.assertEqual(str(seller), 'Тестовый продавец')
 
     def test_seller_create_view(self):
-        """Тест создания продавца через view."""
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:create_seller')
 
@@ -162,19 +146,15 @@ class TestSeller(TestCase):
 
 
 class TestProduct(TestCase):
-    """Тесты для модели продуктов."""
-
     fixtures = [
         'users.yaml',
         'receipt_product.yaml',
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
 
     def test_product_creation(self):
-        """Тест создания продукта."""
         product_data = {
             'user': self.user,
             'product_name': 'Тестовый продукт',
@@ -190,7 +170,6 @@ class TestProduct(TestCase):
         self.assertEqual(product.amount, Decimal('201.00'))
 
     def test_product_str_representation(self):
-        """Тест строкового представления продукта."""
         product = Product.objects.create(
             user=self.user,
             product_name='Тестовый продукт',
@@ -198,7 +177,6 @@ class TestProduct(TestCase):
         self.assertEqual(str(product), 'Тестовый продукт')
 
     def test_product_with_zero_quantity(self):
-        """Тест продукта с нулевым количеством."""
         product_data = {
             'user': self.user,
             'product_name': 'Продукт с нулевым количеством',
@@ -211,8 +189,6 @@ class TestProduct(TestCase):
 
 
 class TestReceiptModel(TestCase):
-    """Тесты для модели чека."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
@@ -221,13 +197,11 @@ class TestReceiptModel(TestCase):
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
     def test_receipt_creation(self):
-        """Тест создания чека."""
         receipt_data = {
             'user': self.user,
             'account': self.account,
@@ -245,7 +219,6 @@ class TestReceiptModel(TestCase):
         self.assertEqual(receipt.total_sum, Decimal('500.00'))
 
     def test_receipt_ordering(self):
-        """Тест сортировки чеков по дате."""
         receipt2 = Receipt.objects.create(
             user=self.user,
             account=self.account,
@@ -258,7 +231,6 @@ class TestReceiptModel(TestCase):
         self.assertEqual(receipts[0], receipt2)
 
     def test_receipt_with_products(self):
-        """Тест чека с продуктами."""
         receipt = Receipt.objects.create(
             user=self.user,
             account=self.account,
@@ -287,8 +259,6 @@ class TestReceiptModel(TestCase):
 
 
 class TestForms(TestCase):
-    """Тесты для форм."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
@@ -296,13 +266,11 @@ class TestForms(TestCase):
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
     def test_seller_form_valid(self):
-        """Тест валидной формы продавца."""
         form_data = {
             'name_seller': 'Тестовый продавец',
             'retail_place_address': 'ул. Тестовая, 1',
@@ -312,7 +280,6 @@ class TestForms(TestCase):
         self.assertTrue(form.is_valid())
 
     def test_seller_form_empty_fields(self):
-        """Тест формы продавца с пустыми необязательными полями."""
         form_data = {
             'name_seller': 'Тестовый продавец',
             'retail_place_address': '',
@@ -322,7 +289,6 @@ class TestForms(TestCase):
         self.assertTrue(form.is_valid())
 
     def test_product_form_valid(self):
-        """Тест валидной формы продукта."""
         form_data = {
             'product_name': 'Тестовый продукт',
             'price': '100.50',
@@ -333,7 +299,6 @@ class TestForms(TestCase):
         self.assertTrue(form.is_valid())
 
     def test_product_form_invalid_quantity(self):
-        """Тест формы продукта с невалидным количеством."""
         form_data = {
             'product_name': 'Тестовый продукт',
             'price': '100.50',
@@ -345,7 +310,6 @@ class TestForms(TestCase):
         self.assertIn('quantity', form.errors)
 
     def test_product_form_negative_quantity(self):
-        """Тест формы продукта с отрицательным количеством."""
         form_data = {
             'product_name': 'Тестовый продукт',
             'price': '100.50',
@@ -357,7 +321,6 @@ class TestForms(TestCase):
         self.assertIn('quantity', form.errors)
 
     def test_receipt_form_valid(self):
-        """Тест валидной формы чека."""
         form_data = {
             'seller': self.seller.pk,
             'account': self.account.pk,
@@ -372,7 +335,6 @@ class TestForms(TestCase):
         self.assertTrue(form.is_valid())
 
     def test_receipt_form_missing_required_fields(self):
-        """Тест формы чека с отсутствующими обязательными полями."""
         form_data = {
             'seller': self.seller.pk,
             'receipt_date': '2023-06-28 21:24',
@@ -385,7 +347,6 @@ class TestForms(TestCase):
         self.assertIn('account', form.errors)
 
     def test_product_formset_valid(self):
-        """Тест валидного набора форм продуктов."""
         formset_data = {
             'form-TOTAL_FORMS': '2',
             'form-INITIAL_FORMS': '0',
@@ -403,7 +364,6 @@ class TestForms(TestCase):
         self.assertTrue(formset.is_valid())
 
     def test_upload_image_form_valid(self):
-        """Тест валидной формы загрузки изображения."""
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         test_file = SimpleUploadedFile(
@@ -426,8 +386,6 @@ class TestForms(TestCase):
 
 
 class TestReceiptFilter(TestCase):
-    """Тесты для фильтрации чеков."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
@@ -437,13 +395,11 @@ class TestReceiptFilter(TestCase):
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
     def test_filter_by_seller(self):
-        """Тест фильтрации по продавцу."""
         filter_data = {'name_seller': self.seller.pk}
         receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
             data=filter_data,
@@ -454,7 +410,6 @@ class TestReceiptFilter(TestCase):
         self.assertTrue(all(receipt.seller == self.seller for receipt in filtered_qs))
 
     def test_filter_by_account(self):
-        """Тест фильтрации по счету."""
         filter_data = {'account': self.account.pk}
         receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
             data=filter_data,
@@ -465,7 +420,6 @@ class TestReceiptFilter(TestCase):
         self.assertTrue(all(receipt.account == self.account for receipt in filtered_qs))
 
     def test_filter_by_date_range(self):
-        """Тест фильтрации по диапазону дат."""
         filter_data = {
             'receipt_date_after': '2023-01-01',
             'receipt_date_before': '2023-12-31',
@@ -482,8 +436,6 @@ class TestReceiptFilter(TestCase):
 
 
 class TestReceiptAPIs(APITestCase):
-    """Тесты для API чеков."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
@@ -493,7 +445,6 @@ class TestReceiptAPIs(APITestCase):
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
@@ -501,28 +452,24 @@ class TestReceiptAPIs(APITestCase):
         self.client.force_authenticate(user=self.user)
 
     def test_receipt_list_api(self):
-        """Тест API списка чеков."""
         url = reverse_lazy('receipts:api_list')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsInstance(response.json(), list)
 
     def test_receipt_list_api_unauthorized(self):
-        """Тест API списка чеков без авторизации."""
         self.client.force_authenticate(user=None)
         url = reverse_lazy('receipts:api_list')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_seller_detail_api(self):
-        """Тест API деталей продавца."""
         url = reverse_lazy('receipts:seller', kwargs={'id': self.seller.pk})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()['name_seller'], self.seller.name_seller)
 
     def test_seller_create_api(self):
-        """Тест API создания продавца."""
         url = reverse_lazy('receipts:seller_create_api')
         data = {
             'name_seller': 'Новый продавец через API',
@@ -534,7 +481,6 @@ class TestReceiptAPIs(APITestCase):
         self.assertEqual(response.json()['name_seller'], 'Новый продавец через API')
 
     def test_data_url_api(self):
-        """Тест API для обработки data URL."""
         url = reverse_lazy('receipts:receipt_image')
         data = {'data_url': 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD'}
         response = self.client.post(url, data)
@@ -542,14 +488,12 @@ class TestReceiptAPIs(APITestCase):
         self.assertIn('message', response.json())
 
     def test_data_url_api_invalid_data(self):
-        """Тест API для обработки data URL с невалидными данными."""
         url = reverse_lazy('receipts:receipt_image')
         data: dict[str, Any] = {}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_receipt_create_api(self):
-        """Тест API создания чека."""
         url = reverse_lazy('receipts:receipt_api_create')
         data: dict[str, Any] = {
             'user': self.user.pk,
@@ -588,7 +532,6 @@ class TestReceiptAPIs(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_receipt_create_api_duplicate(self):
-        """Тест API создания дублирующегося чека."""
         url = reverse_lazy('receipts:receipt_api_create')
         data = {
             'user': self.user.pk,
@@ -620,10 +563,7 @@ class TestReceiptAPIs(APITestCase):
 
 
 class TestServices(TestCase):
-    """Тесты для сервисов."""
-
     def test_image_to_base64(self):
-        """Тест конвертации изображения в base64."""
         test_file = SimpleUploadedFile(
             'test.jpg',
             b'fake-image-content',
@@ -636,7 +576,6 @@ class TestServices(TestCase):
 
     @patch('hasta_la_vista_money.receipts.services.OpenAI')
     def test_analyze_image_with_ai(self, mock_openai):
-        """Тест анализа изображения с помощью AI."""
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = '{"test": "data"}'
@@ -658,7 +597,6 @@ class TestServices(TestCase):
 
     @patch('hasta_la_vista_money.receipts.services.OpenAI')
     def test_analyze_image_with_ai_error(self, mock_openai):
-        """Тест обработки ошибки при анализе изображения."""
         mock_client = Mock()
         mock_client.chat.completions.create.side_effect = Exception('API Error')
         mock_openai.return_value = mock_client
@@ -674,34 +612,28 @@ class TestServices(TestCase):
 
 
 class TestUploadImageView(TestCase):
-    """Тесты для представления загрузки изображений."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
 
     def test_upload_image_view_get(self):
-        """Тест GET запроса к странице загрузки изображения."""
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:upload')
         response = self.client.get(url)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_upload_image_view_unauthorized(self):
-        """Тест доступа к странице загрузки изображения без авторизации."""
         url = reverse_lazy('receipts:upload')
         response = self.client.get(url)
         self.assertRedirects(response, '/login/?next=/receipts/upload/')
 
     @patch('hasta_la_vista_money.receipts.views.analyze_image_with_ai')
     def test_upload_image_view_post(self, mock_analyze):
-        """Тест POST запроса к странице загрузки изображения."""
         mock_analyze.return_value = json.dumps(
             {
                 'name_seller': 'Тестовый продавец',
@@ -742,8 +674,6 @@ class TestUploadImageView(TestCase):
 
 
 class TestProductByMonthView(TestCase):
-    """Тесты для представления продуктов по месяцам."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
@@ -753,38 +683,31 @@ class TestProductByMonthView(TestCase):
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
 
     def test_product_by_month_view(self):
-        """Тест представления продуктов по месяцам."""
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:products')
         response = self.client.get(url)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_product_by_month_view_unauthorized(self):
-        """Тест доступа к представлению продуктов по месяцам без авторизации."""
         url = reverse_lazy('receipts:products')
         response = self.client.get(url)
         self.assertRedirects(response, '/login/?next=/receipts/products')
 
 
 class TestModelValidation(TestCase):
-    """Тесты валидации моделей."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
 
     def test_receipt_negative_total_sum(self):
-        """Тест чека с отрицательной суммой."""
         seller = Seller.objects.create(
             user=self.user,
             name_seller='Тестовый продавец',
@@ -801,7 +724,6 @@ class TestModelValidation(TestCase):
         self.assertEqual(receipt.total_sum, Decimal('-100.00'))
 
     def test_product_zero_price(self):
-        """Тест продукта с нулевой ценой."""
         product = Product.objects.create(
             user=self.user,
             product_name='Бесплатный продукт',
@@ -814,7 +736,6 @@ class TestModelValidation(TestCase):
         self.assertEqual(product.amount, Decimal('0.00'))
 
     def test_seller_empty_name(self):
-        """Тест продавца с пустым именем."""
         seller = Seller.objects.create(
             user=self.user,
             name_seller='',
@@ -824,15 +745,12 @@ class TestModelValidation(TestCase):
 
 
 class TestReceiptOperations(TestCase):
-    """Тесты операций с чеками."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.create(
@@ -841,7 +759,6 @@ class TestReceiptOperations(TestCase):
         )
 
     def test_receipt_operation_types(self):
-        """Тест различных типов операций."""
         operation_types = [1, 2, 3, 4]
 
         for op_type in operation_types:
@@ -856,7 +773,6 @@ class TestReceiptOperations(TestCase):
             self.assertEqual(receipt.operation_type, op_type)
 
     def test_receipt_manual_flag(self):
-        """Тест флага ручного ввода чека."""
         receipt = Receipt.objects.create(
             user=self.user,
             account=self.account,
@@ -869,7 +785,6 @@ class TestReceiptOperations(TestCase):
         self.assertTrue(receipt.manual)
 
     def test_receipt_nds_calculation(self):
-        """Тест расчета НДС."""
         receipt = Receipt.objects.create(
             user=self.user,
             account=self.account,
@@ -885,15 +800,12 @@ class TestReceiptOperations(TestCase):
 
 
 class TestReceiptPermissions(TestCase):
-    """Тесты разрешений для чеков."""
-
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
         self.user1 = User.objects.get(pk=1)
         self.user2 = User.objects.create_user(
             username='testuser2',
@@ -916,7 +828,6 @@ class TestReceiptPermissions(TestCase):
         )
 
     def test_user_can_only_see_own_receipts(self):
-        """Тест, что пользователь видит только свои чеки."""
         receipt1 = Receipt.objects.create(
             user=self.user1,
             account=self.account1,
@@ -933,7 +844,6 @@ class TestReceiptPermissions(TestCase):
         self.assertEqual(receipts[0], receipt1)
 
     def test_user_can_only_see_own_sellers(self):
-        """Тест, что пользователь видит только своих продавцов."""
         self.client.force_login(self.user1)
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
@@ -944,7 +854,6 @@ class TestReceiptPermissions(TestCase):
         self.assertEqual(seller_queryset[0], self.seller1)
 
     def test_user_can_only_see_own_accounts(self):
-        """Тест, что пользователь видит только свои счета."""
         self.client.force_login(self.user1)
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
