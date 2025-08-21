@@ -67,7 +67,7 @@ staticfiles:
 
 .PHONY: start
 start:
-		@uv run python manage.py runserver
+		@uv run python manage.py runserver 0.0.0.0:8000
 
 .PHONY: secretkey
 secretkey:
