@@ -146,7 +146,6 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                 request_data['account'] = account
                 seller = Seller.objects.create(**seller_data)
 
-                # Преобразуем строку даты в datetime объект
                 if isinstance(receipt_date, str):
                     receipt_date = datetime.fromisoformat(
                         receipt_date.replace("Z", "+00:00")
@@ -170,7 +169,6 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                     product_data_copy.pop("receipt", None)
                     product_data_copy["user"] = user
 
-                    # Преобразуем числовые поля в Decimal
                     if "price" in product_data_copy:
                         product_data_copy["price"] = decimal.Decimal(
                             str(product_data_copy["price"])
@@ -184,7 +182,6 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                             str(product_data_copy["amount"])
                         )
 
-                    # Исправляем проблему с category - заменяем None на пустую строку
                     if (
                         "category" in product_data_copy
                         and product_data_copy["category"] is None

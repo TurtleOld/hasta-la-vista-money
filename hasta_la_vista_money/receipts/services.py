@@ -14,9 +14,6 @@ T = TypeVar('T')
 
 
 def image_to_base64(uploaded_file) -> str:
-    """
-    Преобразует загруженное изображение в строку Base64.
-    """
     file_bytes = uploaded_file.read()
     encoded_str = base64.b64encode(file_bytes).decode('utf-8')
     return f'data:image/jpeg;base64,{encoded_str}'
@@ -114,15 +111,6 @@ def paginator_custom_view(
     paginate_by: int,
     page_name: str,
 ) -> Page[Sequence[T]]:
-    """
-    Кастомный пагинатор для данных.
-
-    :param request
-    :param queryset: QuerySet или список данных
-    :param paginate_by: количество элементов на странице
-    :param page_name: имя параметра страницы в URL
-    :return Page: страница с данными
-    """
     paginator = Paginator(queryset, paginate_by)
     num_page = request.GET.get(page_name)
     return paginator.get_page(num_page)
