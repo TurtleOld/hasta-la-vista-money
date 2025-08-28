@@ -863,3 +863,114 @@ class TestReceiptPermissions(TestCase):
         for account in account_queryset:
             self.assertEqual(account.user, self.user1)
         self.assertNotIn(self.account2, account_queryset)
+
+
+class TestReceiptDeleteAPI(APITestCase):
+    """Тесты для API удаления чеков"""
+
+    fixtures = [
+        "users.yaml",
+        "finance_account.yaml",
+        "receipt_receipt.yaml",
+        "receipt_seller.yaml",
+        "receipt_product.yaml",
+    ]
+
+    def setUp(self) -> None:
+        self.user = User.objects.get(pk=1)
+        self.user2 = User.objects.get(pk=2)
+        self.receipt = Receipt.objects.get(pk=1)
+        self.account = Account.objects.get(pk=1)
+        self.seller = Seller.objects.get(pk=1)
+
+    def test_delete_receipt_success(self):
+        """Тест успешного удаления чека через API"""
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": self.receipt.pk})
+
+        self.assertTrue(Receipt.objects.filter(pk=self.receipt.pk).exists())
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Receipt.objects.filter(pk=self.receipt.pk).exists())
+
+    def test_delete_receipt_unauthorized(self):
+        """Тест удаления чека без авторизации (API не требует авторизации)"""
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": self.receipt.pk})
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Receipt.objects.filter(pk=self.receipt.pk).exists())
+
+    def test_delete_nonexistent_receipt(self):
+        """Тест удаления несуществующего чека"""
+        nonexistent_pk = 99999
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": nonexistent_pk})
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.data)
+
+    def test_delete_receipt_wrong_user(self):
+        """Тест удаления чека другим пользователем (API не проверяет права)"""
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=self.seller,
+            receipt_date=timezone.now(),
+            total_sum=Decimal("100.00"),
+        )
+
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": receipt.pk})
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
+
+    def test_delete_receipt_with_products(self):
+        """Тест удаления чека с товарами"""
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=self.seller,
+            receipt_date=timezone.now(),
+            total_sum=Decimal("150.00"),
+        )
+
+        product1 = Product.objects.create(
+            user=self.user,
+            product_name="Товар 1",
+            price=Decimal("50.00"),
+            quantity=1,
+            amount=Decimal("50.00"),
+        )
+        product2 = Product.objects.create(
+            user=self.user,
+            product_name="Товар 2",
+            price=Decimal("100.00"),
+            quantity=1,
+            amount=Decimal("100.00"),
+        )
+
+        receipt.product.add(product1, product2)
+
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": receipt.pk})
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
+        self.assertTrue(Product.objects.filter(pk=product1.pk).exists())
+        self.assertTrue(Product.objects.filter(pk=product2.pk).exists())
+
+    def test_delete_receipt_invalid_pk_format(self):
+        """Тест удаления чека с некорректным форматом ID"""
+        url = '/receipts/delete/invalid/'
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

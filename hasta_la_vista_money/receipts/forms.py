@@ -256,12 +256,12 @@ class UploadImageForm(Form):
         widget=Select(attrs={'class': 'form-control'}),
     )
     file = FileField(
-        label=_("Выберите файл"),
+        label=_('Выберите файл'),
         widget=ClearableFileInput(
             attrs={
-                "class": "form-control",
-                "accept": ".jpg,.jpeg,.png",
-                "data-max-size": "5242880",
+                'class': 'form-control',
+                'accept': '.jpg,.jpeg,.png',
+                'data-max-size': '5242880',
             },
         ),
         validators=[validate_image_jpg_png],
