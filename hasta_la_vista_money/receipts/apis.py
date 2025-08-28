@@ -92,7 +92,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             request_data = json.loads(request.body)
         except json.JSONDecodeError:
             return Response(
-                "Invalid JSON data",
+                'Invalid JSON data',
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -126,7 +126,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                     user = User.objects.get(id=user_id)
                 except User.DoesNotExist:
                     return Response(
-                        f"User with id {user_id} does not exist",
+                        f'User with id {user_id} does not exist',
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
@@ -134,7 +134,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                     account = Account.objects.get(id=account_id, user=user)
                 except Account.DoesNotExist:
                     return Response(
-                        f"Account with id {account_id} does not exist or does not belong to user {user_id}",
+                        f'Account with id {account_id} does not exist or does not belong to user {user_id}',
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
@@ -148,7 +148,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 
                 if isinstance(receipt_date, str):
                     receipt_date = datetime.fromisoformat(
-                        receipt_date.replace("Z", "+00:00")
+                        receipt_date.replace('Z', '+00:00')
                     )
 
                 receipt = Receipt.objects.create(
@@ -166,27 +166,27 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                 products_objects = []
                 for product_data in products_data:
                     product_data_copy = product_data.copy()
-                    product_data_copy.pop("receipt", None)
-                    product_data_copy["user"] = user
+                    product_data_copy.pop('receipt', None)
+                    product_data_copy['user'] = user
 
-                    if "price" in product_data_copy:
-                        product_data_copy["price"] = decimal.Decimal(
-                            str(product_data_copy["price"])
+                    if 'price' in product_data_copy:
+                        product_data_copy['price'] = decimal.Decimal(
+                            str(product_data_copy['price'])
                         )
-                    if "quantity" in product_data_copy:
-                        product_data_copy["quantity"] = decimal.Decimal(
-                            str(product_data_copy["quantity"])
+                    if 'quantity' in product_data_copy:
+                        product_data_copy['quantity'] = decimal.Decimal(
+                            str(product_data_copy['quantity'])
                         )
-                    if "amount" in product_data_copy:
-                        product_data_copy["amount"] = decimal.Decimal(
-                            str(product_data_copy["amount"])
+                    if 'amount' in product_data_copy:
+                        product_data_copy['amount'] = decimal.Decimal(
+                            str(product_data_copy['amount'])
                         )
 
                     if (
-                        "category" in product_data_copy
-                        and product_data_copy["category"] is None
+                        'category' in product_data_copy
+                        and product_data_copy['category'] is None
                     ):
-                        product_data_copy["category"] = ""
+                        product_data_copy['category'] = ''
 
                     products_objects.append(Product(**product_data_copy))
 
@@ -199,7 +199,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                 )
             else:
                 return Response(
-                    "Такой чек уже был добавлен ранее",
+                    'Такой чек уже был добавлен ранее',
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         except Exception as error:
@@ -216,9 +216,10 @@ class ReceiptDeleteAPIView(APIView):
             receipt.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception as error:
-            return Response(status=status.HTTP_400_BAD_REQUEST, data={'error': str(error)})
+            return Response(
+                status=status.HTTP_400_BAD_REQUEST, data={'error': str(error)}
+            )
 
-        
 
 class SellerAutocompleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
