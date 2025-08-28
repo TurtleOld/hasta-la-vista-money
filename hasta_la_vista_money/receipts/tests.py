@@ -863,3 +863,132 @@ class TestReceiptPermissions(TestCase):
         for account in account_queryset:
             self.assertEqual(account.user, self.user1)
         self.assertNotIn(self.account2, account_queryset)
+
+
+class TestReceiptDeleteAPI(APITestCase):
+    """Тесты для API удаления чеков"""
+
+    fixtures = [
+        "users.yaml",
+        "finance_account.yaml",
+        "receipt_receipt.yaml",
+        "receipt_seller.yaml",
+        "receipt_product.yaml",
+    ]
+
+    def setUp(self) -> None:
+        self.user = User.objects.get(pk=1)
+        self.user2 = User.objects.get(pk=2)
+        self.receipt = Receipt.objects.get(pk=1)
+        self.account = Account.objects.get(pk=1)
+        self.seller = Seller.objects.get(pk=1)
+
+    def test_delete_receipt_success(self):
+        """Тест успешного удаления чека через API"""
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": self.receipt.pk})
+
+        # Проверяем, что чек существует перед удалением
+        self.assertTrue(Receipt.objects.filter(pk=self.receipt.pk).exists())
+
+        response = self.client.delete(url)
+
+        # Проверяем статус ответа
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Проверяем, что чек был удален
+        self.assertFalse(Receipt.objects.filter(pk=self.receipt.pk).exists())
+
+    def test_delete_receipt_unauthorized(self):
+        """Тест удаления чека без авторизации (API не требует авторизации)"""
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": self.receipt.pk})
+
+        response = self.client.delete(url)
+
+        # API не проверяет авторизацию, поэтому удаление проходит успешно
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Проверяем, что чек был удален
+        self.assertFalse(Receipt.objects.filter(pk=self.receipt.pk).exists())
+
+    def test_delete_nonexistent_receipt(self):
+        """Тест удаления несуществующего чека"""
+        nonexistent_pk = 99999
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": nonexistent_pk})
+
+        response = self.client.delete(url)
+
+        # Проверяем, что возвращается ошибка 400
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", response.data)
+
+    def test_delete_receipt_wrong_user(self):
+        """Тест удаления чека другим пользователем (API не проверяет права)"""
+        # Создаем чек для первого пользователя
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=self.seller,
+            receipt_date=timezone.now(),
+            total_sum=Decimal("100.00"),
+        )
+
+        # Удаляем чек без авторизации (API позволяет это)
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": receipt.pk})
+
+        response = self.client.delete(url)
+
+        # Проверяем, что чек был удален (API не проверяет права доступа)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
+
+    def test_delete_receipt_with_products(self):
+        """Тест удаления чека с товарами"""
+        # Создаем чек
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=self.seller,
+            receipt_date=timezone.now(),
+            total_sum=Decimal("150.00"),
+        )
+
+        # Создаем товары
+        product1 = Product.objects.create(
+            user=self.user,
+            product_name="Товар 1",
+            price=Decimal("50.00"),
+            quantity=1,
+            amount=Decimal("50.00"),
+        )
+        product2 = Product.objects.create(
+            user=self.user,
+            product_name="Товар 2",
+            price=Decimal("100.00"),
+            quantity=1,
+            amount=Decimal("100.00"),
+        )
+
+        # Связываем товары с чеком
+        receipt.product.add(product1, product2)
+
+        url = reverse_lazy("receipts:delete_api", kwargs={"pk": receipt.pk})
+
+        response = self.client.delete(url)
+
+        # Проверяем успешное удаление
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Проверяем, что чек удален, но товары остались (ManyToMany)
+        self.assertFalse(Receipt.objects.filter(pk=receipt.pk).exists())
+        self.assertTrue(Product.objects.filter(pk=product1.pk).exists())
+        self.assertTrue(Product.objects.filter(pk=product2.pk).exists())
+
+    def test_delete_receipt_invalid_pk_format(self):
+        """Тест удаления чека с некорректным форматом ID"""
+        # Тестируем с нечисловым ID - это вызовет 404 на уровне URL
+        url = '/receipts/delete/invalid/'
+
+        response = self.client.delete(url)
+
+        # Проверяем, что возвращается ошибка 404 (неправильный URL)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
