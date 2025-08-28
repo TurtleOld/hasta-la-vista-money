@@ -209,6 +209,17 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             )
 
 
+class ReceiptDeleteAPIView(APIView):
+    def delete(self, request, *args, **kwargs):
+        try:
+            receipt = Receipt.objects.get(id=kwargs['pk'])
+            receipt.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as error:
+            return Response(status=status.HTTP_400_BAD_REQUEST, data={'error': str(error)})
+
+        
+
 class SellerAutocompleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
