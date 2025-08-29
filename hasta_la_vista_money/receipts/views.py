@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from django.views.generic.edit import UpdateView
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -202,10 +203,24 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
             receipt.manual = True
             receipt.save()
             for product_form in product_formset:
-                product = product_form.save(commit=False)
-                product.user = request.user
-                product.save()
-                receipt.product.add(product)
+                if product_form.cleaned_data and not product_form.cleaned_data.get(
+                    "DELETE", False
+                ):
+                    product_data = product_form.cleaned_data
+                    # Проверяем, что все обязательные поля заполнены
+                    if (
+                        product_data.get("product_name")
+                        and product_data.get("price")
+                        and product_data.get("quantity")
+                    ):
+                        product = Product.objects.create(
+                            user=request.user,
+                            product_name=product_data["product_name"],
+                            price=product_data["price"],
+                            quantity=product_data["quantity"],
+                            amount=product_data["amount"],
+                        )
+                        receipt.product.add(product)
             return receipt
 
     def form_valid_receipt(self, receipt_form, product_formset, seller):
@@ -256,6 +271,164 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
                 return self.form_invalid(form)
         else:
             return self.form_invalid(form)
+
+    def form_invalid(self, form):
+        product_formset = ProductFormSet(self.request.POST)
+        context = self.get_context_data(form=form)
+        context["product_formset"] = product_formset
+        return self.render_to_response(context)
+
+
+class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+    template_name = "receipts/receipt_update.html"
+    success_url = reverse_lazy("receipts:list")
+    model = Receipt
+    form_class = ReceiptForm
+    success_message = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
+
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+    def get_object(self, queryset: Any = None) -> Receipt:
+        receipt = get_object_or_404(
+            Receipt,
+            pk=self.kwargs["pk"],
+            user=self.request.user,
+        )
+        return receipt
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        receipt_form = self.get_form()
+
+        receipt_form.fields["account"].queryset = Account.objects.filter(
+            user=self.request.user
+        )
+        receipt_form.fields["seller"].queryset = Seller.objects.filter(
+            user=self.request.user
+        )
+
+        context["receipt_form"] = receipt_form
+
+        existing_products = self.object.product.all() if self.object else []
+        initial_data = []
+        for product in existing_products:
+            initial_data.append(
+                {
+                    "product_name": product.product_name,
+                    "price": product.price,
+                    "quantity": product.quantity,
+                    "amount": product.amount,
+                }
+            )
+        context["product_formset"] = ProductFormSet(initial=initial_data)
+        return context
+
+    def form_valid(self, form):
+        receipt = self.get_object()
+        product_formset = ProductFormSet(self.request.POST)
+
+        if form.is_valid() and product_formset.is_valid():
+            old_total_sum = receipt.total_sum
+            old_account = receipt.account
+
+            receipt = form.save()
+
+            receipt.product.clear()
+
+            new_total_sum = Decimal("0.00")
+            for product_form in product_formset:
+                if product_form.cleaned_data and not product_form.cleaned_data.get(
+                    "DELETE", False
+                ):
+                    product_data = product_form.cleaned_data
+                    if (
+                        product_data.get("product_name")
+                        and product_data.get("price")
+                        and product_data.get("quantity")
+                    ):
+                        product = Product.objects.create(
+                            user=self.request.user,
+                            product_name=product_data["product_name"],
+                            price=product_data["price"],
+                            quantity=product_data["quantity"],
+                            amount=product_data["amount"],
+                        )
+                        receipt.product.add(product)
+                        new_total_sum += product_data["amount"]
+
+            receipt.total_sum = new_total_sum
+            receipt.save()
+
+            new_account = receipt.account
+
+            self.update_account_balance(
+                old_account,
+                new_account,
+                old_total_sum,
+                new_total_sum,
+            )
+
+            return super().form_valid(form)
+        else:
+            return self.form_invalid(form)
+
+    def form_invalid(self, form):
+        product_formset = ProductFormSet(self.request.POST)
+        context = self.get_context_data(form=form)
+        context["product_formset"] = product_formset
+
+        if not form.is_valid():
+            messages.error(self.request, "Пожалуйста, исправьте ошибки в форме.")
+        if not product_formset.is_valid():
+            messages.error(self.request, "Пожалуйста, исправьте ошибки в товарах.")
+
+        return self.render_to_response(context)
+
+    def update_account_balance(
+        self, old_account, new_account, old_total_sum, new_total_sum
+    ):
+        """
+        Обновляет баланс счёта при изменении суммы чека.
+
+        Логика:
+        1. Если счёт не изменился:
+           - Вычисляем разницу между старой и новой суммой
+           - Если сумма увеличилась → уменьшаем баланс на разницу
+           - Если сумма уменьшилась → увеличиваем баланс на разницу
+        2. Если счёт изменился:
+           - Возвращаем старую сумму на старый счёт
+           - Списываем новую сумму с нового счёта
+        """
+
+        if (
+            old_account.user != self.request.user
+            or new_account.user != self.request.user
+        ):
+            return
+
+        try:
+            old_account_obj = Account.objects.get(id=old_account.id)
+            new_account_obj = Account.objects.get(id=new_account.id)
+
+            if old_account.id == new_account.id:
+                difference = new_total_sum - old_total_sum
+                if difference > 0:
+                    old_account_obj.balance -= difference
+                else:
+                    old_account_obj.balance += abs(difference)
+                old_account_obj.save()
+            else:
+                old_account_obj.balance += old_total_sum
+                old_account_obj.save()
+
+                new_account_obj.balance -= new_total_sum
+                new_account_obj.save()
+
+        except Account.DoesNotExist:
+            logger.error(
+                f"Account not found during receipt update for user {self.request.user}"
+            )
 
 
 class ReceiptDeleteView(LoginRequiredMixin, BaseView, DeleteView):

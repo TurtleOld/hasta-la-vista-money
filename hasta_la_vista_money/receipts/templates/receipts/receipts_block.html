@@ -42,6 +42,9 @@
                     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#receipt-{{ receipt.id }}">
                         <i class="bi bi-eye me-1"></i>{% translate 'Просмотр' %}
                     </button>
+                    <a href="{% url 'receipts:update' receipt.id %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-pencil me-1"></i>{% translate 'Редактировать' %}
+                    </a>
                     <form class="form-remove-receipt-button m-0" action="{% url 'receipts:delete' receipt.id %}" method="post">
                         {% csrf_token %}
                         <input type="hidden" name="receipt_id" value="{{ receipt.id }}">
