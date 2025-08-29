@@ -204,21 +204,21 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
             receipt.save()
             for product_form in product_formset:
                 if product_form.cleaned_data and not product_form.cleaned_data.get(
-                    "DELETE", False
+                    'DELETE', False
                 ):
                     product_data = product_form.cleaned_data
                     # Проверяем, что все обязательные поля заполнены
                     if (
-                        product_data.get("product_name")
-                        and product_data.get("price")
-                        and product_data.get("quantity")
+                        product_data.get('product_name')
+                        and product_data.get('price')
+                        and product_data.get('quantity')
                     ):
                         product = Product.objects.create(
                             user=request.user,
-                            product_name=product_data["product_name"],
-                            price=product_data["price"],
-                            quantity=product_data["quantity"],
-                            amount=product_data["amount"],
+                            product_name=product_data['product_name'],
+                            price=product_data['price'],
+                            quantity=product_data['quantity'],
+                            amount=product_data['amount'],
                         )
                         receipt.product.add(product)
             return receipt
@@ -275,13 +275,13 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
     def form_invalid(self, form):
         product_formset = ProductFormSet(self.request.POST)
         context = self.get_context_data(form=form)
-        context["product_formset"] = product_formset
+        context['product_formset'] = product_formset
         return self.render_to_response(context)
 
 
 class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
-    template_name = "receipts/receipt_update.html"
-    success_url = reverse_lazy("receipts:list")
+    template_name = 'receipts/receipt_update.html'
+    success_url = reverse_lazy('receipts:list')
     model = Receipt
     form_class = ReceiptForm
     success_message = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
@@ -292,7 +292,7 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     def get_object(self, queryset: Any = None) -> Receipt:
         receipt = get_object_or_404(
             Receipt,
-            pk=self.kwargs["pk"],
+            pk=self.kwargs['pk'],
             user=self.request.user,
         )
         return receipt
@@ -301,27 +301,27 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         receipt_form = self.get_form()
 
-        receipt_form.fields["account"].queryset = Account.objects.filter(
+        receipt_form.fields['account'].queryset = Account.objects.filter(
             user=self.request.user
         )
-        receipt_form.fields["seller"].queryset = Seller.objects.filter(
+        receipt_form.fields['seller'].queryset = Seller.objects.filter(
             user=self.request.user
         )
 
-        context["receipt_form"] = receipt_form
+        context['receipt_form'] = receipt_form
 
         existing_products = self.object.product.all() if self.object else []
         initial_data = []
         for product in existing_products:
             initial_data.append(
                 {
-                    "product_name": product.product_name,
-                    "price": product.price,
-                    "quantity": product.quantity,
-                    "amount": product.amount,
+                    'product_name': product.product_name,
+                    'price': product.price,
+                    'quantity': product.quantity,
+                    'amount': product.amount,
                 }
             )
-        context["product_formset"] = ProductFormSet(initial=initial_data)
+        context['product_formset'] = ProductFormSet(initial=initial_data)
         return context
 
     def form_valid(self, form):
@@ -336,26 +336,26 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
             receipt.product.clear()
 
-            new_total_sum = Decimal("0.00")
+            new_total_sum = Decimal('0.00')
             for product_form in product_formset:
                 if product_form.cleaned_data and not product_form.cleaned_data.get(
-                    "DELETE", False
+                    'DELETE', False
                 ):
                     product_data = product_form.cleaned_data
                     if (
-                        product_data.get("product_name")
-                        and product_data.get("price")
-                        and product_data.get("quantity")
+                        product_data.get('product_name')
+                        and product_data.get('price')
+                        and product_data.get('quantity')
                     ):
                         product = Product.objects.create(
                             user=self.request.user,
-                            product_name=product_data["product_name"],
-                            price=product_data["price"],
-                            quantity=product_data["quantity"],
-                            amount=product_data["amount"],
+                            product_name=product_data['product_name'],
+                            price=product_data['price'],
+                            quantity=product_data['quantity'],
+                            amount=product_data['amount'],
                         )
                         receipt.product.add(product)
-                        new_total_sum += product_data["amount"]
+                        new_total_sum += product_data['amount']
 
             receipt.total_sum = new_total_sum
             receipt.save()
@@ -376,12 +376,12 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     def form_invalid(self, form):
         product_formset = ProductFormSet(self.request.POST)
         context = self.get_context_data(form=form)
-        context["product_formset"] = product_formset
+        context['product_formset'] = product_formset
 
         if not form.is_valid():
-            messages.error(self.request, "Пожалуйста, исправьте ошибки в форме.")
+            messages.error(self.request, 'Пожалуйста, исправьте ошибки в форме.')
         if not product_formset.is_valid():
-            messages.error(self.request, "Пожалуйста, исправьте ошибки в товарах.")
+            messages.error(self.request, 'Пожалуйста, исправьте ошибки в товарах.')
 
         return self.render_to_response(context)
 
@@ -427,7 +427,7 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
         except Account.DoesNotExist:
             logger.error(
-                f"Account not found during receipt update for user {self.request.user}"
+                f'Account not found during receipt update for user {self.request.user}'
             )
 
 

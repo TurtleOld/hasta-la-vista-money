@@ -153,9 +153,9 @@ class ProductForm(ModelForm[Product]):
         widget=NumberInput(attrs={'class': 'price'}),
     )
     quantity = DecimalField(
-        label=_("Количество продукта"),
-        help_text=_("Укажите количество продукта"),
-        widget=NumberInput(attrs={"class": "quantity", "step": "0.01"}),
+        label=_('Количество продукта'),
+        help_text=_('Укажите количество продукта'),
+        widget=NumberInput(attrs={'class': 'quantity', 'step': '0.01'}),
         max_digits=10,
         decimal_places=2,
     )
@@ -233,14 +233,14 @@ class ReceiptForm(ModelForm[Receipt]):
     class Meta:
         model = Receipt
         fields = [
-            "seller",
-            "account",
-            "receipt_date",
-            "number_receipt",
-            "operation_type",
-            "nds10",
-            "nds20",
-            "total_sum",
+            'seller',
+            'account',
+            'receipt_date',
+            'number_receipt',
+            'operation_type',
+            'nds10',
+            'nds20',
+            'total_sum',
         ]
 
     products = ProductFormSet()
