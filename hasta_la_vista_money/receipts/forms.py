@@ -152,10 +152,12 @@ class ProductForm(ModelForm[Product]):
         help_text=_('Укажите цену продукта'),
         widget=NumberInput(attrs={'class': 'price'}),
     )
-    quantity = IntegerField(
+    quantity = DecimalField(
         label=_('Количество продукта'),
         help_text=_('Укажите количество продукта'),
-        widget=NumberInput(attrs={'class': 'quantity'}),
+        widget=NumberInput(attrs={'class': 'quantity', 'step': '0.01'}),
+        max_digits=10,
+        decimal_places=2,
     )
     amount = DecimalField(
         label=_('Итоговая сумма за продукт'),
@@ -178,7 +180,7 @@ class ProductForm(ModelForm[Product]):
         return cleaned_data
 
 
-ProductFormSet = formset_factory(ProductForm, extra=1)
+ProductFormSet = formset_factory(ProductForm, extra=1, can_delete=True)
 
 
 class ReceiptForm(ModelForm[Receipt]):
@@ -236,6 +238,8 @@ class ReceiptForm(ModelForm[Receipt]):
             'receipt_date',
             'number_receipt',
             'operation_type',
+            'nds10',
+            'nds20',
             'total_sum',
         ]
 
