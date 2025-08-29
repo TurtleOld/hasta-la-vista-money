@@ -208,6 +208,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function addForm(e) {
         e.preventDefault();
+        if (!container || !productForm.length || !addButton || !totalForms) return;
+
         let newForm = productForm[0].cloneNode(true);
         let formRegex = RegExp(`form-(\\d){1}-`,'g');
         formNum++;
@@ -229,13 +231,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         container.insertBefore(newForm, addButton);
         totalForms.setAttribute('value', `${formNum+1}`);
-        newForm.querySelector('.price').addEventListener('input', amountUpdate);
-        newForm.querySelector('.quantity').addEventListener('input', amountUpdate);
+
+        const priceInput = newForm.querySelector('.price');
+        const quantityInput = newForm.querySelector('.quantity');
+        if (priceInput) priceInput.addEventListener('input', amountUpdate);
+        if (quantityInput) quantityInput.addEventListener('input', amountUpdate);
     }
 
     function removeForm(e) {
         e.preventDefault();
+        if (!totalForms) return;
+
         productForm = document.querySelectorAll(".form-product");
+        if (productForm.length <= 1) return;
+
         let lastForm = productForm[productForm.length - 1];
         let formRegex = RegExp(`form-(\\d){1}-`,'g');
 
@@ -254,21 +263,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        if (productForm.length > 1) {
-            lastForm.remove();
-        }
-        totalForms.setAttribute('value', `${productForm.length}`);
+        lastForm.remove();
+        totalForms.setAttribute('value', `${productForm.length - 1}`);
     }
 
     function amountUpdate() {
+        if (!container) return;
+
         let formInputs = container.querySelectorAll('.form-product');
         formInputs.forEach( formInput => {
             let priceInput = formInput.querySelector('.price');
             let quantityInput = formInput.querySelector('.quantity');
             let amountInput = formInput.querySelector('.amount');
             if (priceInput && quantityInput && amountInput) {
-                let price = parseFloat(priceInput.value);
-                let quantity = parseFloat(quantityInput.value);
+                let price = parseFloat(priceInput.value.replace(',', '.')) || 0;
+                let quantity = parseFloat(quantityInput.value.replace(',', '.')) || 0;
                 let amount = price * quantity;
                 amountInput.value = amount.toFixed(2);
             }
@@ -276,8 +285,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     productForm.forEach(form => {
-        form.querySelector('.price').addEventListener('input', amountUpdate);
-        form.querySelector('.quantity').addEventListener('input', amountUpdate);
+        const priceInput = form.querySelector('.price');
+        const quantityInput = form.querySelector('.quantity');
+        if (priceInput) priceInput.addEventListener('input', amountUpdate);
+        if (quantityInput) quantityInput.addEventListener('input', amountUpdate);
     });
 
     function calculateTotalSum() {
@@ -286,10 +297,12 @@ document.addEventListener('DOMContentLoaded', function() {
         let total_sum = 0;
 
         amountInputs.forEach(amountInput => {
-          total_sum += parseFloat(amountInput.value);
+            total_sum += parseFloat(amountInput.value.replace(',', '.')) || 0;
         });
 
-        totalSumInput.value = total_sum.toFixed(2);
+        if (totalSumInput) {
+            totalSumInput.value = total_sum.toFixed(2);
+        }
     }
 
     const formCreateReceipt = document.getElementById('form-create-receipt');

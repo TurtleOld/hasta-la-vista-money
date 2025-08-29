@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load csp %}
+{% load comma %}
+
+{% block title %}{% translate 'Редактировать чек' %}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0 bg-gradient-primary">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h4 class="mb-3 text-white">
+                                <i class="bi bi-pencil-square me-2"></i>
+                                {% translate 'Редактировать чек' %}
+                            </h4>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <a href="{% url 'receipts:list' %}" class="btn btn-light btn-lg">
+                                <i class="bi bi-arrow-left me-2"></i>
+                                {% translate 'Назад к списку' %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <!-- Receipt Form -->
+                        <div class="mb-4">
+                            <h5 class="mb-3">{% translate 'Информация о чеке' %}</h5>
+                            {% for field in receipt_form %}
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    {{ field | as_crispy_field }}
+                                    {% if field.errors %}
+                                    {% for error in field.errors %}
+                                    <p class="help-block text-danger">{{ error }}</p>
+                                    {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Products Formset -->
+                        <div class="mb-4">
+                            <h5 class="mb-3">{% translate 'Товары' %}</h5>
+                            {{ product_formset.management_form }}
+                            <div id="product-forms">
+                                {% for product_form in product_formset %}
+                                <div class="form-product p-3 border mb-3 {% if product_form.errors %}has-error{% endif %}">
+                                    {{ product_form | crispy }}
+                                    {% if product_form.errors %}
+                                    {% for error in product_form.errors %}
+                                    <p class="help-block text-danger">{{ error }}</p>
+                                    {% endfor %}
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="d-flex gap-2 mb-3">
+                                <button type="button" id="add-form" class="btn btn-outline-warning">
+                                    <i class="bi bi-plus-lg me-1"></i>
+                                    {% translate 'Добавить товар' %}
+                                </button>
+                                <button type="button" id="remove-form" class="btn btn-outline-danger">
+                                    <i class="bi bi-dash-lg me-1"></i>
+                                    {% translate 'Удалить товар' %}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-lg me-1"></i>
+                                {% translate 'Сохранить изменения' %}
+                            </button>
+                            <a href="{% url 'receipts:list' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-lg me-1"></i>
+                                {% translate 'Отмена' %}
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
