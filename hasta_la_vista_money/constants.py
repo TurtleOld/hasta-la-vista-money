@@ -28,6 +28,7 @@ RECEIPT_BE_ADDED: Final = 'Чек успешно добавлен!'
 RECEIPT_CANNOT_BE_ADDED: Final[tuple[str]] = (
     'Чек не корректен, перепроверьте в приложении налоговой!',
 )
+SUCCESS_MESSAGE_UPDATE_RECEIPT: Final = _('Чек успешно обновлен!')
 RECEIPT_NOT_ACCEPTED: Final[tuple[str]] = (
     'Чек не прошёл валидацию! '
     'Вероятно он ещё не попал в базу данных налоговой! '
