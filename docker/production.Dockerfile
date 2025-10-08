@@ -1,4 +1,4 @@
-FROM python:3.13-slim as builder
+FROM python:3.14-slim as builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ COPY . .
 RUN mkdir -p /app/staticfiles && \
     .venv/bin/python manage.py collectstatic --noinput --clear
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
