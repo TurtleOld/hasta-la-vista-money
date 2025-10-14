@@ -63,10 +63,18 @@ class ReceiptView(
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
-                return Receipt.objects.filter(user__in=users_in_group).select_related('user', 'account', 'seller').prefetch_related('product')
+                return (
+                    Receipt.objects.filter(user__in=users_in_group)
+                    .select_related('user', 'account', 'seller')
+                    .prefetch_related('product')
+                )
             except Group.DoesNotExist:
                 return Receipt.objects.none()
-        return Receipt.objects.filter(user=self.request.user).select_related('user', 'account', 'seller').prefetch_related('product')
+        return (
+            Receipt.objects.filter(user=self.request.user)
+            .select_related('user', 'account', 'seller')
+            .prefetch_related('product')
+        )
 
     def get_context_data(self, *args, **kwargs):
         user = get_object_or_404(User, username=self.request.user)
@@ -75,18 +83,36 @@ class ReceiptView(
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
-                receipt_queryset = Receipt.objects.filter(user__in=users_in_group).select_related('user', 'account', 'seller').prefetch_related('product')
-                seller_queryset = Seller.objects.filter(
-                    user__in=users_in_group,
-                ).distinct('name_seller').select_related('user')
-                account_queryset = Account.objects.filter(user__in=users_in_group).select_related('user')
+                receipt_queryset = (
+                    Receipt.objects.filter(user__in=users_in_group)
+                    .select_related('user', 'account', 'seller')
+                    .prefetch_related('product')
+                )
+                seller_queryset = (
+                    Seller.objects.filter(
+                        user__in=users_in_group,
+                    )
+                    .distinct('name_seller')
+                    .select_related('user')
+                )
+                account_queryset = Account.objects.filter(
+                    user__in=users_in_group
+                ).select_related('user')
             except Group.DoesNotExist:
                 receipt_queryset = Receipt.objects.none()
                 seller_queryset = Seller.objects.none()
                 account_queryset = Account.objects.none()
         else:
-            receipt_queryset = Receipt.objects.filter(user=self.request.user).select_related('user', 'account', 'seller').prefetch_related('product')
-            seller_queryset = Seller.objects.filter(user=user).distinct('name_seller').select_related('user')
+            receipt_queryset = (
+                Receipt.objects.filter(user=self.request.user)
+                .select_related('user', 'account', 'seller')
+                .prefetch_related('product')
+            )
+            seller_queryset = (
+                Seller.objects.filter(user=user)
+                .distinct('name_seller')
+                .select_related('user')
+            )
             account_queryset = Account.objects.filter(user=user).select_related('user')
 
         seller_form = SellerForm()
@@ -291,7 +317,9 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
     def get_object(self, queryset: Any = None) -> Receipt:
         receipt = get_object_or_404(
-            Receipt.objects.select_related('user', 'account', 'seller').prefetch_related('product'),
+            Receipt.objects.select_related(
+                'user', 'account', 'seller'
+            ).prefetch_related('product'),
             pk=self.kwargs['pk'],
             user=self.request.user,
         )

@@ -21,7 +21,9 @@ class AccountQuerySet(models.QuerySet):
 
     def credit(self) -> 'AccountQuerySet':
         """Return only credit accounts and credit cards."""
-        return self.filter(type_account__in=[ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD])
+        return self.filter(
+            type_account__in=[ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD]
+        )
 
     def debit(self) -> 'AccountQuerySet':
         """Return only debit accounts, debit cards, and cash."""

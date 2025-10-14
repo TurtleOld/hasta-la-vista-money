@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from django.contrib import messages
@@ -7,6 +6,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models.aggregates import Sum
+from django.db.models.functions import TruncMonth
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -100,14 +100,12 @@ class IncomeView(
         income_by_month = income_filter.qs.values('date', 'amount')
         pages_income = income_by_month
 
-        total_amount_page = income_by_month.aggregate(
-            total=Sum('amount')
-        )['total'] or 0
+        total_amount_page = income_by_month.aggregate(total=Sum('amount'))['total'] or 0
         total_amount_period = total_amount_page
 
         monthly_aggregation = (
-            income_by_month
-            .extra(select={'month': "DATE_TRUNC('month', date)"})
+            income_filter.qs
+            .annotate(month=TruncMonth('date'))
             .values('month')
             .annotate(total=Sum('amount'))
             .order_by('month')
@@ -482,12 +480,16 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
         incomes = Income.objects.none()
 
         if group_id == 'my' or not group_id:
-            incomes = Income.objects.filter(user=user).select_related('user', 'category', 'account')
+            incomes = Income.objects.filter(user=user).select_related(
+                'user', 'category', 'account'
+            )
         else:
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = User.objects.filter(groups=group)
-                incomes = Income.objects.filter(user__in=users_in_group).select_related('user', 'category', 'account')
+                incomes = Income.objects.filter(user__in=users_in_group).select_related(
+                    'user', 'category', 'account'
+                )
             except Group.DoesNotExist:
                 incomes = Income.objects.none()
 

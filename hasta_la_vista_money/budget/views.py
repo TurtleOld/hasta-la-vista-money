@@ -59,7 +59,9 @@ def get_fact_amount(
                     category=category,
                     date__year=month.year,
                     date__month=month.month,
-                ).select_related('user', 'category').aggregate(total=Sum('amount'))['total']
+                )
+                .select_related('user', 'category')
+                .aggregate(total=Sum('amount'))['total']
                 or 0
             )
         else:
@@ -72,7 +74,9 @@ def get_fact_amount(
                     category=category,
                     date__year=month.year,
                     date__month=month.month,
-                ).select_related('user', 'category').aggregate(total=Sum('amount'))['total']
+                )
+                .select_related('user', 'category')
+                .aggregate(total=Sum('amount'))['total']
                 or 0
             )
         else:

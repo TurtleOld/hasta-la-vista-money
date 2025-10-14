@@ -8,7 +8,10 @@ from django.db.models.query import QuerySet
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils.formats import date_format
-from hasta_la_vista_money.constants import RECEIPT_CATEGORY_NAME, RECEIPT_OPERATION_PURCHASE
+from hasta_la_vista_money.constants import (
+    RECEIPT_CATEGORY_NAME,
+    RECEIPT_OPERATION_PURCHASE,
+)
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
@@ -140,12 +143,16 @@ class ExpenseService:
         receipt_expense_list = []
 
         if not group_id or group_id == 'my':
-            expenses = Expense.objects.filter(user=self.user).select_related('user', 'category', 'account')
+            expenses = Expense.objects.filter(user=self.user).select_related(
+                'user', 'category', 'account'
+            )
             group_users = [self.user]
         else:
             if self.user.groups.filter(id=group_id).exists():
                 group_users = list(User.objects.filter(groups__id=group_id))
-                expenses = Expense.objects.filter(user__in=group_users).select_related('user', 'category', 'account')
+                expenses = Expense.objects.filter(user__in=group_users).select_related(
+                    'user', 'category', 'account'
+                )
             else:
                 group_users = []
 
@@ -165,13 +172,17 @@ class ExpenseService:
         receipt_expense_list = []
 
         if group_id == 'my' or not group_id:
-            expenses = Expense.objects.filter(user=self.user).select_related('user', 'category', 'account')
+            expenses = Expense.objects.filter(user=self.user).select_related(
+                'user', 'category', 'account'
+            )
             group_users = [self.user]
         else:
             try:
                 group = Group.objects.get(pk=group_id)
                 group_users = list(group.user_set.all())
-                expenses = Expense.objects.filter(user__in=group_users).select_related('user', 'category', 'account')
+                expenses = Expense.objects.filter(user__in=group_users).select_related(
+                    'user', 'category', 'account'
+                )
             except Group.DoesNotExist:
                 group_users = []
                 expenses = Expense.objects.none()
@@ -322,13 +333,22 @@ class ReceiptExpenseService:
     def get_receipt_expenses_by_users(self, users: List[User]) -> List[Dict[str, Any]]:
         """Get receipt expenses for multiple users."""
         receipt_expenses = (
-            Receipt.objects.filter(user__in=users, operation_type=RECEIPT_OPERATION_PURCHASE)
+            Receipt.objects.filter(
+                user__in=users, operation_type=RECEIPT_OPERATION_PURCHASE
+            )
             .select_related('user', 'account')
             .annotate(
                 month=TruncMonth('receipt_date'),
                 year=ExtractYear('receipt_date'),
             )
-            .values('month', 'year', 'account__id', 'account__name_account', 'user', 'user__username')
+            .values(
+                'month',
+                'year',
+                'account__id',
+                'account__name_account',
+                'user',
+                'user__username',
+            )
             .annotate(amount=Sum('total_sum'))
             .order_by('-year', '-month')
         )

@@ -160,7 +160,9 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
             'expense_data': expense_series_data,
             'income_data': income_series_data,
         }
-    credit_cards = accounts.filter(type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT])
+    credit_cards = accounts.filter(
+        type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT]
+    )
     credit_cards_data = []
     for card in credit_cards:
         debt_now = card.get_credit_card_debt()

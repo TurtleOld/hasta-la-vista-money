@@ -135,19 +135,12 @@ class AccountService:
         if account.type_account not in (ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT):
             return None
 
-        from django.db.models import Q, Case, When, DecimalField
+        from django.db.models import Q
         from django.db.models.functions import Coalesce
 
-        base_filters = {'account': account}
-        if start_date and end_date:
-            base_filters.update({
-                'date__range': (start_date, end_date),
-                'receipt_date__range': (start_date, end_date)
-            })
-
-        expense_qs = Expense.objects.filter(**{k: v for k, v in base_filters.items() if k != 'receipt_date__range'})
-        income_qs = Income.objects.filter(**{k: v for k, v in base_filters.items() if k != 'receipt_date__range'})
-        receipt_qs = Receipt.objects.filter(**{k: v for k, v in base_filters.items() if k != 'date__range'})
+        expense_qs = Expense.objects.filter(account=account)
+        income_qs = Income.objects.filter(account=account)
+        receipt_qs = Receipt.objects.filter(account=account)
 
         if start_date and end_date:
             expense_qs = expense_qs.filter(date__range=(start_date, end_date))
@@ -156,14 +149,18 @@ class AccountService:
 
         total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
         total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
+
+        from django.db.models import DecimalField
         
         receipt_aggregation = receipt_qs.aggregate(
             total_expense=Coalesce(
-                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_PURCHASE)), 0
+                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_PURCHASE)), 0,
+                output_field=DecimalField()
             ),
             total_return=Coalesce(
-                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_RETURN)), 0
-            )
+                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_RETURN)), 0,
+                output_field=DecimalField()
+            ),
         )
         total_receipt_expense = receipt_aggregation['total_expense'] or 0
         total_receipt_return = receipt_aggregation['total_return'] or 0
