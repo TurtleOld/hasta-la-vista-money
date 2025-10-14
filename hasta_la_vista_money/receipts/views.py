@@ -63,10 +63,18 @@ class ReceiptView(
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
-                return Receipt.objects.filter(user__in=users_in_group)
+                return (
+                    Receipt.objects.filter(user__in=users_in_group)
+                    .select_related('user', 'account', 'seller')
+                    .prefetch_related('product')
+                )
             except Group.DoesNotExist:
                 return Receipt.objects.none()
-        return Receipt.objects.filter(user=self.request.user)
+        return (
+            Receipt.objects.filter(user=self.request.user)
+            .select_related('user', 'account', 'seller')
+            .prefetch_related('product')
+        )
 
     def get_context_data(self, *args, **kwargs):
         user = get_object_or_404(User, username=self.request.user)
@@ -75,19 +83,37 @@ class ReceiptView(
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
-                receipt_queryset = Receipt.objects.filter(user__in=users_in_group)
-                seller_queryset = Seller.objects.filter(
-                    user__in=users_in_group,
-                ).distinct('name_seller')
-                account_queryset = Account.objects.filter(user__in=users_in_group)
+                receipt_queryset = (
+                    Receipt.objects.filter(user__in=users_in_group)
+                    .select_related('user', 'account', 'seller')
+                    .prefetch_related('product')
+                )
+                seller_queryset = (
+                    Seller.objects.filter(
+                        user__in=users_in_group,
+                    )
+                    .distinct('name_seller')
+                    .select_related('user')
+                )
+                account_queryset = Account.objects.filter(
+                    user__in=users_in_group
+                ).select_related('user')
             except Group.DoesNotExist:
                 receipt_queryset = Receipt.objects.none()
                 seller_queryset = Seller.objects.none()
                 account_queryset = Account.objects.none()
         else:
-            receipt_queryset = Receipt.objects.filter(user=self.request.user)
-            seller_queryset = Seller.objects.filter(user=user).distinct('name_seller')
-            account_queryset = Account.objects.filter(user=user)
+            receipt_queryset = (
+                Receipt.objects.filter(user=self.request.user)
+                .select_related('user', 'account', 'seller')
+                .prefetch_related('product')
+            )
+            seller_queryset = (
+                Seller.objects.filter(user=user)
+                .distinct('name_seller')
+                .select_related('user')
+            )
+            account_queryset = Account.objects.filter(user=user).select_related('user')
 
         seller_form = SellerForm()
         receipt_filter = ReceiptFilter(
@@ -291,7 +317,9 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
     def get_object(self, queryset: Any = None) -> Receipt:
         receipt = get_object_or_404(
-            Receipt,
+            Receipt.objects.select_related(
+                'user', 'account', 'seller'
+            ).prefetch_related('product'),
             pk=self.kwargs['pk'],
             user=self.request.user,
         )
@@ -303,10 +331,10 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
         receipt_form.fields['account'].queryset = Account.objects.filter(
             user=self.request.user
-        )
+        ).select_related('user')
         receipt_form.fields['seller'].queryset = Seller.objects.filter(
             user=self.request.user
-        )
+        ).select_related('user')
 
         context['receipt_form'] = receipt_form
 
@@ -466,6 +494,8 @@ class ProductByMonthView(LoginRequiredMixin, ListView):
 
         all_purchased_products = (
             Receipt.objects.filter(user=self.request.user)
+            .select_related('user')
+            .prefetch_related('product')
             .values('product__product_name')
             .annotate(products=Count('product__product_name'))
             .order_by('-products')
@@ -474,6 +504,7 @@ class ProductByMonthView(LoginRequiredMixin, ListView):
 
         purchased_products_by_month = (
             Receipt.objects.filter(user=self.request.user)
+            .select_related('user')
             .prefetch_related('product')
             .annotate(month=TruncMonth('receipt_date'))
             .values('month', 'product__product_name')

@@ -1,11 +1,12 @@
 from collections import OrderedDict
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models.aggregates import Sum
+from django.db.models.functions import TruncMonth
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -74,7 +75,7 @@ class IncomeView(
 
         categories = (
             IncomeCategory.objects.filter(user=user)
-            .select_related('user')
+            .select_related('user', 'parent_category')
             .values(
                 'id',
                 'name',
@@ -82,12 +83,12 @@ class IncomeView(
                 'parent_category__name',
             )
             .order_by('parent_category_id')
-            .all()
         )
 
+        income_queryset = Income.objects.select_related('user', 'category', 'account')
         income_filter = IncomeFilter(
             self.request.GET,
-            queryset=Income.objects.all(),
+            queryset=income_queryset,
             user=self.request.user,
         )
 
@@ -96,29 +97,28 @@ class IncomeView(
             depth=depth_limit,
         )
 
-        income_by_month = income_filter.qs
-
+        income_by_month = income_filter.qs.values('date', 'amount')
         pages_income = income_by_month
 
-        total_amount_page = sum(income['amount'] for income in pages_income)
-        total_amount_period = sum(income['amount'] for income in income_by_month)
+        total_amount_page = income_by_month.aggregate(total=Sum('amount'))['total'] or 0
+        total_amount_period = total_amount_page
+
+        monthly_aggregation = (
+            income_filter.qs
+            .annotate(month=TruncMonth('date'))
+            .values('month')
+            .annotate(total=Sum('amount'))
+            .order_by('month')
+        )
 
         monthly_data = OrderedDict()
-        sorted_incomes = sorted(income_by_month, key=lambda x: x['date'])
-        for income in sorted_incomes:
-            date_val = income['date']
-            if isinstance(date_val, str):
-                try:
-                    date_val = datetime.fromisoformat(date_val)
-                except ValueError:
-                    # Пропускаем записи с некорректным форматом даты
-                    continue
-            month_label = formats.date_format(date_val, 'F Y')
-            if month_label not in monthly_data:
-                monthly_data[month_label] = 0
-            monthly_data[month_label] += income['amount']
+        for item in monthly_aggregation:
+            month_date = item['month']
+            month_label = formats.date_format(month_date, 'F Y')
+            monthly_data[month_label] = float(item['total'] or 0)
+
         chart_labels = list(monthly_data.keys())
-        chart_values = [float(v) for v in monthly_data.values()]
+        chart_values = list(monthly_data.values())
 
         context.update(
             {
@@ -207,15 +207,10 @@ class IncomeCreateView(
         """
         Handle invalid form submission for income creation.
         """
-        user = get_object_or_404(User, username=self.request.user)
-        income_categories = (
-            IncomeCategory.objects.filter(user=user)
-            .select_related('user')
-            .order_by('parent_category__name', 'name')
-            .all()
-        )
-        form.fields['category'].queryset = income_categories
-        return self.render_to_response(self.get_context_data(form=form))
+        context = self.get_context_data(form=form)
+        if 'categories' in context:
+            form.fields['category'].queryset = context['categories']
+        return self.render_to_response(context)
 
 
 class IncomeCopyView(
@@ -282,9 +277,8 @@ class IncomeUpdateView(
 
         income_categories = (
             IncomeCategory.objects.filter(user=user)
-            .select_related('user')
+            .select_related('user', 'parent_category')
             .order_by('parent_category__name', 'name')
-            .all()
         )
 
         form_class = self.get_form_class()
@@ -486,12 +480,16 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
         incomes = Income.objects.none()
 
         if group_id == 'my' or not group_id:
-            incomes = Income.objects.filter(user=user)
+            incomes = Income.objects.filter(user=user).select_related(
+                'user', 'category', 'account'
+            )
         else:
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = User.objects.filter(groups=group)
-                incomes = Income.objects.filter(user__in=users_in_group)
+                incomes = Income.objects.filter(user__in=users_in_group).select_related(
+                    'user', 'category', 'account'
+                )
             except Group.DoesNotExist:
                 incomes = Income.objects.none()
 

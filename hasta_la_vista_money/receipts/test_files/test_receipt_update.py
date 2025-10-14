@@ -3,6 +3,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
+from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt, Product, Seller
 
@@ -64,7 +65,7 @@ class ReceiptUpdateViewTest(TestCase):
             account=self.account1,
             receipt_date='2024-01-15 12:00:00',
             number_receipt=12345,
-            operation_type=1,
+            operation_type=RECEIPT_OPERATION_PURCHASE,
             total_sum=Decimal('350.00'),
             manual=True,
         )
@@ -298,7 +299,7 @@ class ReceiptUpdateViewTest(TestCase):
             account=self.account1,
             receipt_date='2024-01-15 12:00:00',
             number_receipt=54321,
-            operation_type=1,
+            operation_type=RECEIPT_OPERATION_PURCHASE,
             total_sum=Decimal('100.00'),
             manual=True,
         )

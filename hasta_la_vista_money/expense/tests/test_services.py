@@ -1,5 +1,6 @@
 from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
+from hasta_la_vista_money.constants import RECEIPT_CATEGORY_NAME
 from hasta_la_vista_money.expense.forms import AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.expense.services import (
@@ -190,7 +191,7 @@ class TestReceiptExpenseService(TestCase):
         """Test getting receipt expenses when category doesn't exist."""
         ExpenseCategory.objects.filter(
             user=self.user,
-            name='Покупки по чекам',
+            name=RECEIPT_CATEGORY_NAME,
         ).delete()
         expenses = self.service.get_receipt_expenses()
         self.assertEqual(expenses, [])
@@ -199,7 +200,7 @@ class TestReceiptExpenseService(TestCase):
         """Test getting receipt expenses when category exists."""
         receipt_category = ExpenseCategory.objects.create(
             user=self.user,
-            name='Покупки по чекам',
+            name=RECEIPT_CATEGORY_NAME,
         )
         expenses = self.service.get_receipt_expenses()
         self.assertIsInstance(expenses, list)
