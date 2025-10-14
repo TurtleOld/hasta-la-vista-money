@@ -5,6 +5,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -20,7 +21,7 @@ class AccountQuerySet(models.QuerySet):
 
     def credit(self) -> 'AccountQuerySet':
         """Return only credit accounts and credit cards."""
-        return self.filter(type_account__in=['Credit', 'CreditCard'])
+        return self.filter(type_account__in=[ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD])
 
     def debit(self) -> 'AccountQuerySet':
         """Return only debit accounts, debit cards, and cash."""

@@ -108,6 +108,17 @@ SERVER_ERROR: Final = 500
 NOT_FOUND: Final = 404
 REDIRECTS: Final = 302
 
+# Типы операций чеков
+RECEIPT_OPERATION_PURCHASE: Final = 1
+RECEIPT_OPERATION_RETURN: Final = 2
+
+# Типы счетов
+ACCOUNT_TYPE_CREDIT: Final = 'Credit'
+ACCOUNT_TYPE_CREDIT_CARD: Final = 'CreditCard'
+
+# Названия категорий
+RECEIPT_CATEGORY_NAME: Final = 'Покупки по чекам'
+
 # Числа
 ONE: Final = 1
 TWO: Final = 2

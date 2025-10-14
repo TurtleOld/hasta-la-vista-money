@@ -12,6 +12,7 @@ from typing import Any
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD
 from hasta_la_vista_money.finance_account.models import Account
 
 
@@ -73,7 +74,7 @@ def validate_credit_fields_required(
     Raises:
         ValidationError: If credit fields are missing for credit accounts.
     """
-    credit_types = ['Credit', 'CreditCard']
+    credit_types = [ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD]
 
     if type_account in credit_types:
         if not limit_credit:

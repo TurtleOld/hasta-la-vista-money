@@ -5,6 +5,12 @@ from calendar import monthrange
 from dateutil.relativedelta import relativedelta
 from django.db.models import Sum
 from django.utils import timezone
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+    RECEIPT_OPERATION_PURCHASE,
+    RECEIPT_OPERATION_RETURN,
+)
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
@@ -154,7 +160,7 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
             'expense_data': expense_series_data,
             'income_data': income_series_data,
         }
-    credit_cards = accounts.filter(type_account__in=['CreditCard', 'Credit'])
+    credit_cards = accounts.filter(type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT])
     credit_cards_data = []
     for card in credit_cards:
         debt_now = card.get_credit_card_debt()
@@ -182,7 +188,7 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
                 Receipt.objects.filter(
                     account=card,
                     receipt_date__range=(purchase_start, purchase_end),
-                    operation_type=1,
+                    operation_type=RECEIPT_OPERATION_PURCHASE,
                 ).aggregate(total=Sum('total_sum'))['total']
                 or 0
             )
@@ -190,7 +196,7 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
                 Receipt.objects.filter(
                     account=card,
                     receipt_date__range=(purchase_start, purchase_end),
-                    operation_type=2,
+                    operation_type=RECEIPT_OPERATION_RETURN,
                 ).aggregate(total=Sum('total_sum'))['total']
                 or 0
             )

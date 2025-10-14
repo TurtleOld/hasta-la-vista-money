@@ -59,7 +59,7 @@ def get_fact_amount(
                     category=category,
                     date__year=month.year,
                     date__month=month.month,
-                ).aggregate(total=Sum('amount'))['total']
+                ).select_related('user', 'category').aggregate(total=Sum('amount'))['total']
                 or 0
             )
         else:
@@ -72,7 +72,7 @@ def get_fact_amount(
                     category=category,
                     date__year=month.year,
                     date__month=month.month,
-                ).aggregate(total=Sum('amount'))['total']
+                ).select_related('user', 'category').aggregate(total=Sum('amount'))['total']
                 or 0
             )
         else:
@@ -89,7 +89,7 @@ def get_plan_amount(
         user=user,
         date=month,
         type=type_,
-    )
+    ).select_related('user', 'category_expense', 'category_income')
     if type_ == 'expense':
         if isinstance(category, ExpenseCategory):
             q = q.filter(category_expense=category)
