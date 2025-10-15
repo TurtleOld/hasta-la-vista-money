@@ -227,3 +227,6 @@ Writerside
 .github/copilot-instructions.md
 
 .cursor/*
+
+#Ignore cursor AI rules
+.cursor\rules\codacy.mdc

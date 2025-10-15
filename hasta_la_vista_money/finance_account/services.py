@@ -14,6 +14,12 @@ from dateutil.relativedelta import relativedelta
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+    RECEIPT_OPERATION_PURCHASE,
+    RECEIPT_OPERATION_RETURN,
+)
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
 from hasta_la_vista_money.finance_account.validators import (
@@ -126,8 +132,11 @@ class AccountService:
         Returns:
             Optional[Decimal]: The calculated debt, or None if not a credit account
         """
-        if account.type_account not in ('CreditCard', 'Credit'):
+        if account.type_account not in (ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT):
             return None
+
+        from django.db.models import Q
+        from django.db.models.functions import Coalesce
 
         expense_qs = Expense.objects.filter(account=account)
         income_qs = Income.objects.filter(account=account)
@@ -140,18 +149,21 @@ class AccountService:
 
         total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
         total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
-        total_receipt_expense = (
-            receipt_qs.filter(operation_type=1).aggregate(total=Sum('total_sum'))[
-                'total'
-            ]
-            or 0
+
+        from django.db.models import DecimalField
+        
+        receipt_aggregation = receipt_qs.aggregate(
+            total_expense=Coalesce(
+                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_PURCHASE)), 0,
+                output_field=DecimalField()
+            ),
+            total_return=Coalesce(
+                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_RETURN)), 0,
+                output_field=DecimalField()
+            ),
         )
-        total_receipt_return = (
-            receipt_qs.filter(operation_type=2).aggregate(total=Sum('total_sum'))[
-                'total'
-            ]
-            or 0
-        )
+        total_receipt_expense = receipt_aggregation['total_expense'] or 0
+        total_receipt_return = receipt_aggregation['total_return'] or 0
 
         debt = (total_expense + total_receipt_expense) - (
             total_income + total_receipt_return
@@ -193,7 +205,7 @@ class AccountService:
         first_receipt = (
             Receipt.objects.filter(
                 account=account,
-                operation_type=1,  # Покупки
+                operation_type=RECEIPT_OPERATION_PURCHASE,
                 receipt_date__range=(month_start, month_end),
             )
             .order_by('receipt_date')
@@ -222,7 +234,7 @@ class AccountService:
         - Raiffeisenbank: 110 days from the first purchase date in the month.
         - Other banks: placeholder for now (repayment due at the end of the purchase month) until specific rules are implemented.
         """
-        if account.type_account not in ('CreditCard', 'Credit'):
+        if account.type_account not in (ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT):
             return {}
 
         purchase_start = purchase_month.replace(day=1)
@@ -399,10 +411,10 @@ class AccountService:
 
 def get_accounts_for_user_or_group(user, group_id=None):
     if not group_id or group_id == 'my':
-        return Account.objects.filter(user=user)
+        return Account.objects.filter(user=user).select_related('user')
     else:
         users_in_group = User.objects.filter(groups__id=group_id)
-        return Account.objects.filter(user__in=users_in_group)
+        return Account.objects.filter(user__in=users_in_group).select_related('user')
 
 
 def get_sum_all_accounts(accounts):

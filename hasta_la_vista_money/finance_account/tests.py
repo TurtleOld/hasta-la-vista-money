@@ -8,6 +8,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
@@ -457,7 +458,7 @@ class TestAccount(TestCase):
 
         data = {
             'name_account': 'New Test Account',
-            'type_account': 'Credit',
+            'type_account': ACCOUNT_TYPE_CREDIT,
             'limit_credit': 1000,
             'payment_due_date': '2022-01-01',
             'grace_period_days': 120,
@@ -478,7 +479,7 @@ class TestAccount(TestCase):
 
         data = {
             'name_account': 'Updated Account Name',
-            'type_account': 'Credit',
+            'type_account': ACCOUNT_TYPE_CREDIT,
             'limit_credit': 1000,
             'payment_due_date': '2022-01-01',
             'grace_period_days': 120,
@@ -531,7 +532,7 @@ class TestAccount(TestCase):
         self.assertIn('EUR', currency_choices)
 
         type_choices = [choice[0] for choice in Account.TYPE_ACCOUNT_LIST]
-        self.assertIn('Credit', type_choices)
+        self.assertIn(ACCOUNT_TYPE_CREDIT, type_choices)
         self.assertIn('Debit', type_choices)
         self.assertIn('CASH', type_choices)
 
@@ -698,13 +699,13 @@ class TestAccountBusinessLogic(TestCase):
         self.assertFalse(result)
 
     def test_get_credit_card_debt(self):
-        self.account1.type_account = 'CreditCard'
+        self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
         debt = self.account1.get_credit_card_debt()
         self.assertIsInstance(debt, Decimal)
 
     def test_calculate_grace_period_info(self):
-        self.account1.type_account = 'CreditCard'
+        self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
         from datetime import date
 
@@ -767,7 +768,7 @@ class TestValidatorsRefactored(TestCase):
     def test_validate_credit_fields_required_credit_account(self) -> None:
         """Test credit fields validation for credit account."""
         validate_credit_fields_required(
-            type_account='Credit',
+            type_account=ACCOUNT_TYPE_CREDIT,
             bank='SBERBANK',
             limit_credit=Decimal('10000.00'),
             payment_due_date=timezone.now().date(),
@@ -778,7 +779,7 @@ class TestValidatorsRefactored(TestCase):
         """Test credit fields validation with missing fields."""
         with self.assertRaises(ValidationError):
             validate_credit_fields_required(
-                type_account='Credit',
+                type_account=ACCOUNT_TYPE_CREDIT,
                 bank=None,
                 limit_credit=None,
                 payment_due_date=None,
@@ -832,7 +833,7 @@ class TestAddAccountFormRefactored(TestCase):
         """Test form validation for credit account with all required fields."""
         form_data = {
             'name_account': 'Credit Card',
-            'type_account': 'Credit',
+            'type_account': ACCOUNT_TYPE_CREDIT,
             'bank': 'SBERBANK',
             'limit_credit': Decimal('10000.00'),
             'payment_due_date': timezone.now().date(),
@@ -847,7 +848,7 @@ class TestAddAccountFormRefactored(TestCase):
         """Test form validation for credit account with missing fields."""
         form_data = {
             'name_account': 'Credit Card',
-            'type_account': 'Credit',
+            'type_account': ACCOUNT_TYPE_CREDIT,
             'balance': Decimal('0.00'),
             'currency': 'RUB',
         }
