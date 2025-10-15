@@ -104,8 +104,7 @@ class IncomeView(
         total_amount_period = total_amount_page
 
         monthly_aggregation = (
-            income_filter.qs
-            .annotate(month=TruncMonth('date'))
+            income_filter.qs.annotate(month=TruncMonth('date'))
             .values('month')
             .annotate(total=Sum('amount'))
             .order_by('month')
@@ -481,14 +480,18 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
 
         if group_id == 'my' or not group_id:
             incomes = Income.objects.filter(user=user).select_related(
-                'user', 'category', 'account'
+                'user',
+                'category',
+                'account',
             )
         else:
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = User.objects.filter(groups=group)
                 incomes = Income.objects.filter(user__in=users_in_group).select_related(
-                    'user', 'category', 'account'
+                    'user',
+                    'category',
+                    'account',
                 )
             except Group.DoesNotExist:
                 incomes = Income.objects.none()
