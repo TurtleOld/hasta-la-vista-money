@@ -274,7 +274,11 @@ LOGOUT_REDIRECT_URL = '/login'
 
 # CORS settings for mobile app
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') or [
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+    if origin.strip()
+] or [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://localhost:8080',
