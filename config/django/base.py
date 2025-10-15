@@ -10,33 +10,22 @@ import structlog
 from config.django.sessions import *  # NOQA
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from csp.constants import NONCE, SELF
-from dotenv import load_dotenv
+from decouple import config
 from sentry_sdk.integrations.django import DjangoIntegration
 
 django_stubs_ext.monkeypatch()
-load_dotenv()
 
 # Security settings
-SECRET_KEY = os.getenv('SECRET_KEY')
-if not SECRET_KEY:
-    raise ValueError('SECRET_KEY must be set in environment variables')
-DEBUG = os.getenv('DEBUG', 'false').lower() in {'true', '1', 't'}
-BASE_URL = os.getenv('BASE_URL') or 'http://127.0.0.1:8000/'
+SECRET_KEY = config('SECRET_KEY')
+DEBUG = config('DEBUG', default=False, cast=bool)
+BASE_URL = config('BASE_URL', default='http://127.0.0.1:8000/')
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split() or []
-INTERNAL_IPS = [
-    (
-        os.environ.get(
-            'LOCAL_IPS',
-        )
-        if os.environ.get(
-            'LOCAL_IPS',
-        )
-        else '127.0.0.1'
-    ),
-]
+allowed_hosts = str(config('ALLOWED_HOSTS', default=''))
+ALLOWED_HOSTS = allowed_hosts.split(',') if allowed_hosts else []
+csrf_trusted_origins = str(config('CSRF_TRUSTED_ORIGINS', default=''))
+CSRF_TRUSTED_ORIGINS = csrf_trusted_origins.split() if csrf_trusted_origins else []
+INTERNAL_IPS = [config('LOCAL_IPS', default='127.0.0.1')]
 
 # Application definition
 LOCAL_APPS = [
@@ -128,22 +117,22 @@ TEMPLATES = [
     },
 ]
 
-CONN_MAX_AGE = 500
+CONN_MAX_AGE = config('CONN_MAX_AGE', default=500, cast=int)
 
 # Database
-if os.getenv('DATABASE_URL') or os.getenv('POSTGRES_DB'):
+if config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
     DATABASES: Dict[str, Any] = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('POSTGRES_DB', 'postgres'),
-            'USER': os.getenv('POSTGRES_USER', 'postgres'),
-            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
-            'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
-            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+            'NAME': config('POSTGRES_DB', default='postgres'),
+            'USER': config('POSTGRES_USER', default='postgres'),
+            'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
+            'HOST': config('POSTGRES_HOST', default='localhost'),
+            'PORT': config('POSTGRES_PORT', default='5432'),
             'CONN_MAX_AGE': CONN_MAX_AGE,
         },
     }
-    if os.environ.get('GITHUB_WORKFLOW'):
+    if config('GITHUB_WORKFLOW', default=''):
         DATABASES = {
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
@@ -154,8 +143,11 @@ if os.getenv('DATABASE_URL') or os.getenv('POSTGRES_DB'):
                 'PORT': '5432',
             },
         }
-    if os.getenv('DATABASE_URL'):
-        DATABASES['default'] = dict(dj_database_url.config(conn_max_age=CONN_MAX_AGE))
+    database_url = config('DATABASE_URL', default='')
+    if database_url:
+        DATABASES['default'] = dict(
+            dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE)
+        )
 else:
     DATABASES = {
         'default': {
@@ -180,8 +172,8 @@ AUTHENTICATION_BACKENDS = (
 )
 
 # Internationalization
-LANGUAGE_CODE = os.getenv('LANGUAGE_CODE', 'ru-RU')
-TIME_ZONE = os.getenv('TIME_ZONE', 'Europe/Moscow')
+LANGUAGE_CODE = config('LANGUAGE_CODE', default='ru-RU')
+TIME_ZONE = config('TIME_ZONE', default='Europe/Moscow')
 USE_I18N = True
 USE_TZ = False
 LANGUAGES = (
@@ -219,7 +211,7 @@ CSP_CDN_URLS = [
     'https://cdnjs.cloudflare.com',
 ]
 additional_script_src = list(
-    filter(None, os.environ.get('URL_CSP_SCRIPT_SRC', '').split(',')),
+    filter(None, str(config('URL_CSP_SCRIPT_SRC', default='')).split(',')),
 )
 CONTENT_SECURITY_POLICY = {
     'EXCLUDE_URL_PREFIXES': ['/admin'],
@@ -264,7 +256,7 @@ CONTENT_SECURITY_POLICY = {
             *CSP_CDN_URLS,
         ]
         + additional_script_src,
-        'report_uri': [os.getenv('SENTRY_ENDPOINT')],
+        'report_uri': [config('SENTRY_ENDPOINT', default='')],
     },
 }
 
@@ -278,7 +270,7 @@ LOGOUT_REDIRECT_URL = '/login'
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+    for origin in str(config('CORS_ALLOWED_ORIGINS', default='')).split(',')
     if origin.strip()
 ] or [
     'http://localhost:3000',
@@ -300,14 +292,14 @@ REST_FRAMEWORK = {
 
 # Sentry
 RATE = 0.01
-SENTRY_DSN = os.getenv('SENTRY_DSN')
+SENTRY_DSN = config('SENTRY_DSN', default='')
 if SENTRY_DSN:
     sentry_sdk.init(
-        dsn=SENTRY_DSN,
+        dsn=str(SENTRY_DSN),
         integrations=[DjangoIntegration()],
         auto_session_tracking=False,
         traces_sample_rate=RATE,
-        environment=os.getenv('SENTRY_ENVIRONMENT'),
+        environment=str(config('SENTRY_ENVIRONMENT', default='')),
     )
 
 # Rosetta
@@ -331,21 +323,20 @@ INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(
-        minutes=int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60')),
+        minutes=config('ACCESS_TOKEN_LIFETIME', default=60, cast=int),
     ),
     'REFRESH_TOKEN_LIFETIME': timedelta(
-        days=int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7')),
+        days=config('REFRESH_TOKEN_LIFETIME', default=7, cast=int),
     ),
     'AUTH_COOKIE': 'access_token',
     'AUTH_COOKIE_REFRESH': 'refresh_token',
     'AUTH_COOKIE_DOMAIN': None,
-    'AUTH_COOKIE_SECURE': os.environ.get('SESSION_COOKIE_SECURE', 'false').lower()
-    == 'true',
+    'AUTH_COOKIE_SECURE': config('SESSION_COOKIE_SECURE', default=False, cast=bool),
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',
     'AUTH_COOKIE_SAMESITE': 'Lax',
-    'AUTH_COOKIE_MAX_AGE': int(os.environ.get('ACCESS_TOKEN_LIFETIME', '60')) * 60,
-    'AUTH_COOKIE_REFRESH_MAX_AGE': int(os.environ.get('REFRESH_TOKEN_LIFETIME', '7'))
+    'AUTH_COOKIE_MAX_AGE': config('ACCESS_TOKEN_LIFETIME', default=60, cast=int) * 60,
+    'AUTH_COOKIE_REFRESH_MAX_AGE': config('REFRESH_TOKEN_LIFETIME', default=7, cast=int)
     * 24
     * 60
     * 60,

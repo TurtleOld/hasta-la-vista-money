@@ -75,11 +75,11 @@ secretkey:
 
 .PHONY: test
 test:
-		@uv run python ./manage.py test -v 2
+		@DJANGO_SETTINGS_MODULE=config.django.base uv run python ./manage.py test -v 2
 
 .PHONY: coverage
 coverage:
-		@uv run coverage run manage.py test
+		@DJANGO_SETTINGS_MODULE=config.django.base uv run coverage run manage.py test
 		@uv run coverage xml
 		@uv run coverage report
 
