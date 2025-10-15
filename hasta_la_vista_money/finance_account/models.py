@@ -124,11 +124,13 @@ class Account(TimeStampedModel):
         default=_('Основной счёт'),
     )
     type_account = models.CharField(
+        max_length=20,
         choices=TYPE_ACCOUNT_LIST,
         default=TYPE_ACCOUNT_LIST[1][0],
         verbose_name=_('Тип счёта'),
     )
     bank = models.CharField(
+        max_length=20,
         choices=BANK_LIST,
         default='-',
         verbose_name=_('Банк'),
@@ -140,6 +142,7 @@ class Account(TimeStampedModel):
         default=0,
     )
     currency = models.CharField(
+        max_length=10,
         choices=CURRENCY_LIST,
         default='RUB',
         verbose_name=_('Валюта'),

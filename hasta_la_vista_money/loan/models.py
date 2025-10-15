@@ -34,7 +34,7 @@ class Loan(models.Model):
         decimal_places=constants.TWO,
     )
     period_loan = models.IntegerField()
-    type_loan = models.CharField(choices=TYPE_LOAN, default=TYPE_LOAN[0][0])
+    type_loan = models.CharField(max_length=20, choices=TYPE_LOAN, default=TYPE_LOAN[0][0])
 
     class Meta:
         ordering = ['-id']
