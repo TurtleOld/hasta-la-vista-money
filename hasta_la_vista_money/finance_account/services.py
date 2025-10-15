@@ -21,7 +21,10 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_RETURN,
 )
 from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
     validate_different_accounts,
@@ -151,15 +154,17 @@ class AccountService:
         total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
 
         from django.db.models import DecimalField
-        
+
         receipt_aggregation = receipt_qs.aggregate(
             total_expense=Coalesce(
-                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_PURCHASE)), 0,
-                output_field=DecimalField()
+                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_PURCHASE)),
+                0,
+                output_field=DecimalField(),
             ),
             total_return=Coalesce(
-                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_RETURN)), 0,
-                output_field=DecimalField()
+                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_RETURN)),
+                0,
+                output_field=DecimalField(),
             ),
         )
         total_receipt_expense = receipt_aggregation['total_expense'] or 0
@@ -172,7 +177,8 @@ class AccountService:
 
     @staticmethod
     def _get_first_purchase_in_month(
-        account: Account, month_start: datetime
+        account: Account,
+        month_start: datetime,
     ) -> Optional[datetime]:
         """
         Находит дату первой покупки в указанном месяце для кредитной карты.
@@ -195,7 +201,8 @@ class AccountService:
         # Ищем среди расходов
         first_expense = (
             Expense.objects.filter(
-                account=account, date__range=(month_start, month_end)
+                account=account,
+                date__range=(month_start, month_end),
             )
             .order_by('date')
             .first()
@@ -224,7 +231,8 @@ class AccountService:
 
     @staticmethod
     def calculate_grace_period_info(
-        account: Account, purchase_month: Any
+        account: Account,
+        purchase_month: Any,
     ) -> Dict[str, Any]:
         """
         Calculate grace period information for a credit card.
@@ -255,7 +263,8 @@ class AccountService:
             # Для Райффайзенбанка: 110 дней с даты первой покупки
             # Находим первую покупку в месяце для определения точки отсчёта
             first_purchase = AccountService._get_first_purchase_in_month(
-                account, purchase_start
+                account,
+                purchase_start,
             )
 
             if first_purchase:
@@ -276,16 +285,22 @@ class AccountService:
             payments_end = grace_end
 
         debt_for_month = AccountService.get_credit_card_debt(
-            account, purchase_start, purchase_end
+            account,
+            purchase_start,
+            purchase_end,
         )
 
         if account.bank == 'SBERBANK':
             payments_for_period = AccountService.get_credit_card_debt(
-                account, payments_start, payments_end
+                account,
+                payments_start,
+                payments_end,
             )
         elif account.bank == 'RAIFFAISENBANK':
             payments_for_period = AccountService.get_credit_card_debt(
-                account, payments_start, payments_end
+                account,
+                payments_start,
+                payments_end,
             )
         else:
             payments_for_period = 0
@@ -310,7 +325,8 @@ class AccountService:
 
     @staticmethod
     def calculate_raiffeisenbank_payment_schedule(
-        account: Account, purchase_month: Any
+        account: Account,
+        purchase_month: Any,
     ) -> Dict[str, Any]:
         """
         Рассчитывает детальный график платежей для кредитной карты Райффайзенбанка.
@@ -339,7 +355,8 @@ class AccountService:
 
         # Находим первую покупку в месяце
         first_purchase = AccountService._get_first_purchase_in_month(
-            account, purchase_start
+            account,
+            purchase_start,
         )
 
         if not first_purchase:
@@ -381,7 +398,7 @@ class AccountService:
                     'remaining_debt': remaining_debt,
                     'min_payment': min_payment,
                     'statement_number': i + 1,
-                }
+                },
             )
 
             # Остаток после минимального платежа
@@ -395,7 +412,9 @@ class AccountService:
             'first_purchase_date': first_purchase,
             'grace_end_date': grace_end,
             'total_initial_debt': AccountService.get_credit_card_debt(
-                account, purchase_start, purchase_end
+                account,
+                purchase_start,
+                purchase_end,
             )
             or 0,
             'final_debt': remaining_debt,  # Остаток после всех минимальных платежей
