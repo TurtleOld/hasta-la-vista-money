@@ -174,7 +174,7 @@ class Account(TimeStampedModel):
 
     objects = AccountManager.from_queryset(AccountQuerySet)()
 
-    class Meta:
+    class Meta(TimeStampedModel.Meta):
         db_table = 'account'
         ordering = ['name_account']
         indexes = [
@@ -194,7 +194,7 @@ class Account(TimeStampedModel):
         """
         Returns the absolute URL to edit this account in the admin or UI.
         """
-        return reverse('finance_account:change', args=[self.id])
+        return reverse('finance_account:change', args=[self.pk])
 
     def transfer_money(self, to_account: 'Account', amount: Decimal) -> bool:
         """
@@ -321,7 +321,7 @@ class TransferMoneyLog(TimeStampedModel):
 
     objects = TransferMoneyLogManager.from_queryset(TransferMoneyLogQuerySet)()
 
-    class Meta:
+    class Meta(TimeStampedModel.Meta):
         ordering = ['-exchange_date']
         indexes = [
             models.Index(fields=['user']),
