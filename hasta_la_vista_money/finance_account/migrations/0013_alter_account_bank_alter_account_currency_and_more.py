@@ -4,61 +4,60 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("finance_account", "0012_alter_account_bank"),
+        ('finance_account', '0012_alter_account_bank'),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name="account",
-            name="bank",
+            model_name='account',
+            name='bank',
             field=models.CharField(
                 choices=[
-                    ("-", "—"),
-                    ("SBERBANK", "Сбербанк"),
-                    ("RAIFFAISENBANK", "Райффайзенбанк"),
+                    ('-', '—'),
+                    ('SBERBANK', 'Сбербанк'),
+                    ('RAIFFAISENBANK', 'Райффайзенбанк'),
                 ],
-                default="-",
-                help_text="Банк, выпустивший карту или обслуживающий счёт",
+                default='-',
+                help_text='Банк, выпустивший карту или обслуживающий счёт',
                 max_length=20,
-                verbose_name="Банк",
+                verbose_name='Банк',
             ),
         ),
         migrations.AlterField(
-            model_name="account",
-            name="currency",
+            model_name='account',
+            name='currency',
             field=models.CharField(
                 choices=[
-                    ("RUB", "Российский рубль"),
-                    ("USD", "Доллар США"),
-                    ("EUR", "Евро"),
-                    ("GBP", "Британский фунт"),
-                    ("CZK", "Чешская крона"),
-                    ("PLN", "Польский злотый"),
-                    ("TRY", "Турецкая лира"),
-                    ("CNH", "Китайский юань"),
+                    ('RUB', 'Российский рубль'),
+                    ('USD', 'Доллар США'),
+                    ('EUR', 'Евро'),
+                    ('GBP', 'Британский фунт'),
+                    ('CZK', 'Чешская крона'),
+                    ('PLN', 'Польский злотый'),
+                    ('TRY', 'Турецкая лира'),
+                    ('CNH', 'Китайский юань'),
                 ],
-                default="RUB",
-                help_text="Валюта счёта (например, RUB, USD)",
+                default='RUB',
+                help_text='Валюта счёта (например, RUB, USD)',
                 max_length=10,
-                verbose_name="Валюта",
+                verbose_name='Валюта',
             ),
         ),
         migrations.AlterField(
-            model_name="account",
-            name="type_account",
+            model_name='account',
+            name='type_account',
             field=models.CharField(
                 choices=[
-                    ("Credit", "Кредитный счёт"),
-                    ("Debit", "Дебетовый счёт"),
-                    ("CreditCard", "Кредитная карта"),
-                    ("DebitCard", "Дебетовая карта"),
-                    ("CASH", "Наличные"),
+                    ('Credit', 'Кредитный счёт'),
+                    ('Debit', 'Дебетовый счёт'),
+                    ('CreditCard', 'Кредитная карта'),
+                    ('DebitCard', 'Дебетовая карта'),
+                    ('CASH', 'Наличные'),
                 ],
-                default="Debit",
+                default='Debit',
                 max_length=20,
-                verbose_name="Тип счёта",
+                verbose_name='Тип счёта',
             ),
         ),
     ]

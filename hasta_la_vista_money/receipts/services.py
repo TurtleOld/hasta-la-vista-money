@@ -1,5 +1,4 @@
 import base64
-import os
 
 from django.core.files.uploadedfile import UploadedFile
 from decouple import config

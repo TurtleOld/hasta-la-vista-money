@@ -863,6 +863,11 @@ dev = [
     { name = "yesqa" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "faker" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "bump2version", marker = "extra == 'dev'", specifier = ">=1.0.1" },
@@ -914,6 +919,9 @@ requires-dist = [
     { name = "yesqa", marker = "extra == 'dev'", specifier = ">=1.5.0" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "faker", specifier = ">=37.4.0" }]
 
 [[package]]
 name = "hpack"

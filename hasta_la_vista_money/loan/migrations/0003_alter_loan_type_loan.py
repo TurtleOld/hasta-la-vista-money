@@ -4,21 +4,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("loan", "0002_initial"),
+        ('loan', '0002_initial'),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name="loan",
-            name="type_loan",
+            model_name='loan',
+            name='type_loan',
             field=models.CharField(
                 choices=[
-                    ("Annuity", "Аннуитетный"),
-                    ("Differentiated", "Дифференцированный"),
+                    ('Annuity', 'Аннуитетный'),
+                    ('Differentiated', 'Дифференцированный'),
                 ],
-                default="Annuity",
+                default='Annuity',
                 max_length=20,
             ),
         ),
