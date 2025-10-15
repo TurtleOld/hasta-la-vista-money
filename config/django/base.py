@@ -17,7 +17,9 @@ django_stubs_ext.monkeypatch()
 load_dotenv()
 
 # Security settings
-SECRET_KEY = os.getenv('SECRET_KEY', None)
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError('SECRET_KEY must be set in environment variables')
 DEBUG = os.getenv('DEBUG', 'false').lower() in {'true', '1', 't'}
 BASE_URL = os.getenv('BASE_URL') or 'http://127.0.0.1:8000/'
 BASE_DIR = Path(__file__).resolve().parent.parent.parent

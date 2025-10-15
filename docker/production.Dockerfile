@@ -1,4 +1,4 @@
-FROM python:3.13-slim as builder
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN uv venv .venv && uv pip install -e '.[dev]'
 COPY . .
 
 RUN mkdir -p /app/staticfiles && \
-    .venv/bin/python manage.py collectstatic --noinput --clear
+    SECRET_KEY=build-time-secret-key .venv/bin/python manage.py collectstatic --noinput --clear
 
 FROM python:3.13-slim
 
@@ -31,9 +31,8 @@ ENV PATH="/root/.local/bin:$PATH"
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv venv .venv && uv pip install -e '.[dev]'
-
-RUN adduser --disabled-password --gecos '' appuser
+RUN uv venv .venv && uv pip install -e '.[dev]' && \
+    adduser --disabled-password --gecos '' appuser
 
 COPY --from=builder /app /app
 COPY --from=builder /app/staticfiles /app/staticfiles
