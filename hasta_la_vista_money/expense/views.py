@@ -103,16 +103,17 @@ class ExpenseView(
         expense_service = ExpenseService(user, self.request)
         receipt_service = ReceiptExpenseService(user, self.request)
 
-        expense_filter: ExpenseFilter = ExpenseFilter(
-            self.request.GET,
-            queryset=Expense.objects.all(),
-            user=self.request.user,
-        )
-        expenses = expense_filter.qs.select_related(
+        expense_queryset = Expense.objects.select_related(
             'user',
             'category',
             'account',
         )
+        expense_filter: ExpenseFilter = ExpenseFilter(
+            self.request.GET,
+            queryset=expense_queryset,
+            user=self.request.user,
+        )
+        expenses = expense_filter.qs
 
         receipt_expenses = receipt_service.get_receipt_expenses()
 
@@ -251,7 +252,7 @@ class ExpenseUpdateView(
     def get_object(self, queryset: Any = None) -> Expense:
         """Get the expense object to update."""
         return get_object_or_404(
-            Expense,
+            Expense.objects.select_related('user', 'category', 'account'),
             pk=self.kwargs['pk'],
             user=self.request.user,
         )
