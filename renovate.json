@@ -16,6 +16,14 @@
       "matchCurrentVersion": "3.13.7",
       "matchPackageNames": ["python"],
       "enabled": false
+    },
+    {
+      "matchFileNames": [".github/workflows/hasta_la_vista_money.yaml"],
+      "matchPackageNames": [
+        "postgres"
+      ],
+      "matchCurrentVersion": "17",
+      "enabled": false
     }
   ]
 }
