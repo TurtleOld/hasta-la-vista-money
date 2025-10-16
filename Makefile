@@ -10,6 +10,10 @@ format:
 			echo "Running ruff..." && \
 			uv run ruff format
 			uv run ruff check --fix
+	@cd ./config && \
+			echo "Running ruff on config..." && \
+			uv run ruff format
+			uv run ruff check --fix
 
 
 .PHONY: transprepare

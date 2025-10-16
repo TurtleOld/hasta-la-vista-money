@@ -1,4 +1,3 @@
-
 from decouple import config
 
 DEBUG_TOOLBAR_ENABLED = config('DEBUG_TOOLBAR_ENABLED', default=True, cast=bool)

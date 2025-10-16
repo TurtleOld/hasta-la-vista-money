@@ -122,17 +122,17 @@ CONN_MAX_AGE = config('CONN_MAX_AGE', default=60, cast=int)
 # Database
 if config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
     DATABASES: Dict[str, Any] = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": config("POSTGRES_DB", default="postgres"),
-            "USER": config("POSTGRES_USER", default="postgres"),
-            "PASSWORD": config("POSTGRES_PASSWORD", default="postgres"),
-            "HOST": config("POSTGRES_HOST", default="localhost"),
-            "PORT": config("POSTGRES_PORT", default="5432"),
-            "CONN_MAX_AGE": CONN_MAX_AGE,
-            "OPTIONS": {
-                "slow_query_log": True,
-                "slow_query_threshold": 1.0,
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('POSTGRES_DB', default='postgres'),
+            'USER': config('POSTGRES_USER', default='postgres'),
+            'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
+            'HOST': config('POSTGRES_HOST', default='localhost'),
+            'PORT': config('POSTGRES_PORT', default='5432'),
+            'CONN_MAX_AGE': CONN_MAX_AGE,
+            'OPTIONS': {
+                'slow_query_log': True,
+                'slow_query_threshold': 1.0,
             },
         },
     }
@@ -287,19 +287,19 @@ CORS_ALLOWED_ORIGINS = [
 
 # REST Framework
 REST_FRAMEWORK = {
-    "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "hasta_la_vista_money.authentication.authentication.CookieJWTAuthentication",
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    'DEFAULT_FILTER_BACKENDS': ('django_filters.rest_framework.DjangoFilterBackend',),
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'hasta_la_vista_money.authentication.authentication.CookieJWTAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
     ],
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/hour",
-        "user": "1000/hour",
-        "login": "5/min",
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+        'login': '5/min',
     },
 }
 
@@ -359,43 +359,43 @@ if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
     os.mkdir(os.path.join(BASE_DIR, 'logs'))
 
 LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "console": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.dev.ConsoleRenderer(),
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'console': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.dev.ConsoleRenderer(),
         },
-        "key_value": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.processors.KeyValueRenderer(
-                key_order=["timestamp", "level", "event", "logger"],
+        'key_value': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.processors.KeyValueRenderer(
+                key_order=['timestamp', 'level', 'event', 'logger'],
             ),
         },
     },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "console",
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'console',
         },
-        "flat_line_file": {
-            "class": "logging.handlers.WatchedFileHandler",
-            "filename": os.path.join(BASE_DIR, "logs", "hlvm.log"),
-            "formatter": "key_value",
+        'flat_line_file': {
+            'class': 'logging.handlers.WatchedFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'hlvm.log'),
+            'formatter': 'key_value',
         },
     },
-    "loggers": {
-        "django_structlog": {
-            "handlers": ["console", "flat_line_file"],
-            "level": "DEBUG",
+    'loggers': {
+        'django_structlog': {
+            'handlers': ['console', 'flat_line_file'],
+            'level': 'DEBUG',
         },
-        "django.db.backends": {
-            "handlers": ["console", "flat_line_file"],
-            "level": "DEBUG",
+        'django.db.backends': {
+            'handlers': ['console', 'flat_line_file'],
+            'level': 'DEBUG',
         },
-        "slow_queries": {
-            "handlers": ["console", "flat_line_file"],
-            "level": "WARNING",
+        'slow_queries': {
+            'handlers': ['console', 'flat_line_file'],
+            'level': 'WARNING',
         },
     },
 }

@@ -7,7 +7,7 @@ class LoginRateThrottle(UserRateThrottle):
 
 class AnonLoginRateThrottle(UserRateThrottle):
     scope = 'anon_login'
-    
+
     def get_cache_key(self, request, view):
         if request.user and request.user.is_authenticated:
             return None  # Don't throttle authenticated users
