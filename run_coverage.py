@@ -32,13 +32,12 @@ def validate_environment() -> Path:
 
 
 def run_coverage_command(
-    cmd: list[str], description: str, timeout: int = 600
+    cmd: list[str], timeout: int = 600
 ) -> subprocess.CompletedProcess[bytes]:
     """Безопасно выполняет команду coverage.
 
     Args:
         cmd: Команда для выполнения.
-        description: Описание команды для вывода.
         timeout: Максимальное время выполнения в секундах.
 
     Returns:
@@ -48,7 +47,6 @@ def run_coverage_command(
         SystemExit: При превышении времени выполнения, ошибке команды или отсутствии файла.
     """
     try:
-        print(f'{description}...')
         result = subprocess.run(
             cmd,
             check=True,
@@ -58,10 +56,10 @@ def run_coverage_command(
         )
         return result
     except subprocess.TimeoutExpired:
-        print(f'Ошибка: {description} превысил лимит времени выполнения ({timeout} секунд)')
+        print(f"Ошибка: команда превысила лимит времени выполнения ({timeout} секунд)")
         sys.exit(1)
     except subprocess.CalledProcessError as e:
-        print(f'Ошибка при выполнении {description}: {e}')
+        print(f"Ошибка при выполнении команды: {e}")
         sys.exit(e.returncode)
     except FileNotFoundError as e:
         print(f'Ошибка: Команда не найдена: {e}')
@@ -74,17 +72,17 @@ def main() -> None:
     Валидирует окружение, устанавливает переменные окружения и выполняет
     команды coverage с ограничениями по времени и безопасности.
     """
-    manage_py = validate_environment()
+    validate_environment()
 
     os.environ['DJANGO_SETTINGS_MODULE'] = 'config.django.base'
 
-    coverage_run_cmd = [sys.executable, '-m', 'coverage', 'run', str(manage_py), 'test']
-    coverage_xml_cmd = [sys.executable, '-m', 'coverage', 'xml']
-    coverage_report_cmd = [sys.executable, '-m', 'coverage', 'report']
+    coverage_run_cmd = ["python", "-m", "coverage", "run", "manage.py", "test"]
+    coverage_xml_cmd = ["python", "-m", "coverage", "xml"]
+    coverage_report_cmd = ["python", "-m", "coverage", "report"]
 
-    run_coverage_command(coverage_run_cmd, 'Запуск тестов с coverage', timeout=600)
-    run_coverage_command(coverage_xml_cmd, 'Генерация XML отчёта', timeout=60)
-    run_coverage_command(coverage_report_cmd, 'Генерация текстового отчёта', timeout=60)
+    run_coverage_command(coverage_run_cmd, timeout=600)
+    run_coverage_command(coverage_xml_cmd, timeout=60)
+    run_coverage_command(coverage_report_cmd, timeout=60)
 
 
 if __name__ == '__main__':
