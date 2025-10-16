@@ -37,15 +37,13 @@ def main() -> None:
     Валидирует окружение, устанавливает переменные окружения и запускает
     тесты с ограничениями по времени и безопасности.
     """
-    manage_py = validate_environment()
+    validate_environment()
 
     os.environ['DJANGO_SETTINGS_MODULE'] = 'config.django.base'
 
-    cmd = ['uv', 'run', 'python', str(manage_py), 'test', '-v', '2']
-
     try:
         result = subprocess.run(
-            cmd,
+            ["uv", "run", "python", "manage.py", "test", "-v", "2"],
             check=True,
             timeout=300,
             cwd=Path.cwd(),
