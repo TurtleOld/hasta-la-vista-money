@@ -193,9 +193,13 @@ class AccountService:
         Returns:
             datetime: Дата первой покупки или None, если покупок нет
         """
-        month_end = datetime.combine(
-            month_start.replace(day=monthrange(month_start.year, month_start.month)[1]),
-            time.max,
+        month_end = timezone.make_aware(
+            datetime.combine(
+                month_start.replace(
+                    day=monthrange(month_start.year, month_start.month)[1]
+                ),
+                time.max,
+            )
         )
 
         # Ищем среди расходов
@@ -245,17 +249,24 @@ class AccountService:
         if account.type_account not in (ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT):
             return {}
 
-        purchase_start = purchase_month.replace(day=1)
+        purchase_start = timezone.make_aware(
+            datetime.combine(purchase_month.replace(day=1), time.min)
+        )
+        
         last_day = monthrange(purchase_start.year, purchase_start.month)[1]
-        purchase_end = datetime.combine(purchase_start.replace(day=last_day), time.max)
+        purchase_end = timezone.make_aware(
+            datetime.combine(purchase_start.date().replace(day=last_day), time.max)
+        )
 
         # Для Сбербанка используем текущую доменную логику (1+3 месяца)
         if account.bank == 'SBERBANK':
             grace_end_date = purchase_start + relativedelta(months=3)
             last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[1]
-            grace_end = datetime.combine(
-                grace_end_date.replace(day=last_day_grace),
-                time.max,
+            grace_end = timezone.make_aware(
+                datetime.combine(
+                    grace_end_date.replace(day=last_day_grace),
+                    time.max,
+                )
             )
             payments_start = purchase_end + relativedelta(seconds=1)
             payments_end = grace_end
@@ -268,10 +279,15 @@ class AccountService:
             )
 
             if first_purchase:
+                if timezone.is_naive(first_purchase):
+                    first_purchase = timezone.make_aware(first_purchase)
+                
                 # Отсчитываем 110 дней с даты первой покупки
                 grace_end = first_purchase + relativedelta(days=110)
                 # Устанавливаем время на конец дня для корректного сравнения
-                grace_end = datetime.combine(grace_end.date(), time.max)
+                grace_end = timezone.make_aware(
+                    datetime.combine(grace_end.date(), time.max)
+                )
             else:
                 # Если покупок нет, используем конец месяца как fallback
                 grace_end = purchase_end
@@ -307,6 +323,10 @@ class AccountService:
 
         final_debt = (debt_for_month or 0) + (payments_for_period or 0)
 
+        # Убеждаемся, что grace_end является timezone-aware
+        if hasattr(grace_end, 'utcoffset') and timezone.is_naive(grace_end):
+            grace_end = timezone.make_aware(grace_end)
+
         return {
             'purchase_month': purchase_start.strftime('%m.%Y'),
             'purchase_start': purchase_start,
@@ -315,10 +335,10 @@ class AccountService:
             'debt_for_month': debt_for_month,
             'payments_for_period': payments_for_period,
             'final_debt': final_debt,
-            'is_overdue': timezone.now() > grace_end and final_debt > 0,
+            'is_overdue': timezone.make_aware(timezone.now()) > grace_end and final_debt > 0,
             'days_until_due': (
                 (grace_end.date() - timezone.now().date()).days
-                if timezone.now() <= grace_end
+                if timezone.make_aware(timezone.now()) <= grace_end
                 else 0
             ),
         }
@@ -351,9 +371,10 @@ class AccountService:
 
         purchase_start = purchase_month.replace(day=1)
         last_day = monthrange(purchase_start.year, purchase_start.month)[1]
-        purchase_end = datetime.combine(purchase_start.replace(day=last_day), time.max)
+        purchase_end = timezone.make_aware(
+            datetime.combine(purchase_start.replace(day=last_day), time.max)
+        )
 
-        # Находим первую покупку в месяце
         first_purchase = AccountService._get_first_purchase_in_month(
             account,
             purchase_start,
@@ -361,6 +382,9 @@ class AccountService:
 
         if not first_purchase:
             return {}
+        
+        if timezone.is_naive(first_purchase):
+            first_purchase = timezone.make_aware(first_purchase)
 
         # Рассчитываем даты выписок (2-го числа каждого месяца, начиная со следующего)
         first_statement_date = first_purchase.replace(day=2)
@@ -370,14 +394,12 @@ class AccountService:
                 first_statement_date + relativedelta(months=1)
             ).replace(day=2)
 
-        # Рассчитываем даты трёх выписок
         statement_dates = []
         current_date = first_statement_date
         for i in range(3):
             statement_dates.append(current_date)
             current_date = current_date + relativedelta(months=1)
 
-        # Рассчитываем минимальные платежи и остатки
         payments_schedule = []
         remaining_debt = (
             AccountService.get_credit_card_debt(account, purchase_start, purchase_end)
@@ -385,10 +407,8 @@ class AccountService:
         )
 
         for i, statement_date in enumerate(statement_dates):
-            # Минимальный платёж 3% от остатка
             min_payment = remaining_debt * Decimal('0.03')
 
-            # Срок оплаты - 20 дней с даты выписки
             payment_due_date = statement_date + relativedelta(days=20)
 
             payments_schedule.append(
@@ -401,12 +421,10 @@ class AccountService:
                 },
             )
 
-            # Остаток после минимального платежа
             remaining_debt = remaining_debt - min_payment
 
-        # Конец льготного периода (110 дней с первой покупки)
         grace_end = first_purchase + relativedelta(days=110)
-        grace_end = datetime.combine(grace_end.date(), time.max)
+        grace_end = timezone.make_aware(datetime.combine(grace_end.date(), time.max))
 
         return {
             'first_purchase_date': first_purchase,
@@ -417,7 +435,7 @@ class AccountService:
                 purchase_end,
             )
             or 0,
-            'final_debt': remaining_debt,  # Остаток после всех минимальных платежей
+            'final_debt': remaining_debt,
             'payments_schedule': payments_schedule,
             'days_until_grace_end': (
                 (grace_end.date() - timezone.now().date()).days

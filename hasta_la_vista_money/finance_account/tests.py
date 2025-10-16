@@ -709,7 +709,7 @@ class TestAccountBusinessLogic(TestCase):
         self.account1.save()
         from datetime import date
 
-        info = self.account1.calculate_grace_period_info(date.today())
+        info = self.account1.calculate_grace_period_info(timezone.now().date())
         self.assertIn('final_debt', info)
 
 
