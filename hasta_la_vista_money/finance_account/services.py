@@ -10,6 +10,8 @@ from datetime import datetime, time
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
+from django.db.models.query import QuerySet
+
 from dateutil.relativedelta import relativedelta
 from django.db import transaction
 from django.db.models import Sum
@@ -25,6 +27,7 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
     validate_different_accounts,
@@ -32,7 +35,6 @@ from hasta_la_vista_money.finance_account.validators import (
 )
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
-from hasta_la_vista_money.users.models import User
 
 
 class TransferService:
@@ -252,7 +254,7 @@ class AccountService:
         purchase_start = timezone.make_aware(
             datetime.combine(purchase_month.replace(day=1), time.min)
         )
-        
+
         last_day = monthrange(purchase_start.year, purchase_start.month)[1]
         purchase_end = timezone.make_aware(
             datetime.combine(purchase_start.date().replace(day=last_day), time.max)
@@ -281,7 +283,7 @@ class AccountService:
             if first_purchase:
                 if timezone.is_naive(first_purchase):
                     first_purchase = timezone.make_aware(first_purchase)
-                
+
                 # Отсчитываем 110 дней с даты первой покупки
                 grace_end = first_purchase + relativedelta(days=110)
                 # Устанавливаем время на конец дня для корректного сравнения
@@ -382,7 +384,7 @@ class AccountService:
 
         if not first_purchase:
             return {}
-        
+
         if timezone.is_naive(first_purchase):
             first_purchase = timezone.make_aware(first_purchase)
 
@@ -446,7 +448,9 @@ class AccountService:
         }
 
 
-def get_accounts_for_user_or_group(user, group_id=None):
+def get_accounts_for_user_or_group(
+    user: User, group_id: Optional[str] = None
+) -> QuerySet[Account]:
     if not group_id or group_id == 'my':
         return Account.objects.filter(user=user).select_related('user')
     else:
