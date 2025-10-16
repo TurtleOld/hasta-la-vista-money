@@ -75,11 +75,13 @@ secretkey:
 
 .PHONY: test
 test:
-		@uv run python run_tests.py
+		@uv run python manage.py test -v 2
 
 .PHONY: coverage
 coverage:
-		@uv run python run_coverage.py
+		@uv run python -m coverage run manage.py test -v 2
+		@uv run python -m coverage xml
+		@uv run python -m coverage report
 
 .PHONY: taskiq-worker
 taskiq-worker:
