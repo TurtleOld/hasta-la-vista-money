@@ -448,11 +448,3 @@ class SwitchThemeView(LoginRequiredMixin, View):
         theme = data.get('theme')
         set_user_theme(user, theme)
         return JsonResponse({'success': True})
-
-
-class HealthCheckView(View):
-    """Simple health check endpoint for Docker containers."""
-
-    def get(self, request):
-        """Return simple health status."""
-        return JsonResponse({'status': 'healthy'}, status=200)
