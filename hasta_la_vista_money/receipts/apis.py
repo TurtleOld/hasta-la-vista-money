@@ -16,11 +16,13 @@ from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.throttling import UserRateThrottle
 
 
 class ReceiptListAPIView(ListCreateAPIView):
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
+    throttle_classes = [UserRateThrottle]
 
     def get_queryset(self) -> QuerySet[Receipt, Receipt]:  # type: ignore[override]
         return (
@@ -39,6 +41,7 @@ class SellerDetailAPIView(RetrieveAPIView):
     queryset = Seller.objects.all()
     serializer_class = SellerSerializer
     permission_classes = (IsAuthenticated,)
+    throttle_classes = [UserRateThrottle]
     lookup_field = 'id'
 
     def get_queryset(self) -> QuerySet[Seller, Seller]:  # type: ignore[override]
@@ -48,6 +51,9 @@ class SellerDetailAPIView(RetrieveAPIView):
 
 
 class DataUrlAPIView(APIView):
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = [UserRateThrottle]
+    
     def post(self, request):
         serializer = ImageDataSerializer(data=request.data)
 
@@ -77,6 +83,7 @@ class DataUrlAPIView(APIView):
 
 class SellerCreateAPIView(APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_classes = [UserRateThrottle]
 
     def post(self, request, *args, **kwargs):
         serializer = SellerSerializer(data=request.data)
@@ -87,6 +94,9 @@ class SellerCreateAPIView(APIView):
 
 
 class ReceiptCreateAPIView(ListCreateAPIView):
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = [UserRateThrottle]
+    
     def post(self, request, *args, **kwargs):
         try:
             request_data = json.loads(request.body)
@@ -210,6 +220,9 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 
 
 class ReceiptDeleteAPIView(APIView):
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = [UserRateThrottle]
+    
     def delete(self, request, *args, **kwargs):
         try:
             receipt = Receipt.objects.get(id=kwargs['pk'])

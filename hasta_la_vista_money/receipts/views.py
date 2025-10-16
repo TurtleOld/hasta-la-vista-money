@@ -2,6 +2,7 @@ import decimal
 import json
 import re
 from datetime import datetime
+from django.utils import timezone
 from decimal import Decimal
 from typing import Any
 
@@ -601,9 +602,11 @@ class UploadImageView(LoginRequiredMixin, FormView):
                     user=user,
                     account=account,
                     number_receipt=decode_json_receipt['number_receipt'],
-                    receipt_date=datetime.strptime(
-                        self.normalize_date(decode_json_receipt['receipt_date']),
-                        '%d.%m.%Y %H:%M',
+                    receipt_date=timezone.make_aware(
+                        datetime.strptime(
+                            self.normalize_date(decode_json_receipt['receipt_date']),
+                            '%d.%m.%Y %H:%M',
+                        )
                     ),
                     nds10=decode_json_receipt.get('nds10', 0),
                     nds20=decode_json_receipt.get('nds20', 0),
@@ -663,7 +666,7 @@ class UploadImageView(LoginRequiredMixin, FormView):
             )
         except ValueError:
             day, month, year_short, time = date_str.replace(' ', '.').split('.')
-            current_century = str(datetime.now().year)[:2]
+            current_century = str(timezone.now().year)[:2]
             return f'{day}.{month}.{current_century}{year_short} {time}'
 
 

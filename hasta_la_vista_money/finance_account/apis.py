@@ -9,6 +9,7 @@ from hasta_la_vista_money.finance_account.serializers import AccountSerializer
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 
 
 class AccountListCreateAPIView(ListCreateAPIView):
@@ -23,6 +24,7 @@ class AccountListCreateAPIView(ListCreateAPIView):
 
     serializer_class = AccountSerializer
     permission_classes = (IsAuthenticated,)
+    throttle_classes = [UserRateThrottle]
 
     @property
     def queryset(self):

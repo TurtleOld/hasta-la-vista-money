@@ -18,6 +18,10 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from hasta_la_vista_money.api.throttling import (
+    LoginRateThrottle,
+    AnonLoginRateThrottle,
+)
 
 
 class SessionTokenObtainView(APIView):
@@ -45,6 +49,8 @@ class SessionTokenObtainView(APIView):
 
 class CookieTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view that sets HttpOnly cookies"""
+    
+    throttle_classes = [AnonLoginRateThrottle, LoginRateThrottle]
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:

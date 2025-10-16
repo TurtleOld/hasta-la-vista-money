@@ -7,7 +7,6 @@ authors = [
 ]
 requires-python = ">=3.12.7"
 dependencies = [
-    "python-dotenv>=1.0.0",
     "dj-database-url>=3.0.0",
     "psycopg2-binary>=2.9.3",
     "whitenoise>=6.0.0",
@@ -37,6 +36,7 @@ dependencies = [
     "djangorestframework-stubs>=3.16.1",
     "django-stubs>=5.2.1",
     "django-cors-headers>=4.7.0",
+    "python-decouple>=3.8",
 ]
 
 [project.optional-dependencies]
@@ -75,4 +75,9 @@ exclude = [
     "migrations",
     ".venv",
     ".git"
+]
+
+[dependency-groups]
+dev = [
+    "faker>=37.4.0",
 ]

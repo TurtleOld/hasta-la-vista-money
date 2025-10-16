@@ -1,14 +1,11 @@
 import base64
-import os
 
 from django.core.files.uploadedfile import UploadedFile
-from dotenv import load_dotenv
+from decouple import config
 from openai import OpenAI
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
 from typing import Any, Sequence, TypeVar, Union
-
-load_dotenv()
 
 T = TypeVar('T')
 
@@ -20,9 +17,9 @@ def image_to_base64(uploaded_file) -> str:
 
 
 def analyze_image_with_ai(image_base64: UploadedFile):
-    base_url = os.environ.get('API_BASE_URL', 'https://models.github.ai/inference')
-    token = os.environ.get('API_KEY')
-    model = os.environ.get('API_MODEL', 'openai/gpt-4o')
+    base_url = str(config('API_BASE_URL', default='https://models.github.ai/inference'))
+    token = str(config('API_KEY', default=''))
+    model = str(config('API_MODEL', default='openai/gpt-4o'))
 
     client = OpenAI(
         base_url=base_url,

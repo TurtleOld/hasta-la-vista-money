@@ -124,11 +124,13 @@ class Account(TimeStampedModel):
         default=_('Основной счёт'),
     )
     type_account = models.CharField(
+        max_length=20,
         choices=TYPE_ACCOUNT_LIST,
         default=TYPE_ACCOUNT_LIST[1][0],
         verbose_name=_('Тип счёта'),
     )
     bank = models.CharField(
+        max_length=20,
         choices=BANK_LIST,
         default='-',
         verbose_name=_('Банк'),
@@ -140,6 +142,7 @@ class Account(TimeStampedModel):
         default=0,
     )
     currency = models.CharField(
+        max_length=10,
         choices=CURRENCY_LIST,
         default='RUB',
         verbose_name=_('Валюта'),
@@ -171,7 +174,7 @@ class Account(TimeStampedModel):
 
     objects = AccountManager.from_queryset(AccountQuerySet)()
 
-    class Meta:
+    class Meta(TimeStampedModel.Meta):
         db_table = 'account'
         ordering = ['name_account']
         indexes = [
@@ -191,7 +194,7 @@ class Account(TimeStampedModel):
         """
         Returns the absolute URL to edit this account in the admin or UI.
         """
-        return reverse('finance_account:change', args=[self.id])
+        return reverse('finance_account:change', args=[self.pk])
 
     def transfer_money(self, to_account: 'Account', amount: Decimal) -> bool:
         """
@@ -318,7 +321,7 @@ class TransferMoneyLog(TimeStampedModel):
 
     objects = TransferMoneyLogManager.from_queryset(TransferMoneyLogQuerySet)()
 
-    class Meta:
+    class Meta(TimeStampedModel.Meta):
         ordering = ['-exchange_date']
         indexes = [
             models.Index(fields=['user']),

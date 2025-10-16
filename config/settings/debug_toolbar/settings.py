@@ -1,6 +1,7 @@
-import os
 
-DEBUG_TOOLBAR_ENABLED = os.environ.get('DEBUG_TOOLBAR_ENABLED', default=True)
+from decouple import config
+
+DEBUG_TOOLBAR_ENABLED = config('DEBUG_TOOLBAR_ENABLED', default=True, cast=bool)
 DEBUG_TOOLBAR_CONFIG = {
     'SHOW_TOOLBAR_CALLBACK': 'config.settings.debug_toolbar.setup.show_toolbar',
 }

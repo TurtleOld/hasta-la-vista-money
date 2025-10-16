@@ -6,8 +6,15 @@
   "automergeType": "pr",
   "prCreation": "immediate",
   "ignorePresets": [":ignoreModulesAndTests"],
-  "ignorePaths": ["**/node_modules/**", "**/__fixtures__/**", "test/**", "**/migrations/**"],
+  "ignorePaths": ["**/node_modules/**", "**/__fixtures__/**", "test/**", "**/migrations/**", "**/*.Dockerfile", "**/.git"],
   "rebaseWhen": "conflicted",
   "baseBranches": ["$default"],
-  "dependencyDashboard": false
+  "dependencyDashboard": false,
+  "packageRules": [
+    {
+      "matchFileNames": [".github/workflows/hasta_la_vista_money.yaml"],
+      "matchCurrentVersion": "3.13.7",
+      "enabled": false
+    }
+  ]
 }
