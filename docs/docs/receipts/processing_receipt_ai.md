@@ -60,6 +60,7 @@ def image_to_base64(uploaded_file) -> str:
     """Преобразование изображения в Base64"""
     file_bytes = uploaded_file.read()
     encoded_str = base64.b64encode(file_bytes).decode('utf-8')
+    encoded_str = encoded_str.replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
     return f'data:image/jpeg;base64,{encoded_str}'
 ```
 
