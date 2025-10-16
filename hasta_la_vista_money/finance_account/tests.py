@@ -707,9 +707,8 @@ class TestAccountBusinessLogic(TestCase):
     def test_calculate_grace_period_info(self):
         self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
-        from datetime import date
 
-        info = self.account1.calculate_grace_period_info(date.today())
+        info = self.account1.calculate_grace_period_info(timezone.now().date())
         self.assertIn('final_debt', info)
 
 

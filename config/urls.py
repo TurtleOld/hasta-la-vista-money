@@ -2,7 +2,6 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
 from hasta_la_vista_money.users.views import (
-    HealthCheckView,
     IndexView,
     LoginUser,
     LogoutUser,
@@ -89,6 +88,4 @@ urlpatterns = [
     ),
     path('admin/', admin.site.urls),
     path('__debug__/', include('debug_toolbar.urls')),
-    path('health/', HealthCheckView.as_view(), name='health'),
-    # re_path(r'rosetta/', include('rosetta.urls'))
 ]

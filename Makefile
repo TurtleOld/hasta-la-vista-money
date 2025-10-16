@@ -2,7 +2,7 @@
 lint:
 		@cd ./hasta_la_vista_money && \
 			echo "Running flake8 check..." && \
-			flake8 . --select=WPS
+			uv run flake8 . --select=WPS
 
 .PHONY: format
 format:
@@ -75,13 +75,13 @@ secretkey:
 
 .PHONY: test
 test:
-		@DJANGO_SETTINGS_MODULE=config.django.base uv run python ./manage.py test -v 2
+		@uv run python manage.py test -v 2
 
 .PHONY: coverage
 coverage:
-		@DJANGO_SETTINGS_MODULE=config.django.base uv run coverage run manage.py test
-		@uv run coverage xml
-		@uv run coverage report
+		@uv run python -m coverage run manage.py test -v 2
+		@uv run python -m coverage xml
+		@uv run python -m coverage report
 
 .PHONY: taskiq-worker
 taskiq-worker:

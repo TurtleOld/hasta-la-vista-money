@@ -175,7 +175,7 @@ AUTHENTICATION_BACKENDS = (
 LANGUAGE_CODE = config('LANGUAGE_CODE', default='ru-RU')
 TIME_ZONE = config('TIME_ZONE', default='Europe/Moscow')
 USE_I18N = True
-USE_TZ = False
+USE_TZ = True
 LANGUAGES = (
     ('en', 'English'),
     ('ru-RU', 'Russian'),
