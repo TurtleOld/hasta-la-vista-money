@@ -46,7 +46,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@3ccd0fd498ef6303a98d4125859aae05eedf6294
         with:
-          version: "0.7.13"
+          version: "0.9.3"
 
       - name: Install ruff
         uses: astral-sh/ruff-action@5ad29210b1239ed44df0d72c2bcae76eb6f034b9
