@@ -130,6 +130,10 @@ if config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
             'HOST': config('POSTGRES_HOST', default='localhost'),
             'PORT': config('POSTGRES_PORT', default='5432'),
             'CONN_MAX_AGE': CONN_MAX_AGE,
+            'OPTIONS': {
+                'slow_query_log': True,
+                'slow_query_threshold': 1.0,
+            },
         },
     }
     if config('GITHUB_WORKFLOW', default=''):
@@ -283,19 +287,19 @@ CORS_ALLOWED_ORIGINS = [
 
 # REST Framework
 REST_FRAMEWORK = {
-    "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "hasta_la_vista_money.authentication.authentication.CookieJWTAuthentication",
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    'DEFAULT_FILTER_BACKENDS': ('django_filters.rest_framework.DjangoFilterBackend',),
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'hasta_la_vista_money.authentication.authentication.CookieJWTAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
     ],
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/hour",
-        "user": "1000/hour",
-        "login": "5/min",
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',
+        'user': '1000/hour',
+        'login': '5/min',
     },
 }
 
@@ -385,9 +389,13 @@ LOGGING = {
             'handlers': ['console', 'flat_line_file'],
             'level': 'DEBUG',
         },
-        'myproject': {  # Замените на имя вашего Django-проекта
+        'django.db.backends': {
             'handlers': ['console', 'flat_line_file'],
             'level': 'DEBUG',
+        },
+        'slow_queries': {
+            'handlers': ['console', 'flat_line_file'],
+            'level': 'WARNING',
         },
     },
 }

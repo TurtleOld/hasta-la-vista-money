@@ -53,7 +53,7 @@ class SellerDetailAPIView(RetrieveAPIView):
 class DataUrlAPIView(APIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = [UserRateThrottle]
-    
+
     def post(self, request):
         serializer = ImageDataSerializer(data=request.data)
 
@@ -96,7 +96,7 @@ class SellerCreateAPIView(APIView):
 class ReceiptCreateAPIView(ListCreateAPIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = [UserRateThrottle]
-    
+
     def post(self, request, *args, **kwargs):
         try:
             request_data = json.loads(request.body)
@@ -222,7 +222,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 class ReceiptDeleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = [UserRateThrottle]
-    
+
     def delete(self, request, *args, **kwargs):
         try:
             receipt = Receipt.objects.get(id=kwargs['pk'])
