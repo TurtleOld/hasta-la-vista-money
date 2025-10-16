@@ -2,7 +2,7 @@ FROM python:3.13.9-alpine AS builder
 
 WORKDIR /app
 
-RUN pip install uv
+RUN pip install uv==0.7.13
 
 ENV PATH="/root/.local/bin:$PATH"
 
@@ -19,7 +19,7 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-RUN pip install uv
+RUN pip install uv==0.7.13
 
 ENV PATH="/root/.local/bin:$PATH"
 
