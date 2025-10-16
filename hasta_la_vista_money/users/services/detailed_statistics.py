@@ -150,7 +150,9 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
             for date in all_dates
         ]
         if len(all_dates) == 1:
-            single_date = datetime.strptime(all_dates[0], '%Y-%m-%d')
+            single_date = timezone.make_aware(
+                datetime.strptime(all_dates[0], '%Y-%m-%d')
+            )
             prev_date = (single_date - timedelta(days=1)).strftime('%Y-%m-%d')
             all_dates = [prev_date] + all_dates
             expense_series_data = [0] + expense_series_data
@@ -175,9 +177,11 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
             month_date = today_month - relativedelta(months=11 - i)
             purchase_start = month_date.replace(day=1)
             last_day = monthrange(purchase_start.year, purchase_start.month)[1]
-            purchase_end = datetime.combine(
-                purchase_start.replace(day=last_day),
-                time.max,
+            purchase_end = timezone.make_aware(
+                datetime.combine(
+                    purchase_start.replace(day=last_day),
+                    time.max,
+                )
             )
             expense_sum = (
                 Expense.objects.filter(
@@ -214,9 +218,11 @@ def get_user_detailed_statistics(user: User) -> Dict[str, Any]:
                 last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[
                     1
                 ]
-                grace_end = datetime.combine(
-                    grace_end_date.replace(day=last_day_grace),
-                    time.max,
+                grace_end = timezone.make_aware(
+                    datetime.combine(
+                        grace_end_date.replace(day=last_day_grace),
+                        time.max,
+                    )
                 )
             elif getattr(card, 'bank', None) == 'RAIFFAISENBANK':
                 # Для Райффайзенбанка используем специальную логику

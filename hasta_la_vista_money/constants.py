@@ -1,6 +1,6 @@
-import datetime
 from typing import Final
 
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 # Константы для парсинга json чека
@@ -163,8 +163,8 @@ SUCCESS_WEBHOOKS: Final = 'Webhook processed successfully'
 WEBHOOKS_TELEGRAM: Final = 'This page for Webhooks Telegram!'
 
 # Параметры дат
-TODAY = datetime.datetime.today()
-CURRENT_YEAR = datetime.date.today().year
+TODAY = timezone.now().date()
+CURRENT_YEAR = timezone.now().year
 
 MONTH_NUMBERS: Final = {
     'Январь': 1,
