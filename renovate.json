@@ -14,6 +14,7 @@
     {
       "matchFileNames": [".github/workflows/hasta_la_vista_money.yaml"],
       "matchCurrentVersion": "3.13.7",
+      "matchPackageNames": ["python"],
       "enabled": false
     }
   ]
