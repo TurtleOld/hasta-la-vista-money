@@ -335,10 +335,10 @@ class AccountService:
             'debt_for_month': debt_for_month,
             'payments_for_period': payments_for_period,
             'final_debt': final_debt,
-            'is_overdue': timezone.make_aware(timezone.now()) > grace_end and final_debt > 0,
+            'is_overdue': timezone.now() > grace_end and final_debt > 0,
             'days_until_due': (
                 (grace_end.date() - timezone.now().date()).days
-                if timezone.make_aware(timezone.now()) <= grace_end
+                if timezone.now() <= grace_end
                 else 0
             ),
         }
