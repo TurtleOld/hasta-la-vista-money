@@ -41,10 +41,10 @@ jobs:
       - uses: actions/checkout@v5.0.0
       - uses: actions/setup-python@v6.0.0
         with:
-          python-version: '3.14.0'
+          python-version: '3.13.9'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@cb6c0a53d9c61608defba05145184489d20183b2
+        uses: astral-sh/setup-uv@3ccd0fd498ef6303a98d4125859aae05eedf6294
         with:
           version: "latest"
 
