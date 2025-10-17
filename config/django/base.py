@@ -8,6 +8,7 @@ import django_stubs_ext
 import sentry_sdk
 import structlog
 from config.django.sessions import *  # NOQA
+from config.django.validator_env import EnvironmentValidator
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from csp.constants import NONCE, SELF
 from decouple import config
@@ -16,6 +17,8 @@ from sentry_sdk.integrations.django import DjangoIntegration
 django_stubs_ext.monkeypatch()
 
 # Security settings
+if not EnvironmentValidator('.env').validate():
+    raise ValueError('Environment variables are not valid')
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 BASE_URL = config('BASE_URL', default='http://127.0.0.1:8000/')
@@ -56,6 +59,7 @@ THIRD_PARTY_APPS = [
     'rest_framework.authtoken',
     'rosetta',
     'django_structlog',
+    'silk',
 ]
 
 if DEBUG:
@@ -74,6 +78,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'silk.middleware.SilkyMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.locale.LocaleMiddleware',
@@ -119,6 +124,18 @@ TEMPLATES = [
 
 CONN_MAX_AGE = config('CONN_MAX_AGE', default=60, cast=int)
 
+# Cache configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+        'TIMEOUT': 300,  # 5 minutes
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        },
+    }
+}
+
 # Database
 if config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
     DATABASES: Dict[str, Any] = {
@@ -130,10 +147,6 @@ if config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
             'HOST': config('POSTGRES_HOST', default='localhost'),
             'PORT': config('POSTGRES_PORT', default='5432'),
             'CONN_MAX_AGE': CONN_MAX_AGE,
-            'OPTIONS': {
-                'slow_query_log': True,
-                'slow_query_threshold': 1.0,
-            },
         },
     }
     if config('GITHUB_WORKFLOW', default=''):
@@ -174,6 +187,15 @@ AUTHENTICATION_BACKENDS = (
     'axes.backends.AxesStandaloneBackend',
     'django.contrib.auth.backends.ModelBackend',
 )
+
+# Axes settings for performance optimization
+AXES_ENABLED = True
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # 1 hour
+AXES_LOCKOUT_CALLABLE = 'axes.lockout.database_lockout'
+AXES_LOCKOUT_TEMPLATE = None
+AXES_VERBOSE = False
+AXES_ENABLE_ADMIN = False  # Отключаем админку Axes для производительности
 
 # Internationalization
 LANGUAGE_CODE = config('LANGUAGE_CODE', default='ru-RU')
@@ -387,14 +409,6 @@ LOGGING = {
     'loggers': {
         'django_structlog': {
             'handlers': ['console', 'flat_line_file'],
-            'level': 'DEBUG',
-        },
-        'django.db.backends': {
-            'handlers': ['console', 'flat_line_file'],
-            'level': 'DEBUG',
-        },
-        'slow_queries': {
-            'handlers': ['console', 'flat_line_file'],
             'level': 'WARNING',
         },
     },
@@ -416,3 +430,5 @@ structlog.configure(
     logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=True,
 )
+
+SILKY_PYTHON_PROFILER = True

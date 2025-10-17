@@ -33,7 +33,7 @@ shell:
 		@test ! -f .env && cp .env.example .env
 
 .PHONY: install
-install: .env
+install: .env secretkey
 		@uv pip install -e '.[dev]'
 
 .PHONY: migrate
@@ -71,11 +71,11 @@ staticfiles:
 
 .PHONY: start
 start:
-		@uv run python manage.py runserver 0.0.0.0:8000
+		@uv run python manage.py runserver 127.0.0.1:8000
 
 .PHONY: secretkey
 secretkey:
-		@uv run python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
+		@uv run python -c "from django.core.management.utils import get_random_secret_key; print('SECRET_KEY=' + get_random_secret_key())" >> .env
 
 .PHONY: test
 test:

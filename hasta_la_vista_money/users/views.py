@@ -106,21 +106,24 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponseBase:
-        if hasattr(request, 'axes_locked_out'):
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse(
-                    {
-                        'success': False,
-                        'error': 'Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.',
-                    },
-                    status=429,
-                )
-            else:
-                messages.error(
-                    request,
-                    'Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.',
-                )
-                return self.render_to_response(self.get_context_data())
+        # Кэшируем проверку блокировки
+        if not hasattr(request, '_axes_checked'):
+            request._axes_checked = True  # type: ignore
+            if hasattr(request, 'axes_locked_out'):
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse(
+                        {
+                            'success': False,
+                            'error': 'Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.',
+                        },
+                        status=429,
+                    )
+                else:
+                    messages.error(
+                        request,
+                        'Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.',
+                    )
+                    return self.render_to_response(self.get_context_data())
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
