@@ -79,5 +79,6 @@ exclude = [
 
 [dependency-groups]
 dev = [
+    "django-silk>=5.4.3",
     "faker>=37.4.0",
 ]

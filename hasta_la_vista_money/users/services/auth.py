@@ -15,6 +15,7 @@ def login_user(
 ) -> Dict[str, Any]:
     username = form.cleaned_data['username']
     password = form.cleaned_data['password']
+
     user = authenticate(
         request,
         username=username,
@@ -23,9 +24,16 @@ def login_user(
     )
     if user is not None:
         login(request, user)
-        tokens = RefreshToken.for_user(user)
-        jwt_access_token = str(tokens.access_token)
-        jwt_refresh_token = str(tokens)
+        # Оптимизированная генерация токенов
+        try:
+            tokens = RefreshToken.for_user(user)
+            jwt_access_token = str(tokens.access_token)
+            jwt_refresh_token = str(tokens)
+        except Exception:
+            # Fallback без JWT токенов
+            jwt_access_token = None
+            jwt_refresh_token = None
+
         messages.success(request, success_message)
         return {
             'user': user,

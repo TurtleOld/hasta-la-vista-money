@@ -1,5 +1,6 @@
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.core.cache import cache
 from hasta_la_vista_money.users.models import User
 
 
@@ -9,7 +10,12 @@ class CheckAdminMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if not User.objects.filter(is_superuser=True).exists():
+        has_superuser = cache.get('has_superuser')
+        if has_superuser is None:
+            has_superuser = User.objects.filter(is_superuser=True).exists()
+            cache.set('has_superuser', has_superuser, 300)
+
+        if not has_superuser:
             if request.path != reverse_lazy('users:registration'):
                 return redirect('users:registration')
         return self.get_response(request)

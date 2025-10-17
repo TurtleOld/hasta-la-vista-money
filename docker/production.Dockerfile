@@ -12,9 +12,6 @@ RUN uv venv .venv && uv pip install -e '.[dev]'
 
 COPY . .
 
-RUN mkdir -p /app/staticfiles && \
-    SECRET_KEY=build-time-secret-key .venv/bin/python manage.py collectstatic --noinput --clear
-
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -29,12 +26,10 @@ RUN uv venv .venv && uv pip install -e '.[dev]' && \
     adduser --disabled-password --gecos '' appuser
 
 COPY --from=builder /app /app
-COPY --from=builder /app/staticfiles /app/staticfiles
 
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/.venv/bin/granian && \
-    chmod +x /app/.venv/bin/python && \
-    chmod -R 755 /app/staticfiles
+    chmod +x /app/.venv/bin/python
 
 USER appuser
 
