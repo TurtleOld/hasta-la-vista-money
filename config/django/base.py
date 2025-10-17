@@ -196,10 +196,12 @@ AUTHENTICATION_BACKENDS = (
 # Axes settings for performance optimization
 AXES_ENABLED = True
 AXES_FAILURE_LIMIT = 5
-AXES_COOLOFF_TIME = 1  # 1 hour
+AXES_COOLOFF_TIME = 1
 AXES_LOCKOUT_TEMPLATE = None
 AXES_VERBOSE = False
-AXES_ENABLE_ADMIN = False  # Отключаем админку Axes для производительности
+AXES_ENABLE_ADMIN = False
+if "test" in sys.argv:
+    AXES_ENABLED = False
 
 # Internationalization
 LANGUAGE_CODE = config('LANGUAGE_CODE', default='ru-RU')
