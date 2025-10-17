@@ -12,9 +12,6 @@ RUN uv venv .venv && uv pip install -e '.[dev]'
 
 COPY . .
 
-RUN mkdir -p /app/staticfiles && \
-    SECRET_KEY=build-time-secret-key .venv/bin/python manage.py collectstatic --noinput --clear
-
 FROM python:3.13-slim
 
 WORKDIR /app
