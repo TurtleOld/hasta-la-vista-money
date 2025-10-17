@@ -17,7 +17,7 @@ from sentry_sdk.integrations.django import DjangoIntegration
 django_stubs_ext.monkeypatch()
 
 # Security settings
-if not EnvironmentValidator('.env').validate():
+if not EnvironmentValidator().validate():
     raise ValueError('Environment variables are not valid')
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
@@ -192,7 +192,6 @@ AUTHENTICATION_BACKENDS = (
 AXES_ENABLED = True
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # 1 hour
-AXES_LOCKOUT_CALLABLE = 'axes.lockout.database_lockout'
 AXES_LOCKOUT_TEMPLATE = None
 AXES_VERBOSE = False
 AXES_ENABLE_ADMIN = False  # Отключаем админку Axes для производительности
