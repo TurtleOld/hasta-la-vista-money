@@ -10,11 +10,10 @@ class CheckAdminMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Кэшируем проверку существования суперпользователя
         has_superuser = cache.get('has_superuser')
         if has_superuser is None:
             has_superuser = User.objects.filter(is_superuser=True).exists()
-            cache.set('has_superuser', has_superuser, 300)  # Кэш на 5 минут
+            cache.set('has_superuser', has_superuser, 300)
 
         if not has_superuser:
             if request.path != reverse_lazy('users:registration'):

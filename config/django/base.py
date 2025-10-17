@@ -83,22 +83,30 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'silk.middleware.SilkyMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'django.middleware.locale.LocaleMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'csp.middleware.CSPMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'hasta_la_vista_money.users.middleware.CheckAdminMiddleware',
-    'axes.middleware.AxesMiddleware',
-    'django_structlog.middlewares.RequestMiddleware',
+    "silk.middleware.SilkyMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "csp.middleware.CSPMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "hasta_la_vista_money.users.middleware.CheckAdminMiddleware",
+    "django_structlog.middlewares.RequestMiddleware",
 ]
+
+if "test" not in sys.argv:
+    MIDDLEWARE.append("axes.middleware.AxesMiddleware")
+else:
+    MIDDLEWARE = [
+        mw
+        for mw in MIDDLEWARE
+        if mw != "hasta_la_vista_money.users.middleware.CheckAdminMiddleware"
+    ]
 
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
@@ -142,41 +150,49 @@ CACHES = {
 }
 
 # Database
-if config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
-    DATABASES: Dict[str, Any] = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('POSTGRES_DB', default='postgres'),
-            'USER': config('POSTGRES_USER', default='postgres'),
-            'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
-            'HOST': config('POSTGRES_HOST', default='localhost'),
-            'PORT': config('POSTGRES_PORT', default='5432'),
-            'CONN_MAX_AGE': CONN_MAX_AGE,
+if "test" in sys.argv and not config("USE_DB_FOR_TESTS", default=False, cast=bool):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
         },
     }
-    if config('GITHUB_WORKFLOW', default=''):
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': 'github_actions',
-                'USER': 'postgres',
-                'PASSWORD': 'postgres',
-                'HOST': '127.0.0.1',
-                'PORT': '5432',
+else:
+    if config("DATABASE_URL", default="") or config("POSTGRES_DB", default=""):
+        DATABASES: Dict[str, Any] = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": config("POSTGRES_DB", default="postgres"),
+                "USER": config("POSTGRES_USER", default="postgres"),
+                "PASSWORD": config("POSTGRES_PASSWORD", default="postgres"),
+                "HOST": config("POSTGRES_HOST", default="localhost"),
+                "PORT": config("POSTGRES_PORT", default="5432"),
+                "CONN_MAX_AGE": CONN_MAX_AGE,
             },
         }
-    database_url = config('DATABASE_URL', default='')
-    if database_url:
-        DATABASES['default'] = dict(
-            dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE)
-        )
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-        },
-    }
+        if config("GITHUB_WORKFLOW", default=""):
+            DATABASES = {
+                "default": {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": "github_actions",
+                    "USER": "postgres",
+                    "PASSWORD": "postgres",
+                    "HOST": "127.0.0.1",
+                    "PORT": "5432",
+                },
+            }
+        database_url = config("DATABASE_URL", default="")
+        if database_url:
+            DATABASES["default"] = dict(
+                dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE)
+            )
+    else:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
+            },
+        }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

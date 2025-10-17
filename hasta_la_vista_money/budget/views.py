@@ -151,7 +151,7 @@ def generate_date_list_view(request):
     if request.method == 'POST':
         user = request.user
         queryset_user = get_object_or_404(User, username=user)
-        last_date_obj = queryset_user.budget_date_list_users.last()
+        last_date_obj = queryset_user.budget_date_lists.last()
         if last_date_obj:
             queryset_last_date = last_date_obj.date
         else:

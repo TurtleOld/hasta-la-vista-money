@@ -12,7 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Count, ProtectedError, Sum, Window
+from django.db.models import Count, ProtectedError, Sum, Window, Min
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
 from django.http import JsonResponse
@@ -89,13 +89,15 @@ class ReceiptView(
                     .select_related('user', 'account', 'seller')
                     .prefetch_related('product')
                 )
-                seller_queryset = (
-                    Seller.objects.filter(
-                        user__in=users_in_group,
-                    )
-                    .distinct('name_seller')
-                    .select_related('user')
+                seller_ids = (
+                    Seller.objects.filter(user__in=users_in_group)
+                    .values("name_seller")
+                    .annotate(min_id=Min("id"))
+                    .values("min_id")
                 )
+                seller_queryset = Seller.objects.filter(
+                    pk__in=seller_ids
+                ).select_related("user")
                 account_queryset = Account.objects.filter(
                     user__in=users_in_group
                 ).select_related('user')
@@ -109,10 +111,14 @@ class ReceiptView(
                 .select_related('user', 'account', 'seller')
                 .prefetch_related('product')
             )
-            seller_queryset = (
+            seller_ids = (
                 Seller.objects.filter(user=user)
-                .distinct('name_seller')
-                .select_related('user')
+                .values("name_seller")
+                .annotate(min_id=Min("id"))
+                .values("min_id")
+            )
+            seller_queryset = Seller.objects.filter(pk__in=seller_ids).select_related(
+                "user"
             )
             account_queryset = Account.objects.filter(user=user).select_related('user')
 
