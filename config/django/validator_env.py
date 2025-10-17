@@ -1,4 +1,4 @@
-from decouple import config
+from os import environ
 
 
 class EnvironmentValidator:
@@ -6,7 +6,7 @@ class EnvironmentValidator:
         self.env_file = env_file
 
     def validate(self) -> bool:
-        if config("GITHUB_ACTIONS"):
+        if environ.get("GITHUB_ACTIONS"):
             return True
 
         valid = True
