@@ -2,7 +2,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict
-
+import sys
 import dj_database_url
 import django_stubs_ext
 import sentry_sdk
@@ -17,8 +17,13 @@ from sentry_sdk.integrations.django import DjangoIntegration
 django_stubs_ext.monkeypatch()
 
 # Security settings
-if not EnvironmentValidator().validate():
-    raise ValueError('Environment variables are not valid')
+if (
+    "collectstatic" not in sys.argv
+    and "migrate" not in sys.argv
+    and "test" not in sys.argv
+):
+    if not EnvironmentValidator().validate():
+        raise ValueError("Environment variables are not valid")
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 BASE_URL = config('BASE_URL', default='http://127.0.0.1:8000/')

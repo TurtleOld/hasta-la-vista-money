@@ -4,6 +4,14 @@ from icecream import ic
 
 class EnvironmentValidator:
     def validate(self) -> bool:
+        if (
+            environ.get('CI')
+            or environ.get('GITHUB_ACTIONS')
+            or environ.get('DOCKER_BUILD')
+            or environ.get('SECRET_KEY') == 'build-time-secret-key'
+        ):
+            return True
+
         valid = True
 
         if not environ.get('SECRET_KEY'):
