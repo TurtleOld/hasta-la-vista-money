@@ -6,7 +6,7 @@ class EnvironmentValidator:
         self.env_file = env_file
 
     def validate(self) -> bool:
-        if config("GITHUB_WORKFLOW"):
+        if config("GITHUB_ACTIONS"):
             return True
 
         valid = True
