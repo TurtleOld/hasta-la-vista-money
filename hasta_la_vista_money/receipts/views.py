@@ -2,26 +2,26 @@ import decimal
 import json
 import re
 from datetime import datetime
-from django.utils import timezone
 from decimal import Decimal
 from typing import Any
 
-from django.views.generic.edit import UpdateView
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Count, ProtectedError, Sum, Window, Min
+from django.db.models import Count, Min, ProtectedError, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
+from django.views.generic.edit import UpdateView
 from django_filters.views import FilterView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -91,15 +91,15 @@ class ReceiptView(
                 )
                 seller_ids = (
                     Seller.objects.filter(user__in=users_in_group)
-                    .values("name_seller")
-                    .annotate(min_id=Min("id"))
-                    .values("min_id")
+                    .values('name_seller')
+                    .annotate(min_id=Min('id'))
+                    .values('min_id')
                 )
                 seller_queryset = Seller.objects.filter(
-                    pk__in=seller_ids
-                ).select_related("user")
+                    pk__in=seller_ids,
+                ).select_related('user')
                 account_queryset = Account.objects.filter(
-                    user__in=users_in_group
+                    user__in=users_in_group,
                 ).select_related('user')
             except Group.DoesNotExist:
                 receipt_queryset = Receipt.objects.none()
@@ -113,12 +113,12 @@ class ReceiptView(
             )
             seller_ids = (
                 Seller.objects.filter(user=user)
-                .values("name_seller")
-                .annotate(min_id=Min("id"))
-                .values("min_id")
+                .values('name_seller')
+                .annotate(min_id=Min('id'))
+                .values('min_id')
             )
             seller_queryset = Seller.objects.filter(pk__in=seller_ids).select_related(
-                "user"
+                'user',
             )
             account_queryset = Account.objects.filter(user=user).select_related('user')
 
@@ -237,7 +237,8 @@ class ReceiptCreateView(LoginRequiredMixin, SuccessMessageMixin, BaseView, Creat
             receipt.save()
             for product_form in product_formset:
                 if product_form.cleaned_data and not product_form.cleaned_data.get(
-                    'DELETE', False
+                    'DELETE',
+                    False,
                 ):
                     product_data = product_form.cleaned_data
                     # Проверяем, что все обязательные поля заполнены
@@ -325,7 +326,9 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     def get_object(self, queryset: Any = None) -> Receipt:
         receipt = get_object_or_404(
             Receipt.objects.select_related(
-                'user', 'account', 'seller'
+                'user',
+                'account',
+                'seller',
             ).prefetch_related('product'),
             pk=self.kwargs['pk'],
             user=self.request.user,
@@ -337,10 +340,10 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         receipt_form = self.get_form()
 
         receipt_form.fields['account'].queryset = Account.objects.filter(
-            user=self.request.user
+            user=self.request.user,
         ).select_related('user')
         receipt_form.fields['seller'].queryset = Seller.objects.filter(
-            user=self.request.user
+            user=self.request.user,
         ).select_related('user')
 
         context['receipt_form'] = receipt_form
@@ -354,7 +357,7 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
                     'price': product.price,
                     'quantity': product.quantity,
                     'amount': product.amount,
-                }
+                },
             )
         context['product_formset'] = ProductFormSet(initial=initial_data)
         return context
@@ -374,7 +377,8 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
             new_total_sum = Decimal('0.00')
             for product_form in product_formset:
                 if product_form.cleaned_data and not product_form.cleaned_data.get(
-                    'DELETE', False
+                    'DELETE',
+                    False,
                 ):
                     product_data = product_form.cleaned_data
                     if (
@@ -421,7 +425,11 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         return self.render_to_response(context)
 
     def update_account_balance(
-        self, old_account, new_account, old_total_sum, new_total_sum
+        self,
+        old_account,
+        new_account,
+        old_total_sum,
+        new_total_sum,
     ):
         """
         Обновляет баланс счёта при изменении суммы чека.
@@ -462,7 +470,7 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
         except Account.DoesNotExist:
             logger.error(
-                f'Account not found during receipt update for user {self.request.user}'
+                f'Account not found during receipt update for user {self.request.user}',
             )
 
 
@@ -612,7 +620,7 @@ class UploadImageView(LoginRequiredMixin, FormView):
                         datetime.strptime(
                             self.normalize_date(decode_json_receipt['receipt_date']),
                             '%d.%m.%Y %H:%M',
-                        )
+                        ),
                     ),
                     nds10=decode_json_receipt.get('nds10', 0),
                     nds20=decode_json_receipt.get('nds20', 0),
