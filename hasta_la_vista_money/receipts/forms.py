@@ -2,6 +2,7 @@ from os.path import splitext
 
 import django_filters
 from django.core.exceptions import ValidationError
+from django.db.models import Min
 from django.forms import (
     CharField,
     ChoiceField,
@@ -19,7 +20,6 @@ from django.forms import (
 )
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
-from django.db.models import Min
 from django_filters.fields import ModelChoiceField
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
@@ -85,11 +85,11 @@ class ReceiptFilter(django_filters.FilterSet):
 
         seller_ids = (
             Seller.objects.filter(user=self.user)
-            .values("name_seller")
-            .annotate(min_id=Min("id"))
-            .values_list("min_id", flat=True)
+            .values('name_seller')
+            .annotate(min_id=Min('id'))
+            .values_list('min_id', flat=True)
         )
-        self.filters["name_seller"].queryset = Seller.objects.filter(pk__in=seller_ids)
+        self.filters['name_seller'].queryset = Seller.objects.filter(pk__in=seller_ids)
 
         self.filters['account'].queryset = (
             Account.objects.filter(user=self.user)

@@ -22,6 +22,21 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:latest
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   hlvm-server:
     build:
       context: ./
@@ -44,6 +59,8 @@ services:
       DEBUG: "false"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - default
@@ -72,6 +89,7 @@ services:
 volumes:
   postgres_data:
   staticfiles_data:
+  redis_data:
 
 networks:
   default:
