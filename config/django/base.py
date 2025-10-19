@@ -173,7 +173,18 @@ if 'test' in sys.argv and not config('USE_DB_FOR_TESTS', default=False, cast=boo
         },
     }
 else:
-    if config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
+    if config('GITHUB_WORKFLOW', default=''):
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': 'github_actions',
+                'USER': 'postgres',
+                'PASSWORD': 'postgres',
+                'HOST': '127.0.0.1',
+                'PORT': '5432',
+            },
+        }
+    elif config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
         DATABASES: Dict[str, Any] = {
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
@@ -185,22 +196,18 @@ else:
                 'CONN_MAX_AGE': CONN_MAX_AGE,
             },
         }
-        if config('GITHUB_WORKFLOW', default=''):
-            DATABASES = {
-                'default': {
-                    'ENGINE': 'django.db.backends.postgresql',
-                    'NAME': 'github_actions',
-                    'USER': 'postgres',
-                    'PASSWORD': 'postgres',
-                    'HOST': '127.0.0.1',
-                    'PORT': '5432',
-                },
-            }
         database_url = config('DATABASE_URL', default='')
         if database_url:
             DATABASES['default'] = dict(
                 dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE),
             )
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+            },
+        }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
