@@ -72,26 +72,34 @@ class ReceiptView(
     def get_context_data(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         group_id = self.request.GET.get('group_id') or 'my'
-        
+
         receipt_queryset: QuerySet[Receipt]
         seller_queryset: QuerySet[Seller]
         account_queryset: QuerySet[Account]
-        
+
         if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
-                receipt_queryset = Receipt.objects.for_users(users_in_group).with_related()
-                seller_queryset = Seller.objects.unique_by_name_for_users(users_in_group)
-                account_queryset = Account.objects.filter(
-                    user__in=users_in_group
-                ).select_related('user').distinct()
+                receipt_queryset = Receipt.objects.for_users(
+                    users_in_group
+                ).with_related()
+                seller_queryset = Seller.objects.unique_by_name_for_users(
+                    users_in_group
+                )
+                account_queryset = (
+                    Account.objects.filter(user__in=users_in_group)
+                    .select_related('user')
+                    .distinct()
+                )
             except Group.DoesNotExist:
                 receipt_queryset = Receipt.objects.for_users([]).with_related()
                 seller_queryset = Seller.objects.for_users([])
                 account_queryset = Account.objects.none()
         else:
-            receipt_queryset = Receipt.objects.for_user(self.request.user).with_related()
+            receipt_queryset = Receipt.objects.for_user(
+                self.request.user
+            ).with_related()
             seller_queryset = Seller.objects.unique_by_name_for_user(user)
             account_queryset = Account.objects.by_user_with_related(user)
 
@@ -312,7 +320,9 @@ class ReceiptUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         receipt_form = self.get_form()
 
         current_user = cast(User, self.request.user)
-        receipt_form.fields['account'].queryset = Account.objects.by_user_with_related(current_user)  # type: ignore[attr-defined]
+        receipt_form.fields['account'].queryset = Account.objects.by_user_with_related(
+            current_user
+        )  # type: ignore[attr-defined]
         receipt_form.fields['seller'].queryset = Seller.objects.for_user(current_user)  # type: ignore[attr-defined]
 
         context['receipt_form'] = receipt_form
@@ -474,9 +484,11 @@ class ProductByMonthView(LoginRequiredMixin, ListView):
     model = Receipt
     login_url = '/login/'
 
-    def get_context_data(self, *, object_list: Any = None, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(
+        self, *, object_list: Any = None, **kwargs: Any
+    ) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        
+
         current_user = cast(User, self.request.user)
 
         all_purchased_products = (

@@ -15,6 +15,7 @@ OPERATION_TYPES = (
     (4, _('Возврат выигрыша или продажи')),
 )
 
+
 class SellerManager(models.Manager['Seller']):
     def get_queryset(self) -> 'SellerQuerySet':
         return SellerQuerySet(self.model, using=self._db)
@@ -90,7 +91,6 @@ class SellerQuerySet(models.QuerySet[Seller]):
         return self.filter(pk__in=seller_ids).select_related('user')
 
 
-
 class Product(models.Model):
     user = models.ForeignKey(
         User,
@@ -130,7 +130,9 @@ class Product(models.Model):
 
 class ReceiptQuerySet(models.QuerySet['Receipt']):
     def with_related(self) -> 'ReceiptQuerySet':
-        return self.select_related('user', 'account', 'seller').prefetch_related('product')
+        return self.select_related('user', 'account', 'seller').prefetch_related(
+            'product'
+        )
 
     def for_user(self, user: User) -> 'ReceiptQuerySet':
         return self.filter(user=user)
@@ -138,7 +140,9 @@ class ReceiptQuerySet(models.QuerySet['Receipt']):
     def for_users(self, users: Iterable[User]) -> 'ReceiptQuerySet':
         return self.filter(user__in=users)
 
-    def for_user_and_number(self, user: User, number_receipt: int | None) -> 'ReceiptQuerySet':
+    def for_user_and_number(
+        self, user: User, number_receipt: int | None
+    ) -> 'ReceiptQuerySet':
         return self.for_user(user).filter(number_receipt=number_receipt)
 
 
@@ -155,7 +159,9 @@ class ReceiptManager(models.Manager['Receipt']):
     def for_users(self, users: Iterable[User]) -> 'ReceiptQuerySet':
         return self.get_queryset().filter(user__in=users)
 
-    def for_user_and_number(self, user: User, number_receipt: int | None) -> 'ReceiptQuerySet':
+    def for_user_and_number(
+        self, user: User, number_receipt: int | None
+    ) -> 'ReceiptQuerySet':
         return self.get_queryset().filter(user=user, number_receipt=number_receipt)
 
 
