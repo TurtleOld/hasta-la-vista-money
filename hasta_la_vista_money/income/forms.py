@@ -7,12 +7,16 @@ from django.forms import (
     ModelForm,
 )
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.custom_mixin import CategoryChoicesMixin
+from hasta_la_vista_money.custom_mixin import (
+    CategoryChoicesConfigurerMixin,
+    CategoryChoicesMixin,
+    FormQuerysetsMixin,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
 
-class IncomeForm(ModelForm):
+class IncomeForm(CategoryChoicesConfigurerMixin, FormQuerysetsMixin, ModelForm):
     """Модельная форма отображения доходов на сайте."""
 
     category = ModelChoiceField(
@@ -42,30 +46,14 @@ class IncomeForm(ModelForm):
 
     field = 'category'
 
-    def __init__(self, *args, **kwargs):
-        category_queryset = kwargs.pop('category_queryset', None)
-        account_queryset = kwargs.pop('account_queryset', None)
-        super().__init__(*args, **kwargs)
-
-        if category_queryset is not None:
-            self.fields['category'].queryset = category_queryset
-        if account_queryset is not None:
-            self.fields['account'].queryset = account_queryset
-
-    def configure_category_choices(self, category_choices):
-        self.fields[self.field].choices = category_choices
-
     class Meta:
         model = Income
         fields = ['category', 'account', 'date', 'amount']
-        widgets = {
-            'date': DateTimeInput(
-                attrs={'type': 'datetime-local', 'class': 'form-control'},
-            ),
-        }
 
 
-class AddCategoryIncomeForm(CategoryChoicesMixin, ModelForm):
+class AddCategoryIncomeForm(
+    CategoryChoicesConfigurerMixin, CategoryChoicesMixin, ModelForm
+):
     name = CharField(
         label=_('Название категории'),
         help_text=_('Введите название категории дохода для её создания'),
@@ -80,15 +68,10 @@ class AddCategoryIncomeForm(CategoryChoicesMixin, ModelForm):
     field = 'parent_category'
 
     def __init__(self, *args, **kwargs):
+        """Инициализирует queryset для поля 'parent_category'."""
         category_queryset = kwargs.pop('category_queryset', None)
-        super().__init__(*args, **kwargs)
-
-        if category_queryset is not None:
-            self.fields['parent_category'].queryset = category_queryset
+        super().__init__(*args, category_queryset=category_queryset, **kwargs)
 
     class Meta:
         model = IncomeCategory
         fields = ['name', 'parent_category']
-
-    def configure_category_choices(self, category_choices):
-        self.fields[self.field].choices = category_choices

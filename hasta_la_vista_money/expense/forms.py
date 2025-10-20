@@ -5,15 +5,19 @@ from django.forms import (
     ModelChoiceField,
     ModelForm,
 )
-from django.forms.fields import CharField
+from django.forms import CharField
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.custom_mixin import CategoryChoicesMixin
+from hasta_la_vista_money.custom_mixin import (
+    CategoryChoicesConfigurerMixin,
+    CategoryChoicesMixin,
+    FormQuerysetsMixin,
+)
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 
 
-class AddExpenseForm(ModelForm):
+class AddExpenseForm(FormQuerysetsMixin, ModelForm):
     category = ModelChoiceField(
         queryset=ExpenseCategory.objects.none(),
         label=_('Категория расхода'),
@@ -41,17 +45,9 @@ class AddExpenseForm(ModelForm):
 
     field = 'category'
 
-    def __init__(self, *args, **kwargs):
-        category_queryset = kwargs.pop('category_queryset', None)
-        account_queryset = kwargs.pop('account_queryset', None)
-        super().__init__(*args, **kwargs)
-        if category_queryset is not None:
-            self.fields['category'].queryset = category_queryset
-        if account_queryset is not None:
-            self.fields['account'].queryset = account_queryset
+    # Инициализация queryset'ов обеспечивается миксином FormQuerysetsMixin
 
-    def configure_category_choices(self, category_choices):
-        self.fields[self.field].choices = category_choices
+    # Настройка choices при необходимости обеспечивается внешней логикой/миксином
 
     def clean(self):
         cleaned_data = super().clean()
@@ -70,7 +66,7 @@ class AddExpenseForm(ModelForm):
         fields = ['category', 'account', 'date', 'amount']
 
 
-class AddCategoryForm(CategoryChoicesMixin, ModelForm):
+class AddCategoryForm(CategoryChoicesConfigurerMixin, CategoryChoicesMixin, ModelForm):
     name = CharField(
         label=_('Название категории'),
         help_text=_('Введите название категории расхода для её создания'),
@@ -87,13 +83,11 @@ class AddCategoryForm(CategoryChoicesMixin, ModelForm):
     field = 'parent_category'
 
     def __init__(self, *args, **kwargs):
+        """Инициализирует queryset для поля 'parent_category'."""
         category_queryset = kwargs.pop('category_queryset', None)
-        super().__init__(*args, **kwargs)
-        if category_queryset is not None:
-            self.fields['parent_category'].queryset = category_queryset
+        super().__init__(*args, category_queryset=category_queryset, **kwargs)
 
-    def configure_category_choices(self, category_choices):
-        self.fields[self.field].choices = category_choices
+    # Настройка choices обеспечивается миксином CategoryChoicesConfigurerMixin
 
     def save(self, commit=True) -> ExpenseCategory:
         return super().save(commit=commit)

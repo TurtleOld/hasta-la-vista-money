@@ -168,7 +168,10 @@ class ReceiptView(
 
 
 class SellerCreateView(
-    LoginRequiredMixin, SuccessMessageMixin, BaseView, CreateView[Seller, SellerForm], 
+    LoginRequiredMixin,
+    SuccessMessageMixin,
+    BaseView,
+    CreateView[Seller, SellerForm],
 ):
     model = Seller
     form_class: type[SellerForm] = SellerForm
@@ -195,7 +198,10 @@ class SellerCreateView(
 
 
 class ReceiptCreateView(
-    LoginRequiredMixin, SuccessMessageMixin, BaseView, CreateView[Receipt, ReceiptForm],
+    LoginRequiredMixin,
+    SuccessMessageMixin,
+    BaseView,
+    CreateView[Receipt, ReceiptForm],
 ):
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
