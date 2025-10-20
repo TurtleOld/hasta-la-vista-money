@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from django.contrib import messages
 from django.contrib.auth.models import Group
@@ -7,17 +7,12 @@ from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.users.models import User
 
 
-def get_user_groups(user: User) -> List[Dict]:
-    return list(user.groups.values('id', 'name'))
+def get_user_groups(user: User) -> List[Dict[str, Any]]:
+    return list(user.groups.all().prefetch_related('user_set').values('id', 'name'))
 
 
-def get_groups_not_for_user(user: User) -> List[Dict]:
-    return list(
-        Group.objects.exclude(id__in=user.groups.values_list('id', flat=True)).values(
-            'id',
-            'name',
-        ),
-    )
+def get_groups_not_for_user(user: User) -> List[Dict[str, Any]]:
+    return list(Group.objects.exclude(id__in=user.groups.values_list('id', flat=True)).prefetch_related('user_set').values('id', 'name'))
 
 
 def create_group(form) -> Group:
