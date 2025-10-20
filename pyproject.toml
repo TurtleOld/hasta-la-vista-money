@@ -38,6 +38,7 @@ dependencies = [
     "django-cors-headers>=4.7.0",
     "python-decouple>=3.8",
     "django-redis>=6.0.0",
+    "django-compressor>=4.5.1",
 ]
 
 [project.optional-dependencies]

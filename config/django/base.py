@@ -66,6 +66,7 @@ THIRD_PARTY_APPS = [
     'rosetta',
     'django_structlog',
     'silk',
+    'compressor',
 ]
 
 if not DEBUG:
@@ -251,6 +252,11 @@ APPEND_SLASH = True
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
 STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
+STATICFILES_FINDERS = (
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+    'compressor.finders.CompressorFinder',
+)
 
 # WhiteNoise configuration for static files
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -469,3 +475,10 @@ structlog.configure(
 )
 
 SILKY_PYTHON_PROFILER = True
+
+
+# Compressor settings
+COMPRESS_ENABLED = not config('DEBUG', cast=bool)
+COMPRESS_OFFLINE = True
+COMPRESS_ROOT = os.path.join(BASE_DIR, 'static')
+COMPRESS_OUTPUT_DIR = 'CACHE/css_build'
