@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
-class AccountQuerySet(models.QuerySet):
+class AccountQuerySet(models.QuerySet['Account']):
     """
     Custom QuerySet for Account model with common filters.
     """
@@ -33,6 +33,10 @@ class AccountQuerySet(models.QuerySet):
         """Return accounts belonging to the given user."""
         return self.filter(user=user)
 
+    def by_user_with_related(self, user: 'User') -> 'AccountQuerySet':
+        """Return accounts belonging to the given user with select_related('user')."""
+        return self.filter(user=user).select_related('user')
+
     def by_currency(self, currency: str) -> 'AccountQuerySet':
         """Return accounts with the specified currency code (e.g., 'RUB')."""
         return self.filter(currency=currency)
@@ -42,7 +46,7 @@ class AccountQuerySet(models.QuerySet):
         return self.filter(type_account=type_account)
 
 
-class AccountManager(models.Manager):
+class AccountManager(models.Manager['Account']):
     """
     Custom manager for Account model, exposing common filters via QuerySet.
     """
@@ -60,6 +64,9 @@ class AccountManager(models.Manager):
 
     def by_user(self, user: 'User') -> AccountQuerySet:
         return self.get_queryset().by_user(user)
+
+    def by_user_with_related(self, user: 'User') -> AccountQuerySet:
+        return self.get_queryset().by_user_with_related(user)
 
     def by_currency(self, currency: str) -> AccountQuerySet:
         return self.get_queryset().by_currency(currency)
@@ -272,7 +279,7 @@ class TransferMoneyLogQuerySet(models.QuerySet):
         return self.filter(exchange_date__date__gte=start, exchange_date__date__lte=end)
 
 
-class TransferMoneyLogManager(models.Manager):
+class TransferMoneyLogManager(models.Manager['TransferMoneyLog']):
     """
     Custom manager for TransferMoneyLog model, exposing common filters via QuerySet.
     """
