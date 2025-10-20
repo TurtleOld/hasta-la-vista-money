@@ -52,8 +52,8 @@ class BaseView:
 class ReceiptView(
     LoginRequiredMixin,
     SuccessMessageMixin,
-    FilterView[Receipt],
     BaseView,
+    FilterView[Receipt],
 ):
     paginate_by: int = 10
     model = Receipt
@@ -168,7 +168,7 @@ class ReceiptView(
 
 
 class SellerCreateView(
-    LoginRequiredMixin, SuccessMessageMixin, CreateView[Seller, SellerForm], BaseView
+    LoginRequiredMixin, SuccessMessageMixin, BaseView, CreateView[Seller, SellerForm], 
 ):
     model = Seller
     form_class: type[SellerForm] = SellerForm
@@ -195,7 +195,7 @@ class SellerCreateView(
 
 
 class ReceiptCreateView(
-    LoginRequiredMixin, SuccessMessageMixin, CreateView[Receipt, ReceiptForm], BaseView
+    LoginRequiredMixin, SuccessMessageMixin, BaseView, CreateView[Receipt, ReceiptForm],
 ):
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
@@ -503,7 +503,7 @@ class ReceiptUpdateView(
             )
 
 
-class ReceiptDeleteView(LoginRequiredMixin, DeleteView[Receipt], BaseView):
+class ReceiptDeleteView(LoginRequiredMixin, BaseView, DeleteView[Receipt]):
     model = Receipt
 
     def form_valid(self, form: Any) -> HttpResponse:
