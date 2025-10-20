@@ -82,13 +82,65 @@ class CategoryChoicesMixin:
     field: str
 
     def __init__(self, *args, category_queryset=None, depth=None, **kwargs):
+        """Инициализирует choices для древовидных категорий.
+
+        Args:
+            category_queryset: QuerySet категорий или None.
+            depth: Глубина иерархии категорий.
+        """
         super().__init__(*args, **kwargs)
-        if category_queryset:
+        queryset_to_use = category_queryset or (
+            self.fields.get(self.field).queryset if self.field in self.fields else None
+        )
+        if queryset_to_use is not None:
+            if self.field in self.fields:
+                self.fields[self.field].queryset = queryset_to_use
             category_choices = list(
                 get_category_choices(
-                    queryset=category_queryset,
+                    queryset=queryset_to_use,
                     max_level=depth or 2,
                 ),
             )
             category_choices.insert(0, ('', '----------'))
             self.fields[self.field].choices = category_choices
+
+
+class CategoryChoicesConfigurerMixin:
+    def configure_category_choices(self, category_choices):
+        """Устанавливает choices для поля категории.
+
+        Args:
+            category_choices: Последовательность пар (value, label).
+        """
+        self.fields[self.field].choices = category_choices
+
+
+class FormQuerysetsMixin:
+    """Инициализация queryset'ов полей формы из kwargs.
+
+    Поддерживает параметры 'category_queryset' и 'account_queryset'.
+    Имя поля категории берётся из атрибута 'field' формы, либо из
+    'category_field_name', либо по умолчанию 'category'.
+    Имя поля счёта задаётся атрибутом 'account_field_name' (по умолчанию 'account').
+    """
+
+    category_field_name = None
+    account_field_name = 'account'
+
+    def __init__(self, *args, **kwargs):
+        category_queryset = kwargs.pop('category_queryset', None)
+        account_queryset = kwargs.pop('account_queryset', None)
+        super().__init__(*args, **kwargs)
+
+        category_field = (
+            getattr(self, 'field', None)
+            or getattr(self, 'category_field_name', None)
+            or 'category'
+        )
+
+        if category_queryset is not None and category_field in self.fields:
+            self.fields[category_field].queryset = category_queryset
+
+        account_field = getattr(self, 'account_field_name', 'account')
+        if account_queryset is not None and account_field in self.fields:
+            self.fields[account_field].queryset = account_queryset
