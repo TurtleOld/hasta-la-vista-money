@@ -192,7 +192,7 @@ class ReceiptForm(ModelForm[Receipt]):
         help_text=_('Выберите продавца. Если он ещё не создан, нажмите кнопку ниже.'),
     )
     account = ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.none(),
         label=_('Счёт списания'),
         help_text=_(
             'Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.',

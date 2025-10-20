@@ -1,4 +1,5 @@
 from os import environ
+from decouple import config
 from icecream import ic
 
 
@@ -14,16 +15,16 @@ class EnvironmentValidator:
 
         valid = True
 
-        if not environ.get('SECRET_KEY'):
+        if not config('SECRET_KEY', cast=str, default=''):
             valid = False
             ic('SECRET_KEY is not set, use make secretkey to generate it')
-        if not environ.get('DEBUG'):
+        if not config('DEBUG', cast=bool, default=False):
             valid = False
             ic('DEBUG is not set, set it to true or false')
-        if not environ.get('ALLOWED_HOSTS'):
+        if not config('ALLOWED_HOSTS', cast=str, default=''):
             valid = False
             ic('ALLOWED_HOSTS is not set, set it to a comma-separated list of hosts')
-        if not environ.get('DATABASE_URL'):
+        if not config('DATABASE_URL', cast=str, default=''):
             valid = False
             ic('DATABASE_URL is not set, set it to a valid database URL')
         return valid

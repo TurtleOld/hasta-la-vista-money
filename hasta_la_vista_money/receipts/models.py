@@ -1,6 +1,8 @@
 from datetime import datetime
 
 from django.db import models
+from django.db.models import Min
+from typing import Iterable
 from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -12,6 +14,23 @@ OPERATION_TYPES = (
     (3, _(r'Продажа\Выигрыш')),
     (4, _('Возврат выигрыша или продажи')),
 )
+
+
+class SellerManager(models.Manager['Seller']):
+    def get_queryset(self) -> 'SellerQuerySet':
+        return SellerQuerySet(self.model, using=self._db)
+
+    def for_user(self, user: User) -> 'SellerQuerySet':
+        return self.get_queryset().for_user(user)
+
+    def for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
+        return self.get_queryset().for_users(users)
+
+    def unique_by_name_for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
+        return self.get_queryset().unique_by_name_for_users(users)
+
+    def unique_by_name_for_user(self, user: User) -> 'SellerQuerySet':
+        return self.get_queryset().unique_by_name_for_user(user)
 
 
 class Seller(models.Model):
@@ -42,6 +61,34 @@ class Seller(models.Model):
 
     def __str__(self) -> str:
         return self.name_seller
+
+    objects = SellerManager()
+
+
+class SellerQuerySet(models.QuerySet[Seller]):
+    def for_user(self, user: User) -> 'SellerQuerySet':
+        return self.filter(user=user)
+
+    def for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
+        return self.filter(user__in=users)
+
+    def unique_by_name_for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
+        seller_ids = (
+            self.for_users(users)
+            .values('name_seller')
+            .annotate(min_id=Min('id'))
+            .values('min_id')
+        )
+        return self.filter(pk__in=seller_ids).select_related('user')
+
+    def unique_by_name_for_user(self, user: User) -> 'SellerQuerySet':
+        seller_ids = (
+            self.for_user(user)
+            .values('name_seller')
+            .annotate(min_id=Min('id'))
+            .values('min_id')
+        )
+        return self.filter(pk__in=seller_ids).select_related('user')
 
 
 class Product(models.Model):
@@ -79,6 +126,43 @@ class Product(models.Model):
 
     def __str__(self):
         return self.product_name
+
+
+class ReceiptQuerySet(models.QuerySet['Receipt']):
+    def with_related(self) -> 'ReceiptQuerySet':
+        return self.select_related('user', 'account', 'seller').prefetch_related(
+            'product'
+        )
+
+    def for_user(self, user: User) -> 'ReceiptQuerySet':
+        return self.filter(user=user)
+
+    def for_users(self, users: Iterable[User]) -> 'ReceiptQuerySet':
+        return self.filter(user__in=users)
+
+    def for_user_and_number(
+        self, user: User, number_receipt: int | None
+    ) -> 'ReceiptQuerySet':
+        return self.for_user(user).filter(number_receipt=number_receipt)
+
+
+class ReceiptManager(models.Manager['Receipt']):
+    def get_queryset(self) -> 'ReceiptQuerySet':
+        return ReceiptQuerySet(self.model, using=self._db)
+
+    def with_related(self) -> 'ReceiptQuerySet':
+        return self.get_queryset().with_related()
+
+    def for_user(self, user: User) -> 'ReceiptQuerySet':
+        return self.get_queryset().filter(user=user)
+
+    def for_users(self, users: Iterable[User]) -> 'ReceiptQuerySet':
+        return self.get_queryset().filter(user__in=users)
+
+    def for_user_and_number(
+        self, user: User, number_receipt: int | None
+    ) -> 'ReceiptQuerySet':
+        return self.get_queryset().filter(user=user, number_receipt=number_receipt)
 
 
 class Receipt(models.Model):
@@ -145,3 +229,5 @@ class Receipt(models.Model):
 
     def datetime(self) -> datetime:
         return self.receipt_date
+
+    objects = ReceiptManager()

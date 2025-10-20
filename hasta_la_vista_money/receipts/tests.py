@@ -332,6 +332,8 @@ class TestForms(TestCase):
             'nds20': '0.00',
         }
         form = ReceiptForm(data=form_data)
+        form.fields['account'].queryset = Account.objects.filter(user=self.user)
+        form.fields['seller'].queryset = Seller.objects.filter(user=self.user)
         self.assertTrue(form.is_valid())
 
     def test_receipt_form_missing_required_fields(self):
@@ -343,6 +345,7 @@ class TestForms(TestCase):
             'total_sum': '500.00',
         }
         form = ReceiptForm(data=form_data)
+        form.fields['seller'].queryset = Seller.objects.filter(user=self.user)
         self.assertFalse(form.is_valid())
         self.assertIn('account', form.errors)
 
