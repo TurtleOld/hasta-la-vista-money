@@ -3,6 +3,7 @@
 {% load static %}
 {% load i18n %}
 {% load word_hash %}
+{% load compress %}
 
 
 <!DOCTYPE html>
@@ -15,9 +16,11 @@
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
         <link nonce="{{request.csp_nonce}}" rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-        <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet" integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA==" crossorigin="anonymous">
-        <link href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
+        <link nonce="{{request.csp_nonce}}" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
+        {% compress css %}
+        <link rel="stylesheet" href="{% static 'css/styles.min.css' %}">
+        {% endcompress %}
     {% endblock %}
 </head>
 <body data-bs-theme="{% if user.is_authenticated %}{{ user.theme|default:'light' }}{% else %}light{% endif %}">
@@ -47,34 +50,37 @@
 
     <script nonce="{{request.csp_nonce}}" src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/jquery-3.7.1.min.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" type="text/javascript" src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}?v={% word_hash %}"></script>
+    
+    {% compress js %}
+    <script src="{% static 'js/jquery-3.7.1.min.js' %}?v={% word_hash %}"></script>
+    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}?v={% word_hash %}"></script>
+    <script src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
+    <script src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
+    <script src="{% static 'js/account_group_filter.js' %}?v={% word_hash %}"></script>
     {% if 'receipts' in request.path %}
-        <script nonce="{{request.csp_nonce}}" src="{% static 'js/tokens.js' %}?v={% word_hash %}"></script>
-        <script nonce="{{request.csp_nonce}}" src="{% static 'js/receipt_group_filter.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/tokens.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/receipt_group_filter.js' %}?v={% word_hash %}"></script>
         {% if 'update' in request.path %}
-            <script nonce="{{request.csp_nonce}}" src="{% static 'js/receipt_update.js' %}?v={% word_hash %}"></script>
+            <script src="{% static 'js/receipt_update.js' %}?v={% word_hash %}"></script>
         {% endif %}
     {% endif %}
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
     {% if 'budget' in request.path %}
-        <script nonce="{{request.csp_nonce}}" src="{% static 'js/budget.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/budget.js' %}?v={% word_hash %}"></script>
     {% endif %}
     {% if 'users' in request.path %}
-        <script nonce="{{request.csp_nonce}}" src="{% static 'js/theme.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/theme.js' %}?v={% word_hash %}"></script>
     {% endif %}
     {% if 'income' in request.path and not 'budget' in request.path%}
-        <script nonce="{{request.csp_nonce}}" src="{% static 'js/income_table.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/income_table.js' %}?v={% word_hash %}"></script>
     {% endif %}
     {% if 'expense' in request.path and not 'budget' in request.path%}
-        <script nonce="{{request.csp_nonce}}" src="{% static 'js/expense_table.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/expense_table.js' %}?v={% word_hash %}"></script>
     {% endif %}
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/account_group_filter.js' %}?v={% word_hash %}"></script>
     {% if 'loan' in request.path %}
-        <script nonce="{{request.csp_nonce}}" src="{% static 'js/loan.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/loan.js' %}?v={% word_hash %}"></script>
     {% endif %}
+    {% endcompress %}
     <script nonce="{{request.csp_nonce}}">
         window.SET_THEME_URL = "{% url 'users:set_theme' %}";
         window.LOGIN_URL = "{% url 'users:login' %}";
