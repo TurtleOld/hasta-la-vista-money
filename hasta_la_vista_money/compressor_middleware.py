@@ -1,7 +1,7 @@
 """Middleware for injecting CSP nonce into static asset tags in HTML responses."""
 
 import re
-from xml.sax.saxutils import quoteattr
+import html
 
 
 class CompressorNonceMiddleware:
@@ -56,6 +56,17 @@ class CompressorNonceMiddleware:
             return False
         return bool(self._NONCE_RE.match(str(nonce)))
 
+    def _quote_attr_value(self, value: str) -> str:
+        """Return an HTML-attribute-safe quoted value.
+
+        Args:
+            value: Raw attribute value.
+
+        Returns:
+            Value wrapped in double quotes with special characters escaped.
+        """
+        return '"' + html.escape(value, quote=True) + '"'
+
     def _escape_nonce(self, nonce) -> str:
         """Produce a safely quoted HTML-attribute value for the nonce.
 
@@ -67,7 +78,7 @@ class CompressorNonceMiddleware:
         """
         if not self._validate_nonce(nonce):
             return ''
-        return quoteattr(str(nonce))
+        return self._quote_attr_value(str(nonce))
 
     def _inject_attr(self, tag: str, safe_attr: str) -> str:
         """Insert an attribute into a start tag before the closing bracket.
@@ -126,9 +137,7 @@ class CompressorNonceMiddleware:
 
         new_bytes = content.encode(charset, errors='ignore')
         response.content = new_bytes
-        try:
+        if 'Content-Length' in response:
             response['Content-Length'] = str(len(new_bytes))
-        except Exception:
-            pass
 
         return response
