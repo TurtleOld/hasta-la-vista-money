@@ -36,7 +36,8 @@ class CompressorNonceMiddleware:
         """
         if not nonce:
             return False
-        return bool(re.match(r'^[A-Za-z0-9_-]+$', nonce))
+        nonce_str = str(nonce)
+        return bool(re.match(r'^[A-Za-z0-9_-]+$', nonce_str))
 
     def _escape_nonce(self, nonce):
         """Escape nonce for safe use in HTML attributes.
@@ -49,7 +50,8 @@ class CompressorNonceMiddleware:
         """
         if not self._validate_nonce(nonce):
             return ''
-        return html.escape(nonce, quote=True)
+        nonce_str = str(nonce)
+        return html.escape(nonce_str, quote=True)
 
     def process_response(self, request, response):
         """Add nonce to static CSS and JS files in HTML content.
