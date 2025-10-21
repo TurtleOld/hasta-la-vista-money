@@ -74,7 +74,7 @@ class CompressorNonceMiddleware:
             css_pattern = r'<link([^>]*href="[^"]*\/static\/[^"]*\.css"[^>]*)>'
             content = re.sub(
                 css_pattern,
-                lambda m: f'<link{m.group(1)} nonce="{safe_nonce}">'
+                lambda m: f'<link{html.escape(m.group(1), quote=True)} nonce="{safe_nonce}">'
                 if 'nonce=' not in m.group(0)
                 else m.group(0),
                 content,
@@ -83,7 +83,7 @@ class CompressorNonceMiddleware:
             js_pattern = r'<script([^>]*src="[^"]*\/static\/[^"]*\.js"[^>]*)>'
             content = re.sub(
                 js_pattern,
-                lambda m: f'<script{m.group(1)} nonce="{safe_nonce}">'
+                lambda m: f'<script{html.escape(m.group(1), quote=True)} nonce="{safe_nonce}">'
                 if 'nonce=' not in m.group(0)
                 else m.group(0),
                 content,
