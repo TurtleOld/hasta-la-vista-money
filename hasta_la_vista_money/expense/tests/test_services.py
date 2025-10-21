@@ -1,5 +1,6 @@
 from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
+
 from hasta_la_vista_money.constants import RECEIPT_CATEGORY_NAME
 from hasta_la_vista_money.expense.forms import AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
@@ -100,14 +101,18 @@ class TestExpenseService(TestCase):
         """Test getting expenses for 'my' group."""
         expenses = self.service.get_expenses_by_group('my')
         self.assertIsInstance(expenses, list)
-        expense_ids = [exp.pk if hasattr(exp, 'pk') else exp['id'] for exp in expenses]
+        expense_ids = [
+            exp.pk if hasattr(exp, 'pk') else exp['id'] for exp in expenses
+        ]
         self.assertIn(self.expense.pk, expense_ids)
 
     def test_get_expenses_by_group_none(self) -> None:
         """Test getting expenses for None group."""
         expenses = self.service.get_expenses_by_group(None)
         self.assertIsInstance(expenses, list)
-        expense_ids = [exp.pk if hasattr(exp, 'pk') else exp['id'] for exp in expenses]
+        expense_ids = [
+            exp.pk if hasattr(exp, 'pk') else exp['id'] for exp in expenses
+        ]
         self.assertIn(self.expense.pk, expense_ids)
 
     def test_get_expense_data(self) -> None:

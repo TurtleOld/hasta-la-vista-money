@@ -122,6 +122,7 @@ RECEIPT_CATEGORY_NAME: Final = 'Покупки по чекам'
 # Числа
 ONE: Final = 1
 TWO: Final = 2
+SAVINGS_THRESHOLD: Final = 0.2
 TEN: Final = 10
 TWENTY: Final = 20
 THIRTY: Final = 30
@@ -135,6 +136,7 @@ ONE_HUNDRED: Final = 100
 ONE_HUNDRED_FIFTY: Final = 150
 TWO_HUNDRED: Final = 200
 TWO_HUNDRED_FIFTY: Final = 250
+LOW_BALANCE_THRESHOLD: Final = 1000
 DAY_MINUS_HOUR: Final = 23
 MINUTE_MINUS_ONE: Final = 59
 SECOND_MINUS_ONE: Final = 59

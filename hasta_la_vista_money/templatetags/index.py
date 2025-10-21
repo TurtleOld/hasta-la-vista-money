@@ -15,7 +15,7 @@ def index(sequence, idx):
 def diff_by_index(list1, list2, idx):
     try:
         return (list1[idx] or 0) - (list2[idx] or 0)
-    except Exception:
+    except (IndexError, TypeError):
         return ''
 
 

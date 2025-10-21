@@ -1,4 +1,5 @@
-from typing import Any, Generator
+from collections.abc import Generator
+from typing import Any
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
@@ -90,7 +91,9 @@ class CategoryChoicesMixin:
         """
         super().__init__(*args, **kwargs)
         queryset_to_use = category_queryset or (
-            self.fields.get(self.field).queryset if self.field in self.fields else None
+            self.fields.get(self.field).queryset
+            if self.field in self.fields
+            else None
         )
         if queryset_to_use is not None:
             if self.field in self.fields:

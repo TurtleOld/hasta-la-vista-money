@@ -1,5 +1,6 @@
 from django.test import TestCase
 from django.urls import reverse_lazy
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
@@ -73,7 +74,10 @@ class TestExpenseViews(TestCase):
 
     def test_category_expense_delete(self):
         self.client.force_login(self.user)
-        url = reverse_lazy('expense:delete_category_expense', args=(self.expense.pk,))
+        url = reverse_lazy(
+            'expense:delete_category_expense',
+            args=(self.expense.pk,),
+        )
         response = self.client.post(url, follow=True)
         self.assertIn(response.status_code, [constants.SUCCESS_CODE, 302])
 
@@ -102,14 +106,18 @@ class TestExpenseViews(TestCase):
             'name': '',
             'parent_category': self.parent_category.pk,
         }
-        response = self.client.post(reverse_lazy('expense:create_category'), data)
+        response = self.client.post(
+            reverse_lazy('expense:create_category'),
+            data,
+        )
         self.assertIn(response.status_code, [constants.SUCCESS_CODE, 200])
 
     def test_expense_category_delete_view(self):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse_lazy(
-                'expense:delete_category_expense', args=[self.expense_type.pk]
+                'expense:delete_category_expense',
+                args=[self.expense_type.pk],
             ),
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
@@ -136,13 +144,14 @@ class TestExpenseViews(TestCase):
             'amount': NEW_TEST_AMOUNT,
         }
         response = self.client.post(
-            reverse_lazy('expense:change', kwargs={'pk': self.expense.pk}), data
+            reverse_lazy('expense:change', kwargs={'pk': self.expense.pk}),
+            data,
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
     def test_expense_delete_view_unauthenticated(self):
         response = self.client.post(
-            reverse_lazy('expense:delete', args=[self.expense.pk])
+            reverse_lazy('expense:delete', args=[self.expense.pk]),
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
@@ -155,11 +164,17 @@ class TestExpenseViews(TestCase):
             'name': 'Test',
             'parent_category': self.parent_category.pk,
         }
-        response = self.client.post(reverse_lazy('expense:create_category'), data)
+        response = self.client.post(
+            reverse_lazy('expense:create_category'),
+            data,
+        )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
     def test_expense_category_delete_view_unauthenticated(self):
         response = self.client.post(
-            reverse_lazy('expense:delete_category_expense', args=[self.expense_type.pk])
+            reverse_lazy(
+                'expense:delete_category_expense',
+                args=[self.expense_type.pk],
+            ),
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])

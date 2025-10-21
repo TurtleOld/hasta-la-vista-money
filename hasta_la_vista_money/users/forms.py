@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, ClassVar
 
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
@@ -7,19 +7,17 @@ from django.forms import CharField, ModelForm, PasswordInput
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import (
     add_user_to_group,
     remove_user_from_group,
 )
-from hasta_la_vista_money.users.validators import validate_username_unique
 
 
 class UserLoginForm(AuthenticationForm):
-    """
-    Authentication form for user login by username or email.
-    """
+    """Form for user authentication using username or email."""
 
     username: CharField
     password: CharField
@@ -51,25 +49,17 @@ class UserLoginForm(AuthenticationForm):
 
 
 class RegisterUserForm(UserCreationForm[User]):
-    """
-    User registration form.
-    """
-
-    # Example: add custom validator for username
-    def clean_username(self):
-        username = self.cleaned_data.get('username')
-        validate_username_unique(username)
-        return username
+    """Form for creating new user accounts."""
 
     class Meta(TypedModelMeta):
-        model = User
-        fields = [
+        model: ClassVar[type[User]] = User
+        fields: ClassVar[list[str]] = [
             'username',
             'email',
             'password1',
             'password2',
         ]
-        widgets = {
+        widgets: ClassVar[dict[str, Any]] = {
             'username': forms.TextInput(
                 attrs={
                     'placeholder': _('Имя пользователя'),
@@ -83,11 +73,11 @@ class RegisterUserForm(UserCreationForm[User]):
                 },
             ),
         }
-        help_texts = {
+        help_texts: ClassVar[dict[str, str]] = {
             'username': _('Только буквы, цифры и @/./+/-/_'),
             'email': _('Укажите действующий email.'),
         }
-        error_messages = {
+        error_messages: ClassVar[dict[str, dict[str, str]]] = {
             'username': {
                 'required': _('Пожалуйста, введите имя пользователя.'),
             },
@@ -98,25 +88,23 @@ class RegisterUserForm(UserCreationForm[User]):
 
 
 class UpdateUserForm(ModelForm):
-    """
-    Form for updating user profile information.
-    """
+    """Form for updating user profile information."""
 
     class Meta:
-        model = User
-        fields = [
+        model: ClassVar[type[User]] = User
+        fields: ClassVar[list[str]] = [
             'username',
             'email',
             'first_name',
             'last_name',
         ]
-        labels = {
+        labels: ClassVar[dict[str, str]] = {
             'username': _('Имя пользователя'),
             'email': _('Email'),
             'first_name': _('Имя'),
             'last_name': _('Фамилия'),
         }
-        widgets = {
+        widgets: ClassVar[dict[str, Any]] = {
             'username': forms.TextInput(
                 attrs={
                     'class': 'form-control',
@@ -142,13 +130,13 @@ class UpdateUserForm(ModelForm):
                 },
             ),
         }
-        help_texts = {
+        help_texts: ClassVar[dict[str, str]] = {
             'username': _('Только буквы, цифры и @/./+/-/_'),
             'email': _('Укажите действующий email.'),
             'first_name': _('Ваше имя.'),
             'last_name': _('Ваша фамилия.'),
         }
-        error_messages = {
+        error_messages: ClassVar[dict[str, dict[str, str]]] = {
             'username': {
                 'required': _('Пожалуйста, введите имя пользователя.'),
             },
@@ -159,15 +147,13 @@ class UpdateUserForm(ModelForm):
 
 
 class GroupCreateForm(ModelForm):
-    """
-    Form for creating a new group.
-    """
+    """Form for creating new user groups."""
 
     class Meta:
-        model = Group
-        fields = ['name']
-        labels = {'name': _('Название группы')}
-        widgets = {
+        model: ClassVar[type[Group]] = Group
+        fields: ClassVar[list[str]] = ['name']
+        labels: ClassVar[dict[str, str]] = {'name': _('Название группы')}
+        widgets: ClassVar[dict[str, Any]] = {
             'name': forms.TextInput(
                 attrs={
                     'class': 'form-control',
@@ -175,10 +161,10 @@ class GroupCreateForm(ModelForm):
                 },
             ),
         }
-        help_texts = {
+        help_texts: ClassVar[dict[str, str]] = {
             'name': _('Введите уникальное название группы.'),
         }
-        error_messages = {
+        error_messages: ClassVar[dict[str, dict[str, str]]] = {
             'name': {
                 'required': _('Пожалуйста, введите название группы.'),
             },
@@ -186,9 +172,7 @@ class GroupCreateForm(ModelForm):
 
 
 class GroupDeleteForm(forms.Form):
-    """
-    Form for deleting a group.
-    """
+    """Form for deleting user groups."""
 
     group: forms.ModelChoiceField
     group = forms.ModelChoiceField(
@@ -203,22 +187,18 @@ class GroupDeleteForm(forms.Form):
 
 
 class UserGroupBaseForm(forms.Form):
-    """
-    Base form for user-group operations. Handles user instance extraction from data or initial.
-    """
+    """Base form for user-group operations."""
 
     user: forms.ModelChoiceField
     group: forms.ModelChoiceField
-    user_instance: Optional[User] = None  # Ensure attribute always exists
+    user_instance: User | None = None  # Ensure attribute always exists
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.user_instance = self._get_user_instance()
 
-    def _get_user_instance(self) -> Optional[User]:
-        """
-        Extracts the User instance from the form's data or initial data.
-        """
+    def _get_user_instance(self) -> User | None:
+        """Extract User instance from form data or initial data."""
         user_id = self.data.get('user')
         if user_id:
             try:
@@ -254,9 +234,7 @@ class UserGroupBaseForm(forms.Form):
 
 
 class AddUserToGroupForm(UserGroupBaseForm):
-    """
-    Form for adding a user to a group. Group queryset excludes groups the user is already in.
-    """
+    """Form for adding users to groups."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -268,9 +246,7 @@ class AddUserToGroupForm(UserGroupBaseForm):
             self.fields['group'].queryset = Group.objects.none()
 
     def save(self, request: HttpRequest) -> None:
-        """
-        Calls the service to add the user to the group, passing request for messages.
-        """
+        """Add user to selected group."""
         add_user_to_group(
             request,
             self.cleaned_data['user'],
@@ -279,9 +255,7 @@ class AddUserToGroupForm(UserGroupBaseForm):
 
 
 class DeleteUserFromGroupForm(UserGroupBaseForm):
-    """
-    Form for removing a user from a group. Group queryset is limited to user's groups.
-    """
+    """Form for removing users from groups."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -291,9 +265,7 @@ class DeleteUserFromGroupForm(UserGroupBaseForm):
             self.fields['group'].queryset = Group.objects.none()
 
     def save(self, request: HttpRequest) -> None:
-        """
-        Calls the service to remove the user from the group, passing request for messages.
-        """
+        """Remove user from selected group."""
         remove_user_from_group(
             request,
             self.cleaned_data['user'],

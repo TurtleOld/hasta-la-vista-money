@@ -4,6 +4,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
@@ -35,7 +36,9 @@ class Loan(models.Model):
     )
     period_loan = models.IntegerField()
     type_loan = models.CharField(
-        max_length=20, choices=TYPE_LOAN, default=TYPE_LOAN[0][0]
+        max_length=20,
+        choices=TYPE_LOAN,
+        default=TYPE_LOAN[0][0],
     )
 
     class Meta:

@@ -1,14 +1,16 @@
-from typing import Any, Dict
-from django.db.models import Sum, Count
+from typing import Any
+
+from django.db.models import Count, Sum
 from django.utils import timezone
+
 from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
 
-def get_user_statistics(user: User) -> Dict[str, Any]:
+def get_user_statistics(user: User) -> dict[str, Any]:
     today = timezone.now().date()
     month_start = today.replace(day=1)
     last_month = (month_start - timezone.timedelta(days=1)).replace(day=1)
@@ -23,26 +25,30 @@ def get_user_statistics(user: User) -> Dict[str, Any]:
 
     current_month_expenses = (
         Expense.objects.filter(user=user, date__gte=month_start).aggregate(
-            total=Sum('amount')
+            total=Sum('amount'),
         )['total']
         or 0
     )
     current_month_income = (
         Income.objects.filter(user=user, date__gte=month_start).aggregate(
-            total=Sum('amount')
+            total=Sum('amount'),
         )['total']
         or 0
     )
 
     last_month_expenses = (
         Expense.objects.filter(
-            user=user, date__gte=last_month, date__lt=month_start
+            user=user,
+            date__gte=last_month,
+            date__lt=month_start,
         ).aggregate(total=Sum('amount'))['total']
         or 0
     )
     last_month_income = (
         Income.objects.filter(
-            user=user, date__gte=last_month, date__lt=month_start
+            user=user,
+            date__gte=last_month,
+            date__lt=month_start,
         ).aggregate(total=Sum('amount'))['total']
         or 0
     )

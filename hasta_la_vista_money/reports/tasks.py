@@ -1,15 +1,16 @@
 """Модуль задач для пакета reports."""
 
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 from django.db.models import Avg, Count, Max, Min, Sum
+from taskiq import Context, TaskiqDepends
+
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
-from taskiq import Context, TaskiqDepends
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +20,7 @@ async def generate_monthly_report(
     year: int,
     month: int,
     context: Context = TaskiqDepends(),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Генерация месячного отчета для пользователя.
 
@@ -82,7 +83,10 @@ async def generate_monthly_report(
 
         # Топ категорий доходов
         top_income_categories = (
-            await Income.objects.filter(user=user, date__range=(start_date, end_date))
+            await Income.objects.filter(
+                user=user,
+                date__range=(start_date, end_date),
+            )
             .values('category__name')
             .annotate(total=Sum('amount'), count=Count('id'))
             .order_by('-total')[:5]
@@ -90,7 +94,10 @@ async def generate_monthly_report(
 
         # Топ категорий расходов
         top_expense_categories = (
-            await Expense.objects.filter(user=user, date__range=(start_date, end_date))
+            await Expense.objects.filter(
+                user=user,
+                date__range=(start_date, end_date),
+            )
             .values('category__name')
             .annotate(total=Sum('amount'), count=Count('id'))
             .order_by('-total')[:5]
@@ -175,7 +182,7 @@ async def generate_yearly_report(
     user_id: int,
     year: int,
     context: Context = TaskiqDepends(),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Генерация годового отчета для пользователя.
 
@@ -233,7 +240,8 @@ async def generate_yearly_report(
                     'month': month,
                     'income': month_income['total'] or 0,
                     'expense': month_expense['total'] or 0,
-                    'net': (month_income['total'] or 0) - (month_expense['total'] or 0),
+                    'net': (month_income['total'] or 0)
+                    - (month_expense['total'] or 0),
                 },
             )
 
@@ -284,7 +292,10 @@ async def generate_yearly_report(
                 'net_income': (yearly_income['total'] or 0)
                 - (yearly_expense['total'] or 0),
                 'savings_rate': (
-                    ((yearly_income['total'] or 0) - (yearly_expense['total'] or 0))
+                    (
+                        (yearly_income['total'] or 0)
+                        - (yearly_expense['total'] or 0)
+                    )
                     / (yearly_income['total'] or 1)
                     * 100
                 )
@@ -320,7 +331,7 @@ async def generate_yearly_report(
 async def generate_user_statistics(
     user_id: int,
     context: Context = TaskiqDepends(),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Генерация общей статистики пользователя.
 
@@ -401,10 +412,19 @@ async def generate_user_statistics(
                 'total_transactions': (total_income['count'] or 0)
                 + (total_expense['count'] or 0),
                 'avg_transaction': (
-                    ((total_income['total'] or 0) + (total_expense['total'] or 0))
-                    / ((total_income['count'] or 0) + (total_expense['count'] or 0))
+                    (
+                        (total_income['total'] or 0)
+                        + (total_expense['total'] or 0)
+                    )
+                    / (
+                        (total_income['count'] or 0)
+                        + (total_expense['count'] or 0)
+                    )
                 )
-                if ((total_income['count'] or 0) + (total_expense['count'] or 0)) > 0
+                if (
+                    (total_income['count'] or 0) + (total_expense['count'] or 0)
+                )
+                > 0
                 else 0,
             },
         }

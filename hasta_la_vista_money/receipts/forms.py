@@ -21,6 +21,7 @@ from django.forms import (
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
 from django_filters.fields import ModelChoiceField
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     OPERATION_TYPES,
@@ -89,7 +90,9 @@ class ReceiptFilter(django_filters.FilterSet):
             .annotate(min_id=Min('id'))
             .values_list('min_id', flat=True)
         )
-        self.filters['name_seller'].queryset = Seller.objects.filter(pk__in=seller_ids)
+        self.filters['name_seller'].queryset = Seller.objects.filter(
+            pk__in=seller_ids,
+        )
 
         self.filters['account'].queryset = (
             Account.objects.filter(user=self.user)
@@ -163,7 +166,9 @@ class ProductForm(ModelForm[Product]):
     )
     amount = DecimalField(
         label=_('Итоговая сумма за продукт'),
-        help_text=_('Высчитывается автоматически на основании цены и количества'),
+        help_text=_(
+            'Высчитывается автоматически на основании цены и количества',
+        ),
         widget=NumberInput(attrs={'class': 'amount', 'readonly': True}),
     )
 
@@ -189,7 +194,9 @@ class ReceiptForm(ModelForm[Receipt]):
     seller = ModelChoiceField(
         queryset=Seller.objects.all(),
         label=_('Имя продавца'),
-        help_text=_('Выберите продавца. Если он ещё не создан, нажмите кнопку ниже.'),
+        help_text=_(
+            'Выберите продавца. Если он ещё не создан, нажмите кнопку ниже.',
+        ),
     )
     account = ModelChoiceField(
         queryset=Account.objects.none(),
@@ -226,7 +233,9 @@ class ReceiptForm(ModelForm[Receipt]):
     )
     total_sum = DecimalField(
         label=_('Итоговая сумма по чеку'),
-        help_text=_('Высчитывается автоматически на основании итоговых сумм продуктов'),
+        help_text=_(
+            'Высчитывается автоматически на основании итоговых сумм продуктов',
+        ),
         widget=NumberInput(
             attrs={'class': 'total-sum', 'readonly': True},
         ),
@@ -252,7 +261,9 @@ def validate_image_jpg_png(value):
     ext = splitext(value.name)[1].lower()
 
     if ext not in ['.jpg', '.jpeg', '.png']:
-        raise ValidationError(_('Разрешены только файлы форматов: JPG, JPEG или PNG'))
+        raise ValidationError(
+            _('Разрешены только файлы форматов: JPG, JPEG или PNG'),
+        )
 
 
 class UploadImageForm(Form):
@@ -277,7 +288,9 @@ class UploadImageForm(Form):
         super().__init__(*args, **kwargs)
         self.fields['account'].queryset = Account.objects.filter(user=user)
         if self.fields['account'].queryset.exists():
-            self.fields['account'].initial = self.fields['account'].queryset.first()
+            self.fields['account'].initial = self.fields[
+                'account'
+            ].queryset.first()
 
     def clean_file(self):
         file = self.cleaned_data.get('file')

@@ -1,11 +1,15 @@
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+)
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -22,7 +26,7 @@ class AccountQuerySet(models.QuerySet['Account']):
     def credit(self) -> 'AccountQuerySet':
         """Return only credit accounts and credit cards."""
         return self.filter(
-            type_account__in=[ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD]
+            type_account__in=[ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD],
         )
 
     def debit(self) -> 'AccountQuerySet':
@@ -225,9 +229,9 @@ class Account(TimeStampedModel):
 
     def get_credit_card_debt(
         self,
-        start_date: Optional[Any] = None,
-        end_date: Optional[Any] = None,
-    ) -> Optional[Decimal]:
+        start_date: Any | None = None,
+        end_date: Any | None = None,
+    ) -> Decimal | None:
         """
         Calculates the credit card (or credit account) debt for a given period.
         If no period is specified, calculates the current debt.
@@ -246,7 +250,10 @@ class Account(TimeStampedModel):
 
         return AccountService.get_credit_card_debt(self, start_date, end_date)
 
-    def calculate_grace_period_info(self, purchase_month: Any) -> Dict[str, Any]:
+    def calculate_grace_period_info(
+        self,
+        purchase_month: Any,
+    ) -> dict[str, Any]:
         """
         Calculates grace period information for a credit card.
         Logic: 1 month for purchases + 3 months for repayment.
@@ -274,9 +281,16 @@ class TransferMoneyLogQuerySet(models.QuerySet):
         """Return transfer logs for the given user."""
         return self.filter(user=user)
 
-    def by_date_range(self, start: 'date', end: 'date') -> 'TransferMoneyLogQuerySet':
+    def by_date_range(
+        self,
+        start: 'date',
+        end: 'date',
+    ) -> 'TransferMoneyLogQuerySet':
         """Return transfer logs within the specified date range (inclusive)."""
-        return self.filter(exchange_date__date__gte=start, exchange_date__date__lte=end)
+        return self.filter(
+            exchange_date__date__gte=start,
+            exchange_date__date__lte=end,
+        )
 
 
 class TransferMoneyLogManager(models.Manager['TransferMoneyLog']):
@@ -290,7 +304,11 @@ class TransferMoneyLogManager(models.Manager['TransferMoneyLog']):
     def by_user(self, user: 'User') -> TransferMoneyLogQuerySet:
         return self.get_queryset().by_user(user)
 
-    def by_date_range(self, start: 'date', end: 'date') -> TransferMoneyLogQuerySet:
+    def by_date_range(
+        self,
+        start: 'date',
+        end: 'date',
+    ) -> TransferMoneyLogQuerySet:
         return self.get_queryset().by_date_range(start, end)
 
 

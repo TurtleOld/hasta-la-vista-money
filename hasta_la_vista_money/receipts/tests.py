@@ -8,6 +8,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse_lazy
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
@@ -24,8 +27,6 @@ from hasta_la_vista_money.receipts.services import (
     image_to_base64,
 )
 from hasta_la_vista_money.users.models import User
-from rest_framework import status
-from rest_framework.test import APITestCase
 
 
 class TestReceipt(TestCase):
@@ -123,7 +124,10 @@ class TestSeller(TestCase):
         self.assertEqual(seller.user, self.user)
 
     def test_seller_str_representation(self):
-        seller = Seller.objects.create(user=self.user, name_seller='Тестовый продавец')
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller='Тестовый продавец',
+        )
         self.assertEqual(str(seller), 'Тестовый продавец')
 
     def test_seller_create_view(self):
@@ -136,7 +140,11 @@ class TestSeller(TestCase):
             'retail_place': 'Магазин "Новый"',
         }
 
-        response = self.client.post(url, data, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        response = self.client.post(
+            url,
+            data,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
         self.assertEqual(response.status_code, 200)
 
         seller = Seller.objects.filter(name_seller='Новый продавец').first()
@@ -160,7 +168,7 @@ class TestProduct(TestCase):
             'product_name': 'Тестовый продукт',
             'category': 'Тестовая категория',
             'price': Decimal('100.50'),
-            'quantity': Decimal('2'),
+            'quantity': Decimal(2),
             'amount': Decimal('201.00'),
             'nds_type': 20,
             'nds_sum': Decimal('33.50'),
@@ -180,12 +188,12 @@ class TestProduct(TestCase):
         product_data = {
             'user': self.user,
             'product_name': 'Продукт с нулевым количеством',
-            'quantity': Decimal('0'),
+            'quantity': Decimal(0),
             'price': Decimal('10.00'),
             'amount': Decimal('0.00'),
         }
         product = Product.objects.create(**product_data)
-        self.assertEqual(product.quantity, Decimal('0'))
+        self.assertEqual(product.quantity, Decimal(0))
 
 
 class TestReceiptModel(TestCase):
@@ -243,14 +251,14 @@ class TestReceiptModel(TestCase):
             user=self.user,
             product_name='Продукт 1',
             price=Decimal('50.00'),
-            quantity=Decimal('1'),
+            quantity=Decimal(1),
             amount=Decimal('50.00'),
         )
         product2 = Product.objects.create(
             user=self.user,
             product_name='Продукт 2',
             price=Decimal('50.00'),
-            quantity=Decimal('1'),
+            quantity=Decimal(1),
             amount=Decimal('50.00'),
         )
 
@@ -410,7 +418,9 @@ class TestReceiptFilter(TestCase):
             user=self.user,
         )
         filtered_qs = receipt_filter.qs
-        self.assertTrue(all(receipt.seller == self.seller for receipt in filtered_qs))
+        self.assertTrue(
+            all(receipt.seller == self.seller for receipt in filtered_qs),
+        )
 
     def test_filter_by_account(self):
         filter_data = {'account': self.account.pk}
@@ -420,7 +430,9 @@ class TestReceiptFilter(TestCase):
             user=self.user,
         )
         filtered_qs = receipt_filter.qs
-        self.assertTrue(all(receipt.account == self.account for receipt in filtered_qs))
+        self.assertTrue(
+            all(receipt.account == self.account for receipt in filtered_qs),
+        )
 
     def test_filter_by_date_range(self):
         filter_data = {
@@ -470,7 +482,10 @@ class TestReceiptAPIs(APITestCase):
         url = reverse_lazy('receipts:seller', kwargs={'id': self.seller.pk})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()['name_seller'], self.seller.name_seller)
+        self.assertEqual(
+            response.json()['name_seller'],
+            self.seller.name_seller,
+        )
 
     def test_seller_create_api(self):
         url = reverse_lazy('receipts:seller_create_api')
@@ -481,11 +496,16 @@ class TestReceiptAPIs(APITestCase):
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.json()['name_seller'], 'Новый продавец через API')
+        self.assertEqual(
+            response.json()['name_seller'],
+            'Новый продавец через API',
+        )
 
     def test_data_url_api(self):
         url = reverse_lazy('receipts:receipt_image')
-        data = {'data_url': 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD'}
+        data = {
+            'data_url': 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD',
+        }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('message', response.json())
@@ -672,7 +692,10 @@ class TestUploadImageView(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
 
-        receipt = Receipt.objects.filter(user=self.user, number_receipt='12345').first()
+        receipt = Receipt.objects.filter(
+            user=self.user,
+            number_receipt='12345',
+        ).first()
         self.assertIsNotNone(receipt)
 
 
@@ -731,7 +754,7 @@ class TestModelValidation(TestCase):
             user=self.user,
             product_name='Бесплатный продукт',
             price=Decimal('0.00'),
-            quantity=Decimal('1'),
+            quantity=Decimal(1),
             amount=Decimal('0.00'),
         )
 

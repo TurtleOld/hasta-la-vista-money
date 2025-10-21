@@ -5,7 +5,7 @@ listing, creation, editing, deletion, and money transfer operations. Includes
 comprehensive error handling, user authentication, and AJAX support.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 from asgiref.sync import sync_to_async
@@ -20,6 +20,7 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account import services as account_services
@@ -66,7 +67,7 @@ class AccountView(
 
     context_object_name = 'finance_account'
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context for the account list page, including accounts, forms, logs, and statistics.
 
         Aggregates data from multiple sources to provide a comprehensive view of the user's
@@ -85,7 +86,7 @@ class AccountView(
         context.update(self._get_sums_context())
         return context
 
-    def _get_accounts_context(self) -> Dict[str, Any]:
+    def _get_accounts_context(self) -> dict[str, Any]:
         """
         Get context with accounts and user groups.
 
@@ -99,7 +100,7 @@ class AccountView(
             'user_groups': user.groups.all(),
         }
 
-    def _get_forms_context(self) -> Dict[str, Any]:
+    def _get_forms_context(self) -> dict[str, Any]:
         """
         Get context with forms for adding and transferring accounts.
 
@@ -122,7 +123,7 @@ class AccountView(
             ),
         }
 
-    def _get_transfer_log_context(self) -> Dict[str, Any]:
+    def _get_transfer_log_context(self) -> dict[str, Any]:
         """
         Get context with recent transfer logs.
 
@@ -135,7 +136,7 @@ class AccountView(
             'transfer_money_log': transfer_money_log,
         }
 
-    def _get_sums_context(self) -> Dict[str, Any]:
+    def _get_sums_context(self) -> dict[str, Any]:
         """
         Get context with account balance statistics.
 
@@ -147,9 +148,13 @@ class AccountView(
         sum_all_accounts = account_services.get_sum_all_accounts(accounts)
         user_groups = user.groups.all()
         if user_groups.exists():
-            users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
+            users_in_groups = User.objects.filter(
+                groups__in=user_groups,
+            ).distinct()
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.filter(user__in=users_in_groups).select_related('user'),
+                Account.objects.filter(user__in=users_in_groups).select_related(
+                    'user',
+                ),
             )
         else:
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
@@ -174,7 +179,7 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
     no_permission_url = reverse_lazy('login')
     success_message = constants.SUCCESS_MESSAGE_ADDED_ACCOUNT
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
         Add the account creation form to the context.
 
@@ -290,7 +295,12 @@ class TransferMoneyAccountView(
     form_class = TransferMoneyAccountForm
     success_message = constants.SUCCESS_MESSAGE_TRANSFER_MONEY
 
-    def post(self, request: WSGIRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    def post(
+        self,
+        request: WSGIRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
         """
         Process a POST request to transfer money between accounts.
 
@@ -305,7 +315,8 @@ class TransferMoneyAccountView(
 
             if (
                 form.is_valid()
-                and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
+                and request.META.get('HTTP_X_REQUESTED_WITH')
+                == 'XMLHttpRequest'
             ):
                 try:
                     form.save()

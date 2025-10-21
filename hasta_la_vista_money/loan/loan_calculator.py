@@ -1,7 +1,8 @@
-from typing import Dict
-
-
-def calculate_annuity_schedule(amount: float, annual_rate: float, months: int) -> Dict:
+def calculate_annuity_schedule(
+    amount: float,
+    annual_rate: float,
+    months: int,
+) -> dict:
     """
     Возвращает график платежей для аннуитетного кредита с банковским округлением (до рубля).
     Последний платёж = остаток долга + проценты, округлённый до рубля.
@@ -66,7 +67,7 @@ def calculate_differentiated_schedule(
     amount: float,
     annual_rate: float,
     months: int,
-) -> Dict:
+) -> dict:
     """
     Возвращает график платежей для дифференцированного кредита с банковским округлением (до рубля).
     :param amount: сумма кредита

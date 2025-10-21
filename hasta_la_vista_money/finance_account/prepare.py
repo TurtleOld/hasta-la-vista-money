@@ -5,7 +5,7 @@ from the database, including income and expense information filtered by user.
 """
 
 from operator import itemgetter
-from typing import Any, List
+from typing import Any
 
 from hasta_la_vista_money.users.models import User
 
@@ -52,7 +52,7 @@ def collect_info_expense(user: User) -> Any:
     )
 
 
-def sort_expense_income(expenses: Any, income: Any) -> List[Any]:
+def sort_expense_income(expenses: Any, income: Any) -> list[Any]:
     """Create a sorted list combining expenses and income.
 
     Merges expense and income data into a single list sorted by date

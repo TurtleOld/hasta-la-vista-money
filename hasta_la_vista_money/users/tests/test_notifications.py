@@ -1,6 +1,11 @@
-from django.test import TestCase
+from typing import ClassVar
+
 from django.contrib.auth import get_user_model
-from hasta_la_vista_money.users.services.notifications import get_user_notifications
+from django.test import TestCase
+
+from hasta_la_vista_money.users.services.notifications import (
+    get_user_notifications,
+)
 
 User = get_user_model()
 
@@ -8,7 +13,7 @@ User = get_user_model()
 class GetUserNotificationsServiceTest(TestCase):
     """Tests for get_user_notifications service function."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',

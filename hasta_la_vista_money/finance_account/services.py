@@ -8,14 +8,14 @@ separating it from form and view logic.
 from calendar import monthrange
 from datetime import datetime, time
 from decimal import Decimal
-from typing import Any, Dict, Optional
-
-from django.db.models.query import QuerySet
+from typing import Any
 
 from dateutil.relativedelta import relativedelta
 from django.db import transaction
 from django.db.models import Sum
+from django.db.models.query import QuerySet
 from django.utils import timezone
+
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -27,7 +27,6 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
     validate_different_accounts,
@@ -35,6 +34,7 @@ from hasta_la_vista_money.finance_account.validators import (
 )
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.users.models import User
 
 
 class TransferService:
@@ -47,8 +47,8 @@ class TransferService:
         to_account: Account,
         amount: Decimal,
         user: User,
-        exchange_date: Optional[str] = None,
-        notes: Optional[str] = None,
+        exchange_date: str | None = None,
+        notes: str | None = None,
     ) -> TransferMoneyLog:
         """
         Transfer money between accounts with validation and logging.
@@ -82,7 +82,9 @@ class TransferService:
             )
             return transfer_log
 
-        raise ValueError('Transfer failed - insufficient funds or invalid accounts')
+        raise ValueError(
+            'Transfer failed - insufficient funds or invalid accounts',
+        )
 
 
 class AccountService:
@@ -102,7 +104,7 @@ class AccountService:
         return list(Account.objects.filter(user=user).select_related('user'))
 
     @staticmethod
-    def get_account_by_id(account_id: int, user: User) -> Optional[Account]:
+    def get_account_by_id(account_id: int, user: User) -> Account | None:
         """
         Get a specific account by ID for a user.
 
@@ -121,9 +123,9 @@ class AccountService:
     @staticmethod
     def get_credit_card_debt(
         account: Account,
-        start_date: Optional[Any] = None,
-        end_date: Optional[Any] = None,
-    ) -> Optional[Decimal]:
+        start_date: Any | None = None,
+        end_date: Any | None = None,
+    ) -> Decimal | None:
         """
         Calculates the credit card (or credit account) debt for a given period.
         If no period is specified, calculates the current debt.
@@ -137,7 +139,10 @@ class AccountService:
         Returns:
             Optional[Decimal]: The calculated debt, or None if not a credit account
         """
-        if account.type_account not in (ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT):
+        if account.type_account not in (
+            ACCOUNT_TYPE_CREDIT_CARD,
+            ACCOUNT_TYPE_CREDIT,
+        ):
             return None
 
         from django.db.models import Q
@@ -150,7 +155,9 @@ class AccountService:
         if start_date and end_date:
             expense_qs = expense_qs.filter(date__range=(start_date, end_date))
             income_qs = income_qs.filter(date__range=(start_date, end_date))
-            receipt_qs = receipt_qs.filter(receipt_date__range=(start_date, end_date))
+            receipt_qs = receipt_qs.filter(
+                receipt_date__range=(start_date, end_date),
+            )
 
         total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
         total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
@@ -159,12 +166,18 @@ class AccountService:
 
         receipt_aggregation = receipt_qs.aggregate(
             total_expense=Coalesce(
-                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_PURCHASE)),
+                Sum(
+                    'total_sum',
+                    filter=Q(operation_type=RECEIPT_OPERATION_PURCHASE),
+                ),
                 0,
                 output_field=DecimalField(),
             ),
             total_return=Coalesce(
-                Sum('total_sum', filter=Q(operation_type=RECEIPT_OPERATION_RETURN)),
+                Sum(
+                    'total_sum',
+                    filter=Q(operation_type=RECEIPT_OPERATION_RETURN),
+                ),
                 0,
                 output_field=DecimalField(),
             ),
@@ -181,7 +194,7 @@ class AccountService:
     def _get_first_purchase_in_month(
         account: Account,
         month_start: datetime,
-    ) -> Optional[datetime]:
+    ) -> datetime | None:
         """
         Находит дату первой покупки в указанном месяце для кредитной карты.
 
@@ -198,10 +211,10 @@ class AccountService:
         month_end = timezone.make_aware(
             datetime.combine(
                 month_start.replace(
-                    day=monthrange(month_start.year, month_start.month)[1]
+                    day=monthrange(month_start.year, month_start.month)[1],
                 ),
                 time.max,
-            )
+            ),
         )
 
         # Ищем среди расходов
@@ -228,18 +241,17 @@ class AccountService:
         # Сравниваем даты и возвращаем самую раннюю
         if first_expense and first_receipt:
             return min(first_expense.date, first_receipt.receipt_date)
-        elif first_expense:
+        if first_expense:
             return first_expense.date
-        elif first_receipt:
+        if first_receipt:
             return first_receipt.receipt_date
-        else:
-            return None
+        return None
 
     @staticmethod
     def calculate_grace_period_info(
         account: Account,
         purchase_month: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Calculate grace period information for a credit card.
 
@@ -248,27 +260,36 @@ class AccountService:
         - Raiffeisenbank: 110 days from the first purchase date in the month.
         - Other banks: placeholder for now (repayment due at the end of the purchase month) until specific rules are implemented.
         """
-        if account.type_account not in (ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT):
+        if account.type_account not in (
+            ACCOUNT_TYPE_CREDIT_CARD,
+            ACCOUNT_TYPE_CREDIT,
+        ):
             return {}
 
         purchase_start = timezone.make_aware(
-            datetime.combine(purchase_month.replace(day=1), time.min)
+            datetime.combine(purchase_month.replace(day=1), time.min),
         )
 
         last_day = monthrange(purchase_start.year, purchase_start.month)[1]
         purchase_end = timezone.make_aware(
-            datetime.combine(purchase_start.date().replace(day=last_day), time.max)
+            datetime.combine(
+                purchase_start.date().replace(day=last_day),
+                time.max,
+            ),
         )
 
         # Для Сбербанка используем текущую доменную логику (1+3 месяца)
         if account.bank == 'SBERBANK':
             grace_end_date = purchase_start + relativedelta(months=3)
-            last_day_grace = monthrange(grace_end_date.year, grace_end_date.month)[1]
+            last_day_grace = monthrange(
+                grace_end_date.year,
+                grace_end_date.month,
+            )[1]
             grace_end = timezone.make_aware(
                 datetime.combine(
                     grace_end_date.replace(day=last_day_grace),
                     time.max,
-                )
+                ),
             )
             payments_start = purchase_end + relativedelta(seconds=1)
             payments_end = grace_end
@@ -288,7 +309,7 @@ class AccountService:
                 grace_end = first_purchase + relativedelta(days=110)
                 # Устанавливаем время на конец дня для корректного сравнения
                 grace_end = timezone.make_aware(
-                    datetime.combine(grace_end.date(), time.max)
+                    datetime.combine(grace_end.date(), time.max),
                 )
             else:
                 # Если покупок нет, используем конец месяца как fallback
@@ -308,13 +329,7 @@ class AccountService:
             purchase_end,
         )
 
-        if account.bank == 'SBERBANK':
-            payments_for_period = AccountService.get_credit_card_debt(
-                account,
-                payments_start,
-                payments_end,
-            )
-        elif account.bank == 'RAIFFAISENBANK':
+        if account.bank == 'SBERBANK' or account.bank == 'RAIFFAISENBANK':
             payments_for_period = AccountService.get_credit_card_debt(
                 account,
                 payments_start,
@@ -349,7 +364,7 @@ class AccountService:
     def calculate_raiffeisenbank_payment_schedule(
         account: Account,
         purchase_month: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Рассчитывает детальный график платежей для кредитной карты Райффайзенбанка.
 
@@ -374,7 +389,7 @@ class AccountService:
         purchase_start = purchase_month.replace(day=1)
         last_day = monthrange(purchase_start.year, purchase_start.month)[1]
         purchase_end = timezone.make_aware(
-            datetime.combine(purchase_start.replace(day=last_day), time.max)
+            datetime.combine(purchase_start.replace(day=last_day), time.max),
         )
 
         first_purchase = AccountService._get_first_purchase_in_month(
@@ -404,7 +419,11 @@ class AccountService:
 
         payments_schedule = []
         remaining_debt = (
-            AccountService.get_credit_card_debt(account, purchase_start, purchase_end)
+            AccountService.get_credit_card_debt(
+                account,
+                purchase_start,
+                purchase_end,
+            )
             or 0
         )
 
@@ -426,7 +445,9 @@ class AccountService:
             remaining_debt = remaining_debt - min_payment
 
         grace_end = first_purchase + relativedelta(days=110)
-        grace_end = timezone.make_aware(datetime.combine(grace_end.date(), time.max))
+        grace_end = timezone.make_aware(
+            datetime.combine(grace_end.date(), time.max),
+        )
 
         return {
             'first_purchase_date': first_purchase,
@@ -449,13 +470,15 @@ class AccountService:
 
 
 def get_accounts_for_user_or_group(
-    user: User, group_id: Optional[str] = None
+    user: User,
+    group_id: str | None = None,
 ) -> QuerySet[Account]:
     if not group_id or group_id == 'my':
         return Account.objects.filter(user=user).select_related('user')
-    else:
-        users_in_group = User.objects.filter(groups__id=group_id)
-        return Account.objects.filter(user__in=users_in_group).select_related('user')
+    users_in_group = User.objects.filter(groups__id=group_id)
+    return Account.objects.filter(user__in=users_in_group).select_related(
+        'user',
+    )
 
 
 def get_sum_all_accounts(accounts):
@@ -465,4 +488,6 @@ def get_sum_all_accounts(accounts):
 
 def get_transfer_money_log(user, limit=10):
     """Get recent transfer logs for a user."""
-    return TransferMoneyLog.objects.filter(user=user).order_by('-exchange_date')[:limit]
+    return TransferMoneyLog.objects.filter(user=user).order_by(
+        '-exchange_date',
+    )[:limit]

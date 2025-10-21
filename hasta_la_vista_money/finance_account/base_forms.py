@@ -7,6 +7,7 @@ credit field handling, date field configuration, and common validation patterns.
 
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.forms import (
     CharField,
     DateInput,
@@ -16,8 +17,8 @@ from django.forms import (
     Textarea,
 )
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money import constants
-from django.core.exceptions import ValidationError
 
 
 class BootstrapFormMixin:
@@ -55,11 +56,18 @@ class CreditFieldsMixin:
         Applies the 'credit-only-field' class to credit-related form fields
         including limit_credit, payment_due_date, and grace_period_days.
         """
-        credit_fields = ['limit_credit', 'payment_due_date', 'grace_period_days']
+        credit_fields = [
+            'limit_credit',
+            'payment_due_date',
+            'grace_period_days',
+        ]
 
         for field_name in credit_fields:
             if field_name in self.fields:
-                current_class = self.fields[field_name].widget.attrs.get('class', '')
+                current_class = self.fields[field_name].widget.attrs.get(
+                    'class',
+                    '',
+                )
                 self.fields[field_name].widget.attrs['class'] = (
                     f'{current_class} credit-only-field'.strip()
                 )
@@ -115,7 +123,10 @@ class FormValidationMixin:
         """
         amount = self.cleaned_data.get('amount')
         if amount is not None and amount <= 0:
-            raise self.get_form_error('amount', _('Сумма должна быть больше нуля'))
+            raise self.get_form_error(
+                'amount',
+                _('Сумма должна быть больше нуля'),
+            )
         return amount
 
     def get_form_error(self, field: str, message: str) -> Any:

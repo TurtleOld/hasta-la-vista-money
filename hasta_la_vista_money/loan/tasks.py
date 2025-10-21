@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from django.shortcuts import get_object_or_404
+
 from hasta_la_vista_money.loan.loan_calculator import (
     calculate_annuity_schedule,
     calculate_differentiated_schedule,
@@ -47,7 +48,11 @@ def calculate_annuity_loan(
             PaymentSchedule(
                 user=user,
                 loan=loan,
-                date=date(current_date.year, current_date.month, current_date.day),
+                date=date(
+                    current_date.year,
+                    current_date.month,
+                    current_date.day,
+                ),
                 balance=payment['balance'],
                 monthly_payment=payment['payment'],
                 interest=payment['interest'],
@@ -92,7 +97,11 @@ def calculate_differentiated_loan(
             PaymentSchedule(
                 user=user,
                 loan=loan,
-                date=date(current_date.year, current_date.month, current_date.day),
+                date=date(
+                    current_date.year,
+                    current_date.month,
+                    current_date.day,
+                ),
                 balance=payment['balance'],
                 monthly_payment=payment['payment'],
                 interest=payment['interest'],

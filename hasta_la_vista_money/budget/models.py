@@ -7,9 +7,9 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.users.models import User
     from hasta_la_vista_money.expense.models import ExpenseCategory
     from hasta_la_vista_money.income.models import IncomeCategory
+    from hasta_la_vista_money.users.models import User
 
 
 class DateListQuerySet(models.QuerySet):
@@ -90,7 +90,11 @@ class PlanningQuerySet(models.QuerySet):
 
     def with_related(self) -> models.QuerySet[Planning]:
         """Optimize queries by joining related categories."""
-        return self.select_related('user', 'category_expense', 'category_income')
+        return self.select_related(
+            'user',
+            'category_expense',
+            'category_income',
+        )
 
 
 class PlanningManager(models.Manager):

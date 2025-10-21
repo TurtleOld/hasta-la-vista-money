@@ -18,7 +18,9 @@ class IncomeQuerySet(models.QuerySet):
 
     def for_category(self, category):
         """Return incomes for a specific category or its descendants."""
-        return self.filter(Q(category=category) | Q(category__parent_category=category))
+        return self.filter(
+            Q(category=category) | Q(category__parent_category=category),
+        )
 
     def total_amount(self):
         """Return the total amount for the queryset."""

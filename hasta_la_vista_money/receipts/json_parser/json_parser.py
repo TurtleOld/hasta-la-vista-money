@@ -48,5 +48,5 @@ def _parse_value(
 ) -> list[dict[str, Any]] | int | str | None:
     if isinstance(value, dict):
         return _parse_dict(value, key)
-    elif isinstance(value, list):
+    if isinstance(value, list):
         return _parse_list(value, key)

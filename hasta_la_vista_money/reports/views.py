@@ -1,15 +1,16 @@
 from collections import defaultdict
 from decimal import Decimal
-from typing import Any, Dict
+from typing import Any
 
-from django.contrib.messages.views import SuccessMessageMixin
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView
+
 from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.income.models import Income
@@ -140,7 +141,9 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
             chart_data = {
                 'chart': {'type': 'pie'},
                 'title': {
-                    'text': _(f'Статистика расходов по категории {parent_category}'),
+                    'text': _(
+                        f'Статистика расходов по категории {parent_category}',
+                    ),
                 },
                 'series': [{'name': parent_category, 'data': data}],
                 'credits': {'enabled': 'false'},
@@ -171,10 +174,14 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
         months = [d.date for d in list_dates]
 
         expense_categories = list(
-            user.category_expense_users.filter(parent_category=None).order_by('name'),  # type: ignore[attr-defined]
+            user.category_expense_users.filter(parent_category=None).order_by(
+                'name',
+            ),  # type: ignore[attr-defined]
         )
         income_categories = list(
-            user.category_income_users.filter(parent_category=None).order_by('name'),  # type: ignore[attr-defined]
+            user.category_income_users.filter(parent_category=None).order_by(
+                'name',
+            ),  # type: ignore[attr-defined]
         )
 
         chart_labels = [m.strftime('%b %Y') for m in months]
@@ -182,10 +189,10 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
         total_fact_income = [0] * len(months)
         total_fact_expense = [0] * len(months)
 
-        expense_fact_map: Dict[Any, Dict[Any, Any]] = defaultdict(
+        expense_fact_map: dict[Any, dict[Any, Any]] = defaultdict(
             lambda: defaultdict(lambda: 0),
         )
-        income_fact_map: Dict[Any, Dict[Any, Any]] = defaultdict(
+        income_fact_map: dict[Any, dict[Any, Any]] = defaultdict(
             lambda: defaultdict(lambda: 0),
         )
 
@@ -203,7 +210,9 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
             )
             for e in expenses:
                 month_date = (
-                    e['month'].date() if hasattr(e['month'], 'date') else e['month']
+                    e['month'].date()
+                    if hasattr(e['month'], 'date')
+                    else e['month']
                 )
                 total_amount = e['total'] if e['total'] is not None else 0
                 expense_fact_map[e['category_id']][month_date] = total_amount
@@ -225,7 +234,9 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
             )
             for e in incomes:
                 month_date = (
-                    e['month'].date() if hasattr(e['month'], 'date') else e['month']
+                    e['month'].date()
+                    if hasattr(e['month'], 'date')
+                    else e['month']
                 )
                 total_amount = e['total'] if e['total'] is not None else 0
                 income_fact_map[e['category_id']][month_date] = total_amount
@@ -242,7 +253,9 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
         pie_labels = []
         pie_values = []
         if months and expense_categories:
-            category_totals: Dict[Any, Decimal] = defaultdict(lambda: Decimal('0'))
+            category_totals: dict[Any, Decimal] = defaultdict(
+                lambda: Decimal(0),
+            )
             for cat in expense_categories:
                 for month in months:
                     amount = expense_fact_map[cat.id][month]

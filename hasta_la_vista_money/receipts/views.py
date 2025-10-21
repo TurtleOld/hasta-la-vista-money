@@ -1,9 +1,11 @@
 import decimal
 import json
 import re
+from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, ClassVar, Optional, Sequence, Union, cast
+from typing import Any, ClassVar, cast
+
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -12,6 +14,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, ProtectedError, QuerySet, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
+from django.forms import ModelChoiceField
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -22,7 +25,7 @@ from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django.views.generic.edit import UpdateView
 from django_filters.views import FilterView
-from django.forms import ModelChoiceField
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
@@ -43,10 +46,10 @@ logger = structlog.get_logger(__name__)
 
 
 class BaseView:
-    template_name: ClassVar[Optional[Union[str, Sequence[str]]]] = (
+    template_name: ClassVar[str | Sequence[str] | None] = (
         'receipts/receipts.html'
     )
-    success_url: ClassVar[str] = cast(str, reverse_lazy('receipts:list'))
+    success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))
 
 
 class ReceiptView(
@@ -58,7 +61,7 @@ class ReceiptView(
     paginate_by: int = 10
     model = Receipt
     filterset_class = ReceiptFilter
-    no_permission_url: ClassVar[str] = cast(str, reverse_lazy('login'))
+    no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
 
     def get_queryset(self) -> QuerySet[Receipt]:
         group_id = self.request.GET.get('group_id') or 'my'
@@ -71,7 +74,7 @@ class ReceiptView(
                 return Receipt.objects.none()
         return Receipt.objects.for_user(self.request.user).with_related()
 
-    def get_context_data(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         group_id = self.request.GET.get('group_id') or 'my'
 
@@ -84,10 +87,10 @@ class ReceiptView(
                 group = Group.objects.get(pk=group_id)
                 users_in_group = group.user_set.all()
                 receipt_queryset = Receipt.objects.for_users(
-                    users_in_group
+                    users_in_group,
                 ).with_related()
                 seller_queryset = Seller.objects.unique_by_name_for_users(
-                    users_in_group
+                    users_in_group,
                 )
                 account_queryset = (
                     Account.objects.filter(user__in=users_in_group)
@@ -100,7 +103,7 @@ class ReceiptView(
                 account_queryset = Account.objects.none()
         else:
             receipt_queryset = Receipt.objects.for_user(
-                self.request.user
+                self.request.user,
             ).with_related()
             seller_queryset = Seller.objects.unique_by_name_for_user(user)
             account_queryset = Account.objects.by_user_with_related(user)
@@ -112,14 +115,14 @@ class ReceiptView(
             user=self.request.user,
         )
         receipt_form = ReceiptForm()
-        account_field = cast(ModelChoiceField, receipt_form.fields['account'])
+        account_field = cast('ModelChoiceField', receipt_form.fields['account'])
         account_field.queryset = account_queryset
-        seller_field = cast(ModelChoiceField, receipt_form.fields['seller'])
+        seller_field = cast('ModelChoiceField', receipt_form.fields['seller'])
         seller_field.queryset = seller_queryset
 
         product_formset = ProductFormSet()
 
-        total_sum_receipts: Dict[str, Any] = receipt_filter.qs.aggregate(
+        total_sum_receipts: dict[str, Any] = receipt_filter.qs.aggregate(
             total=Sum('total_sum'),
         )
         total_receipts: QuerySet[Receipt] = receipt_filter.qs
@@ -153,7 +156,7 @@ class ReceiptView(
             'receipts',
         )
 
-        context: Dict[str, Any] = super().get_context_data(**kwargs)
+        context: dict[str, Any] = super().get_context_data(**kwargs)
         context['receipts'] = page_receipts
         context['receipt_filter'] = receipt_filter
         context['total_receipts'] = total_receipts
@@ -177,7 +180,10 @@ class SellerCreateView(
     form_class: type[SellerForm] = SellerForm
 
     def post(
-        self, request: HttpRequest, *args: object, **kwargs: object
+        self,
+        request: HttpRequest,
+        *args: object,
+        **kwargs: object,
     ) -> JsonResponse:
         seller_form = SellerForm(request.POST)
         if seller_form.is_valid():
@@ -208,21 +214,27 @@ class ReceiptCreateView(
     success_message: ClassVar[str] = constants.SUCCESS_MESSAGE_CREATE_RECEIPT
 
     def __init__(self, *args: object, **kwargs: object) -> None:
-        self.request: Optional[HttpRequest] = None
+        self.request: HttpRequest | None = None
         super().__init__(*args, **kwargs)
 
-    def get_form(self, form_class: type[ReceiptForm] | None = None) -> ReceiptForm:
+    def get_form(
+        self,
+        form_class: type[ReceiptForm] | None = None,
+    ) -> ReceiptForm:
         form = super().get_form(form_class)
-        current_user = cast(User, self.request.user)
-        account_field = cast(ModelChoiceField, form.fields['account'])
-        account_field.queryset = Account.objects.by_user_with_related(current_user)
-        seller_field = cast(ModelChoiceField, form.fields['seller'])
+        current_user = cast('User', self.request.user)
+        account_field = cast('ModelChoiceField', form.fields['account'])
+        account_field.queryset = Account.objects.by_user_with_related(
+            current_user,
+        )
+        seller_field = cast('ModelChoiceField', form.fields['seller'])
         seller_field.queryset = Seller.objects.for_user(current_user)
         return form
 
     @staticmethod
     def check_exist_receipt(
-        request: HttpRequest, receipt_form: ReceiptForm
+        request: HttpRequest,
+        receipt_form: ReceiptForm,
     ) -> QuerySet[Receipt]:
         number_receipt = receipt_form.cleaned_data.get('number_receipt')
         return Receipt.objects.filter(
@@ -236,7 +248,7 @@ class ReceiptCreateView(
         receipt_form: ReceiptForm,
         product_formset: ProductFormSet,
         seller: Seller,
-    ) -> Optional[Receipt]:
+    ) -> Receipt | None:
         receipt = receipt_form.save(commit=False)
         total_sum = receipt.total_sum
         account = receipt.account
@@ -249,9 +261,12 @@ class ReceiptCreateView(
             receipt.manual = True
             receipt.save()
             for product_form in product_formset:
-                if product_form.cleaned_data and not product_form.cleaned_data.get(
-                    'DELETE',
-                    False,
+                if (
+                    product_form.cleaned_data
+                    and not product_form.cleaned_data.get(
+                        'DELETE',
+                        False,
+                    )
                 ):
                     product_data = product_form.cleaned_data
                     if (
@@ -276,7 +291,8 @@ class ReceiptCreateView(
         seller: Seller,
     ) -> bool:
         number_receipt = self.check_exist_receipt(
-            cast(HttpRequest, self.request), receipt_form
+            cast('HttpRequest', self.request),
+            receipt_form,
         )
         if number_receipt:
             messages.error(
@@ -284,32 +300,36 @@ class ReceiptCreateView(
                 _(constants.RECEIPT_ALREADY_EXISTS),
             )
             return False
-        else:
-            self.create_receipt(
-                cast(HttpRequest, self.request),
-                receipt_form,
-                product_formset,
-                seller,
-            )
-            messages.success(
-                self.request,
-                constants.SUCCESS_MESSAGE_CREATE_RECEIPT,
-            )
-            return True
+        self.create_receipt(
+            cast('HttpRequest', self.request),
+            receipt_form,
+            product_formset,
+            seller,
+        )
+        messages.success(
+            self.request,
+            constants.SUCCESS_MESSAGE_CREATE_RECEIPT,
+        )
+        return True
 
-    def setup(self, request: HttpRequest, *args: object, **kwargs: object) -> None:
+    def setup(
+        self,
+        request: HttpRequest,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
         self.request = request
         super().setup(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context: Dict[str, Any] = super().get_context_data(**kwargs)
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context: dict[str, Any] = super().get_context_data(**kwargs)
         context['receipt_form'] = self.get_form()
         context['product_formset'] = ProductFormSet()
         return context
 
     def form_valid(self, form: ReceiptForm) -> HttpResponse:
-        seller = cast(Seller, form.cleaned_data.get('seller'))
-        product_formset = ProductFormSet(cast(HttpRequest, self.request).POST)
+        seller = cast('Seller', form.cleaned_data.get('seller'))
+        product_formset = ProductFormSet(cast('HttpRequest', self.request).POST)
 
         valid_form = form.is_valid() and product_formset.is_valid()
         if valid_form:
@@ -320,29 +340,32 @@ class ReceiptCreateView(
             )
             if success:
                 return super().form_valid(form)
-            else:
-                return self.form_invalid(form)
-        else:
             return self.form_invalid(form)
+        return self.form_invalid(form)
 
     def form_invalid(self, form: ReceiptForm) -> HttpResponse:
-        product_formset = ProductFormSet(cast(HttpRequest, self.request).POST)
-        context: Dict[str, Any] = self.get_context_data(form=form)
+        product_formset = ProductFormSet(cast('HttpRequest', self.request).POST)
+        context: dict[str, Any] = self.get_context_data(form=form)
         context['product_formset'] = product_formset
         return self.render_to_response(context)
 
 
 class ReceiptUpdateView(
-    LoginRequiredMixin, SuccessMessageMixin, UpdateView[Receipt, ReceiptForm]
+    LoginRequiredMixin,
+    SuccessMessageMixin,
+    UpdateView[Receipt, ReceiptForm],
 ):
     template_name = 'receipts/receipt_update.html'
-    success_url: ClassVar[str] = cast(str, reverse_lazy('receipts:list'))
+    success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
     success_message: ClassVar[str] = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
 
     def post(
-        self, request: HttpRequest, *args: object, **kwargs: object
+        self,
+        request: HttpRequest,
+        *args: object,
+        **kwargs: object,
     ) -> HttpResponse:
         return super().post(request, *args, **kwargs)
 
@@ -358,14 +381,16 @@ class ReceiptUpdateView(
         )
         return receipt
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context: Dict[str, Any] = super().get_context_data(**kwargs)
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context: dict[str, Any] = super().get_context_data(**kwargs)
         receipt_form = self.get_form()
 
-        current_user = cast(User, self.request.user)
-        account_field = cast(ModelChoiceField, receipt_form.fields['account'])
-        account_field.queryset = Account.objects.by_user_with_related(current_user)
-        seller_field = cast(ModelChoiceField, receipt_form.fields['seller'])
+        current_user = cast('User', self.request.user)
+        account_field = cast('ModelChoiceField', receipt_form.fields['account'])
+        account_field.queryset = Account.objects.by_user_with_related(
+            current_user,
+        )
+        seller_field = cast('ModelChoiceField', receipt_form.fields['seller'])
         seller_field.queryset = Seller.objects.for_user(current_user)
 
         context['receipt_form'] = receipt_form
@@ -384,12 +409,17 @@ class ReceiptUpdateView(
         context['product_formset'] = ProductFormSet(initial=initial_data)
         return context
 
-    def get_form(self, form_class: type[ReceiptForm] | None = None) -> ReceiptForm:
+    def get_form(
+        self,
+        form_class: type[ReceiptForm] | None = None,
+    ) -> ReceiptForm:
         form = super().get_form(form_class)
-        current_user = cast(User, self.request.user)
-        account_field = cast(ModelChoiceField, form.fields['account'])
-        account_field.queryset = Account.objects.by_user_with_related(current_user)
-        seller_field = cast(ModelChoiceField, form.fields['seller'])
+        current_user = cast('User', self.request.user)
+        account_field = cast('ModelChoiceField', form.fields['account'])
+        account_field.queryset = Account.objects.by_user_with_related(
+            current_user,
+        )
+        seller_field = cast('ModelChoiceField', form.fields['seller'])
         seller_field.queryset = Seller.objects.for_user(current_user)
         return form
 
@@ -397,10 +427,12 @@ class ReceiptUpdateView(
         receipt = self.get_object()
         product_formset = ProductFormSet(self.request.POST)
 
-        current_user = cast(User, self.request.user)
-        account_field = cast(ModelChoiceField, form.fields['account'])
-        account_field.queryset = Account.objects.by_user_with_related(current_user)
-        seller_field = cast(ModelChoiceField, form.fields['seller'])
+        current_user = cast('User', self.request.user)
+        account_field = cast('ModelChoiceField', form.fields['account'])
+        account_field.queryset = Account.objects.by_user_with_related(
+            current_user,
+        )
+        seller_field = cast('ModelChoiceField', form.fields['seller'])
         seller_field.queryset = Seller.objects.for_user(current_user)
 
         if form.is_valid() and product_formset.is_valid():
@@ -413,9 +445,12 @@ class ReceiptUpdateView(
 
             new_total_sum = Decimal('0.00')
             for product_form in product_formset:
-                if product_form.cleaned_data and not product_form.cleaned_data.get(
-                    'DELETE',
-                    False,
+                if (
+                    product_form.cleaned_data
+                    and not product_form.cleaned_data.get(
+                        'DELETE',
+                        False,
+                    )
                 ):
                     product_data = product_form.cleaned_data
                     if (
@@ -423,7 +458,7 @@ class ReceiptUpdateView(
                         and product_data.get('price')
                         and product_data.get('quantity')
                     ):
-                        current_user = cast(User, self.request.user)
+                        current_user = cast('User', self.request.user)
                         product = Product.objects.create(
                             user=current_user,
                             product_name=product_data['product_name'],
@@ -447,18 +482,23 @@ class ReceiptUpdateView(
             )
 
             return super().form_valid(form)
-        else:
-            return self.form_invalid(form)
+        return self.form_invalid(form)
 
     def form_invalid(self, form: ReceiptForm) -> HttpResponse:
         product_formset = ProductFormSet(self.request.POST)
-        context: Dict[str, Any] = self.get_context_data(form=form)
+        context: dict[str, Any] = self.get_context_data(form=form)
         context['product_formset'] = product_formset
 
         if not form.is_valid():
-            messages.error(self.request, 'Пожалуйста, исправьте ошибки в форме.')
+            messages.error(
+                self.request,
+                'Пожалуйста, исправьте ошибки в форме.',
+            )
         if not product_formset.is_valid():
-            messages.error(self.request, 'Пожалуйста, исправьте ошибки в товарах.')
+            messages.error(
+                self.request,
+                'Пожалуйста, исправьте ошибки в товарах.',
+            )
 
         return self.render_to_response(context)
 
@@ -540,11 +580,14 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
     login_url = '/login/'
 
     def get_context_data(
-        self, *, object_list: Any = None, **kwargs: Any
-    ) -> Dict[str, Any]:
-        context: Dict[str, Any] = super().get_context_data(**kwargs)
+        self,
+        *,
+        object_list: Any = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        context: dict[str, Any] = super().get_context_data(**kwargs)
 
-        current_user = cast(User, self.request.user)
+        current_user = cast('User', self.request.user)
 
         all_purchased_products = (
             Receipt.objects.filter(user=current_user)
@@ -574,7 +617,7 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
             .order_by('month', 'rank')
         )
 
-        data: Dict[Any, Dict[str, Decimal]] = {}
+        data: dict[Any, dict[str, Decimal]] = {}
 
         for item in purchased_products_by_month:
             product_name = item['product__product_name']
@@ -598,9 +641,9 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
 class UploadImageView(LoginRequiredMixin, FormView):
     template_name = 'receipts/upload_image.html'
     form_class: type[UploadImageForm] = UploadImageForm
-    success_url: ClassVar[str] = cast(str, reverse_lazy('receipts:list'))
+    success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))
 
-    def get_form_kwargs(self) -> Dict[str, Any]:
+    def get_form_kwargs(self) -> dict[str, Any]:
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
@@ -610,7 +653,7 @@ class UploadImageView(LoginRequiredMixin, FormView):
             uploaded_file = self.request.FILES['file']
             if isinstance(uploaded_file, list):
                 uploaded_file = uploaded_file[0]
-            user = cast(User, self.request.user)
+            user = cast('User', self.request.user)
             account = form.cleaned_data.get('account')
 
             json_receipt = analyze_image_with_ai(uploaded_file)
@@ -657,7 +700,9 @@ class UploadImageView(LoginRequiredMixin, FormView):
                     number_receipt=decode_json_receipt['number_receipt'],
                     receipt_date=timezone.make_aware(
                         datetime.strptime(
-                            self.normalize_date(decode_json_receipt['receipt_date']),
+                            self.normalize_date(
+                                decode_json_receipt['receipt_date'],
+                            ),
                             '%d.%m.%Y %H:%M',
                         ),
                     ),
@@ -677,10 +722,16 @@ class UploadImageView(LoginRequiredMixin, FormView):
                 )
                 account_balance.save()
 
-                messages.success(self.request, 'Чек успешно загружен и обработан!')
+                messages.success(
+                    self.request,
+                    'Чек успешно загружен и обработан!',
+                )
                 return super().form_valid(form)
 
-            messages.error(self.request, gettext_lazy(constants.RECEIPT_ALREADY_EXISTS))
+            messages.error(
+                self.request,
+                gettext_lazy(constants.RECEIPT_ALREADY_EXISTS),
+            )
             return super().form_invalid(form)
         except ValueError as e:
             logger.error(e)
@@ -699,7 +750,8 @@ class UploadImageView(LoginRequiredMixin, FormView):
 
     @staticmethod
     def check_exist_receipt(
-        user: User, number_receipt: int | None
+        user: User,
+        number_receipt: int | None,
     ) -> QuerySet[Receipt]:
         return Receipt.objects.filter(
             user=user,

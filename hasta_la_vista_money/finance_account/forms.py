@@ -6,7 +6,7 @@ Includes comprehensive validation, user-specific account filtering, and proper
 error handling for financial operations.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from django.forms import (
     CharField,
@@ -17,6 +17,7 @@ from django.forms import (
     ModelChoiceField,
 )
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.base_forms import (
     BaseAccountForm,
@@ -31,8 +32,8 @@ from hasta_la_vista_money.finance_account.models import (
 from hasta_la_vista_money.finance_account.services import TransferService
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
-    validate_different_accounts,
     validate_credit_fields_required,
+    validate_different_accounts,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -48,7 +49,9 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
 
     name_account = CharField(
         label=_('Наименование счёта'),
-        help_text=_('Введите наименование счёта. Максимальная длина 250 символов.'),
+        help_text=_(
+            'Введите наименование счёта. Максимальная длина 250 символов.',
+        ),
         max_length=constants.TWO_HUNDRED_FIFTY,
     )
 
@@ -109,7 +112,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         # Setup date fields
         self.setup_date_fields()
 
-    def clean(self) -> Dict[str, Any]:
+    def clean(self) -> dict[str, Any]:
         """Validate form data, ensuring credit fields are provided for credit accounts.
 
         Performs comprehensive validation including credit field requirements
@@ -185,7 +188,7 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
 
         self.add_bootstrap_classes()
 
-    def clean(self) -> Dict[str, Any]:
+    def clean(self) -> dict[str, Any]:
         """Validate transfer parameters using custom validators.
 
         Performs comprehensive validation including account differences,

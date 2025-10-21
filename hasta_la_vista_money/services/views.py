@@ -1,60 +1,74 @@
-from typing import Any, Dict, Generator, List, Optional, Type, Union
+from collections import defaultdict
+from collections.abc import Generator
+from typing import Any
 
 from django.db.models import Count, Model, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
+
 from hasta_la_vista_money.users.models import User
 
 
+class CategoryTreeBuilder:
+    """Строит дерево категорий и считает число всех потомков."""
+
+    def __init__(
+        self,
+        categories: list[dict[str, Any]] | QuerySet,
+        depth: int,
+    ) -> None:
+        self.depth = depth
+        self.cats = (
+            list(categories) if hasattr(categories, 'values') else categories
+        )
+        self.children_map: dict[int | None, list[dict[str, Any]]] = defaultdict(
+            list
+        )
+        for c in self.cats:
+            self.children_map[c['parent_category']].append(c)
+        self._memo: dict[int, int] = {}
+
+    def count_desc(self, cid: int) -> int:
+        cached = self._memo.get(cid)
+        if cached is not None:
+            return cached
+        total = 0
+        for ch in self.children_map.get(cid, ()):
+            total += 1 + self.count_desc(ch['id'])
+        self._memo[cid] = total
+        return total
+
+    def build(
+        self,
+        parent_id: int | None,
+        current_depth: int,
+    ) -> Generator[dict[str, Any], None, None]:
+        for cat in self.children_map.get(parent_id, ()):
+            node = {
+                'id': cat['id'],
+                'name': cat['name'],
+                'parent_category': cat['parent_category'],
+                'parent_category__name': cat['parent_category__name'],
+                'total_children_count': self.count_desc(cat['id']),
+            }
+            if current_depth < self.depth:
+                node['children'] = self.build(cat['id'], current_depth + 1)
+            yield node
+
+
 def build_category_tree(
-    categories: Union[List[Dict[str, Any]], QuerySet],
-    parent_id: Optional[int] = None,
+    categories: list[dict[str, Any]] | QuerySet,
+    parent_id: int | None = None,
     depth: int = 2,
     current_depth: int = 1,
-) -> Generator[Dict[str, Any], None, None]:
+) -> Generator[dict[str, Any], None, None]:
     """
-    Формирование дерева категория для отображения на сайте.
-    Добавляет поле total_children_count — количество всех вложенных подкатегорий.
+    Формирование дерева категорий для отображения.
+    Добавляет total_children_count — число всех вложенных подкатегорий.
     """
-    # Convert QuerySet to list if needed
-    if hasattr(categories, 'values'):  # It's a QuerySet
-        categories_list = list(categories)
-    else:
-        categories_list = categories
-
-    def count_all_descendants(cat_id: int) -> int:
-        count = 0
-        children = [c for c in categories_list if c['parent_category'] == cat_id]
-        count += len(children)
-        for child in children:
-            count += count_all_descendants(child['id'])
-        return count
-
-    for category in categories_list:
-        if category['parent_category'] == parent_id:
-            if current_depth < depth:
-                yield {
-                    'id': category['id'],
-                    'name': category['name'],
-                    'parent_category': category['parent_category'],
-                    'parent_category__name': category['parent_category__name'],
-                    'children': build_category_tree(
-                        categories_list,
-                        category['id'],
-                        depth,
-                        current_depth + 1,
-                    ),
-                    'total_children_count': count_all_descendants(category['id']),
-                }
-            else:
-                yield {
-                    'id': category['id'],
-                    'name': category['name'],
-                    'parent_category': category['parent_category'],
-                    'parent_category__name': category['parent_category__name'],
-                    'total_children_count': count_all_descendants(category['id']),
-                }
+    builder = CategoryTreeBuilder(categories=categories, depth=depth)
+    yield from builder.build(parent_id=parent_id, current_depth=current_depth)
 
 
 def collect_info_receipt(user: User) -> QuerySet:
@@ -88,7 +102,7 @@ def get_queryset_type_income_expenses(type_id, model, form):
 
 
 def get_new_type_operation(
-    model: Type[Model],
+    model: type[Model],
     id_type_operation: int,
     request: HttpRequest,
 ) -> Model:

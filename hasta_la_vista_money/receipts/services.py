@@ -1,11 +1,12 @@
 import base64
+from collections.abc import Sequence
+from typing import Any, TypeVar
 
-from django.core.files.uploadedfile import UploadedFile
 from decouple import config
-from openai import OpenAI
+from django.core.files.uploadedfile import UploadedFile
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
-from typing import Any, Sequence, TypeVar, Union
+from openai import OpenAI
 
 T = TypeVar('T')
 
@@ -14,13 +15,17 @@ def image_to_base64(uploaded_file) -> str:
     file_bytes = uploaded_file.read()
     encoded_str = base64.b64encode(file_bytes).decode('utf-8')
     encoded_str = (
-        encoded_str.replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+        encoded_str.replace('<', '&lt;')
+        .replace('>', '&gt;')
+        .replace('"', '&quot;')
     )
     return f'data:image/jpeg;base64,{encoded_str}'
 
 
 def analyze_image_with_ai(image_base64: UploadedFile):
-    base_url = str(config('API_BASE_URL', default='https://models.github.ai/inference'))
+    base_url = str(
+        config('API_BASE_URL', default='https://models.github.ai/inference'),
+    )
     token = str(config('API_KEY', default=''))
     model = str(config('API_MODEL', default='openai/gpt-4o'))
 
@@ -107,7 +112,7 @@ def analyze_image_with_ai(image_base64: UploadedFile):
 
 def paginator_custom_view(
     request,
-    queryset: Union[QuerySet[Any], list[Any]],
+    queryset: QuerySet[Any] | list[Any],
     paginate_by: int,
     page_name: str,
 ) -> Page[Sequence[T]]:

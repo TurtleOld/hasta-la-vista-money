@@ -5,14 +5,15 @@ account listing, creation, editing, deletion, money transfers, and API endpoints
 """
 
 from django.urls import path
+
 from hasta_la_vista_money.finance_account.apis import AccountListCreateAPIView
 from hasta_la_vista_money.finance_account.views import (
     AccountCreateView,
     AccountView,
+    AjaxAccountsByGroupView,
     ChangeAccountView,
     DeleteAccountView,
     TransferMoneyAccountView,
-    AjaxAccountsByGroupView,
 )
 
 app_name = 'finance_account'

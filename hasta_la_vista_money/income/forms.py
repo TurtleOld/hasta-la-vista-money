@@ -7,6 +7,7 @@ from django.forms import (
     ModelForm,
 )
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money.custom_mixin import (
     CategoryChoicesConfigurerMixin,
     CategoryChoicesMixin,
@@ -52,7 +53,9 @@ class IncomeForm(CategoryChoicesConfigurerMixin, FormQuerysetsMixin, ModelForm):
 
 
 class AddCategoryIncomeForm(
-    CategoryChoicesConfigurerMixin, CategoryChoicesMixin, ModelForm
+    CategoryChoicesConfigurerMixin,
+    CategoryChoicesMixin,
+    ModelForm,
 ):
     name = CharField(
         label=_('Название категории'),
@@ -61,7 +64,9 @@ class AddCategoryIncomeForm(
     parent_category = ModelChoiceField(
         queryset=IncomeCategory.objects.none(),
         label=_('Родительская категория'),
-        help_text=_('Выберите родительскую категорию дохода для создаваемой категории'),
+        help_text=_(
+            'Выберите родительскую категорию дохода для создаваемой категории',
+        ),
         empty_label=_('Нет родительской категории'),
         required=False,
     )

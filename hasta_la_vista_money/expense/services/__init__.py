@@ -1,11 +1,11 @@
 from .expense_services import (
-    ExpenseService,
     ExpenseCategoryService,
+    ExpenseService,
     ReceiptExpenseService,
 )
 
 __all__ = [
-    'ExpenseService',
     'ExpenseCategoryService',
+    'ExpenseService',
     'ReceiptExpenseService',
 ]

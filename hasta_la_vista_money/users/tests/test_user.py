@@ -1,6 +1,9 @@
+from typing import ClassVar
+
 from django.test import Client, TestCase
 from django.urls import reverse_lazy
 from faker import Faker
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
 
@@ -8,7 +11,7 @@ LENGTH_PASSWORD = 12
 
 
 class TestUser(TestCase):
-    fixtures = ['users.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml']
 
     def setUp(self) -> None:
         self.user1 = User.objects.get(pk=1)
@@ -62,7 +65,7 @@ class TestUser(TestCase):
 
         self.assertContains(
             response,
-            'Пожалуйста, введите правильные имя пользователя и пароль. Оба поля могут быть чувствительны к регистру.',
+            'Пожалуйста, введите правильные имя пользователя и пароль.',
         )
 
         self.assertFalse(response.wsgi_request.user.is_authenticated)
@@ -77,5 +80,8 @@ class TestUser(TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Пожалуйста, введите имя пользователя или email.')
+        self.assertContains(
+            response,
+            'Пожалуйста, введите имя пользователя или email.',
+        )
         self.assertFalse(response.wsgi_request.user.is_authenticated)

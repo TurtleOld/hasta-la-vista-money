@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
+
 from hasta_la_vista_money.users.views import (
     IndexView,
     LoginUser,
@@ -9,83 +10,83 @@ from hasta_la_vista_money.users.views import (
 
 urlpatterns = [
     re_path(
-        r'^users/',
+        r"^users/",
         include(
-            'hasta_la_vista_money.users.urls',
-            namespace='users',
+            "hasta_la_vista_money.users.urls",
+            namespace="users",
         ),
     ),
-    path('', IndexView.as_view(), name='index'),
+    path("", IndexView.as_view(), name="index"),
     path(
-        'login/',
+        "login/",
         LoginUser.as_view(redirect_authenticated_user=True),
-        name='login',
+        name="login",
     ),
     path(
-        'logout/',
+        "logout/",
         LogoutUser.as_view(),
-        {'next_page': settings.LOGOUT_REDIRECT_URL},
-        name='logout',
+        {"next_page": settings.LOGOUT_REDIRECT_URL},
+        name="logout",
     ),
     path(
-        'authentication/',
+        "authentication/",
         include(
-            'hasta_la_vista_money.authentication.urls',
-            namespace='authentication',
+            "hasta_la_vista_money.authentication.urls",
+            namespace="authentication",
         ),
     ),
     path(
-        'hasta-la-vista-money/',
+        "hasta-la-vista-money/",
         include(
-            'hasta_la_vista_money.finance_account.urls',
-            namespace='applications',
+            "hasta_la_vista_money.finance_account.urls",
+            namespace="applications",
         ),
     ),
     path(
-        'receipts/',
+        "receipts/",
         include(
-            'hasta_la_vista_money.receipts.urls',
-            namespace='receipts',
+            "hasta_la_vista_money.receipts.urls",
+            namespace="receipts",
         ),
     ),
     path(
-        'income/',
+        "income/",
         include(
-            'hasta_la_vista_money.income.urls',
-            namespace='income',
+            "hasta_la_vista_money.income.urls",
+            namespace="income",
         ),
     ),
     path(
-        'expense/',
+        "expense/",
         include(
-            'hasta_la_vista_money.expense.urls',
-            namespace='expense',
+            "hasta_la_vista_money.expense.urls",
+            namespace="expense",
         ),
     ),
     path(
-        'finance_account/',
+        "finance_account/",
         include(
-            'hasta_la_vista_money.finance_account.urls',
-            namespace='finance_account',
+            "hasta_la_vista_money.finance_account.urls",
+            namespace="finance_account",
         ),
     ),
     path(
-        'reports/',
-        include('hasta_la_vista_money.reports.urls', namespace='reports'),
+        "reports/",
+        include("hasta_la_vista_money.reports.urls", namespace="reports"),
     ),
     path(
-        'loan/',
-        include('hasta_la_vista_money.loan.urls', namespace='loan'),
+        "loan/",
+        include("hasta_la_vista_money.loan.urls", namespace="loan"),
     ),
     path(
-        'budget/',
-        include('hasta_la_vista_money.budget.urls', namespace='budget'),
+        "budget/",
+        include("hasta_la_vista_money.budget.urls", namespace="budget"),
     ),
     path(
-        'api/',
-        include('hasta_la_vista_money.api.urls', namespace='api'),
-        name='api',
+        "api/",
+        include("hasta_la_vista_money.api.urls", namespace="api"),
+        name="api",
     ),
-    path('admin/', admin.site.urls),
-    path('__debug__/', include('debug_toolbar.urls')),
+    path("admin/", admin.site.urls),
+    path("__debug__/", include("debug_toolbar.urls")),
 ]

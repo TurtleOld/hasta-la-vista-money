@@ -3,6 +3,7 @@ from datetime import date
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import resolve, reverse
+
 from hasta_la_vista_money.budget.apps import BudgetConfig
 from hasta_la_vista_money.budget.models import DateList, Planning
 
@@ -16,7 +17,10 @@ class BudgetConfigTest(TestCase):
 
 class BudgetModelTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='testuser', password='pass')
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='pass',
+        )
         self.date = date(2024, 1, 1)
         self.datelist = DateList.objects.create(user=self.user, date=self.date)
         self.planning = Planning.objects.create(
@@ -54,7 +58,10 @@ class BudgetUrlsTest(TestCase):
 class BudgetViewsTest(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username='testuser', password='pass')
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='pass',
+        )
         self.client.force_login(self.user)
         self.date = date(2024, 1, 1)
         DateList.objects.create(user=self.user, date=self.date)
@@ -73,14 +80,24 @@ class BudgetViewsTest(TestCase):
     def test_save_planning_post(self):
         response = self.client.post(
             reverse('budget:save_planning'),
-            {'category_id': 1, 'date': self.date, 'type': 'expense', 'amount': 123},
+            {
+                'category_id': 1,
+                'date': self.date,
+                'type': 'expense',
+                'amount': 123,
+            },
         )
         self.assertIn(response.status_code, [200, 302, 400])
 
     def test_change_planning_post(self):
         response = self.client.post(
             reverse('budget:change_planning'),
-            {'category_id': 1, 'date': self.date, 'type': 'expense', 'amount': 123},
+            {
+                'category_id': 1,
+                'date': self.date,
+                'type': 'expense',
+                'amount': 123,
+            },
         )
         self.assertIn(response.status_code, [200, 302, 400])
 

@@ -1,8 +1,9 @@
 from datetime import date, datetime
-from typing import Optional, Union
+from typing import Sequence
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import QuerySet
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import DateList, Planning
 from hasta_la_vista_money.expense.models import ExpenseCategory
@@ -10,94 +11,123 @@ from hasta_la_vista_money.income.models import IncomeCategory
 from hasta_la_vista_money.users.models import User
 
 
-def generate_date_list(
-    current_date: Union[datetime, QuerySet[DateList, DateList]],
-    user: User,
-    type_: Optional[str] = None,
-) -> None:
-    """
-    Добавляет 12 новых месяцев после самой последней даты пользователя.
-    Если type_ задан, добавляет только для расходов или только для доходов (в Planning).
-    """
-    actual_date: Union[datetime, date]
-    if isinstance(current_date, QuerySet):
-        last_date_instance = current_date.last()
-        if last_date_instance is not None:
-            actual_date = last_date_instance.date
+class DateListGenerator:
+    """Создаёт недостающие месяцы и плановые записи для пользователя."""
+
+    def __init__(self, user: User, type_: str | None) -> None:
+        """Сохранить параметры генерации."""
+        self.user = user
+        self.type_ = type_
+
+    def run(self, current_date: datetime | QuerySet[DateList]) -> None:
+        """Добавить 12 следующих месяцев и, при необходимости, Planning."""
+        actual = self._actual_date(current_date)
+        start = self._start_date(actual)
+        months = self._month_sequence(
+            start, constants.NUMBER_TWELFTH_MONTH_YEAR
+        )
+        self._ensure_dates(months)
+        self._ensure_planning(months)
+
+    def _actual_date(
+        self, current_date: datetime | QuerySet[DateList]
+    ) -> date:
+        """Вернуть опорную дату из datetime или QuerySet."""
+        if isinstance(current_date, QuerySet):
+            last = current_date.last()
+            if last is None:
+                error_msg = 'current_date must be datetime or QuerySet'
+                raise ValueError(error_msg)
+            return last.date
+        return current_date.date()
+
+    def _start_date(self, actual: date) -> date:
+        """Вернуть месяц после последней даты в DateList или actual."""
+        last_obj = (
+            DateList.objects.filter(user=self.user)
+            .order_by("-date")
+            .first()
+        )
+        return (
+            last_obj.date + relativedelta(months=1) if last_obj else actual
+        )
+
+    def _month_sequence(self, start: date, count: int) -> list[date]:
+        """Сгенерировать последовательность месяцев от start включительно."""
+        return [start + relativedelta(months=i) for i in range(count)]
+
+    def _ensure_dates(self, months: Sequence[date]) -> None:
+        """Создать записи DateList для отсутствующих дат."""
+        existing = set(
+            DateList.objects.filter(user=self.user, date__in=months)
+            .values_list("date", flat=True)
+        )
+        to_create = [
+            DateList(user=self.user, date=d)
+            for d in months
+            if d not in existing
+        ]
+        if to_create:
+            DateList.objects.bulk_create(to_create)
+
+    def _ensure_planning(self, months: Sequence[date]) -> None:
+        """Создать недостающие Planning по заданному типу."""
+        if self.type_ not in {"expense", "income"}:
+            return
+
+        if self.type_ == "expense":
+            cats = list(ExpenseCategory.objects.filter(user=self.user))
+            existing = set(
+                Planning.objects.filter(
+                    user=self.user,
+                    type="expense",
+                    date__in=months,
+                    category_expense__in=cats,
+                ).values_list("category_expense_id", "date")
+            )
+            to_create = [
+                Planning(
+                    user=self.user,
+                    category_expense=c,
+                    date=d,
+                    type="expense",
+                    amount=0,
+                )
+                for c in cats
+                for d in months
+                if (c.id, d) not in existing
+            ]
         else:
-            raise ValueError('current_date must be datetime or QuerySet')
-    else:
-        actual_date = current_date
-
-    last_date_obj = DateList.objects.filter(user=user).order_by('-date').first()
-    if last_date_obj:
-        start_date = last_date_obj.date + relativedelta(months=1)
-    else:
-        start_date = actual_date
-
-    new_dates = [
-        start_date + relativedelta(months=i)
-        for i in range(constants.NUMBER_TWELFTH_MONTH_YEAR)
-    ]
-
-    existing_dates = set(
-        DateList.objects.filter(user=user, date__in=new_dates).values_list(
-            'date',
-            flat=True,
-        ),
-    )
-
-    dates_to_create = []
-    for d in new_dates:
-        if d not in existing_dates:
-            dates_to_create.append(DateList(user=user, date=d))
-
-    if dates_to_create:
-        DateList.objects.bulk_create(dates_to_create)
-
-    planning_to_create = []
-
-    for d in new_dates:
-        if type_ == 'expense':
-            expense_categories: QuerySet[ExpenseCategory] = (
-                ExpenseCategory.objects.filter(user=user)
+            cats = list(IncomeCategory.objects.filter(user=self.user))
+            existing = set(
+                Planning.objects.filter(
+                    user=self.user,
+                    type="income",
+                    date__in=months,
+                    category_income__in=cats,
+                ).values_list("category_income_id", "date")
             )
-            for cat in expense_categories:
-                if not Planning.objects.filter(
-                    user=user,
-                    category_expense=cat,
+            to_create = [
+                Planning(
+                    user=self.user,
+                    category_income=c,
                     date=d,
-                    type='expense',
-                ).exists():
-                    planning_to_create.append(
-                        Planning(
-                            user=user,
-                            category_expense=cat,
-                            date=d,
-                            type='expense',
-                            amount=0,
-                        ),
-                    )
-        elif type_ == 'income':
-            income_categories: QuerySet[IncomeCategory] = IncomeCategory.objects.filter(
-                user=user,
-            )
-            for cat in income_categories:
-                if not Planning.objects.filter(
-                    user=user,
-                    category_income=cat,
-                    date=d,
-                    type='income',
-                ).exists():
-                    planning_to_create.append(
-                        Planning(
-                            user=user,
-                            category_income=cat,
-                            date=d,
-                            type='income',
-                            amount=0,
-                        ),
-                    )
+                    type="income",
+                    amount=0,
+                )
+                for c in cats
+                for d in months
+                if (c.id, d) not in existing
+            ]
 
-    if planning_to_create:
-        Planning.objects.bulk_create(planning_to_create)
+        if to_create:
+            Planning.objects.bulk_create(to_create)
+
+
+def generate_date_list(
+    current_date: datetime | QuerySet[DateList],
+    user: User,
+    type_: str | None = None,
+) -> None:
+    """Добавить месяцы и при необходимости Planning без дублей."""
+    DateListGenerator(user=user, type_=type_).run(current_date)

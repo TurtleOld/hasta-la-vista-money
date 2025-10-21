@@ -1,7 +1,12 @@
+from datetime import date
+
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.income.models import Income
+
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.users.models import User
 
 
 def add_income(user, account, category, amount, date):
@@ -14,22 +19,31 @@ def add_income(user, account, category, amount, date):
         )
     account.balance += amount
     account.save()
-    income = Income.objects.create(
+    return Income.objects.create(
         user=user,
         account=account,
         category=category,
         amount=amount,
         date=date,
     )
-    return income
 
 
-def update_income(user, income, account, category, amount, date):
+
+def update_income(
+    user: User,
+    income: Income,
+    account: Account,
+    category: IncomeCategory,
+    amount: float,
+    date: date,
+) -> Income:
     """
     Update an existing income record and adjust account balances.
     """
     if income.user != user or account.user != user:
-        raise PermissionDenied(_('You do not have permission to update this income.'))
+        raise PermissionDenied(
+            _('You do not have permission to update this income.'),
+        )
     old_account = income.account
     old_amount = income.amount
     if old_account == account:
@@ -54,7 +68,9 @@ def delete_income(user, income):
     Delete an income record and update the account balance.
     """
     if income.user != user:
-        raise PermissionDenied(_('You do not have permission to delete this income.'))
+        raise PermissionDenied(
+            _('You do not have permission to delete this income.'),
+        )
     account = income.account
     account.balance -= income.amount
     account.save()

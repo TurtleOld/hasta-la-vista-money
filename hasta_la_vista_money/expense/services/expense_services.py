@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from django.contrib.auth.models import Group
 from django.db.models import Sum
@@ -8,6 +8,7 @@ from django.db.models.query import QuerySet
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils.formats import date_format
+
 from hasta_la_vista_money.constants import (
     RECEIPT_CATEGORY_NAME,
     RECEIPT_OPERATION_PURCHASE,
@@ -51,7 +52,7 @@ class ExpenseService:
             .all()
         )
 
-    def get_form_querysets(self) -> Dict[str, Any]:
+    def get_form_querysets(self) -> dict[str, Any]:
         """Get form querysets for expense forms."""
         return {
             'category_queryset': self.get_categories_queryset(),
@@ -137,52 +138,57 @@ class ExpenseService:
 
         return valid_expense
 
-    def get_expenses_by_group(self, group_id: Optional[str]) -> List[Any]:
+    def get_expenses_by_group(self, group_id: str | None) -> list[Any]:
         """Get expenses filtered by group."""
         expenses = Expense.objects.none()
         receipt_expense_list = []
 
         if not group_id or group_id == 'my':
             expenses = Expense.objects.filter(user=self.user).select_related(
-                'user', 'category', 'account'
+                'user',
+                'category',
+                'account',
             )
             group_users = [self.user]
+        elif self.user.groups.filter(id=group_id).exists():
+            group_users = list(User.objects.filter(groups__id=group_id))
+            expenses = Expense.objects.filter(
+                user__in=group_users,
+            ).select_related('user', 'category', 'account')
         else:
-            if self.user.groups.filter(id=group_id).exists():
-                group_users = list(User.objects.filter(groups__id=group_id))
-                expenses = Expense.objects.filter(user__in=group_users).select_related(
-                    'user', 'category', 'account'
-                )
-            else:
-                group_users = []
+            group_users = []
 
         expenses = expenses.order_by('-date')
 
         if group_users:
             receipt_service = ReceiptExpenseService(self.user, self.request)
-            receipt_expense_list = receipt_service.get_receipt_expenses_by_users(
-                group_users,
+            receipt_expense_list = (
+                receipt_service.get_receipt_expenses_by_users(
+                    group_users,
+                )
             )
 
         return list(expenses) + receipt_expense_list
 
-    def get_expense_data(self, group_id: Optional[str]) -> List[Dict[str, Any]]:
+    def get_expense_data(self, group_id: str | None) -> list[dict[str, Any]]:
         """Get expense data as dictionary for AJAX responses."""
         expenses = Expense.objects.none()
         receipt_expense_list = []
 
         if group_id == 'my' or not group_id:
             expenses = Expense.objects.filter(user=self.user).select_related(
-                'user', 'category', 'account'
+                'user',
+                'category',
+                'account',
             )
             group_users = [self.user]
         else:
             try:
                 group = Group.objects.get(pk=group_id)
                 group_users = list(group.user_set.all())
-                expenses = Expense.objects.filter(user__in=group_users).select_related(
-                    'user', 'category', 'account'
-                )
+                expenses = Expense.objects.filter(
+                    user__in=group_users,
+                ).select_related('user', 'category', 'account')
             except Group.DoesNotExist:
                 group_users = []
                 expenses = Expense.objects.none()
@@ -202,11 +208,14 @@ class ExpenseService:
                     'amount': float(expense.amount)
                     if expense.amount is not None
                     else 0,
-                    'category_name': expense.category.name if expense.category else '',
+                    'category_name': expense.category.name
+                    if expense.category
+                    else '',
                     'account_name': expense.account.name_account
                     if expense.account
                     else '',
-                    'user_name': expense.user.get_full_name() or expense.user.username
+                    'user_name': expense.user.get_full_name()
+                    or expense.user.username
                     if expense.user
                     else '',
                     'user_id': expense.user.pk if expense.user else None,
@@ -262,7 +271,7 @@ class ReceiptExpenseService:
         self.user = user
         self.request = request
 
-    def get_receipt_expenses(self) -> List[Any]:
+    def get_receipt_expenses(self) -> list[Any]:
         """Get receipt expenses for the user."""
         receipt_category = ExpenseCategory.objects.filter(
             user=self.user,
@@ -330,11 +339,15 @@ class ReceiptExpenseService:
 
         return receipt_expense_list
 
-    def get_receipt_expenses_by_users(self, users: List[User]) -> List[Dict[str, Any]]:
+    def get_receipt_expenses_by_users(
+        self,
+        users: list[User],
+    ) -> list[dict[str, Any]]:
         """Get receipt expenses for multiple users."""
         receipt_expenses = (
             Receipt.objects.filter(
-                user__in=users, operation_type=RECEIPT_OPERATION_PURCHASE
+                user__in=users,
+                operation_type=RECEIPT_OPERATION_PURCHASE,
             )
             .select_related('user', 'account')
             .annotate(
@@ -367,7 +380,9 @@ class ReceiptExpenseService:
                         'name': RECEIPT_CATEGORY_NAME,
                         'parent_category': None,
                     },
-                    'account': {'name_account': receipt['account__name_account']},
+                    'account': {
+                        'name_account': receipt['account__name_account'],
+                    },
                     'user': {'username': receipt['user__username']},
                     'is_receipt': True,
                 },
@@ -375,7 +390,10 @@ class ReceiptExpenseService:
 
         return receipt_expense_list
 
-    def get_receipt_data_by_users(self, users: List[User]) -> List[Dict[str, Any]]:
+    def get_receipt_data_by_users(
+        self,
+        users: list[User],
+    ) -> list[dict[str, Any]]:
         """Get receipt data as dictionary for AJAX responses."""
         receipts = Receipt.objects.filter(
             user__in=users,
@@ -397,7 +415,8 @@ class ReceiptExpenseService:
                     'account_name': receipt.account.name_account
                     if receipt.account
                     else '',
-                    'user_name': receipt.user.get_full_name() or receipt.user.username
+                    'user_name': receipt.user.get_full_name()
+                    or receipt.user.username
                     if receipt.user
                     else '',
                     'user_id': receipt.user.pk if receipt.user else None,

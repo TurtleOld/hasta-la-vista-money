@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
@@ -12,7 +13,12 @@ class IncomeModelTest(TestCase):
     Test cases for the Income model.
     """
 
-    fixtures = ['users.yaml', 'finance_account.yaml', 'income.yaml', 'income_cat.yaml']
+    fixtures = [
+        'users.yaml',
+        'finance_account.yaml',
+        'income.yaml',
+        'income_cat.yaml',
+    ]
 
     def setUp(self):
         self.user = User.objects.get(pk=1)

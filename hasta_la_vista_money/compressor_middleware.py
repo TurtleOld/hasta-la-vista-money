@@ -1,7 +1,7 @@
 """Middleware for injecting CSP nonce into static asset tags in HTML responses."""
 
-import re
 import html
+import re
 
 
 class CompressorNonceMiddleware:

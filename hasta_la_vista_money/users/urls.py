@@ -1,15 +1,16 @@
 """User app URL configuration."""
 
-from django.urls import path, include
+from django.urls import include, path
+
 from hasta_la_vista_money.users.views import (
     CreateUser,
+    ExportUserDataView,
     ListUsers,
     LoginUser,
     SetPasswordUserView,
+    SwitchThemeView,
     UpdateUserView,
     UserStatisticsView,
-    ExportUserDataView,
-    SwitchThemeView,
 )
 
 app_name = 'users'

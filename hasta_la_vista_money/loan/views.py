@@ -1,11 +1,13 @@
 import structlog
-from django.contrib.messages.views import SuccessMessageMixin
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
@@ -14,7 +16,6 @@ from hasta_la_vista_money.loan.tasks import (
     calculate_differentiated_loan,
 )
 from hasta_la_vista_money.users.models import User
-from django.contrib import messages
 
 logger = structlog.get_logger(__name__)
 
@@ -151,7 +152,7 @@ class PaymentMakeCreateView(LoginRequiredMixin, CreateView):
                 {
                     'success': False,
                     'errors': {'__all__': ['Все поля должны быть заполнены']},
-                }
+                },
             )
 
         if account.user == request.user:
@@ -161,12 +162,13 @@ class PaymentMakeCreateView(LoginRequiredMixin, CreateView):
             form_instance.save()
             messages.success(request, constants.SUCCESS_MESSAGE_PAYMENT_MAKE)
             return JsonResponse({'success': True})
-        else:
-            return JsonResponse(
-                {
-                    'success': False,
-                    'errors': {
-                        '__all__': ['У вас нет прав для выполнения этого действия']
-                    },
-                }
-            )
+        return JsonResponse(
+            {
+                'success': False,
+                'errors': {
+                    '__all__': [
+                        'У вас нет прав для выполнения этого действия',
+                    ],
+                },
+            },
+        )

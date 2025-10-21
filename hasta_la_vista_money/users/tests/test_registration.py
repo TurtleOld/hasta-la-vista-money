@@ -1,8 +1,9 @@
-from django.test import TestCase
 from django.contrib.auth import get_user_model
-from hasta_la_vista_money.users.services.registration import register_user
-from hasta_la_vista_money.users.forms import RegisterUserForm
+from django.test import TestCase
 from django.utils import timezone
+
+from hasta_la_vista_money.users.forms import RegisterUserForm
+from hasta_la_vista_money.users.services.registration import register_user
 
 User = get_user_model()
 

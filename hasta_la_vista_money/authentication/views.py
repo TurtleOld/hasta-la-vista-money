@@ -1,12 +1,6 @@
 from typing import Any
 
 from django.utils.translation import gettext_lazy as _
-from hasta_la_vista_money.authentication.authentication import (
-    clear_auth_cookies,
-    get_refresh_token_from_cookie,
-    set_auth_cookies,
-)
-from hasta_la_vista_money.users.models import User
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -18,10 +12,17 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+
 from hasta_la_vista_money.api.throttling import (
-    LoginRateThrottle,
     AnonLoginRateThrottle,
+    LoginRateThrottle,
 )
+from hasta_la_vista_money.authentication.authentication import (
+    clear_auth_cookies,
+    get_refresh_token_from_cookie,
+    set_auth_cookies,
+)
+from hasta_la_vista_money.users.models import User
 
 
 class SessionTokenObtainView(APIView):
@@ -43,7 +44,10 @@ class SessionTokenObtainView(APIView):
             return response
 
         except Exception as e:
-            response = Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            response = Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
             return clear_auth_cookies(response)
 
 
@@ -61,7 +65,11 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                 refresh_token = response.data.get('refresh')
 
                 if access_token and refresh_token:
-                    response = set_auth_cookies(response, access_token, refresh_token)
+                    response = set_auth_cookies(
+                        response,
+                        access_token,
+                        refresh_token,
+                    )
                     # Return tokens in JSON for mobile apps, but keep cookies for web
                     response.data = {
                         'success': True,
@@ -72,7 +80,10 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             return response
 
         except Exception as e:
-            response = Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            response = Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
             return clear_auth_cookies(response)
 
 

@@ -3,6 +3,13 @@ import json
 from datetime import datetime
 
 from django.db.models import QuerySet
+from rest_framework import status
+from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
@@ -11,12 +18,6 @@ from hasta_la_vista_money.receipts.serializers import (
     SellerSerializer,
 )
 from hasta_la_vista_money.users.models import User
-from rest_framework import status
-from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.throttling import UserRateThrottle
 
 
 class ReceiptListAPIView(ListCreateAPIView):
@@ -45,7 +46,9 @@ class SellerDetailAPIView(RetrieveAPIView):
     lookup_field = 'id'
 
     def get_queryset(self) -> QuerySet[Seller, Seller]:  # type: ignore[override]
-        return Seller.objects.filter(user__id=self.request.user.pk).select_related(
+        return Seller.objects.filter(
+            user__id=self.request.user.pk,
+        ).select_related(
             'user',
         )
 
@@ -71,14 +74,16 @@ class DataUrlAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             return Response(
-                {'message': 'Data URL received successfully', 'data_url': data_url},
+                {
+                    'message': 'Data URL received successfully',
+                    'data_url': data_url,
+                },
                 status=status.HTTP_200_OK,
             )
-        else:
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class SellerCreateAPIView(APIView):
@@ -118,7 +123,14 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         products_data = request_data.get('product')
 
         if not all(
-            [user_id, account_id, receipt_date, total_sum, seller_data, products_data],
+            [
+                user_id,
+                account_id,
+                receipt_date,
+                total_sum,
+                seller_data,
+                products_data,
+            ],
         ):
             return Response(
                 'Missing required data',
@@ -158,7 +170,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 
                 if isinstance(receipt_date, str):
                     receipt_date = datetime.fromisoformat(
-                        receipt_date.replace('Z', '+00:00')
+                        receipt_date.replace('Z', '+00:00'),
                     )
 
                 receipt = Receipt.objects.create(
@@ -181,15 +193,15 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 
                     if 'price' in product_data_copy:
                         product_data_copy['price'] = decimal.Decimal(
-                            str(product_data_copy['price'])
+                            str(product_data_copy['price']),
                         )
                     if 'quantity' in product_data_copy:
                         product_data_copy['quantity'] = decimal.Decimal(
-                            str(product_data_copy['quantity'])
+                            str(product_data_copy['quantity']),
                         )
                     if 'amount' in product_data_copy:
                         product_data_copy['amount'] = decimal.Decimal(
-                            str(product_data_copy['amount'])
+                            str(product_data_copy['amount']),
                         )
 
                     if (
@@ -207,11 +219,10 @@ class ReceiptCreateAPIView(ListCreateAPIView):
                     ReceiptSerializer(receipt).data,
                     status=status.HTTP_201_CREATED,
                 )
-            else:
-                return Response(
-                    'Такой чек уже был добавлен ранее',
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            return Response(
+                'Такой чек уже был добавлен ранее',
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception as error:
             return Response(
                 str(error),
@@ -230,7 +241,8 @@ class ReceiptDeleteAPIView(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception as error:
             return Response(
-                status=status.HTTP_400_BAD_REQUEST, data={'error': str(error)}
+                status=status.HTTP_400_BAD_REQUEST,
+                data={'error': str(error)},
             )
 
 

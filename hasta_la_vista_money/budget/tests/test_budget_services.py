@@ -1,15 +1,16 @@
 from django.test import TestCase
+
+from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.budget.services.budget import (
-    get_categories,
-    aggregate_budget_data,
-    aggregate_expense_table,
-    aggregate_income_table,
-    aggregate_expense_api,
-    aggregate_income_api,
     BudgetDataError,
+    aggregate_budget_data,
+    aggregate_expense_api,
+    aggregate_expense_table,
+    aggregate_income_api,
+    aggregate_income_table,
+    get_categories,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.budget.models import DateList
 
 
 class BudgetServicesTestCase(TestCase):
@@ -29,12 +30,14 @@ class BudgetServicesTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.first()
         self.expense_categories = list(
-            self.user.category_expense_users.filter(parent_category=None)
+            self.user.category_expense_users.filter(parent_category=None),
         )
         self.income_categories = list(
-            self.user.category_income_users.filter(parent_category=None)
+            self.user.category_income_users.filter(parent_category=None),
         )
-        self.dates = list(DateList.objects.filter(user=self.user).order_by('date'))
+        self.dates = list(
+            DateList.objects.filter(user=self.user).order_by('date'),
+        )
         self.months = [d.date for d in self.dates]
 
     def test_get_categories_expense(self):
@@ -77,16 +80,32 @@ class BudgetServicesTestCase(TestCase):
         """Test aggregate_budget_data raises error on missing data."""
         with self.assertRaises(BudgetDataError):
             aggregate_budget_data(
-                None, self.months, self.expense_categories, self.income_categories
+                None,
+                self.months,
+                self.expense_categories,
+                self.income_categories,
             )
         with self.assertRaises(BudgetDataError):
             aggregate_budget_data(
-                self.user, None, self.expense_categories, self.income_categories
+                self.user,
+                None,
+                self.expense_categories,
+                self.income_categories,
             )
         with self.assertRaises(BudgetDataError):
-            aggregate_budget_data(self.user, self.months, None, self.income_categories)
+            aggregate_budget_data(
+                self.user,
+                self.months,
+                None,
+                self.income_categories,
+            )
         with self.assertRaises(BudgetDataError):
-            aggregate_budget_data(self.user, self.months, self.expense_categories, None)
+            aggregate_budget_data(
+                self.user,
+                self.months,
+                self.expense_categories,
+                None,
+            )
 
     def test_aggregate_budget_data_empty_months(self):
         """Test aggregate_budget_data with empty months list."""
@@ -233,7 +252,10 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(data['months'], [])
         for row in data['data']:
             self.assertTrue(
-                all(row[f] == [] for f in ['fact_' + str(m) for m in data['months']])
+                all(
+                    row[f] == []
+                    for f in ['fact_' + str(m) for m in data['months']]
+                ),
             )
 
     def test_aggregate_expense_api_empty_categories(self):
@@ -273,7 +295,10 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(data['months'], [])
         for row in data['data']:
             self.assertTrue(
-                all(row[f] == [] for f in ['fact_' + str(m) for m in data['months']])
+                all(
+                    row[f] == []
+                    for f in ['fact_' + str(m) for m in data['months']]
+                ),
             )
 
     def test_aggregate_income_api_empty_categories(self):

@@ -7,9 +7,14 @@ from django.forms import ValidationError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+)
 from hasta_la_vista_money.expense.models import Expense
+from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -33,7 +38,6 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.finance_account.views import AccountView
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.finance_account import services as account_services
 
 BALANCE_TEST = 250000
 NEW_BALANCE_TEST = 450000
@@ -178,7 +182,7 @@ class TestAccount(TestCase):
 
         initial_balance_account1 = self.account1.balance
         initial_balance_account2 = self.account2.balance
-        amount = Decimal('100')
+        amount = Decimal(100)
 
         transfer_money = {
             'from_account': self.account1.pk,
@@ -199,14 +203,20 @@ class TestAccount(TestCase):
         self.account1.refresh_from_db()
         self.account2.refresh_from_db()
 
-        self.assertEqual(self.account1.balance, initial_balance_account1 - amount)
-        self.assertEqual(self.account2.balance, initial_balance_account2 + amount)
+        self.assertEqual(
+            self.account1.balance,
+            initial_balance_account1 - amount,
+        )
+        self.assertEqual(
+            self.account2.balance,
+            initial_balance_account2 + amount,
+        )
 
     def test_transfer_money_insufficient_funds(self) -> None:
         """Тест перевода средств при недостаточном балансе."""
         self.client.force_login(self.user)
 
-        amount = self.account1.balance + Decimal('1000')  # Сумма больше баланса
+        amount = self.account1.balance + Decimal(1000)  # Сумма больше баланса
 
         transfer_money = {
             'from_account': self.account1.pk,
@@ -294,12 +304,15 @@ class TestAccount(TestCase):
         """Тест методов модели Account."""
         self.assertEqual(str(self.account1), 'Банковская карта')
 
-        expected_url = reverse('finance_account:change', args=[self.account1.pk])
+        expected_url = reverse(
+            'finance_account:change',
+            args=[self.account1.pk],
+        )
         self.assertEqual(self.account1.get_absolute_url(), expected_url)
 
         initial_balance1 = self.account1.balance
         initial_balance2 = self.account2.balance
-        amount = Decimal('100')
+        amount = Decimal(100)
 
         result = self.account1.transfer_money(self.account2, amount)
         self.assertTrue(result)
@@ -309,7 +322,7 @@ class TestAccount(TestCase):
         self.assertEqual(self.account1.balance, initial_balance1 - amount)
         self.assertEqual(self.account2.balance, initial_balance2 + amount)
 
-        large_amount = self.account1.balance + Decimal('1000')
+        large_amount = self.account1.balance + Decimal(1000)
         result = self.account1.transfer_money(self.account2, large_amount)
         self.assertFalse(result)
 
@@ -387,7 +400,7 @@ class TestAccount(TestCase):
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account2.pk,
-                'amount': self.account1.balance + Decimal('1000'),
+                'amount': self.account1.balance + Decimal(1000),
                 'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
                 'notes': 'Test transfer',
             },
@@ -578,7 +591,7 @@ class TestAccount(TestCase):
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account1.pk,
-                'amount': self.account1.balance + Decimal('1000'),
+                'amount': self.account1.balance + Decimal(1000),
                 'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
                 'notes': 'Test transfer',
             },
@@ -630,9 +643,15 @@ class TestAccountServices(TestCase):
 
     def test_get_accounts_for_user(self):
         """Test that get_accounts_for_user_or_group returns only user's accounts when group_id is None or 'my'."""
-        accounts = account_services.get_accounts_for_user_or_group(self.user, None)
+        accounts = account_services.get_accounts_for_user_or_group(
+            self.user,
+            None,
+        )
         self.assertTrue(all(acc.user == self.user for acc in accounts))
-        accounts_my = account_services.get_accounts_for_user_or_group(self.user, 'my')
+        accounts_my = account_services.get_accounts_for_user_or_group(
+            self.user,
+            'my',
+        )
         self.assertTrue(all(acc.user == self.user for acc in accounts_my))
 
     def test_get_accounts_for_group(self):
@@ -640,7 +659,8 @@ class TestAccountServices(TestCase):
         if not self.group_id:
             self.skipTest('User has no group for group test')
         accounts = account_services.get_accounts_for_user_or_group(
-            self.user, self.group_id
+            self.user,
+            self.group_id,
         )
         group_users = list(self.group.user_set.all())
         self.assertTrue(all(acc.user in group_users for acc in accounts))
@@ -683,7 +703,7 @@ class TestAccountBusinessLogic(TestCase):
         self.account2.save()
 
     def test_transfer_money_success(self):
-        amount = Decimal('100')
+        amount = Decimal(100)
         initial_balance_1 = self.account1.balance
         initial_balance_2 = self.account2.balance
         result = self.account1.transfer_money(self.account2, amount)
@@ -694,7 +714,7 @@ class TestAccountBusinessLogic(TestCase):
         self.assertEqual(self.account2.balance, initial_balance_2 + amount)
 
     def test_transfer_money_insufficient(self):
-        amount = self.account1.balance + Decimal('1')
+        amount = self.account1.balance + Decimal(1)
         result = self.account1.transfer_money(self.account2, amount)
         self.assertFalse(result)
 
@@ -810,12 +830,16 @@ class TestAddAccountFormRefactored(TestCase):
         form = AddAccountForm()
 
         self.assertEqual(
-            form.fields['type_account'].initial, Account.TYPE_ACCOUNT_LIST[1][0]
+            form.fields['type_account'].initial,
+            Account.TYPE_ACCOUNT_LIST[1][0],
         )
 
         for field_name, field in form.fields.items():
             if hasattr(field.widget, 'attrs'):
-                self.assertIn('form-control', field.widget.attrs.get('class', ''))
+                self.assertIn(
+                    'form-control',
+                    field.widget.attrs.get('class', ''),
+                )
 
     def test_form_validation_valid_data(self) -> None:
         """Test form validation with valid data."""

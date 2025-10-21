@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Any, Dict, Optional
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -18,6 +18,7 @@ from django.views.generic import DeleteView, UpdateView
 from django.views.generic.edit import CreateView, DeletionMixin
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.models import Account
@@ -38,7 +39,7 @@ class BaseView:
     """
 
     template_name = 'income/income.html'
-    success_url: Optional[str] = reverse_lazy(INCOME_LIST_URL_NAME)
+    success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
 
 
 class IncomeCategoryBaseView(BaseView):
@@ -65,7 +66,7 @@ class IncomeView(
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
 
-    def get_context_data(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """
         Build context for income list, including categories, filters, and chart data.
         """
@@ -85,7 +86,11 @@ class IncomeView(
             .order_by('parent_category_id')
         )
 
-        income_queryset = Income.objects.select_related('user', 'category', 'account')
+        income_queryset = Income.objects.select_related(
+            'user',
+            'category',
+            'account',
+        )
         income_filter = IncomeFilter(
             self.request.GET,
             queryset=income_queryset,
@@ -100,7 +105,9 @@ class IncomeView(
         income_by_month = income_filter.qs.values('date', 'amount')
         pages_income = income_by_month
 
-        total_amount_page = income_by_month.aggregate(total=Sum('amount'))['total'] or 0
+        total_amount_page = (
+            income_by_month.aggregate(total=Sum('amount'))['total'] or 0
+        )
         total_amount_period = total_amount_page
 
         monthly_aggregation = (
@@ -151,7 +158,7 @@ class IncomeCreateView(
     no_permission_url = reverse_lazy('login')
     form_class = IncomeForm
     depth_limit = 3
-    success_url: Optional[str] = reverse_lazy(INCOME_LIST_URL_NAME)
+    success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
 
     category_model = IncomeCategory
     account_model = Account
@@ -165,7 +172,7 @@ class IncomeCreateView(
         kwargs['account_queryset'] = self.get_account_queryset()
         return kwargs
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
         Build context for income creation form.
         """
@@ -251,7 +258,7 @@ class IncomeUpdateView(
     template_name = 'income/change_income.html'
     form_class = IncomeForm
     no_permission_url = reverse_lazy('login')
-    success_url: Optional[str] = reverse_lazy(INCOME_LIST_URL_NAME)
+    success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
     depth_limit = 3
 
     category_model = IncomeCategory
@@ -267,7 +274,7 @@ class IncomeUpdateView(
             user=self.request.user,
         )
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
         Build context for income update form.
         """
@@ -286,7 +293,9 @@ class IncomeUpdateView(
         form = form_class(**form_kwargs)
         context['income_form'] = form
         context['cancel_url'] = (
-            str(self.success_url) if self.success_url else reverse_lazy('income:list')
+            str(self.success_url)
+            if self.success_url
+            else reverse_lazy('income:list')
         )
         return context
 
@@ -333,7 +342,7 @@ class IncomeDeleteView(BaseView, DeleteView, DeletionMixin):
     model = Income
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
-    success_url: Optional[str] = reverse_lazy(INCOME_LIST_URL_NAME)
+    success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
 
     def post(self, request, *args, **kwargs):
         """
@@ -361,7 +370,7 @@ class IncomeCategoryView(LoginRequiredMixin, ListView):
         *,
         object_list: Any = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Build context for income category list view.
         """
@@ -400,16 +409,16 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
     model = IncomeCategory
     template_name = 'income/add_category_income.html'
     form_class = AddCategoryIncomeForm
-    success_url: Optional[str] = reverse_lazy('income:category_list')
+    success_url: str | None = reverse_lazy('income:category_list')
     depth = 3
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
         Build context for income category creation form.
         """
         return super().get_context_data(**kwargs)
 
-    def get_form_kwargs(self) -> Dict[str, Any]:
+    def get_form_kwargs(self) -> dict[str, Any]:
         """
         Provide form kwargs with user-specific category queryset for category creation.
         """
@@ -434,7 +443,8 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
         category_form.save()
         messages.success(
             self.request,
-            _('Category "%(name)s" was successfully added!') % {'name': category_name},
+            _('Category "%(name)s" was successfully added!')
+            % {'name': category_name},
         )
 
         return HttpResponseRedirect(str(self.success_url))
@@ -462,7 +472,7 @@ class IncomeCategoryDeleteView(DeleteObjectMixin, BaseView, DeleteView):
     model = IncomeCategory
     success_message = constants.SUCCESS_CATEGORY_INCOME_DELETED
     error_message = constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY
-    success_url: Optional[str] = reverse_lazy('income:category_list')
+    success_url: str | None = reverse_lazy('income:category_list')
 
 
 class IncomeGroupAjaxView(LoginRequiredMixin, View):
@@ -488,7 +498,9 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = User.objects.filter(groups=group)
-                incomes = Income.objects.filter(user__in=users_in_group).select_related(
+                incomes = Income.objects.filter(
+                    user__in=users_in_group,
+                ).select_related(
                     'user',
                     'category',
                     'account',
@@ -528,11 +540,17 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
                 incomes = Income.objects.none()
 
         data = []
-        for income in incomes.select_related('category', 'account', 'user').all():
+        for income in incomes.select_related(
+            'category',
+            'account',
+            'user',
+        ).all():
             data.append(
                 {
                     'id': income.pk,
-                    'category_name': income.category.name if income.category else '',
+                    'category_name': income.category.name
+                    if income.category
+                    else '',
                     'account_name': income.account.name_account
                     if income.account
                     else '',
@@ -560,7 +578,9 @@ class IncomeGetAjaxView(LoginRequiredMixin, View):
             income = Income.objects.get(id=income_id)
             # Проверяем права доступа
             if income.user != request.user:
-                return JsonResponse({'success': False, 'error': 'Доступ запрещен'})
+                return JsonResponse(
+                    {'success': False, 'error': 'Доступ запрещен'},
+                )
 
             data = {
                 'success': True,
@@ -568,7 +588,9 @@ class IncomeGetAjaxView(LoginRequiredMixin, View):
                     'id': income.pk,
                     'date': income.date.strftime('%Y-%m-%d'),
                     'amount': float(income.amount),
-                    'category_id': income.category.id if income.category else None,
+                    'category_id': income.category.id
+                    if income.category
+                    else None,
                     'account_id': income.account.id if income.account else None,
                 },
             }

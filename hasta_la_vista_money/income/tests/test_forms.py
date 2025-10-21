@@ -1,5 +1,6 @@
 from django.test import TestCase
 from django.utils import timezone
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.models import IncomeCategory
@@ -108,4 +109,7 @@ class AddCategoryIncomeFormTest(TestCase):
         )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
-        self.assertEqual(form.fields['parent_category'].choices, category_choices)
+        self.assertEqual(
+            form.fields['parent_category'].choices,
+            category_choices,
+        )

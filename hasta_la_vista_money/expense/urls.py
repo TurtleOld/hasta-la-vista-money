@@ -1,4 +1,5 @@
 from django.urls import path
+
 from hasta_la_vista_money.expense.views import (
     ExpenseCategoryCreateView,
     ExpenseCategoryDeleteView,
@@ -43,7 +44,11 @@ urlpatterns = [
         ExpenseGroupAjaxView.as_view(),
         name='ajax_expense_by_group',
     ),
-    path('ajax/expense_data/', ExpenseDataAjaxView.as_view(), name='expense_data_ajax'),
+    path(
+        'ajax/expense_data/',
+        ExpenseDataAjaxView.as_view(),
+        name='expense_data_ajax',
+    ),
     path(
         'ajax/expense_data/',
         ExpenseDataAjaxView.as_view(),
