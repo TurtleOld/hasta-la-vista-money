@@ -1,96 +1,134 @@
+"""Middleware for injecting CSP nonce into static asset tags in HTML responses."""
+
 import re
-import html
+from xml.sax.saxutils import quoteattr
 
 
 class CompressorNonceMiddleware:
-    """Middleware that adds CSP nonce to static CSS and JS files in HTML responses."""
+    """Add CSP nonce to `<link>` and `<script>` tags that reference static assets.
+
+    The middleware looks for tags with `href`/`src` pointing to `/static/*.css` and
+    `/static/*.js` in HTML responses and injects a `nonce` attribute using the value
+    from `request.csp_nonce` after strict validation and safe quoting.
+    """
+
+    _NONCE_RE = re.compile(r'^[A-Za-z0-9+/_-]{1,128}={0,2}$')
+    _LINK_RE = re.compile(
+        r'<link\b(?=[^>]*\bhref="[^"]*/static/[^"]*\.css[^"]*")[^>]*?/?>',
+        re.IGNORECASE,
+    )
+    _SCRIPT_RE = re.compile(
+        r'<script\b(?=[^>]*\bsrc="[^"]*/static/[^"]*\.js[^"]*")[^>]*?/?>',
+        re.IGNORECASE,
+    )
+    _HAS_NONCE_RE = re.compile(r'\bnonce\s*=', re.IGNORECASE)
 
     def __init__(self, get_response):
-        """Initialize the middleware.
-        
+        """Initialize middleware.
+
         Args:
-            get_response: The next middleware in the chain.
+            get_response: The next middleware or view callable.
         """
         self.get_response = get_response
 
     def __call__(self, request):
-        """Process the request and add nonce to static files.
-        
+        """Process request/response chain.
+
         Args:
-            request: The HTTP request object.
-            
+            request: Django HttpRequest.
+
         Returns:
-            The HTTP response with nonce added to static files.
+            Django HttpResponse.
         """
         response = self.get_response(request)
         return self.process_response(request, response)
 
-    def _validate_nonce(self, nonce):
-        """Check if nonce contains only safe characters for HTML attributes.
-        
+    def _validate_nonce(self, nonce) -> bool:
+        """Validate nonce characters and length.
+
         Args:
-            nonce: The nonce string to validate.
-            
+            nonce: Nonce value to validate.
+
         Returns:
-            True if nonce is valid, False otherwise.
+            True if the nonce matches the allowed pattern; otherwise False.
         """
         if not nonce:
             return False
-        nonce_str = str(nonce)
-        return bool(re.match(r'^[A-Za-z0-9_-]+$', nonce_str))
+        return bool(self._NONCE_RE.match(str(nonce)))
 
-    def _escape_nonce(self, nonce):
-        """Escape nonce for safe use in HTML attributes.
-        
+    def _escape_nonce(self, nonce) -> str:
+        """Produce a safely quoted HTML-attribute value for the nonce.
+
         Args:
-            nonce: The nonce string to escape.
-            
+            nonce: Nonce value to escape.
+
         Returns:
-            Escaped nonce string or empty string if invalid.
+            A quoted attribute value (e.g., '"abc123"') or an empty string if invalid.
         """
         if not self._validate_nonce(nonce):
             return ''
-        nonce_str = str(nonce)
-        return html.escape(nonce_str, quote=True)
+        return quoteattr(str(nonce))
+
+    def _inject_attr(self, tag: str, safe_attr: str) -> str:
+        """Insert an attribute into a start tag before the closing bracket.
+
+        Handles both `>` and `/>` endings.
+
+        Args:
+            tag: Full start tag as a string.
+            safe_attr: Attribute string like 'nonce="..."'.
+
+        Returns:
+            Modified tag with the attribute inserted.
+        """
+        if tag.endswith('/>'):
+            return f'{tag[:-2]} {safe_attr}/>'
+        return f'{tag[:-1]} {safe_attr}>'
 
     def process_response(self, request, response):
-        """Add nonce to static CSS and JS files in HTML content.
-        
+        """Inject nonce into qualifying tags for HTML responses.
+
         Args:
-            request: The HTTP request object.
-            response: The HTTP response object.
-            
+            request: Django HttpRequest that may contain `csp_nonce`.
+            response: Django HttpResponse to potentially modify.
+
         Returns:
-            The modified response with nonce added to static files.
+            The original response if not HTML or nonce is missing/invalid.
+            Otherwise, a response with `nonce` added to matching `<link>` and
+            `<script>` tags that reference static assets.
         """
-        if not hasattr(request, 'csp_nonce') or not request.csp_nonce:
+        nonce = getattr(request, 'csp_nonce', None)
+        if not nonce:
             return response
 
-        safe_nonce = self._escape_nonce(request.csp_nonce)
+        safe_nonce = self._escape_nonce(nonce)
         if not safe_nonce:
             return response
 
-        if response.get('Content-Type', '').startswith('text/html'):
-            content = response.content.decode('utf-8')
+        ctype = response.get('Content-Type', '')
+        if not ctype.startswith('text/html'):
+            return response
 
-            css_pattern = r'<link([^>]*href="[^"]*\/static\/[^"]*\.css"[^>]*)>'
-            content = re.sub(
-                css_pattern,
-                lambda m: f'<link{html.escape(m.group(1), quote=True)} nonce="{safe_nonce}">'
-                if 'nonce=' not in m.group(0)
-                else m.group(0),
-                content,
-            )
+        charset = getattr(response, 'charset', None) or 'utf-8'
+        try:
+            content = response.content.decode(charset, errors='ignore')
+        except Exception:
+            return response
 
-            js_pattern = r'<script([^>]*src="[^"]*\/static\/[^"]*\.js"[^>]*)>'
-            content = re.sub(
-                js_pattern,
-                lambda m: f'<script{html.escape(m.group(1), quote=True)} nonce="{safe_nonce}">'
-                if 'nonce=' not in m.group(0)
-                else m.group(0),
-                content,
-            )
+        def add_nonce(match: re.Match) -> str:
+            tag = match.group(0)
+            if self._HAS_NONCE_RE.search(tag):
+                return tag
+            return self._inject_attr(tag, f'nonce={safe_nonce}')
 
-            response.content = content.encode('utf-8')
+        content = self._LINK_RE.sub(add_nonce, content)
+        content = self._SCRIPT_RE.sub(add_nonce, content)
+
+        new_bytes = content.encode(charset, errors='ignore')
+        response.content = new_bytes
+        try:
+            response['Content-Length'] = str(len(new_bytes))
+        except Exception:
+            pass
 
         return response
