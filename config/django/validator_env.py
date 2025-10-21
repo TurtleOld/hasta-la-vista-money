@@ -14,13 +14,9 @@ class EnvironmentValidator:
             return True
 
         valid = True
-
         if not config('SECRET_KEY', cast=str, default=''):
             valid = False
             ic('SECRET_KEY is not set, use make secretkey to generate it')
-        if not config('DEBUG', cast=bool, default=False):
-            valid = False
-            ic('DEBUG is not set, set it to true or false')
         if not config('ALLOWED_HOSTS', cast=str, default=''):
             valid = False
             ic('ALLOWED_HOSTS is not set, set it to a comma-separated list of hosts')

@@ -3,7 +3,6 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict
-
 import dj_database_url
 import django_stubs_ext
 import sentry_sdk
@@ -65,8 +64,8 @@ THIRD_PARTY_APPS = [
     'rest_framework.authtoken',
     'rosetta',
     'django_structlog',
-    'silk',
 ]
+
 
 if not DEBUG:
     THIRD_PARTY_APPS.append('django_redis')
@@ -87,7 +86,6 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'silk.middleware.SilkyMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.locale.LocaleMiddleware',
@@ -100,8 +98,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'hasta_la_vista_money.users.middleware.CheckAdminMiddleware',
+    'hasta_la_vista_money.compressor_middleware.CompressorNonceMiddleware',
     'django_structlog.middlewares.RequestMiddleware',
 ]
+
 
 if 'test' not in sys.argv:
     MIDDLEWARE.append('axes.middleware.AxesMiddleware')
@@ -253,7 +253,11 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
 
 # WhiteNoise configuration for static files
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGE = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # WhiteNoise settings
 WHITENOISE_USE_FINDERS = True
@@ -261,6 +265,7 @@ WHITENOISE_AUTOREFRESH = DEBUG
 WHITENOISE_MAX_AGE = 31536000  # 1 year
 WHITENOISE_INDEX_FILE = True
 WHITENOISE_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+WHITENOISE_BROTLI = True
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -468,4 +473,31 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
-SILKY_PYTHON_PROFILER = True
+
+# Compressor settings
+COMPRESS_ENABLED = config('COMPRESS_ENABLED', default=False, cast=bool)
+INSTALLED_APPS.append('compressor')
+COMPRESS_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+COMPRESS_URL = '/static/'
+COMPRESS_STORAGE = 'compressor.storage.GzipCompressorFileStorage'
+COMPRESS_STORAGE_ALIAS = 'compressor'
+COMPRESS_OFFLINE = False
+COMPRESS_BROTLI = True
+COMPRESS_CSS_FILTERS = [
+    'compressor.filters.cssmin.CSSMinFilter',
+]
+COMPRESS_JS_FILTERS = [
+    'compressor.filters.jsmin.JSMinFilter',
+]
+
+COMPRESS_CSS_HASHING_METHOD = 'mtime'
+COMPRESS_JS_HASHING_METHOD = 'mtime'
+COMPRESS_OUTPUT_DIR = ''
+COMPRESS_OFFLINE_CONTEXT = {
+    'STATIC_URL': STATIC_URL,
+}
+STATICFILES_FINDERS = [
+    'compressor.finders.CompressorFinder',
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
