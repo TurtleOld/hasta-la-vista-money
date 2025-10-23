@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.db import models
 from django.urls import reverse
@@ -104,7 +104,7 @@ class Account(TimeStampedModel):
     Provides methods for money transfer and credit card debt calculations.
     """
 
-    CURRENCY_LIST = [
+    CURRENCY_LIST: ClassVar[list[tuple[str, str]]] = [
         ('RUB', _('Российский рубль')),
         ('USD', _('Доллар США')),
         ('EUR', _('Евро')),
@@ -114,14 +114,14 @@ class Account(TimeStampedModel):
         ('TRY', _('Турецкая лира')),
         ('CNH', _('Китайский юань')),
     ]
-    TYPE_ACCOUNT_LIST = [
+    TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str]]] = [
         ('Credit', _('Кредитный счёт')),
         ('Debit', _('Дебетовый счёт')),
         ('CreditCard', _('Кредитная карта')),
         ('DebitCard', _('Дебетовая карта')),
         ('CASH', _('Наличные')),
     ]
-    BANK_LIST = [
+    BANK_LIST: ClassVar[list[tuple[str, str]]] = [
         ('-', _('—')),  # Default value - dash
         ('SBERBANK', _('Сбербанк')),
         ('RAIFFAISENBANK', _('Райффайзенбанк')),
@@ -190,8 +190,8 @@ class Account(TimeStampedModel):
 
     class Meta(TimeStampedModel.Meta):
         db_table = 'account'
-        ordering = ['name_account']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['name_account']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['name_account']),
             models.Index(fields=['user']),
             models.Index(fields=['type_account']),
@@ -357,8 +357,8 @@ class TransferMoneyLog(TimeStampedModel):
     objects = TransferMoneyLogManager.from_queryset(TransferMoneyLogQuerySet)()
 
     class Meta(TimeStampedModel.Meta):
-        ordering = ['-exchange_date']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-exchange_date']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['user']),
             models.Index(fields=['from_account']),
             models.Index(fields=['to_account']),

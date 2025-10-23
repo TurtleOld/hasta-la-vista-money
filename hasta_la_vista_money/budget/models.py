@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -64,8 +64,8 @@ class DateList(models.Model):
     class Meta:
         verbose_name = _('Список дат')
         verbose_name_plural = _('Списки дат')
-        ordering = ['-date']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-date']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['user', 'date']),
         ]
 
@@ -183,8 +183,8 @@ class Planning(models.Model):
     class Meta:
         verbose_name = _('Планирование')
         verbose_name_plural = _('Планирования')
-        ordering = ['-date']
-        constraints = [
+        ordering: ClassVar[list[str]] = ['-date']
+        constraints: ClassVar[list[models.UniqueConstraint]] = [
             models.UniqueConstraint(
                 fields=[
                     'user',
@@ -196,7 +196,7 @@ class Planning(models.Model):
                 name='unique_planning_per_user_category_date_type',
             ),
         ]
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['user', 'date', 'type']),
         ]
 

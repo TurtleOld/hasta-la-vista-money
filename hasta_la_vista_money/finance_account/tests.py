@@ -1,6 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 
 from django.contrib import messages
 from django.forms import ValidationError
@@ -44,7 +44,7 @@ NEW_BALANCE_TEST = 450000
 
 
 class TestAccount(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -625,7 +625,7 @@ class TestAccountServices(TestCase):
     get_transfer_money_log).
     """
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -693,7 +693,7 @@ class TestAccountBusinessLogic(TestCase):
     transfer_money, get_credit_card_debt, calculate_grace_period_info.
     """
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',

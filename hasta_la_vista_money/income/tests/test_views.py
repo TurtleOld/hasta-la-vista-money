@@ -1,4 +1,5 @@
 from django.test import TestCase
+from typing import ClassVar
 from django.urls import reverse_lazy
 from django.utils import timezone
 
@@ -13,7 +14,7 @@ class IncomeViewsTest(TestCase):
     Test cases for income-related views.
     """
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'income.yaml',

@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.forms import (
     CharField,
     DateTimeField,
@@ -68,7 +70,7 @@ class AddExpenseForm(FormQuerysetsMixin, ModelForm):
 
     class Meta:
         model = Expense
-        fields = ['category', 'account', 'date', 'amount']
+        fields: ClassVar[list[str]] = ['category', 'account', 'date', 'amount']
 
 
 class AddCategoryForm(
@@ -103,4 +105,4 @@ class AddCategoryForm(
 
     class Meta:
         model = ExpenseCategory
-        fields = ['name', 'parent_category']
+        fields: ClassVar[list[str]] = ['name', 'parent_category']

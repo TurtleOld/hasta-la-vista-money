@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import django_filters
 from django.forms import Select
 from django_filters.widgets import RangeWidget
@@ -61,4 +63,4 @@ class IncomeFilter(django_filters.FilterSet):
 
     class Meta:
         model = Income
-        fields = ['category', 'date', 'account']
+        fields: ClassVar[list[str]] = ['category', 'date', 'account']

@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -30,8 +32,8 @@ class IncomeCategory(models.Model):
     )
 
     class Meta:
-        ordering = ['parent_category_id']
-        indexes = [models.Index(fields=['name'])]
+        ordering: ClassVar[list[str]] = ['parent_category_id']
+        indexes: ClassVar[list[models.Index]] = [models.Index(fields=['name'])]
         unique_together = ('user', 'name')
 
     def __str__(self):
@@ -72,8 +74,8 @@ class Income(models.Model):
     objects = IncomeManager()
 
     class Meta:
-        ordering = ['-date']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-date']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['-date']),
             models.Index(fields=['amount']),
             models.Index(fields=['user', 'date']),

@@ -92,7 +92,7 @@ exclude = [
 [tool.ruff.lint]
 select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
 ignore = [
-    "D100", "D101", "D102", "D104", "D105", "D106", "E203", "COM812", "Q000", "Q003", "PT009", "RUF001", "RUF002", "PLR0913", "FBT001", "FBT002", "ARG002",
+    "D100", "D101", "D102", "D104", "D105", "D106", "E203", "COM812", "Q000", "Q003", "PT009", "RUF001", "RUF002", "PLR0913", "FBT001", "FBT002", "ARG002", "RUF012",
 ]
 external = [ "WPS" ]
 
@@ -113,6 +113,9 @@ max-complexity = 6
 ]
 "**/tests.py" = [
   "SLF001", # private member access in tests
+]
+"**/forms.py" = [
+  "RUF012", # Django Meta classes don't support ClassVar
 ]
 
 [tool.mypy]

@@ -1,4 +1,5 @@
 from django.test import TestCase
+from typing import ClassVar
 from django.urls import reverse_lazy
 
 from hasta_la_vista_money import constants
@@ -11,7 +12,7 @@ NEW_TEST_AMOUNT = 25000
 
 
 class TestExpenseViews(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',

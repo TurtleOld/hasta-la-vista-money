@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, ClassVar
 
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
@@ -54,7 +54,7 @@ class SessionTokenObtainView(APIView):
 class CookieTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view that sets HttpOnly cookies"""
 
-    throttle_classes = [AnonLoginRateThrottle, LoginRateThrottle]
+    throttle_classes: ClassVar[list] = [AnonLoginRateThrottle, LoginRateThrottle]
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:

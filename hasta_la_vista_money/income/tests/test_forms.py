@@ -1,4 +1,5 @@
 from django.test import TestCase
+from typing import ClassVar
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
@@ -12,7 +13,7 @@ class IncomeFormTest(TestCase):
     Test cases for the IncomeForm.
     """
 
-    fixtures = ['users.yaml', 'finance_account.yaml', 'income_cat.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml', 'finance_account.yaml', 'income_cat.yaml']
 
     def setUp(self):
         self.user = User.objects.get(pk=1)
@@ -70,7 +71,7 @@ class AddCategoryIncomeFormTest(TestCase):
     Test cases for the AddCategoryIncomeForm.
     """
 
-    fixtures = ['users.yaml', 'income_cat.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml', 'income_cat.yaml']
 
     def setUp(self):
         self.user = User.objects.get(pk=1)

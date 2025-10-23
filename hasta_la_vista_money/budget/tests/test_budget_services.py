@@ -1,4 +1,5 @@
 from django.test import TestCase
+from typing import ClassVar
 
 from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.budget.services.budget import (
@@ -14,7 +15,7 @@ from hasta_la_vista_money.users.models import User
 
 
 class BudgetServicesTestCase(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'expense_cat.yaml',
         'income_cat.yaml',

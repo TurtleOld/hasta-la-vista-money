@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
 
@@ -16,7 +18,7 @@ from hasta_la_vista_money.users.models import User
 class TestExpenseService(TestCase):
     """Test cases for ExpenseService."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -133,7 +135,7 @@ class TestExpenseService(TestCase):
 class TestExpenseCategoryService(TestCase):
     """Test cases for ExpenseCategoryService."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'expense_cat.yaml',
     ]
@@ -180,7 +182,7 @@ class TestExpenseCategoryService(TestCase):
 class TestReceiptExpenseService(TestCase):
     """Test cases for ReceiptExpenseService."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'expense_cat.yaml',
     ]

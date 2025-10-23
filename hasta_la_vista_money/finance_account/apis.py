@@ -5,6 +5,8 @@ financial accounts,
 with proper authentication and user-specific data filtering.
 """
 
+from typing import ClassVar
+
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -26,7 +28,7 @@ class AccountListCreateAPIView(ListCreateAPIView):
 
     serializer_class = AccountSerializer
     permission_classes = (IsAuthenticated,)
-    throttle_classes = [UserRateThrottle]
+    throttle_classes: ClassVar[list] = [UserRateThrottle]
 
     @property
     def queryset(self):

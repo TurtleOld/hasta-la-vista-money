@@ -5,6 +5,7 @@ finance account models to and from JSON format for API communication.
 """
 
 from rest_framework import serializers
+from typing import ClassVar
 
 from hasta_la_vista_money.finance_account.models import Account
 
@@ -18,4 +19,4 @@ class AccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Account
-        fields = ['id', 'name_account', 'balance', 'currency']
+        fields: ClassVar[list[str]] = ['id', 'name_account', 'balance', 'currency']

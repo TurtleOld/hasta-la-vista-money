@@ -1,7 +1,7 @@
 import json
 from datetime import date
 from decimal import Decimal
-from typing import Any, TypedDict, overload
+from typing import Any, ClassVar, TypedDict, overload
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum
@@ -275,7 +275,7 @@ class PlanningExpenseDict(TypedDict):
 
 
 class ExpenseBudgetAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes: ClassVar[list] = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         """
@@ -294,7 +294,7 @@ class ExpenseBudgetAPIView(APIView):
 
 
 class IncomeBudgetAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes: ClassVar[list] = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         """

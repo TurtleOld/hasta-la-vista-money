@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, ClassVar
 
 import django_filters
 from django.forms import Select
@@ -90,4 +90,4 @@ class ExpenseFilter(django_filters.FilterSet):
 
     class Meta:
         model = Expense
-        fields = ['category', 'date', 'account']
+        fields: ClassVar[list[str]] = ['category', 'date', 'account']
