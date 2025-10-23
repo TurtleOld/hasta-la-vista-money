@@ -48,7 +48,8 @@ class AddExpenseForm(FormQuerysetsMixin, ModelForm):
 
     # Инициализация queryset'ов обеспечивается миксином FormQuerysetsMixin
 
-    # Настройка choices при необходимости обеспечивается внешней логикой/миксином
+    # Настройка choices при необходимости обеспечивается
+    # внешней логикой/миксином
 
     def clean(self):
         cleaned_data = super().clean()

@@ -7,7 +7,12 @@ from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models.aggregates import Sum
 from django.db.models.functions import TruncMonth
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
@@ -68,7 +73,8 @@ class IncomeView(
 
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """
-        Build context for income list, including categories, filters, and chart data.
+        Build context for income list, including categories, filters,
+        and chart data.
         """
         context = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
@@ -205,7 +211,7 @@ class IncomeCreateView(
             )
             messages.success(self.request, constants.SUCCESS_INCOME_ADDED)
             return HttpResponseRedirect(str(self.success_url))
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             form.add_error(None, str(e))
             return self.form_invalid(form)
 
@@ -239,7 +245,7 @@ class IncomeCopyView(
         try:
             income_services.copy_income(request.user, income_id)
             return JsonResponse({'success': True})
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -301,7 +307,8 @@ class IncomeUpdateView(
 
     def get_form_kwargs(self) -> dict:
         """
-        Provide form kwargs with user-specific category and account querysets for update.
+        Provide form kwargs with user-specific category and account
+        querysets for update.
         """
         kwargs = super().get_form_kwargs()
         kwargs['category_queryset'] = self.get_category_queryset()
@@ -329,7 +336,7 @@ class IncomeUpdateView(
             )
             messages.success(self.request, constants.SUCCESS_INCOME_UPDATE)
             return super().form_valid(form)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             form.add_error(None, str(e))
             return self.form_invalid(form)
 
@@ -352,7 +359,7 @@ class IncomeDeleteView(BaseView, DeleteView, DeletionMixin):
         try:
             income_services.delete_income(request.user, income)
             return JsonResponse({'success': True})
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -420,7 +427,8 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """
-        Provide form kwargs with user-specific category queryset for category creation.
+        Provide form kwargs with user-specific category queryset for
+        category creation.
         """
         kwargs = super().get_form_kwargs()
         user = get_object_or_404(User, username=self.request.user)
@@ -539,27 +547,26 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
             except Group.DoesNotExist:
                 incomes = Income.objects.none()
 
-        data = []
-        for income in incomes.select_related(
-            'category',
-            'account',
-            'user',
-        ).all():
-            data.append(
-                {
-                    'id': income.pk,
-                    'category_name': income.category.name
-                    if income.category
-                    else '',
-                    'account_name': income.account.name_account
-                    if income.account
-                    else '',
-                    'amount': float(income.amount),
-                    'date': income.date.strftime('%d.%m.%Y'),
-                    'user_name': income.user.username,
-                    'user_id': income.user.pk,
-                },
-            )
+        data = [
+            {
+                'id': income.pk,
+                'category_name': income.category.name
+                if income.category
+                else '',
+                'account_name': income.account.name_account
+                if income.account
+                else '',
+                'amount': float(income.amount),
+                'date': income.date.strftime('%d.%m.%Y'),
+                'user_name': income.user.username,
+                'user_id': income.user.pk,
+            }
+            for income in incomes.select_related(
+                'category',
+                'account',
+                'user',
+            ).all()
+        ]
 
         return JsonResponse(data, safe=False)
 
@@ -569,14 +576,17 @@ class IncomeGetAjaxView(LoginRequiredMixin, View):
     AJAX view for retrieving a single income record by ID.
     """
 
-    def get(self, request, *args, **kwargs):
+    def get(
+        self,
+        request: HttpRequest,
+        **kwargs: Any,
+    ) -> JsonResponse:
         """
         Handle GET request to retrieve a single income record for AJAX.
         """
         income_id = kwargs.get('pk')
         try:
             income = Income.objects.get(id=income_id)
-            # Проверяем права доступа
             if income.user != request.user:
                 return JsonResponse(
                     {'success': False, 'error': 'Доступ запрещен'},

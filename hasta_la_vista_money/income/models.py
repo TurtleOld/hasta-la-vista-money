@@ -9,7 +9,8 @@ from hasta_la_vista_money.users.models import User
 
 class IncomeCategory(models.Model):
     """
-    Income category model with support for user-specific and hierarchical categories.
+    Income category model with support for user-specific and
+    hierarchical categories.
     """
 
     user = models.ForeignKey(

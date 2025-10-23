@@ -1,6 +1,7 @@
 """API views for finance account management.
 
-This module provides REST API endpoints for creating and listing financial accounts,
+This module provides REST API endpoints for creating and listing
+financial accounts,
 with proper authentication and user-specific data filtering.
 """
 

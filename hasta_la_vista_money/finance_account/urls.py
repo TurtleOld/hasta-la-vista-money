@@ -1,7 +1,8 @@
 """URL configuration for finance account management.
 
 This module defines the URL patterns for finance account operations including
-account listing, creation, editing, deletion, money transfers, and API endpoints.
+account listing, creation, editing, deletion, money transfers,
+and API endpoints.
 """
 
 from django.urls import path

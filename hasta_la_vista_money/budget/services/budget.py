@@ -41,7 +41,8 @@ def aggregate_budget_data(
     income_categories: list[IncomeCategory],
 ) -> dict[str, Any]:
     """
-    Aggregates all budget data for context: expenses, incomes, plans, diffs, percents, and chart data.
+    Aggregates all budget data for context: expenses, incomes, plans,
+    diffs, percents, and chart data.
     Raises BudgetDataError if required data is missing.
     """
     if not user:

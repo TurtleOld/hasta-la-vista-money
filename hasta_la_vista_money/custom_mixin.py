@@ -124,7 +124,8 @@ class FormQuerysetsMixin:
     Поддерживает параметры 'category_queryset' и 'account_queryset'.
     Имя поля категории берётся из атрибута 'field' формы, либо из
     'category_field_name', либо по умолчанию 'category'.
-    Имя поля счёта задаётся атрибутом 'account_field_name' (по умолчанию 'account').
+    Имя поля счёта задаётся атрибутом 'account_field_name'
+    (по умолчанию 'account').
     """
 
     category_field_name = None

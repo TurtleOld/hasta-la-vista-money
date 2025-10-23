@@ -1,6 +1,7 @@
 class IncomeFormQuerysetMixin:
     """
-    Mixin to provide category and account querysets for income forms based on the current user.
+    Mixin to provide category and account querysets for income forms
+    based on the current user.
     Subclasses must define category_model and account_model attributes.
     """
 

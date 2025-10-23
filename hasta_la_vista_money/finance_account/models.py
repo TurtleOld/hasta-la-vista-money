@@ -303,7 +303,8 @@ class TransferMoneyLogQuerySet(models.QuerySet):
 
 class TransferMoneyLogManager(models.Manager['TransferMoneyLog']):
     """
-    Custom manager for TransferMoneyLog model, exposing common filters via QuerySet.
+    Custom manager for TransferMoneyLog model, exposing common
+    filters via QuerySet.
     """
 
     def get_queryset(self) -> TransferMoneyLogQuerySet:
@@ -322,7 +323,8 @@ class TransferMoneyLogManager(models.Manager['TransferMoneyLog']):
 
 class TransferMoneyLog(TimeStampedModel):
     """
-    Stores logs of money transfers between accounts, including user, source, destination, amount, and notes.
+    Stores logs of money transfers between accounts, including user,
+    source, destination, amount, and notes.
     Used for auditing and tracking account movements.
     """
 
@@ -369,7 +371,8 @@ class TransferMoneyLog(TimeStampedModel):
         """
         return str(
             _(
-                '{date}. Перевод суммы {amount} со счёта "{from_account}" на счёт "{to_account}". ',
+                '{date}. Перевод суммы {amount} со счёта '
+                '"{from_account}" на счёт "{to_account}". '
             ).format(
                 date=self.exchange_date.strftime('%d-%m-%Y %H:%M'),
                 amount=self.amount,

@@ -57,7 +57,8 @@ class ExpenseFilter(django_filters.FilterSet):
         return queryset.filter(user=self.user).distinct()
 
     def get_expenses_with_annotations(self) -> list[dict[str, Any]]:
-        """Возвращает список расходов с дополнительными полями для отображения."""
+        """Возвращает список расходов с дополнительными полями
+        для отображения."""
         queryset = self.qs
         expenses = queryset.values(
             'id',

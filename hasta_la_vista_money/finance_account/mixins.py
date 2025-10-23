@@ -25,7 +25,8 @@ class GroupAccountMixin:
         """Extract group_id from request parameters.
 
         Returns:
-            The group ID from the request GET parameters, or None if not provided.
+            The group ID from the request GET parameters, or None if
+            not provided.
         """
         return self.request.GET.get('group_id')
 

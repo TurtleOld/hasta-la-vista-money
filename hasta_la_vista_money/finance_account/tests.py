@@ -338,7 +338,11 @@ class TestAccount(TestCase):
         )
 
         # Тест __str__
-        expected_str = f'{transfer_log.exchange_date:%d-%m-%Y %H:%M}. Перевод суммы {transfer_log.amount} со счёта "{self.account1}" на счёт "{self.account2}". '
+        expected_str = (
+            f'{transfer_log.exchange_date:%d-%m-%Y %H:%M}. '
+            f'Перевод суммы {transfer_log.amount} со счёта '
+            f'"{self.account1}" на счёт "{self.account2}". '
+        )
         self.assertEqual(str(transfer_log), expected_str)
 
     def test_account_form_validation(self) -> None:
@@ -616,7 +620,9 @@ class TestAccount(TestCase):
 
 class TestAccountServices(TestCase):
     """
-    Unit tests for account service functions (get_accounts_for_user_or_group, get_sum_all_accounts, get_transfer_money_log).
+    Unit tests for account service functions
+    (get_accounts_for_user_or_group, get_sum_all_accounts,
+    get_transfer_money_log).
     """
 
     fixtures = [
@@ -642,7 +648,8 @@ class TestAccountServices(TestCase):
             self.group_id = None
 
     def test_get_accounts_for_user(self):
-        """Test that get_accounts_for_user_or_group returns only user's accounts when group_id is None or 'my'."""
+        """Test that get_accounts_for_user_or_group returns only user's
+        accounts when group_id is None or 'my'."""
         accounts = account_services.get_accounts_for_user_or_group(
             self.user,
             None,
@@ -655,7 +662,8 @@ class TestAccountServices(TestCase):
         self.assertTrue(all(acc.user == self.user for acc in accounts_my))
 
     def test_get_accounts_for_group(self):
-        """Test that get_accounts_for_user_or_group returns all accounts for users in the group."""
+        """Test that get_accounts_for_user_or_group returns all accounts
+        for users in the group."""
         if not self.group_id:
             self.skipTest('User has no group for group test')
         accounts = account_services.get_accounts_for_user_or_group(
@@ -681,7 +689,8 @@ class TestAccountServices(TestCase):
 
 class TestAccountBusinessLogic(TestCase):
     """
-    Unit tests for Account model business logic methods: transfer_money, get_credit_card_debt, calculate_grace_period_info.
+    Unit tests for Account model business logic methods:
+    transfer_money, get_credit_card_debt, calculate_grace_period_info.
     """
 
     fixtures = [

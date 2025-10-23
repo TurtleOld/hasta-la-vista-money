@@ -1,7 +1,8 @@
 """Base form classes and mixins for finance account forms.
 
 This module provides reusable base classes and mixins to reduce code duplication
-and ensure consistent behavior across forms. It includes Bootstrap styling mixins,
+and ensure consistent behavior across forms. It includes
+Bootstrap styling mixins,
 credit field handling, date field configuration, and common validation patterns.
 """
 
@@ -145,7 +146,8 @@ class FormValidationMixin:
 class BaseAccountForm(BootstrapFormMixin, CreditFieldsMixin, ModelForm):
     """Base form class for account-related forms with common functionality.
 
-    Combines Bootstrap styling, credit field handling, and ModelForm functionality
+    Combines Bootstrap styling, credit field handling, and
+    ModelForm functionality
     to provide a consistent foundation for account creation and editing forms.
     """
 

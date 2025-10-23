@@ -73,7 +73,8 @@ def validate_credit_fields_required(
     """Validate that credit-related fields are provided for credit accounts.
 
     Ensures that all required fields are present when creating or updating
-    credit accounts, including bank information, credit limits, and payment terms.
+    credit accounts, including bank information, credit limits,
+    and payment terms.
 
     Args:
         type_account: The type of account (Credit or CreditCard).

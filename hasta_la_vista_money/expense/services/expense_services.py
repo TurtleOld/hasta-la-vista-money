@@ -372,7 +372,12 @@ class ReceiptExpenseService:
             date_label = month_date.strftime('%B %Y') if month_date else ''
             receipt_expense_list.append(
                 {
-                    'id': f'receipt_{receipt["year"]}{month_date.strftime("%m")}_{receipt["account__name_account"]}_{receipt["user"]}',
+                    'id': (
+                        f'receipt_{receipt["year"]}'
+                        f'{month_date.strftime("%m")}_'
+                        f'{receipt["account__name_account"]}_'
+                        f'{receipt["user"]}'
+                    ),
                     'date': month_date,
                     'date_label': date_label,
                     'amount': receipt['amount'],
