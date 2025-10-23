@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 from datetime import datetime
+from typing import ClassVar
 
 from django.db import models
 from django.db.models import Min
@@ -233,8 +234,8 @@ class Receipt(models.Model):
     product = models.ManyToManyField(Product, related_name='receipt_products')
 
     class Meta:
-        ordering = ['-receipt_date']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-receipt_date']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['-receipt_date']),
             models.Index(fields=['number_receipt']),
             models.Index(fields=['nds10']),

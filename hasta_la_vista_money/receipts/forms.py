@@ -1,8 +1,9 @@
-from os.path import splitext
+from pathlib import Path
+from typing import ClassVar
 
 import django_filters
 from django.core.exceptions import ValidationError
-from django.db.models import Min
+from django.db.models import Min, QuerySet
 from django.forms import (
     CharField,
     ChoiceField,
@@ -109,14 +110,18 @@ class ReceiptFilter(django_filters.FilterSet):
             .distinct()
         )
 
-    def filter_by_product_name(self, queryset, name, value):
+    def filter_by_product_name(
+        self,
+        queryset: QuerySet[Product],
+        value: str,
+    ) -> QuerySet[Product]:
         if value:
             return queryset.filter(product__product_name__icontains=value)
         return queryset
 
     class Meta:
         model = Receipt
-        fields = [
+        fields: ClassVar[list[str]] = [
             'name_seller',
             'receipt_date',
             'account',
@@ -139,7 +144,11 @@ class SellerForm(ModelForm[Seller]):
 
     class Meta:
         model = Seller
-        fields = ['name_seller', 'retail_place_address', 'retail_place']
+        fields: ClassVar[list[str]] = [
+            'name_seller',
+            'retail_place_address',
+            'retail_place',
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -174,7 +183,12 @@ class ProductForm(ModelForm[Product]):
 
     class Meta:
         model = Product
-        fields = ['product_name', 'price', 'quantity', 'amount']
+        fields: ClassVar[list[str]] = [
+            'product_name',
+            'price',
+            'quantity',
+            'amount',
+        ]
 
     def clean(self):
         cleaned_data = super().clean()
@@ -202,7 +216,8 @@ class ReceiptForm(ModelForm[Receipt]):
         queryset=Account.objects.none(),
         label=_('Счёт списания'),
         help_text=_(
-            'Выберите счёт списания. Если он ещё не создан, нажмите кнопку ниже.',
+            'Выберите счёт списания. '
+            'Если он ещё не создан, нажмите кнопку ниже.',
         ),
     )
     receipt_date = DateTimeField(
@@ -243,7 +258,7 @@ class ReceiptForm(ModelForm[Receipt]):
 
     class Meta:
         model = Receipt
-        fields = [
+        fields: ClassVar[list[str]] = [
             'seller',
             'account',
             'receipt_date',
@@ -258,9 +273,8 @@ class ReceiptForm(ModelForm[Receipt]):
 
 
 def validate_image_jpg_png(value):
-    ext = splitext(value.name)[1].lower()
-
-    if ext not in ['.jpg', '.jpeg', '.png']:
+    ext = Path(value.name).suffix.lower()
+    if ext not in ('.jpg', '.jpeg', '.png'):
         raise ValidationError(
             _('Разрешены только файлы форматов: JPG, JPEG или PNG'),
         )
@@ -294,7 +308,6 @@ class UploadImageForm(Form):
 
     def clean_file(self):
         file = self.cleaned_data.get('file')
-        if file:
-            if file.size > 5 * 1024 * 1024:
-                raise ValidationError(_('Размер файла не должен превышать 5MB'))
+        if file and file.size > 5 * 1024 * 1024:
+            raise ValidationError(_('Размер файла не должен превышать 5MB'))
         return file

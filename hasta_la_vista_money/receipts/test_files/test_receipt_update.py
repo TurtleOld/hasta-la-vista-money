@@ -12,14 +12,16 @@ User = get_user_model()
 
 
 class ReceiptUpdateViewTest(TestCase):
-    """Тесты для проверки функциональности изменения чека с проверкой баланса счёта."""
+    """Тесты для проверки функциональности изменения чека
+    с проверкой баланса счёта.
+    """
 
     def setUp(self):
         """Настройка тестовых данных."""
         self.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
-            password='testpass123',
+            password='testpass123',  # noqa: S106
             is_active=True,
             is_superuser=True,
         )
@@ -294,7 +296,7 @@ class ReceiptUpdateViewTest(TestCase):
         other_user = User.objects.create_user(
             username='otheruser',
             email='other@example.com',
-            password='otherpass123',
+            password='otherpass123',  # noqa: S106
         )
 
         other_receipt = Receipt.objects.create(
