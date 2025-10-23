@@ -6,6 +6,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
@@ -136,7 +137,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
                     'name': f'Subcategories for {parent_category} in {month}',
                     'data': subcategory_data[f'{parent_category}_{month}'],
                 }
-                for month in subcategories.keys()
+                for month in subcategories
             ]
             chart_data = {
                 'chart': {'type': 'pie'},
@@ -156,7 +157,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
 
         return charts_data
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request: HttpRequest) -> HttpResponse:
         budget_chart_data = self.prepare_budget_charts(request)
         template_name = self.template_name
         if template_name is None:
@@ -167,106 +168,141 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
             budget_chart_data,
         )
 
+    def _get_expense_data(self, user, categories, months):
+        """Получить данные о расходах по категориям и месяцам."""
+        fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        if not months:
+            return fact_map
+
+        expenses = (
+            Expense.objects.filter(
+                user=user,
+                category__in=categories,
+                date__gte=months[0],
+                date__lte=months[-1],
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('category_id', 'month')
+            .annotate(total=Sum('amount'))
+        )
+        for e in expenses:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            total_amount = e['total'] if e['total'] is not None else 0
+            fact_map[e['category_id']][month_date] = total_amount
+        return fact_map
+
+    def _get_income_data(self, user, categories, months):
+        """Получить данные о доходах по категориям и месяцам."""
+        fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        if not months:
+            return fact_map
+
+        incomes = (
+            Income.objects.filter(
+                user=user,
+                category__in=categories,
+                date__gte=months[0],
+                date__lte=months[-1],
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('category_id', 'month')
+            .annotate(total=Sum('amount'))
+        )
+        for e in incomes:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            total_amount = e['total'] if e['total'] is not None else 0
+            fact_map[e['category_id']][month_date] = total_amount
+        return fact_map
+
+    def _calculate_totals(self, categories, months, fact_map):
+        """Рассчитать общие суммы по месяцам."""
+        totals = [0] * len(months)
+        for i, m in enumerate(months):
+            for cat in categories:
+                totals[i] += fact_map[cat.id][m]
+        return totals
+
+    def _calculate_category_totals(self, categories, months, fact_map):
+        """Рассчитать общие суммы по категориям."""
+        category_totals = defaultdict(lambda: Decimal(0))
+        for cat in categories:
+            for month in months:
+                amount = fact_map[cat.id][month]
+                if amount:
+                    category_totals[cat.id] += amount
+        return category_totals
+
+    def _calculate_pie_data(self, categories, months, fact_map):
+        """Рассчитать данные для круговой диаграммы."""
+        labels = []
+        values = []
+        if not months or not categories:
+            return labels, values
+
+        category_totals = self._calculate_category_totals(
+            categories,
+            months,
+            fact_map,
+        )
+
+        for cat in categories:
+            total = category_totals[cat.id]
+            if total > 0:
+                labels.append(cat.name)
+                values.append(float(total))
+        return labels, values
+
     def prepare_budget_charts(self, request):
-        """Подготовка данных для графиков бюджета"""
+        """Подготовка данных для графиков бюджета."""
         user = get_object_or_404(User, username=request.user)
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date for d in list_dates]
 
         expense_categories = list(
-            user.category_expense_users.filter(parent_category=None).order_by(
-                'name',
-            ),  # type: ignore[attr-defined]
+            user.category_expense_users.filter(
+                parent_category=None,
+            ).order_by('name'),  # type: ignore[attr-defined]
         )
         income_categories = list(
-            user.category_income_users.filter(parent_category=None).order_by(
-                'name',
-            ),  # type: ignore[attr-defined]
+            user.category_income_users.filter(
+                parent_category=None,
+            ).order_by('name'),  # type: ignore[attr-defined]
         )
 
         chart_labels = [m.strftime('%b %Y') for m in months]
 
-        total_fact_income = [0] * len(months)
-        total_fact_expense = [0] * len(months)
-
-        expense_fact_map: dict[Any, dict[Any, Any]] = defaultdict(
-            lambda: defaultdict(lambda: 0),
+        expense_fact_map = self._get_expense_data(
+            user,
+            expense_categories,
+            months,
         )
-        income_fact_map: dict[Any, dict[Any, Any]] = defaultdict(
-            lambda: defaultdict(lambda: 0),
+        income_fact_map = self._get_income_data(user, income_categories, months)
+
+        total_fact_expense = self._calculate_totals(
+            expense_categories,
+            months,
+            expense_fact_map,
+        )
+        total_fact_income = self._calculate_totals(
+            income_categories,
+            months,
+            income_fact_map,
         )
 
-        if months:
-            expenses = (
-                Expense.objects.filter(
-                    user=user,
-                    category__in=expense_categories,
-                    date__gte=months[0],
-                    date__lte=months[-1],
-                )
-                .annotate(month=TruncMonth('date'))
-                .values('category_id', 'month')
-                .annotate(total=Sum('amount'))
-            )
-            for e in expenses:
-                month_date = (
-                    e['month'].date()
-                    if hasattr(e['month'], 'date')
-                    else e['month']
-                )
-                total_amount = e['total'] if e['total'] is not None else 0
-                expense_fact_map[e['category_id']][month_date] = total_amount
+        chart_balance = [
+            float(total_fact_income[i] - total_fact_expense[i])
+            for i in range(len(months))
+        ]
 
-            for i, m in enumerate(months):
-                for cat in expense_categories:
-                    total_fact_expense[i] += expense_fact_map[cat.id][m]
-
-            incomes = (
-                Income.objects.filter(
-                    user=user,
-                    category__in=income_categories,
-                    date__gte=months[0],
-                    date__lte=months[-1],
-                )
-                .annotate(month=TruncMonth('date'))
-                .values('category_id', 'month')
-                .annotate(total=Sum('amount'))
-            )
-            for e in incomes:
-                month_date = (
-                    e['month'].date()
-                    if hasattr(e['month'], 'date')
-                    else e['month']
-                )
-                total_amount = e['total'] if e['total'] is not None else 0
-                income_fact_map[e['category_id']][month_date] = total_amount
-
-            for i, m in enumerate(months):
-                for cat in income_categories:
-                    total_fact_income[i] += income_fact_map[cat.id][m]
-
-        chart_balance = []
-        for i in range(len(months)):
-            balance = total_fact_income[i] - total_fact_expense[i]
-            chart_balance.append(float(balance))
-
-        pie_labels = []
-        pie_values = []
-        if months and expense_categories:
-            category_totals: dict[Any, Decimal] = defaultdict(
-                lambda: Decimal(0),
-            )
-            for cat in expense_categories:
-                for month in months:
-                    amount = expense_fact_map[cat.id][month]
-                    if amount:
-                        category_totals[cat.id] += amount
-
-            for cat in expense_categories:
-                total = category_totals[cat.id]
-                if total > 0:
-                    pie_labels.append(cat.name)
-                    pie_values.append(float(total))
+        pie_labels, pie_values = self._calculate_pie_data(
+            expense_categories,
+            months,
+            expense_fact_map,
+        )
 
         return {
             'chart_labels': chart_labels,
@@ -279,5 +315,5 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
 
 
 class ReportsAnalyticMixin(TemplateView):
-    def get_context_report(self, request, *args, **kwargs):
+    def get_context_report(self) -> dict[str, Any]:
         return

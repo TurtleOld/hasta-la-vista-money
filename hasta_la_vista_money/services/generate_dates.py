@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from datetime import date, datetime
-from typing import Sequence
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import QuerySet
@@ -29,9 +29,7 @@ class DateListGenerator:
         self._ensure_dates(months)
         self._ensure_planning(months)
 
-    def _actual_date(
-        self, current_date: datetime | QuerySet[DateList]
-    ) -> date:
+    def _actual_date(self, current_date: datetime | QuerySet[DateList]) -> date:
         """Вернуть опорную дату из datetime или QuerySet."""
         if isinstance(current_date, QuerySet):
             last = current_date.last()
@@ -39,18 +37,19 @@ class DateListGenerator:
                 error_msg = 'current_date must be datetime or QuerySet'
                 raise ValueError(error_msg)
             return last.date
+        if isinstance(current_date, date) and not isinstance(
+            current_date,
+            datetime,
+        ):
+            return current_date
         return current_date.date()
 
     def _start_date(self, actual: date) -> date:
         """Вернуть месяц после последней даты в DateList или actual."""
         last_obj = (
-            DateList.objects.filter(user=self.user)
-            .order_by("-date")
-            .first()
+            DateList.objects.filter(user=self.user).order_by('-date').first()
         )
-        return (
-            last_obj.date + relativedelta(months=1) if last_obj else actual
-        )
+        return last_obj.date + relativedelta(months=1) if last_obj else actual
 
     def _month_sequence(self, start: date, count: int) -> list[date]:
         """Сгенерировать последовательность месяцев от start включительно."""
@@ -59,8 +58,9 @@ class DateListGenerator:
     def _ensure_dates(self, months: Sequence[date]) -> None:
         """Создать записи DateList для отсутствующих дат."""
         existing = set(
-            DateList.objects.filter(user=self.user, date__in=months)
-            .values_list("date", flat=True)
+            DateList.objects.filter(
+                user=self.user, date__in=months
+            ).values_list('date', flat=True)
         )
         to_create = [
             DateList(user=self.user, date=d)
@@ -72,25 +72,25 @@ class DateListGenerator:
 
     def _ensure_planning(self, months: Sequence[date]) -> None:
         """Создать недостающие Planning по заданному типу."""
-        if self.type_ not in {"expense", "income"}:
+        if self.type_ not in {'expense', 'income'}:
             return
 
-        if self.type_ == "expense":
+        if self.type_ == 'expense':
             cats = list(ExpenseCategory.objects.filter(user=self.user))
             existing = set(
                 Planning.objects.filter(
                     user=self.user,
-                    type="expense",
+                    type='expense',
                     date__in=months,
                     category_expense__in=cats,
-                ).values_list("category_expense_id", "date")
+                ).values_list('category_expense_id', 'date')
             )
             to_create = [
                 Planning(
                     user=self.user,
                     category_expense=c,
                     date=d,
-                    type="expense",
+                    type='expense',
                     amount=0,
                 )
                 for c in cats
@@ -102,17 +102,17 @@ class DateListGenerator:
             existing = set(
                 Planning.objects.filter(
                     user=self.user,
-                    type="income",
+                    type='income',
                     date__in=months,
                     category_income__in=cats,
-                ).values_list("category_income_id", "date")
+                ).values_list('category_income_id', 'date')
             )
             to_create = [
                 Planning(
                     user=self.user,
                     category_income=c,
                     date=d,
-                    type="income",
+                    type='income',
                     amount=0,
                 )
                 for c in cats

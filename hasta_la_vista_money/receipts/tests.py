@@ -1,7 +1,7 @@
 import json
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -30,7 +30,7 @@ from hasta_la_vista_money.users.models import User
 
 
 class TestReceipt(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'receipt_receipt.yaml',
@@ -105,7 +105,7 @@ class TestReceipt(TestCase):
 
 
 class TestSeller(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'receipt_seller.yaml',
     ]
@@ -154,7 +154,7 @@ class TestSeller(TestCase):
 
 
 class TestProduct(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'receipt_product.yaml',
     ]
@@ -197,7 +197,7 @@ class TestProduct(TestCase):
 
 
 class TestReceiptModel(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -267,7 +267,7 @@ class TestReceiptModel(TestCase):
 
 
 class TestForms(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -375,8 +375,6 @@ class TestForms(TestCase):
         self.assertTrue(formset.is_valid())
 
     def test_upload_image_form_valid(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
         test_file = SimpleUploadedFile(
             'test.jpg',
             b'fake-image-content',
@@ -397,7 +395,7 @@ class TestForms(TestCase):
 
 
 class TestReceiptFilter(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -451,7 +449,7 @@ class TestReceiptFilter(TestCase):
 
 
 class TestReceiptAPIs(APITestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -630,12 +628,12 @@ class TestServices(TestCase):
             content_type='image/jpeg',
         )
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(RuntimeError):  # noqa: PT027
             analyze_image_with_ai(test_file)
 
 
 class TestUploadImageView(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -700,7 +698,7 @@ class TestUploadImageView(TestCase):
 
 
 class TestProductByMonthView(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -724,7 +722,7 @@ class TestProductByMonthView(TestCase):
 
 
 class TestModelValidation(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -771,7 +769,7 @@ class TestModelValidation(TestCase):
 
 
 class TestReceiptOperations(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -826,7 +824,7 @@ class TestReceiptOperations(TestCase):
 
 
 class TestReceiptPermissions(TestCase):
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -836,7 +834,7 @@ class TestReceiptPermissions(TestCase):
         self.user2 = User.objects.create_user(
             username='testuser2',
             email='test2@example.com',
-            password='testpass123',  # nosec
+            password='testpass123',  # noqa: S106
         )
         self.account1 = Account.objects.get(pk=1)
         self.account2 = Account.objects.create(

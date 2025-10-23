@@ -4,7 +4,7 @@ import re
 from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import structlog
 from django.contrib import messages
@@ -14,7 +14,9 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, ProtectedError, QuerySet, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
-from django.forms import ModelChoiceField
+
+if TYPE_CHECKING:
+    from django.forms import ModelChoiceField
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -74,7 +76,7 @@ class ReceiptView(
                 return Receipt.objects.none()
         return Receipt.objects.for_user(self.request.user).with_related()
 
-    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def get_context_data(self, **kwargs: object) -> dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         group_id = self.request.GET.get('group_id') or 'my'
 
@@ -182,8 +184,6 @@ class SellerCreateView(
     def post(
         self,
         request: HttpRequest,
-        *args: object,
-        **kwargs: object,
     ) -> JsonResponse:
         seller_form = SellerForm(request.POST)
         if seller_form.is_valid():
@@ -283,6 +283,7 @@ class ReceiptCreateView(
                         )
                         receipt.product.add(product)
             return receipt
+        return None
 
     def form_valid_receipt(
         self,
@@ -369,17 +370,19 @@ class ReceiptUpdateView(
     ) -> HttpResponse:
         return super().post(request, *args, **kwargs)
 
-    def get_object(self, queryset: Any = None) -> Receipt:
-        receipt = get_object_or_404(
-            Receipt.objects.select_related(
-                'user',
-                'account',
-                'seller',
-            ).prefetch_related('product'),
-            pk=self.kwargs['pk'],
-            user=self.request.user,
-        )
-        return receipt
+    def get_object(self) -> Receipt | None:
+        try:
+            return get_object_or_404(
+                Receipt.objects.select_related(
+                    'user',
+                    'account',
+                    'seller',
+                ).prefetch_related('product'),
+                pk=self.kwargs['pk'],
+                user=self.request.user,
+            )
+        except Receipt.DoesNotExist:
+            logger.exception('Receipt not found', pk=self.kwargs['pk'])
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context: dict[str, Any] = super().get_context_data(**kwargs)
@@ -396,16 +399,15 @@ class ReceiptUpdateView(
         context['receipt_form'] = receipt_form
 
         existing_products = self.object.product.all() if self.object else []
-        initial_data: list[dict[str, Any]] = []
-        for product in existing_products:
-            initial_data.append(
-                {
-                    'product_name': product.product_name,
-                    'price': product.price,
-                    'quantity': product.quantity,
-                    'amount': product.amount,
-                },
-            )
+        initial_data: list[dict[str, Any]] = [
+            {
+                'product_name': product.product_name,
+                'price': product.price,
+                'quantity': product.quantity,
+                'amount': product.amount,
+            }
+            for product in existing_products
+        ]
         context['product_formset'] = ProductFormSet(initial=initial_data)
         return context
 
@@ -544,15 +546,16 @@ class ReceiptUpdateView(
                 new_account_obj.save()
 
         except Account.DoesNotExist:
-            logger.error(
-                f'Account not found during receipt update for user {self.request.user}',
+            logger.exception(
+                'Account not found during receipt update',
+                error=str(self.request.user),
             )
 
 
 class ReceiptDeleteView(LoginRequiredMixin, BaseView, DeleteView[Receipt]):
     model = Receipt
 
-    def form_valid(self, form: Any) -> HttpResponse:
+    def form_valid(self) -> HttpResponse:
         receipt = self.get_object()
         account = receipt.account
         amount = receipt.total_sum
@@ -567,10 +570,16 @@ class ReceiptDeleteView(LoginRequiredMixin, BaseView, DeleteView[Receipt]):
                     product.delete()
 
                 receipt.delete()
-                messages.success(self.request, 'Чек успешно удалён!')
+                messages.success(
+                    self.request,
+                    constants.SUCCESS_MESSAGE_DELETE_RECEIPT,
+                )
                 return redirect(self.success_url)
         except ProtectedError:
-            messages.error(self.request, 'Чек не может быть удалён!')
+            messages.error(
+                self.request,
+                constants.UNSUCCESSFULLY_MESSAGE_DELETE_RECEIPT,
+            )
             return redirect(self.success_url)
 
 
@@ -582,10 +591,13 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
     def get_context_data(
         self,
         *,
-        object_list: Any = None,
+        object_list: QuerySet[Receipt] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        context: dict[str, Any] = super().get_context_data(**kwargs)
+        context: dict[str, Any] = super().get_context_data(
+            object_list=object_list,
+            **kwargs,
+        )
 
         current_user = cast('User', self.request.user)
 
@@ -650,103 +662,133 @@ class UploadImageView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form: UploadImageForm) -> HttpResponse:
         try:
-            uploaded_file = self.request.FILES['file']
-            if isinstance(uploaded_file, list):
-                uploaded_file = uploaded_file[0]
+            uploaded_file = self._get_uploaded_file()
             user = cast('User', self.request.user)
             account = form.cleaned_data.get('account')
 
-            json_receipt = analyze_image_with_ai(uploaded_file)
-            if json_receipt and 'json' in json_receipt:
-                json_receipt = self.clean_json_response(json_receipt)
-            decode_json_receipt = json.loads(json_receipt)
+            decode_json_receipt = self._process_uploaded_file(uploaded_file)
+            return self._handle_receipt_processing(
+                decode_json_receipt,
+                user,
+                account,
+            )
+        except ValueError as e:
+            logger.exception('Error processing receipt', error=e)
+            messages.error(
+                self.request,
+                constants.INVALID_FILE_FORMAT,
+            )
+            return super().form_invalid(form)
+        except Exception as e:
+            logger.exception('Error processing receipt', error=e)
+            messages.error(
+                self.request,
+                constants.ERROR_PROCESSING_RECEIPT,
+            )
+            return super().form_invalid(form)
 
-            number_receipt = decode_json_receipt['number_receipt']
-            receipt_exists = self.check_exist_receipt(user, number_receipt)
-            if not receipt_exists.exists():
-                seller, _ = Seller.objects.update_or_create(
-                    user=user,
-                    name_seller=decode_json_receipt.get('name_seller'),
-                    defaults={
-                        'retail_place_address': decode_json_receipt.get(
-                            'retail_place_address',
-                            'Нет данных',
-                        ),
-                        'retail_place': decode_json_receipt.get(
-                            'retail_place',
-                            'Нет данных',
-                        ),
-                    },
-                )
+    def _get_uploaded_file(self):
+        """Extract uploaded file from request."""
+        uploaded_file = self.request.FILES['file']
+        if isinstance(uploaded_file, list):
+            uploaded_file = uploaded_file[0]
+        return uploaded_file
 
-                products_data = []
-                for item in decode_json_receipt.get('items', []):
-                    products_data.append(
-                        Product(
-                            user=user,
-                            product_name=item['product_name'],
-                            category=item['category'],
-                            price=item['price'],
-                            quantity=item['quantity'],
-                            amount=item['amount'],
-                        ),
-                    )
+    def _process_uploaded_file(self, uploaded_file):
+        """Process uploaded file and return decoded JSON receipt."""
+        json_receipt = analyze_image_with_ai(uploaded_file)
+        if json_receipt and 'json' in json_receipt:
+            json_receipt = self.clean_json_response(json_receipt)
+        return json.loads(json_receipt)
 
-                products = Product.objects.bulk_create(products_data)
+    def _handle_receipt_processing(self, decode_json_receipt, user, account):
+        """Handle receipt processing logic."""
+        number_receipt = decode_json_receipt['number_receipt']
+        receipt_exists = self.check_exist_receipt(user, number_receipt)
 
-                receipt = Receipt.objects.create(
-                    user=user,
-                    account=account,
-                    number_receipt=decode_json_receipt['number_receipt'],
-                    receipt_date=timezone.make_aware(
-                        datetime.strptime(
-                            self.normalize_date(
-                                decode_json_receipt['receipt_date'],
-                            ),
-                            '%d.%m.%Y %H:%M',
-                        ),
-                    ),
-                    nds10=decode_json_receipt.get('nds10', 0),
-                    nds20=decode_json_receipt.get('nds20', 0),
-                    operation_type=decode_json_receipt.get('operation_type', 0),
-                    total_sum=decode_json_receipt['total_sum'],
-                    seller=seller,
-                )
-
-                if products:
-                    receipt.product.set(products)
-
-                account_balance = get_object_or_404(Account, id=account.id)
-                account_balance.balance -= decimal.Decimal(
-                    decode_json_receipt['total_sum'],
-                )
-                account_balance.save()
-
-                messages.success(
-                    self.request,
-                    'Чек успешно загружен и обработан!',
-                )
-                return super().form_valid(form)
-
+        if receipt_exists.exists():
             messages.error(
                 self.request,
                 gettext_lazy(constants.RECEIPT_ALREADY_EXISTS),
             )
-            return super().form_invalid(form)
-        except ValueError as e:
-            logger.error(e)
-            messages.error(
-                self.request,
-                'Неверный формат файла, попробуйте загрузить ещё раз или другой файл',
+            return super().form_invalid(self.get_form())
+
+        seller = self._create_or_update_seller(decode_json_receipt, user)
+        products = self._create_products(decode_json_receipt, user)
+        receipt = self._create_receipt(
+            decode_json_receipt,
+            user,
+            account,
+            seller,
+        )
+
+        if products:
+            receipt.product.set(products)
+
+        self._update_account_balance(
+            account,
+            decode_json_receipt['total_sum'],
+        )
+
+        messages.success(
+            self.request,
+            'Чек успешно загружен и обработан!',
+        )
+        return super().form_valid(self.get_form())
+
+    def _create_or_update_seller(self, decode_json_receipt, user):
+        """Create or update seller from receipt data."""
+        return Seller.objects.update_or_create(
+            user=user,
+            name_seller=decode_json_receipt.get('name_seller'),
+            defaults={
+                'retail_place_address': decode_json_receipt.get(
+                    'retail_place_address',
+                    'Нет данных',
+                ),
+                'retail_place': decode_json_receipt.get(
+                    'retail_place',
+                    'Нет данных',
+                ),
+            },
+        )[0]
+
+    def _create_products(self, decode_json_receipt, user):
+        """Create products from receipt data."""
+        products_data = [
+            Product(
+                user=user,
+                product_name=item['product_name'],
+                category=item['category'],
+                price=item['price'],
+                quantity=item['quantity'],
+                amount=item['amount'],
             )
-            return super().form_invalid(form)
-        except Exception as e:
-            logger.error(f'Ошибка при обработке чека: {e}')
-            messages.error(
-                self.request,
-                'Произошла ошибка при обработке чека. Попробуйте ещё раз.',
-            )
-            return super().form_invalid(form)
+            for item in decode_json_receipt.get('items', [])
+        ]
+        return Product.objects.bulk_create(products_data)
+
+    def _create_receipt(self, decode_json_receipt, user, account, seller):
+        """Create receipt from processed data."""
+        return Receipt.objects.create(
+            user=user,
+            account=account,
+            number_receipt=decode_json_receipt['number_receipt'],
+            receipt_date=self._parse_receipt_date(
+                decode_json_receipt['receipt_date'],
+            ),
+            nds10=decode_json_receipt.get('nds10', 0),
+            nds20=decode_json_receipt.get('nds20', 0),
+            operation_type=decode_json_receipt.get('operation_type', 0),
+            total_sum=decode_json_receipt['total_sum'],
+            seller=seller,
+        )
+
+    def _update_account_balance(self, account, total_sum):
+        """Update account balance after receipt creation."""
+        account_balance = get_object_or_404(Account, id=account.id)
+        account_balance.balance -= decimal.Decimal(total_sum)
+        account_balance.save()
 
     @staticmethod
     def check_exist_receipt(
@@ -766,11 +808,34 @@ class UploadImageView(LoginRequiredMixin, FormView):
         return text.strip()
 
     @staticmethod
+    def _parse_receipt_date(date_str: str) -> datetime:
+        """Parse receipt date string into timezone-aware datetime."""
+        normalized_date = UploadImageView.normalize_date(date_str)
+        day, month, year = normalized_date.split(' ')[0].split('.')
+        hour, minute = normalized_date.split(' ')[1].split(':')
+        return timezone.datetime(
+            int(year),
+            int(month),
+            int(day),
+            int(hour),
+            int(minute),
+            tzinfo=timezone.get_current_timezone(),
+        )
+
+    @staticmethod
     def normalize_date(date_str: str) -> str:
         try:
-            return datetime.strptime(date_str, '%d.%m.%Y %H:%M').strftime(
-                '%d.%m.%Y %H:%M',
+            day, month, year = date_str.split(' ')[0].split('.')
+            hour, minute = date_str.split(' ')[1].split(':')
+            aware_dt = timezone.datetime(
+                int(year),
+                int(month),
+                int(day),
+                int(hour),
+                int(minute),
+                tzinfo=timezone.get_current_timezone(),
             )
+            return aware_dt.strftime('%d.%m.%Y %H:%M')
         except ValueError:
             day, month, year_short, time = date_str.replace(' ', '.').split('.')
             current_century = str(timezone.now().year)[:2]

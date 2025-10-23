@@ -28,7 +28,6 @@ def add_income(user, account, category, amount, date):
     )
 
 
-
 def update_income(
     user: User,
     income: Income,

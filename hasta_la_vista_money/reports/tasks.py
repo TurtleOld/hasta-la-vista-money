@@ -1,12 +1,12 @@
 """Модуль задач для пакета reports."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 import structlog
 from django.db.models import Avg, Count, Max, Min, Sum
-from taskiq import Context, TaskiqDepends
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
@@ -19,7 +19,6 @@ async def generate_monthly_report(
     user_id: int,
     year: int,
     month: int,
-    context: Context = TaskiqDepends(),
 ) -> dict[str, Any]:
     """
     Генерация месячного отчета для пользователя.
@@ -44,11 +43,13 @@ async def generate_monthly_report(
         user = await User.objects.aget(id=user_id)
 
         # Определяем период
-        start_date = datetime(year, month, 1)
-        if month == 12:
-            end_date = datetime(year + 1, 1, 1) - timedelta(days=1)
+        start_date = datetime(year, month, 1, tzinfo=UTC)
+        if month == constants.NUMBER_TWELFTH_MONTH_YEAR:
+            end_date = datetime(year + 1, 1, 1, tzinfo=UTC) - timedelta(days=1)
         else:
-            end_date = datetime(year, month + 1, 1) - timedelta(days=1)
+            end_date = datetime(year, month + 1, 1, tzinfo=UTC) - timedelta(
+                days=1
+            )
 
         logger.info(
             'Report period defined',
@@ -164,24 +165,22 @@ async def generate_monthly_report(
             receipts_count=receipt_stats['total_receipts'],
         )
 
-        return {'success': True, 'report': report_data}
-
     except Exception as e:
-        logger.error(
+        logger.exception(
             'Error generating monthly report',
             user_id=user_id,
             year=year,
             month=month,
             error=str(e),
-            exc_info=True,
         )
         return {'success': False, 'error': str(e)}
+    else:
+        return {'success': True, 'report': report_data}
 
 
 async def generate_yearly_report(
     user_id: int,
     year: int,
-    context: Context = TaskiqDepends(),
 ) -> dict[str, Any]:
     """
     Генерация годового отчета для пользователя.
@@ -203,9 +202,8 @@ async def generate_yearly_report(
     try:
         user = await User.objects.aget(id=user_id)
 
-        # Определяем период
-        start_date = datetime(year, 1, 1)
-        end_date = datetime(year, 12, 31)
+        start_date = datetime(year, 1, 1, tzinfo=timezone.UTC)
+        end_date = datetime(year, 12, 31, tzinfo=timezone.UTC)
 
         logger.info(
             'Yearly report period defined',
@@ -214,14 +212,20 @@ async def generate_yearly_report(
             end_date=end_date.isoformat(),
         )
 
-        # Месячная статистика
         monthly_data = []
-        for month in range(1, 13):
-            month_start = datetime(year, month, 1)
-            if month == 12:
-                month_end = datetime(year + 1, 1, 1) - timedelta(days=1)
+        for month in range(
+            constants.NUMBER_FIRST_MONTH_YEAR,
+            constants.NUMBER_TWELFTH_MONTH_YEAR + 1,
+        ):
+            month_start = datetime(year, month, 1, tzinfo=UTC)
+            if month == constants.NUMBER_TWELFTH_MONTH_YEAR:
+                month_end = datetime(
+                    year + 1, 1, 1, tzinfo=timezone.UTC
+                ) - timedelta(days=1)
             else:
-                month_end = datetime(year, month + 1, 1) - timedelta(days=1)
+                month_end = datetime(
+                    year, month + 1, 1, tzinfo=timezone.UTC
+                ) - timedelta(days=1)
 
             # Доходы за месяц
             month_income = await Income.objects.filter(
@@ -315,22 +319,20 @@ async def generate_yearly_report(
             + (yearly_expense['count'] or 0),
         )
 
-        return {'success': True, 'report': report_data}
-
     except Exception as e:
-        logger.error(
+        logger.exception(
             'Error generating yearly report',
             user_id=user_id,
             year=year,
             error=str(e),
-            exc_info=True,
         )
         return {'success': False, 'error': str(e)}
+    else:
+        return {'success': True, 'report': report_data}
 
 
 async def generate_user_statistics(
     user_id: int,
-    context: Context = TaskiqDepends(),
 ) -> dict[str, Any]:
     """
     Генерация общей статистики пользователя.
@@ -439,13 +441,12 @@ async def generate_user_statistics(
             receipts_count=total_receipts['count'],
         )
 
-        return {'success': True, 'statistics': stats_data}
-
     except Exception as e:
-        logger.error(
+        logger.exception(
             'Error generating user statistics',
             user_id=user_id,
             error=str(e),
-            exc_info=True,
         )
         return {'success': False, 'error': str(e)}
+    else:
+        return {'success': True, 'statistics': stats_data}
