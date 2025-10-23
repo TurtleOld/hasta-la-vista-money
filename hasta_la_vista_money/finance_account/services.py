@@ -137,7 +137,8 @@ class AccountService:
             end_date: End of the period (inclusive)
 
         Returns:
-            Optional[Decimal]: The calculated debt, or None if not a credit account
+            Optional[Decimal]: The calculated debt, or None if not a
+            credit account
         """
         if account.type_account not in (
             ACCOUNT_TYPE_CREDIT_CARD,
@@ -256,9 +257,11 @@ class AccountService:
         Calculate grace period information for a credit card.
 
         Bank-dependent logic:
-        - Sberbank: current domain logic applies (1 month for purchases + 3 months for repayment).
+        - Sberbank: current domain logic applies (1 month for purchases
+          + 3 months for repayment).
         - Raiffeisenbank: 110 days from the first purchase date in the month.
-        - Other banks: placeholder for now (repayment due at the end of the purchase month) until specific rules are implemented.
+        - Other banks: placeholder for now (repayment due at the end of
+          the purchase month) until specific rules are implemented.
         """
         if account.type_account not in (
             ACCOUNT_TYPE_CREDIT_CARD,
@@ -366,7 +369,8 @@ class AccountService:
         purchase_month: Any,
     ) -> dict[str, Any]:
         """
-        Рассчитывает детальный график платежей для кредитной карты Райффайзенбанка.
+        Рассчитывает детальный график платежей для кредитной карты
+        Райффайзенбанка.
 
         Включает:
         - Даты ежемесячных выписок (2-го числа каждого месяца)
@@ -403,7 +407,8 @@ class AccountService:
         if timezone.is_naive(first_purchase):
             first_purchase = timezone.make_aware(first_purchase)
 
-        # Рассчитываем даты выписок (2-го числа каждого месяца, начиная со следующего)
+        # Рассчитываем даты выписок (2-го числа каждого месяца,
+        # начиная со следующего)
         first_statement_date = first_purchase.replace(day=2)
         if first_statement_date <= first_purchase:
             # Если 2-е число уже прошло, берём следующий месяц

@@ -106,6 +106,13 @@ max-complexity = 6
   "S404", # subprocess calls are for tests
   "S603", # do not require `shell=True`
   "S607", # partial executable paths
+  "SLF001", # private member access in tests
+]
+"**/test_*.py" = [
+  "SLF001", # private member access in tests
+]
+"**/tests.py" = [
+  "SLF001", # private member access in tests
 ]
 
 [tool.mypy]

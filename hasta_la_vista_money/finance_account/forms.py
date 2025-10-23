@@ -1,7 +1,9 @@
 """Forms for finance account management.
 
-This module contains forms for creating accounts and transferring money between them.
-Forms use base classes and mixins to reduce code duplication and ensure consistency.
+This module contains forms for creating accounts and transferring money
+between them.
+Forms use base classes and mixins to reduce code duplication and ensure
+consistency.
 Includes comprehensive validation, user-specific account filtering, and proper
 error handling for financial operations.
 """
@@ -92,7 +94,8 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     balance = DecimalField(
         label=_('Баланс'),
         help_text=_(
-            'Введите начальный баланс, который есть сейчас на счёту в банке\\в наличной валюте.\nМаксимальная длина 20 символов.',
+            'Введите начальный баланс, который есть сейчас на счёту в банке'
+            '\\в наличной валюте.\nМаксимальная длина 20 символов.',
         ),
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
@@ -105,7 +108,8 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the form with default values and date field configuration."""
+        """Initialize the form with default values and date field
+        configuration."""
         super().__init__(*args, **kwargs)
         # Set default account type
         self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
@@ -113,7 +117,8 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         self.setup_date_fields()
 
     def clean(self) -> dict[str, Any]:
-        """Validate form data, ensuring credit fields are provided for credit accounts.
+        """Validate form data, ensuring credit fields are provided for
+        credit accounts.
 
         Performs comprehensive validation including credit field requirements
         and business logic validation for different account types.
@@ -236,7 +241,8 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             TransferMoneyLog: Created transfer log entry.
 
         Raises:
-            ValueError: If transfer fails due to insufficient funds or invalid accounts.
+            ValueError: If transfer fails due to insufficient funds or
+            invalid accounts.
         """
         if not commit:
             raise ValueError('Transfer forms must be committed')

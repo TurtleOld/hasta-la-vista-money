@@ -23,7 +23,8 @@ def calculate_annuity_loan(
     period_loan,
 ):
     """
-    Функция по расчёту аннуитетных платежей (по-банковски, с округлением каждого платежа).
+    Функция по расчёту аннуитетных платежей
+    (по-банковски, с округлением каждого платежа).
     """
     if not isinstance(loan_amount, Decimal):
         loan_amount = Decimal(str(loan_amount))
@@ -72,7 +73,8 @@ def calculate_differentiated_loan(
     period_loan,
 ):
     """
-    Функция по расчёту дифференцированных платежей (по-банковски, с округлением каждого платежа).
+    Функция по расчёту дифференцированных платежей
+    (по-банковски, с округлением каждого платежа).
     """
     if not isinstance(loan_amount, Decimal):
         loan_amount = Decimal(str(loan_amount))
@@ -84,7 +86,6 @@ def calculate_differentiated_loan(
     user = get_object_or_404(User, id=user_id)
     loan = get_object_or_404(Loan, id=loan_id)
 
-    # Используем банковский расчёт
     schedule_data = calculate_differentiated_schedule(
         float(loan_amount),
         float(annual_interest_rate),

@@ -1,14 +1,18 @@
-"""Middleware for injecting CSP nonce into static asset tags in HTML responses."""
+"""Middleware for injecting CSP nonce into static asset tags
+in HTML responses."""
 
 import html
 import re
 
 
 class CompressorNonceMiddleware:
-    """Add CSP nonce to `<link>` and `<script>` tags that reference static assets.
+    """Add CSP nonce to `<link>` and `<script>` tags that reference
+    static assets.
 
-    The middleware looks for tags with `href`/`src` pointing to `/static/*.css` and
-    `/static/*.js` in HTML responses and injects a `nonce` attribute using the value
+    The middleware looks for tags with `href`/`src` pointing to
+    `/static/*.css` and
+    `/static/*.js` in HTML responses and injects a `nonce` attribute
+    using the value
     from `request.csp_nonce` after strict validation and safe quoting.
     """
 
@@ -74,7 +78,8 @@ class CompressorNonceMiddleware:
             nonce: Nonce value to escape.
 
         Returns:
-            A quoted attribute value (e.g., '"abc123"') or an empty string if invalid.
+            A quoted attribute value (e.g., '"abc123"') or an empty string
+            if invalid.
         """
         if not self._validate_nonce(nonce):
             return ''

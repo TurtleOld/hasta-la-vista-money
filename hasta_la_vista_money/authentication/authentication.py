@@ -13,7 +13,8 @@ T = TypeVar('T', bound=HttpResponse)
 
 
 class CookieJWTAuthentication(JWTAuthentication):
-    """Custom JWT authentication that uses HttpOnly cookies instead of Authorization header"""
+    """Custom JWT authentication that uses HttpOnly cookies
+    instead of Authorization header"""
 
     def authenticate(self, request: Request) -> tuple[User, Token] | None:  # type: ignore[override]
         header = self.get_header(request)

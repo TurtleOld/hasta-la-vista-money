@@ -1,3 +1,5 @@
+from typing import Any
+
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -25,7 +27,7 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin, ListView):
     template_name = 'loan/loan_modern.html'
     no_permission_url = reverse_lazy('login')
 
-    def get_context_data(self, *args, **kwargs):
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         loan_form = LoanForm()
         payment_make_loan_form = PaymentMakeLoanForm(user=self.request.user)
@@ -35,7 +37,6 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin, ListView):
         ).all()
         payment_make_loan = user.payment_make_loan_users.all()
 
-        # Автоматический расчёт общей суммы кредитов и переплаты
         total_loan_amount = sum(loan_item.loan_amount for loan_item in loan)
         total_overpayment = sum(
             float(loan_item.calculate_sum_monthly_payment) for loan_item in loan
@@ -120,7 +121,7 @@ class LoanDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
         try:
             account.delete()
         except ProtectedError:
-            logger.error(f'Account {account.name_account} is protected')
+            logger.exception('Account %s is protected', account.name_account)
         return super().form_valid(form)
 
 
@@ -136,7 +137,7 @@ class PaymentMakeCreateView(LoginRequiredMixin, CreateView):
         kwargs['user'] = self.request.user
         return kwargs
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         form = self.get_form()
         if not form.is_valid():
             return JsonResponse({'success': False, 'errors': form.errors})

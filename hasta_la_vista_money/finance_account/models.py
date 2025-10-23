@@ -38,7 +38,8 @@ class AccountQuerySet(models.QuerySet['Account']):
         return self.filter(user=user)
 
     def by_user_with_related(self, user: 'User') -> 'AccountQuerySet':
-        """Return accounts belonging to the given user with select_related('user')."""
+        """Return accounts belonging to the given user with
+        select_related('user')."""
         return self.filter(user=user).select_related('user')
 
     def by_currency(self, currency: str) -> 'AccountQuerySet':
@@ -97,7 +98,8 @@ class TimeStampedModel(models.Model):
 
 class Account(TimeStampedModel):
     """
-    Represents a user's financial account, which can be a credit/debit account, card, or cash.
+    Represents a user's financial account, which can be a credit/debit
+    account, card, or cash.
     Stores balance, currency, type, and credit-related fields.
     Provides methods for money transfer and credit card debt calculations.
     """
@@ -179,7 +181,8 @@ class Account(TimeStampedModel):
         blank=True,
         verbose_name=_('Длительность льготного периода (дней)'),
         help_text=_(
-            'Для кредитных карт: сколько дней длится беспроцентный период (например, 120)',
+            'Для кредитных карт: сколько дней длится беспроцентный период '
+            '(например, 120)',
         ),
     )
 
@@ -209,8 +212,10 @@ class Account(TimeStampedModel):
 
     def transfer_money(self, to_account: 'Account', amount: Decimal) -> bool:
         """
-        Transfers a specified amount of money from this account to another account.
-        Returns True if the transfer was successful, False otherwise (e.g., insufficient funds).
+        Transfers a specified amount of money from this account to another
+        account.
+        Returns True if the transfer was successful, False otherwise
+        (e.g., insufficient funds).
 
         Args:
             to_account (Account): The account to transfer money to.
@@ -242,7 +247,8 @@ class Account(TimeStampedModel):
             end_date (date|datetime|None): End of the period (inclusive).
 
         Returns:
-            Optional[Decimal]: The calculated debt, or None if not a credit account.
+            Optional[Decimal]: The calculated debt, or None if not a credit
+            account.
         """
         from hasta_la_vista_money.finance_account.services import (
             AccountService,
@@ -260,10 +266,12 @@ class Account(TimeStampedModel):
         Example: purchases in May -> repayment due by end of August.
 
         Args:
-            purchase_month (date|datetime): The month of purchases (first day of month).
+            purchase_month (date|datetime): The month of purchases
+            (first day of month).
 
         Returns:
-            dict: Information about the grace period, including dates, debts, and overdue status.
+            dict: Information about the grace period, including dates,
+            debts, and overdue status.
         """
         from hasta_la_vista_money.finance_account.services import (
             AccountService,

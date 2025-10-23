@@ -70,7 +70,8 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                         access_token,
                         refresh_token,
                     )
-                    # Return tokens in JSON for mobile apps, but keep cookies for web
+                    # Return tokens in JSON for mobile apps,
+                    # but keep cookies for web
                     response.data = {
                         'success': True,
                         'access': access_token,

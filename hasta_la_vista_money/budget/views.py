@@ -111,7 +111,8 @@ class BaseView:
 
 class BudgetContextMixin:
     """
-    Mixin to provide user, months, expense and income categories for budget views.
+    Mixin to provide user, months, expense and income categories
+    for budget views.
     """
 
     def get_budget_context(self):
@@ -128,7 +129,8 @@ class BudgetView(LoginRequiredMixin, BudgetContextMixin, BaseView, ListView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
-        Returns context data for the budget page, using aggregated data from service layer.
+        Returns context data for the budget page, using aggregated data
+        from service layer.
         """
         context = super().get_context_data(**kwargs)
         user, months, expense_categories, income_categories = (
@@ -225,7 +227,8 @@ class ExpenseTableView(
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
-        Returns context data for the expense table page, using aggregated data from service layer.
+        Returns context data for the expense table page, using aggregated
+        data from service layer.
         """
         context = super().get_context_data(**kwargs)
         user, months, expense_categories, _ = self.get_budget_context()
@@ -250,7 +253,8 @@ class IncomeTableView(
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
-        Returns context data for the income table page, using aggregated data from service layer.
+        Returns context data for the income table page, using aggregated
+        data from service layer.
         """
         context = super().get_context_data(**kwargs)
         user, months, _, income_categories = self.get_budget_context()

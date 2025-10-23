@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import ClassVar
 
 from django.test import TestCase
 from django.urls import reverse_lazy
@@ -22,7 +23,7 @@ from hasta_la_vista_money.users.models import User
 class TestLoan(TestCase):
     """Test cases for Loan application."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'income.yaml',
@@ -153,7 +154,6 @@ class TestLoan(TestCase):
 
     def test_payment_make_loan_form_validation(self):
         """Test PaymentMakeLoanForm validation."""
-        # Создаем отдельный счет для платежа, который не связан с кредитом
         payment_account = Account.objects.create(
             user=self.user,
             name_account='Test Payment Account',
@@ -412,7 +412,9 @@ class TestLoan(TestCase):
         self.assertIsInstance(result, Decimal)
 
     def test_loan_calculate_sum_monthly_payment_with_zero_loan_amount(self):
-        """Test Loan calculate_sum_monthly_payment property with zero loan amount."""
+        """
+        Test Loan calculate_sum_monthly_payment property with zero loan amount.
+        """
         self.loan1.loan_amount = 0
         self.loan1.save()
         result = self.loan1.calculate_sum_monthly_payment

@@ -58,19 +58,24 @@ class AccountView(
     AccountBaseView,
     ListView,
 ):
-    """Display a list of user or group accounts with related forms and statistics.
+    """Display a list of user or group accounts with related forms
+    and statistics.
 
-    Shows all accounts for the current user or selected group, provides forms for adding and transferring accounts,
-    and displays recent transfer logs and account balances. Supports group-based filtering and comprehensive
+    Shows all accounts for the current user or selected group, provides
+    forms for adding and transferring accounts,
+    and displays recent transfer logs and account balances. Supports
+    group-based filtering and comprehensive
     financial data presentation.
     """
 
     context_object_name = 'finance_account'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Build the context for the account list page, including accounts, forms, logs, and statistics.
+        """Build the context for the account list page, including
+        accounts, forms, logs, and statistics.
 
-        Aggregates data from multiple sources to provide a comprehensive view of the user's
+        Aggregates data from multiple sources to provide a comprehensive
+        view of the user's
         financial accounts and related operations.
 
         Args:
@@ -170,7 +175,8 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
     """
     Handles creation of a new account for the current user.
 
-    Presents a form for account creation, validates and saves the account, and provides user feedback.
+    Presents a form for account creation, validates and saves the
+    account, and provides user feedback.
     """
 
     form_class = AddAccountForm
@@ -240,7 +246,8 @@ class ChangeAccountView(
     """
     Handles editing of an existing account.
 
-    Presents a form for editing account details and provides user feedback on success or error.
+    Presents a form for editing account details and provides user
+    feedback on success or error.
     """
 
     form_class = AddAccountForm
@@ -274,7 +281,8 @@ class ChangeAccountView(
             messages.error(
                 self.request,
                 _(
-                    'Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте позже.',
+                    'Произошла ошибка при загрузке формы изменения счета. '
+            'Пожалуйста, попробуйте позже.',
                 ),
             )
             return super().get_context_data(**kwargs)
@@ -289,7 +297,8 @@ class TransferMoneyAccountView(
     """
     Handles money transfers between user accounts.
 
-    Validates and processes money transfer requests, providing user feedback and error handling.
+    Validates and processes money transfer requests, providing user
+    feedback and error handling.
     """
 
     form_class = TransferMoneyAccountForm
@@ -337,7 +346,8 @@ class TransferMoneyAccountView(
                     'success': False,
                     'errors': str(
                         _(
-                            'Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже.',
+                            'Произошла ошибка при переводе средств. '
+            'Пожалуйста, попробуйте позже.',
                         ),
                     ),
                 },
@@ -349,7 +359,8 @@ class DeleteAccountView(DeleteObjectMixin, LoginRequiredMixin, DeleteView):
     """
     Handles deletion of an account.
 
-    Deletes the specified account and provides user feedback on success or failure.
+    Deletes the specified account and provides user feedback on
+    success or failure.
     """
 
     model = Account
@@ -363,7 +374,8 @@ class AjaxAccountsByGroupView(View):
     """
     Returns rendered HTML for accounts filtered by group via AJAX.
 
-    Handles asynchronous requests for account cards, with error logging and user-friendly error messages.
+    Handles asynchronous requests for account cards, with error
+    logging and user-friendly error messages.
     """
 
     async def get(
@@ -404,7 +416,8 @@ class AjaxAccountsByGroupView(View):
                     'success': False,
                     'error': str(
                         _(
-                            'Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже.',
+                            'Произошла ошибка при получении счетов. '
+            'Пожалуйста, попробуйте позже.',
                         ),
                     ),
                 },
