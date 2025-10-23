@@ -54,7 +54,10 @@ class SessionTokenObtainView(APIView):
 class CookieTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view that sets HttpOnly cookies"""
 
-    throttle_classes: ClassVar[list] = [AnonLoginRateThrottle, LoginRateThrottle]
+    throttle_classes: ClassVar[list] = [
+        AnonLoginRateThrottle,
+        LoginRateThrottle,
+    ]
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:

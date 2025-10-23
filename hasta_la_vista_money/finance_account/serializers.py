@@ -4,8 +4,9 @@ This module provides Django REST Framework serializers for converting
 finance account models to and from JSON format for API communication.
 """
 
-from rest_framework import serializers
 from typing import ClassVar
+
+from rest_framework import serializers
 
 from hasta_la_vista_money.finance_account.models import Account
 
@@ -19,4 +20,9 @@ class AccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Account
-        fields: ClassVar[list[str]] = ['id', 'name_account', 'balance', 'currency']
+        fields: ClassVar[list[str]] = [
+            'id',
+            'name_account',
+            'balance',
+            'currency',
+        ]

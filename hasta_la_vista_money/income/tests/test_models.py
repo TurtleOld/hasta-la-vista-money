@@ -1,7 +1,7 @@
 from decimal import Decimal
+from typing import ClassVar
 
 from django.test import TestCase
-from typing import ClassVar
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account

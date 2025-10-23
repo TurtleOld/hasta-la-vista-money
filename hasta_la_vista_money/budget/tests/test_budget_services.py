@@ -1,5 +1,6 @@
-from django.test import TestCase
 from typing import ClassVar
+
+from django.test import TestCase
 
 from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.budget.services.budget import (

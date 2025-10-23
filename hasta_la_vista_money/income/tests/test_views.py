@@ -1,5 +1,6 @@
-from django.test import TestCase
 from typing import ClassVar
+
+from django.test import TestCase
 from django.urls import reverse_lazy
 from django.utils import timezone
 
