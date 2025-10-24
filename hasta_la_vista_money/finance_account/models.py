@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.db import models
 from django.urls import reverse
@@ -11,8 +11,12 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services import (
+        AccountService,  # noqa: TC004
+    )
 
 
 class AccountQuerySet(models.QuerySet['Account']):
