@@ -44,6 +44,7 @@ QR_CODE_NOT_CONSIDERED: Final[tuple[str]] = (
 SUCCESS_MESSAGE_LOGIN: Final = _('Вы успешно авторизовались!')
 SUCCESS_MESSAGE_REGISTRATION: Final = _('Регистрация прошла успешно!')
 SUCCESS_MESSAGE_CREATE_RECEIPT: Final = _('Чек успешно добавлен!')
+SUCCESS_MESSAGE_DELETE_RECEIPT: Final = _('Чек успешно удален!')
 SUCCESS_MESSAGE_CREATE_SELLER: Final = _(
     'Новый продавец успешно добавлен!',
 )

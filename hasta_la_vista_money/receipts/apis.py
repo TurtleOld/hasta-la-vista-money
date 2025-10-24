@@ -33,7 +33,7 @@ class ReceiptListAPIView(ListCreateAPIView):
             .prefetch_related('product')
         )
 
-    def list(self) -> Response:
+    def list(self, request) -> Response:
         queryset = self.get_queryset()
         serializer = ReceiptSerializer(queryset, many=True)
         return Response(serializer.data)

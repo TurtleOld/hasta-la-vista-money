@@ -16,10 +16,16 @@ from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.template.loader import render_to_string
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import CreateView, DeleteView, ListView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    FormView,
+    ListView,
+    UpdateView,
+)
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
@@ -225,9 +231,8 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
             messages.success(self.request, self.success_message)
             return HttpResponseRedirect(self.get_success_url())
         except Exception:
-            logger.error(
+            logger.exception(
                 'Ошибка при создании счета',
-                exc_info=True,
                 user_id=getattr(self.request.user, 'id', None),
             )
             messages.error(
@@ -269,15 +274,11 @@ class ChangeAccountView(
             form_class = self.get_form_class()
             form = form_class(**self.get_form_kwargs())
             context['add_account_form'] = form
-            return context
         except Exception:
-            logger.error(
+            logger.exception(
                 'Ошибка при формировании контекста изменения счета',
-                exc_info=True,
                 user_id=getattr(self.request.user, 'id', None),
             )
-            from django.contrib import messages
-
             messages.error(
                 self.request,
                 _(
@@ -286,13 +287,15 @@ class ChangeAccountView(
                 ),
             )
             return super().get_context_data(**kwargs)
+        else:
+            return context
 
 
 class TransferMoneyAccountView(
     LoginRequiredMixin,
     SuccessMessageMixin,
     AccountBaseView,
-    View,
+    FormView,
 ):
     """
     Handles money transfers between user accounts.
@@ -303,56 +306,46 @@ class TransferMoneyAccountView(
 
     form_class = TransferMoneyAccountForm
     success_message = constants.SUCCESS_MESSAGE_TRANSFER_MONEY
+    template_name = 'finance_account/transfer_money.html'
 
-    def post(
-        self,
-        request: WSGIRequest,
-        *args: Any,
-        **kwargs: Any,
-    ) -> JsonResponse:
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get form kwargs including user for account filtering."""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(
+        self, form: TransferMoneyAccountForm
+    ) -> HttpResponseRedirect:
         """
-        Process a POST request to transfer money between accounts.
+        Process valid form submission.
 
         Args:
-            request (WSGIRequest): The HTTP request object.
+            form: Validated form instance.
 
         Returns:
-            JsonResponse: JSON response indicating success or error.
+            HttpResponseRedirect: Redirect to account list with success message.
         """
         try:
-            form = self.form_class(user=request.user, data=request.POST)
-
-            if (
-                form.is_valid()
-                and request.META.get('HTTP_X_REQUESTED_WITH')
-                == 'XMLHttpRequest'
-            ):
-                try:
-                    form.save()
-                    messages.success(request, self.success_message)
-                    return JsonResponse({'success': True})
-                except ValidationError as e:
-                    return JsonResponse({'success': False, 'errors': str(e)})
-            else:
-                return JsonResponse({'success': False, 'errors': form.errors})
+            form.save()
+            messages.success(self.request, self.success_message)
+            return HttpResponseRedirect(reverse('finance_account:list'))
+        except ValidationError as e:
+            messages.error(self.request, str(e))
+            return self.form_invalid(form)
         except Exception:
-            logger.error(
+            logger.exception(
                 'Ошибка при переводе средств между счетами',
-                exc_info=True,
-                user_id=getattr(request.user, 'id', None),
+                user_id=getattr(self.request.user, 'id', None),
             )
-            return JsonResponse(
-                {
-                    'success': False,
-                    'errors': str(
-                        _(
-                            'Произошла ошибка при переводе средств. '
-                            'Пожалуйста, попробуйте позже.',
-                        ),
-                    ),
-                },
-                status=500,
+            messages.error(
+                self.request,
+                _(
+                    'Произошла ошибка при переводе средств. '
+                    'Пожалуйста, попробуйте позже.',
+                ),
             )
+            return self.form_invalid(form)
 
 
 class DeleteAccountView(DeleteObjectMixin, LoginRequiredMixin, DeleteView):
@@ -405,9 +398,8 @@ class AjaxAccountsByGroupView(View):
             )
             return HttpResponse(html)
         except Exception:
-            logger.error(
+            logger.exception(
                 'Ошибка при получении счетов по группе',
-                exc_info=True,
                 group_id=group_id,
                 user_id=getattr(user, 'id', None),
             )

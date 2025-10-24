@@ -35,7 +35,7 @@ class BootstrapFormMixin:
         Iterates through all form fields and adds the 'form-control' class
         to their widget attributes if not already present.
         """
-        for field_name, field in self.fields.items():
+        for field in self.fields.values():
             if hasattr(field.widget, 'attrs'):
                 current_class = field.widget.attrs.get('class', '')
                 if 'form-control' not in current_class:
@@ -124,8 +124,9 @@ class FormValidationMixin:
         """
         amount = self.cleaned_data.get('amount')
         if amount is not None and amount <= 0:
+            msg = 'amount'
             raise self.get_form_error(
-                'amount',
+                msg,
                 _('Сумма должна быть больше нуля'),
             )
         return amount

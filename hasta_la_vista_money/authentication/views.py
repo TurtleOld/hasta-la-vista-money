@@ -30,20 +30,21 @@ class SessionTokenObtainView(APIView):
 
     permission_classes = (IsAuthenticated,)
 
+    def _validate_user(self, user) -> None:
+        if not isinstance(user, User):
+            raise TypeError(_('Пользователь не авторизован'))
+
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:
-            if not isinstance(request.user, User):
-                raise ValueError(_('Пользователь не авторизован'))
+            self._validate_user(request.user)
             refresh = RefreshToken.for_user(request.user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
 
             response = Response({'success': True})
-            response = set_auth_cookies(response, access_token, refresh_token)
+            return set_auth_cookies(response, access_token, refresh_token)
 
-            return response
-
-        except Exception as e:
+        except (TypeError, ValueError, KeyError) as e:
             response = Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -73,22 +74,20 @@ class CookieTokenObtainPairView(TokenObtainPairView):
                         access_token,
                         refresh_token,
                     )
-                    # Return tokens in JSON for mobile apps,
-                    # but keep cookies for web
                     response.data = {
                         'success': True,
                         'access': access_token,
                         'refresh': refresh_token,
                     }
 
-            return response
-
-        except Exception as e:
+        except (TypeError, ValueError, KeyError) as e:
             response = Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
             return clear_auth_cookies(response)
+        else:
+            return response
 
 
 class CookieTokenRefreshView(TokenRefreshView):
@@ -116,17 +115,17 @@ class CookieTokenRefreshView(TokenRefreshView):
                 refresh.get('refresh', refresh_token),
             )
 
-            return response
-
         except InvalidToken:
             response = Response(
                 {'error': 'Invalid refresh token'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
             return clear_auth_cookies(response)
-        except Exception as e:
+        except (TypeError, ValueError, KeyError) as e:
             response = Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
             return clear_auth_cookies(response)
+        else:
+            return response

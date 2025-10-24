@@ -555,7 +555,7 @@ class ReceiptUpdateView(
 class ReceiptDeleteView(LoginRequiredMixin, BaseView, DeleteView[Receipt]):
     model = Receipt
 
-    def form_valid(self) -> HttpResponse:
+    def form_valid(self, form) -> HttpResponse:
         receipt = self.get_object()
         account = receipt.account
         amount = receipt.total_sum

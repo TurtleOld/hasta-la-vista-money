@@ -1,4 +1,4 @@
-from typing import TypeVar, cast
+from typing import ParamSpec, TypeVar, cast
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
@@ -10,6 +10,7 @@ from rest_framework_simplejwt.tokens import Token
 from hasta_la_vista_money.users.models import User
 
 T = TypeVar('T', bound=HttpResponse)
+P = ParamSpec('P')
 
 
 class CookieJWTAuthentication(JWTAuthentication):
@@ -36,21 +37,24 @@ class CookieJWTAuthentication(JWTAuthentication):
             user = self.get_user(validated_token)
 
             if not isinstance(user, User):
-                raise ValueError(
-                    _('Ожидался экземпляр User, получен {type_name}').format(
-                        type_name=type(user),
-                    ),
-                )
-
-            return user, validated_token
-        except Exception:
+                self._raise_invalid_user_type(user)
+            else:
+                return user, validated_token
+        except (ValueError, TypeError, KeyError):
             return None
+
+    def _raise_invalid_user_type(self, user) -> None:
+        raise TypeError(
+            _('Ожидался экземпляр User, получен {type_name}').format(
+                type_name=type(user),
+            ),
+        )
 
     def authenticate_header(self, request: Request) -> str:
         return 'Bearer realm="api"'
 
 
-def set_auth_cookies(
+def set_auth_cookies[T: HttpResponse](
     response: T,
     access_token: str,
     refresh_token: str | None = None,
@@ -94,7 +98,7 @@ def set_auth_cookies(
     return response
 
 
-def clear_auth_cookies(response: T) -> T:
+def clear_auth_cookies[T: HttpResponse](response: T) -> T:
     """Clear JWT token cookies from the response"""
     jwt_settings = settings.SIMPLE_JWT
     response.delete_cookie(

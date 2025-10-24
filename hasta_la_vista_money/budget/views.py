@@ -8,6 +8,7 @@ from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic import ListView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -65,7 +66,8 @@ def get_fact_amount(
                 .aggregate(total=Sum('amount'))['total']
                 or 0
             )
-        raise ValueError('Expected ExpenseCategory for expense type')
+        error_msg = 'Expected ExpenseCategory for expense type'
+        raise ValueError(error_msg)
     if isinstance(category, IncomeCategory):
         return (
             Income.objects.filter(
@@ -78,7 +80,8 @@ def get_fact_amount(
             .aggregate(total=Sum('amount'))['total']
             or 0
         )
-    raise ValueError('Expected IncomeCategory for income type')
+    error_msg = 'Expected IncomeCategory for income type'
+    raise ValueError(error_msg)
 
 
 def get_plan_amount(
@@ -96,11 +99,13 @@ def get_plan_amount(
         if isinstance(category, ExpenseCategory):
             q = q.filter(category_expense=category)
         else:
-            raise ValueError('Expected ExpenseCategory for expense type')
+            error_msg = 'Expected ExpenseCategory for expense type'
+            raise ValueError(error_msg)
     elif isinstance(category, IncomeCategory):
         q = q.filter(category_income=category)
     else:
-        raise ValueError('Expected IncomeCategory for income type')
+        error_msg = 'Expected IncomeCategory for income type'
+        raise ValueError(error_msg)
     plan = q.first()
     return plan.amount if plan else 0
 
@@ -156,12 +161,14 @@ def generate_date_list_view(request):
         if last_date_obj:
             queryset_last_date = last_date_obj.date
         else:
-            queryset_last_date = date.today().replace(day=1)
+            queryset_last_date = timezone.now().date().replace(day=1)
         type_ = request.POST.get('type')
         generate_date_list(queryset_last_date, queryset_user, type_)
         if type_ == 'income':
             return redirect(reverse_lazy('budget:income_table'))
         return redirect(reverse_lazy('budget:expense_table'))
+
+    return redirect(reverse_lazy('budget:expense_table'))
 
 
 def change_planning(request):
@@ -185,7 +192,7 @@ def save_planning(request):
         month = date.fromisoformat(data['month'])
         try:
             amount = Decimal(str(data['amount']))
-        except Exception:
+        except (ValueError, TypeError, KeyError):
             amount = Decimal(0)
         type_ = data['type']
         if type_ == 'expense':

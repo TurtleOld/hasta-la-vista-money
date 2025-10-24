@@ -10,6 +10,7 @@ error handling for financial operations.
 
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.forms import (
     CharField,
     ChoiceField,
@@ -212,19 +213,17 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             to_account = cleaned_data.get('to_account')
             amount = cleaned_data.get('amount')
 
-            # Validate accounts are different
             if from_account and to_account:
                 try:
                     validate_different_accounts(from_account, to_account)
-                except Exception as e:
-                    self.add_error('to_account', str(e))
+                except ValidationError as e:
+                    self.add_error('to_account', e.message)
 
-            # Validate sufficient balance
             if from_account and amount:
                 try:
                     validate_account_balance(from_account, amount)
-                except Exception as e:
-                    self.add_error('from_account', str(e))
+                except ValidationError as e:
+                    self.add_error('from_account', e.message)
 
         return cleaned_data
 
@@ -245,7 +244,8 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             invalid accounts.
         """
         if not commit:
-            raise ValueError('Transfer forms must be committed')
+            error_msg = 'Transfer forms must be committed'
+            raise ValueError(error_msg)
 
         cleaned_data = self.cleaned_data
 

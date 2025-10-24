@@ -164,7 +164,7 @@ class IncomeViewsTest(TestCase):
         response = self.client.post(
             reverse_lazy('income:delete_income', args=[self.income.pk]),
         )
-        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_income_category_view_unauthenticated(self):
         response = self.client.get(reverse_lazy('income:category_list'))

@@ -34,7 +34,11 @@ shell:
 
 .PHONY: install
 install: .env secretkey
-		@uv pip install -e '.[dev]'
+		@uv sync --dev
+
+.PHONY: install-prod
+install-prod: .env secretkey
+		@uv sync
 
 .PHONY: migrate
 migrate:

@@ -47,7 +47,7 @@ class BudgetServicesTestCase(TestCase):
         cats = get_categories(self.user, 'expense')
         self.assertQuerySetEqual(
             cats.order_by('id'),
-            [c for c in self.expense_categories],
+            list(self.expense_categories),
             transform=lambda x: x,
         )
 
@@ -56,7 +56,7 @@ class BudgetServicesTestCase(TestCase):
         cats = get_categories(self.user, 'income')
         self.assertQuerySetEqual(
             cats.order_by('id'),
-            [c for c in self.income_categories],
+            list(self.income_categories),
             transform=lambda x: x,
         )
 

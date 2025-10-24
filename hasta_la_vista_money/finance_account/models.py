@@ -1,5 +1,6 @@
+from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from django.db import models
 from django.urls import reverse
@@ -10,12 +11,8 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
+from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.users.models import User
-
-if TYPE_CHECKING:
-    from datetime import date
-
-    from hasta_la_vista_money.users.models import User
 
 
 class AccountQuerySet(models.QuerySet['Account']):
@@ -250,11 +247,11 @@ class Account(TimeStampedModel):
             Optional[Decimal]: The calculated debt, or None if not a credit
             account.
         """
-        from hasta_la_vista_money.finance_account.services import (
-            AccountService,
+        return AccountService.get_credit_card_debt(
+            account=self,
+            start_date=start_date,
+            end_date=end_date,
         )
-
-        return AccountService.get_credit_card_debt(self, start_date, end_date)
 
     def calculate_grace_period_info(
         self,
@@ -273,11 +270,10 @@ class Account(TimeStampedModel):
             dict: Information about the grace period, including dates,
             debts, and overdue status.
         """
-        from hasta_la_vista_money.finance_account.services import (
-            AccountService,
+        return AccountService.calculate_grace_period_info(
+            account=self,
+            purchase_month=purchase_month,
         )
-
-        return AccountService.calculate_grace_period_info(self, purchase_month)
 
 
 class TransferMoneyLogQuerySet(models.QuerySet):
@@ -291,8 +287,8 @@ class TransferMoneyLogQuerySet(models.QuerySet):
 
     def by_date_range(
         self,
-        start: 'date',
-        end: 'date',
+        start: date,
+        end: date,
     ) -> 'TransferMoneyLogQuerySet':
         """Return transfer logs within the specified date range (inclusive)."""
         return self.filter(

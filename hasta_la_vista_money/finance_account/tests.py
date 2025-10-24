@@ -195,10 +195,9 @@ class TestAccount(TestCase):
         response = self.client.post(
             reverse('finance_account:transfer_money'),
             transfer_money,
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'success': True})
+        self.assertEqual(response.status_code, constants.REDIRECT_CODE)
+        self.assertRedirects(response, reverse('finance_account:list'))
 
         self.account1.refresh_from_db()
         self.account2.refresh_from_db()
@@ -216,7 +215,7 @@ class TestAccount(TestCase):
         """Тест перевода средств при недостаточном балансе."""
         self.client.force_login(self.user)
 
-        amount = self.account1.balance + Decimal(1000)  # Сумма больше баланса
+        amount = self.account1.balance + Decimal(1000)
 
         transfer_money = {
             'from_account': self.account1.pk,
@@ -229,12 +228,9 @@ class TestAccount(TestCase):
         response = self.client.post(
             reverse('finance_account:transfer_money'),
             transfer_money,
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('from_account', response_data['errors'])
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'from_account')
 
     def test_transfer_money_same_account(self) -> None:
         """Тест перевода средств на тот же счет."""
@@ -251,12 +247,9 @@ class TestAccount(TestCase):
         response = self.client.post(
             reverse('finance_account:transfer_money'),
             transfer_money,
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('to_account', response_data['errors'])
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'to_account')
 
     def test_transfer_money_invalid_form(self) -> None:
         """Тест перевода средств с невалидной формой."""
@@ -273,12 +266,9 @@ class TestAccount(TestCase):
         response = self.client.post(
             reverse('finance_account:transfer_money'),
             transfer_money,
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('amount', response_data['errors'])
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'amount')
 
     def test_transfer_money_no_ajax(self) -> None:
         """Тест перевода средств без AJAX запроса."""
@@ -296,9 +286,9 @@ class TestAccount(TestCase):
             reverse('finance_account:transfer_money'),
             transfer_money,
         )
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertFalse(response_data['success'])
+        # Должен перенаправить на список счетов после успешного перевода
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse('finance_account:list'))
 
     def test_account_model_methods(self) -> None:
         """Тест методов модели Account."""
@@ -843,7 +833,7 @@ class TestAddAccountFormRefactored(TestCase):
             Account.TYPE_ACCOUNT_LIST[1][0],
         )
 
-        for field_name, field in form.fields.items():
+        for field in form.fields.values():
             if hasattr(field.widget, 'attrs'):
                 self.assertIn(
                     'form-control',

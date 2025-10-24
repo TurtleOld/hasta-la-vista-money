@@ -628,7 +628,7 @@ class TestServices(TestCase):
             content_type='image/jpeg',
         )
 
-        with self.assertRaises(RuntimeError):  # noqa: PT027
+        with self.assertRaises(RuntimeError):
             analyze_image_with_ai(test_file)
 
 
@@ -834,7 +834,7 @@ class TestReceiptPermissions(TestCase):
         self.user2 = User.objects.create_user(
             username='testuser2',
             email='test2@example.com',
-            password='testpass123',  # noqa: S106
+            password='testpass123',
         )
         self.account1 = Account.objects.get(pk=1)
         self.account2 = Account.objects.create(

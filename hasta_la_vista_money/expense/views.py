@@ -181,7 +181,7 @@ class ExpenseCopyView(
             return redirect(
                 reverse_lazy('expense:change', kwargs={'pk': new_expense.pk}),
             )
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             messages.error(
                 request,
                 _('Ошибка при копировании расхода: {error}').format(
@@ -208,7 +208,8 @@ class ExpenseCreateView(
         """Get form kwargs with user-specific querysets."""
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
-            raise ValueError('User must be authenticated')
+            error_msg = 'User must be authenticated'
+            raise TypeError(error_msg)
         expense_service = ExpenseService(self.request.user, self.request)
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
@@ -223,14 +224,15 @@ class ExpenseCreateView(
     def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
-            raise ValueError('User must be authenticated')
+            error_msg = 'User must be authenticated'
+            raise TypeError(error_msg)
         expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.create_expense(form)
             messages.success(self.request, constants.SUCCESS_EXPENSE_ADDED)
             return super().form_valid(form)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             messages.error(
                 self.request,
                 _('Ошибка при создании расхода: {error}').format(error=str(e)),
@@ -269,7 +271,7 @@ class ExpenseUpdateView(
         """Get form kwargs with user-specific querysets."""
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
-            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+            raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
         expense_service = ExpenseService(self.request.user, self.request)
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
@@ -283,14 +285,14 @@ class ExpenseUpdateView(
     def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
-            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+            raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
         expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.update_expense(self.object, form)
             messages.success(self.request, constants.SUCCESS_EXPENSE_UPDATE)
             return super().form_valid(form)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             messages.error(
                 self.request,
                 _('Ошибка при обновлении расхода: {error}').format(
@@ -316,14 +318,14 @@ class ExpenseDeleteView(
     def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission for deletion."""
         if not isinstance(self.request.user, User):
-            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+            raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
         expense_service = ExpenseService(self.request.user, self.request)
 
         try:
             expense_service.delete_expense(self.get_object())
             messages.success(self.request, constants.SUCCESS_EXPENSE_DELETED)
             return super().form_valid(form)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             messages.error(
                 self.request,
                 _('Ошибка при удалении расхода: {error}').format(error=str(e)),
@@ -369,7 +371,7 @@ class ExpenseCategoryCreateView(
         """Get form kwargs with user-specific queryset."""
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
-            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+            raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
         category_service = ExpenseCategoryService(
             self.request.user,
             self.request,
@@ -380,7 +382,7 @@ class ExpenseCategoryCreateView(
     def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
-            raise ValueError(constants.USER_MUST_BE_AUTHENTICATED)
+            raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
         category_service = ExpenseCategoryService(
             self.request.user,
             self.request,
@@ -388,7 +390,7 @@ class ExpenseCategoryCreateView(
 
         try:
             category_name = self.request.POST.get('name')
-            category_service.create_category(form)
+            self.object = category_service.create_category(form)
             messages.success(
                 self.request,
                 _('Категория "{category_name}" была успешно добавлена!').format(
@@ -396,7 +398,7 @@ class ExpenseCategoryCreateView(
                 ),
             )
             return redirect(self.get_success_url())
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             messages.error(
                 self.request,
                 _('Ошибка при создании категории: {error}').format(
@@ -452,7 +454,7 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
                 request=request,
             )
             return HttpResponse(html)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             return HttpResponse(
                 _('Ошибка: {error}').format(error=str(e)),
                 status=500,
@@ -477,5 +479,5 @@ class ExpenseDataAjaxView(LoginRequiredMixin, View):
         try:
             all_data = expense_service.get_expense_data(group_id)
             return JsonResponse({'data': all_data})
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             return JsonResponse({'error': str(e)}, status=500)

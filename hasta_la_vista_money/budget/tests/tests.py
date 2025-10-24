@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import resolve, reverse
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.apps import BudgetConfig
 from hasta_la_vista_money.budget.models import DateList, Planning
 
@@ -69,13 +70,16 @@ class BudgetViewsTest(TestCase):
     def test_budget_view_get(self):
         response = self.client.get(reverse('budget:list'))
         self.assertIn(response.status_code, [200, 302])
-        if response.status_code == 200 and response.context is not None:
+        if (
+            response.status_code == constants.SUCCESS_CODE
+            and response.context is not None
+        ):
             self.assertIn('chart_plan_execution_income', response.context)
             self.assertIn('chart_plan_execution_expense', response.context)
 
     def test_generate_date_list_view(self):
         response = self.client.post(reverse('budget:generate_date'))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_save_planning_post(self):
         response = self.client.post(
@@ -87,7 +91,14 @@ class BudgetViewsTest(TestCase):
                 'amount': 123,
             },
         )
-        self.assertIn(response.status_code, [200, 302, 400])
+        self.assertIn(
+            response.status_code,
+            [
+                constants.SUCCESS_CODE,
+                constants.REDIRECTS,
+                constants.SERVER_ERROR,
+            ],
+        )
 
     def test_change_planning_post(self):
         response = self.client.post(
@@ -107,5 +118,8 @@ class BudgetViewsTest(TestCase):
         self.client.force_login(user2)
         response = self.client.get(reverse('budget:list'))
         self.assertIn(response.status_code, [200, 302])
-        if response.status_code == 200 and response.context is not None:
+        if (
+            response.status_code == constants.SUCCESS_CODE
+            and response.context is not None
+        ):
             self.assertIn('chart_plan_execution_income', response.context)

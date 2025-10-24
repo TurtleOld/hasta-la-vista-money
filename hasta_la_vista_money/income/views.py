@@ -341,7 +341,7 @@ class IncomeUpdateView(
             return self.form_invalid(form)
 
 
-class IncomeDeleteView(BaseView, DeleteView, DeletionMixin):
+class IncomeDeleteView(LoginRequiredMixin, BaseView, DeleteView, DeletionMixin):
     """
     View for deleting an income record.
     """

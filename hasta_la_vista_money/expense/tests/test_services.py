@@ -4,7 +4,7 @@ from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
 
 from hasta_la_vista_money.constants import RECEIPT_CATEGORY_NAME
-from hasta_la_vista_money.expense.forms import AddExpenseForm
+from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.expense.services import (
     ExpenseCategoryService,
@@ -80,7 +80,7 @@ class TestExpenseService(TestCase):
             data=form_data,
             category_queryset=self.service.get_categories_queryset(),
             account_queryset=Account.objects.filter(user=self.user),
-        )  # type: ignore
+        )
         self.assertTrue(form.is_valid())
         expense = self.service.create_expense(form)
         self.assertIsInstance(expense, Expense)
@@ -162,7 +162,6 @@ class TestExpenseCategoryService(TestCase):
 
     def test_create_category(self) -> None:
         """Test creating a new category."""
-        from hasta_la_vista_money.expense.forms import AddCategoryForm
 
         form_data = {
             'name': 'Test Category',
@@ -171,7 +170,7 @@ class TestExpenseCategoryService(TestCase):
         form = AddCategoryForm(
             data=form_data,
             category_queryset=self.service.get_categories_queryset(),
-        )  # type: ignore
+        )
         self.assertTrue(form.is_valid())
         category = self.service.create_category(form)
         self.assertIsInstance(category, ExpenseCategory)
