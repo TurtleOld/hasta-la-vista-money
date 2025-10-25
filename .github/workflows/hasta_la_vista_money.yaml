@@ -83,16 +83,6 @@ jobs:
           REDIS_LOCATION: redis://localhost:6379/1
           GITHUB_WORKFLOW: true
 
-      - name: Run Tests
-        run: make test
-        env:
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/github_actions
-          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
-          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
-          REDIS_LOCATION: redis://localhost:6379/1
-          GITHUB_WORKFLOW: true
-
       - name: Run Tests with Coverage
         run: make coverage
         env:
