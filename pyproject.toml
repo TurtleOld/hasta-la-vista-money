@@ -80,9 +80,13 @@ dev-dependencies = [
     "mkdocs-material>=9.5.39",
     "django-stubs[compatible-mypy]>=5.1.0",
     "types-python-dateutil>=2.9.0.20241003",
-    "pysentry-rs>=0.3.12",
+    "safety>=3.6.2",
 ]
 
+[[tool.uv.index]]
+name = "safety"
+url = "https://pkgs.safetycli.com/repository/pavlovteam/project/hastalavistamoney/pypi/simple/"
+default = false
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
