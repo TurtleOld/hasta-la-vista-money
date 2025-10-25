@@ -1,14 +1,13 @@
 import decimal
 import json
 from datetime import datetime
-from typing import ClassVar
 
 from django.db.models import QuerySet
 from rest_framework import status
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import BaseThrottle, UserRateThrottle
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from hasta_la_vista_money.finance_account.models import Account
@@ -24,7 +23,7 @@ from hasta_la_vista_money.users.models import User
 class ReceiptListAPIView(ListCreateAPIView):
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
-    throttle_classes: ClassVar[list[type[BaseThrottle]]] = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
     def get_queryset(self) -> QuerySet[Receipt, Receipt]:  # type: ignore[override]
         return (
@@ -43,7 +42,7 @@ class SellerDetailAPIView(RetrieveAPIView):
     queryset = Seller.objects.all()
     serializer_class = SellerSerializer
     permission_classes = (IsAuthenticated,)
-    throttle_classes: ClassVar[list[type[BaseThrottle]]] = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
     lookup_field = 'id'
 
     def get_queryset(self) -> QuerySet[Seller, Seller]:  # type: ignore[override]
@@ -56,7 +55,7 @@ class SellerDetailAPIView(RetrieveAPIView):
 
 class DataUrlAPIView(APIView):
     permission_classes = (IsAuthenticated,)
-    throttle_classes: ClassVar[list[type[BaseThrottle]]] = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
     def post(self, request):
         serializer = ImageDataSerializer(data=request.data)
@@ -89,7 +88,7 @@ class DataUrlAPIView(APIView):
 
 class SellerCreateAPIView(APIView):
     permission_classes = (IsAuthenticated,)
-    throttle_classes: ClassVar[list[type[BaseThrottle]]] = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
     def post(self, request):
         serializer = SellerSerializer(data=request.data)
@@ -101,7 +100,7 @@ class SellerCreateAPIView(APIView):
 
 class ReceiptCreateAPIView(ListCreateAPIView):
     permission_classes = (IsAuthenticated,)
-    throttle_classes: ClassVar[list[type[BaseThrottle]]] = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
     def post(self, request):
         return self._process_request(request)
@@ -161,7 +160,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             Receipt.objects.filter(
                 receipt_date=request_data.get('receipt_date'),
                 total_sum=request_data.get('total_sum'),
-            ).first()
+            ).first(),
         )
 
     def _get_user_and_account(
@@ -230,7 +229,10 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         return receipt
 
     def _create_products(
-        self, products_data: list, user: User, receipt: Receipt
+        self,
+        products_data: list,
+        user: User,
+        receipt: Receipt,
     ) -> None:
         products_objects = []
         for product_data in products_data:
@@ -256,7 +258,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 
 class ReceiptDeleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
-    throttle_classes: ClassVar[list[type[BaseThrottle]]] = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
     def delete(self, pk: int) -> Response:
         try:
