@@ -1,6 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, ClassVar
+from typing import Any
 
 from django.contrib import messages
 from django.forms import ValidationError
@@ -44,7 +44,7 @@ NEW_BALANCE_TEST = 450000
 
 
 class TestAccount(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -60,10 +60,8 @@ class TestAccount(TestCase):
         cls.factory = RequestFactory()
 
     def setUp(self) -> None:
-        # Получаем пользователя из фикстуры
         self.user = User.objects.get(id=1)
 
-        # Привязываем аккаунты к пользователю
         self.account1 = Account.objects.get(name_account='Банковская карта')
         self.account1.user = self.user
         self.account1.save()
@@ -196,7 +194,7 @@ class TestAccount(TestCase):
             reverse('finance_account:transfer_money'),
             transfer_money,
         )
-        self.assertEqual(response.status_code, constants.REDIRECT_CODE)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
         self.assertRedirects(response, reverse('finance_account:list'))
 
         self.account1.refresh_from_db()
@@ -286,7 +284,6 @@ class TestAccount(TestCase):
             reverse('finance_account:transfer_money'),
             transfer_money,
         )
-        # Должен перенаправить на список счетов после успешного перевода
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, reverse('finance_account:list'))
 
@@ -327,7 +324,6 @@ class TestAccount(TestCase):
             notes='Test transfer log',
         )
 
-        # Тест __str__
         expected_str = (
             f'{transfer_log.exchange_date:%d-%m-%Y %H:%M}. '
             f'Перевод суммы {transfer_log.amount} со счёта '
@@ -337,7 +333,6 @@ class TestAccount(TestCase):
 
     def test_account_form_validation(self) -> None:
         """Тест валидации формы AddAccountForm."""
-        # Валидная форма
         form = AddAccountForm(
             data={
                 'name_account': 'Test Account',
@@ -351,7 +346,6 @@ class TestAccount(TestCase):
         )
         self.assertTrue(form.is_valid())
 
-        # Невалидная форма (отсутствует обязательное поле)
         form = AddAccountForm(
             data={
                 'name_account': 'Test Account',
@@ -362,7 +356,6 @@ class TestAccount(TestCase):
 
     def test_transfer_money_form_validation(self) -> None:
         """Тест валидации формы TransferMoneyAccountForm."""
-        # Валидная форма
         form = TransferMoneyAccountForm(
             user=self.user,
             data={
@@ -375,7 +368,6 @@ class TestAccount(TestCase):
         )
         self.assertTrue(form.is_valid())
 
-        # Невалидная форма - перевод на тот же счет
         form = TransferMoneyAccountForm(
             user=self.user,
             data={
@@ -388,7 +380,6 @@ class TestAccount(TestCase):
         )
         self.assertFalse(form.is_valid())
 
-        # Невалидная форма - недостаточно средств
         form = TransferMoneyAccountForm(
             user=self.user,
             data={
@@ -424,8 +415,6 @@ class TestAccount(TestCase):
 
     def test_account_view_methods(self) -> None:
         """Тест методов класса AccountView."""
-        # Тестируем только базовую функциональность AccountView
-        # Статистические методы перенесены в users app
         self.assertTrue(hasattr(AccountView, 'get_context_data'))
         self.assertTrue(hasattr(AccountView, 'context_object_name'))
         self.assertEqual(AccountView.context_object_name, 'finance_account')
@@ -615,7 +604,7 @@ class TestAccountServices(TestCase):
     get_transfer_money_log).
     """
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -633,7 +622,7 @@ class TestAccountServices(TestCase):
         self.account1 = Account.objects.filter(user=self.user).first()
         self.group = self.user.groups.first()
         if self.group:
-            self.group_id = str(self.group.id)
+            self.group_id = str(self.group.pk)
         else:
             self.group_id = None
 
@@ -683,7 +672,7 @@ class TestAccountBusinessLogic(TestCase):
     transfer_money, get_credit_card_debt, calculate_grace_period_info.
     """
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
