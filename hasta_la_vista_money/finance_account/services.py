@@ -251,11 +251,14 @@ class AccountService:
         """Calculate grace period based on bank type."""
         if account.bank == 'SBERBANK':
             return AccountService._calculate_sberbank_grace_period(
-                purchase_start, purchase_end
+                purchase_start,
+                purchase_end,
             )
         if account.bank == 'RAIFFAISENBANK':
             return AccountService._calculate_raiffeisenbank_grace_period(
-                account, purchase_start, purchase_end
+                account,
+                purchase_start,
+                purchase_end,
             )
         grace_end = purchase_end
         payments_start = purchase_end + relativedelta(seconds=1)
@@ -315,7 +318,9 @@ class AccountService:
 
         grace_end, payments_start, payments_end = (
             AccountService._calculate_grace_period_by_bank(
-                account, purchase_start, purchase_end
+                account,
+                purchase_start,
+                purchase_end,
             )
         )
 
@@ -351,7 +356,8 @@ class AccountService:
     def _validate_raiffeisenbank_account(
         account: Account,
     ) -> bool:
-        """Validate if account is eligible for Raiffeisenbank payment schedule."""
+        """Validate if account is eligible
+        for Raiffeisenbank payment schedule."""
         return (
             account.type_account in ('CreditCard', 'Credit')
             and account.bank == 'RAIFFAISENBANK'
@@ -437,7 +443,7 @@ class AccountService:
 
         purchase_start, purchase_end = (
             AccountService._calculate_purchase_period_for_raiffeisenbank(
-                purchase_month
+                purchase_month,
             )
         )
 
@@ -453,22 +459,25 @@ class AccountService:
             first_purchase = timezone.make_aware(first_purchase)
 
         first_statement_date = AccountService._calculate_first_statement_date(
-            first_purchase
+            first_purchase,
         )
         statement_dates = AccountService._generate_statement_dates(
-            first_statement_date
+            first_statement_date,
         )
 
         initial_debt = (
             AccountService.get_credit_card_debt(
-                account, purchase_start, purchase_end
+                account,
+                purchase_start,
+                purchase_end,
             )
             or 0
         )
 
         payments_schedule, final_debt = (
             AccountService._calculate_payment_schedule(
-                statement_dates, initial_debt
+                statement_dates,
+                initial_debt,
             )
         )
 

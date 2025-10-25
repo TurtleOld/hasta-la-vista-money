@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 title: { display: true, text: "{{ _('Выполнение плана по месяцам (%)') }}" }
             },
             scales: {
-                y: { 
+                y: {
                     beginAtZero: true,
                     max: function(context) {
                         const maxValue = Math.max(...chartPlanExecutionIncome, ...chartPlanExecutionExpense);

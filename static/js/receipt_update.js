@@ -3,11 +3,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const addButton = document.getElementById('add-form');
     const removeButton = document.getElementById('remove-form');
     const totalForms = document.querySelector('[name="form-TOTAL_FORMS"]');
-    
+
     if (!container || !addButton || !removeButton || !totalForms) {
         return;
     }
-    
+
     let formNum = container.children.length - 1;
 
     if (addButton) addButton.addEventListener('click', addForm);
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         container.appendChild(newForm);
         totalForms.setAttribute('value', `${formNum + 1}`);
-        
+
         newForm.querySelector('.price')?.addEventListener('input', amountUpdate);
         newForm.querySelector('.quantity')?.addEventListener('input', amountUpdate);
     }
@@ -59,13 +59,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const priceInput = form.querySelector('.price');
         const quantityInput = form.querySelector('.quantity');
         const amountInput = form.querySelector('.amount');
-        
+
         if (priceInput && quantityInput && amountInput) {
             const price = parseFloat(priceInput.value.replace(',', '.')) || 0;
             const quantity = parseFloat(quantityInput.value.replace(',', '.')) || 0;
             amountInput.value = (price * quantity).toFixed(2);
         }
-        
+
         calculateTotalSum();
     }
 

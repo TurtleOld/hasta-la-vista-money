@@ -15,6 +15,23 @@ format:
 			uv run ruff format
 			uv run ruff check --fix
 
+.PHONY: pre-commit
+pre-commit:
+	@echo "Running pre-commit on all files..."
+	@uv run pre-commit run --all-files
+
+.PHONY: pre-commit-install
+pre-commit-install:
+	@echo "Installing pre-commit hooks..."
+	@uv run pre-commit install
+	@echo "Pre-commit hooks installed successfully!"
+
+.PHONY: pre-commit-update
+pre-commit-update:
+	@echo "Updating pre-commit hooks..."
+	@uv run pre-commit autoupdate
+	@echo "Pre-commit hooks updated successfully!"
+
 
 .PHONY: transprepare
 transprepare:

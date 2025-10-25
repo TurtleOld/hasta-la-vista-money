@@ -1,9 +1,10 @@
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from django.db import models
 from django.urls import reverse
+from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -12,11 +13,6 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
 )
 from hasta_la_vista_money.users.models import User
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.finance_account.services import (
-        AccountService,  # noqa: TC004
-    )
 
 
 class AccountQuerySet(models.QuerySet['Account']):
@@ -105,7 +101,7 @@ class Account(TimeStampedModel):
     Provides methods for money transfer and credit card debt calculations.
     """
 
-    CURRENCY_LIST: ClassVar[list[tuple[str, str]]] = [
+    CURRENCY_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
         ('RUB', _('Российский рубль')),
         ('USD', _('Доллар США')),
         ('EUR', _('Евро')),
@@ -115,14 +111,14 @@ class Account(TimeStampedModel):
         ('TRY', _('Турецкая лира')),
         ('CNH', _('Китайский юань')),
     ]
-    TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str]]] = [
+    TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
         ('Credit', _('Кредитный счёт')),
         ('Debit', _('Дебетовый счёт')),
         ('CreditCard', _('Кредитная карта')),
         ('DebitCard', _('Дебетовая карта')),
         ('CASH', _('Наличные')),
     ]
-    BANK_LIST: ClassVar[list[tuple[str, str]]] = [
+    BANK_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
         ('-', _('—')),  # Default value - dash
         ('SBERBANK', _('Сбербанк')),
         ('RAIFFAISENBANK', _('Райффайзенбанк')),
@@ -251,6 +247,10 @@ class Account(TimeStampedModel):
             Optional[Decimal]: The calculated debt, or None if not a credit
             account.
         """
+        from hasta_la_vista_money.finance_account.services import (
+            AccountService,
+        )
+
         return AccountService.get_credit_card_debt(
             account=self,
             start_date=start_date,
@@ -274,6 +274,10 @@ class Account(TimeStampedModel):
             dict: Information about the grace period, including dates,
             debts, and overdue status.
         """
+        from hasta_la_vista_money.finance_account.services import (
+            AccountService,
+        )
+
         return AccountService.calculate_grace_period_info(
             account=self,
             purchase_month=purchase_month,
@@ -372,7 +376,7 @@ class TransferMoneyLog(TimeStampedModel):
         return str(
             _(
                 '{date}. Перевод суммы {amount} со счёта '
-                '"{from_account}" на счёт "{to_account}". '
+                '"{from_account}" на счёт "{to_account}". ',
             ).format(
                 date=self.exchange_date.strftime('%d-%m-%Y %H:%M'),
                 amount=self.amount,

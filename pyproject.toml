@@ -139,8 +139,11 @@ max-complexity = 6
 "**/forms.py" = [
   "RUF012", # Django Meta classes don't support ClassVar
 ]
-"**/services.py" = [
-  "E501", # line too long
+"hasta_la_vista_money/finance_account/models.py" = [
+  "PLC0415",
+]
+"hasta_la_vista_money/receipts/services.py" = [
+  "E501",
 ]
 
 [tool.mypy]
