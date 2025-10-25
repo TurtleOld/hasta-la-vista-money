@@ -103,6 +103,24 @@ jobs:
           REDIS_LOCATION: redis://localhost:6379/1
           GITHUB_WORKFLOW: true
 
+      - name: Run security audit with pysentry-rs
+        run: |
+          uv run pysentry-rs --sources pypa,pypi,osv --format json --output prod-security.json --exclude-extra --fail-on high
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
+          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
+          REDIS_LOCATION: redis://localhost:6379/1
+          GITHUB_WORKFLOW: true
+
+      - name: Upload security audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-audit-results
+          path: prod-security.json
+          retention-days: 30
+
       - name: Run codacy-coverage-reporter
         uses: codacy/codacy-coverage-reporter-action@a38818475bb21847788496e9f0fddaa4e84955ba
         with:
