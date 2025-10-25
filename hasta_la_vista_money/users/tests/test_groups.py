@@ -1,17 +1,22 @@
-from django.test import TestCase
+from typing import ClassVar
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from hasta_la_vista_money.users.services.groups import (
-    get_user_groups,
-    get_groups_not_for_user,
-    create_group,
-    delete_group,
-)
+from django.contrib.messages.middleware import MessageMiddleware
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.test import RequestFactory, TestCase
+
 from hasta_la_vista_money.users.forms import (
-    GroupCreateForm,
-    GroupDeleteForm,
     AddUserToGroupForm,
     DeleteUserFromGroupForm,
+    GroupCreateForm,
+    GroupDeleteForm,
+)
+from hasta_la_vista_money.users.services.groups import (
+    create_group,
+    delete_group,
+    get_groups_not_for_user,
+    get_user_groups,
 )
 
 User = get_user_model()
@@ -20,7 +25,7 @@ User = get_user_model()
 class GroupsServiceTest(TestCase):
     """Tests for user group services."""
 
-    fixtures = ['users.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml']
 
     def setUp(self):
         self.user = User.objects.first()
@@ -46,24 +51,22 @@ class GroupsServiceTest(TestCase):
 
     def test_add_and_remove_user_to_group(self):
         """Test adding and removing user from group using form save methods."""
-        from django.test import RequestFactory
-        from django.contrib.messages.storage.fallback import FallbackStorage
 
         factory = RequestFactory()
         request = factory.get('/')
-        setattr(request, 'session', self.client.session)
-        messages = FallbackStorage(request)
-        setattr(request, '_messages', messages)
+        SessionMiddleware(lambda: None).process_request(request)
+        request.session.save()
+        MessageMiddleware(lambda: None).process_request(request)
 
         add_form = AddUserToGroupForm(
-            data={'user': self.user.pk, 'group': self.group.pk}
+            data={'user': self.user.pk, 'group': self.group.pk},
         )
         self.assertTrue(add_form.is_valid())
         add_form.save(request)
         self.assertIn(self.group, self.user.groups.all())
 
         remove_form = DeleteUserFromGroupForm(
-            data={'user': self.user.pk, 'group': self.group.pk}
+            data={'user': self.user.pk, 'group': self.group.pk},
         )
         self.assertTrue(remove_form.is_valid())
         remove_form.save(request)

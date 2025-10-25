@@ -1,4 +1,7 @@
+from typing import ClassVar
+
 from django.db import models
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
@@ -29,11 +32,11 @@ class ExpenseCategory(models.Model):
     )
 
     class Meta:
-        ordering = ['name']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['name']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['name']),
         ]
-        constraints = [
+        constraints: ClassVar[list[models.UniqueConstraint]] = [
             models.UniqueConstraint(
                 fields=['user', 'name'],
                 name='unique_user_category_expense',
@@ -73,8 +76,8 @@ class Expense(models.Model):
     )
 
     class Meta:
-        ordering = ['-date']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-date']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['-date']),
             models.Index(fields=['amount']),
             models.Index(fields=['user', 'date']),

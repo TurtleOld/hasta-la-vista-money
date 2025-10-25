@@ -1,7 +1,10 @@
-from django.test import TestCase
+from typing import ClassVar
+
 from django.contrib.auth import get_user_model
-from hasta_la_vista_money.users.services.profile import update_user_profile
+from django.test import TestCase
+
 from hasta_la_vista_money.users.forms import UpdateUserForm
+from hasta_la_vista_money.users.services.profile import update_user_profile
 
 User = get_user_model()
 
@@ -9,7 +12,7 @@ User = get_user_model()
 class UpdateUserProfileServiceTest(TestCase):
     """Tests for update_user_profile service function."""
 
-    fixtures = ['users.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml']
 
     def setUp(self):
         self.user = User.objects.first()

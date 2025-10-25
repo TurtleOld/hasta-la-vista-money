@@ -38,7 +38,7 @@
                 <div class="card-body p-4">
                     <form method="post">
                         {% csrf_token %}
-                        
+
                         <!-- Receipt Form -->
                         <div class="mb-4">
                             <h5 class="mb-3">{% translate 'Информация о чеке' %}</h5>
@@ -72,7 +72,7 @@
                                 </div>
                                 {% endfor %}
                             </div>
-                            
+
                             <div class="d-flex gap-2 mb-3">
                                 <button type="button" id="add-form" class="btn btn-outline-warning">
                                     <i class="bi bi-plus-lg me-1"></i>

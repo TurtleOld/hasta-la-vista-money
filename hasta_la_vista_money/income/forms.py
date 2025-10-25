@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.forms import (
     CharField,
     DateTimeField,
@@ -7,6 +9,7 @@ from django.forms import (
     ModelForm,
 )
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money.custom_mixin import (
     CategoryChoicesConfigurerMixin,
     CategoryChoicesMixin,
@@ -48,11 +51,13 @@ class IncomeForm(CategoryChoicesConfigurerMixin, FormQuerysetsMixin, ModelForm):
 
     class Meta:
         model = Income
-        fields = ['category', 'account', 'date', 'amount']
+        fields: ClassVar[list[str]] = ['category', 'account', 'date', 'amount']
 
 
 class AddCategoryIncomeForm(
-    CategoryChoicesConfigurerMixin, CategoryChoicesMixin, ModelForm
+    CategoryChoicesConfigurerMixin,
+    CategoryChoicesMixin,
+    ModelForm,
 ):
     name = CharField(
         label=_('Название категории'),
@@ -61,7 +66,9 @@ class AddCategoryIncomeForm(
     parent_category = ModelChoiceField(
         queryset=IncomeCategory.objects.none(),
         label=_('Родительская категория'),
-        help_text=_('Выберите родительскую категорию дохода для создаваемой категории'),
+        help_text=_(
+            'Выберите родительскую категорию дохода для создаваемой категории',
+        ),
         empty_label=_('Нет родительской категории'),
         required=False,
     )
@@ -74,4 +81,4 @@ class AddCategoryIncomeForm(
 
     class Meta:
         model = IncomeCategory
-        fields = ['name', 'parent_category']
+        fields: ClassVar[list[str]] = ['name', 'parent_category']

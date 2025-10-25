@@ -1,13 +1,14 @@
 from django.urls import path
+
 from hasta_la_vista_money.receipts.apis import (
     DataUrlAPIView,
+    ProductAutocompleteAPIView,
     ReceiptCreateAPIView,
     ReceiptDeleteAPIView,
     ReceiptListAPIView,
+    SellerAutocompleteAPIView,
     SellerCreateAPIView,
     SellerDetailAPIView,
-    SellerAutocompleteAPIView,
-    ProductAutocompleteAPIView,
 )
 from hasta_la_vista_money.receipts.views import (
     ProductByMonthView,

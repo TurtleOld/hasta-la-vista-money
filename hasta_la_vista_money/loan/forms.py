@@ -1,5 +1,7 @@
 """Модуль форм по кредитам."""
 
+from typing import Any, ClassVar
+
 from django.forms import (
     ChoiceField,
     DateTimeField,
@@ -10,6 +12,7 @@ from django.forms import (
     ModelForm,
 )
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
 
@@ -49,20 +52,20 @@ class LoanForm(ModelForm):
 
     class Meta:
         model = Loan
-        fields = [
+        fields: ClassVar[list[str]] = [
             'date',
             'type_loan',
             'loan_amount',
             'annual_interest_rate',
             'period_loan',
         ]
-        widgets = {
+        widgets: ClassVar[dict[str, Any]] = {
             'date': DateTimeInput(
                 attrs={'type': 'datetime-local', 'class': 'form-control'},
             ),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Конструктов класса инициализирующий поля формы.
 
@@ -72,7 +75,7 @@ class LoanForm(ModelForm):
         self.request_user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
-    def save(self, commit=True):
+    def save(self, commit: bool = True) -> None:
         cd = self.cleaned_data
         form = super().save(commit=False)
         loan_amount = cd.get('loan_amount')
@@ -138,8 +141,13 @@ class PaymentMakeLoanForm(ModelForm):
 
     class Meta:
         model = PaymentMakeLoan
-        fields = ['date', 'account', 'loan', 'amount']
-        widgets = {
+        fields: ClassVar[list[str]] = [
+            'date',
+            'account',
+            'loan',
+            'amount',
+        ]
+        widgets: ClassVar[dict[str, Any]] = {
             'date': DateTimeInput(
                 attrs={'type': 'datetime-local', 'class': 'form-control'},
             ),

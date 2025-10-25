@@ -1,5 +1,8 @@
-from django.test import TestCase
+from typing import ClassVar
+
 from django.contrib.auth import get_user_model
+from django.test import TestCase
+
 from hasta_la_vista_money.users.services.theme import set_user_theme
 
 User = get_user_model()
@@ -8,7 +11,7 @@ User = get_user_model()
 class SetUserThemeServiceTest(TestCase):
     """Tests for set_user_theme service function."""
 
-    fixtures = ['users.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml']
 
     def setUp(self):
         self.user = User.objects.first()

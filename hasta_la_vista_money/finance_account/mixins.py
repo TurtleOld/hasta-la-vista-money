@@ -4,12 +4,12 @@ This module provides reusable mixin classes that add functionality to views,
 including group-based account filtering and user-specific data access.
 """
 
-from typing import Optional
+from django.db.models import QuerySet
 from django.http import HttpRequest
+
 from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
-from django.db.models import QuerySet
 
 
 class GroupAccountMixin:
@@ -21,11 +21,12 @@ class GroupAccountMixin:
 
     request: HttpRequest
 
-    def get_group_id(self) -> Optional[str]:
+    def get_group_id(self) -> str | None:
         """Extract group_id from request parameters.
 
         Returns:
-            The group ID from the request GET parameters, or None if not provided.
+            The group ID from the request GET parameters, or None if
+            not provided.
         """
         return self.request.GET.get('group_id')
 

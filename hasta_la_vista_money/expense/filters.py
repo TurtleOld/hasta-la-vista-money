@@ -1,10 +1,11 @@
-from typing import Any, Dict, List
+from typing import Any, ClassVar
 
 import django_filters
 from django.forms import Select
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 from django_filters import widgets
+
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 
@@ -41,7 +42,9 @@ class ExpenseFilter(django_filters.FilterSet):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         self.filters['category'].queryset = (
-            ExpenseCategory.objects.filter(user=self.user).distinct().order_by('name')
+            ExpenseCategory.objects.filter(user=self.user)
+            .distinct()
+            .order_by('name')
         )
         self.filters['account'].queryset = Account.objects.filter(
             user=self.user,
@@ -53,8 +56,9 @@ class ExpenseFilter(django_filters.FilterSet):
         queryset = super().qs
         return queryset.filter(user=self.user).distinct()
 
-    def get_expenses_with_annotations(self) -> List[Dict[str, Any]]:
-        """Возвращает список расходов с дополнительными полями для отображения."""
+    def get_expenses_with_annotations(self) -> list[dict[str, Any]]:
+        """Возвращает список расходов с дополнительными полями
+        для отображения."""
         queryset = self.qs
         expenses = queryset.values(
             'id',
@@ -86,4 +90,4 @@ class ExpenseFilter(django_filters.FilterSet):
 
     class Meta:
         model = Expense
-        fields = ['category', 'date', 'account']
+        fields: ClassVar[list[str]] = ['category', 'date', 'account']

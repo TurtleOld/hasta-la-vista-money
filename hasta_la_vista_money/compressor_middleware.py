@@ -1,14 +1,18 @@
-"""Middleware for injecting CSP nonce into static asset tags in HTML responses."""
+"""Middleware for injecting CSP nonce into static asset tags
+in HTML responses."""
 
-import re
 import html
+import re
 
 
 class CompressorNonceMiddleware:
-    """Add CSP nonce to `<link>` and `<script>` tags that reference static assets.
+    """Add CSP nonce to `<link>` and `<script>` tags that reference
+    static assets.
 
-    The middleware looks for tags with `href`/`src` pointing to `/static/*.css` and
-    `/static/*.js` in HTML responses and injects a `nonce` attribute using the value
+    The middleware looks for tags with `href`/`src` pointing to
+    `/static/*.css` and
+    `/static/*.js` in HTML responses and injects a `nonce` attribute
+    using the value
     from `request.csp_nonce` after strict validation and safe quoting.
     """
 
@@ -74,7 +78,8 @@ class CompressorNonceMiddleware:
             nonce: Nonce value to escape.
 
         Returns:
-            A quoted attribute value (e.g., '"abc123"') or an empty string if invalid.
+            A quoted attribute value (e.g., '"abc123"') or an empty string
+            if invalid.
         """
         if not self._validate_nonce(nonce):
             return ''
@@ -96,35 +101,30 @@ class CompressorNonceMiddleware:
             return f'{tag[:-2]} {safe_attr}/>'
         return f'{tag[:-1]} {safe_attr}>'
 
-    def process_response(self, request, response):
-        """Inject nonce into qualifying tags for HTML responses.
-
-        Args:
-            request: Django HttpRequest that may contain `csp_nonce`.
-            response: Django HttpResponse to potentially modify.
-
-        Returns:
-            The original response if not HTML or nonce is missing/invalid.
-            Otherwise, a response with `nonce` added to matching `<link>` and
-            `<script>` tags that reference static assets.
-        """
+    def _validate_nonce(self, request) -> str | None:
+        """Validate and get nonce from request."""
         nonce = getattr(request, 'csp_nonce', None)
         if not nonce:
-            return response
+            return None
 
         safe_nonce = self._escape_nonce(nonce)
-        if not safe_nonce:
-            return response
+        return safe_nonce if safe_nonce else None
 
+    def _is_html_response(self, response) -> bool:
+        """Check if response is HTML content."""
         ctype = response.get('Content-Type', '')
-        if not ctype.startswith('text/html'):
-            return response
+        return ctype.startswith('text/html')
 
+    def _decode_response_content(self, response) -> str | None:
+        """Decode response content safely."""
         charset = getattr(response, 'charset', None) or 'utf-8'
         try:
-            content = response.content.decode(charset, errors='ignore')
-        except Exception:
-            return response
+            return response.content.decode(charset, errors='ignore')
+        except (UnicodeDecodeError, AttributeError):
+            return None
+
+    def _add_nonce_to_content(self, content: str, safe_nonce: str) -> str:
+        """Add nonce to content using regex substitution."""
 
         def add_nonce(match: re.Match) -> str:
             tag = match.group(0)
@@ -133,11 +133,31 @@ class CompressorNonceMiddleware:
             return self._inject_attr(tag, f'nonce={safe_nonce}')
 
         content = self._LINK_RE.sub(add_nonce, content)
-        content = self._SCRIPT_RE.sub(add_nonce, content)
+        return self._SCRIPT_RE.sub(add_nonce, content)
 
+    def _update_response_content(self, response, content: str) -> None:
+        """Update response content and headers."""
+        charset = getattr(response, 'charset', None) or 'utf-8'
         new_bytes = content.encode(charset, errors='ignore')
         response.content = new_bytes
+
         if 'Content-Length' in response:
             response['Content-Length'] = str(len(new_bytes))
+
+    def process_response(self, request, response):
+        """Inject nonce into qualifying tags for HTML responses."""
+        safe_nonce = self._validate_nonce(request)
+        if not safe_nonce:
+            return response
+
+        if not self._is_html_response(response):
+            return response
+
+        content = self._decode_response_content(response)
+        if content is None:
+            return response
+
+        content = self._add_nonce_to_content(content, safe_nonce)
+        self._update_response_content(response, content)
 
         return response

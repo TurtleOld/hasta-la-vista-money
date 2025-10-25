@@ -1,11 +1,12 @@
 """Group-related URL configuration for users app."""
 
 from django.urls import path
+
 from hasta_la_vista_money.users.views import (
-    GroupCreateView,
-    GroupDeleteView,
     AddUserToGroupView,
     DeleteUserFromGroupView,
+    GroupCreateView,
+    GroupDeleteView,
 )
 
 app_name = 'groups'

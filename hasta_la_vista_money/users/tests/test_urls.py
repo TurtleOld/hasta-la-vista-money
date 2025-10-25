@@ -2,6 +2,7 @@
 
 from django.test import SimpleTestCase
 from django.urls import resolve, reverse
+
 from hasta_la_vista_money.users.views import (
     AddUserToGroupView,
     CreateUser,
@@ -26,7 +27,10 @@ class TestUserUrls(SimpleTestCase):
     def test_registration_url_resolves(self) -> None:
         """Test that registration URL resolves to correct view."""
         url = reverse('users:registration')
-        self.assertIs(getattr(resolve(url).func, 'view_class', None), CreateUser)
+        self.assertIs(
+            getattr(resolve(url).func, 'view_class', None),
+            CreateUser,
+        )
 
     def test_profile_url_resolves(self) -> None:
         """Test that profile URL resolves to correct view."""
@@ -49,7 +53,10 @@ class TestUserUrls(SimpleTestCase):
     def test_update_user_url_resolves(self) -> None:
         """Test that update user URL resolves to correct view."""
         url = reverse('users:update_user', args=[1])
-        self.assertIs(getattr(resolve(url).func, 'view_class', None), UpdateUserView)
+        self.assertIs(
+            getattr(resolve(url).func, 'view_class', None),
+            UpdateUserView,
+        )
 
     def test_list_users_url_resolves(self) -> None:
         """Test that list users URL resolves to correct view."""
@@ -75,7 +82,10 @@ class TestUserUrls(SimpleTestCase):
     def test_set_theme_url_resolves(self) -> None:
         """Test that set theme URL resolves to correct view."""
         url = reverse('users:set_theme')
-        self.assertIs(getattr(resolve(url).func, 'view_class', None), SwitchThemeView)
+        self.assertIs(
+            getattr(resolve(url).func, 'view_class', None),
+            SwitchThemeView,
+        )
 
 
 class TestGroupUrls(SimpleTestCase):
@@ -84,12 +94,18 @@ class TestGroupUrls(SimpleTestCase):
     def test_group_create_url_resolves(self) -> None:
         """Test that group create URL resolves to correct view."""
         url = reverse('users:groups:create')
-        self.assertIs(getattr(resolve(url).func, 'view_class', None), GroupCreateView)
+        self.assertIs(
+            getattr(resolve(url).func, 'view_class', None),
+            GroupCreateView,
+        )
 
     def test_group_delete_url_resolves(self) -> None:
         """Test that group delete URL resolves to correct view."""
         url = reverse('users:groups:delete')
-        self.assertIs(getattr(resolve(url).func, 'view_class', None), GroupDeleteView)
+        self.assertIs(
+            getattr(resolve(url).func, 'view_class', None),
+            GroupDeleteView,
+        )
 
     def test_add_user_to_group_url_resolves(self) -> None:
         """Test that add user to group URL resolves to correct view."""
@@ -145,14 +161,14 @@ class TestUrlPatterns(SimpleTestCase):
         for name, args in url_names_with_args.items():
             try:
                 reverse(name, args=args)
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 self.fail(f"URL name '{name}' failed to resolve: {e}")
 
         # Test URLs that don't require arguments
         for name in url_names_without_args:
             try:
                 reverse(name)
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 self.fail(f"URL name '{name}' failed to resolve: {e}")
 
     def test_url_paths_use_hyphens(self) -> None:
@@ -172,5 +188,5 @@ class TestUrlPatterns(SimpleTestCase):
         for path in url_paths:
             try:
                 resolve(path)
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 self.fail(f"URL path '{path}' failed to resolve: {e}")

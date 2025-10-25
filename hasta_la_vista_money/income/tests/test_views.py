@@ -1,6 +1,9 @@
+from typing import ClassVar
+
 from django.test import TestCase
 from django.urls import reverse_lazy
 from django.utils import timezone
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
@@ -12,7 +15,12 @@ class IncomeViewsTest(TestCase):
     Test cases for income-related views.
     """
 
-    fixtures = ['users.yaml', 'finance_account.yaml', 'income.yaml', 'income_cat.yaml']
+    fixtures: ClassVar[list[str]] = [
+        'users.yaml',
+        'finance_account.yaml',
+        'income.yaml',
+        'income_cat.yaml',
+    ]
 
     def setUp(self):
         self.user = User.objects.get(pk=1)
@@ -68,7 +76,9 @@ class IncomeViewsTest(TestCase):
 
     def test_income_update_view_get(self):
         self.client.force_login(self.user)
-        response = self.client.get(reverse_lazy('income:change', args=[self.income.pk]))
+        response = self.client.get(
+            reverse_lazy('income:change', args=[self.income.pk]),
+        )
         self.assertEqual(response.status_code, 200)
 
     def test_income_update_view_post(self):
@@ -108,7 +118,10 @@ class IncomeViewsTest(TestCase):
             'name': 'New Test Category',
             'parent_category': self.parent_category.pk,
         }
-        response = self.client.post(reverse_lazy('income:create_category'), data)
+        response = self.client.post(
+            reverse_lazy('income:create_category'),
+            data,
+        )
         self.assertEqual(response.status_code, 302)
 
     def test_income_category_create_view_invalid_form(self):
@@ -117,13 +130,19 @@ class IncomeViewsTest(TestCase):
             'name': '',
             'parent_category': self.parent_category.pk,
         }
-        response = self.client.post(reverse_lazy('income:create_category'), data)
+        response = self.client.post(
+            reverse_lazy('income:create_category'),
+            data,
+        )
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_category_delete_view(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse_lazy('income:delete_category_income', args=[self.income_type.pk]),
+            reverse_lazy(
+                'income:delete_category_income',
+                args=[self.income_type.pk],
+            ),
         )
         self.assertEqual(response.status_code, 302)
 
@@ -136,14 +155,16 @@ class IncomeViewsTest(TestCase):
         self.assertEqual(response.status_code, 302)
 
     def test_income_update_view_unauthenticated(self):
-        response = self.client.get(reverse_lazy('income:change', args=[self.income.pk]))
+        response = self.client.get(
+            reverse_lazy('income:change', args=[self.income.pk]),
+        )
         self.assertEqual(response.status_code, 302)
 
     def test_income_delete_view_unauthenticated(self):
         response = self.client.post(
             reverse_lazy('income:delete_income', args=[self.income.pk]),
         )
-        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_income_category_view_unauthenticated(self):
         response = self.client.get(reverse_lazy('income:category_list'))
@@ -155,6 +176,9 @@ class IncomeViewsTest(TestCase):
 
     def test_income_category_delete_view_unauthenticated(self):
         response = self.client.post(
-            reverse_lazy('income:delete_category_income', args=[self.income_type.pk]),
+            reverse_lazy(
+                'income:delete_category_income',
+                args=[self.income_type.pk],
+            ),
         )
         self.assertEqual(response.status_code, 302)

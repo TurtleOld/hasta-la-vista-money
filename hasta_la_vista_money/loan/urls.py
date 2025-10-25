@@ -1,4 +1,5 @@
 from django.urls import path
+
 from hasta_la_vista_money.loan.views import (
     LoanCreateView,
     LoanDeleteView,

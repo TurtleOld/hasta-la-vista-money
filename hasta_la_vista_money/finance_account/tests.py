@@ -7,9 +7,14 @@ from django.forms import ValidationError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+)
 from hasta_la_vista_money.expense.models import Expense
+from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -33,14 +38,13 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.finance_account.views import AccountView
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.finance_account import services as account_services
 
 BALANCE_TEST = 250000
 NEW_BALANCE_TEST = 450000
 
 
 class TestAccount(TestCase):
-    fixtures = [
+    fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -56,10 +60,8 @@ class TestAccount(TestCase):
         cls.factory = RequestFactory()
 
     def setUp(self) -> None:
-        # Получаем пользователя из фикстуры
         self.user = User.objects.get(id=1)
 
-        # Привязываем аккаунты к пользователю
         self.account1 = Account.objects.get(name_account='Банковская карта')
         self.account1.user = self.user
         self.account1.save()
@@ -178,7 +180,7 @@ class TestAccount(TestCase):
 
         initial_balance_account1 = self.account1.balance
         initial_balance_account2 = self.account2.balance
-        amount = Decimal('100')
+        amount = Decimal(100)
 
         transfer_money = {
             'from_account': self.account1.pk,
@@ -191,22 +193,27 @@ class TestAccount(TestCase):
         response = self.client.post(
             reverse('finance_account:transfer_money'),
             transfer_money,
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {'success': True})
+        self.assertEqual(response.status_code, constants.REDIRECTS)
+        self.assertRedirects(response, reverse('finance_account:list'))
 
         self.account1.refresh_from_db()
         self.account2.refresh_from_db()
 
-        self.assertEqual(self.account1.balance, initial_balance_account1 - amount)
-        self.assertEqual(self.account2.balance, initial_balance_account2 + amount)
+        self.assertEqual(
+            self.account1.balance,
+            initial_balance_account1 - amount,
+        )
+        self.assertEqual(
+            self.account2.balance,
+            initial_balance_account2 + amount,
+        )
 
     def test_transfer_money_insufficient_funds(self) -> None:
         """Тест перевода средств при недостаточном балансе."""
         self.client.force_login(self.user)
 
-        amount = self.account1.balance + Decimal('1000')  # Сумма больше баланса
+        amount = self.account1.balance + Decimal(1000)
 
         transfer_money = {
             'from_account': self.account1.pk,
@@ -219,12 +226,9 @@ class TestAccount(TestCase):
         response = self.client.post(
             reverse('finance_account:transfer_money'),
             transfer_money,
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('from_account', response_data['errors'])
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'from_account')
 
     def test_transfer_money_same_account(self) -> None:
         """Тест перевода средств на тот же счет."""
@@ -241,12 +245,9 @@ class TestAccount(TestCase):
         response = self.client.post(
             reverse('finance_account:transfer_money'),
             transfer_money,
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('to_account', response_data['errors'])
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'to_account')
 
     def test_transfer_money_invalid_form(self) -> None:
         """Тест перевода средств с невалидной формой."""
@@ -263,12 +264,9 @@ class TestAccount(TestCase):
         response = self.client.post(
             reverse('finance_account:transfer_money'),
             transfer_money,
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertFalse(response_data['success'])
-        self.assertIn('amount', response_data['errors'])
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'amount')
 
     def test_transfer_money_no_ajax(self) -> None:
         """Тест перевода средств без AJAX запроса."""
@@ -286,20 +284,22 @@ class TestAccount(TestCase):
             reverse('finance_account:transfer_money'),
             transfer_money,
         )
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertFalse(response_data['success'])
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse('finance_account:list'))
 
     def test_account_model_methods(self) -> None:
         """Тест методов модели Account."""
         self.assertEqual(str(self.account1), 'Банковская карта')
 
-        expected_url = reverse('finance_account:change', args=[self.account1.pk])
+        expected_url = reverse(
+            'finance_account:change',
+            args=[self.account1.pk],
+        )
         self.assertEqual(self.account1.get_absolute_url(), expected_url)
 
         initial_balance1 = self.account1.balance
         initial_balance2 = self.account2.balance
-        amount = Decimal('100')
+        amount = Decimal(100)
 
         result = self.account1.transfer_money(self.account2, amount)
         self.assertTrue(result)
@@ -309,7 +309,7 @@ class TestAccount(TestCase):
         self.assertEqual(self.account1.balance, initial_balance1 - amount)
         self.assertEqual(self.account2.balance, initial_balance2 + amount)
 
-        large_amount = self.account1.balance + Decimal('1000')
+        large_amount = self.account1.balance + Decimal(1000)
         result = self.account1.transfer_money(self.account2, large_amount)
         self.assertFalse(result)
 
@@ -324,13 +324,15 @@ class TestAccount(TestCase):
             notes='Test transfer log',
         )
 
-        # Тест __str__
-        expected_str = f'{transfer_log.exchange_date:%d-%m-%Y %H:%M}. Перевод суммы {transfer_log.amount} со счёта "{self.account1}" на счёт "{self.account2}". '
+        expected_str = (
+            f'{transfer_log.exchange_date:%d-%m-%Y %H:%M}. '
+            f'Перевод суммы {transfer_log.amount} со счёта '
+            f'"{self.account1}" на счёт "{self.account2}". '
+        )
         self.assertEqual(str(transfer_log), expected_str)
 
     def test_account_form_validation(self) -> None:
         """Тест валидации формы AddAccountForm."""
-        # Валидная форма
         form = AddAccountForm(
             data={
                 'name_account': 'Test Account',
@@ -344,7 +346,6 @@ class TestAccount(TestCase):
         )
         self.assertTrue(form.is_valid())
 
-        # Невалидная форма (отсутствует обязательное поле)
         form = AddAccountForm(
             data={
                 'name_account': 'Test Account',
@@ -355,7 +356,6 @@ class TestAccount(TestCase):
 
     def test_transfer_money_form_validation(self) -> None:
         """Тест валидации формы TransferMoneyAccountForm."""
-        # Валидная форма
         form = TransferMoneyAccountForm(
             user=self.user,
             data={
@@ -368,7 +368,6 @@ class TestAccount(TestCase):
         )
         self.assertTrue(form.is_valid())
 
-        # Невалидная форма - перевод на тот же счет
         form = TransferMoneyAccountForm(
             user=self.user,
             data={
@@ -381,13 +380,12 @@ class TestAccount(TestCase):
         )
         self.assertFalse(form.is_valid())
 
-        # Невалидная форма - недостаточно средств
         form = TransferMoneyAccountForm(
             user=self.user,
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account2.pk,
-                'amount': self.account1.balance + Decimal('1000'),
+                'amount': self.account1.balance + Decimal(1000),
                 'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
                 'notes': 'Test transfer',
             },
@@ -417,8 +415,6 @@ class TestAccount(TestCase):
 
     def test_account_view_methods(self) -> None:
         """Тест методов класса AccountView."""
-        # Тестируем только базовую функциональность AccountView
-        # Статистические методы перенесены в users app
         self.assertTrue(hasattr(AccountView, 'get_context_data'))
         self.assertTrue(hasattr(AccountView, 'context_object_name'))
         self.assertEqual(AccountView.context_object_name, 'finance_account')
@@ -578,7 +574,7 @@ class TestAccount(TestCase):
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account1.pk,
-                'amount': self.account1.balance + Decimal('1000'),
+                'amount': self.account1.balance + Decimal(1000),
                 'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
                 'notes': 'Test transfer',
             },
@@ -603,10 +599,12 @@ class TestAccount(TestCase):
 
 class TestAccountServices(TestCase):
     """
-    Unit tests for account service functions (get_accounts_for_user_or_group, get_sum_all_accounts, get_transfer_money_log).
+    Unit tests for account service functions
+    (get_accounts_for_user_or_group, get_sum_all_accounts,
+    get_transfer_money_log).
     """
 
-    fixtures = [
+    fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -624,23 +622,32 @@ class TestAccountServices(TestCase):
         self.account1 = Account.objects.filter(user=self.user).first()
         self.group = self.user.groups.first()
         if self.group:
-            self.group_id = str(self.group.id)
+            self.group_id = str(self.group.pk)
         else:
             self.group_id = None
 
     def test_get_accounts_for_user(self):
-        """Test that get_accounts_for_user_or_group returns only user's accounts when group_id is None or 'my'."""
-        accounts = account_services.get_accounts_for_user_or_group(self.user, None)
+        """Test that get_accounts_for_user_or_group returns only user's
+        accounts when group_id is None or 'my'."""
+        accounts = account_services.get_accounts_for_user_or_group(
+            self.user,
+            None,
+        )
         self.assertTrue(all(acc.user == self.user for acc in accounts))
-        accounts_my = account_services.get_accounts_for_user_or_group(self.user, 'my')
+        accounts_my = account_services.get_accounts_for_user_or_group(
+            self.user,
+            'my',
+        )
         self.assertTrue(all(acc.user == self.user for acc in accounts_my))
 
     def test_get_accounts_for_group(self):
-        """Test that get_accounts_for_user_or_group returns all accounts for users in the group."""
+        """Test that get_accounts_for_user_or_group returns all accounts
+        for users in the group."""
         if not self.group_id:
             self.skipTest('User has no group for group test')
         accounts = account_services.get_accounts_for_user_or_group(
-            self.user, self.group_id
+            self.user,
+            self.group_id,
         )
         group_users = list(self.group.user_set.all())
         self.assertTrue(all(acc.user in group_users for acc in accounts))
@@ -661,10 +668,11 @@ class TestAccountServices(TestCase):
 
 class TestAccountBusinessLogic(TestCase):
     """
-    Unit tests for Account model business logic methods: transfer_money, get_credit_card_debt, calculate_grace_period_info.
+    Unit tests for Account model business logic methods:
+    transfer_money, get_credit_card_debt, calculate_grace_period_info.
     """
 
-    fixtures = [
+    fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -683,7 +691,7 @@ class TestAccountBusinessLogic(TestCase):
         self.account2.save()
 
     def test_transfer_money_success(self):
-        amount = Decimal('100')
+        amount = Decimal(100)
         initial_balance_1 = self.account1.balance
         initial_balance_2 = self.account2.balance
         result = self.account1.transfer_money(self.account2, amount)
@@ -694,7 +702,7 @@ class TestAccountBusinessLogic(TestCase):
         self.assertEqual(self.account2.balance, initial_balance_2 + amount)
 
     def test_transfer_money_insufficient(self):
-        amount = self.account1.balance + Decimal('1')
+        amount = self.account1.balance + Decimal(1)
         result = self.account1.transfer_money(self.account2, amount)
         self.assertFalse(result)
 
@@ -810,12 +818,16 @@ class TestAddAccountFormRefactored(TestCase):
         form = AddAccountForm()
 
         self.assertEqual(
-            form.fields['type_account'].initial, Account.TYPE_ACCOUNT_LIST[1][0]
+            form.fields['type_account'].initial,
+            Account.TYPE_ACCOUNT_LIST[1][0],
         )
 
-        for field_name, field in form.fields.items():
+        for field in form.fields.values():
             if hasattr(field.widget, 'attrs'):
-                self.assertIn('form-control', field.widget.attrs.get('class', ''))
+                self.assertIn(
+                    'form-control',
+                    field.widget.attrs.get('class', ''),
+                )
 
     def test_form_validation_valid_data(self) -> None:
         """Test form validation with valid data."""

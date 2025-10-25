@@ -1,5 +1,8 @@
-from django.test import TestCase
+from typing import ClassVar
+
 from django.contrib.auth import get_user_model
+from django.test import TestCase
+
 from hasta_la_vista_money.users.services.export import get_user_export_data
 
 User = get_user_model()
@@ -8,7 +11,7 @@ User = get_user_model()
 class GetUserExportDataServiceTest(TestCase):
     """Tests for get_user_export_data service function."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',

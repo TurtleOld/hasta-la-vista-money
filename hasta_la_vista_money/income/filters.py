@@ -1,6 +1,9 @@
+from typing import ClassVar
+
 import django_filters
 from django.forms import Select
 from django_filters.widgets import RangeWidget
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
@@ -34,7 +37,9 @@ class IncomeFilter(django_filters.FilterSet):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         self.filters['category'].queryset = (
-            IncomeCategory.objects.filter(user=self.user).distinct().order_by('name')
+            IncomeCategory.objects.filter(user=self.user)
+            .distinct()
+            .order_by('name')
         )
         self.filters['account'].queryset = Account.objects.filter(
             user=self.user,
@@ -58,4 +63,4 @@ class IncomeFilter(django_filters.FilterSet):
 
     class Meta:
         model = Income
-        fields = ['category', 'date', 'account']
+        fields: ClassVar[list[str]] = ['category', 'date', 'account']

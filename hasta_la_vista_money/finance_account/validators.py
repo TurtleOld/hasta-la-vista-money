@@ -11,8 +11,12 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+)
 from hasta_la_vista_money.finance_account.models import Account
 
 
@@ -31,11 +35,15 @@ def validate_account_balance(from_account: Account, amount: Decimal) -> None:
     """
     if amount > from_account.balance:
         raise ValidationError(
-            constants.SUCCESS_MESSAGE_INSUFFICIENT_FUNDS, code='insufficient_funds'
+            constants.SUCCESS_MESSAGE_INSUFFICIENT_FUNDS,
+            code='insufficient_funds',
         )
 
 
-def validate_different_accounts(from_account: Account, to_account: Account) -> None:
+def validate_different_accounts(
+    from_account: Account,
+    to_account: Account,
+) -> None:
     """Validate that source and destination accounts are different.
 
     Ensures that money transfers occur between different accounts to prevent
@@ -49,7 +57,10 @@ def validate_different_accounts(from_account: Account, to_account: Account) -> N
         ValidationError: If source and destination accounts are the same.
     """
     if from_account == to_account:
-        raise ValidationError(constants.ANOTHER_ACCRUAL_ACCOUNT, code='same_accounts')
+        raise ValidationError(
+            constants.ANOTHER_ACCRUAL_ACCOUNT,
+            code='same_accounts',
+        )
 
 
 def validate_credit_fields_required(
@@ -62,7 +73,8 @@ def validate_credit_fields_required(
     """Validate that credit-related fields are provided for credit accounts.
 
     Ensures that all required fields are present when creating or updating
-    credit accounts, including bank information, credit limits, and payment terms.
+    credit accounts, including bank information, credit limits,
+    and payment terms.
 
     Args:
         type_account: The type of account (Credit or CreditCard).
@@ -112,4 +124,7 @@ def validate_positive_amount(amount: Decimal) -> None:
         ValidationError: If amount is zero or negative.
     """
     if amount <= 0:
-        raise ValidationError(_('Сумма должна быть больше нуля'), code='invalid_amount')
+        raise ValidationError(
+            _('Сумма должна быть больше нуля'),
+            code='invalid_amount',
+        )

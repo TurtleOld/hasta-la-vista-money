@@ -1,4 +1,7 @@
+from typing import ClassVar
+
 from django.test import TestCase
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.models import Income, IncomeCategory
@@ -10,7 +13,12 @@ class IncomeFilterTest(TestCase):
     Test cases for the IncomeFilter.
     """
 
-    fixtures = ['users.yaml', 'finance_account.yaml', 'income.yaml', 'income_cat.yaml']
+    fixtures: ClassVar[list[str]] = [
+        'users.yaml',
+        'finance_account.yaml',
+        'income.yaml',
+        'income_cat.yaml',
+    ]
 
     def setUp(self):
         self.user = User.objects.get(pk=1)

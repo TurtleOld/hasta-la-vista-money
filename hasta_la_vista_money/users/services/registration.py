@@ -1,5 +1,5 @@
-from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.services.generate_dates import generate_date_list
+from hasta_la_vista_money.users.models import User
 
 
 def register_user(form) -> User:

@@ -1,24 +1,27 @@
 from decimal import Decimal
-from django.test import TestCase, Client
-from django.urls import reverse
+
 from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
 
 from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import Receipt, Product, Seller
+from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 
 User = get_user_model()
 
 
 class ReceiptUpdateViewTest(TestCase):
-    """Тесты для проверки функциональности изменения чека с проверкой баланса счёта."""
+    """Тесты для проверки функциональности изменения чека
+    с проверкой баланса счёта.
+    """
 
     def setUp(self):
         """Настройка тестовых данных."""
         self.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
-            password='testpass123',
+            password='testpass123',  # noqa: S106
             is_active=True,
             is_superuser=True,
         )
@@ -40,7 +43,8 @@ class ReceiptUpdateViewTest(TestCase):
         )
 
         self.seller = Seller.objects.create(
-            user=self.user, name_seller='Тестовый магазин'
+            user=self.user,
+            name_seller='Тестовый магазин',
         )
 
         self.product1 = Product.objects.create(
@@ -290,7 +294,9 @@ class ReceiptUpdateViewTest(TestCase):
     def test_receipt_update_unauthorized_user(self):
         """Тест попытки обновления чека неавторизованным пользователем."""
         other_user = User.objects.create_user(
-            username='otheruser', email='other@example.com', password='otherpass123'
+            username='otheruser',
+            email='other@example.com',
+            password='otherpass123',  # noqa: S106
         )
 
         other_receipt = Receipt.objects.create(
@@ -305,7 +311,7 @@ class ReceiptUpdateViewTest(TestCase):
         )
 
         response = self.client.get(
-            reverse('receipts:update', kwargs={'pk': other_receipt.pk})
+            reverse('receipts:update', kwargs={'pk': other_receipt.pk}),
         )
 
         self.assertEqual(response.status_code, 404)

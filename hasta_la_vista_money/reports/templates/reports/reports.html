@@ -75,7 +75,7 @@
                 }
             }
         });
-        
+
         // График баланса
         const balanceCtx = document.getElementById('balanceChart').getContext('2d');
         const chartBalance = JSON.parse(document.getElementById('chartBalance').textContent);
@@ -104,7 +104,7 @@
                     title: { display: true, text: "{{ _('Баланс по месяцам') }}" }
                 },
                 scales: {
-                    y: { 
+                    y: {
                         beginAtZero: true,
                         grid: {
                             color: function(context) {
@@ -129,7 +129,7 @@
                 }
             }
         });
-        
+
         // Круговая диаграмма
         const pieCtx = document.getElementById('pieChart').getContext('2d');
         const pieLabels = JSON.parse(document.getElementById('pieLabels').textContent);

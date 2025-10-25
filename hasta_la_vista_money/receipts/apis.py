@@ -3,6 +3,13 @@ import json
 from datetime import datetime
 
 from django.db.models import QuerySet
+from rest_framework import status
+from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
@@ -11,18 +18,12 @@ from hasta_la_vista_money.receipts.serializers import (
     SellerSerializer,
 )
 from hasta_la_vista_money.users.models import User
-from rest_framework import status
-from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.throttling import UserRateThrottle
 
 
 class ReceiptListAPIView(ListCreateAPIView):
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
-    throttle_classes = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
     def get_queryset(self) -> QuerySet[Receipt, Receipt]:  # type: ignore[override]
         return (
@@ -31,7 +32,7 @@ class ReceiptListAPIView(ListCreateAPIView):
             .prefetch_related('product')
         )
 
-    def list(self, request, *args, **kwargs):
+    def list(self, request) -> Response:
         queryset = self.get_queryset()
         serializer = ReceiptSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -41,18 +42,20 @@ class SellerDetailAPIView(RetrieveAPIView):
     queryset = Seller.objects.all()
     serializer_class = SellerSerializer
     permission_classes = (IsAuthenticated,)
-    throttle_classes = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
     lookup_field = 'id'
 
     def get_queryset(self) -> QuerySet[Seller, Seller]:  # type: ignore[override]
-        return Seller.objects.filter(user__id=self.request.user.pk).select_related(
+        return Seller.objects.filter(
+            user__id=self.request.user.pk,
+        ).select_related(
             'user',
         )
 
 
 class DataUrlAPIView(APIView):
     permission_classes = (IsAuthenticated,)
-    throttle_classes = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
     def post(self, request):
         serializer = ImageDataSerializer(data=request.data)
@@ -71,21 +74,23 @@ class DataUrlAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             return Response(
-                {'message': 'Data URL received successfully', 'data_url': data_url},
+                {
+                    'message': 'Data URL received successfully',
+                    'data_url': data_url,
+                },
                 status=status.HTTP_200_OK,
             )
-        else:
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class SellerCreateAPIView(APIView):
     permission_classes = (IsAuthenticated,)
-    throttle_classes = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         serializer = SellerSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(user=request.user)
@@ -95,149 +100,182 @@ class SellerCreateAPIView(APIView):
 
 class ReceiptCreateAPIView(ListCreateAPIView):
     permission_classes = (IsAuthenticated,)
-    throttle_classes = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
+        return self._process_request(request)
+
+    def _process_request(self, request) -> Response:
         try:
             request_data = json.loads(request.body)
         except json.JSONDecodeError:
-            return Response(
-                'Invalid JSON data',
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return self._error_response('Invalid JSON data')
 
+        validation_error = self._validate_request_data(request_data)
+        if validation_error:
+            return validation_error
+
+        try:
+            return self._handle_receipt_creation(request_data)
+        except (ValueError, TypeError, decimal.InvalidOperation) as error:
+            return self._error_response(str(error))
+
+    def _handle_receipt_creation(self, request_data: dict) -> Response:
+        if self._check_existing_receipt(request_data):
+            return self._error_response('Такой чек уже был добавлен ранее')
+
+        user, account = self._get_user_and_account(request_data)
+        if isinstance(user, Response):
+            return user
+        if isinstance(account, Response):
+            return account
+
+        receipt = self._create_receipt(request_data, user, account)
+        return Response(
+            ReceiptSerializer(receipt).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _error_response(self, message: str) -> Response:
+        return Response(
+            message,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def _validate_request_data(self, request_data: dict) -> Response | None:
+        required_fields = [
+            'user',
+            'finance_account',
+            'receipt_date',
+            'total_sum',
+            'seller',
+            'product',
+        ]
+        if not all(request_data.get(field) for field in required_fields):
+            return self._error_response('Missing required data')
+        return None
+
+    def _check_existing_receipt(self, request_data: dict) -> bool:
+        return bool(
+            Receipt.objects.filter(
+                receipt_date=request_data.get('receipt_date'),
+                total_sum=request_data.get('total_sum'),
+            ).first(),
+        )
+
+    def _get_user_and_account(
+        self,
+        request_data: dict,
+    ) -> tuple[User | Response, Account | Response]:
         user_id = request_data.get('user')
         account_id = request_data.get('finance_account')
-        receipt_date = request_data.get('receipt_date')
-        total_sum = request_data.get('total_sum')
-        number_receipt = request_data.get('number_receipt')
-        operation_type = request_data.get('operation_type')
-        nds10 = request_data.get('nds10')
-        nds20 = request_data.get('nds20')
-        seller_data = request_data.get('seller')
-        products_data = request_data.get('product')
 
-        if not all(
-            [user_id, account_id, receipt_date, total_sum, seller_data, products_data],
-        ):
-            return Response(
-                'Missing required data',
-                status=status.HTTP_400_BAD_REQUEST,
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return (
+                self._error_response(f'User with id {user_id} does not exist'),
+                None,
             )
 
         try:
-            check_existing_receipt = Receipt.objects.filter(
-                receipt_date=receipt_date,
-                total_sum=total_sum,
-            ).first()
-
-            if not check_existing_receipt:
-                try:
-                    user = User.objects.get(id=user_id)
-                except User.DoesNotExist:
-                    return Response(
-                        f'User with id {user_id} does not exist',
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                try:
-                    account = Account.objects.get(id=account_id, user=user)
-                except Account.DoesNotExist:
-                    return Response(
-                        f'Account with id {account_id} does not exist or does not belong to user {user_id}',
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                seller_data['user'] = user
-
-                account.balance -= decimal.Decimal(total_sum)
-                account.save()
-
-                request_data['account'] = account
-                seller = Seller.objects.create(**seller_data)
-
-                if isinstance(receipt_date, str):
-                    receipt_date = datetime.fromisoformat(
-                        receipt_date.replace('Z', '+00:00')
-                    )
-
-                receipt = Receipt.objects.create(
-                    user=user,
-                    account=account,
-                    receipt_date=receipt_date,
-                    seller=seller,
-                    total_sum=decimal.Decimal(str(total_sum)),
-                    number_receipt=number_receipt,
-                    operation_type=operation_type,
-                    nds10=decimal.Decimal(str(nds10)) if nds10 else None,
-                    nds20=decimal.Decimal(str(nds20)) if nds20 else None,
-                )
-
-                products_objects = []
-                for product_data in products_data:
-                    product_data_copy = product_data.copy()
-                    product_data_copy.pop('receipt', None)
-                    product_data_copy['user'] = user
-
-                    if 'price' in product_data_copy:
-                        product_data_copy['price'] = decimal.Decimal(
-                            str(product_data_copy['price'])
-                        )
-                    if 'quantity' in product_data_copy:
-                        product_data_copy['quantity'] = decimal.Decimal(
-                            str(product_data_copy['quantity'])
-                        )
-                    if 'amount' in product_data_copy:
-                        product_data_copy['amount'] = decimal.Decimal(
-                            str(product_data_copy['amount'])
-                        )
-
-                    if (
-                        'category' in product_data_copy
-                        and product_data_copy['category'] is None
-                    ):
-                        product_data_copy['category'] = ''
-
-                    products_objects.append(Product(**product_data_copy))
-
-                products = Product.objects.bulk_create(products_objects)
-                receipt.product.set(products)
-
-                return Response(
-                    ReceiptSerializer(receipt).data,
-                    status=status.HTTP_201_CREATED,
-                )
-            else:
-                return Response(
-                    'Такой чек уже был добавлен ранее',
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        except Exception as error:
-            return Response(
-                str(error),
-                status=status.HTTP_400_BAD_REQUEST,
+            account = Account.objects.get(id=account_id, user=user)
+        except Account.DoesNotExist:
+            return (
+                None,
+                self._error_response(
+                    f'Account with id {account_id} does not exist '
+                    f'or does not belong to user {user_id}',
+                ),
             )
+
+        return user, account
+
+    def _create_receipt(
+        self,
+        request_data: dict,
+        user: User,
+        account: Account,
+    ) -> Receipt:
+        seller_data = request_data.get('seller')
+        seller_data['user'] = user
+
+        account.balance -= decimal.Decimal(str(request_data.get('total_sum')))
+        account.save()
+
+        seller = Seller.objects.create(**seller_data)
+
+        receipt_date = request_data.get('receipt_date')
+        if isinstance(receipt_date, str):
+            receipt_date = datetime.fromisoformat(receipt_date)
+
+        receipt = Receipt.objects.create(
+            user=user,
+            account=account,
+            receipt_date=receipt_date,
+            seller=seller,
+            total_sum=decimal.Decimal(str(request_data.get('total_sum'))),
+            number_receipt=request_data.get('number_receipt'),
+            operation_type=request_data.get('operation_type'),
+            nds10=decimal.Decimal(str(request_data.get('nds10')))
+            if request_data.get('nds10')
+            else None,
+            nds20=decimal.Decimal(str(request_data.get('nds20')))
+            if request_data.get('nds20')
+            else None,
+        )
+
+        self._create_products(request_data.get('product'), user, receipt)
+        return receipt
+
+    def _create_products(
+        self,
+        products_data: list,
+        user: User,
+        receipt: Receipt,
+    ) -> None:
+        products_objects = []
+        for product_data in products_data:
+            product_data_copy = product_data.copy()
+            product_data_copy.pop('receipt', None)
+            product_data_copy['user'] = user
+
+            self._process_product_data(product_data_copy)
+            products_objects.append(Product(**product_data_copy))
+
+        products = Product.objects.bulk_create(products_objects)
+        receipt.product.set(products)
+
+    def _process_product_data(self, product_data: dict) -> None:
+        decimal_fields = ['price', 'quantity', 'amount']
+        for field in decimal_fields:
+            if field in product_data:
+                product_data[field] = decimal.Decimal(str(product_data[field]))
+
+        if 'category' in product_data and product_data['category'] is None:
+            product_data['category'] = ''
 
 
 class ReceiptDeleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
-    throttle_classes = [UserRateThrottle]
+    throttle_classes = (UserRateThrottle,)
 
-    def delete(self, request, *args, **kwargs):
+    def delete(self, pk: int) -> Response:
         try:
-            receipt = Receipt.objects.get(id=kwargs['pk'])
+            receipt = Receipt.objects.get(id=pk)
             receipt.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-        except Exception as error:
+        except Receipt.DoesNotExist:
             return Response(
-                status=status.HTTP_400_BAD_REQUEST, data={'error': str(error)}
+                status=status.HTTP_404_NOT_FOUND,
+                data={'error': 'Receipt not found'},
             )
 
 
 class SellerAutocompleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request):
         query = request.GET.get('q', '').strip()
         sellers: QuerySet[Seller, Seller] = Seller.objects.filter(
             user=request.user,
@@ -254,7 +292,7 @@ class SellerAutocompleteAPIView(APIView):
 class ProductAutocompleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request):
         query = request.GET.get('q', '').strip()
         products: QuerySet[Product, Product] = Product.objects.filter(
             user=request.user,

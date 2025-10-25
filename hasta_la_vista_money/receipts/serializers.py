@@ -1,7 +1,16 @@
 from django_stubs_ext.db.models import TypedModelMeta
-from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import CharField, ModelSerializer, Serializer
+
+from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+
+
+class InvalidSellerDataError(ValidationError):
+    default_detail = 'Invalid seller data'
+
+
+class InvalidProductDataError(ValidationError):
+    default_detail = 'Invalid product data'
 
 
 class SellerSerializer(ModelSerializer):
@@ -29,13 +38,13 @@ class ReceiptSerializer(ModelSerializer):
         seller_data = validated_data.pop('seller')
         seller_serializer = SellerSerializer(data=seller_data)
         if not seller_serializer.is_valid():
-            raise ValidationError('Invalid seller data')
+            raise InvalidSellerDataError
         seller = seller_serializer.save()
         receipt = Receipt.objects.create(seller=seller, **validated_data)
         for product_data in products_data:
             product_serializer = ProductSerializer(data=product_data)
             if not product_serializer.is_valid():
-                raise ValidationError('Invalid product data')
+                raise InvalidProductDataError
             product = product_serializer.save()
             receipt.product.add(product)
         return receipt

@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from django.shortcuts import get_object_or_404
+
 from hasta_la_vista_money.loan.loan_calculator import (
     calculate_annuity_schedule,
     calculate_differentiated_schedule,
@@ -22,7 +23,8 @@ def calculate_annuity_loan(
     period_loan,
 ):
     """
-    Функция по расчёту аннуитетных платежей (по-банковски, с округлением каждого платежа).
+    Функция по расчёту аннуитетных платежей
+    (по-банковски, с округлением каждого платежа).
     """
     if not isinstance(loan_amount, Decimal):
         loan_amount = Decimal(str(loan_amount))
@@ -47,7 +49,11 @@ def calculate_annuity_loan(
             PaymentSchedule(
                 user=user,
                 loan=loan,
-                date=date(current_date.year, current_date.month, current_date.day),
+                date=date(
+                    current_date.year,
+                    current_date.month,
+                    current_date.day,
+                ),
                 balance=payment['balance'],
                 monthly_payment=payment['payment'],
                 interest=payment['interest'],
@@ -67,7 +73,8 @@ def calculate_differentiated_loan(
     period_loan,
 ):
     """
-    Функция по расчёту дифференцированных платежей (по-банковски, с округлением каждого платежа).
+    Функция по расчёту дифференцированных платежей
+    (по-банковски, с округлением каждого платежа).
     """
     if not isinstance(loan_amount, Decimal):
         loan_amount = Decimal(str(loan_amount))
@@ -79,7 +86,6 @@ def calculate_differentiated_loan(
     user = get_object_or_404(User, id=user_id)
     loan = get_object_or_404(Loan, id=loan_id)
 
-    # Используем банковский расчёт
     schedule_data = calculate_differentiated_schedule(
         float(loan_amount),
         float(annual_interest_rate),
@@ -92,7 +98,11 @@ def calculate_differentiated_loan(
             PaymentSchedule(
                 user=user,
                 loan=loan,
-                date=date(current_date.year, current_date.month, current_date.day),
+                date=date(
+                    current_date.year,
+                    current_date.month,
+                    current_date.day,
+                ),
                 balance=payment['balance'],
                 monthly_payment=payment['payment'],
                 interest=payment['interest'],

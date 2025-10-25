@@ -1,9 +1,9 @@
-import os
 from datetime import timedelta
 
 import structlog
-from config.django.base import *  # NOQA
 from decouple import config
+
+from config.django.base import *  # noqa: F403
 
 allowed_hosts = str(config('ALLOWED_HOSTS', default=''))
 ALLOWED_HOSTS = (
@@ -20,7 +20,9 @@ SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
 SECURE_CONTENT_TYPE_NOSNIFF = config(
-    'SECURE_CONTENT_TYPE_NOSNIFF', default=True, cast=bool
+    'SECURE_CONTENT_TYPE_NOSNIFF',
+    default=True,
+    cast=bool,
 )
 
 SIMPLE_JWT = {
@@ -37,11 +39,12 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',
     'AUTH_COOKIE_SAMESITE': 'Lax',
-    'AUTH_COOKIE_MAX_AGE': config('ACCESS_TOKEN_LIFETIME', default=60, cast=int) * 60,
-    'AUTH_COOKIE_REFRESH_MAX_AGE': config('REFRESH_TOKEN_LIFETIME', default=7, cast=int)
-    * 24
-    * 60
-    * 60,
+    'AUTH_COOKIE_MAX_AGE': (
+        config('ACCESS_TOKEN_LIFETIME', default=60, cast=int) * 60
+    ),
+    'AUTH_COOKIE_REFRESH_MAX_AGE': (
+        config('REFRESH_TOKEN_LIFETIME', default=7, cast=int) * 24 * 60 * 60
+    ),
 }
 
 LOGGING = {
@@ -56,7 +59,7 @@ LOGGING = {
     'handlers': {
         'json_file': {
             'class': 'logging.handlers.WatchedFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'hlvm.log'),  # noqa: F405
+            'filename': BASE_DIR / 'logs' / 'hlvm.log',  # noqa: F405
             'formatter': 'json',
         },
         'console': {

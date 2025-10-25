@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict
+from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import CreateView, TemplateView, UpdateView
 from django.views.generic.edit import FormView
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.authentication.authentication import (
     clear_auth_cookies,
@@ -62,21 +63,23 @@ class IndexView(TemplateView):
     def dispatch(
         self,
         request: HttpRequest,
-        *args: Any,
-        **kwargs: Any,
     ) -> HttpResponseBase:
         if request.user.is_authenticated:
             return redirect('applications:list')
         return redirect('login')
 
 
-class ListUsers(LoginRequiredMixin, SuccessMessageMixin[BaseForm], TemplateView):
+class ListUsers(
+    LoginRequiredMixin,
+    SuccessMessageMixin[BaseForm],
+    TemplateView,
+):
     model = User
     template_name = 'users/profile.html'
     context_object_name = 'users'
     no_permission_url = reverse_lazy('login')
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         if self.request.user.is_authenticated:
             user_update = UpdateUserForm(instance=self.request.user)
@@ -106,27 +109,34 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponseBase:
-        # Кэшируем проверку блокировки
-        if not hasattr(request, '_axes_checked'):
-            request._axes_checked = True  # type: ignore
+        if not hasattr(request, 'axes_checked'):
+            request.axes_checked = True
             if hasattr(request, 'axes_locked_out'):
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                     return JsonResponse(
                         {
                             'success': False,
-                            'error': 'Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.',
+                            'error': (
+                                'Слишком много неудачных попыток входа. '
+                                'Ваш браузер и компьютер заблокированы '
+                                'для входа в это приложение. '
+                                'Попробуйте позже или '
+                                'обратитесь к администратору.'
+                            ),
                         },
                         status=429,
                     )
-                else:
-                    messages.error(
-                        request,
-                        'Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.',
-                    )
-                    return self.render_to_response(self.get_context_data())
+                messages.error(
+                    request,
+                    'Слишком много неудачных попыток входа. '
+                    'Ваш браузер и компьютер заблокированы '
+                    'для входа в это приложение. '
+                    'Попробуйте позже или обратитесь к администратору.',
+                )
+                return self.render_to_response(self.get_context_data())
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context['button_text'] = _('Войти')
         if 'form' in context:
@@ -141,7 +151,9 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
 
     def form_valid(self, form: Any) -> HttpResponse:
         result = login_user(self.request, form, str(self.success_message))
-        is_ajax = self.request.headers.get('x-requested-with') == 'XMLHttpRequest'
+        is_ajax = (
+            self.request.headers.get('x-requested-with') == 'XMLHttpRequest'
+        )
 
         if result['success']:
             self.jwt_access_token = result['access']
@@ -155,12 +167,11 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
             else:
                 response = redirect(self.get_success_url())
 
-            response = set_auth_cookies(
+            return set_auth_cookies(
                 response,
                 self.jwt_access_token,
                 self.jwt_refresh_token,
             )
-            return response
 
         error_message = 'Неправильный логин или пароль!'
         messages.error(self.request, error_message)
@@ -189,15 +200,19 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
 
 
 class LogoutUser(LogoutView, SuccessMessageMixin[BaseForm]):
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def dispatch(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
         messages.add_message(
             request,
             messages.SUCCESS,
             constants.SUCCESS_MESSAGE_LOGOUT,
         )
         response = super().dispatch(request, *args, **kwargs)
-        response = clear_auth_cookies(response)
-        return response
+        return clear_auth_cookies(response)
 
 
 class CreateUser(
@@ -220,7 +235,7 @@ class CreateUser(
             return redirect('login')
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context['title'] = _('Форма регистрации')
         context['button_text'] = _('Регистрация')
@@ -247,7 +262,10 @@ class UpdateUserView(
         form.instance = self.request.user
         return form
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    def post(
+        self,
+        request: HttpRequest,
+    ) -> JsonResponse:
         user_update = self.get_form()
         valid_form = (
             user_update.is_valid()
@@ -266,7 +284,7 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
     template_name = 'users/set_password.html'
     form_class = SetPasswordForm
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = get_object_or_404(User, pk=self.request.user.pk)
         if self.request.method == 'POST':
@@ -299,7 +317,10 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
 class ExportUserDataView(LoginRequiredMixin, View):
     """Представление для экспорта данных пользователя"""
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def get(
+        self,
+        request: HttpRequest,
+    ) -> HttpResponse:
         if not isinstance(request.user, User):
             return HttpResponse('Unauthorized', status=401)
         user_data = get_user_export_data(request.user)
@@ -308,7 +329,10 @@ class ExportUserDataView(LoginRequiredMixin, View):
             content_type='application/json',
         )
         response['Content-Disposition'] = (
-            f'attachment; filename="user_data_{request.user.username}_{timezone.now().strftime("%Y%m%d")}.json"'
+            'attachment; filename="user_data_{}_{}.json"'.format(
+                request.user.username,
+                timezone.now().strftime('%Y%m%d'),
+            )
         )
         return response
 
@@ -318,7 +342,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
 
     template_name = 'users/statistics.html'
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = self.request.user
         if isinstance(user, User):
@@ -331,7 +355,7 @@ class UserNotificationsView(LoginRequiredMixin, TemplateView):
 
     template_name = 'users/notifications.html'
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = self.request.user
         if isinstance(user, User):
@@ -355,7 +379,10 @@ class GroupCreateView(
 
     def get_success_url(self) -> str:
         return str(
-            reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk or 0}),
+            reverse_lazy(
+                'users:profile',
+                kwargs={'pk': self.request.user.pk or 0},
+            ),
         )
 
 
@@ -374,7 +401,10 @@ class GroupDeleteView(
 
     def get_success_url(self) -> str:
         return str(
-            reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk or 0}),
+            reverse_lazy(
+                'users:profile',
+                kwargs={'pk': self.request.user.pk or 0},
+            ),
         )
 
 
@@ -393,7 +423,10 @@ class AddUserToGroupView(
 
     def get_success_url(self) -> str:
         return str(
-            reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk or 0}),
+            reverse_lazy(
+                'users:profile',
+                kwargs={'pk': self.request.user.pk or 0},
+            ),
         )
 
 
@@ -416,7 +449,10 @@ class DeleteUserFromGroupView(
 
     def get_success_url(self) -> str:
         return str(
-            reverse_lazy('users:profile', kwargs={'pk': self.request.user.pk or 0}),
+            reverse_lazy(
+                'users:profile',
+                kwargs={'pk': self.request.user.pk or 0},
+            ),
         )
 
 
@@ -445,7 +481,10 @@ def groups_not_for_user_ajax(request: HttpRequest) -> JsonResponse:
 
 
 class SwitchThemeView(LoginRequiredMixin, View):
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    def post(
+        self,
+        request: HttpRequest,
+    ) -> JsonResponse:
         user = User.objects.get(pk=request.user.pk or 0)
         data = json.loads(request.body)
         theme = data.get('theme')

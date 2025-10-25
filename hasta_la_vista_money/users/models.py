@@ -1,7 +1,8 @@
 from typing import Any
+
 from django.contrib import admin
-from django.db.models import CharField
 from django.contrib.auth.models import AbstractUser
+from django.db.models import CharField
 
 
 class User(AbstractUser):
@@ -11,5 +12,5 @@ class User(AbstractUser):
         return self.username
 
 
-class TokenAdmin(admin.ModelAdmin):  # type: ignore
+class TokenAdmin(admin.ModelAdmin):
     search_fields = ('key', 'user__username')

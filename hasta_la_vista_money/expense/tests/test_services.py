@@ -1,7 +1,10 @@
+from typing import ClassVar
+
 from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
+
 from hasta_la_vista_money.constants import RECEIPT_CATEGORY_NAME
-from hasta_la_vista_money.expense.forms import AddExpenseForm
+from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.expense.services import (
     ExpenseCategoryService,
@@ -15,7 +18,7 @@ from hasta_la_vista_money.users.models import User
 class TestExpenseService(TestCase):
     """Test cases for ExpenseService."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -77,7 +80,7 @@ class TestExpenseService(TestCase):
             data=form_data,
             category_queryset=self.service.get_categories_queryset(),
             account_queryset=Account.objects.filter(user=self.user),
-        )  # type: ignore
+        )
         self.assertTrue(form.is_valid())
         expense = self.service.create_expense(form)
         self.assertIsInstance(expense, Expense)
@@ -100,14 +103,18 @@ class TestExpenseService(TestCase):
         """Test getting expenses for 'my' group."""
         expenses = self.service.get_expenses_by_group('my')
         self.assertIsInstance(expenses, list)
-        expense_ids = [exp.pk if hasattr(exp, 'pk') else exp['id'] for exp in expenses]
+        expense_ids = [
+            exp.pk if hasattr(exp, 'pk') else exp['id'] for exp in expenses
+        ]
         self.assertIn(self.expense.pk, expense_ids)
 
     def test_get_expenses_by_group_none(self) -> None:
         """Test getting expenses for None group."""
         expenses = self.service.get_expenses_by_group(None)
         self.assertIsInstance(expenses, list)
-        expense_ids = [exp.pk if hasattr(exp, 'pk') else exp['id'] for exp in expenses]
+        expense_ids = [
+            exp.pk if hasattr(exp, 'pk') else exp['id'] for exp in expenses
+        ]
         self.assertIn(self.expense.pk, expense_ids)
 
     def test_get_expense_data(self) -> None:
@@ -128,7 +135,7 @@ class TestExpenseService(TestCase):
 class TestExpenseCategoryService(TestCase):
     """Test cases for ExpenseCategoryService."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'expense_cat.yaml',
     ]
@@ -155,7 +162,6 @@ class TestExpenseCategoryService(TestCase):
 
     def test_create_category(self) -> None:
         """Test creating a new category."""
-        from hasta_la_vista_money.expense.forms import AddCategoryForm
 
         form_data = {
             'name': 'Test Category',
@@ -164,7 +170,7 @@ class TestExpenseCategoryService(TestCase):
         form = AddCategoryForm(
             data=form_data,
             category_queryset=self.service.get_categories_queryset(),
-        )  # type: ignore
+        )
         self.assertTrue(form.is_valid())
         category = self.service.create_category(form)
         self.assertIsInstance(category, ExpenseCategory)
@@ -175,7 +181,7 @@ class TestExpenseCategoryService(TestCase):
 class TestReceiptExpenseService(TestCase):
     """Test cases for ReceiptExpenseService."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'expense_cat.yaml',
     ]

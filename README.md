@@ -89,7 +89,7 @@ cd hasta-la-vista-money
 2. **Создайте файл `.env` в корне проекта:**
 ```bash
 # Обязательные настройки
-SECRET_KEY=your-secret-key-here 
+SECRET_KEY=your-secret-key-here
 # Создать ключ можно командой: make secretkey
 DEBUG=false
 DATABASE_URL=postgres://username:password@localhost:5432/hasta_la_vista_money

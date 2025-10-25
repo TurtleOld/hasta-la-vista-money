@@ -3,6 +3,8 @@ from datetime import date
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import resolve, reverse
+
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.apps import BudgetConfig
 from hasta_la_vista_money.budget.models import DateList, Planning
 
@@ -16,7 +18,10 @@ class BudgetConfigTest(TestCase):
 
 class BudgetModelTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='testuser', password='pass')
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='pass',
+        )
         self.date = date(2024, 1, 1)
         self.datelist = DateList.objects.create(user=self.user, date=self.date)
         self.planning = Planning.objects.create(
@@ -54,7 +59,10 @@ class BudgetUrlsTest(TestCase):
 class BudgetViewsTest(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username='testuser', password='pass')
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='pass',
+        )
         self.client.force_login(self.user)
         self.date = date(2024, 1, 1)
         DateList.objects.create(user=self.user, date=self.date)
@@ -62,25 +70,45 @@ class BudgetViewsTest(TestCase):
     def test_budget_view_get(self):
         response = self.client.get(reverse('budget:list'))
         self.assertIn(response.status_code, [200, 302])
-        if response.status_code == 200 and response.context is not None:
+        if (
+            response.status_code == constants.SUCCESS_CODE
+            and response.context is not None
+        ):
             self.assertIn('chart_plan_execution_income', response.context)
             self.assertIn('chart_plan_execution_expense', response.context)
 
     def test_generate_date_list_view(self):
         response = self.client.post(reverse('budget:generate_date'))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, constants.REDIRECTS)
 
     def test_save_planning_post(self):
         response = self.client.post(
             reverse('budget:save_planning'),
-            {'category_id': 1, 'date': self.date, 'type': 'expense', 'amount': 123},
+            {
+                'category_id': 1,
+                'date': self.date,
+                'type': 'expense',
+                'amount': 123,
+            },
         )
-        self.assertIn(response.status_code, [200, 302, 400])
+        self.assertIn(
+            response.status_code,
+            [
+                constants.SUCCESS_CODE,
+                constants.REDIRECTS,
+                constants.SERVER_ERROR,
+            ],
+        )
 
     def test_change_planning_post(self):
         response = self.client.post(
             reverse('budget:change_planning'),
-            {'category_id': 1, 'date': self.date, 'type': 'expense', 'amount': 123},
+            {
+                'category_id': 1,
+                'date': self.date,
+                'type': 'expense',
+                'amount': 123,
+            },
         )
         self.assertIn(response.status_code, [200, 302, 400])
 
@@ -90,5 +118,8 @@ class BudgetViewsTest(TestCase):
         self.client.force_login(user2)
         response = self.client.get(reverse('budget:list'))
         self.assertIn(response.status_code, [200, 302])
-        if response.status_code == 200 and response.context is not None:
+        if (
+            response.status_code == constants.SUCCESS_CODE
+            and response.context is not None
+        ):
             self.assertIn('chart_plan_execution_income', response.context)

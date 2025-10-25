@@ -1,16 +1,19 @@
 import decimal
+from decimal import Decimal
+from typing import ClassVar
 
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
 
 class Loan(models.Model):
-    TYPE_LOAN = [
+    TYPE_LOAN: ClassVar[list[tuple[str, str]]] = [
         ('Annuity', gettext_lazy('Аннуитетный')),
         ('Differentiated', gettext_lazy('Дифференцированный')),
     ]
@@ -35,35 +38,35 @@ class Loan(models.Model):
     )
     period_loan = models.IntegerField()
     type_loan = models.CharField(
-        max_length=20, choices=TYPE_LOAN, default=TYPE_LOAN[0][0]
+        max_length=20,
+        choices=TYPE_LOAN,
+        default=TYPE_LOAN[0][0],
     )
 
     class Meta:
-        ordering = ['-id']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-id']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['-id']),
             models.Index(fields=['loan_amount']),
             models.Index(fields=['annual_interest_rate']),
             models.Index(fields=['period_loan']),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return _(f'Кредит №{self.pk} на сумму {self.loan_amount}')
 
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
         return reverse('loan:delete', args=[self.pk])
 
     @property
-    def calculate_sum_monthly_payment(self):
-        from decimal import Decimal
-
+    def calculate_sum_monthly_payment(self) -> Decimal:
         payments = self.payment_schedule_loans.aggregate(
             total=models.Sum('monthly_payment'),
         )['total'] or Decimal('0.00')
         return payments - Decimal(str(self.loan_amount))
 
     @property
-    def calculate_total_amount_loan_with_interest(self):
+    def calculate_total_amount_loan_with_interest(self) -> Decimal:
         sum_monthly_payment = self.calculate_sum_monthly_payment
         return decimal.Decimal(self.loan_amount) + sum_monthly_payment
 

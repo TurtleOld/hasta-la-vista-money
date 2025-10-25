@@ -1,8 +1,10 @@
 from decimal import Decimal
+from typing import ClassVar
 
 from django.test import TestCase
 from django.urls import reverse_lazy
 from django.utils import timezone
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
@@ -21,7 +23,7 @@ from hasta_la_vista_money.users.models import User
 class TestLoan(TestCase):
     """Test cases for Loan application."""
 
-    fixtures = [
+    fixtures: ClassVar[list[str]] = [
         'users.yaml',
         'finance_account.yaml',
         'income.yaml',
@@ -152,7 +154,6 @@ class TestLoan(TestCase):
 
     def test_payment_make_loan_form_validation(self):
         """Test PaymentMakeLoanForm validation."""
-        # Создаем отдельный счет для платежа, который не связан с кредитом
         payment_account = Account.objects.create(
             user=self.user,
             name_account='Test Payment Account',
@@ -224,7 +225,9 @@ class TestLoan(TestCase):
             period_loan=12,
             type_loan='Annuity',
         )
-        response = self.client.post(reverse_lazy('loan:delete', args=[test_loan.pk]))
+        response = self.client.post(
+            reverse_lazy('loan:delete', args=[test_loan.pk]),
+        )
         self.assertEqual(response.status_code, 302)
 
     def test_payment_make_create_view_post(self):
@@ -253,11 +256,13 @@ class TestLoan(TestCase):
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
-            loan_amount=Decimal('10000'),
+            loan_amount=Decimal(10000),
             annual_interest_rate=Decimal('5.5'),
             period_loan=12,
         )
-        self.assertTrue(PaymentSchedule.objects.filter(loan=self.loan1).exists())
+        self.assertTrue(
+            PaymentSchedule.objects.filter(loan=self.loan1).exists(),
+        )
 
     def test_calculate_differentiated_loan(self):
         """Test calculate_differentiated_loan function."""
@@ -265,11 +270,13 @@ class TestLoan(TestCase):
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
-            loan_amount=Decimal('10000'),
+            loan_amount=Decimal(10000),
             annual_interest_rate=Decimal('5.5'),
             period_loan=12,
         )
-        self.assertTrue(PaymentSchedule.objects.filter(loan=self.loan1).exists())
+        self.assertTrue(
+            PaymentSchedule.objects.filter(loan=self.loan1).exists(),
+        )
 
     def test_loan_calculate_sum_monthly_payment_property(self):
         """Test Loan calculate_sum_monthly_payment property."""
@@ -294,7 +301,7 @@ class TestLoan(TestCase):
             account=payment_account,
             date=timezone.now(),
             loan=self.loan1,
-            amount=Decimal('1000'),
+            amount=Decimal(1000),
         )
         self.assertIsNotNone(payment)
 
@@ -304,10 +311,10 @@ class TestLoan(TestCase):
             user=self.user,
             loan=self.loan1,
             date=timezone.now(),
-            balance=Decimal('9000'),
-            monthly_payment=Decimal('1000'),
-            interest=Decimal('100'),
-            principal_payment=Decimal('900'),
+            balance=Decimal(9000),
+            monthly_payment=Decimal(1000),
+            interest=Decimal(100),
+            principal_payment=Decimal(900),
         )
         self.assertIsNotNone(payment_schedule)
 
@@ -339,7 +346,9 @@ class TestLoan(TestCase):
             period_loan=12,
             type_loan='Annuity',
         )
-        response = self.client.post(reverse_lazy('loan:delete', args=[test_loan.pk]))
+        response = self.client.post(
+            reverse_lazy('loan:delete', args=[test_loan.pk]),
+        )
         self.assertEqual(response.status_code, 302)
 
     def test_loan_form_field_configuration(self):
@@ -379,7 +388,9 @@ class TestLoan(TestCase):
             annual_interest_rate=5.5,
             period_loan=12,
         )
-        self.assertTrue(PaymentSchedule.objects.filter(loan=self.loan1).exists())
+        self.assertTrue(
+            PaymentSchedule.objects.filter(loan=self.loan1).exists(),
+        )
 
     def test_calculate_differentiated_loan_with_float_inputs(self):
         """Test calculate_differentiated_loan with float inputs."""
@@ -391,7 +402,9 @@ class TestLoan(TestCase):
             annual_interest_rate=Decimal('5.5'),
             period_loan=12,
         )
-        self.assertTrue(PaymentSchedule.objects.filter(loan=self.loan1).exists())
+        self.assertTrue(
+            PaymentSchedule.objects.filter(loan=self.loan1).exists(),
+        )
 
     def test_loan_calculate_sum_monthly_payment_without_payments(self):
         """Test Loan calculate_sum_monthly_payment property without payments."""
@@ -399,7 +412,9 @@ class TestLoan(TestCase):
         self.assertIsInstance(result, Decimal)
 
     def test_loan_calculate_sum_monthly_payment_with_zero_loan_amount(self):
-        """Test Loan calculate_sum_monthly_payment property with zero loan amount."""
+        """
+        Test Loan calculate_sum_monthly_payment property with zero loan amount.
+        """
         self.loan1.loan_amount = 0
         self.loan1.save()
         result = self.loan1.calculate_sum_monthly_payment

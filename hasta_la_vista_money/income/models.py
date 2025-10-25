@@ -1,5 +1,8 @@
+from typing import ClassVar
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.managers import IncomeManager
@@ -8,7 +11,8 @@ from hasta_la_vista_money.users.models import User
 
 class IncomeCategory(models.Model):
     """
-    Income category model with support for user-specific and hierarchical categories.
+    Income category model with support for user-specific and
+    hierarchical categories.
     """
 
     user = models.ForeignKey(
@@ -28,8 +32,8 @@ class IncomeCategory(models.Model):
     )
 
     class Meta:
-        ordering = ['parent_category_id']
-        indexes = [models.Index(fields=['name'])]
+        ordering: ClassVar[list[str]] = ['parent_category_id']
+        indexes: ClassVar[list[models.Index]] = [models.Index(fields=['name'])]
         unique_together = ('user', 'name')
 
     def __str__(self):
@@ -70,8 +74,8 @@ class Income(models.Model):
     objects = IncomeManager()
 
     class Meta:
-        ordering = ['-date']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-date']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['-date']),
             models.Index(fields=['amount']),
             models.Index(fields=['user', 'date']),

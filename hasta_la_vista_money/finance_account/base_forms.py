@@ -1,12 +1,14 @@
 """Base form classes and mixins for finance account forms.
 
 This module provides reusable base classes and mixins to reduce code duplication
-and ensure consistent behavior across forms. It includes Bootstrap styling mixins,
+and ensure consistent behavior across forms. It includes
+Bootstrap styling mixins,
 credit field handling, date field configuration, and common validation patterns.
 """
 
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.forms import (
     CharField,
     DateInput,
@@ -16,8 +18,8 @@ from django.forms import (
     Textarea,
 )
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money import constants
-from django.core.exceptions import ValidationError
 
 
 class BootstrapFormMixin:
@@ -33,7 +35,7 @@ class BootstrapFormMixin:
         Iterates through all form fields and adds the 'form-control' class
         to their widget attributes if not already present.
         """
-        for field_name, field in self.fields.items():
+        for field in self.fields.values():
             if hasattr(field.widget, 'attrs'):
                 current_class = field.widget.attrs.get('class', '')
                 if 'form-control' not in current_class:
@@ -55,11 +57,18 @@ class CreditFieldsMixin:
         Applies the 'credit-only-field' class to credit-related form fields
         including limit_credit, payment_due_date, and grace_period_days.
         """
-        credit_fields = ['limit_credit', 'payment_due_date', 'grace_period_days']
+        credit_fields = [
+            'limit_credit',
+            'payment_due_date',
+            'grace_period_days',
+        ]
 
         for field_name in credit_fields:
             if field_name in self.fields:
-                current_class = self.fields[field_name].widget.attrs.get('class', '')
+                current_class = self.fields[field_name].widget.attrs.get(
+                    'class',
+                    '',
+                )
                 self.fields[field_name].widget.attrs['class'] = (
                     f'{current_class} credit-only-field'.strip()
                 )
@@ -115,7 +124,11 @@ class FormValidationMixin:
         """
         amount = self.cleaned_data.get('amount')
         if amount is not None and amount <= 0:
-            raise self.get_form_error('amount', _('Сумма должна быть больше нуля'))
+            msg = 'amount'
+            raise self.get_form_error(
+                msg,
+                _('Сумма должна быть больше нуля'),
+            )
         return amount
 
     def get_form_error(self, field: str, message: str) -> Any:
@@ -134,7 +147,8 @@ class FormValidationMixin:
 class BaseAccountForm(BootstrapFormMixin, CreditFieldsMixin, ModelForm):
     """Base form class for account-related forms with common functionality.
 
-    Combines Bootstrap styling, credit field handling, and ModelForm functionality
+    Combines Bootstrap styling, credit field handling, and
+    ModelForm functionality
     to provide a consistent foundation for account creation and editing forms.
     """
 

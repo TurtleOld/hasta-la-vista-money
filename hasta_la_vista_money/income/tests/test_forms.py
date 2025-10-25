@@ -1,5 +1,8 @@
+from typing import ClassVar
+
 from django.test import TestCase
 from django.utils import timezone
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.models import IncomeCategory
@@ -11,7 +14,11 @@ class IncomeFormTest(TestCase):
     Test cases for the IncomeForm.
     """
 
-    fixtures = ['users.yaml', 'finance_account.yaml', 'income_cat.yaml']
+    fixtures: ClassVar[list[str]] = [
+        'users.yaml',
+        'finance_account.yaml',
+        'income_cat.yaml',
+    ]
 
     def setUp(self):
         self.user = User.objects.get(pk=1)
@@ -69,7 +76,7 @@ class AddCategoryIncomeFormTest(TestCase):
     Test cases for the AddCategoryIncomeForm.
     """
 
-    fixtures = ['users.yaml', 'income_cat.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml', 'income_cat.yaml']
 
     def setUp(self):
         self.user = User.objects.get(pk=1)
@@ -108,4 +115,7 @@ class AddCategoryIncomeFormTest(TestCase):
         )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
-        self.assertEqual(form.fields['parent_category'].choices, category_choices)
+        self.assertEqual(
+            form.fields['parent_category'].choices,
+            category_choices,
+        )

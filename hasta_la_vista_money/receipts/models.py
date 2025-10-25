@@ -1,9 +1,11 @@
+from collections.abc import Iterable
 from datetime import datetime
+from typing import ClassVar
 
 from django.db import models
 from django.db.models import Min
-from typing import Iterable
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
@@ -26,7 +28,10 @@ class SellerManager(models.Manager['Seller']):
     def for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
         return self.get_queryset().for_users(users)
 
-    def unique_by_name_for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
+    def unique_by_name_for_users(
+        self,
+        users: Iterable[User],
+    ) -> 'SellerQuerySet':
         return self.get_queryset().unique_by_name_for_users(users)
 
     def unique_by_name_for_user(self, user: User) -> 'SellerQuerySet':
@@ -72,7 +77,10 @@ class SellerQuerySet(models.QuerySet[Seller]):
     def for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
         return self.filter(user__in=users)
 
-    def unique_by_name_for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
+    def unique_by_name_for_users(
+        self,
+        users: Iterable[User],
+    ) -> 'SellerQuerySet':
         seller_ids = (
             self.for_users(users)
             .values('name_seller')
@@ -130,9 +138,11 @@ class Product(models.Model):
 
 class ReceiptQuerySet(models.QuerySet['Receipt']):
     def with_related(self) -> 'ReceiptQuerySet':
-        return self.select_related('user', 'account', 'seller').prefetch_related(
-            'product'
-        )
+        return self.select_related(
+            'user',
+            'account',
+            'seller',
+        ).prefetch_related('product')
 
     def for_user(self, user: User) -> 'ReceiptQuerySet':
         return self.filter(user=user)
@@ -141,7 +151,9 @@ class ReceiptQuerySet(models.QuerySet['Receipt']):
         return self.filter(user__in=users)
 
     def for_user_and_number(
-        self, user: User, number_receipt: int | None
+        self,
+        user: User,
+        number_receipt: int | None,
     ) -> 'ReceiptQuerySet':
         return self.for_user(user).filter(number_receipt=number_receipt)
 
@@ -160,9 +172,14 @@ class ReceiptManager(models.Manager['Receipt']):
         return self.get_queryset().filter(user__in=users)
 
     def for_user_and_number(
-        self, user: User, number_receipt: int | None
+        self,
+        user: User,
+        number_receipt: int | None,
     ) -> 'ReceiptQuerySet':
-        return self.get_queryset().filter(user=user, number_receipt=number_receipt)
+        return self.get_queryset().filter(
+            user=user,
+            number_receipt=number_receipt,
+        )
 
 
 class Receipt(models.Model):
@@ -217,8 +234,8 @@ class Receipt(models.Model):
     product = models.ManyToManyField(Product, related_name='receipt_products')
 
     class Meta:
-        ordering = ['-receipt_date']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-receipt_date']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['-receipt_date']),
             models.Index(fields=['number_receipt']),
             models.Index(fields=['nds10']),

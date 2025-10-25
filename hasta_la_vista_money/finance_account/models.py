@@ -1,17 +1,18 @@
+from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import Any, ClassVar
 
 from django.db import models
 from django.urls import reverse
+from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+)
 from hasta_la_vista_money.users.models import User
-
-if TYPE_CHECKING:
-    from datetime import date
-
-    from hasta_la_vista_money.users.models import User
 
 
 class AccountQuerySet(models.QuerySet['Account']):
@@ -22,7 +23,7 @@ class AccountQuerySet(models.QuerySet['Account']):
     def credit(self) -> 'AccountQuerySet':
         """Return only credit accounts and credit cards."""
         return self.filter(
-            type_account__in=[ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD]
+            type_account__in=[ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD],
         )
 
     def debit(self) -> 'AccountQuerySet':
@@ -34,7 +35,8 @@ class AccountQuerySet(models.QuerySet['Account']):
         return self.filter(user=user)
 
     def by_user_with_related(self, user: 'User') -> 'AccountQuerySet':
-        """Return accounts belonging to the given user with select_related('user')."""
+        """Return accounts belonging to the given user with
+        select_related('user')."""
         return self.filter(user=user).select_related('user')
 
     def by_currency(self, currency: str) -> 'AccountQuerySet':
@@ -93,12 +95,13 @@ class TimeStampedModel(models.Model):
 
 class Account(TimeStampedModel):
     """
-    Represents a user's financial account, which can be a credit/debit account, card, or cash.
+    Represents a user's financial account, which can be a credit/debit
+    account, card, or cash.
     Stores balance, currency, type, and credit-related fields.
     Provides methods for money transfer and credit card debt calculations.
     """
 
-    CURRENCY_LIST = [
+    CURRENCY_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
         ('RUB', _('Российский рубль')),
         ('USD', _('Доллар США')),
         ('EUR', _('Евро')),
@@ -108,14 +111,14 @@ class Account(TimeStampedModel):
         ('TRY', _('Турецкая лира')),
         ('CNH', _('Китайский юань')),
     ]
-    TYPE_ACCOUNT_LIST = [
+    TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
         ('Credit', _('Кредитный счёт')),
         ('Debit', _('Дебетовый счёт')),
         ('CreditCard', _('Кредитная карта')),
         ('DebitCard', _('Дебетовая карта')),
         ('CASH', _('Наличные')),
     ]
-    BANK_LIST = [
+    BANK_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
         ('-', _('—')),  # Default value - dash
         ('SBERBANK', _('Сбербанк')),
         ('RAIFFAISENBANK', _('Райффайзенбанк')),
@@ -175,7 +178,8 @@ class Account(TimeStampedModel):
         blank=True,
         verbose_name=_('Длительность льготного периода (дней)'),
         help_text=_(
-            'Для кредитных карт: сколько дней длится беспроцентный период (например, 120)',
+            'Для кредитных карт: сколько дней длится беспроцентный период '
+            '(например, 120)',
         ),
     )
 
@@ -183,8 +187,8 @@ class Account(TimeStampedModel):
 
     class Meta(TimeStampedModel.Meta):
         db_table = 'account'
-        ordering = ['name_account']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['name_account']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['name_account']),
             models.Index(fields=['user']),
             models.Index(fields=['type_account']),
@@ -205,8 +209,10 @@ class Account(TimeStampedModel):
 
     def transfer_money(self, to_account: 'Account', amount: Decimal) -> bool:
         """
-        Transfers a specified amount of money from this account to another account.
-        Returns True if the transfer was successful, False otherwise (e.g., insufficient funds).
+        Transfers a specified amount of money from this account to another
+        account.
+        Returns True if the transfer was successful, False otherwise
+        (e.g., insufficient funds).
 
         Args:
             to_account (Account): The account to transfer money to.
@@ -225,9 +231,9 @@ class Account(TimeStampedModel):
 
     def get_credit_card_debt(
         self,
-        start_date: Optional[Any] = None,
-        end_date: Optional[Any] = None,
-    ) -> Optional[Decimal]:
+        start_date: Any | None = None,
+        end_date: Any | None = None,
+    ) -> Decimal | None:
         """
         Calculates the credit card (or credit account) debt for a given period.
         If no period is specified, calculates the current debt.
@@ -238,31 +244,44 @@ class Account(TimeStampedModel):
             end_date (date|datetime|None): End of the period (inclusive).
 
         Returns:
-            Optional[Decimal]: The calculated debt, or None if not a credit account.
+            Optional[Decimal]: The calculated debt, or None if not a credit
+            account.
         """
         from hasta_la_vista_money.finance_account.services import (
             AccountService,
         )
 
-        return AccountService.get_credit_card_debt(self, start_date, end_date)
+        return AccountService.get_credit_card_debt(
+            account=self,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
-    def calculate_grace_period_info(self, purchase_month: Any) -> Dict[str, Any]:
+    def calculate_grace_period_info(
+        self,
+        purchase_month: Any,
+    ) -> dict[str, Any]:
         """
         Calculates grace period information for a credit card.
         Logic: 1 month for purchases + 3 months for repayment.
         Example: purchases in May -> repayment due by end of August.
 
         Args:
-            purchase_month (date|datetime): The month of purchases (first day of month).
+            purchase_month (date|datetime): The month of purchases
+            (first day of month).
 
         Returns:
-            dict: Information about the grace period, including dates, debts, and overdue status.
+            dict: Information about the grace period, including dates,
+            debts, and overdue status.
         """
         from hasta_la_vista_money.finance_account.services import (
             AccountService,
         )
 
-        return AccountService.calculate_grace_period_info(self, purchase_month)
+        return AccountService.calculate_grace_period_info(
+            account=self,
+            purchase_month=purchase_month,
+        )
 
 
 class TransferMoneyLogQuerySet(models.QuerySet):
@@ -274,14 +293,22 @@ class TransferMoneyLogQuerySet(models.QuerySet):
         """Return transfer logs for the given user."""
         return self.filter(user=user)
 
-    def by_date_range(self, start: 'date', end: 'date') -> 'TransferMoneyLogQuerySet':
+    def by_date_range(
+        self,
+        start: date,
+        end: date,
+    ) -> 'TransferMoneyLogQuerySet':
         """Return transfer logs within the specified date range (inclusive)."""
-        return self.filter(exchange_date__date__gte=start, exchange_date__date__lte=end)
+        return self.filter(
+            exchange_date__date__gte=start,
+            exchange_date__date__lte=end,
+        )
 
 
 class TransferMoneyLogManager(models.Manager['TransferMoneyLog']):
     """
-    Custom manager for TransferMoneyLog model, exposing common filters via QuerySet.
+    Custom manager for TransferMoneyLog model, exposing common
+    filters via QuerySet.
     """
 
     def get_queryset(self) -> TransferMoneyLogQuerySet:
@@ -290,13 +317,18 @@ class TransferMoneyLogManager(models.Manager['TransferMoneyLog']):
     def by_user(self, user: 'User') -> TransferMoneyLogQuerySet:
         return self.get_queryset().by_user(user)
 
-    def by_date_range(self, start: 'date', end: 'date') -> TransferMoneyLogQuerySet:
+    def by_date_range(
+        self,
+        start: 'date',
+        end: 'date',
+    ) -> TransferMoneyLogQuerySet:
         return self.get_queryset().by_date_range(start, end)
 
 
 class TransferMoneyLog(TimeStampedModel):
     """
-    Stores logs of money transfers between accounts, including user, source, destination, amount, and notes.
+    Stores logs of money transfers between accounts, including user,
+    source, destination, amount, and notes.
     Used for auditing and tracking account movements.
     """
 
@@ -329,8 +361,8 @@ class TransferMoneyLog(TimeStampedModel):
     objects = TransferMoneyLogManager.from_queryset(TransferMoneyLogQuerySet)()
 
     class Meta(TimeStampedModel.Meta):
-        ordering = ['-exchange_date']
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-exchange_date']
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['user']),
             models.Index(fields=['from_account']),
             models.Index(fields=['to_account']),
@@ -343,7 +375,8 @@ class TransferMoneyLog(TimeStampedModel):
         """
         return str(
             _(
-                '{date}. Перевод суммы {amount} со счёта "{from_account}" на счёт "{to_account}". ',
+                '{date}. Перевод суммы {amount} со счёта '
+                '"{from_account}" на счёт "{to_account}". ',
             ).format(
                 date=self.exchange_date.strftime('%d-%m-%Y %H:%M'),
                 amount=self.amount,

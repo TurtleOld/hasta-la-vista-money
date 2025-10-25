@@ -1,18 +1,19 @@
-import os
 import sys
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+
 import dj_database_url
 import django_stubs_ext
 import sentry_sdk
 import structlog
-from config.django.sessions import *  # NOQA
-from config.django.validator_env import EnvironmentValidator
-from config.settings.debug_toolbar.setup import DebugToolbarSetup
 from csp.constants import NONCE, SELF
 from decouple import config
 from sentry_sdk.integrations.django import DjangoIntegration
+
+from config.django.sessions import *  # noqa: F403
+from config.django.validator_env import EnvironmentValidator
+from config.settings.debug_toolbar.setup import DebugToolbarSetup
 
 django_stubs_ext.monkeypatch()
 
@@ -21,9 +22,10 @@ if (
     'collectstatic' not in sys.argv
     and 'migrate' not in sys.argv
     and 'test' not in sys.argv
+    and not EnvironmentValidator().validate()
 ):
-    if not EnvironmentValidator().validate():
-        raise ValueError('Environment variables are not valid')
+    env_error = 'Environment variables are not valid'
+    raise ValueError(env_error)
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 BASE_URL = config('BASE_URL', default='http://127.0.0.1:8000/')
@@ -32,7 +34,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 allowed_hosts = str(config('ALLOWED_HOSTS', default=''))
 ALLOWED_HOSTS = allowed_hosts.split(',') if allowed_hosts else []
 csrf_trusted_origins = str(config('CSRF_TRUSTED_ORIGINS', default=''))
-CSRF_TRUSTED_ORIGINS = csrf_trusted_origins.split() if csrf_trusted_origins else []
+CSRF_TRUSTED_ORIGINS = (
+    csrf_trusted_origins.split() if csrf_trusted_origins else []
+)
 INTERNAL_IPS = [config('LOCAL_IPS', default='127.0.0.1')]
 
 # Application definition
@@ -120,7 +124,7 @@ ASGI_APPLICATION = 'config.asgi.application'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'hasta_la_vista_money', 'templates')],
+        'DIRS': [BASE_DIR / 'hasta_la_vista_money' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -165,58 +169,66 @@ else:
     }
 
 # Database
-if 'test' in sys.argv and not config('USE_DB_FOR_TESTS', default=False, cast=bool):
+if 'test' in sys.argv and not config(
+    'USE_DB_FOR_TESTS', default=False, cast=bool
+):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+            'NAME': BASE_DIR / 'db.sqlite3',
         },
     }
+elif config('GITHUB_WORKFLOW', default=''):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'github_actions',
+            'USER': 'postgres',
+            'PASSWORD': 'postgres',
+            'HOST': '127.0.0.1',
+            'PORT': '5432',
+        },
+    }
+elif config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
+    DATABASES: dict[str, Any] = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('POSTGRES_DB', default='postgres'),
+            'USER': config('POSTGRES_USER', default='postgres'),
+            'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
+            'HOST': config('POSTGRES_HOST', default='localhost'),
+            'PORT': config('POSTGRES_PORT', default='5432'),
+            'CONN_MAX_AGE': CONN_MAX_AGE,
+        },
+    }
+    database_url = config('DATABASE_URL', default='')
+    if database_url:
+        DATABASES['default'] = dict(
+            dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE),
+        )
 else:
-    if config('GITHUB_WORKFLOW', default=''):
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': 'github_actions',
-                'USER': 'postgres',
-                'PASSWORD': 'postgres',
-                'HOST': '127.0.0.1',
-                'PORT': '5432',
-            },
-        }
-    elif config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
-        DATABASES: Dict[str, Any] = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': config('POSTGRES_DB', default='postgres'),
-                'USER': config('POSTGRES_USER', default='postgres'),
-                'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
-                'HOST': config('POSTGRES_HOST', default='localhost'),
-                'PORT': config('POSTGRES_PORT', default='5432'),
-                'CONN_MAX_AGE': CONN_MAX_AGE,
-            },
-        }
-        database_url = config('DATABASE_URL', default='')
-        if database_url:
-            DATABASES['default'] = dict(
-                dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE),
-            )
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-            },
-        }
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        },
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        'NAME': (
+            'django.contrib.auth.password_validation.'
+            'UserAttributeSimilarityValidator'
+        ),
     },
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {
+        'NAME': (
+            'django.contrib.auth.password_validation.NumericPasswordValidator'
+        )
+    },
 ]
 
 AUTHENTICATION_BACKENDS = (
@@ -243,14 +255,14 @@ LANGUAGES = (
     ('en', 'English'),
     ('ru-RU', 'Russian'),
 )
-LOCALE_PATHS = (os.path.join(BASE_DIR, 'locale'),)
+LOCALE_PATHS = (BASE_DIR / 'locale',)
 
 APPEND_SLASH = True
 
 # Static files
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATIC_URL = '/static/'
-STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
+STATICFILES_DIRS = (BASE_DIR / 'static',)
 
 # WhiteNoise configuration for static files
 STORAGE = {
@@ -264,7 +276,7 @@ WHITENOISE_USE_FINDERS = True
 WHITENOISE_AUTOREFRESH = DEBUG
 WHITENOISE_MAX_AGE = 31536000  # 1 year
 WHITENOISE_INDEX_FILE = True
-WHITENOISE_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+WHITENOISE_ROOT = BASE_DIR / 'staticfiles'
 WHITENOISE_BROTLI = True
 
 # Default primary key field type
@@ -289,15 +301,15 @@ CONTENT_SECURITY_POLICY = {
             NONCE,
             BASE_URL,
             *CSP_CDN_URLS,
-        ]
-        + additional_script_src,
+            *additional_script_src,
+        ],
         'script-src': [
             SELF,
             NONCE,
             BASE_URL,
             *CSP_CDN_URLS,
-        ]
-        + additional_script_src,
+            *additional_script_src,
+        ],
         'img-src': [
             SELF,
             NONCE,
@@ -310,20 +322,20 @@ CONTENT_SECURITY_POLICY = {
             NONCE,
             BASE_URL,
             *CSP_CDN_URLS,
-        ]
-        + additional_script_src,
+            *additional_script_src,
+        ],
         'font-src': [
             SELF,
             NONCE,
             BASE_URL,
             *CSP_CDN_URLS,
-        ]
-        + additional_script_src,
+            *additional_script_src,
+        ],
         'frame-ancestors': [
             SELF,
             *CSP_CDN_URLS,
-        ]
-        + additional_script_src,
+            *additional_script_src,
+        ],
         'report_uri': [config('SENTRY_ENDPOINT', default='')],
     },
 }
@@ -351,7 +363,9 @@ CORS_ALLOWED_ORIGINS = [
 
 # REST Framework
 REST_FRAMEWORK = {
-    'DEFAULT_FILTER_BACKENDS': ('django_filters.rest_framework.DjangoFilterBackend',),
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+    ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'hasta_la_vista_money.authentication.authentication.CookieJWTAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -408,19 +422,23 @@ SIMPLE_JWT = {
     'AUTH_COOKIE': 'access_token',
     'AUTH_COOKIE_REFRESH': 'refresh_token',
     'AUTH_COOKIE_DOMAIN': None,
-    'AUTH_COOKIE_SECURE': config('SESSION_COOKIE_SECURE', default=False, cast=bool),
+    'AUTH_COOKIE_SECURE': config(
+        'SESSION_COOKIE_SECURE', default=False, cast=bool
+    ),
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',
     'AUTH_COOKIE_SAMESITE': 'Lax',
-    'AUTH_COOKIE_MAX_AGE': config('ACCESS_TOKEN_LIFETIME', default=60, cast=int) * 60,
-    'AUTH_COOKIE_REFRESH_MAX_AGE': config('REFRESH_TOKEN_LIFETIME', default=7, cast=int)
-    * 24
-    * 60
-    * 60,
+    'AUTH_COOKIE_MAX_AGE': (
+        config('ACCESS_TOKEN_LIFETIME', default=60, cast=int) * 60
+    ),
+    'AUTH_COOKIE_REFRESH_MAX_AGE': (
+        config('REFRESH_TOKEN_LIFETIME', default=7, cast=int) * 24 * 60 * 60
+    ),
 }
 
-if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
-    os.mkdir(os.path.join(BASE_DIR, 'logs'))
+logs_dir = BASE_DIR / 'logs'
+if not logs_dir.exists():
+    logs_dir.mkdir()
 
 LOGGING = {
     'version': 1,
@@ -444,7 +462,7 @@ LOGGING = {
         },
         'flat_line_file': {
             'class': 'logging.handlers.WatchedFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'hlvm.log'),
+            'filename': BASE_DIR / 'logs' / 'hlvm.log',
             'formatter': 'key_value',
         },
     },
@@ -477,7 +495,7 @@ structlog.configure(
 # Compressor settings
 COMPRESS_ENABLED = config('COMPRESS_ENABLED', default=False, cast=bool)
 INSTALLED_APPS.append('compressor')
-COMPRESS_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+COMPRESS_ROOT = BASE_DIR / 'staticfiles'
 COMPRESS_URL = '/static/'
 COMPRESS_STORAGE = 'compressor.storage.GzipCompressorFileStorage'
 COMPRESS_STORAGE_ALIAS = 'compressor'

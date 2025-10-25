@@ -44,6 +44,7 @@ QR_CODE_NOT_CONSIDERED: Final[tuple[str]] = (
 SUCCESS_MESSAGE_LOGIN: Final = _('Вы успешно авторизовались!')
 SUCCESS_MESSAGE_REGISTRATION: Final = _('Регистрация прошла успешно!')
 SUCCESS_MESSAGE_CREATE_RECEIPT: Final = _('Чек успешно добавлен!')
+SUCCESS_MESSAGE_DELETE_RECEIPT: Final = _('Чек успешно удален!')
 SUCCESS_MESSAGE_CREATE_SELLER: Final = _(
     'Новый продавец успешно добавлен!',
 )
@@ -122,6 +123,7 @@ RECEIPT_CATEGORY_NAME: Final = 'Покупки по чекам'
 # Числа
 ONE: Final = 1
 TWO: Final = 2
+SAVINGS_THRESHOLD: Final = 0.2
 TEN: Final = 10
 TWENTY: Final = 20
 THIRTY: Final = 30
@@ -135,6 +137,7 @@ ONE_HUNDRED: Final = 100
 ONE_HUNDRED_FIFTY: Final = 150
 TWO_HUNDRED: Final = 200
 TWO_HUNDRED_FIFTY: Final = 250
+LOW_BALANCE_THRESHOLD: Final = 1000
 DAY_MINUS_HOUR: Final = 23
 MINUTE_MINUS_ONE: Final = 59
 SECOND_MINUS_ONE: Final = 59

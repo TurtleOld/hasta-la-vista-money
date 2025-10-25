@@ -1,13 +1,16 @@
+from typing import ClassVar
+
 from django.forms import (
+    CharField,
     DateTimeField,
     DateTimeInput,
     DecimalField,
     ModelChoiceField,
     ModelForm,
 )
-from django.forms import CharField
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
+
 from hasta_la_vista_money.custom_mixin import (
     CategoryChoicesConfigurerMixin,
     CategoryChoicesMixin,
@@ -47,7 +50,8 @@ class AddExpenseForm(FormQuerysetsMixin, ModelForm):
 
     # Инициализация queryset'ов обеспечивается миксином FormQuerysetsMixin
 
-    # Настройка choices при необходимости обеспечивается внешней логикой/миксином
+    # Настройка choices при необходимости обеспечивается
+    # внешней логикой/миксином
 
     def clean(self):
         cleaned_data = super().clean()
@@ -58,15 +62,22 @@ class AddExpenseForm(FormQuerysetsMixin, ModelForm):
         if account_form and amount and category:
             account = get_object_or_404(Account, id=account_form.id)
             if amount > account.balance:
-                self.add_error('account', _(f'Недостаточно средств на счёте {account}'))
+                self.add_error(
+                    'account',
+                    _(f'Недостаточно средств на счёте {account}'),
+                )
         return cleaned_data
 
     class Meta:
         model = Expense
-        fields = ['category', 'account', 'date', 'amount']
+        fields: ClassVar[list[str]] = ['category', 'account', 'date', 'amount']
 
 
-class AddCategoryForm(CategoryChoicesConfigurerMixin, CategoryChoicesMixin, ModelForm):
+class AddCategoryForm(
+    CategoryChoicesConfigurerMixin,
+    CategoryChoicesMixin,
+    ModelForm,
+):
     name = CharField(
         label=_('Название категории'),
         help_text=_('Введите название категории расхода для её создания'),
@@ -75,7 +86,7 @@ class AddCategoryForm(CategoryChoicesConfigurerMixin, CategoryChoicesMixin, Mode
         queryset=ExpenseCategory.objects.none(),
         label=_('Родительская категория'),
         help_text=_(
-            'Выберите родительскую категорию расхода для создаваемой категории'
+            'Выберите родительскую категорию расхода для создаваемой категории',
         ),
         required=False,
         empty_label=_('Нет родительской категории'),
@@ -94,4 +105,4 @@ class AddCategoryForm(CategoryChoicesConfigurerMixin, CategoryChoicesMixin, Mode
 
     class Meta:
         model = ExpenseCategory
-        fields = ['name', 'parent_category']
+        fields: ClassVar[list[str]] = ['name', 'parent_category']
