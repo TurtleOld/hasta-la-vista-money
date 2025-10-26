@@ -5,6 +5,7 @@ from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
 from rest_framework.request import Request
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.tokens import Token
 
 from hasta_la_vista_money.users.models import User
@@ -18,19 +19,18 @@ class CookieJWTAuthentication(JWTAuthentication):
     instead of Authorization header"""
 
     def authenticate(self, request: Request) -> tuple[User, Token] | None:  # type: ignore[override]
-        header = self.get_header(request)
-        raw_token = None
+        cookie_token = request.COOKIES.get(
+            str(settings.SIMPLE_JWT['AUTH_COOKIE']),
+        )
 
-        if header is not None:
-            raw_token = self.get_raw_token(header)
-
-        if raw_token is None:
-            cookie_token = request.COOKIES.get(
-                str(settings.SIMPLE_JWT['AUTH_COOKIE']),
-            )
-            if cookie_token is None:
-                return None
+        if cookie_token is not None:
             raw_token = cookie_token.encode('utf-8')
+        else:
+            header = self.get_header(request)
+            if header is not None:
+                raw_token = self.get_raw_token(header)
+            else:
+                return None
 
         try:
             validated_token = self.get_validated_token(raw_token)
@@ -40,7 +40,17 @@ class CookieJWTAuthentication(JWTAuthentication):
                 self._raise_invalid_user_type(user)
             else:
                 return user, validated_token
-        except (ValueError, TypeError, KeyError):
+        except TypeError:
+            raise
+        except (
+            InvalidToken,
+            ValueError,
+            KeyError,
+            AttributeError,
+            ImportError,
+            RuntimeError,
+            OSError,
+        ):
             return None
 
     def _raise_invalid_user_type(self, user) -> None:
