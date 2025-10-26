@@ -41,7 +41,7 @@ jobs:
           python-version: '3.14.0'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@22d500a65c34c827ebc95094040adcee254e92fa
+        uses: astral-sh/setup-uv@85856786d1ce8acfbcc2f13a5f3fbd6b938f9f41
         with:
           version: "0.9.5"
 
