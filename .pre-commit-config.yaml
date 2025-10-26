@@ -15,12 +15,6 @@ repos:
     hooks:
     -   id: add-trailing-comma
 
--   repo: https://github.com/pycqa/isort
-    rev: 7.0.0
-    hooks:
-      - id: isort
-        name: isort (python)
-
 -   repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.2
     hooks:
