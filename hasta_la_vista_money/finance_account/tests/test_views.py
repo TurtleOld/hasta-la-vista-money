@@ -9,9 +9,8 @@ from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
-from hasta_la_vista_money.finance_account.models import (
-    Account,
-)
+from hasta_la_vista_money.finance_account.factories import AccountFactory
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.views import (
     AccountCreateView,
     AccountView,
@@ -20,6 +19,7 @@ from hasta_la_vista_money.finance_account.views import (
     DeleteAccountView,
     TransferMoneyAccountView,
 )
+from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import User
 
 
@@ -166,12 +166,10 @@ class TestAccountCreateView(TestCase):
 class TestChangeAccountView(TestCase):
     """Test cases for ChangeAccountView."""
 
-    fixtures = ['users.yaml', 'finance_account.yaml']
-
     def setUp(self) -> None:
         """Set up test data."""
-        self.user = User.objects.get(id=1)
-        self.account = Account.objects.filter(user=self.user).first()
+        self.user = UserFactory()
+        self.account = AccountFactory(user=self.user)
         self.factory = RequestFactory()
 
     def test_change_account_view_get(self) -> None:
@@ -216,16 +214,18 @@ class TestChangeAccountView(TestCase):
 class TestTransferMoneyAccountView(TestCase):
     """Test cases for TransferMoneyAccountView."""
 
-    fixtures = ['users.yaml', 'finance_account.yaml']
-
     def setUp(self) -> None:
         """Set up test data."""
-
         self.factory = RequestFactory()
-        self.user = User.objects.get(id=1)
-        self.accounts = Account.objects.filter(user=self.user)[:2]
-        self.account1 = self.accounts[0]
-        self.account2 = self.accounts[1]
+        self.user = UserFactory()
+        self.account1 = AccountFactory(
+            user=self.user,
+            balance=Decimal('1000.00'),
+        )
+        self.account2 = AccountFactory(
+            user=self.user,
+            balance=Decimal('500.00'),
+        )
 
     def test_transfer_money_view_get(self) -> None:
         """Test GET request to TransferMoneyAccountView."""
@@ -293,12 +293,10 @@ class TestTransferMoneyAccountView(TestCase):
 class TestDeleteAccountView(TestCase):
     """Test cases for DeleteAccountView."""
 
-    fixtures = ['users.yaml', 'finance_account.yaml']
-
     def setUp(self) -> None:
         """Set up test data."""
-        self.user = User.objects.get(id=1)
-        self.account = Account.objects.filter(user=self.user).first()
+        self.user = UserFactory()
+        self.account = AccountFactory(user=self.user)
 
     def test_delete_account_view_post(self) -> None:
         """Test POST request to DeleteAccountView."""
@@ -318,11 +316,9 @@ class TestDeleteAccountView(TestCase):
 class TestAjaxAccountsByGroupView(TestCase):
     """Test cases for AjaxAccountsByGroupView."""
 
-    fixtures = ['users.yaml', 'finance_account.yaml']
-
     def setUp(self) -> None:
         """Set up test data."""
-        self.user = User.objects.get(id=1)
+        self.user = UserFactory()
         self.factory = RequestFactory()
 
     async def test_ajax_accounts_by_group_get(self) -> None:

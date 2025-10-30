@@ -52,6 +52,30 @@ class LoginRateThrottleTestCase(TestCase):
             self.assertIn('login', cache_key)
             self.assertIn('anonymous_ident', cache_key)
 
+    def test_login_throttle_blocks_after_limit(self):
+        """Проверяет, что после двух запросов следующий блокируется."""
+        throttle = LoginRateThrottle()
+        throttle.rate = '2/min'
+        throttle.num_requests, throttle.duration = throttle.parse_rate(
+            throttle.rate
+        )
+        request = self.factory.post('/api/auth/token/')
+        request.user = self.user
+
+        cache_key = throttle.get_cache_key(request, None)
+        throttle.cache.delete(cache_key)
+
+        allowed1 = throttle.allow_request(request, None)
+        allowed2 = throttle.allow_request(request, None)
+        allowed3 = throttle.allow_request(request, None)
+
+        self.assertTrue(allowed1)
+        self.assertTrue(allowed2)
+        self.assertFalse(allowed3)
+        self.assertGreater(throttle.wait(), 0)
+
+        throttle.cache.delete(cache_key)
+
 
 class AnonLoginRateThrottleTestCase(TestCase):
     """Тесты для класса AnonLoginRateThrottle."""
@@ -106,3 +130,32 @@ class AnonLoginRateThrottleTestCase(TestCase):
             self.assertIsNotNone(cache_key)
             self.assertIn('anon_login', cache_key)
             self.assertIn('unauthenticated_ident', cache_key)
+
+    def test_anon_throttle_blocks_after_limit(self):
+        """Проверяет, что после двух
+        анонимных запросов следующий блокируется."""
+        throttle = AnonLoginRateThrottle()
+        throttle.rate = '2/min'
+        throttle.num_requests, throttle.duration = throttle.parse_rate(
+            throttle.rate
+        )
+        request = self.factory.post('/api/auth/token/')
+        request.user = Mock()
+        request.user.is_authenticated = False
+
+        with patch.object(throttle, 'get_ident') as mock_get_ident:
+            mock_get_ident.return_value = 'ident'
+
+            cache_key = throttle.get_cache_key(request, None)
+            throttle.cache.delete(cache_key)
+
+            allowed1 = throttle.allow_request(request, None)
+            allowed2 = throttle.allow_request(request, None)
+            allowed3 = throttle.allow_request(request, None)
+
+            self.assertTrue(allowed1)
+            self.assertTrue(allowed2)
+            self.assertFalse(allowed3)
+            self.assertGreater(throttle.wait(), 0)
+
+            throttle.cache.delete(cache_key)

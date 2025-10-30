@@ -96,7 +96,6 @@ class TestAccountSerializer(TestCase):
         """Test that AccountSerializer fields are not read-only."""
         serializer = AccountSerializer()
 
-        # Most fields should be writable for creation
         writable_fields = ['name_account', 'balance', 'currency']
         for field_name in writable_fields:
             field = serializer.fields[field_name]
@@ -130,5 +129,80 @@ class TestAccountSerializer(TestCase):
         serializer = AccountSerializer(self.account)
         data = serializer.data
 
-        # created_at is not included in the serializer fields
         self.assertNotIn('created_at', data)
+
+    def test_account_serializer_invalid_input_parametrized(self) -> None:
+        """Параметризация: невалидные и граничные данные для create/update."""
+        testcases = [
+            ({}, ['name_account', 'balance', 'currency', 'type_account']),
+            (
+                {
+                    'balance': '100.00',
+                    'currency': 'RUB',
+                    'type_account': 'Debit',
+                },
+                ['name_account'],
+            ),
+            (
+                {
+                    'name_account': 'Test',
+                    'currency': 'RUB',
+                    'type_account': 'Debit',
+                },
+                ['balance'],
+            ),
+            (
+                {
+                    'name_account': 'Test',
+                    'balance': '10.00',
+                    'type_account': 'Debit',
+                },
+                ['currency'],
+            ),
+            (
+                {
+                    'name_account': 'Test',
+                    'currency': 'RUB',
+                    'type_account': 'Debit',
+                    'balance': 'oops',
+                },
+                ['balance'],
+            ),
+            (
+                {
+                    'name_account': 'Test',
+                    'currency': 'SOMETHING',
+                    'type_account': 'Debit',
+                    'balance': '10.00',
+                },
+                ['currency'],
+            ),
+            (
+                {
+                    'name_account': 'Test',
+                    'currency': 'USD',
+                    'type_account': 'BADTYPE',
+                    'balance': '10.00',
+                },
+                ['type_account'],
+            ),
+            (
+                {
+                    'name_account': 'Test',
+                    'currency': 'USD',
+                    'type_account': 'Debit',
+                    'balance': '-5.00',
+                },
+                [],
+            ),
+        ]
+        for data, fields in testcases:
+            with self.subTest(data=data):
+                serializer = AccountSerializer(data=data)
+                valid = serializer.is_valid()
+                if not valid:
+                    for f in fields:
+                        self.assertIn(f, serializer.errors)
+                else:
+                    # Если ошибок не ожидается, всё должно быть валидно
+                    self.assertTrue(valid)
