@@ -1,7 +1,6 @@
 """Tests for finance account views."""
 
 from decimal import Decimal
-from typing import Any
 
 from django.contrib.auth.models import Group
 from django.test import RequestFactory, TestCase
@@ -10,7 +9,9 @@ from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
-from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+)
 from hasta_la_vista_money.finance_account.views import (
     AccountCreateView,
     AccountView,
@@ -63,7 +64,7 @@ class TestAccountView(TestCase):
         """Test AccountView with user groups."""
         group = Group.objects.create(name='Test Group')
         self.user.groups.add(group)
-        
+
         self.client.force_login(self.user)
         url = reverse('finance_account:list')
         response = self.client.get(url)
@@ -98,6 +99,7 @@ class TestAccountCreateView(TestCase):
 
     def setUp(self) -> None:
         """Set up test data."""
+        self.factory = RequestFactory()
         self.user = User.objects.create_user(
             username='testuser',
             password='testpass123',
@@ -149,6 +151,7 @@ class TestAccountCreateView(TestCase):
         view = AccountCreateView()
         view.request = self.factory.get('/')
         view.request.user = self.user
+        view.object = None
 
         context = view.get_context_data()
         self.assertIn('add_account_form', context)
@@ -204,6 +207,7 @@ class TestChangeAccountView(TestCase):
         view.request = self.factory.get('/')
         view.request.user = self.user
         view.kwargs = {'pk': self.account.pk}
+        view.object = self.account
 
         context = view.get_context_data()
         self.assertIn('add_account_form', context)
@@ -216,6 +220,8 @@ class TestTransferMoneyAccountView(TestCase):
 
     def setUp(self) -> None:
         """Set up test data."""
+
+        self.factory = RequestFactory()
         self.user = User.objects.get(id=1)
         self.accounts = Account.objects.filter(user=self.user)[:2]
         self.account1 = self.accounts[0]
@@ -319,29 +325,29 @@ class TestAjaxAccountsByGroupView(TestCase):
         self.user = User.objects.get(id=1)
         self.factory = RequestFactory()
 
-    def test_ajax_accounts_by_group_get(self) -> None:
+    async def test_ajax_accounts_by_group_get(self) -> None:
         """Test GET request to AjaxAccountsByGroupView."""
         view = AjaxAccountsByGroupView()
         request = self.factory.get('/?group_id=my')
         request.user = self.user
 
-        response = view.get(request)
+        response = await view.get(request)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_ajax_accounts_by_group_get_with_group_id(self) -> None:
+    async def test_ajax_accounts_by_group_get_with_group_id(self) -> None:
         """Test GET request with specific group_id."""
         view = AjaxAccountsByGroupView()
         request = self.factory.get('/?group_id=1')
         request.user = self.user
 
-        response = view.get(request)
+        response = await view.get(request)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_ajax_accounts_by_group_get_exception(self) -> None:
+    async def test_ajax_accounts_by_group_get_exception(self) -> None:
         """Test GET request handling exceptions."""
         view = AjaxAccountsByGroupView()
         request = self.factory.get('/?group_id=invalid')
         request.user = self.user
 
-        response = view.get(request)
+        response = await view.get(request)
         self.assertEqual(response.status_code, 500)

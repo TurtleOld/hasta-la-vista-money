@@ -30,7 +30,7 @@ class TestValidatePositiveAmount(TestCase):
         amount = Decimal('0.00')
         with self.assertRaises(ValidationError) as context:
             validate_positive_amount(amount)
-        
+
         self.assertIn('Сумма должна быть больше нуля', str(context.exception))
 
     def test_validate_positive_amount_negative(self) -> None:
@@ -38,7 +38,7 @@ class TestValidatePositiveAmount(TestCase):
         amount = Decimal('-100.00')
         with self.assertRaises(ValidationError) as context:
             validate_positive_amount(amount)
-        
+
         self.assertIn('Сумма должна быть больше нуля', str(context.exception))
 
     def test_validate_positive_amount_very_small(self) -> None:
@@ -83,7 +83,7 @@ class TestValidateAccountBalance(TestCase):
         amount = Decimal('1500.00')
         with self.assertRaises(ValidationError) as context:
             validate_account_balance(self.account, amount)
-        
+
         self.assertIn('Недостаточно средств на счете', str(context.exception))
 
     def test_validate_account_balance_zero_account(self) -> None:
@@ -94,7 +94,7 @@ class TestValidateAccountBalance(TestCase):
             balance=Decimal('0.00'),
             currency='RUB',
         )
-        
+
         amount = Decimal('100.00')
         with self.assertRaises(ValidationError):
             validate_account_balance(zero_account, amount)
@@ -107,7 +107,7 @@ class TestValidateAccountBalance(TestCase):
             balance=Decimal('-500.00'),
             currency='RUB',
         )
-        
+
         amount = Decimal('100.00')
         with self.assertRaises(ValidationError):
             validate_account_balance(negative_account, amount)
@@ -143,8 +143,10 @@ class TestValidateDifferentAccounts(TestCase):
         """Test different accounts validation with same account."""
         with self.assertRaises(ValidationError) as context:
             validate_different_accounts(self.account1, self.account1)
-        
-        self.assertIn('Нельзя переводить деньги на тот же счет', str(context.exception))
+
+        self.assertIn(
+            'Нельзя переводить деньги на тот же счет', str(context.exception)
+        )
 
     def test_validate_different_accounts_none_first(self) -> None:
         """Test different accounts validation with None as first account."""
@@ -190,8 +192,11 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=timezone.now().date(),
                 grace_period_days=30,
             )
-        
-        self.assertIn('Для кредитного счета необходимо указать банк', str(context.exception))
+
+        self.assertIn(
+            'Для кредитного счёта необходимо указать банк',
+            [str(m) for m in [str(m) for m in context.exception.messages]],
+        )
 
     def test_validate_credit_fields_required_missing_limit(self) -> None:
         """Test credit fields validation with missing limit."""
@@ -203,10 +208,15 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=timezone.now().date(),
                 grace_period_days=30,
             )
-        
-        self.assertIn('Для кредитного счета необходимо указать лимит', str(context.exception))
 
-    def test_validate_credit_fields_required_missing_payment_due_date(self) -> None:
+        self.assertIn(
+            'Для кредитного счёта необходимо указать лимит',
+            [str(m) for m in context.exception.messages],
+        )
+
+    def test_validate_credit_fields_required_missing_payment_due_date(
+        self,
+    ) -> None:
         """Test credit fields validation with missing payment due date."""
         with self.assertRaises(ValidationError) as context:
             validate_credit_fields_required(
@@ -216,8 +226,11 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=None,
                 grace_period_days=30,
             )
-        
-        self.assertIn('Для кредитного счета необходимо указать дату платежа', str(context.exception))
+
+        self.assertIn(
+            'Для кредитного счёта необходимо указать дату платежа',
+            [str(m) for m in context.exception.messages],
+        )
 
     def test_validate_credit_fields_required_missing_grace_period(self) -> None:
         """Test credit fields validation with missing grace period."""
@@ -229,8 +242,11 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=timezone.now().date(),
                 grace_period_days=None,
             )
-        
-        self.assertIn('Для кредитного счета необходимо указать льготный период', str(context.exception))
+
+        self.assertIn(
+            'Для кредитного счёта необходимо указать льготный период',
+            [str(m) for m in context.exception.messages],
+        )
 
     def test_validate_credit_fields_required_multiple_missing(self) -> None:
         """Test credit fields validation with multiple missing fields."""
@@ -242,12 +258,24 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=None,
                 grace_period_days=None,
             )
-        
-        error_message = str(context.exception)
-        self.assertIn('Для кредитного счета необходимо указать банк', error_message)
-        self.assertIn('Для кредитного счета необходимо указать лимит', error_message)
-        self.assertIn('Для кредитного счета необходимо указать дату платежа', error_message)
-        self.assertIn('Для кредитного счета необходимо указать льготный период', error_message)
+
+        error_messages = [
+                str(message) for message in context.exception.messages
+            ]
+        self.assertIn(
+            'Для кредитного счёта необходимо указать банк', error_messages,
+        )
+        self.assertIn(
+            'Для кредитного счёта необходимо указать лимит', error_messages
+        )
+        self.assertIn(
+            'Для кредитного счёта необходимо указать дату платежа',
+            error_messages,
+        )
+        self.assertIn(
+            'Для кредитного счёта необходимо указать льготный период',
+            error_messages,
+        )
 
     def test_validate_credit_fields_required_debit_account(self) -> None:
         """Test credit fields validation for debit account (should pass)."""
@@ -279,8 +307,11 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=timezone.now().date(),
                 grace_period_days=30,
             )
-        
-        self.assertIn('Для кредитного счета необходимо указать лимит', str(context.exception))
+
+        self.assertIn(
+            'Для кредитного счёта необходимо указать лимит',
+            ''.join(context.exception.messages),
+        )
 
     def test_validate_credit_fields_required_negative_limit(self) -> None:
         """Test credit fields validation with negative limit."""
@@ -292,8 +323,11 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=timezone.now().date(),
                 grace_period_days=30,
             )
-        
-        self.assertIn('Для кредитного счета необходимо указать лимит', str(context.exception))
+
+        self.assertIn(
+            'Для кредитного счёта необходимо указать лимит',
+            ''.join(context.exception.messages),
+        )
 
     def test_validate_credit_fields_required_zero_grace_period(self) -> None:
         """Test credit fields validation with zero grace period."""
@@ -305,10 +339,15 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=timezone.now().date(),
                 grace_period_days=0,
             )
-        
-        self.assertIn('Для кредитного счета необходимо указать льготный период', str(context.exception))
 
-    def test_validate_credit_fields_required_negative_grace_period(self) -> None:
+        self.assertIn(
+            'Для кредитного счёта необходимо указать льготный период',
+            ''.join(context.exception.messages),
+        )
+
+    def test_validate_credit_fields_required_negative_grace_period(
+        self,
+    ) -> None:
         """Test credit fields validation with negative grace period."""
         with self.assertRaises(ValidationError) as context:
             validate_credit_fields_required(
@@ -318,5 +357,8 @@ class TestValidateCreditFieldsRequired(TestCase):
                 payment_due_date=timezone.now().date(),
                 grace_period_days=-5,
             )
-        
-        self.assertIn('Для кредитного счета необходимо указать льготный период', str(context.exception))
+
+        self.assertIn(
+            'Для кредитного счёта необходимо указать льготный период',
+            ''.join(context.exception.messages),
+        )

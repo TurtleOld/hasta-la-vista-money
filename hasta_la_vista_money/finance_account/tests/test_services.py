@@ -3,10 +3,14 @@
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from hasta_la_vista_money.finance_account import services as account_services
-from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -49,7 +53,7 @@ class TestAccountServices(TestCase):
             self.user1,
             None,
         )
-        
+
         self.assertEqual(accounts.count(), 2)
         self.assertIn(self.account1, accounts)
         self.assertIn(self.account2, accounts)
@@ -61,7 +65,7 @@ class TestAccountServices(TestCase):
             self.user1,
             'my',
         )
-        
+
         self.assertEqual(accounts.count(), 2)
         self.assertIn(self.account1, accounts)
         self.assertIn(self.account2, accounts)
@@ -77,7 +81,7 @@ class TestAccountServices(TestCase):
             self.user1,
             str(group.pk),
         )
-        
+
         self.assertEqual(accounts.count(), 3)
         self.assertIn(self.account1, accounts)
         self.assertIn(self.account2, accounts)
@@ -89,7 +93,8 @@ class TestAccountServices(TestCase):
             self.user1,
             '999',
         )
-        
+
+        # When group doesn't exist, should return only user's own accounts
         self.assertEqual(accounts.count(), 2)
         self.assertIn(self.account1, accounts)
         self.assertIn(self.account2, accounts)
@@ -98,7 +103,7 @@ class TestAccountServices(TestCase):
         """Test get_sum_all_accounts function."""
         accounts = Account.objects.filter(user=self.user1)
         expected_sum = sum(acc.balance for acc in accounts)
-        
+
         result = account_services.get_sum_all_accounts(accounts)
         self.assertEqual(result, expected_sum)
         self.assertEqual(result, Decimal('1500.00'))
@@ -122,6 +127,7 @@ class TestAccountServices(TestCase):
             from_account=self.account1,
             to_account=self.account2,
             amount=Decimal('100.00'),
+            exchange_date='2024-01-01',
             notes='Test transfer 1',
         )
         TransferMoneyLog.objects.create(
@@ -129,6 +135,7 @@ class TestAccountServices(TestCase):
             from_account=self.account2,
             to_account=self.account1,
             amount=Decimal('200.00'),
+            exchange_date='2024-01-01',
             notes='Test transfer 2',
         )
         TransferMoneyLog.objects.create(
@@ -136,11 +143,12 @@ class TestAccountServices(TestCase):
             from_account=self.account3,
             to_account=self.account1,
             amount=Decimal('300.00'),
+            exchange_date='2024-01-01',
             notes='Test transfer 3',
         )
 
         logs = account_services.get_transfer_money_log(self.user1)
-        
+
         self.assertEqual(logs.count(), 2)
         self.assertTrue(all(log.user == self.user1 for log in logs))
 
@@ -157,6 +165,7 @@ class TestAccountServices(TestCase):
                 from_account=self.account1,
                 to_account=self.account2,
                 amount=Decimal('10.00'),
+                exchange_date='2024-01-01',
                 notes=f'Test transfer {i}',
             )
 
@@ -188,15 +197,14 @@ class TestTransferService(TestCase):
 
     def test_transfer_service_execute_transfer(self) -> None:
         """Test TransferService execute_transfer method."""
-        service = account_services.TransferService(
+        transfer_log = account_services.TransferService.transfer_money(
             from_account=self.from_account,
             to_account=self.to_account,
             amount=Decimal('200.00'),
             user=self.user,
+            exchange_date='2024-01-01',
             notes='Test transfer',
         )
-
-        transfer_log = service.execute_transfer()
 
         self.assertIsInstance(transfer_log, TransferMoneyLog)
         self.assertEqual(transfer_log.from_account, self.from_account)
@@ -212,52 +220,48 @@ class TestTransferService(TestCase):
 
     def test_transfer_service_insufficient_funds(self) -> None:
         """Test TransferService with insufficient funds."""
-        service = account_services.TransferService(
-            from_account=self.from_account,
-            to_account=self.to_account,
-            amount=Decimal('1500.00'),
-            user=self.user,
-            notes='Test transfer',
-        )
-
-        with self.assertRaises(Exception):
-            service.execute_transfer()
+        with self.assertRaises(ValidationError):
+            account_services.TransferService.transfer_money(
+                from_account=self.from_account,
+                to_account=self.to_account,
+                amount=Decimal('1500.00'),
+                user=self.user,
+                exchange_date='2024-01-01',
+                notes='Test transfer',
+            )
 
     def test_transfer_service_same_account(self) -> None:
         """Test TransferService with same account."""
-        service = account_services.TransferService(
-            from_account=self.from_account,
-            to_account=self.from_account,
-            amount=Decimal('200.00'),
-            user=self.user,
-            notes='Test transfer',
-        )
-
-        with self.assertRaises(Exception):
-            service.execute_transfer()
+        with self.assertRaises(ValidationError):
+            account_services.TransferService.transfer_money(
+                from_account=self.from_account,
+                to_account=self.from_account,
+                amount=Decimal('200.00'),
+                user=self.user,
+                exchange_date='2024-01-01',
+                notes='Test transfer',
+            )
 
     def test_transfer_service_zero_amount(self) -> None:
         """Test TransferService with zero amount."""
-        service = account_services.TransferService(
-            from_account=self.from_account,
-            to_account=self.to_account,
-            amount=Decimal('0.00'),
-            user=self.user,
-            notes='Test transfer',
-        )
-
-        with self.assertRaises(Exception):
-            service.execute_transfer()
+        with self.assertRaises(ValidationError):
+            account_services.TransferService.transfer_money(
+                from_account=self.from_account,
+                to_account=self.to_account,
+                amount=Decimal('0.00'),
+                user=self.user,
+                exchange_date='2024-01-01',
+                notes='Test transfer',
+            )
 
     def test_transfer_service_negative_amount(self) -> None:
         """Test TransferService with negative amount."""
-        service = account_services.TransferService(
-            from_account=self.from_account,
-            to_account=self.to_account,
-            amount=Decimal('-100.00'),
-            user=self.user,
-            notes='Test transfer',
-        )
-
-        with self.assertRaises(Exception):
-            service.execute_transfer()
+        with self.assertRaises(ValidationError):
+            account_services.TransferService.transfer_money(
+                from_account=self.from_account,
+                to_account=self.to_account,
+                amount=Decimal('-100.00'),
+                user=self.user,
+                exchange_date='2024-01-01',
+                notes='Test transfer',
+            )

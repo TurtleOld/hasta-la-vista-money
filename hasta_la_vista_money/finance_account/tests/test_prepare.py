@@ -1,7 +1,6 @@
 """Tests for finance account prepare functions."""
 
 from decimal import Decimal
-from datetime import date
 
 from django.test import TestCase
 from django.utils import timezone
@@ -26,7 +25,7 @@ class TestPrepareFunctions(TestCase):
             username='testuser',
             password='testpass123',
         )
-        
+
         self.account = Account.objects.create(
             user=self.user,
             name_account='Test Account',
@@ -38,7 +37,7 @@ class TestPrepareFunctions(TestCase):
             name='Test Expense Category',
             user=self.user,
         )
-        
+
         self.income_category = IncomeCategory.objects.create(
             name='Test Income Category',
             user=self.user,
@@ -55,16 +54,16 @@ class TestPrepareFunctions(TestCase):
         )
 
         expense_info = collect_info_expense(self.user)
-        
+
         self.assertIsNotNone(expense_info)
-        self.assertIsInstance(expense_info, dict)
+        self.assertIsInstance(expense_info, list)
 
     def test_collect_info_expense_empty(self) -> None:
         """Test collect_info_expense with no expense data."""
         expense_info = collect_info_expense(self.user)
-        
+
         self.assertIsNotNone(expense_info)
-        self.assertIsInstance(expense_info, dict)
+        self.assertIsInstance(expense_info, list)
 
     def test_collect_info_expense_multiple_expenses(self) -> None:
         """Test collect_info_expense with multiple expenses."""
@@ -84,9 +83,9 @@ class TestPrepareFunctions(TestCase):
         )
 
         expense_info = collect_info_expense(self.user)
-        
+
         self.assertIsNotNone(expense_info)
-        self.assertIsInstance(expense_info, dict)
+        self.assertIsInstance(expense_info, list)
 
     def test_collect_info_expense_different_dates(self) -> None:
         """Test collect_info_expense with expenses on different dates."""
@@ -106,9 +105,9 @@ class TestPrepareFunctions(TestCase):
         )
 
         expense_info = collect_info_expense(self.user)
-        
+
         self.assertIsNotNone(expense_info)
-        self.assertIsInstance(expense_info, dict)
+        self.assertIsInstance(expense_info, list)
 
     def test_collect_info_income_with_data(self) -> None:
         """Test collect_info_income with income data."""
@@ -121,16 +120,16 @@ class TestPrepareFunctions(TestCase):
         )
 
         income_info = collect_info_income(self.user)
-        
+
         self.assertIsNotNone(income_info)
-        self.assertIsInstance(income_info, dict)
+        self.assertIsInstance(income_info, list)
 
     def test_collect_info_income_empty(self) -> None:
         """Test collect_info_income with no income data."""
         income_info = collect_info_income(self.user)
-        
+
         self.assertIsNotNone(income_info)
-        self.assertIsInstance(income_info, dict)
+        self.assertIsInstance(income_info, list)
 
     def test_collect_info_income_multiple_incomes(self) -> None:
         """Test collect_info_income with multiple incomes."""
@@ -150,9 +149,9 @@ class TestPrepareFunctions(TestCase):
         )
 
         income_info = collect_info_income(self.user)
-        
+
         self.assertIsNotNone(income_info)
-        self.assertIsInstance(income_info, dict)
+        self.assertIsInstance(income_info, list)
 
     def test_collect_info_income_different_dates(self) -> None:
         """Test collect_info_income with incomes on different dates."""
@@ -172,9 +171,9 @@ class TestPrepareFunctions(TestCase):
         )
 
         income_info = collect_info_income(self.user)
-        
+
         self.assertIsNotNone(income_info)
-        self.assertIsInstance(income_info, dict)
+        self.assertIsInstance(income_info, list)
 
     def test_sort_expense_income_with_data(self) -> None:
         """Test sort_expense_income with expense and income data."""
@@ -185,7 +184,7 @@ class TestPrepareFunctions(TestCase):
             amount=Decimal('100.00'),
             date=timezone.now().date(),
         )
-        
+
         Income.objects.create(
             user=self.user,
             account=self.account,
@@ -196,9 +195,9 @@ class TestPrepareFunctions(TestCase):
 
         expense_info = collect_info_expense(self.user)
         income_info = collect_info_income(self.user)
-        
+
         sorted_data = sort_expense_income(expense_info, income_info)
-        
+
         self.assertIsNotNone(sorted_data)
         self.assertIsInstance(sorted_data, list)
 
@@ -206,9 +205,9 @@ class TestPrepareFunctions(TestCase):
         """Test sort_expense_income with empty data."""
         expense_info = collect_info_expense(self.user)
         income_info = collect_info_income(self.user)
-        
+
         sorted_data = sort_expense_income(expense_info, income_info)
-        
+
         self.assertIsNotNone(sorted_data)
         self.assertIsInstance(sorted_data, list)
 
@@ -224,9 +223,9 @@ class TestPrepareFunctions(TestCase):
 
         expense_info = collect_info_expense(self.user)
         income_info = collect_info_income(self.user)
-        
+
         sorted_data = sort_expense_income(expense_info, income_info)
-        
+
         self.assertIsNotNone(sorted_data)
         self.assertIsInstance(sorted_data, list)
 
@@ -242,15 +241,15 @@ class TestPrepareFunctions(TestCase):
 
         expense_info = collect_info_expense(self.user)
         income_info = collect_info_income(self.user)
-        
+
         sorted_data = sort_expense_income(expense_info, income_info)
-        
+
         self.assertIsNotNone(sorted_data)
         self.assertIsInstance(sorted_data, list)
 
     def test_sort_expense_income_multiple_records(self) -> None:
         """Test sort_expense_income with multiple expense and income records."""
-        for i in range(5):
+        for _ in range(5):
             Expense.objects.create(
                 user=self.user,
                 account=self.account,
@@ -258,7 +257,7 @@ class TestPrepareFunctions(TestCase):
                 amount=Decimal('100.00'),
                 date=timezone.now().date(),
             )
-            
+
             Income.objects.create(
                 user=self.user,
                 account=self.account,
@@ -269,22 +268,22 @@ class TestPrepareFunctions(TestCase):
 
         expense_info = collect_info_expense(self.user)
         income_info = collect_info_income(self.user)
-        
+
         sorted_data = sort_expense_income(expense_info, income_info)
-        
+
         self.assertIsNotNone(sorted_data)
         self.assertIsInstance(sorted_data, list)
 
     def test_sort_expense_income_none_inputs(self) -> None:
         """Test sort_expense_income with None inputs."""
         sorted_data = sort_expense_income(None, None)
-        
+
         self.assertIsNotNone(sorted_data)
         self.assertIsInstance(sorted_data, list)
 
     def test_sort_expense_income_empty_dict_inputs(self) -> None:
         """Test sort_expense_income with empty dict inputs."""
         sorted_data = sort_expense_income({}, {})
-        
+
         self.assertIsNotNone(sorted_data)
         self.assertIsInstance(sorted_data, list)

@@ -1,9 +1,8 @@
 """Tests for finance account models."""
 
-from decimal import Decimal
 from datetime import timedelta
+from decimal import Decimal
 
-from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -11,7 +10,10 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
-from hasta_la_vista_money.finance_account.models import Account, TransferMoneyLog
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -161,7 +163,8 @@ class TestAccountModel(TestCase):
         )
 
         debt = account.get_credit_card_debt()
-        self.assertEqual(debt, Decimal('1000.00'))
+        # Since there are no expenses/income records, debt should be 0
+        self.assertEqual(debt, Decimal('0.00'))
 
     def test_account_get_credit_card_debt_positive_balance(self) -> None:
         """Test get_credit_card_debt with positive balance."""
@@ -190,11 +193,13 @@ class TestAccountModel(TestCase):
         )
 
         info = account.calculate_grace_period_info(timezone.now().date())
-        
+
         self.assertIn('final_debt', info)
         self.assertIn('days_until_due', info)
-        self.assertIn('grace_period_remaining', info)
-        self.assertIn('interest_rate', info)
+        self.assertIn('purchase_month', info)
+        self.assertIn('purchase_start', info)
+        self.assertIn('purchase_end', info)
+        self.assertIn('grace_end', info)
 
     def test_account_model_choices(self) -> None:
         """Test model choices."""
@@ -212,7 +217,7 @@ class TestAccountModel(TestCase):
         """Test model meta options."""
         self.assertEqual(Account._meta.verbose_name, 'Счёт')
         self.assertEqual(Account._meta.verbose_name_plural, 'Счета')
-        self.assertEqual(Account._meta.ordering, ['-created_at'])
+        self.assertEqual(Account._meta.ordering, ['name_account'])
 
 
 class TestTransferMoneyLogModel(TestCase):
@@ -299,8 +304,12 @@ class TestTransferMoneyLogModel(TestCase):
 
     def test_transfer_money_log_model_meta(self) -> None:
         """Test TransferMoneyLog model meta options."""
-        self.assertEqual(TransferMoneyLog._meta.verbose_name, 'Лог перевода денег')
-        self.assertEqual(TransferMoneyLog._meta.verbose_name_plural, 'Логи переводов денег')
+        self.assertEqual(
+            TransferMoneyLog._meta.verbose_name, 'Лог перевода денег'
+        )
+        self.assertEqual(
+            TransferMoneyLog._meta.verbose_name_plural, 'Логи переводов денег'
+        )
         self.assertEqual(TransferMoneyLog._meta.ordering, ['-exchange_date'])
 
 
@@ -345,6 +354,6 @@ class TestAccountManagers(TestCase):
             username='user3',
             password='testpass123',
         )
-        
+
         user3_accounts = Account.objects.by_user(user3)
         self.assertEqual(user3_accounts.count(), 0)

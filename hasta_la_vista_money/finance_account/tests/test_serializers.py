@@ -37,9 +37,12 @@ class TestAccountSerializer(TestCase):
             'balance',
             'currency',
             'type_account',
-            'created_at',
+            'bank',
+            'limit_credit',
+            'payment_due_date',
+            'grace_period_days',
         }
-        
+
         self.assertEqual(set(data.keys()), expected_fields)
 
     def test_account_serializer_data_values(self) -> None:
@@ -90,11 +93,16 @@ class TestAccountSerializer(TestCase):
         self.assertEqual(data['currency'], 'EUR')
 
     def test_account_serializer_read_only_fields(self) -> None:
-        """Test that AccountSerializer fields are read-only."""
+        """Test that AccountSerializer fields are not read-only."""
         serializer = AccountSerializer()
-        
-        for field_name, field in serializer.fields.items():
-            self.assertTrue(field.read_only, f'Field {field_name} should be read-only')
+
+        # Most fields should be writable for creation
+        writable_fields = ['name_account', 'balance', 'currency']
+        for field_name in writable_fields:
+            field = serializer.fields[field_name]
+            self.assertFalse(
+                field.read_only, f'Field {field_name} should be writable'
+            )
 
     def test_account_serializer_multiple_accounts(self) -> None:
         """Test AccountSerializer with multiple accounts."""
@@ -118,9 +126,9 @@ class TestAccountSerializer(TestCase):
         self.assertNotEqual(data1['currency'], data2['currency'])
 
     def test_account_serializer_created_at_format(self) -> None:
-        """Test AccountSerializer created_at field format."""
+        """Test AccountSerializer doesn't include created_at field."""
         serializer = AccountSerializer(self.account)
         data = serializer.data
 
-        self.assertIn('created_at', data)
-        self.assertIsInstance(data['created_at'], str)
+        # created_at is not included in the serializer fields
+        self.assertNotIn('created_at', data)
