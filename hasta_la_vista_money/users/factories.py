@@ -5,8 +5,6 @@ User = get_user_model()
 
 
 class UserFactory(factory.django.DjangoModelFactory):
-    """Фабрика для создания тестовых пользователей"""
-
     class Meta:
         model = User
 
@@ -18,3 +16,4 @@ class UserFactory(factory.django.DjangoModelFactory):
     is_staff = False
     is_superuser = False
     theme = 'dark'
+    password = factory.PostGenerationMethodCall('set_password', 'testpass123')

@@ -21,7 +21,7 @@ class ReceiptUpdateViewTest(TestCase):
         self.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
-            password='testpass123',  # noqa: S106
+            password='testpass123',
             is_active=True,
             is_superuser=True,
         )
@@ -296,7 +296,7 @@ class ReceiptUpdateViewTest(TestCase):
         other_user = User.objects.create_user(
             username='otheruser',
             email='other@example.com',
-            password='otherpass123',  # noqa: S106
+            password='otherpass123',
         )
 
         other_receipt = Receipt.objects.create(

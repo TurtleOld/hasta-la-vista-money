@@ -108,18 +108,6 @@ coverage:
 		@uv run python -m coverage xml
 		@uv run python -m coverage report
 
-.PHONY: taskiq-worker
-taskiq-worker:
-		@uv run taskiq worker hasta_la_vista_money.taskiq:broker
-
-.PHONY: taskiq-scheduler
-taskiq-scheduler:
-		@uv run taskiq scheduler hasta_la_vista_money.taskiq:scheduler
-
-.PHONY: taskiq-dashboard
-taskiq-dashboard:
-		@uv run taskiq dashboard hasta_la_vista_money.taskiq:broker
-
 .PHONY: rabbitmq
 rabbitmq:
 		@docker run -d --name hlvm_rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management-alpine

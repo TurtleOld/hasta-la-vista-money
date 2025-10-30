@@ -25,4 +25,15 @@ class AccountSerializer(serializers.ModelSerializer):
             'name_account',
             'balance',
             'currency',
+            'type_account',
+            'bank',
+            'limit_credit',
+            'payment_due_date',
+            'grace_period_days',
         ]
+        read_only_fields: ClassVar[list[str]] = ['id']
+
+    def create(self, validated_data):
+        """Override create to set user from request."""
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)

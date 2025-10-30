@@ -111,11 +111,35 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the form with default values and date field
         configuration."""
+        self.request_user: User | None = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        # Set default account type
         self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
-        # Setup date fields
         self.setup_date_fields()
+
+    def clean_balance(self) -> Any:
+        """Validate balance field.
+
+        Ensures the balance is not negative for non-credit accounts.
+
+        Returns:
+            The validated balance value.
+
+        Raises:
+            ValidationError: If balance is negative for non-credit accounts.
+        """
+        balance = self.cleaned_data.get('balance')
+        type_account = self.cleaned_data.get('type_account')
+
+        if (
+            balance is not None
+            and balance < 0
+            and type_account not in ['Credit', 'CreditCard']
+        ):
+            raise ValidationError(
+                _('Баланс не может быть отрицательным для данного типа счёта'),
+                code='invalid_balance',
+            )
+        return balance
 
     def clean(self) -> dict[str, Any]:
         """Validate form data, ensuring credit fields are provided for
@@ -155,6 +179,18 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
             'balance',
             'currency',
         ]
+
+    def save(self, commit: bool = True) -> Account:
+        """Create Account instance and set user if provided.
+
+        If no user was provided to the form, the instance will not be saved
+        even if commit=True, to avoid IntegrityError on required user field.
+        """
+        instance: Account = super().save(commit=False)
+        if commit and self.request_user is not None:
+            instance.user = self.request_user
+            instance.save()
+        return instance
 
 
 class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
