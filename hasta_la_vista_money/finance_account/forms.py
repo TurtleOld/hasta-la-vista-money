@@ -117,6 +117,31 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         # Setup date fields
         self.setup_date_fields()
 
+    def clean_balance(self) -> Any:
+        """Validate balance field.
+
+        Ensures the balance is not negative for non-credit accounts.
+
+        Returns:
+            The validated balance value.
+
+        Raises:
+            ValidationError: If balance is negative for non-credit accounts.
+        """
+        balance = self.cleaned_data.get('balance')
+        type_account = self.cleaned_data.get('type_account')
+
+        if (
+            balance is not None
+            and balance < 0
+            and type_account not in ['Credit', 'CreditCard']
+        ):
+            raise ValidationError(
+                _('Баланс не может быть отрицательным для данного типа счёта'),
+                code='invalid_balance',
+            )
+        return balance
+
     def clean(self) -> dict[str, Any]:
         """Validate form data, ensuring credit fields are provided for
         credit accounts.

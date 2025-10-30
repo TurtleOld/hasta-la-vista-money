@@ -10,7 +10,7 @@ from typing import Any
 from hasta_la_vista_money.users.models import User
 
 
-def collect_info_income(user: User) -> Any:
+def collect_info_income(user: User) -> list[dict[str, Any]]:
     """Collect income information from database filtered by user.
 
     Retrieves income records for the specified user with related account
@@ -20,18 +20,20 @@ def collect_info_income(user: User) -> Any:
         user: The user whose income records to retrieve.
 
     Returns:
-        Queryset containing income records with related data.
+        List of dictionaries containing income records with related data.
     """
-    return user.income_users.select_related('user').values(
-        'id',
-        'date',
-        'account__name_account',
-        'category__name',
-        'amount',
+    return list(
+        user.income_users.select_related('user').values(
+            'id',
+            'date',
+            'account__name_account',
+            'category__name',
+            'amount',
+        )
     )
 
 
-def collect_info_expense(user: User) -> Any:
+def collect_info_expense(user: User) -> list[dict[str, Any]]:
     """Collect expense information from database filtered by user.
 
     Retrieves expense records for the specified user with related account
@@ -41,14 +43,16 @@ def collect_info_expense(user: User) -> Any:
         user: The user whose expense records to retrieve.
 
     Returns:
-        Queryset containing expense records with related data.
+        List of dictionaries containing expense records with related data.
     """
-    return user.expense_users.select_related('user').values(
-        'id',
-        'date',
-        'account__name_account',
-        'category__name',
-        'amount',
+    return list(
+        user.expense_users.select_related('user').values(
+            'id',
+            'date',
+            'account__name_account',
+            'category__name',
+            'amount',
+        )
     )
 
 

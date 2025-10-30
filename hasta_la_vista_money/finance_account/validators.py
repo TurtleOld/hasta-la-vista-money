@@ -12,7 +12,6 @@ from typing import Any
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -35,7 +34,7 @@ def validate_account_balance(from_account: Account, amount: Decimal) -> None:
     """
     if amount > from_account.balance:
         raise ValidationError(
-            constants.SUCCESS_MESSAGE_INSUFFICIENT_FUNDS,
+            _('Недостаточно средств на счете'),
             code='insufficient_funds',
         )
 
@@ -56,9 +55,14 @@ def validate_different_accounts(
     Raises:
         ValidationError: If source and destination accounts are the same.
     """
+    if from_account is None or to_account is None:
+        raise ValidationError(
+            _('Нельзя выбирать одинаковые счета для перевода.'),
+            code='invalid_accounts',
+        )
     if from_account == to_account:
         raise ValidationError(
-            constants.ANOTHER_ACCRUAL_ACCOUNT,
+            _('Нельзя переводить деньги на тот же счет'),
             code='same_accounts',
         )
 
@@ -89,26 +93,26 @@ def validate_credit_fields_required(
     credit_types = [ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD]
 
     if type_account in credit_types:
-        if not limit_credit:
-            raise ValidationError(
-                _('Кредитный лимит обязателен для кредитных счетов'),
-                code='credit_limit_required',
-            )
-        if not bank:
-            raise ValidationError(
-                _('Банк обязателен для кредитных счетов'),
-                code='bank_required',
-            )
+        errors = []
+
+        if not bank or bank == '-':
+            errors.append(_('Для кредитного счёта необходимо указать банк'))
+
+        if not limit_credit or limit_credit <= 0:
+            errors.append(_('Для кредитного счёта необходимо указать лимит'))
+
         if not payment_due_date:
-            raise ValidationError(
-                _('Дата платежа обязательна для кредитных счетов'),
-                code='payment_due_date_required',
+            errors.append(
+                _('Для кредитного счёта необходимо указать дату платежа')
             )
-        if not grace_period_days:
-            raise ValidationError(
-                _('Льготный период обязателен для кредитных счетов'),
-                code='grace_period_required',
+
+        if not grace_period_days or grace_period_days <= 0:
+            errors.append(
+                _('Для кредитного счёта необходимо указать льготный период')
             )
+
+        if errors:
+            raise ValidationError(errors)
 
 
 def validate_positive_amount(amount: Decimal) -> None:
