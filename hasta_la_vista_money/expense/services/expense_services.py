@@ -15,6 +15,7 @@ from hasta_la_vista_money.constants import (
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import (
     get_new_type_operation,
@@ -71,9 +72,8 @@ class ExpenseService:
         expense.user = self.user
         expense.save()
 
-        if expense.account:
-            expense.account.balance -= expense.amount
-            expense.account.save()
+        if expense.account and expense.amount is not None:
+            AccountService.apply_receipt_spend(expense.account, expense.amount)
 
         return expense
 
@@ -94,20 +94,13 @@ class ExpenseService:
             error_msg = 'У вас нет прав для выполнения этого действия'
             raise ValueError(error_msg)
 
-        # Restore old amount to old account
-        if expense:
-            old_amount = expense.amount
-            account_balance.balance += old_amount
-
-        # Handle account change
-        if expense.account != account:
-            old_account_balance.balance += amount
-            account_balance.balance -= amount
-            old_account_balance.save()
-
-        # Update account balance
-        account_balance.balance -= amount
-        account_balance.save()
+        # Корректировка балансов через сервис аккаунтов
+        AccountService.adjust_on_receipt_update(
+            old_account=old_account_balance,
+            new_account=account_balance,
+            old_total_sum=expense.amount,
+            new_total_sum=amount,
+        )
 
         # Update expense
         expense.user = self.user
@@ -124,6 +117,7 @@ class ExpenseService:
             error_msg = 'У вас нет прав для выполнения этого действия'
             raise ValueError(error_msg)
 
+        # Возврат средств при удалении расхода
         account_balance.balance += amount
         account_balance.save()
         expense.delete()

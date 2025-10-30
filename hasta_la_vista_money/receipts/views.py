@@ -42,6 +42,15 @@ from hasta_la_vista_money.receipts.services import (
     analyze_image_with_ai,
     paginator_custom_view,
 )
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    ReceiptCreatorService,
+)
+from hasta_la_vista_money.receipts.services.receipt_import import (
+    ReceiptImportService,
+)
+from hasta_la_vista_money.receipts.services.receipt_updater import (
+    ReceiptUpdaterService,
+)
 from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
@@ -249,41 +258,12 @@ class ReceiptCreateView(
         product_formset: ProductFormSet,
         seller: Seller,
     ) -> Receipt | None:
-        receipt = receipt_form.save(commit=False)
-        total_sum = receipt.total_sum
-        account = receipt.account
-        account_balance = get_object_or_404(Account, id=account.id)
-        if account_balance.user == request.user:
-            account_balance.balance -= total_sum
-            account_balance.save()
-            receipt.user = request.user
-            receipt.seller = seller
-            receipt.manual = True
-            receipt.save()
-            for product_form in product_formset:
-                if (
-                    product_form.cleaned_data
-                    and not product_form.cleaned_data.get(
-                        'DELETE',
-                        False,
-                    )
-                ):
-                    product_data = product_form.cleaned_data
-                    if (
-                        product_data.get('product_name')
-                        and product_data.get('price')
-                        and product_data.get('quantity')
-                    ):
-                        product = Product.objects.create(
-                            user=request.user,
-                            product_name=product_data['product_name'],
-                            price=product_data['price'],
-                            quantity=product_data['quantity'],
-                            amount=product_data['amount'],
-                        )
-                        receipt.product.add(product)
-            return receipt
-        return None
+        return ReceiptCreatorService.create_manual_receipt(
+            user=request.user,
+            receipt_form=receipt_form,
+            product_formset=product_formset,
+            seller=seller,
+        )
 
     def form_valid_receipt(
         self,
@@ -438,49 +418,11 @@ class ReceiptUpdateView(
         seller_field.queryset = Seller.objects.for_user(current_user)
 
         if form.is_valid() and product_formset.is_valid():
-            old_total_sum = receipt.total_sum
-            old_account = receipt.account
-
-            receipt = form.save()
-
-            receipt.product.clear()
-
-            new_total_sum = Decimal('0.00')
-            for product_form in product_formset:
-                if (
-                    product_form.cleaned_data
-                    and not product_form.cleaned_data.get(
-                        'DELETE',
-                        False,
-                    )
-                ):
-                    product_data = product_form.cleaned_data
-                    if (
-                        product_data.get('product_name')
-                        and product_data.get('price')
-                        and product_data.get('quantity')
-                    ):
-                        current_user = cast('User', self.request.user)
-                        product = Product.objects.create(
-                            user=current_user,
-                            product_name=product_data['product_name'],
-                            price=product_data['price'],
-                            quantity=product_data['quantity'],
-                            amount=product_data['amount'],
-                        )
-                        receipt.product.add(product)
-                        new_total_sum += product_data['amount']
-
-            receipt.total_sum = new_total_sum
-            receipt.save()
-
-            new_account = receipt.account
-
-            self.update_account_balance(
-                old_account,
-                new_account,
-                old_total_sum,
-                new_total_sum,
+            ReceiptUpdaterService.update_receipt(
+                user=cast('User', self.request.user),
+                receipt=receipt,
+                form=form,
+                product_formset=product_formset,
             )
 
             return super().form_valid(form)
@@ -666,12 +608,33 @@ class UploadImageView(LoginRequiredMixin, FormView):
             user = cast('User', self.request.user)
             account = form.cleaned_data.get('account')
 
-            decode_json_receipt = self._process_uploaded_file(uploaded_file)
-            return self._handle_receipt_processing(
-                decode_json_receipt,
-                user,
-                account,
+            result = ReceiptImportService.process_uploaded_image(
+                user=user,
+                account=account,
+                uploaded_file=uploaded_file,
+                analyze_func=analyze_image_with_ai,
             )
+
+            if not result.success:
+                if result.error == 'invalid_file':
+                    messages.error(self.request, constants.INVALID_FILE_FORMAT)
+                elif result.error == 'exists':
+                    messages.error(
+                        self.request,
+                        gettext_lazy(constants.RECEIPT_ALREADY_EXISTS),
+                    )
+                else:
+                    messages.error(
+                        self.request,
+                        constants.ERROR_PROCESSING_RECEIPT,
+                    )
+                return super().form_invalid(form)
+
+            messages.success(
+                self.request,
+                'Чек успешно загружен и обработан!',
+            )
+            return super().form_valid(form)
         except ValueError as e:
             logger.exception('Error processing receipt', error=e)
             messages.error(

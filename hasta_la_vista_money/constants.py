@@ -48,6 +48,8 @@ SUCCESS_MESSAGE_DELETE_RECEIPT: Final = _('Чек успешно удален!')
 SUCCESS_MESSAGE_CREATE_SELLER: Final = _(
     'Новый продавец успешно добавлен!',
 )
+INVALID_FILE_FORMAT: Final = _('Неверный формат файла или пустые данные')
+ERROR_PROCESSING_RECEIPT: Final = _('Ошибка обработки чека, попробуйте позже')
 
 # Шаблоны
 EXPENSE_CATEGORY_TEMPLATE: Final = 'expense/show_category_expense.html'

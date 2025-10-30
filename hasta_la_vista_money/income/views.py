@@ -31,7 +31,7 @@ from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.mixins import IncomeFormQuerysetMixin
 from hasta_la_vista_money.income.models import Income, IncomeCategory
-from hasta_la_vista_money.services import income as income_services
+from hasta_la_vista_money.income.services.income_ops import IncomeOps
 from hasta_la_vista_money.services.views import build_category_tree
 from hasta_la_vista_money.users.models import User
 
@@ -202,12 +202,12 @@ class IncomeCreateView(
             return self.form_invalid(form)
 
         try:
-            income_services.add_income(
-                self.request.user,
-                account,
-                category,
-                amount,
-                date,
+            IncomeOps.add_income(
+                user=self.request.user,
+                account=account,
+                category=category,
+                amount=amount,
+                when=date,
             )
             messages.success(self.request, constants.SUCCESS_INCOME_ADDED)
             return HttpResponseRedirect(str(self.success_url))
@@ -243,7 +243,7 @@ class IncomeCopyView(
         """
         income_id = kwargs.get('pk')
         try:
-            income_services.copy_income(request.user, income_id)
+            IncomeOps.copy_income(user=request.user, income_id=income_id)
             return JsonResponse({'success': True})
         except (ValueError, TypeError) as e:
             return JsonResponse({'success': False, 'error': str(e)})
@@ -326,13 +326,13 @@ class IncomeUpdateView(
         category = cd.get('category')
         date = cd.get('date')
         try:
-            income_services.update_income(
-                self.request.user,
-                income,
-                account,
-                category,
-                amount,
-                date,
+            IncomeOps.update_income(
+                user=self.request.user,
+                income=income,
+                account=account,
+                category=category,
+                amount=amount,
+                when=date,
             )
             messages.success(self.request, constants.SUCCESS_INCOME_UPDATE)
             return super().form_valid(form)
@@ -357,7 +357,7 @@ class IncomeDeleteView(LoginRequiredMixin, BaseView, DeleteView, DeletionMixin):
         """
         income = self.get_object()
         try:
-            income_services.delete_income(request.user, income)
+            IncomeOps.delete_income(user=request.user, income=income)
             return JsonResponse({'success': True})
         except (ValueError, TypeError) as e:
             return JsonResponse({'success': False, 'error': str(e)})

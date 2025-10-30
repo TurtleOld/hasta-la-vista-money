@@ -13,9 +13,8 @@ from django.views.generic import CreateView, DeleteView, ListView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
-from hasta_la_vista_money.loan.tasks import (
-    calculate_annuity_loan,
-    calculate_differentiated_loan,
+from hasta_la_vista_money.loan.services.loan_calculation import (
+    LoanCalculationService,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -86,24 +85,15 @@ class LoanCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
             loan_amount=loan_amount,
         ).first()
 
-        if type_loan == 'Annuity':
-            calculate_annuity_loan(
-                user_id=self.request.user.pk,
-                loan_id=loan.pk,
-                start_date=date,
-                loan_amount=loan_amount,
-                annual_interest_rate=annual_interest_rate,
-                period_loan=period_loan,
-            )
-        elif type_loan == 'Differentiated':
-            calculate_differentiated_loan(
-                user_id=self.request.user.pk,
-                loan_id=loan.pk,
-                start_date=date,
-                loan_amount=loan_amount,
-                annual_interest_rate=annual_interest_rate,
-                period_loan=period_loan,
-            )
+        LoanCalculationService.run(
+            type_loan=type_loan,
+            user_id=self.request.user.pk,
+            loan=loan,
+            start_date=date,
+            loan_amount=loan_amount,
+            annual_interest_rate=annual_interest_rate,
+            period_loan=period_loan,
+        )
         return redirect(self.success_url)
 
 

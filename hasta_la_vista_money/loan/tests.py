@@ -8,14 +8,14 @@ from django.utils import timezone
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
-from hasta_la_vista_money.loan.loan_calculator import (
-    calculate_annuity_schedule,
-    calculate_differentiated_schedule,
-)
 from hasta_la_vista_money.loan.models import (
     Loan,
     PaymentMakeLoan,
     PaymentSchedule,
+)
+from hasta_la_vista_money.loan.services.loan_calculation import (
+    calculate_annuity_schedule,
+    calculate_differentiated_schedule,
 )
 from hasta_la_vista_money.loan.tasks import (
     calculate_annuity_loan,
