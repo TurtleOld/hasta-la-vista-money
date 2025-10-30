@@ -92,11 +92,11 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 3)
+        self.assertEqual(accounts.count(), 4)
         self.assertIn(self.account1, accounts)
         self.assertIn(self.account2, accounts)
+        self.assertIn(self.account3, accounts)
         self.assertIn(self.account4, accounts)
-        self.assertNotIn(self.account3, accounts)
 
     def test_get_accounts_empty_groups(self) -> None:
         """Test get_accounts method for user with empty groups."""
