@@ -1,6 +1,6 @@
 """Tests for finance account validators."""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -50,6 +50,40 @@ class TestValidatePositiveAmount(TestCase):
         """Test positive amount validation with large amount."""
         amount = Decimal('999999.99')
         validate_positive_amount(amount)
+
+    def test_validate_positive_amount_parametrized(self) -> None:
+        """Параметризация: некорректные и граничные значения
+        разных типов на входе positive_amount.
+        """
+        invalid_cases = [
+            0,
+            -1,
+            -0.01,
+            Decimal('0.00'),
+            Decimal('-999.00'),
+            None,
+            '0',
+            '-5',
+            '',
+            object(),
+        ]
+        for value in invalid_cases:
+            with (
+                self.subTest(value=value),
+                self.assertRaises(
+                    (ValidationError, TypeError, InvalidOperation)
+                ),
+            ):
+                validate_positive_amount(value)
+        valid_cases = [
+            1,
+            0.5,
+            Decimal('0.01'),
+            '10.25',
+        ]
+        for value in valid_cases:
+            with self.subTest(value=value):
+                validate_positive_amount(Decimal(value))
 
 
 class TestValidateAccountBalance(TestCase):
@@ -260,10 +294,11 @@ class TestValidateCreditFieldsRequired(TestCase):
             )
 
         error_messages = [
-                str(message) for message in context.exception.messages
-            ]
+            str(message) for message in context.exception.messages
+        ]
         self.assertIn(
-            'Для кредитного счёта необходимо указать банк', error_messages,
+            'Для кредитного счёта необходимо указать банк',
+            error_messages,
         )
         self.assertIn(
             'Для кредитного счёта необходимо указать лимит', error_messages
