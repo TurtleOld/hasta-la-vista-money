@@ -134,6 +134,41 @@ class AccountService:
         )
 
     @staticmethod
+    @transaction.atomic
+    def apply_receipt_spend(account: Account, amount: Decimal) -> Account:
+        """Apply spending by receipt to the account balance with validation."""
+        validate_positive_amount(amount)
+        validate_account_balance(account, amount)
+        account.balance -= amount
+        account.save()
+        return account
+
+    @staticmethod
+    @transaction.atomic
+    def adjust_on_receipt_update(
+        old_account: Account,
+        new_account: Account,
+        old_total_sum: Decimal,
+        new_total_sum: Decimal,
+    ) -> None:
+        """Adjust account balances when receipt is updated."""
+        if old_account.id == new_account.id:
+            difference = new_total_sum - old_total_sum
+            if difference == 0:
+                return
+            if difference > 0:
+                AccountService.apply_receipt_spend(old_account, difference)
+            else:
+                old_account.balance += abs(difference)
+                old_account.save()
+            return
+
+        # Different accounts: refund old, charge new
+        old_account.balance += old_total_sum
+        old_account.save()
+        AccountService.apply_receipt_spend(new_account, new_total_sum)
+
+    @staticmethod
     def _get_first_purchase_in_month(
         account: Account,
         month_start: datetime,
