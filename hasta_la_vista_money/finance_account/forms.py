@@ -111,10 +111,9 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the form with default values and date field
         configuration."""
+        self.request_user: User | None = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        # Set default account type
         self.fields['type_account'].initial = Account.TYPE_ACCOUNT_LIST[1][0]
-        # Setup date fields
         self.setup_date_fields()
 
     def clean_balance(self) -> Any:
@@ -180,6 +179,18 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
             'balance',
             'currency',
         ]
+
+    def save(self, commit: bool = True) -> Account:
+        """Create Account instance and set user if provided.
+
+        If no user was provided to the form, the instance will not be saved
+        even if commit=True, to avoid IntegrityError on required user field.
+        """
+        instance: Account = super().save(commit=False)
+        if commit and self.request_user is not None:
+            instance.user = self.request_user
+            instance.save()
+        return instance
 
 
 class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):

@@ -69,8 +69,11 @@ def sort_expense_income(expenses: Any, income: Any) -> list[Any]:
     Returns:
         List of combined financial records sorted by date (newest first).
     """
+    expenses_list = list(expenses or [])
+    income_list = list(income or [])
+
     return sorted(
-        list(expenses) + list(income),
+        expenses_list + income_list,
         key=itemgetter('date'),
         reverse=True,
     )
