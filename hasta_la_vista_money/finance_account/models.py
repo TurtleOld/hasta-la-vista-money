@@ -187,6 +187,8 @@ class Account(TimeStampedModel):
 
     class Meta(TimeStampedModel.Meta):
         db_table = 'account'
+        verbose_name = _('Счёт')
+        verbose_name_plural = _('Счета')
         ordering: ClassVar[list[str]] = ['name_account']
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['name_account']),
@@ -221,6 +223,8 @@ class Account(TimeStampedModel):
         Returns:
             bool: True if transfer succeeded, False otherwise.
         """
+        if amount <= 0:
+            return False
         if amount <= self.balance:
             self.balance -= amount
             to_account.balance += amount
@@ -361,6 +365,8 @@ class TransferMoneyLog(TimeStampedModel):
     objects = TransferMoneyLogManager.from_queryset(TransferMoneyLogQuerySet)()
 
     class Meta(TimeStampedModel.Meta):
+        verbose_name = _('Лог перевода денег')
+        verbose_name_plural = _('Логи переводов денег')
         ordering: ClassVar[list[str]] = ['-exchange_date']
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['user']),

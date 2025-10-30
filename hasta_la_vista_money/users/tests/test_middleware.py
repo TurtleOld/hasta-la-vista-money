@@ -73,7 +73,7 @@ class CheckAdminMiddlewareTest(TestCase):
         User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
-            password='admin123',  # noqa: S106
+            password='admin123',
         )
 
         protected_paths = [
@@ -130,7 +130,7 @@ class CheckAdminMiddlewareTest(TestCase):
         User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
-            password='admin123',  # noqa: S106
+            password='admin123',
         )
 
         request2 = self.factory.get('/')
@@ -146,7 +146,7 @@ class CheckAdminMiddlewareTest(TestCase):
         User.objects.create_user(
             username='regular',
             email='regular@example.com',
-            password='regular123',  # noqa: S106
+            password='regular123',
         )
 
         request = self.factory.get('/')
@@ -164,7 +164,7 @@ class CheckAdminMiddlewareTest(TestCase):
         User.objects.create_user(
             username='staff',
             email='staff@example.com',
-            password='staff123',  # noqa: S106
+            password='staff123',
             is_staff=True,
         )
 
@@ -235,7 +235,7 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
         User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
-            password='admin123',  # noqa: S106
+            password='admin123',
         )
 
         response = self.client.get('/')

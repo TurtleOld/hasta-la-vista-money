@@ -136,6 +136,7 @@ known-first-party = ["hasta_la_vista_money"]
 ]
 "**/test_*.py" = [
   "SLF001", # private member access in tests
+  "S106",
 ]
 "**/tests.py" = [
   "SLF001", # private member access in tests

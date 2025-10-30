@@ -503,12 +503,28 @@ def get_accounts_for_user_or_group(
     group_id: str | None = None,
 ) -> QuerySet[Account]:
     """Get accounts for user or group."""
-    if not group_id or group_id == 'my':
+    if group_id == 'my':
         return Account.objects.filter(user=user).select_related('user')
-    users_in_group = User.objects.filter(groups__id=group_id)
-    return Account.objects.filter(user__in=users_in_group).select_related(
-        'user',
-    )
+
+    if group_id:
+        users_in_group = User.objects.filter(groups__id=group_id).distinct()
+        if users_in_group.exists():
+            return (
+                Account.objects.filter(user__in=users_in_group)
+                .select_related('user')
+                .distinct()
+            )
+        return Account.objects.filter(user=user).select_related('user')
+
+    user_groups = user.groups.all()
+    if user_groups.exists():
+        users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
+        return (
+            Account.objects.filter(user__in=users_in_groups)
+            .select_related('user')
+            .distinct()
+        )
+    return Account.objects.filter(user=user).select_related('user')
 
 
 def get_sum_all_accounts(accounts):
