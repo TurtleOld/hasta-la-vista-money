@@ -12,6 +12,7 @@ from django.db.models.functions import Coalesce
 from django.db.models.query import QuerySet
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -233,7 +234,9 @@ class AccountService:
         purchase_end: datetime,
     ) -> tuple[datetime, datetime, datetime]:
         """Calculate grace period for Sberbank credit card."""
-        grace_end_date = purchase_start + relativedelta(months=3)
+        grace_end_date = purchase_start + relativedelta(
+            months=constants.GRACE_PERIOD_MONTHS_SBERBANK,
+        )
         last_day_grace = monthrange(
             grace_end_date.year,
             grace_end_date.month,
@@ -244,7 +247,9 @@ class AccountService:
                 time.max,
             ),
         )
-        payments_start = purchase_end + relativedelta(seconds=1)
+        payments_start = purchase_end + relativedelta(
+            seconds=constants.ONE_SECOND,
+        )
         payments_end = grace_end
 
         return grace_end, payments_start, payments_end
@@ -265,14 +270,18 @@ class AccountService:
             if timezone.is_naive(first_purchase):
                 first_purchase = timezone.make_aware(first_purchase)
 
-            grace_end = first_purchase + relativedelta(days=110)
+            grace_end = first_purchase + relativedelta(
+                days=constants.GRACE_PERIOD_DAYS_RAIFFEISENBANK,
+            )
             grace_end = timezone.make_aware(
                 datetime.combine(grace_end.date(), time.max),
             )
         else:
             grace_end = purchase_end
 
-        payments_start = purchase_end + relativedelta(seconds=1)
+        payments_start = purchase_end + relativedelta(
+            seconds=constants.ONE_SECOND,
+        )
         payments_end = grace_end
 
         return grace_end, payments_start, payments_end
@@ -296,7 +305,9 @@ class AccountService:
                 purchase_end,
             )
         grace_end = purchase_end
-        payments_start = purchase_end + relativedelta(seconds=1)
+        payments_start = purchase_end + relativedelta(
+            seconds=constants.ONE_SECOND,
+        )
         payments_end = grace_end
         return grace_end, payments_start, payments_end
 
@@ -322,9 +333,11 @@ class AccountService:
                 payments_end,
             )
         else:
-            payments_for_period = 0
+            payments_for_period = constants.ZERO
 
-        final_debt = (debt_for_month or 0) + (payments_for_period or 0)
+        final_debt = (debt_for_month or constants.ZERO) + (
+            payments_for_period or constants.ZERO
+        )
 
         return debt_for_month, payments_for_period, final_debt
 
@@ -379,11 +392,13 @@ class AccountService:
             'debt_for_month': debt_for_month,
             'payments_for_period': payments_for_period,
             'final_debt': final_debt,
-            'is_overdue': timezone.now() > grace_end and final_debt > 0,
+            'is_overdue': (
+                timezone.now() > grace_end and final_debt > constants.ZERO
+            ),
             'days_until_due': (
                 (grace_end.date() - timezone.now().date()).days
                 if timezone.now() <= grace_end
-                else 0
+                else constants.ZERO
             ),
         }
 
@@ -413,11 +428,13 @@ class AccountService:
     @staticmethod
     def _calculate_first_statement_date(first_purchase: datetime) -> datetime:
         """Calculate first statement date for Raiffeisenbank."""
-        first_statement_date = first_purchase.replace(day=2)
+        first_statement_date = first_purchase.replace(
+            day=constants.STATEMENT_DAY_NUMBER,
+        )
         if first_statement_date <= first_purchase:
             first_statement_date = (
-                first_statement_date + relativedelta(months=1)
-            ).replace(day=2)
+                first_statement_date + relativedelta(months=constants.ONE)
+            ).replace(day=constants.STATEMENT_DAY_NUMBER)
         return first_statement_date
 
     @staticmethod
@@ -427,9 +444,9 @@ class AccountService:
         """Generate list of statement dates for 3 months."""
         statement_dates = []
         current_date = first_statement_date
-        for _ in range(3):
+        for _ in range(constants.STATEMENT_DATES_COUNT):
             statement_dates.append(current_date)
-            current_date = current_date + relativedelta(months=1)
+            current_date = current_date + relativedelta(months=constants.ONE)
         return statement_dates
 
     @staticmethod
@@ -442,8 +459,12 @@ class AccountService:
         remaining_debt = initial_debt
 
         for i, statement_date in enumerate(statement_dates):
-            min_payment = remaining_debt * Decimal('0.03')
-            payment_due_date = statement_date + relativedelta(days=20)
+            min_payment = remaining_debt * Decimal(
+                str(constants.MIN_PAYMENT_PERCENTAGE),
+            )
+            payment_due_date = statement_date + relativedelta(
+                days=constants.PAYMENT_DUE_DAYS,
+            )
 
             payments_schedule.append(
                 {
@@ -462,7 +483,9 @@ class AccountService:
     @staticmethod
     def _calculate_grace_end_date(first_purchase: datetime) -> datetime:
         """Calculate grace end date for Raiffeisenbank."""
-        grace_end = first_purchase + relativedelta(days=110)
+        grace_end = first_purchase + relativedelta(
+            days=constants.GRACE_PERIOD_DAYS_RAIFFEISENBANK,
+        )
         return timezone.make_aware(
             datetime.combine(grace_end.date(), time.max),
         )
@@ -527,9 +550,11 @@ class AccountService:
             'days_until_grace_end': (
                 (grace_end.date() - timezone.now().date()).days
                 if timezone.now() <= grace_end
-                else 0
+                else constants.ZERO
             ),
-            'is_overdue': timezone.now() > grace_end and final_debt > 0,
+            'is_overdue': (
+                timezone.now() > grace_end and final_debt > constants.ZERO
+            ),
         }
 
 
@@ -567,7 +592,7 @@ def get_sum_all_accounts(accounts):
     return sum(acc.balance for acc in accounts)
 
 
-def get_transfer_money_log(user, limit=10):
+def get_transfer_money_log(user, limit=constants.TRANSFER_MONEY_LOG_LIMIT):
     """Get recent transfer logs for a user."""
     return TransferMoneyLog.objects.filter(user=user).order_by(
         '-exchange_date',

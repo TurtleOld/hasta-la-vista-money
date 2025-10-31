@@ -6,6 +6,7 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from django.shortcuts import get_object_or_404
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.models import Loan, PaymentSchedule
 from hasta_la_vista_money.users.models import User
 
@@ -15,7 +16,9 @@ def calculate_annuity_schedule(
     annual_rate: float,
     months: int,
 ) -> dict:
-    monthly_rate = annual_rate / 100 / 12
+    monthly_rate = (
+        annual_rate / constants.PERCENT_TO_DECIMAL / constants.MONTHS_IN_YEAR
+    )
     payment_raw = (
         amount
         * (monthly_rate * (1 + monthly_rate) ** months)
@@ -27,29 +30,42 @@ def calculate_annuity_schedule(
     payments = []
     remaining = amount
     for i in range(1, months):
-        payment = round(payment_raw, 2)
+        payment = round(payment_raw, constants.DECIMAL_PLACES_PRECISION)
         interest = remaining * monthly_rate
-        principal = payment - round(interest, 2)
+        principal = payment - round(
+            interest, constants.DECIMAL_PLACES_PRECISION
+        )
         schedule.append(
             {
                 'month': i,
                 'payment': payment,
-                'interest': round(interest, 2),
-                'principal': round(principal, 2),
-                'balance': max(0, round(remaining - principal, 2)),
+                'interest': round(interest, constants.DECIMAL_PLACES_PRECISION),
+                'principal': round(
+                    principal, constants.DECIMAL_PLACES_PRECISION
+                ),
+                'balance': max(
+                    constants.ZERO,
+                    round(
+                        remaining - principal,
+                        constants.DECIMAL_PLACES_PRECISION,
+                    ),
+                ),
             },
         )
         payments.append(payment)
         remaining -= principal
     interest = remaining * monthly_rate
-    last_payment = round(remaining + interest, 2)
+    last_payment = round(
+        remaining + interest,
+        constants.DECIMAL_PLACES_PRECISION,
+    )
     schedule.append(
         {
             'month': months,
             'payment': last_payment,
-            'interest': round(interest, 2),
-            'principal': round(remaining, 2),
-            'balance': 0,
+            'interest': round(interest, constants.DECIMAL_PLACES_PRECISION),
+            'principal': round(remaining, constants.DECIMAL_PLACES_PRECISION),
+            'balance': constants.ZERO,
         },
     )
     payments.append(last_payment)
@@ -58,8 +74,10 @@ def calculate_annuity_schedule(
     return {
         'schedule': schedule,
         'total_payment': total_payment,
-        'overpayment': round(overpayment, 2),
-        'monthly_payment': round(payment_raw, 2),
+        'overpayment': round(overpayment, constants.DECIMAL_PLACES_PRECISION),
+        'monthly_payment': round(
+            payment_raw, constants.DECIMAL_PLACES_PRECISION
+        ),
     }
 
 
@@ -68,7 +86,9 @@ def calculate_differentiated_schedule(
     annual_rate: float,
     months: int,
 ) -> dict:
-    monthly_rate = annual_rate / 100 / 12
+    monthly_rate = (
+        annual_rate / constants.PERCENT_TO_DECIMAL / constants.MONTHS_IN_YEAR
+    )
     principal_payment = amount / months
     schedule = []
     total_payment = 0
@@ -76,15 +96,24 @@ def calculate_differentiated_schedule(
     for i in range(1, months + 1):
         interest = remaining * monthly_rate
         payment = principal_payment + interest
-        payment_rounded = round(payment, 2)
+        payment_rounded = round(payment, constants.DECIMAL_PLACES_PRECISION)
         total_payment += payment_rounded
         schedule.append(
             {
                 'month': i,
                 'payment': payment_rounded,
-                'interest': round(interest, 2),
-                'principal': round(principal_payment, 2),
-                'balance': max(0, round(remaining - principal_payment, 2)),
+                'interest': round(interest, constants.DECIMAL_PLACES_PRECISION),
+                'principal': round(
+                    principal_payment,
+                    constants.DECIMAL_PLACES_PRECISION,
+                ),
+                'balance': max(
+                    constants.ZERO,
+                    round(
+                        remaining - principal_payment,
+                        constants.DECIMAL_PLACES_PRECISION,
+                    ),
+                ),
             },
         )
         remaining -= principal_payment
@@ -92,7 +121,7 @@ def calculate_differentiated_schedule(
     return {
         'schedule': schedule,
         'total_payment': total_payment,
-        'overpayment': round(overpayment, 2),
+        'overpayment': round(overpayment, constants.DECIMAL_PLACES_PRECISION),
     }
 
 

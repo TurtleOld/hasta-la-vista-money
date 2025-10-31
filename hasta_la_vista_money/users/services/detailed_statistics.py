@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -32,12 +33,16 @@ from hasta_la_vista_money.users.models import User
 
 
 def _month_bounds_for_offset(today: date, offset: int) -> tuple[date, date]:
-    month_date = today.replace(day=1) - timedelta(days=offset * 30)
+    month_date = today.replace(day=1) - timedelta(
+        days=offset * constants.DAYS_IN_MONTH_APPROXIMATE,
+    )
     month_start = month_date.replace(day=1)
     if offset == 0:
         month_end = today
     else:
-        next_month = month_start + timedelta(days=32)
+        next_month = month_start + timedelta(
+            days=constants.DAYS_FOR_NEXT_MONTH_CALC,
+        )
         month_end = next_month.replace(day=1) - timedelta(days=1)
     return month_start, month_end
 
@@ -65,7 +70,7 @@ def _top_categories_qs(
         model.objects.filter(user=user, date__gte=year_start)
         .values('category__name')
         .annotate(total=Sum('amount'))
-        .order_by('-total')[:10]
+        .order_by('-total')[: constants.TOP_CATEGORIES_LIMIT]
     )
 
 
@@ -101,21 +106,23 @@ def _build_chart(user: User) -> dict[str, list]:
         return {'labels': [], 'expense_data': [], 'income_data': []}
 
     exp_series = [
-        exp_amts[exp_dates.index(d)] if d in exp_dates else 0 for d in all_dates
+        exp_amts[exp_dates.index(d)] if d in exp_dates else constants.ZERO
+        for d in all_dates
     ]
     inc_series = [
-        inc_amts[inc_dates.index(d)] if d in inc_dates else 0 for d in all_dates
+        inc_amts[inc_dates.index(d)] if d in inc_dates else constants.ZERO
+        for d in all_dates
     ]
 
-    if len(all_dates) == 1:
+    if len(all_dates) == constants.ONE:
         d = date.fromisoformat(all_dates[0])
         dt = datetime.combine(d, time.min)
         aware = timezone.make_aware(dt)
-        prev = (aware - timedelta(days=1)).date().isoformat()
+        prev = (aware - timedelta(days=constants.ONE)).date().isoformat()
 
         all_dates = [prev, *all_dates]
-        exp_series = [0, *exp_series]
-        inc_series = [0, *inc_series]
+        exp_series = [constants.ZERO, *exp_series]
+        inc_series = [constants.ZERO, *inc_series]
 
     return {
         'labels': all_dates,
@@ -143,7 +150,11 @@ def _balances_and_delta(
         now_val = balances_now.get(cur, 0.0)
         prev_val = balances_prev.get(cur, 0.0)
         diff = now_val - prev_val
-        pct = (diff / prev_val * 100) if prev_val else None
+        pct = (
+            (diff / prev_val * constants.PERCENTAGE_MULTIPLIER)
+            if prev_val
+            else None
+        )
         delta[cur] = {'delta': diff, 'percent': pct}
 
     return dict(balances_now), delta
@@ -154,7 +165,7 @@ def _six_months_data(
     today: date,
 ) -> list[dict[str, float | str]]:
     out = []
-    for i in range(6):
+    for i in range(constants.STATISTICS_MONTHS_COUNT):
         m_start, m_end = _month_bounds_for_offset(today, i)
         exp_sum = _sum_amount_for_period(
             Expense,
@@ -181,7 +192,9 @@ def _six_months_data(
     out.reverse()
     for m in out:
         m['savings_percent'] = (
-            m['savings'] / m['income'] * 100 if m['income'] > 0 else 0
+            m['savings'] / m['income'] * constants.PERCENTAGE_MULTIPLIER
+            if m['income'] > constants.ZERO
+            else constants.ZERO
         )
     return out
 
@@ -194,8 +207,10 @@ def _card_months_block(
     history: list[dict] = []
     now = timezone.now()
 
-    for i in range(12):
-        month_date = today_month - relativedelta(months=11 - i)
+    for i in range(constants.STATISTICS_YEAR_MONTHS_COUNT):
+        month_date = today_month - relativedelta(
+            months=constants.STATISTICS_YEAR_MONTHS_COUNT - constants.ONE - i,
+        )
         purchase_start = month_date.replace(day=1)
         last_day = monthrange(
             purchase_start.year,
@@ -213,7 +228,7 @@ def _card_months_block(
                 account=card,
                 date__range=(purchase_start, purchase_end),
             ).aggregate(total=Sum('amount'))['total']
-            or 0
+            or constants.ZERO
         )
         rcpt_expense = (
             Receipt.objects.filter(
@@ -221,7 +236,7 @@ def _card_months_block(
                 receipt_date__range=(purchase_start, purchase_end),
                 operation_type=RECEIPT_OPERATION_PURCHASE,
             ).aggregate(total=Sum('total_sum'))['total']
-            or 0
+            or constants.ZERO
         )
         rcpt_return = (
             Receipt.objects.filter(
@@ -229,13 +244,15 @@ def _card_months_block(
                 receipt_date__range=(purchase_start, purchase_end),
                 operation_type=RECEIPT_OPERATION_RETURN,
             ).aggregate(total=Sum('total_sum'))['total']
-            or 0
+            or constants.ZERO
         )
 
         debt = float(exp_sum) + float(rcpt_expense) - float(rcpt_return)
 
         if getattr(card, 'bank', None) == 'SBERBANK':
-            grace_end_date = purchase_start + relativedelta(months=3)
+            grace_end_date = purchase_start + relativedelta(
+                months=constants.GRACE_PERIOD_MONTHS_SBERBANK,
+            )
             last_grace_day = monthrange(
                 grace_end_date.year,
                 grace_end_date.month,
@@ -258,9 +275,11 @@ def _card_months_block(
             grace_end = purchase_end
 
         days_left = (
-            (grace_end.date() - now.date()).days if now <= grace_end else 0
+            (grace_end.date() - now.date()).days
+            if now <= grace_end
+            else constants.ZERO
         )
-        overdue = now > grace_end and debt > 0
+        overdue = now > grace_end and debt > constants.ZERO
 
         m = {
             'month': purchase_start.strftime('%m.%Y'),
@@ -274,7 +293,10 @@ def _card_months_block(
         months.append(m)
 
         final_debt = debt
-        if getattr(card, 'bank', None) == 'RAIFFAISENBANK' and debt > 0:
+        if (
+            getattr(card, 'bank', None) == 'RAIFFAISENBANK'
+            and debt > constants.ZERO
+        ):
             schedule = AccountService.calculate_raiffeisenbank_payment_schedule(
                 card,
                 purchase_start,
@@ -303,16 +325,16 @@ def _apply_payments_to_months(
     left = total
     for m in months:
         debt = float(m['debt_for_month'])
-        if debt <= 0:
-            m['payments_made'] = 0
-            m['remaining_debt'] = 0
+        if debt <= constants.ZERO:
+            m['payments_made'] = constants.ZERO
+            m['remaining_debt'] = constants.ZERO
             m['is_paid'] = True
             continue
         paid = min(left, debt)
         m['payments_made'] = paid
-        m['remaining_debt'] = max(debt - paid, 0)
-        m['is_paid'] = m['remaining_debt'] <= 0
-        left = max(left - paid, 0)
+        m['remaining_debt'] = max(debt - paid, constants.ZERO)
+        m['is_paid'] = m['remaining_debt'] <= constants.ZERO
+        left = max(left - paid, constants.ZERO)
 
 
 def _build_payment_schedule(
@@ -322,7 +344,7 @@ def _build_payment_schedule(
 ) -> list[dict]:
     schedule: list[dict] = []
     for m in months:
-        if m['debt_for_month'] <= 0:
+        if m['debt_for_month'] <= constants.ZERO:
             continue
         due = m['grace_end'].strftime('%d.%m.%Y')
         if getattr(card, 'bank', None) == 'RAIFFAISENBANK':
@@ -417,7 +439,7 @@ def get_user_detailed_statistics(user: User) -> dict[str, Any]:
     transfer_money_log = (
         TransferMoneyLog.objects.filter(user=user)
         .select_related('to_account', 'from_account')
-        .order_by('-created_at')[:20]
+        .order_by('-created_at')[: constants.TRANSFER_LOG_LIMIT]
     )
 
     accounts = Account.objects.filter(user=user).select_related('user')

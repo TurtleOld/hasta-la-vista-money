@@ -123,12 +123,18 @@ ACCOUNT_TYPE_CREDIT_CARD: Final = 'CreditCard'
 RECEIPT_CATEGORY_NAME: Final = 'Покупки по чекам'
 
 # Числа
+ZERO: Final = 0
 ONE: Final = 1
 TWO: Final = 2
+THREE: Final = 3
+FIVE: Final = 5
+SIX: Final = 6
 SAVINGS_THRESHOLD: Final = 0.2
 TEN: Final = 10
+TWELVE: Final = 12
 TWENTY: Final = 20
 THIRTY: Final = 30
+THIRTY_TWO: Final = 32
 FORTY: Final = 40
 FIFTY: Final = 50
 SIXTY: Final = 60
@@ -136,6 +142,7 @@ SEVENTY: Final = 70
 EIGHTY: Final = 80
 NINTY: Final = 90
 ONE_HUNDRED: Final = 100
+ONE_HUNDRED_TEN: Final = 110
 ONE_HUNDRED_FIFTY: Final = 150
 TWO_HUNDRED: Final = 200
 TWO_HUNDRED_FIFTY: Final = 250
@@ -193,6 +200,52 @@ TOLERANCE_SMALL: Final = 0.01
 TOLERANCE_MEDIUM: Final = 0.1
 DECIMAL_PLACES_PRECISION: Final = 2
 DECIMAL_PLACES_ROUNDING: Final = 1
+
+# Константы для форм и полей ввода
+QUANTITY_STEP: Final = 0.01
+MAX_DIGITS_DECIMAL_FIELD: Final = 10
+FORMSET_EXTRA_DEFAULT: Final = 1
+
+# Константы для файлов
+MAX_FILE_SIZE_MB: Final = 5
+BYTES_IN_KB: Final = 1024
+KB_IN_MB: Final = 1024
+MAX_FILE_SIZE_BYTES: Final = MAX_FILE_SIZE_MB * KB_IN_MB * BYTES_IN_KB
+
+# Константы для кредитов и процентов
+PERCENT_TO_DECIMAL: Final = 100
+MONTHS_IN_YEAR: Final = 12
+GRACE_PERIOD_MONTHS_SBERBANK: Final = 3
+GRACE_PERIOD_DAYS_RAIFFEISENBANK: Final = 110
+STATEMENT_DAY_NUMBER: Final = 2
+MIN_PAYMENT_PERCENTAGE: Final = 0.03
+PAYMENT_DUE_DAYS: Final = 20
+ONE_SECOND: Final = 1
+STATEMENT_DATES_COUNT: Final = 3
+
+# Константы для пагинации и лимитов
+RECENT_ITEMS_LIMIT: Final = 5
+PAGINATE_BY_DEFAULT: Final = 10
+TOP_CATEGORIES_LIMIT: Final = 10
+RECEIPTS_DISTINCT_LIMIT: Final = 10
+TRANSFER_MONEY_LOG_LIMIT: Final = 10
+RECEIPT_RANK_LIMIT: Final = 10
+RECENT_RECEIPTS_LIMIT: Final = 20
+TRANSFER_LOG_LIMIT: Final = 20
+
+# Константы для статистики
+STATISTICS_MONTHS_COUNT: Final = 6
+STATISTICS_YEAR_MONTHS_COUNT: Final = 12
+DAYS_IN_MONTH_APPROXIMATE: Final = 30
+DAYS_FOR_NEXT_MONTH_CALC: Final = 32
+
+# Константы для AI
+AI_TEMPERATURE: Final = 0.6
+NDS_RATE_10_PERCENT: Final = 10
+NDS_RATE_20_PERCENT: Final = 20
+
+# Константы для процентов
+PERCENTAGE_MULTIPLIER: Final = 100
 
 # Константы для известных значений расчётов
 ANNUITY_MONTHLY_PAYMENT_100K_12M: Final = 8884.88

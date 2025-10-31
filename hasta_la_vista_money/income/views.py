@@ -65,7 +65,7 @@ class IncomeView(
     View for displaying user's incomes with filtering and chart data.
     """
 
-    paginate_by = 10
+    paginate_by = constants.PAGINATE_BY_DEFAULT
     model = Income
     filterset_class = IncomeFilter
     context_object_name = 'incomes'
