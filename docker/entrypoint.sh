@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# Ждем подключения к базе данных
 echo "Waiting for database connection..."
 while ! .venv/bin/python manage.py check --database default 2>&1; do
     echo "Database is unavailable - sleeping"
