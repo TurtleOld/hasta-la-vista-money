@@ -23,6 +23,7 @@ from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
 from django_filters.fields import ModelChoiceField
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     OPERATION_TYPES,
@@ -169,9 +170,14 @@ class ProductForm(ModelForm[Product]):
     quantity = DecimalField(
         label=_('Количество продукта'),
         help_text=_('Укажите количество продукта'),
-        widget=NumberInput(attrs={'class': 'quantity', 'step': '0.01'}),
-        max_digits=10,
-        decimal_places=2,
+        widget=NumberInput(
+            attrs={
+                'class': 'quantity',
+                'step': str(constants.QUANTITY_STEP),
+            },
+        ),
+        max_digits=constants.MAX_DIGITS_DECIMAL_FIELD,
+        decimal_places=constants.DECIMAL_PLACES_PRECISION,
     )
     amount = DecimalField(
         label=_('Итоговая сумма за продукт'),
@@ -193,7 +199,7 @@ class ProductForm(ModelForm[Product]):
     def clean(self):
         cleaned_data = super().clean()
         quantity = cleaned_data.get('quantity')
-        if quantity is not None and quantity <= 0:
+        if quantity is not None and quantity <= constants.ZERO:
             self.add_error(
                 'quantity',
                 _('Количество должно быть больше 0.'),
@@ -201,7 +207,11 @@ class ProductForm(ModelForm[Product]):
         return cleaned_data
 
 
-ProductFormSet = formset_factory(ProductForm, extra=1, can_delete=True)
+ProductFormSet = formset_factory(
+    ProductForm,
+    extra=constants.FORMSET_EXTRA_DEFAULT,
+    can_delete=True,
+)
 
 
 class ReceiptForm(ModelForm[Receipt]):
@@ -292,7 +302,7 @@ class UploadImageForm(Form):
             attrs={
                 'class': 'form-control',
                 'accept': '.jpg,.jpeg,.png',
-                'data-max-size': '5242880',
+                'data-max-size': str(constants.MAX_FILE_SIZE_BYTES),
             },
         ),
         validators=[validate_image_jpg_png],
@@ -308,6 +318,11 @@ class UploadImageForm(Form):
 
     def clean_file(self):
         file = self.cleaned_data.get('file')
-        if file and file.size > 5 * 1024 * 1024:
-            raise ValidationError(_('Размер файла не должен превышать 5MB'))
+        if file and file.size > constants.MAX_FILE_SIZE_BYTES:
+            raise ValidationError(
+                _(
+                    f'Размер файла не должен превышать '
+                    f'{constants.MAX_FILE_SIZE_MB}MB',
+                ),
+            )
         return file

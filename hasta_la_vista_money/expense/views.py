@@ -84,7 +84,7 @@ class ExpenseView(
 
     model = Expense
     template_name = constants.EXPENSE_TEMPLATE
-    paginate_by = 10
+    paginate_by = constants.PAGINATE_BY_DEFAULT
     context_object_name = 'expense'
     filterset_class = ExpenseFilter
     no_permission_url = reverse_lazy('login')

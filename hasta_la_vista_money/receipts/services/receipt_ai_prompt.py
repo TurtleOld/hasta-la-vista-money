@@ -17,6 +17,8 @@ from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
 from openai import OpenAI as OpenAIDefault
 
+from hasta_la_vista_money import constants
+
 T = TypeVar('T')
 
 
@@ -53,7 +55,7 @@ def analyze_image_with_ai(image_base64: UploadedFile):
         )
         response = client.chat.completions.create(
             model=model,
-            temperature=0.6,
+            temperature=constants.AI_TEMPERATURE,
             messages=[
                 {
                     'role': 'system',

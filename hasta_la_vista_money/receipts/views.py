@@ -69,7 +69,7 @@ class ReceiptView(
     BaseView,
     FilterView[Receipt],
 ):
-    paginate_by: int = 10
+    paginate_by: int = constants.PAGINATE_BY_DEFAULT
     model = Receipt
     filterset_class = ReceiptFilter
     no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
@@ -550,7 +550,7 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
             .values('product__product_name')
             .annotate(products=Count('product__product_name'))
             .order_by('-products')
-            .distinct()[:10]
+            .distinct()[: constants.RECEIPTS_DISTINCT_LIMIT]
         )
 
         purchased_products_by_month = (
@@ -567,7 +567,7 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
                     order_by=F('total_quantity').desc(),
                 ),
             )
-            .filter(rank__lte=10)
+            .filter(rank__lte=constants.RECEIPT_RANK_LIMIT)
             .order_by('month', 'rank')
         )
 
@@ -822,7 +822,7 @@ def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
     receipts = (
         receipt_queryset.select_related('seller', 'user')
         .prefetch_related('product')
-        .order_by('-receipt_date')[:20]
+        .order_by('-receipt_date')[: constants.RECENT_RECEIPTS_LIMIT]
     )
     return render(
         request,
