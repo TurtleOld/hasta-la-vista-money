@@ -3,6 +3,7 @@ from typing import Any
 from django.db.models import Count, Sum
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income
@@ -20,20 +21,20 @@ def get_user_statistics(user: User) -> dict[str, Any]:
         total_balance=Sum('balance'),
         accounts_count=Count('id'),
     )
-    total_balance = accounts_data['total_balance'] or 0
-    accounts_count = accounts_data['accounts_count'] or 0
+    total_balance = accounts_data['total_balance'] or constants.ZERO
+    accounts_count = accounts_data['accounts_count'] or constants.ZERO
 
     current_month_expenses = (
         Expense.objects.filter(user=user, date__gte=month_start).aggregate(
             total=Sum('amount'),
         )['total']
-        or 0
+        or constants.ZERO
     )
     current_month_income = (
         Income.objects.filter(user=user, date__gte=month_start).aggregate(
             total=Sum('amount'),
         )['total']
-        or 0
+        or constants.ZERO
     )
 
     last_month_expenses = (
@@ -42,7 +43,7 @@ def get_user_statistics(user: User) -> dict[str, Any]:
             date__gte=last_month,
             date__lt=month_start,
         ).aggregate(total=Sum('amount'))['total']
-        or 0
+        or constants.ZERO
     )
     last_month_income = (
         Income.objects.filter(
@@ -50,18 +51,18 @@ def get_user_statistics(user: User) -> dict[str, Any]:
             date__gte=last_month,
             date__lt=month_start,
         ).aggregate(total=Sum('amount'))['total']
-        or 0
+        or constants.ZERO
     )
 
     recent_expenses = (
         Expense.objects.filter(user=user)
         .select_related('category', 'account')
-        .order_by('-date')[:5]
+        .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
     )
     recent_incomes = (
         Income.objects.filter(user=user)
         .select_related('category', 'account')
-        .order_by('-date')[:5]
+        .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
     )
 
     receipts_count = Receipt.objects.filter(user=user).count()
@@ -70,7 +71,7 @@ def get_user_statistics(user: User) -> dict[str, Any]:
         Expense.objects.filter(user=user, date__gte=month_start)
         .values('category__name')
         .annotate(total=Sum('amount'))
-        .order_by('-total')[:5]
+        .order_by('-total')[: constants.RECENT_ITEMS_LIMIT]
     )
 
     return {

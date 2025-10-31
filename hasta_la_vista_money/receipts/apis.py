@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
@@ -390,7 +391,7 @@ class SellerAutocompleteAPIView(APIView):
         seller_names: QuerySet[Seller, str] = sellers.values_list(
             'name_seller',
             flat=True,
-        ).distinct()[:10]
+        ).distinct()[: constants.RECEIPTS_DISTINCT_LIMIT]
         return Response({'results': list(seller_names)})
 
 
@@ -436,5 +437,5 @@ class ProductAutocompleteAPIView(APIView):
         product_names: QuerySet[Product, str] = products.values_list(
             'product_name',
             flat=True,
-        ).distinct()[:10]
+        ).distinct()[: constants.RECEIPTS_DISTINCT_LIMIT]
         return Response({'results': list(product_names)})
