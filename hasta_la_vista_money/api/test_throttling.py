@@ -78,17 +78,13 @@ class LoginRateThrottleTestCase(TestCase):
     @override_settings(
         REST_FRAMEWORK={
             'DEFAULT_THROTTLE_RATES': {
-                'login': '5/min',
+                'login': '2/min',
             }
         }
     )
     def test_login_throttle_blocks_after_limit(self):
         """Проверяет, что после двух запросов следующий блокируется."""
         throttle = LoginRateThrottle()
-        throttle.rate = '2/min'
-        throttle.num_requests, throttle.duration = throttle.parse_rate(
-            throttle.rate
-        )
         request = self.factory.post('/api/auth/token/')
         request.user = self.user
 
@@ -195,7 +191,7 @@ class AnonLoginRateThrottleTestCase(TestCase):
     @override_settings(
         REST_FRAMEWORK={
             'DEFAULT_THROTTLE_RATES': {
-                'anon_login': '5/min',
+                'anon_login': '2/min',
             }
         }
     )
@@ -203,10 +199,6 @@ class AnonLoginRateThrottleTestCase(TestCase):
         """Проверяет, что после двух
         анонимных запросов следующий блокируется."""
         throttle = AnonLoginRateThrottle()
-        throttle.rate = '2/min'
-        throttle.num_requests, throttle.duration = throttle.parse_rate(
-            throttle.rate
-        )
         request = self.factory.post('/api/auth/token/')
         request.user = Mock()
         request.user.is_authenticated = False
