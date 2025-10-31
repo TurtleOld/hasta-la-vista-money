@@ -1,171 +1,254 @@
 # Hasta La Vista, Money! 💰
 
 [![hasta-la-vista-money](https://github.com/TurtleOld/hasta-la-vista-money/actions/workflows/hasta_la_vista_money.yaml/badge.svg)](https://github.com/TurtleOld/hasta-la-vista-money/actions/workflows/hasta_la_vista_money.yaml)
-[![](https://app.codacy.com/project/badge/Grade/5281be8b483c4c7d8576bdf0ad15d94d)](https://app.codacy.com/gh/TurtleOld/hasta-la-vista-money/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
-[![](https://app.codacy.com/project/badge/Coverage/5281be8b483c4c7d8576bdf0ad15d94d)](https://app.codacy.com/gh/TurtleOld/hasta-la-vista-money/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_coverage)
-[![](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=code)](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=code)
-[![](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=blanks)](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=blanks)
-[![](https://wakatime.com/badge/github/TurtleOld/hasta-la-vista-money.svg)](https://wakatime.com/badge/github/TurtleOld/hasta-la-vista-money)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/5281be8b483c4c7d8576bdf0ad15d94d)](https://app.codacy.com/gh/TurtleOld/hasta-la-vista-money/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![Codacy Coverage](https://app.codacy.com/project/badge/Coverage/5281be8b483c4c7d8576bdf0ad15d94d)](https://app.codacy.com/gh/TurtleOld/hasta-la-vista-money/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_coverage)
+[![Lines of Code](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=code)](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=code)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
 
-**[🇷🇺 Русская версия](README.md)**
+**[🇷🇺 Русская версия](README.md)** | **[📚 Documentation](https://hasta-la-vista-money.readthedocs.io/)**
+
+---
 
 ## 🎯 About the Project
 
-**Hasta La Vista, Money!** is a modern personal finance management system designed as a self-hosted open source solution for efficient income and expense tracking and budget planning. The application provides a complete set of tools for financial state control with an intuitive interface and powerful analytics.
+**Hasta La Vista, Money!** is a modern open-source personal finance management system designed for self-hosting. Take full control of your financial data with powerful analytics and budget planning tools.
 
-**Key Features:**
-- 🏠 **Self-hosted** — full control over data and infrastructure
-- 🔓 **Open Source** — transparent code and customization capabilities
-- 👤 **Personal Use** — all users have full administrator rights
-- 🔒 **Privacy** — your financial data stays on your server
+### ✨ Why Hasta La Vista, Money?
 
-### ✨ Key Capabilities
+- 🏠 **Self-hosted** — full control over your data and infrastructure
+- 🔓 **Open Source** — transparent code, free Apache 2.0 license
+- 🔒 **Privacy** — your financial data stays on your server only
+- 🚀 **Easy Deployment** — one-click launch via Docker Compose
+- 🌐 **Multi-language** — fully localized interface (Russian/English)
 
-#### 💳 **Account Management**
-- Create and manage multiple accounts
+---
+
+## 💡 Key Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 💳 Financial Accounting
+- Manage multiple accounts
 - Support for various currencies
-- Automatic total balance calculation
-- Transaction history for each account
+- Track income and expenses
+- Hierarchical categorization
+- Complete transaction history
 
-#### 📊 **Income and Expense Tracking**
-- Categorization of income and expenses
-- Hierarchical category structure
-- Quick operation addition
-- Filtering and search by dates, categories, amounts
-
-#### 🧾 **Receipt Processing**
-- Automatic receipt recognition
-- QR code data import
-- Manual purchase entry
-- Purchase analysis by sellers and products
-
-#### 📈 **Budgeting and Planning**
-- Monthly income and expense planning
-- Comparison of plans with actual data
-- Budget execution tracking
-- Limit exceed notifications
-
-#### 📋 **Reports and Analytics**
-- Detailed statistics by periods
-- Income and expense dynamics charts
-- Category analysis
+### 📊 Analytics & Reports
+- Detailed statistics by period
+- Interactive charts and graphs
+- Expense analysis by category
 - Data export in JSON format
 
-#### 👤 **Personal Profile**
-- **Statistics Dashboard**: total balance, monthly income/expenses, savings
-- **Tab System**: personal information, statistics, recent operations, settings
-- **Detailed Analytics**: 6-month charts, top categories, savings percentage
-- **Smart Notifications**: low balance warnings, expense exceed alerts, recommendations
-- **Data Export**: complete user data export
+### 🧾 Receipt Processing
+- AI-powered receipt recognition
+- QR code data import
+- Manual purchase entry
+- Analysis by sellers and products
 
-#### 🔔 **Notification System**
-- Automatic notifications about important events
-- Low account balance warnings
-- Notifications about expenses exceeding income
-- Encouragement for good savings
-- Recommendations for improving financial state
+</td>
+<td width="50%">
 
-### 🛠 Technology Stack
+### 📈 Budgeting
+- Income and expense planning
+- Plan vs actual comparison
+- Budget execution tracking
+- Smart limit notifications
 
-- **Backend**: Django 5.2, Python 3.12
-- **Frontend**: Bootstrap 5, Chart.js, jQuery
-- **Database**: PostgreSQL
-- **Containerization**: Docker & Docker Compose
-- **Security**: CSP, CSRF protection, authentication
-- **Internationalization**: Russian language support
+### 👤 Personal Profile
+- Dashboard with statistics
+- 6-month detailed analytics
+- Top expense categories
+- Optimization recommendations
 
-### 🚀 Quick Start
+### 🔔 Notification System
+- Low balance warnings
+- Expense excess alerts
+- Savings encouragement
+- Personalized recommendations
 
-#### Requirements
+</td>
+</tr>
+</table>
+
+---
+
+## 🛠 Technology Stack
+
+| Component | Technologies |
+|-----------|-------------|
+| **Backend** | Django 5.2, Python 3.12, Django REST Framework |
+| **Frontend** | Bootstrap 5, Chart.js, jQuery, HTMX |
+| **Database** | PostgreSQL, SQLite (for development) |
+| **API** | RESTful API, OpenAPI/Swagger documentation |
+| **Containerization** | Docker, Docker Compose |
+| **Security** | CSP, CSRF, JWT authentication, django-axes |
+| **Monitoring** | Sentry, Django Debug Toolbar |
+| **Localization** | i18n, full Russian/English support |
+
+---
+
+## 🚀 Quick Start
+
+### Minimum Requirements
 - Docker and Docker Compose
-- PostgreSQL (optional, can use SQLite for development)
+- 1 GB free disk space
+- 512 MB RAM
 
-#### Installation
+### Installation in 3 Steps
 
-1. **Clone the repository:**
 ```bash
+# 1. Clone the repository
 git clone https://github.com/TurtleOld/hasta-la-vista-money.git
 cd hasta-la-vista-money
-```
 
-2. **Create a `.env` file in the project root:**
-```bash
-# Required settings
-SECRET_KEY=your-secret-key-here  # You can generate it with: make secretkey
+# 2. Create .env file with minimal settings
+cat > .env << EOF
+SECRET_KEY=$(openssl rand -base64 50)
 DEBUG=false
-DATABASE_URL=postgres://username:password@localhost:5432/hasta_la_vista_money
 ALLOWED_HOSTS=localhost,127.0.0.1
-```
+EOF
 
-3. **Start the application:**
-```bash
+# 3. Start the application
 docker compose up -d
 ```
 
-4. **Open your browser and go to:**
+**Done!** Open your browser and go to [http://127.0.0.1:8090](http://127.0.0.1:8090)
+
+> 💡 **Tip:** On first launch, the application will automatically create an SQLite database. For production, PostgreSQL is recommended.
+
+### First Steps
+1. Register an administrator account
+2. Create your first financial account
+3. Add income and expense categories
+4. Start tracking your finances!
+
+> 📚 **Complete installation and configuration guide:** [hasta-la-vista-money.readthedocs.io](https://hasta-la-vista-money.readthedocs.io/)
+
+---
+
+## ⚙️ Configuration
+
+The application is configured through environment variables in the `.env` file:
+
+### Main Variables
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `SECRET_KEY` | Django secret key (required) | - |
+| `DEBUG` | Debug mode | `false` |
+| `ALLOWED_HOSTS` | Allowed hosts | `localhost,127.0.0.1` |
+| `DATABASE_URL` | PostgreSQL URL (optional) | SQLite |
+| `LANGUAGE_CODE` | Interface language | `en` |
+| `TIME_ZONE` | Timezone | `UTC` |
+
+### Additional Features
+
+- **PostgreSQL**: Recommended for production instead of SQLite
+- **AI for receipts**: OpenAI API integration for automatic receipt recognition
+- **Sentry**: Error monitoring in production
+- **Redis**: Caching for improved performance
+
+> 📖 **Full list of variables and configuration examples:** [Configuration Documentation](https://hasta-la-vista-money.readthedocs.io/)
+
+---
+
+## 🔒 Security
+
+The application includes multiple protection mechanisms:
+
+- ✅ CSRF and XSS attack protection
+- ✅ Content Security Policy (CSP)
+- ✅ JWT authentication for API
+- ✅ All input data validation
+- ✅ SQL injection protection via Django ORM
+- ✅ API rate limiting (django-axes)
+- ✅ Secure password storage (bcrypt)
+
+---
+
+## 📚 Documentation
+
+Complete documentation is hosted on **[Read the Docs](https://hasta-la-vista-money.readthedocs.io/)**:
+
+- 📖 [User Guide](https://hasta-la-vista-money.readthedocs.io/) — getting started, features, usage examples
+- 🛠 [Developer Guide](https://hasta-la-vista-money.readthedocs.io/contribute/) — architecture, development, testing
+- 🔌 [API Documentation](https://hasta-la-vista-money.readthedocs.io/api/) — REST API, endpoints, request examples
+
+---
+
+## 🤝 Contributing
+
+We welcome any contribution to the project! Here's how you can help:
+
+### Ways to Contribute
+
+- 🐛 **Report a bug** — create an [Issue](https://github.com/TurtleOld/hasta-la-vista-money/issues)
+- 💡 **Suggest an improvement** — describe your idea in [Discussions](https://github.com/TurtleOld/hasta-la-vista-money/discussions)
+- 🔧 **Fix an issue** — create a Pull Request
+- 📝 **Improve documentation** — docs always need updates
+- 🌍 **Add translation** — help localize the application
+
+### Development Process
+
+```bash
+# 1. Fork and clone the repository
+git clone https://github.com/YOUR_USERNAME/hasta-la-vista-money.git
+
+# 2. Create a branch for your feature
+git checkout -b feature/amazing-feature
+
+# 3. Install development dependencies
+uv sync --dev
+
+# 4. Make changes and test
+uv run pytest
+
+# 5. Create a Pull Request
 ```
-http://127.0.0.1:8090
+
+> 📋 **More details:** [Contributor Guide](https://hasta-la-vista-money.readthedocs.io/contribute/)
+
+---
+
+## 💬 Community & Support
+
+- 💬 [GitHub Discussions](https://github.com/TurtleOld/hasta-la-vista-money/discussions) — discussions, questions, ideas
+- 🐛 [Issue Tracker](https://github.com/TurtleOld/hasta-la-vista-money/issues) — bugs and feature requests
+- 📧 [Email](mailto:dev@pavlovteam.ru) — direct contact with developer
+
+---
+
+## 📄 License
+
+This project is licensed under the **Apache License 2.0**.  
+See the [LICENSE](LICENSE) file for details.
+
+```
+Copyright 2022-2025 Alexander Pavlov (TurtleOld)
+Licensed under the Apache License, Version 2.0
 ```
 
-5. **Create an account:**
-- Go to the registration page
-- Fill out the registration form
-- Done! Now you have full access to all system functions
+---
 
-### 📱 Main Features
+## ⭐ Support the Project
 
-#### 🎯 **Complete Financial Management Functionality:**
-- ✅ Registration and authentication
-- ✅ Personal profile management with extended analytics
-- ✅ Add and edit accounts
-- ✅ Income and expense tracking
-- ✅ Operation categorization
-- ✅ Budget planning
-- ✅ Financial state analysis
-- ✅ Data export
-- ✅ Notifications and recommendations
-- ✅ Receipt and QR code processing
-- ✅ Detailed statistics and reports
-- ✅ System management (monitoring, settings, backup)
+If you like **Hasta La Vista, Money!**, give it a ⭐ on GitHub!  
+It helps other users discover the project.
 
-### 🔧 Configuration
+---
 
-#### Environment Variables
+<div align="center">
 
-## Required Variables
+**Hasta La Vista, Money!** — your reliable assistant in personal finance management! 💪
 
-| Variable           | Description                                   | Example/Default Value                        | Required?   |
-|--------------------|-----------------------------------------------|----------------------------------------------|-------------|
-| `SECRET_KEY`       | Django secret key                             | `base64 /dev/urandom \| head -c50`           | Yes         |
-| `DEBUG`            | Debug mode                                    | `false` (production) / `true` (dev)          | Yes         |
-| `ALLOWED_HOSTS`    | Allowed hosts (comma-separated)               | `localhost,127.0.0.1`                        | Yes         |
+Made with ❤️ in Russia
 
-### For PostgreSQL (if used, otherwise not needed):
+[🌐 Website](https://hasta-la-vista-money.readthedocs.io/) • [📖 Documentation](https://hasta-la-vista-money.readthedocs.io/) • [🐛 Bug Reports](https://github.com/TurtleOld/hasta-la-vista-money/issues)
 
-| Variable           | Description                                   | Example/Default Value                        | Required?   |
-|--------------------|-----------------------------------------------|----------------------------------------------|-------------|
-| `DATABASE_URL`     | Database URL (PostgreSQL)                     | `postgres://user:pass@localhost:5432/db`     | Yes (if not SQLite) |
-| `POSTGRES_DB`      | DB name (alternative to DATABASE_URL)          | `postgres`                                   | No          |
-| `POSTGRES_USER`    | DB user                                       | `postgres`                                   | No          |
-| `POSTGRES_PASSWORD`| DB password                                   | `postgres`                                   | No          |
-| `POSTGRES_HOST`    | DB host                                       | `localhost`                                  | No          |
-| `POSTGRES_PORT`    | DB port                                       | `5432`                                       | No          |
-
-## Optional Variables
-
-| Variable                  | Description                                   | Example/Default Value                        | Required?   |
-|--------------------------|-----------------------------------------------|----------------------------------------------|-------------|
-| `BASE_URL`               | Base site URL                                 | `http://127.0.0.1:8000/`                     | No          |
-| `CSRF_TRUSTED_ORIGINS`   | Trusted origins for CSRF                      | `https://example.com`                        | No          |
-| `LOCAL_IPS`              | Local IPs for INTERNAL_IPS                    | `127.0.0.1`                                  | No          |
-| `LANGUAGE_CODE`          | Interface language                            | `en`                                         | No          |
-| `TIME_ZONE`              | Timezone                                      | `Europe/Moscow`                              | No          |
-| `SENTRY_DSN`             | Sentry DSN                                    | `<dsn>`                                      | No          |
-| `SENTRY_ENVIRONMENT`     | Sentry environment                            | `production`                                 | No          |
-| `SENTRY_ENDPOINT`        | report_uri for CSP                            | `<url>`                                      | No          |
-| `URL_CSP_SCRIPT_SRC`     | Additional CSP sources                        | `https://mycdn.com`                          | No          |
-| `SESSION_COOKIE_AGE`     | Session cookie lifetime (seconds)              | `31536000`                                   | No          |
-| `SESSION_COOKIE_HTTPONLY`| HttpOnly for session cookie                   | `True`                                       | No          |
-| `SESSION_COOKIE_NAME`    | Session cookie name                           | `sessionid`                                  | No          |
-| `SESSION_COOKIE_SAMESITE`| SameSite for session cookie                   | `Lax`                                        | No          |
-| `SESSION_COOKIE_SECURE`
+</div>
