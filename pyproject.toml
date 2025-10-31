@@ -40,6 +40,7 @@ dependencies = [
     "python-decouple>=3.8",
     "django-redis>=6.0.0",
     "django-compressor>=4.5.1",
+    "pyright>=1.1.407",
 ]
 
 [project.optional-dependencies]
@@ -240,5 +241,5 @@ replace = "current_version = {new_version}"
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
 
-[mypy.plugins.django-stubs]
+[tool.django-stubs]
 django_settings_module = "config.django.base"
