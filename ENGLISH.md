@@ -169,6 +169,9 @@ The application includes multiple protection mechanisms:
 - ✅ SQL injection protection via Django ORM
 - ✅ API rate limiting (django-axes)
 - ✅ Secure password storage (bcrypt)
+- ✅ Docker containers run as non-privileged user (appuser)
+- ✅ Minimal file and directory permissions
+- ✅ Proper access rights configured for static files and logs
 
 ---
 

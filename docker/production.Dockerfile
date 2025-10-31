@@ -16,20 +16,23 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-RUN pip install uv==0.7.13
+RUN pip install uv==0.7.13 && \
+    adduser --disabled-password --gecos '' appuser
 
-ENV PATH="/root/.local/bin:$PATH"
+ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv venv .venv && uv pip install -e '.[dev]' && \
-    adduser --disabled-password --gecos '' appuser
+RUN uv venv .venv && uv pip install -e '.[dev]'
 
 COPY --from=builder /app /app
 
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/.venv/bin/granian && \
-    chmod +x /app/.venv/bin/python
+    chmod +x /app/.venv/bin/python && \
+    mkdir -p /app/staticfiles /app/logs && \
+    chown -R appuser:appuser /app/staticfiles /app/logs && \
+    chmod -R 755 /app/staticfiles /app/logs
 
 USER appuser
 
