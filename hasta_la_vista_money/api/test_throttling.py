@@ -1,6 +1,6 @@
 from unittest.mock import Mock, patch
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from rest_framework.test import APIRequestFactory
 
 from hasta_la_vista_money.api.throttling import (
