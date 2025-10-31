@@ -31,7 +31,7 @@ class ExpenseService:
         self.user = user
         self.request = request
 
-    def get_categories(self) -> QuerySet[ExpenseCategory]:
+    def get_categories(self) -> QuerySet[dict[str, Any]]:
         """Get expense categories for the user."""
         return (
             self.user.category_expense_users.select_related('user')
@@ -229,7 +229,7 @@ class ExpenseCategoryService:
         self.user = user
         self.request = request
 
-    def get_categories(self) -> QuerySet[ExpenseCategory]:
+    def get_categories(self) -> QuerySet[dict[str, Any]]:
         """Get expense categories for the user."""
         return (
             self.user.category_expense_users.select_related('parent_category')
