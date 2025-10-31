@@ -40,8 +40,8 @@ jobs:
         with:
           python-version: '3.14.0'
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@8491d1d9a36c62443856ebb0fe897f2255bdc242
+      - name: Setup uv and Handle Its Cache
+        uses: hynek/setup-cached-uv@v2.3.0
         with:
           version: "0.9.7"
 
