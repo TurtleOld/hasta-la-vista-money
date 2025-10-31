@@ -21,27 +21,15 @@ class LoginRateThrottleTestCase(TestCase):
             password='testpass123',
         )
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'login': '5/min',
-            }
-        }
-    )
     def test_scope_attribute(self):
         """Тест проверки атрибута scope."""
+        LoginRateThrottle.THROTTLE_RATES = {'login': '5/min'}
         throttle = LoginRateThrottle()
         self.assertEqual(throttle.scope, 'login')
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'login': '5/min',
-            }
-        }
-    )
     def test_get_cache_key_with_authenticated_user(self):
         """Тест получения ключа кэша для аутентифицированного пользователя."""
+        LoginRateThrottle.THROTTLE_RATES = {'login': '5/min'}
         throttle = LoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
         request.user = self.user
@@ -52,15 +40,9 @@ class LoginRateThrottleTestCase(TestCase):
         self.assertIn('login', cache_key)
         self.assertIn(str(self.user.id), cache_key)
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'login': '5/min',
-            }
-        }
-    )
     def test_get_cache_key_with_anonymous_user(self):
         """Тест получения ключа кэша для анонимного пользователя."""
+        LoginRateThrottle.THROTTLE_RATES = {'login': '5/min'}
         throttle = LoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
         request.user = Mock()
@@ -75,15 +57,9 @@ class LoginRateThrottleTestCase(TestCase):
             self.assertIn('login', cache_key)
             self.assertIn('anonymous_ident', cache_key)
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'login': '2/min',
-            }
-        }
-    )
     def test_login_throttle_blocks_after_limit(self):
         """Проверяет, что после двух запросов следующий блокируется."""
+        LoginRateThrottle.THROTTLE_RATES = {'login': '2/min'}
         throttle = LoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
         request.user = self.user
@@ -114,27 +90,15 @@ class AnonLoginRateThrottleTestCase(TestCase):
             password='testpass123',
         )
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'anon': '5/min',
-            }
-        }
-    )
     def test_scope_attribute(self):
         """Тест проверки атрибута scope."""
+        AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '5/min'}
         throttle = AnonLoginRateThrottle()
         self.assertEqual(throttle.scope, 'anon')
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'anon': '5/min',
-            }
-        }
-    )
     def test_get_cache_key_with_authenticated_user(self):
         """Тест что аутентифицированные пользователи не ограничиваются."""
+        AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '5/min'}
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
         request.user = self.user
@@ -143,15 +107,9 @@ class AnonLoginRateThrottleTestCase(TestCase):
 
         self.assertIsNone(cache_key)
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'anon': '5/min',
-            }
-        }
-    )
     def test_get_cache_key_with_anonymous_user(self):
         """Тест получения ключа кэша для анонимного пользователя."""
+        AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '5/min'}
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
         request.user = Mock()
@@ -166,15 +124,9 @@ class AnonLoginRateThrottleTestCase(TestCase):
             self.assertIn('anon', cache_key)
             self.assertIn('anonymous_ident', cache_key)
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'anon': '5/min',
-            }
-        }
-    )
     def test_get_cache_key_with_unauthenticated_user(self):
         """Тест получения ключа кэша для неаутентифицированного пользователя."""
+        AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '5/min'}
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
         request.user = None
@@ -188,16 +140,10 @@ class AnonLoginRateThrottleTestCase(TestCase):
             self.assertIn('anon', cache_key)
             self.assertIn('unauthenticated_ident', cache_key)
 
-    @override_settings(
-        REST_FRAMEWORK={
-            'DEFAULT_THROTTLE_RATES': {
-                'anon': '2/min',
-            }
-        }
-    )
     def test_anon_throttle_blocks_after_limit(self):
         """Проверяет, что после двух
         анонимных запросов следующий блокируется."""
+        AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '2/min'}
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
         request.user = Mock()
