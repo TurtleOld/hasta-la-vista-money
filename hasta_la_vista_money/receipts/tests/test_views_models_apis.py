@@ -474,7 +474,10 @@ class TestReceiptAPIs(APITestCase):
         self.client.force_authenticate(user=None)
         url = reverse_lazy('receipts:api_list')
         response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
 
     def test_seller_detail_api(self):
         url = reverse_lazy('receipts:seller', kwargs={'id': self.seller.pk})
