@@ -11,6 +11,7 @@ from csp.constants import NONCE, SELF
 from decouple import config
 from sentry_sdk.integrations.django import DjangoIntegration
 
+import hasta_la_vista_money.api.schema  # noqa: F401
 from config.django.sessions import *  # noqa: F403
 from config.django.validator_env import EnvironmentValidator
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
@@ -66,6 +67,7 @@ THIRD_PARTY_APPS = [
     'locale',
     'rest_framework',
     'rest_framework.authtoken',
+    'drf_spectacular',
     'rosetta',
     'django_structlog',
 ]
@@ -380,6 +382,7 @@ REST_FRAMEWORK = {
         'login': '5/min',
         'anon_login': '5/min',
     },
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # Sentry
@@ -406,6 +409,44 @@ ROSETTA_UWSGI_AUTO_RELOAD = True
 # Crispy Forms
 CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
 CRISPY_TEMPLATE_PACK = 'bootstrap5'
+
+# drf-spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Hasta La Vista, Money! API',
+    'DESCRIPTION': 'API для системы домашнего учета финансов',
+    'VERSION': '1.7.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'AUTHENTICATION_WHITELIST': [
+        'hasta_la_vista_money.authentication.authentication.CookieJWTAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'TAGS': [
+        {
+            'name': 'authentication',
+            'description': 'Аутентификация и авторизация',
+        },
+        {
+            'name': 'finance_account',
+            'description': 'Управление финансовыми счетами',
+        },
+        {'name': 'receipts', 'description': 'Управление чеками'},
+        {'name': 'budget', 'description': 'Управление бюджетом'},
+    ],
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'CookieJWTAuth': {
+                'type': 'apiKey',
+                'in': 'cookie',
+                'name': 'access_token',
+                'description': 'JWT токен в HttpOnly cookie для аутентификации',
+            },
+        },
+    },
+    'SWAGGER_UI_SETTINGS': {
+        'persistAuthorization': True,
+    },
+}
 
 # Debug Toolbar
 INSTALLED_APPS, MIDDLEWARE = DebugToolbarSetup.do_settings(

@@ -1,6 +1,10 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+)
 
 from hasta_la_vista_money.users.views import (
     IndexView,
@@ -86,6 +90,16 @@ urlpatterns = [
         'api/',
         include('hasta_la_vista_money.api.urls', namespace='api'),
         name='api',
+    ),
+    path(
+        'api/schema/',
+        SpectacularAPIView.as_view(schema=None),
+        name='schema',
+    ),
+    path(
+        'api/schema/swagger-ui/',
+        SpectacularSwaggerView.as_view(url_name='schema', schema=None),
+        name='swagger-ui',
     ),
     path('admin/', admin.site.urls),
     path('__debug__/', include('debug_toolbar.urls')),

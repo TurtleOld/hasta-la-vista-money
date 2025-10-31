@@ -1,6 +1,8 @@
 from typing import Any, ClassVar
 
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -25,9 +27,28 @@ from hasta_la_vista_money.authentication.authentication import (
 from hasta_la_vista_money.users.models import User
 
 
+@extend_schema(
+    tags=['authentication'],
+    summary='Получение JWT токенов из сессии',
+    description='Получить JWT токены на основе Django session аутентификации',
+    request=None,
+    responses={
+        200: OpenApiResponse(
+            description='Токены успешно получены',
+            response={
+                'type': 'object',
+                'properties': {
+                    'success': {'type': 'boolean'},
+                },
+            },
+        ),
+        400: OpenApiResponse(description='Ошибка при получении токенов'),
+    },
+)
 class SessionTokenObtainView(APIView):
     """Get JWT tokens based on Django session authentication"""
 
+    schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
 
     def _validate_user(self, user) -> None:
@@ -52,9 +73,18 @@ class SessionTokenObtainView(APIView):
             return clear_auth_cookies(response)
 
 
+@extend_schema(
+    tags=['authentication'],
+    summary='Получение JWT токенов',
+    description=(
+        'Получить access и refresh JWT токены с установкой '
+        'HttpOnly cookies'
+    ),
+)
 class CookieTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view that sets HttpOnly cookies"""
 
+    schema = AutoSchema()
     throttle_classes: ClassVar[list] = [
         AnonLoginRateThrottle,
         LoginRateThrottle,
@@ -90,8 +120,18 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             return response
 
 
+@extend_schema(
+    tags=['authentication'],
+    summary='Обновление JWT токена',
+    description=(
+        'Обновить access токен используя refresh токен из '
+        'HttpOnly cookie'
+    ),
+)
 class CookieTokenRefreshView(TokenRefreshView):
     """Custom token refresh view that works with HttpOnly cookies"""
+
+    schema = AutoSchema()
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         refresh_token = get_refresh_token_from_cookie(request)
