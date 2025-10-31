@@ -117,19 +117,19 @@ class AnonLoginRateThrottleTestCase(TestCase):
     @override_settings(
         REST_FRAMEWORK={
             'DEFAULT_THROTTLE_RATES': {
-                'anon_login': '5/min',
+                'anon': '5/min',
             }
         }
     )
     def test_scope_attribute(self):
         """Тест проверки атрибута scope."""
         throttle = AnonLoginRateThrottle()
-        self.assertEqual(throttle.scope, 'anon_login')
+        self.assertEqual(throttle.scope, 'anon')
 
     @override_settings(
         REST_FRAMEWORK={
             'DEFAULT_THROTTLE_RATES': {
-                'anon_login': '5/min',
+                'anon': '5/min',
             }
         }
     )
@@ -146,7 +146,7 @@ class AnonLoginRateThrottleTestCase(TestCase):
     @override_settings(
         REST_FRAMEWORK={
             'DEFAULT_THROTTLE_RATES': {
-                'anon_login': '5/min',
+                'anon': '5/min',
             }
         }
     )
@@ -163,13 +163,13 @@ class AnonLoginRateThrottleTestCase(TestCase):
             cache_key = throttle.get_cache_key(request, None)
 
             self.assertIsNotNone(cache_key)
-            self.assertIn('anon_login', cache_key)
+            self.assertIn('anon', cache_key)
             self.assertIn('anonymous_ident', cache_key)
 
     @override_settings(
         REST_FRAMEWORK={
             'DEFAULT_THROTTLE_RATES': {
-                'anon_login': '5/min',
+                'anon': '5/min',
             }
         }
     )
@@ -185,13 +185,13 @@ class AnonLoginRateThrottleTestCase(TestCase):
             cache_key = throttle.get_cache_key(request, None)
 
             self.assertIsNotNone(cache_key)
-            self.assertIn('anon_login', cache_key)
+            self.assertIn('anon', cache_key)
             self.assertIn('unauthenticated_ident', cache_key)
 
     @override_settings(
         REST_FRAMEWORK={
             'DEFAULT_THROTTLE_RATES': {
-                'anon_login': '2/min',
+                'anon': '2/min',
             }
         }
     )
