@@ -10,6 +10,8 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import ListView
+from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -281,7 +283,37 @@ class PlanningExpenseDict(TypedDict):
     amount: Decimal
 
 
+@extend_schema(
+    tags=['budget'],
+    summary='Данные расходов для бюджета',
+    description=(
+        'Получить агрегированные данные расходов по категориям и месяцам'
+    ),
+    responses={
+        200: OpenApiResponse(
+            description='Агрегированные данные расходов',
+            response={
+                'type': 'object',
+                'properties': {
+                    'months': {
+                        'type': 'array',
+                        'items': {'type': 'string', 'format': 'date'},
+                    },
+                    'categories': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                    },
+                    'data': {
+                        'type': 'array',
+                        'items': {'type': 'object'},
+                    },
+                },
+            },
+        ),
+    },
+)
 class ExpenseBudgetAPIView(APIView):
+    schema = AutoSchema()
     permission_classes: ClassVar[list] = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
@@ -300,7 +332,37 @@ class ExpenseBudgetAPIView(APIView):
         return Response(data)
 
 
+@extend_schema(
+    tags=['budget'],
+    summary='Данные доходов для бюджета',
+    description=(
+        'Получить агрегированные данные доходов по категориям и месяцам'
+    ),
+    responses={
+        200: OpenApiResponse(
+            description='Агрегированные данные доходов',
+            response={
+                'type': 'object',
+                'properties': {
+                    'months': {
+                        'type': 'array',
+                        'items': {'type': 'string', 'format': 'date'},
+                    },
+                    'categories': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                    },
+                    'data': {
+                        'type': 'array',
+                        'items': {'type': 'object'},
+                    },
+                },
+            },
+        ),
+    },
+)
 class IncomeBudgetAPIView(APIView):
+    schema = AutoSchema()
     permission_classes: ClassVar[list] = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):

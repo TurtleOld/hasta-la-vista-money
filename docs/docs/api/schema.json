@@ -1,0 +1,1979 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "",
+        "version": "0.0.0"
+    },
+    "paths": {
+        "/api/auth/token/": {
+            "post": {
+                "operationId": "api_auth_token_create",
+                "description": "Получить access и refresh JWT токены с установкой HttpOnly cookies",
+                "summary": "Получение JWT токенов",
+                "tags": [
+                    "authentication"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenObtainPair"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenObtainPair"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenObtainPair"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenObtainPair"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/token/refresh/": {
+            "post": {
+                "operationId": "api_auth_token_refresh_create",
+                "description": "Обновить access токен используя refresh токен из HttpOnly cookie",
+                "summary": "Обновление JWT токена",
+                "tags": [
+                    "authentication"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefresh"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefresh"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefresh"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenRefresh"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/auth/token/session/": {
+            "post": {
+                "operationId": "api_auth_token_session_create",
+                "description": "Получить JWT токены на основе Django session аутентификации",
+                "summary": "Получение JWT токенов из сессии",
+                "tags": [
+                    "authentication"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Токены успешно получены"
+                    },
+                    "400": {
+                        "description": "Ошибка при получении токенов"
+                    }
+                }
+            }
+        },
+        "/api/budget/api/expenses/": {
+            "get": {
+                "operationId": "api_budget_api_expenses_retrieve",
+                "description": "Получить агрегированные данные расходов по категориям и месяцам",
+                "summary": "Данные расходов для бюджета",
+                "tags": [
+                    "budget"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "months": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string",
+                                                "format": "date"
+                                            }
+                                        },
+                                        "categories": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Агрегированные данные расходов"
+                    }
+                }
+            }
+        },
+        "/api/budget/api/incomes/": {
+            "get": {
+                "operationId": "api_budget_api_incomes_retrieve",
+                "description": "Получить агрегированные данные доходов по категориям и месяцам",
+                "summary": "Данные доходов для бюджета",
+                "tags": [
+                    "budget"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "months": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string",
+                                                "format": "date"
+                                            }
+                                        },
+                                        "categories": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Агрегированные данные доходов"
+                    }
+                }
+            }
+        },
+        "/api/finaccount/list/": {
+            "get": {
+                "operationId": "api_finaccount_list_list",
+                "description": "Получить список всех счетов текущего пользователя или создать новый счет",
+                "summary": "Список и создание счетов",
+                "tags": [
+                    "finance_account"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Account"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "api_finaccount_list_create",
+                "description": "Получить список всех счетов текущего пользователя или создать новый счет",
+                "summary": "Список и создание счетов",
+                "tags": [
+                    "finance_account"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/receipts/api/product-autocomplete/": {
+            "get": {
+                "operationId": "api_receipts_api_product_autocomplete_retrieve",
+                "description": "Поиск товаров по названию для автодополнения",
+                "summary": "Автодополнение товаров",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Поисковый запрос для фильтрации товаров"
+                    }
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "results": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Список найденных товаров"
+                    }
+                }
+            }
+        },
+        "/api/receipts/api/seller-autocomplete/": {
+            "get": {
+                "operationId": "api_receipts_api_seller_autocomplete_retrieve",
+                "description": "Поиск продавцов по имени для автодополнения",
+                "summary": "Автодополнение продавцов",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Поисковый запрос для фильтрации продавцов"
+                    }
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "results": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Список найденных продавцов"
+                    }
+                }
+            }
+        },
+        "/api/receipts/create-receipt/": {
+            "get": {
+                "operationId": "api_receipts_create_receipt_list",
+                "description": "Создать новый чек с товарами и продавцом",
+                "summary": "Создать чек",
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Receipt"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "Неверные данные"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "api_receipts_create_receipt_create",
+                "description": "Создать новый чек с товарами и продавцом",
+                "summary": "Создать чек",
+                "tags": [
+                    "receipts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Receipt"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "Неверные данные"
+                    }
+                }
+            }
+        },
+        "/api/receipts/delete/{id}/": {
+            "delete": {
+                "operationId": "api_receipts_delete_destroy",
+                "description": "Удалить чек по его ID",
+                "summary": "Удалить чек",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Чек успешно удален"
+                    },
+                    "404": {
+                        "description": "Чек не найден"
+                    }
+                }
+            }
+        },
+        "/api/receipts/image/": {
+            "post": {
+                "operationId": "api_receipts_image_create",
+                "description": "Отправить изображение чека в формате data URL для обработки",
+                "summary": "Обработка изображения чека",
+                "tags": [
+                    "receipts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImageData"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImageData"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImageData"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data_url": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Изображение успешно получено"
+                    },
+                    "400": {
+                        "description": "Неверные данные"
+                    }
+                }
+            }
+        },
+        "/api/receipts/list/": {
+            "get": {
+                "operationId": "api_receipts_list_list",
+                "description": "Получить список всех чеков текущего пользователя",
+                "summary": "Список чеков",
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Receipt"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "api_receipts_list_create",
+                "description": "Получить список всех чеков текущего пользователя",
+                "summary": "Список чеков",
+                "tags": [
+                    "receipts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Receipt"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/receipts/seller/{id}/": {
+            "get": {
+                "operationId": "api_receipts_seller_retrieve",
+                "description": "Получить детальную информацию о продавце по ID",
+                "summary": "Детали продавца",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Seller"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/receipts/seller/create/": {
+            "post": {
+                "operationId": "api_receipts_seller_create_create",
+                "description": "Создать нового продавца для текущего пользователя",
+                "summary": "Создать продавца",
+                "tags": [
+                    "receipts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Seller"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Seller"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Seller"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Seller"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "Неверные данные"
+                    }
+                }
+            }
+        },
+        "/authentication/token/": {
+            "post": {
+                "operationId": "authentication_token_create",
+                "description": "Получить access и refresh JWT токены с установкой HttpOnly cookies",
+                "summary": "Получение JWT токенов",
+                "tags": [
+                    "authentication"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenObtainPair"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenObtainPair"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenObtainPair"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenObtainPair"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/authentication/token/refresh/": {
+            "post": {
+                "operationId": "authentication_token_refresh_create",
+                "description": "Обновить access токен используя refresh токен из HttpOnly cookie",
+                "summary": "Обновление JWT токена",
+                "tags": [
+                    "authentication"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefresh"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefresh"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefresh"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TokenRefresh"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/authentication/token/session/": {
+            "post": {
+                "operationId": "authentication_token_session_create",
+                "description": "Получить JWT токены на основе Django session аутентификации",
+                "summary": "Получение JWT токенов из сессии",
+                "tags": [
+                    "authentication"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Токены успешно получены"
+                    },
+                    "400": {
+                        "description": "Ошибка при получении токенов"
+                    }
+                }
+            }
+        },
+        "/budget/api/expenses/": {
+            "get": {
+                "operationId": "budget_api_expenses_retrieve",
+                "description": "Получить агрегированные данные расходов по категориям и месяцам",
+                "summary": "Данные расходов для бюджета",
+                "tags": [
+                    "budget"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "months": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string",
+                                                "format": "date"
+                                            }
+                                        },
+                                        "categories": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Агрегированные данные расходов"
+                    }
+                }
+            }
+        },
+        "/budget/api/incomes/": {
+            "get": {
+                "operationId": "budget_api_incomes_retrieve",
+                "description": "Получить агрегированные данные доходов по категориям и месяцам",
+                "summary": "Данные доходов для бюджета",
+                "tags": [
+                    "budget"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "months": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string",
+                                                "format": "date"
+                                            }
+                                        },
+                                        "categories": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Агрегированные данные доходов"
+                    }
+                }
+            }
+        },
+        "/finance_account/list/": {
+            "get": {
+                "operationId": "finance_account_list_list",
+                "description": "Получить список всех счетов текущего пользователя или создать новый счет",
+                "summary": "Список и создание счетов",
+                "tags": [
+                    "finance_account"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Account"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "finance_account_list_create",
+                "description": "Получить список всех счетов текущего пользователя или создать новый счет",
+                "summary": "Список и создание счетов",
+                "tags": [
+                    "finance_account"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/hasta-la-vista-money/list/": {
+            "get": {
+                "operationId": "hasta_la_vista_money_list_list",
+                "description": "Получить список всех счетов текущего пользователя или создать новый счет",
+                "summary": "Список и создание счетов",
+                "tags": [
+                    "finance_account"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Account"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "hasta_la_vista_money_list_create",
+                "description": "Получить список всех счетов текущего пользователя или создать новый счет",
+                "summary": "Список и создание счетов",
+                "tags": [
+                    "finance_account"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/receipts/api/product-autocomplete/": {
+            "get": {
+                "operationId": "receipts_api_product_autocomplete_retrieve",
+                "description": "Поиск товаров по названию для автодополнения",
+                "summary": "Автодополнение товаров",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Поисковый запрос для фильтрации товаров"
+                    }
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "results": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Список найденных товаров"
+                    }
+                }
+            }
+        },
+        "/receipts/api/seller-autocomplete/": {
+            "get": {
+                "operationId": "receipts_api_seller_autocomplete_retrieve",
+                "description": "Поиск продавцов по имени для автодополнения",
+                "summary": "Автодополнение продавцов",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Поисковый запрос для фильтрации продавцов"
+                    }
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "results": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Список найденных продавцов"
+                    }
+                }
+            }
+        },
+        "/receipts/create-receipt/": {
+            "get": {
+                "operationId": "receipts_create_receipt_list",
+                "description": "Создать новый чек с товарами и продавцом",
+                "summary": "Создать чек",
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Receipt"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "Неверные данные"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "receipts_create_receipt_create",
+                "description": "Создать новый чек с товарами и продавцом",
+                "summary": "Создать чек",
+                "tags": [
+                    "receipts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Receipt"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "Неверные данные"
+                    }
+                }
+            }
+        },
+        "/receipts/delete/{id}/": {
+            "delete": {
+                "operationId": "receipts_delete_destroy",
+                "description": "Удалить чек по его ID",
+                "summary": "Удалить чек",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Чек успешно удален"
+                    },
+                    "404": {
+                        "description": "Чек не найден"
+                    }
+                }
+            }
+        },
+        "/receipts/image/": {
+            "post": {
+                "operationId": "receipts_image_create",
+                "description": "Отправить изображение чека в формате data URL для обработки",
+                "summary": "Обработка изображения чека",
+                "tags": [
+                    "receipts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImageData"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImageData"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImageData"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data_url": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Изображение успешно получено"
+                    },
+                    "400": {
+                        "description": "Неверные данные"
+                    }
+                }
+            }
+        },
+        "/receipts/list/": {
+            "get": {
+                "operationId": "receipts_list_list",
+                "description": "Получить список всех чеков текущего пользователя",
+                "summary": "Список чеков",
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Receipt"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "receipts_list_create",
+                "description": "Получить список всех чеков текущего пользователя",
+                "summary": "Список чеков",
+                "tags": [
+                    "receipts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Receipt"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Receipt"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/receipts/seller/{id}/": {
+            "get": {
+                "operationId": "receipts_seller_retrieve",
+                "description": "Получить детальную информацию о продавце по ID",
+                "summary": "Детали продавца",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "receipts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Seller"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/receipts/seller/create/": {
+            "post": {
+                "operationId": "receipts_seller_create_create",
+                "description": "Создать нового продавца для текущего пользователя",
+                "summary": "Создать продавца",
+                "tags": [
+                    "receipts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Seller"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Seller"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Seller"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Seller"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "Неверные данные"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Account": {
+                "type": "object",
+                "description": "Serializer for Account model.\n\nConverts Account model instances to JSON format for API responses,\nincluding essential account information like name, balance, and currency.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name_account": {
+                        "type": "string",
+                        "maxLength": 250
+                    },
+                    "balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,18}(?:\\.\\d{0,2})?$"
+                    },
+                    "currency": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CurrencyEnum"
+                            }
+                        ],
+                        "title": "Валюта",
+                        "description": "Валюта счёта (например, RUB, USD)\n\n* `RUB` - Российский рубль\n* `USD` - Доллар США\n* `EUR` - Евро\n* `GBP` - Британский фунт\n* `CZK` - Чешская крона\n* `PLN` - Польский злотый\n* `TRY` - Турецкая лира\n* `CNH` - Китайский юань"
+                    },
+                    "type_account": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TypeAccountEnum"
+                            }
+                        ],
+                        "title": "Тип счёта"
+                    },
+                    "bank": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/BankEnum"
+                            }
+                        ],
+                        "title": "Банк",
+                        "description": "Банк, выпустивший карту или обслуживающий счёт\n\n* `-` - —\n* `SBERBANK` - Сбербанк\n* `RAIFFAISENBANK` - Райффайзенбанк"
+                    },
+                    "limit_credit": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,18}(?:\\.\\d{0,2})?$",
+                        "nullable": true,
+                        "title": "Кредитный лимит",
+                        "description": "Только для кредитных карт и кредитных счетов"
+                    },
+                    "payment_due_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true,
+                        "title": "Дата платежа",
+                        "description": "Только для кредитных карт и кредитных счетов"
+                    },
+                    "grace_period_days": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "nullable": true,
+                        "title": "Длительность льготного периода (дней)",
+                        "description": "Для кредитных карт: сколько дней длится беспроцентный период (например, 120)"
+                    }
+                },
+                "required": [
+                    "id"
+                ]
+            },
+            "BankEnum": {
+                "enum": [
+                    "-",
+                    "SBERBANK",
+                    "RAIFFAISENBANK"
+                ],
+                "type": "string",
+                "description": "* `-` - —\n* `SBERBANK` - Сбербанк\n* `RAIFFAISENBANK` - Райффайзенбанк"
+            },
+            "CurrencyEnum": {
+                "enum": [
+                    "RUB",
+                    "USD",
+                    "EUR",
+                    "GBP",
+                    "CZK",
+                    "PLN",
+                    "TRY",
+                    "CNH"
+                ],
+                "type": "string",
+                "description": "* `RUB` - Российский рубль\n* `USD` - Доллар США\n* `EUR` - Евро\n* `GBP` - Британский фунт\n* `CZK` - Чешская крона\n* `PLN` - Польский злотый\n* `TRY` - Турецкая лира\n* `CNH` - Китайский юань"
+            },
+            "ImageData": {
+                "type": "object",
+                "properties": {
+                    "data_url": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "data_url"
+                ]
+            },
+            "NullEnum": {
+                "enum": [
+                    null
+                ]
+            },
+            "OperationTypeEnum": {
+                "enum": [
+                    1,
+                    2,
+                    3,
+                    4
+                ],
+                "type": "integer",
+                "description": "* `1` - Покупка\n* `2` - Возврат средств за покупку\n* `3` - Продажа\\Выигрыш\n* `4` - Возврат выигрыша или продажи"
+            },
+            "Product": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "product_name": {
+                        "type": "string",
+                        "maxLength": 1000
+                    },
+                    "category": {
+                        "type": "string",
+                        "maxLength": 250
+                    },
+                    "price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "quantity": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$",
+                        "title": "Количество"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "nds_type": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "nullable": true
+                    },
+                    "nds_sum": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "Date created"
+                    },
+                    "user": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "user"
+                ]
+            },
+            "Receipt": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "product": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Product"
+                        }
+                    },
+                    "receipt_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "number_receipt": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": -2147483648,
+                        "nullable": true
+                    },
+                    "nds10": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,58}(?:\\.\\d{0,2})?$",
+                        "nullable": true
+                    },
+                    "nds20": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,58}(?:\\.\\d{0,2})?$",
+                        "nullable": true
+                    },
+                    "operation_type": {
+                        "nullable": true,
+                        "minimum": -2147483648,
+                        "maximum": 2147483647,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/OperationTypeEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "total_sum": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$"
+                    },
+                    "manual": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "Date created"
+                    },
+                    "seller": {
+                        "type": "integer"
+                    },
+                    "user": {
+                        "type": "integer"
+                    },
+                    "account": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "account",
+                    "created_at",
+                    "id",
+                    "product",
+                    "receipt_date",
+                    "seller",
+                    "user"
+                ]
+            },
+            "Seller": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name_seller": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "retail_place_address": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 1000
+                    },
+                    "retail_place": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 1000
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "Date created"
+                    },
+                    "user": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "name_seller",
+                    "user"
+                ]
+            },
+            "TokenObtainPair": {
+                "type": "object",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "writeOnly": true
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true
+                    },
+                    "access": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "refresh": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "access",
+                    "password",
+                    "refresh",
+                    "username"
+                ]
+            },
+            "TokenRefresh": {
+                "type": "object",
+                "properties": {
+                    "access": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "refresh": {
+                        "type": "string",
+                        "writeOnly": true
+                    }
+                },
+                "required": [
+                    "access",
+                    "refresh"
+                ]
+            },
+            "TypeAccountEnum": {
+                "enum": [
+                    "Credit",
+                    "Debit",
+                    "CreditCard",
+                    "DebitCard",
+                    "CASH"
+                ],
+                "type": "string",
+                "description": "* `Credit` - Кредитный счёт\n* `Debit` - Дебетовый счёт\n* `CreditCard` - Кредитная карта\n* `DebitCard` - Дебетовая карта\n* `CASH` - Наличные"
+            }
+        },
+        "securitySchemes": {
+            "basicAuth": {
+                "type": "http",
+                "scheme": "basic"
+            },
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid"
+            }
+        }
+    }
+}

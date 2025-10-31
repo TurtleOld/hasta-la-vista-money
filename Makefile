@@ -118,6 +118,12 @@ rabbitmq-stop:
 
 .PHONY: rabbitmq-management
 rabbitmq-management:
-		@echo "RabbitMQ Management UI: http://localhost:15672"
-		@echo "Username: guest"
-		@echo "Password: guest"
+	@echo "RabbitMQ Management UI: http://localhost:15672"
+	@echo "Username: guest"
+	@echo "Password: guest"
+
+.PHONY: export-api-schema
+export-api-schema:
+	@echo "Exporting OpenAPI schema..."
+	@uv run python manage.py spectacular --file docs/docs/api/schema.json --format openapi-json
+	@echo "Schema exported to docs/docs/api/schema.json"

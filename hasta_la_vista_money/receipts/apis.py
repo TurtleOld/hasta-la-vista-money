@@ -3,6 +3,12 @@ import json
 from datetime import datetime
 
 from django.db.models import QuerySet
+from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+)
 from rest_framework import status
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
@@ -20,12 +26,20 @@ from hasta_la_vista_money.receipts.serializers import (
 from hasta_la_vista_money.users.models import User
 
 
+@extend_schema(
+    tags=['receipts'],
+    summary='Список чеков',
+    description='Получить список всех чеков текущего пользователя',
+)
 class ReceiptListAPIView(ListCreateAPIView):
+    schema = AutoSchema()
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
     def get_queryset(self) -> QuerySet[Receipt, Receipt]:  # type: ignore[override]
+        if getattr(self, 'swagger_fake_view', False):
+            return Receipt.objects.none()
         return (
             Receipt.objects.filter(user=self.request.user)
             .select_related('seller', 'account', 'user')
@@ -38,7 +52,13 @@ class ReceiptListAPIView(ListCreateAPIView):
         return Response(serializer.data)
 
 
+@extend_schema(
+    tags=['receipts'],
+    summary='Детали продавца',
+    description='Получить детальную информацию о продавце по ID',
+)
 class SellerDetailAPIView(RetrieveAPIView):
+    schema = AutoSchema()
     queryset = Seller.objects.all()
     serializer_class = SellerSerializer
     permission_classes = (IsAuthenticated,)
@@ -46,6 +66,8 @@ class SellerDetailAPIView(RetrieveAPIView):
     lookup_field = 'id'
 
     def get_queryset(self) -> QuerySet[Seller, Seller]:  # type: ignore[override]
+        if getattr(self, 'swagger_fake_view', False):
+            return Seller.objects.none()
         return Seller.objects.filter(
             user__id=self.request.user.pk,
         ).select_related(
@@ -53,7 +75,27 @@ class SellerDetailAPIView(RetrieveAPIView):
         )
 
 
+@extend_schema(
+    tags=['receipts'],
+    summary='Обработка изображения чека',
+    description='Отправить изображение чека в формате data URL для обработки',
+    request=ImageDataSerializer,
+    responses={
+        200: OpenApiResponse(
+            description='Изображение успешно получено',
+            response={
+                'type': 'object',
+                'properties': {
+                    'message': {'type': 'string'},
+                    'data_url': {'type': 'string'},
+                },
+            },
+        ),
+        400: OpenApiResponse(description='Неверные данные'),
+    },
+)
 class DataUrlAPIView(APIView):
+    schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -86,7 +128,18 @@ class DataUrlAPIView(APIView):
         )
 
 
+@extend_schema(
+    tags=['receipts'],
+    summary='Создать продавца',
+    description='Создать нового продавца для текущего пользователя',
+    request=SellerSerializer,
+    responses={
+        201: SellerSerializer,
+        400: OpenApiResponse(description='Неверные данные'),
+    },
+)
 class SellerCreateAPIView(APIView):
+    schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -98,7 +151,20 @@ class SellerCreateAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    tags=['receipts'],
+    summary='Создать чек',
+    description='Создать новый чек с товарами и продавцом',
+    request=ReceiptSerializer,
+    responses={
+        201: ReceiptSerializer,
+        400: OpenApiResponse(description='Неверные данные'),
+    },
+)
 class ReceiptCreateAPIView(ListCreateAPIView):
+    schema = AutoSchema()
+    queryset = Receipt.objects.none()
+    serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -256,7 +322,17 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             product_data['category'] = ''
 
 
+@extend_schema(
+    tags=['receipts'],
+    summary='Удалить чек',
+    description='Удалить чек по его ID',
+    responses={
+        204: OpenApiResponse(description='Чек успешно удален'),
+        404: OpenApiResponse(description='Чек не найден'),
+    },
+)
 class ReceiptDeleteAPIView(APIView):
+    schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -272,7 +348,36 @@ class ReceiptDeleteAPIView(APIView):
             )
 
 
+@extend_schema(
+    tags=['receipts'],
+    summary='Автодополнение продавцов',
+    description='Поиск продавцов по имени для автодополнения',
+    parameters=[
+        OpenApiParameter(
+            name='q',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Поисковый запрос для фильтрации продавцов',
+            required=False,
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            description='Список найденных продавцов',
+            response={
+                'type': 'object',
+                'properties': {
+                    'results': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                    },
+                },
+            },
+        ),
+    },
+)
 class SellerAutocompleteAPIView(APIView):
+    schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
 
     def get(self, request):
@@ -289,7 +394,36 @@ class SellerAutocompleteAPIView(APIView):
         return Response({'results': list(seller_names)})
 
 
+@extend_schema(
+    tags=['receipts'],
+    summary='Автодополнение товаров',
+    description='Поиск товаров по названию для автодополнения',
+    parameters=[
+        OpenApiParameter(
+            name='q',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='Поисковый запрос для фильтрации товаров',
+            required=False,
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            description='Список найденных товаров',
+            response={
+                'type': 'object',
+                'properties': {
+                    'results': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                    },
+                },
+            },
+        ),
+    },
+)
 class ProductAutocompleteAPIView(APIView):
+    schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
 
     def get(self, request):

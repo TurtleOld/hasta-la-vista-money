@@ -1,6 +1,7 @@
 site_name: Hasta La Vista, Money!
 repo_url: https://github.com/hlvm-app/hasta-la-vista-money.git
 edit_uri: edit/main/docs/
+docs_dir: docs
 nav:
   - Hasta la Vista, Money:
     - Quick start:
@@ -20,6 +21,8 @@ nav:
         - Expenses Page: expenses/expenses_page.md
       - Income management page:
         - Income Page: income/income_page.md
+  - API Documentation:
+      - API Overview: api/api_documentation.md
   - Contribute:
       contribute.md
 theme:
@@ -76,6 +79,8 @@ plugins:
           options:
             show_root_toc_entry: false
             members_order: 'source'
+  - render_swagger:
+      allow_arbitrary_locations: true
 
 
 site_author: 'Alexander Pavlov'

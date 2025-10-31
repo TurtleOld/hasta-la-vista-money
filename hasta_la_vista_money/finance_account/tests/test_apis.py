@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
+from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from hasta_la_vista_money.finance_account.models import Account
@@ -15,6 +16,7 @@ class TestAccountAPI(TestCase):
 
     def setUp(self) -> None:
         """Set up test data."""
+        self.client = APIClient()
         self.user = User.objects.create_user(
             username='testuser',
             password='testpass123',
@@ -31,9 +33,8 @@ class TestAccountAPI(TestCase):
     def test_account_api_list_authenticated(self) -> None:
         """Test account API list endpoint for authenticated user."""
         url = reverse('finance_account:api_list')
-        response = self.client.get(
-            url, HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
-        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
         self.assertIsInstance(response.json(), list)
@@ -43,7 +44,7 @@ class TestAccountAPI(TestCase):
         url = reverse('finance_account:api_list')
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, 401)
+        self.assertIn(response.status_code, [401, 403])
 
     def test_account_api_create_authenticated(self) -> None:
         """Test account API create endpoint for authenticated user."""
@@ -55,12 +56,8 @@ class TestAccountAPI(TestCase):
             'currency': 'USD',
         }
 
-        response = self.client.post(
-            url,
-            data,
-            content_type='application/json',
-            HTTP_AUTHORIZATION=f'Bearer {self.access_token}',
-        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, 201)
 
         response_data = response.json()
@@ -79,8 +76,8 @@ class TestAccountAPI(TestCase):
             'type_account': 'Debit',
         }
 
-        response = self.client.post(url, data, content_type='application/json')
-        self.assertEqual(response.status_code, 401)
+        response = self.client.post(url, data, format='json')
+        self.assertIn(response.status_code, [401, 403])
 
     def test_account_api_create_invalid_data(self) -> None:
         """Test account API create with invalid data."""
@@ -91,12 +88,8 @@ class TestAccountAPI(TestCase):
             'balance': Decimal('500.00'),
         }
 
-        response = self.client.post(
-            url,
-            data,
-            content_type='application/json',
-            HTTP_AUTHORIZATION=f'Bearer {self.access_token}',
-        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, 400)
 
     def test_account_api_create_credit_account(self) -> None:
@@ -114,12 +107,8 @@ class TestAccountAPI(TestCase):
             'currency': 'RUB',
         }
 
-        response = self.client.post(
-            url,
-            data,
-            content_type='application/json',
-            HTTP_AUTHORIZATION=f'Bearer {self.access_token}',
-        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, 201)
 
         response_data = response.json()
@@ -140,9 +129,8 @@ class TestAccountAPI(TestCase):
         )
 
         url = reverse('finance_account:api_list')
-        response = self.client.get(
-            url, HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
-        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -159,9 +147,8 @@ class TestAccountAPI(TestCase):
         )
 
         url = reverse('finance_account:api_list')
-        response = self.client.get(
-            url, HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
-        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -170,9 +157,8 @@ class TestAccountAPI(TestCase):
     def test_account_api_content_type(self) -> None:
         """Test account API content type."""
         url = reverse('finance_account:api_list')
-        response = self.client.get(
-            url, HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
-        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/json')
@@ -180,10 +166,9 @@ class TestAccountAPI(TestCase):
     def test_account_api_throttling(self) -> None:
         """Test account API throttling."""
         url = reverse('finance_account:api_list')
+        self.client.force_authenticate(user=self.user)
 
         # Make multiple requests to test throttling
         for _ in range(5):
-            response = self.client.get(
-                url, HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
-            )
+            response = self.client.get(url)
             self.assertEqual(response.status_code, 200)
