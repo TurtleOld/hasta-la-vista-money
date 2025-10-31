@@ -1,6 +1,6 @@
 from unittest.mock import Mock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIRequestFactory
 
 from hasta_la_vista_money.api.throttling import (
@@ -10,6 +10,14 @@ from hasta_la_vista_money.api.throttling import (
 from hasta_la_vista_money.users.models import User
 
 
+@override_settings(
+    REST_FRAMEWORK={
+        'DEFAULT_THROTTLE_RATES': {
+            'login': '5/min',
+            'anon_login': '5/min',
+        }
+    }
+)
 class LoginRateThrottleTestCase(TestCase):
     """Тесты для класса LoginRateThrottle."""
 
@@ -77,6 +85,14 @@ class LoginRateThrottleTestCase(TestCase):
         throttle.cache.delete(cache_key)
 
 
+@override_settings(
+    REST_FRAMEWORK={
+        'DEFAULT_THROTTLE_RATES': {
+            'login': '5/min',
+            'anon_login': '5/min',
+        }
+    }
+)
 class AnonLoginRateThrottleTestCase(TestCase):
     """Тесты для класса AnonLoginRateThrottle."""
 
