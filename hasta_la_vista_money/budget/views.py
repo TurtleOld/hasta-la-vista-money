@@ -287,8 +287,7 @@ class PlanningExpenseDict(TypedDict):
     tags=['budget'],
     summary='Данные расходов для бюджета',
     description=(
-        'Получить агрегированные данные расходов по '
-        'категориям и месяцам'
+        'Получить агрегированные данные расходов по категориям и месяцам'
     ),
     responses={
         200: OpenApiResponse(
@@ -337,8 +336,7 @@ class ExpenseBudgetAPIView(APIView):
     tags=['budget'],
     summary='Данные доходов для бюджета',
     description=(
-        'Получить агрегированные данные доходов по '
-        'категориям и месяцам'
+        'Получить агрегированные данные доходов по категориям и месяцам'
     ),
     responses={
         200: OpenApiResponse(

@@ -33,7 +33,9 @@ class TestAccountAPI(TestCase):
     def test_account_api_list_authenticated(self) -> None:
         """Test account API list endpoint for authenticated user."""
         url = reverse('finance_account:api_list')
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -57,7 +59,9 @@ class TestAccountAPI(TestCase):
             'currency': 'USD',
         }
 
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
+        )
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, 201)
 
@@ -90,7 +94,9 @@ class TestAccountAPI(TestCase):
             'balance': Decimal('500.00'),
         }
 
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
+        )
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, 400)
 
@@ -109,7 +115,9 @@ class TestAccountAPI(TestCase):
             'currency': 'RUB',
         }
 
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
+        )
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, 201)
 
@@ -131,7 +139,9 @@ class TestAccountAPI(TestCase):
         )
 
         url = reverse('finance_account:api_list')
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -149,7 +159,9 @@ class TestAccountAPI(TestCase):
         )
 
         url = reverse('finance_account:api_list')
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -159,7 +171,9 @@ class TestAccountAPI(TestCase):
     def test_account_api_content_type(self) -> None:
         """Test account API content type."""
         url = reverse('finance_account:api_list')
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
+        )
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
@@ -168,7 +182,9 @@ class TestAccountAPI(TestCase):
     def test_account_api_throttling(self) -> None:
         """Test account API throttling."""
         url = reverse('finance_account:api_list')
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {self.access_token}'
+        )
 
         # Make multiple requests to test throttling
         for _ in range(5):

@@ -77,8 +77,7 @@ class SessionTokenObtainView(APIView):
     tags=['authentication'],
     summary='Получение JWT токенов',
     description=(
-        'Получить access и refresh JWT токены с установкой '
-        'HttpOnly cookies'
+        'Получить access и refresh JWT токены с установкой HttpOnly cookies'
     ),
 )
 class CookieTokenObtainPairView(TokenObtainPairView):
@@ -124,8 +123,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
     tags=['authentication'],
     summary='Обновление JWT токена',
     description=(
-        'Обновить access токен используя refresh токен из '
-        'HttpOnly cookie'
+        'Обновить access токен используя refresh токен из HttpOnly cookie'
     ),
 )
 class CookieTokenRefreshView(TokenRefreshView):
