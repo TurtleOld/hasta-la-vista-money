@@ -12,13 +12,13 @@ from hasta_la_vista_money.users.factories import UserFactory
 class XSSProtectionTestCase(TestCase):
     """Тесты защиты от XSS атак."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Настройка тестовых данных."""
         self.user = UserFactory()
         self.factory = APIRequestFactory()
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
 
-    def test_token_not_in_response_body(self):
+    def test_token_not_in_response_body(self) -> None:
         """Токен не присутствует в теле ответа."""
         response = HttpResponse()
         access_token = 'sensitive_access_token_12345'
@@ -36,7 +36,7 @@ class XSSProtectionTestCase(TestCase):
             access_token,
         )
 
-    def test_token_only_in_cookies(self):
+    def test_token_only_in_cookies(self) -> None:
         """Токен передается только в куках, не в заголовках."""
         response = HttpResponse()
         access_token = 'test_access_token'
@@ -52,7 +52,7 @@ class XSSProtectionTestCase(TestCase):
             access_token,
         )
 
-    def test_cookie_httponly_attribute(self):
+    def test_cookie_httponly_attribute(self) -> None:
         """Кука имеет атрибут HttpOnly=True."""
         response = HttpResponse()
         access_token = 'test_token'
@@ -65,7 +65,7 @@ class XSSProtectionTestCase(TestCase):
         cookie_str = str(cookie)
         self.assertIn('HttpOnly', cookie_str)
 
-    def test_cookie_secure_attribute(self):
+    def test_cookie_secure_attribute(self) -> None:
         """Кука имеет атрибут Secure в соответствии с настройками."""
         response = HttpResponse()
         access_token = 'test_token'
@@ -76,7 +76,7 @@ class XSSProtectionTestCase(TestCase):
         expected_secure = settings.SIMPLE_JWT['AUTH_COOKIE_SECURE']
         self.assertEqual(bool(cookie['secure']), expected_secure)
 
-    def test_cookie_samesite_attribute(self):
+    def test_cookie_samesite_attribute(self) -> None:
         """Кука имеет атрибут SameSite."""
         response = HttpResponse()
         access_token = 'test_token'
@@ -90,7 +90,7 @@ class XSSProtectionTestCase(TestCase):
         cookie_str = str(cookie)
         self.assertIn(f'SameSite={expected_samesite}', cookie_str)
 
-    def test_cookie_path_attribute(self):
+    def test_cookie_path_attribute(self) -> None:
         """Кука имеет корректный путь."""
         response = HttpResponse()
         access_token = 'test_token'
@@ -101,7 +101,7 @@ class XSSProtectionTestCase(TestCase):
         expected_path = settings.SIMPLE_JWT['AUTH_COOKIE_PATH']
         self.assertEqual(cookie['path'], expected_path)
 
-    def test_cookie_domain_attribute(self):
+    def test_cookie_domain_attribute(self) -> None:
         """Кука имеет корректный домен."""
         response = HttpResponse()
         access_token = 'test_token'
@@ -116,7 +116,7 @@ class XSSProtectionTestCase(TestCase):
         else:
             self.assertEqual(cookie['domain'], expected_domain)
 
-    def test_cookie_max_age_attribute(self):
+    def test_cookie_max_age_attribute(self) -> None:
         """Кука имеет корректное время жизни."""
         response = HttpResponse()
         access_token = 'test_token'
@@ -127,7 +127,7 @@ class XSSProtectionTestCase(TestCase):
         expected_max_age = settings.SIMPLE_JWT['AUTH_COOKIE_MAX_AGE']
         self.assertEqual(cookie['max-age'], expected_max_age)
 
-    def test_multiple_cookies_security(self):
+    def test_multiple_cookies_security(self) -> None:
         """Все куки имеют корректные атрибуты безопасности."""
         response = HttpResponse()
         access_token = 'access_token'
@@ -158,7 +158,7 @@ class XSSProtectionTestCase(TestCase):
             settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
         )
 
-    def test_cookie_value_encoding(self):
+    def test_cookie_value_encoding(self) -> None:
         """Значение куки корректно кодируется."""
         response = HttpResponse()
         access_token = (
@@ -173,7 +173,7 @@ class XSSProtectionTestCase(TestCase):
 
         self.assertIsInstance(cookie.value, str)
 
-    def test_cookie_overwrite_protection(self):
+    def test_cookie_overwrite_protection(self) -> None:
         """Защита от перезаписи кук работает корректно."""
         response = HttpResponse()
         access_token1 = 'first_token'
@@ -199,11 +199,11 @@ class XSSProtectionTestCase(TestCase):
 class SecurityHeadersTestCase(TestCase):
     """Тесты безопасности заголовков."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Настройка тестовых данных."""
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
 
-    def test_no_authorization_header_leak(self):
+    def test_no_authorization_header_leak(self) -> None:
         """Отсутствует утечка токена в заголовках."""
         response = HttpResponse()
         access_token = 'sensitive_token'
@@ -214,7 +214,7 @@ class SecurityHeadersTestCase(TestCase):
             self.assertNotIn(access_token, str(header_value))
             self.assertNotIn(access_token, header_name)
 
-    def test_cookie_header_format(self):
+    def test_cookie_header_format(self) -> None:
         """Формат заголовка Set-Cookie корректен."""
         response = HttpResponse()
         access_token = 'test_token'
@@ -233,7 +233,7 @@ class SecurityHeadersTestCase(TestCase):
         )
         self.assertEqual(cookie.value, access_token)
 
-    def test_cookie_header_security_attributes(self):
+    def test_cookie_header_security_attributes(self) -> None:
         """Все атрибуты безопасности присутствуют в заголовке."""
         response = HttpResponse()
         access_token = 'test_token'

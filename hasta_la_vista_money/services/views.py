@@ -4,6 +4,7 @@ from typing import Any
 
 from django.db.models import Count, Model, QuerySet, Sum
 from django.db.models.functions import TruncMonth
+from django.forms import ModelForm
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 
@@ -71,12 +72,12 @@ def build_category_tree(
     yield from builder.build(parent_id=parent_id, current_depth=current_depth)
 
 
-def collect_info_receipt(user: User) -> QuerySet:
+def collect_info_receipt(user: User) -> QuerySet[dict[str, Any]]:
     """
     Сбор информации о чеках для отображения на страницах сайта.
 
     :param user: User
-    :return: QuerySet
+    :return: QuerySet с данными о чеках
     """
     return (
         user.receipt_users.annotate(
@@ -94,7 +95,11 @@ def collect_info_receipt(user: User) -> QuerySet:
     )
 
 
-def get_queryset_type_income_expenses(type_id, model, form):
+def get_queryset_type_income_expenses(
+    type_id: int | None,
+    model: type[Model],
+    form: ModelForm[Any],
+) -> Model:
     """Функция получения queryset."""
     if type_id:
         return get_object_or_404(model, id=type_id)

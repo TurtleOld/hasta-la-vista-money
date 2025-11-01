@@ -2,11 +2,13 @@ from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
-from typing import Any
+from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
@@ -30,6 +32,123 @@ from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services import (
+        GracePeriodInfoDict,
+    )
+
+
+class MonthDataDict(TypedDict):
+    """Данные за месяц."""
+
+    month: str
+    expenses: float
+    income: float
+    savings: float
+    savings_percent: float
+
+
+class ChartDataDict(TypedDict):
+    """Данные для графика."""
+
+    labels: list[str]
+    expense_data: list[float]
+    income_data: list[float]
+
+
+class DeltaByCurrencyDict(TypedDict, total=False):
+    """Изменение баланса по валютам."""
+
+    delta: float
+    percent: float | None
+
+
+class CardMonthDict(TypedDict):
+    """Данные месяца для кредитной карты."""
+
+    month: str
+    purchase_start: datetime
+    purchase_end: datetime
+    grace_end: datetime
+    debt_for_month: float
+    is_overdue: bool
+    days_until_due: int
+    payments_made: float
+    remaining_debt: float
+    is_paid: bool
+
+
+class CardHistoryDict(TypedDict):
+    """История по месяцам для кредитной карты."""
+
+    month: str
+    debt: float
+    final_debt: float
+    grace_end: str
+    is_overdue: bool
+
+
+class PaymentItemDict(TypedDict):
+    """Элемент платежа."""
+
+    amount: Decimal
+    date: date
+
+
+class PaymentScheduleItemDict(TypedDict):
+    """Элемент графика платежей."""
+
+    month: str
+    sum_expense: float
+    payments_made: float
+    remaining_debt: float
+    payment_due: str
+    is_overdue: bool
+    days_until_due: int
+    is_paid: bool
+
+
+class CreditCardDataDict(TypedDict, total=False):
+    """Данные кредитной карты."""
+
+    name: str
+    limit: Decimal | None
+    debt_now: Decimal | None
+    current_grace_info: 'GracePeriodInfoDict'
+    history: list[CardHistoryDict]
+    currency: str
+    card_obj: Account
+    limit_left: Decimal
+    payment_schedule: list[PaymentScheduleItemDict]
+
+
+class IncomeExpenseDict(TypedDict):
+    """Данные о доходе/расходе."""
+
+    id: int
+    date: date
+    account__name_account: str
+    category__name: str
+    amount: Decimal
+    type: str
+
+
+class UserDetailedStatisticsDict(TypedDict):
+    """Подробная статистика пользователя."""
+
+    months_data: list[MonthDataDict]
+    top_expense_categories: list
+    top_income_categories: list
+    receipt_info_by_month: QuerySet
+    income_expense: list[IncomeExpenseDict]
+    transfer_money_log: QuerySet
+    accounts: QuerySet
+    balances_by_currency: dict[str, float]
+    delta_by_currency: dict[str, DeltaByCurrencyDict]
+    chart_combined: ChartDataDict
+    user: User
+    credit_cards_data: list[CreditCardDataDict]
 
 
 def _month_bounds_for_offset(today: date, offset: int) -> tuple[date, date]:
@@ -84,7 +203,7 @@ def _dates_amounts(
     return dates, amounts
 
 
-def _build_chart(user: User) -> dict[str, list]:
+def _build_chart(user: User) -> ChartDataDict:
     exp_ds = (
         Expense.objects.filter(user=user)
         .values('date')
@@ -134,7 +253,7 @@ def _build_chart(user: User) -> dict[str, list]:
 def _balances_and_delta(
     accounts: QuerySet[Account],
     today: date,
-) -> tuple[dict, dict]:
+) -> tuple[dict[str, float], dict[str, DeltaByCurrencyDict]]:
     balances_now = defaultdict(float)
     for acc in accounts:
         balances_now[acc.currency] += float(acc.balance)
@@ -163,7 +282,7 @@ def _balances_and_delta(
 def _six_months_data(
     user: User,
     today: date,
-) -> list[dict[str, float | str]]:
+) -> list[MonthDataDict]:
     out = []
     for i in range(constants.STATISTICS_MONTHS_COUNT):
         m_start, m_end = _month_bounds_for_offset(today, i)
@@ -202,9 +321,9 @@ def _six_months_data(
 def _card_months_block(
     card: Account,
     today_month: date,
-) -> tuple[list[dict], list[dict]]:
-    months: list[dict] = []
-    history: list[dict] = []
+) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
+    months: list[CardMonthDict] = []
+    history: list[CardHistoryDict] = []
     now = timezone.now()
 
     for i in range(constants.STATISTICS_YEAR_MONTHS_COUNT):
@@ -318,8 +437,8 @@ def _card_months_block(
 
 
 def _apply_payments_to_months(
-    months: list[dict],
-    payments: list[dict],
+    months: list[CardMonthDict],
+    payments: list[PaymentItemDict],
 ) -> None:
     total = sum(float(p['amount']) for p in payments)
     left = total
@@ -338,11 +457,11 @@ def _apply_payments_to_months(
 
 
 def _build_payment_schedule(
-    months: list[dict],
-    history: list[dict],
+    months: list[CardMonthDict],
+    history: list[CardHistoryDict],
     card: Account,
-) -> list[dict]:
-    schedule: list[dict] = []
+) -> list[PaymentScheduleItemDict]:
+    schedule: list[PaymentScheduleItemDict] = []
     for m in months:
         if m['debt_for_month'] <= constants.ZERO:
             continue
@@ -367,8 +486,10 @@ def _build_payment_schedule(
     return schedule
 
 
-def _credit_cards_block(accounts: QuerySet[Account]) -> list[dict]:
-    out: list[dict] = []
+def _credit_cards_block(
+    accounts: QuerySet[Account],
+) -> list[CreditCardDataDict]:
+    out: list[CreditCardDataDict] = []
     today_month = timezone.now().date().replace(day=1)
 
     credit_cards = accounts.filter(
@@ -415,7 +536,7 @@ def _credit_cards_block(accounts: QuerySet[Account]) -> list[dict]:
     return out
 
 
-def get_user_detailed_statistics(user: User) -> dict[str, Any]:
+def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
     now = timezone.now()
     today = now.date()
 

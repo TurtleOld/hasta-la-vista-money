@@ -3,7 +3,7 @@
 from calendar import monthrange
 from datetime import datetime, time
 from decimal import Decimal
-from typing import Any
+from typing import Any, TypedDict
 
 from dateutil.relativedelta import relativedelta
 from django.db import transaction
@@ -32,6 +32,39 @@ from hasta_la_vista_money.finance_account.validators import (
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
+
+
+class GracePeriodInfoDict(TypedDict, total=False):
+    """Информация о льготном периоде кредитной карты."""
+
+    purchase_month: str
+    purchase_start: datetime
+    purchase_end: datetime
+    grace_end: datetime
+    debt_for_month: Decimal
+    payments_for_period: Decimal
+    final_debt: Decimal
+    is_overdue: bool
+    days_until_due: int
+
+
+class PaymentScheduleItemDict(TypedDict):
+    """Элемент графика платежей."""
+
+    date: datetime
+    amount: Decimal
+
+
+class RaiffeisenbankScheduleDict(TypedDict, total=False):
+    """График платежей для Raiffeisenbank."""
+
+    first_purchase_date: datetime
+    grace_end_date: datetime
+    total_initial_debt: Decimal
+    final_debt: Decimal
+    payments_schedule: list[PaymentScheduleItemDict]
+    days_until_grace_end: int
+    is_overdue: bool
 
 
 class TransferService:
@@ -352,7 +385,7 @@ class AccountService:
     def calculate_grace_period_info(
         account: Account,
         purchase_month: Any,
-    ) -> dict[str, Any]:
+    ) -> GracePeriodInfoDict:
         """Calculate grace period information for a credit card."""
         if account.type_account not in (
             ACCOUNT_TYPE_CREDIT_CARD,
@@ -494,7 +527,7 @@ class AccountService:
     def calculate_raiffeisenbank_payment_schedule(
         account: Account,
         purchase_month: Any,
-    ) -> dict[str, Any]:
+    ) -> RaiffeisenbankScheduleDict:
         """Calculate payment schedule for Raiffeisenbank credit card."""
         if not AccountService._validate_raiffeisenbank_account(account):
             return {}

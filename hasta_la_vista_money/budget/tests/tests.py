@@ -12,12 +12,12 @@ User = get_user_model()
 
 
 class BudgetConfigTest(TestCase):
-    def test_app_config(self):
+    def test_app_config(self) -> None:
         self.assertEqual(BudgetConfig.name, 'hasta_la_vista_money.budget')
 
 
 class BudgetModelTest(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='testuser',
             password='pass',
@@ -31,16 +31,16 @@ class BudgetModelTest(TestCase):
             amount=100,
         )
 
-    def test_datelist_str(self):
+    def test_datelist_str(self) -> None:
         self.assertEqual(str(self.datelist), f'{self.user} - {self.date}')
 
-    def test_planning_str(self):
+    def test_planning_str(self) -> None:
         self.assertIn(str(self.user), str(self.planning))
         self.assertIn(str(self.date), str(self.planning))
 
 
 class BudgetUrlsTest(TestCase):
-    def test_urls_resolve(self):
+    def test_urls_resolve(self) -> None:
         self.assertEqual(resolve('/budget/').view_name, 'budget:list')
         self.assertEqual(
             resolve('/budget/generate-date/').view_name,
@@ -57,7 +57,7 @@ class BudgetUrlsTest(TestCase):
 
 
 class BudgetViewsTest(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -67,7 +67,7 @@ class BudgetViewsTest(TestCase):
         self.date = date(2024, 1, 1)
         DateList.objects.create(user=self.user, date=self.date)
 
-    def test_budget_view_get(self):
+    def test_budget_view_get(self) -> None:
         response = self.client.get(reverse('budget:list'))
         self.assertIn(response.status_code, [200, 302])
         if (
@@ -77,11 +77,11 @@ class BudgetViewsTest(TestCase):
             self.assertIn('chart_plan_execution_income', response.context)
             self.assertIn('chart_plan_execution_expense', response.context)
 
-    def test_generate_date_list_view(self):
+    def test_generate_date_list_view(self) -> None:
         response = self.client.post(reverse('budget:generate_date'))
         self.assertEqual(response.status_code, constants.REDIRECTS)
 
-    def test_save_planning_post(self):
+    def test_save_planning_post(self) -> None:
         response = self.client.post(
             reverse('budget:save_planning'),
             {
@@ -100,7 +100,7 @@ class BudgetViewsTest(TestCase):
             ],
         )
 
-    def test_change_planning_post(self):
+    def test_change_planning_post(self) -> None:
         response = self.client.post(
             reverse('budget:change_planning'),
             {
@@ -112,7 +112,7 @@ class BudgetViewsTest(TestCase):
         )
         self.assertIn(response.status_code, [200, 302, 400])
 
-    def test_budget_view_no_dates(self):
+    def test_budget_view_no_dates(self) -> None:
         self.client.logout()
         user2 = User.objects.create_user(username='user2', password='pass')
         self.client.force_login(user2)

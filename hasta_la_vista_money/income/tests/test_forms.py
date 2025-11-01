@@ -20,12 +20,12 @@ class IncomeFormTest(TestCase):
         'income_cat.yaml',
     ]
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.income_type = IncomeCategory.objects.get(pk=1)
 
-    def test_income_form_validation(self):
+    def test_income_form_validation(self) -> None:
         income_categories = IncomeCategory.objects.filter(user=self.user)
         form = IncomeForm(
             data={
@@ -39,7 +39,7 @@ class IncomeFormTest(TestCase):
         )
         self.assertTrue(form.is_valid())
 
-    def test_income_form_invalid(self):
+    def test_income_form_invalid(self) -> None:
         income_categories = IncomeCategory.objects.filter(user=self.user)
         form = IncomeForm(
             data={
@@ -51,7 +51,7 @@ class IncomeFormTest(TestCase):
         )
         self.assertFalse(form.is_valid())
 
-    def test_income_form_field_configuration(self):
+    def test_income_form_field_configuration(self) -> None:
         form = IncomeForm(
             category_queryset=IncomeCategory.objects.filter(user=self.user),
             account_queryset=Account.objects.filter(user=self.user),
@@ -61,7 +61,7 @@ class IncomeFormTest(TestCase):
         self.assertIn('date', form.fields)
         self.assertIn('amount', form.fields)
 
-    def test_income_form_configure_category_choices(self):
+    def test_income_form_configure_category_choices(self) -> None:
         form = IncomeForm(
             category_queryset=IncomeCategory.objects.filter(user=self.user),
             account_queryset=Account.objects.filter(user=self.user),
@@ -78,12 +78,12 @@ class AddCategoryIncomeFormTest(TestCase):
 
     fixtures: ClassVar[list[str]] = ['users.yaml', 'income_cat.yaml']
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
         self.parent_category = IncomeCategory.objects.get(name='Зарплата')
         self.income_type = IncomeCategory.objects.get(pk=1)
 
-    def test_create_category_income_form_validation(self):
+    def test_create_category_income_form_validation(self) -> None:
         income_categories = IncomeCategory.objects.filter(user=self.user)
         form = AddCategoryIncomeForm(
             data={
@@ -94,7 +94,7 @@ class AddCategoryIncomeFormTest(TestCase):
         )
         self.assertTrue(form.is_valid())
 
-    def test_create_category_income_form_invalid(self):
+    def test_create_category_income_form_invalid(self) -> None:
         form = AddCategoryIncomeForm(
             data={
                 'name': '',
@@ -102,14 +102,14 @@ class AddCategoryIncomeFormTest(TestCase):
         )
         self.assertFalse(form.is_valid())
 
-    def test_create_category_income_form_field_configuration(self):
+    def test_create_category_income_form_field_configuration(self) -> None:
         form = AddCategoryIncomeForm(
             category_queryset=IncomeCategory.objects.filter(user=self.user),
         )
         self.assertIn('name', form.fields)
         self.assertIn('parent_category', form.fields)
 
-    def test_create_category_income_form_configure_category_choices(self):
+    def test_create_category_income_form_configure_category_choices(self) -> None:
         form = AddCategoryIncomeForm(
             category_queryset=IncomeCategory.objects.filter(user=self.user),
         )

@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
@@ -9,7 +10,13 @@ from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
 
 
-def add_income(user, account, category, amount, date):
+def add_income(
+    user: User,
+    account: Account,
+    category: IncomeCategory,
+    amount: Decimal,
+    date: date,
+) -> Income:
     """
     Create a new income record and update the account balance.
     """
@@ -33,7 +40,7 @@ def update_income(
     income: Income,
     account: Account,
     category: IncomeCategory,
-    amount: float,
+    amount: Decimal,
     date: date,
 ) -> Income:
     """
@@ -62,7 +69,7 @@ def update_income(
     return income
 
 
-def delete_income(user, income):
+def delete_income(user: User, income: Income) -> None:
     """
     Delete an income record and update the account balance.
     """
@@ -76,7 +83,7 @@ def delete_income(user, income):
     income.delete()
 
 
-def copy_income(user, income_id):
+def copy_income(user: User, income_id: int) -> Income:
     """
     Copy an income record and update the account balance for the new record.
     """

@@ -1,6 +1,7 @@
 """Tests for finance account services."""
 
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from unittest import mock
 
 from django.contrib.auth.models import Group
@@ -18,21 +19,27 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.users.factories import UserFactory
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User as UserType
+else:
+    from django.contrib.auth import get_user_model
+    UserType = get_user_model()
+
 
 class TestAccountServices(TestCase):
     """Test cases for account service functions."""
 
     def setUp(self) -> None:
-        self.user1 = UserFactory()
-        self.user2 = UserFactory()
+        self.user1: UserType = UserFactory()
+        self.user2: UserType = UserFactory()
 
-        self.account1 = AccountFactory(
+        self.account1: Account = AccountFactory(
             user=self.user1, balance=Decimal('1000.00')
         )
-        self.account2 = AccountFactory(
+        self.account2: Account = AccountFactory(
             user=self.user1, balance=Decimal('500.00')
         )
-        self.account3 = AccountFactory(
+        self.account3: Account = AccountFactory(
             user=self.user2, balance=Decimal('2000.00')
         )
 
@@ -206,12 +213,12 @@ class TestTransferService(TestCase):
     """Test cases for TransferService."""
 
     def setUp(self) -> None:
-        self.user = UserFactory()
-        self.from_account = AccountFactory(
+        self.user: UserType = UserFactory()
+        self.from_account: Account = AccountFactory(
             user=self.user,
             balance=Decimal('1000.00'),
         )
-        self.to_account = AccountFactory(
+        self.to_account: Account = AccountFactory(
             user=self.user,
             balance=Decimal('500.00'),
         )

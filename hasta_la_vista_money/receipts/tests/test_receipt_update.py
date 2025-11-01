@@ -16,7 +16,7 @@ class ReceiptUpdateViewTest(TestCase):
     с проверкой баланса счёта.
     """
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Настройка тестовых данных."""
         self.user = User.objects.create_user(
             username='testuser',
@@ -84,7 +84,7 @@ class ReceiptUpdateViewTest(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-    def test_receipt_update_increase_amount_same_account(self):
+    def test_receipt_update_increase_amount_same_account(self) -> None:
         """Тест увеличения суммы чека на том же счёте."""
         initial_balance = self.initial_balance
 
@@ -124,7 +124,7 @@ class ReceiptUpdateViewTest(TestCase):
 
         self.assertEqual(self.receipt.total_sum, Decimal('500.00'))
 
-    def test_receipt_update_decrease_amount_same_account(self):
+    def test_receipt_update_decrease_amount_same_account(self) -> None:
         """Тест уменьшения суммы чека на том же счёте."""
         initial_balance = self.initial_balance
 
@@ -161,7 +161,7 @@ class ReceiptUpdateViewTest(TestCase):
 
         self.assertEqual(self.receipt.total_sum, Decimal('200.00'))
 
-    def test_receipt_update_change_account(self):
+    def test_receipt_update_change_account(self) -> None:
         """Тест изменения счёта чека."""
         initial_balance1 = self.initial_balance
         initial_balance2 = self.account2.balance
@@ -207,7 +207,7 @@ class ReceiptUpdateViewTest(TestCase):
 
         self.assertEqual(self.receipt.account, self.account2)
 
-    def test_receipt_update_change_account_and_amount(self):
+    def test_receipt_update_change_account_and_amount(self) -> None:
         """Тест изменения счёта и суммы чека одновременно."""
         initial_balance1 = self.initial_balance
         initial_balance2 = self.account2.balance
@@ -254,7 +254,7 @@ class ReceiptUpdateViewTest(TestCase):
         self.assertEqual(self.receipt.account, self.account2)
         self.assertEqual(self.receipt.total_sum, Decimal('500.00'))
 
-    def test_receipt_update_no_changes(self):
+    def test_receipt_update_no_changes(self) -> None:
         """Тест обновления чека без изменений."""
         initial_balance = self.initial_balance
 
@@ -291,7 +291,7 @@ class ReceiptUpdateViewTest(TestCase):
 
         self.assertEqual(self.account1.balance, initial_balance)
 
-    def test_receipt_update_unauthorized_user(self):
+    def test_receipt_update_unauthorized_user(self) -> None:
         """Тест попытки обновления чека неавторизованным пользователем."""
         other_user = User.objects.create_user(
             username='otheruser',
@@ -316,7 +316,7 @@ class ReceiptUpdateViewTest(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_receipt_update_invalid_form(self):
+    def test_receipt_update_invalid_form(self) -> None:
         """Тест обновления чека с невалидными данными."""
         initial_balance = self.initial_balance
 
@@ -349,7 +349,7 @@ class ReceiptUpdateViewTest(TestCase):
 
         self.assertEqual(self.account1.balance, initial_balance)
 
-    def test_receipt_update_decimal_quantities(self):
+    def test_receipt_update_decimal_quantities(self) -> None:
         """Тест обновления чека с десятичными количествами."""
         initial_balance = self.initial_balance
 

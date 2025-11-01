@@ -4,13 +4,36 @@ This module provides functions for collecting and organizing financial data
 from the database, including income and expense information filtered by user.
 """
 
+from datetime import date, datetime
+from decimal import Decimal
 from operator import itemgetter
-from typing import Any
+
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money.users.models import User
 
 
-def collect_info_income(user: User) -> list[dict[str, Any]]:
+class IncomeInfoDict(TypedDict):
+    """Информация о доходе."""
+
+    id: int
+    date: datetime | date
+    account__name_account: str
+    category__name: str
+    amount: Decimal
+
+
+class ExpenseInfoDict(TypedDict):
+    """Информация о расходе."""
+
+    id: int
+    date: datetime | date
+    account__name_account: str
+    category__name: str
+    amount: Decimal
+
+
+def collect_info_income(user: User) -> list[IncomeInfoDict]:
     """Collect income information from database filtered by user.
 
     Retrieves income records for the specified user with related account
@@ -33,7 +56,7 @@ def collect_info_income(user: User) -> list[dict[str, Any]]:
     )
 
 
-def collect_info_expense(user: User) -> list[dict[str, Any]]:
+def collect_info_expense(user: User) -> list[ExpenseInfoDict]:
     """Collect expense information from database filtered by user.
 
     Retrieves expense records for the specified user with related account
@@ -56,7 +79,10 @@ def collect_info_expense(user: User) -> list[dict[str, Any]]:
     )
 
 
-def sort_expense_income(expenses: Any, income: Any) -> list[Any]:
+def sort_expense_income(
+    expenses: list[ExpenseInfoDict] | None,
+    income: list[IncomeInfoDict] | None,
+) -> list[ExpenseInfoDict | IncomeInfoDict]:
     """Create a sorted list combining expenses and income.
 
     Merges expense and income data into a single list sorted by date

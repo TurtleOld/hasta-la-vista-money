@@ -78,7 +78,7 @@ class ExpenseCategoryBaseView(BaseView):
 class ExpenseView(
     LoginRequiredMixin,
     SuccessMessageMixin[AddExpenseForm],
-    FilterView[Expense, ExpenseFilter],  # type: ignore[misc]
+    FilterView[Expense, ExpenseFilter],
 ):
     """Main expense list view with filtering and pagination."""
 
@@ -194,7 +194,7 @@ class ExpenseCopyView(
 class ExpenseCreateView(
     LoginRequiredMixin,
     SuccessMessageMixin[AddExpenseForm],
-    CreateView[Expense, Any],
+    CreateView[Expense, AddExpenseForm],
 ):
     """View for creating a new expense."""
 
@@ -358,7 +358,7 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
 
 class ExpenseCategoryCreateView(
     LoginRequiredMixin,
-    CreateView[ExpenseCategory, Any],
+    CreateView[ExpenseCategory, AddCategoryForm],
 ):
     """View for creating a new expense category."""
 

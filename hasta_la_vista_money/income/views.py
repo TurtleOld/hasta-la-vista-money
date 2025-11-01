@@ -57,7 +57,7 @@ class IncomeCategoryBaseView(BaseView):
 
 class IncomeView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
+    SuccessMessageMixin[IncomeForm],
     BaseView,
     FilterView[Income, IncomeFilter],
 ):
@@ -150,10 +150,10 @@ class IncomeView(
 
 class IncomeCreateView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
+    SuccessMessageMixin[IncomeForm],
     IncomeFormQuerysetMixin,
     BaseView,
-    CreateView,
+    CreateView[Income, IncomeForm],
 ):
     """
     View for creating a new income record.
@@ -169,7 +169,7 @@ class IncomeCreateView(
     category_model = IncomeCategory
     account_model = Account
 
-    def get_form_kwargs(self):
+    def get_form_kwargs(self) -> dict[str, Any]:
         """
         Provide form kwargs with user-specific category and account querysets.
         """
@@ -215,7 +215,7 @@ class IncomeCreateView(
             form.add_error(None, str(e))
             return self.form_invalid(form)
 
-    def form_invalid(self, form):
+    def form_invalid(self, form: Any) -> HttpResponse:
         """
         Handle invalid form submission for income creation.
         """
@@ -227,7 +227,7 @@ class IncomeCreateView(
 
 class IncomeCopyView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
+    SuccessMessageMixin[IncomeForm],  # type: ignore[type-arg]
     BaseView,
     View,
 ):
@@ -251,10 +251,10 @@ class IncomeCopyView(
 
 class IncomeUpdateView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
+    SuccessMessageMixin[IncomeForm],  # type: ignore[type-arg]
     IncomeFormQuerysetMixin,
     BaseView,
-    UpdateView,
+    UpdateView[Income, IncomeForm],
 ):
     """
     View for updating an existing income record.
@@ -305,7 +305,7 @@ class IncomeUpdateView(
         )
         return context
 
-    def get_form_kwargs(self) -> dict:
+    def get_form_kwargs(self) -> dict[str, Any]:
         """
         Provide form kwargs with user-specific category and account
         querysets for update.
@@ -341,7 +341,12 @@ class IncomeUpdateView(
             return self.form_invalid(form)
 
 
-class IncomeDeleteView(LoginRequiredMixin, BaseView, DeleteView, DeletionMixin):
+class IncomeDeleteView(
+    LoginRequiredMixin,
+    BaseView,
+    DeleteView[Income, Any],  # type: ignore[type-arg]
+    DeletionMixin,
+):
     """
     View for deleting an income record.
     """
@@ -351,7 +356,9 @@ class IncomeDeleteView(LoginRequiredMixin, BaseView, DeleteView, DeletionMixin):
     no_permission_url = reverse_lazy('login')
     success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
 
-    def post(self, request, *args, **kwargs):
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> JsonResponse:
         """
         Handle POST request to delete an income record.
         """
@@ -363,7 +370,7 @@ class IncomeDeleteView(LoginRequiredMixin, BaseView, DeleteView, DeletionMixin):
             return JsonResponse({'success': False, 'error': str(e)})
 
 
-class IncomeCategoryView(LoginRequiredMixin, ListView):
+class IncomeCategoryView(LoginRequiredMixin, ListView[IncomeCategory]):
     """
     View for displaying income categories in a hierarchical structure.
     """
@@ -408,7 +415,9 @@ class IncomeCategoryView(LoginRequiredMixin, ListView):
         return context
 
 
-class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
+class IncomeCategoryCreateView(
+    LoginRequiredMixin, CreateView[IncomeCategory, AddCategoryIncomeForm]
+):
     """
     View for creating a new income category.
     """
@@ -472,7 +481,9 @@ class IncomeCategoryCreateView(LoginRequiredMixin, CreateView):
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class IncomeCategoryDeleteView(DeleteObjectMixin, BaseView, DeleteView):
+class IncomeCategoryDeleteView(
+    DeleteObjectMixin, BaseView, DeleteView[IncomeCategory, Any]
+):  # type: ignore[type-arg]
     """
     View for deleting an income category.
     """
@@ -488,7 +499,9 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
     AJAX view for retrieving incomes by group.
     """
 
-    def get(self, request, *args, **kwargs):
+    def get(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
         """
         Handle GET request to retrieve incomes by group for AJAX.
         """
@@ -529,7 +542,9 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
     AJAX view for retrieving income data for Tabulator.
     """
 
-    def get(self, request, *args, **kwargs):
+    def get(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
         """
         Handle GET request to retrieve income data for AJAX.
         """

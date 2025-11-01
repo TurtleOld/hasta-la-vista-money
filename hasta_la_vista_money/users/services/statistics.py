@@ -1,7 +1,8 @@
-from typing import Any
+from decimal import Decimal
 
 from django.db.models import Count, Sum
 from django.utils import timezone
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense
@@ -11,7 +12,24 @@ from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
 
-def get_user_statistics(user: User) -> dict[str, Any]:
+class UserStatistics(TypedDict, total=False):
+    """Статистика пользователя."""
+
+    total_balance: Decimal
+    accounts_count: int
+    current_month_expenses: Decimal
+    current_month_income: Decimal
+    last_month_expenses: Decimal
+    last_month_income: Decimal
+    recent_expenses: list[Expense]
+    recent_incomes: list[Income]
+    receipts_count: int
+    top_expense_categories: list[dict[str, str | Decimal]]
+    monthly_savings: Decimal
+    last_month_savings: Decimal
+
+
+def get_user_statistics(user: User) -> UserStatistics:
     today = timezone.now().date()
     month_start = today.replace(day=1)
     last_month = (month_start - timezone.timedelta(days=1)).replace(day=1)

@@ -1,23 +1,20 @@
-from __future__ import annotations
-
 from datetime import date
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-if TYPE_CHECKING:
-    from hasta_la_vista_money.expense.models import ExpenseCategory
-    from hasta_la_vista_money.income.models import IncomeCategory
-    from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.expense.models import ExpenseCategory
+from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.users.models import User
 
 
 class DateListQuerySet(models.QuerySet):
-    def for_user(self, user: User) -> models.QuerySet[DateList]:
+    def for_user(self, user: User) -> 'models.QuerySet[DateList]':
         """Filter date lists by user."""
         return self.filter(user=user)
 
-    def for_date(self, target_date: date) -> models.QuerySet[DateList]:
+    def for_date(self, target_date: date) -> 'models.QuerySet[DateList]':
         """Filter date lists by date."""
         return self.filter(date=target_date)
 
@@ -74,21 +71,21 @@ class DateList(models.Model):
 
 
 class PlanningQuerySet(models.QuerySet):
-    def expenses(self) -> models.QuerySet[Planning]:
+    def expenses(self) -> 'models.QuerySet[Planning]':
         """Filter only expense plans."""
         return self.filter(type=Planning.Type.EXPENSE)
 
-    def incomes(self) -> models.QuerySet[Planning]:
+    def incomes(self) -> 'models.QuerySet[Planning]':
         """Filter only income plans."""
         return self.filter(type=Planning.Type.INCOME)
 
-    def for_user(self, user: User) -> models.QuerySet[Planning]:
+    def for_user(self, user: User) -> 'models.QuerySet[Planning]':
         return self.filter(user=user)
 
-    def for_period(self, start: date, end: date) -> models.QuerySet[Planning]:
+    def for_period(self, start: date, end: date) -> 'models.QuerySet[Planning]':
         return self.filter(date__range=(start, end))
 
-    def with_related(self) -> models.QuerySet[Planning]:
+    def with_related(self) -> 'models.QuerySet[Planning]':
         """Optimize queries by joining related categories."""
         return self.select_related(
             'user',

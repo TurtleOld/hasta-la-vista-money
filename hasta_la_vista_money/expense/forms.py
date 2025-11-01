@@ -67,11 +67,13 @@ class AddExpenseForm(FormQuerysetsMixin, ModelForm[Expense]):
             **kwargs,
         )
 
-    def clean(self):
+    def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
-        account_form = cleaned_data.get('account') if cleaned_data else None
-        amount = cleaned_data.get('amount') if cleaned_data else None
-        category = cleaned_data.get('category') if cleaned_data else None
+        if not cleaned_data:
+            return {}
+        account_form = cleaned_data.get('account')
+        amount = cleaned_data.get('amount')
+        category = cleaned_data.get('category')
 
         if account_form and amount and category:
             account = get_object_or_404(Account, id=account_form.id)

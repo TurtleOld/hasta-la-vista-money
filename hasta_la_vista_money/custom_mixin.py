@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any, Protocol
 
 from django.contrib import messages
@@ -95,7 +93,7 @@ class UpdateViewMixin:
     def __init__(self) -> None:
         """Конструктов класса инициализирующий аргументы класса."""
         self.template_name: str | None = None
-        self.request: 'HttpRequest' | None = None
+        self.request: HttpRequest | None = None
 
     def get_update_form(
         self,

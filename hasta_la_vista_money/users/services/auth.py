@@ -1,19 +1,28 @@
-from typing import Any
-
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import HttpRequest, HttpResponse
 from rest_framework_simplejwt.tokens import RefreshToken
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money.authentication.authentication import set_auth_cookies
+from hasta_la_vista_money.users.models import User
+
+
+class LoginResult(TypedDict, total=False):
+    """Результат попытки входа пользователя."""
+
+    user: User
+    access: str | None
+    refresh: str | None
+    success: bool
 
 
 def login_user(
     request: HttpRequest,
     form: AuthenticationForm,
     success_message: str,
-) -> dict[str, Any]:
+) -> LoginResult:
     username = form.cleaned_data['username']
     password = form.cleaned_data['password']
 
