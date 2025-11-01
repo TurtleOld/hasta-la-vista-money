@@ -27,7 +27,7 @@ class CookieJWTAuthenticationTestCase(TestCase):
         """Настройка тестовых данных."""
         self.factory = RequestFactory()
         self.auth = CookieJWTAuthentication()
-        self.user = UserFactory()
+        self.user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
         self.refresh_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH']
 
@@ -154,7 +154,9 @@ class CookieJWTAuthenticationTestCase(TestCase):
         result = self.auth.authenticate(request)  # type: ignore[arg-type]
         self.assertIsNone(result)
 
-    def test_authenticate_authorization_header_ignored_with_cookie(self) -> None:
+    def test_authenticate_authorization_header_ignored_with_cookie(
+        self,
+    ) -> None:
         """Заголовок Authorization игнорируется при наличии куки."""
         valid_token = self._create_valid_token(self.user)
         invalid_token = 'invalid.token.here'
@@ -212,7 +214,7 @@ class CookieSecurityTestCase(TestCase):
 
     def setUp(self) -> None:
         """Настройка тестовых данных."""
-        self.user = UserFactory()
+        self.user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
         self.refresh_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH']
 
@@ -334,7 +336,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
         request = self.factory.get('/')
         request.COOKIES[self.auth_cookie_name] = ''
 
-        result = self.auth.authenticate(request)
+        result = self.auth.authenticate(request)  # type: ignore[arg-type]
         self.assertIsNone(result)
 
     def test_authenticate_whitespace_cookie_value(self) -> None:
@@ -347,7 +349,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_inactive_user(self) -> None:
         """Неактивный пользователь не может аутентифицироваться."""
-        user = UserFactory(is_active=False)
+        user: User = UserFactory(is_active=False)  # type: ignore[assignment,no-untyped-call]
         payload = {
             'user_id': user.pk,
             'exp': timezone.now() + timedelta(hours=1),
@@ -364,7 +366,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_deleted_user(self) -> None:
         """Токен удаленного пользователя возвращает None."""
-        user = UserFactory()
+        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         user_id = user.pk
         user.delete()
 
@@ -384,7 +386,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_multiple_cookies(self) -> None:
         """Несколько кук с одинаковым именем обрабатываются корректно."""
-        user = UserFactory()
+        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         valid_token = AccessToken.for_user(user)
 
         request = self.factory.get('/')
