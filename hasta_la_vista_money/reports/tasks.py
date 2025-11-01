@@ -1,9 +1,10 @@
 """Модуль задач для пакета reports."""
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
+from asgiref.sync import sync_to_async
 from django.db.models import Avg, Count, Max, Min, Sum
 
 from hasta_la_vista_money import constants
@@ -48,7 +49,7 @@ async def generate_monthly_report(
             end_date = datetime(year + 1, 1, 1, tzinfo=UTC) - timedelta(days=1)
         else:
             end_date = datetime(year, month + 1, 1, tzinfo=UTC) - timedelta(
-                days=1
+                days=1,
             )
 
         logger.info(
@@ -83,26 +84,38 @@ async def generate_monthly_report(
         )
 
         # Топ категорий доходов
-        top_income_categories = (
-            await Income.objects.filter(
+        top_income_qs = (
+            Income.objects.filter(
                 user=user,
                 date__range=(start_date, end_date),
             )
             .values('category__name')
-            .annotate(total=Sum('amount'), count=Count('id'))
+            .annotate(
+                total=Sum('amount'),
+                count=Count('id'),
+            )
             .order_by('-total')[:5]
         )
+        top_income_categories: list[dict[str, Any]] = await sync_to_async(
+            lambda: list(top_income_qs),
+        )()  # type: ignore[misc]
 
         # Топ категорий расходов
-        top_expense_categories = (
-            await Expense.objects.filter(
+        top_expense_qs = (
+            Expense.objects.filter(
                 user=user,
                 date__range=(start_date, end_date),
             )
             .values('category__name')
-            .annotate(total=Sum('amount'), count=Count('id'))
+            .annotate(
+                total=Sum('amount'),
+                count=Count('id'),
+            )
             .order_by('-total')[:5]
         )
+        top_expense_categories: list[dict[str, Any]] = await sync_to_async(
+            lambda: list(top_expense_qs),
+        )()  # type: ignore[misc]
 
         # Статистика по чекам
         receipt_stats = await Receipt.objects.filter(
@@ -115,15 +128,21 @@ async def generate_monthly_report(
         )
 
         # Топ продавцов
-        top_sellers = (
-            await Receipt.objects.filter(
+        top_sellers_qs = (
+            Receipt.objects.filter(
                 user=user,
                 receipt_date__range=(start_date, end_date),
             )
             .values('seller__name_seller')
-            .annotate(total=Sum('total_sum'), count=Count('id'))
+            .annotate(
+                total=Sum('total_sum'),
+                count=Count('id'),
+            )
             .order_by('-total')[:5]
         )
+        top_sellers: list[dict[str, Any]] = await sync_to_async(
+            lambda: list(top_sellers_qs),
+        )()  # type: ignore[misc]
 
         report_data = {
             'period': {
@@ -159,10 +178,10 @@ async def generate_monthly_report(
             user_id=user_id,
             year=year,
             month=month,
-            total_income=str(income_stats['total_income']),
-            total_expense=str(expense_stats['total_expense']),
-            net_income=str(report_data['summary']['net_income']),
-            receipts_count=receipt_stats['total_receipts'],
+            total_income=str(income_stats['total_income']),  # type: ignore[index]
+            total_expense=str(expense_stats['total_expense']),  # type: ignore[index]
+            net_income=str(report_data['summary']['net_income']),  # type: ignore[index]
+            receipts_count=receipt_stats['total_receipts'],  # type: ignore[index]
         )
 
     except Exception as e:
@@ -202,8 +221,8 @@ async def generate_yearly_report(
     try:
         user = await User.objects.aget(id=user_id)
 
-        start_date = datetime(year, 1, 1, tzinfo=timezone.UTC)
-        end_date = datetime(year, 12, 31, tzinfo=timezone.UTC)
+        start_date = datetime(year, 1, 1, tzinfo=UTC)
+        end_date = datetime(year, 12, 31, tzinfo=UTC)
 
         logger.info(
             'Yearly report period defined',
@@ -219,12 +238,15 @@ async def generate_yearly_report(
         ):
             month_start = datetime(year, month, 1, tzinfo=UTC)
             if month == constants.NUMBER_TWELFTH_MONTH_YEAR:
-                month_end = datetime(
-                    year + 1, 1, 1, tzinfo=timezone.UTC
-                ) - timedelta(days=1)
+                month_end = datetime(year + 1, 1, 1, tzinfo=UTC) - timedelta(
+                    days=1,
+                )
             else:
                 month_end = datetime(
-                    year, month + 1, 1, tzinfo=timezone.UTC
+                    year,
+                    month + 1,
+                    1,
+                    tzinfo=UTC,
                 ) - timedelta(days=1)
 
             # Доходы за месяц
@@ -269,19 +291,35 @@ async def generate_yearly_report(
         )
 
         # Топ категорий за год
-        top_income_categories = (
-            await Income.objects.filter(user=user, date__year=year)
+        top_income_year_qs = (
+            Income.objects.filter(
+                user=user,
+                date__year=year,
+            )
             .values('category__name')
-            .annotate(total=Sum('amount'))
+            .annotate(
+                total=Sum('amount'),
+            )
             .order_by('-total')[:10]
         )
+        top_income_categories: list[dict[str, Any]] = await sync_to_async(
+            lambda: list(top_income_year_qs),
+        )()  # type: ignore[misc]
 
-        top_expense_categories = (
-            await Expense.objects.filter(user=user, date__year=year)
+        top_expense_year_qs = (
+            Expense.objects.filter(
+                user=user,
+                date__year=year,
+            )
             .values('category__name')
-            .annotate(total=Sum('amount'))
+            .annotate(
+                total=Sum('amount'),
+            )
             .order_by('-total')[:10]
         )
+        top_expense_categories: list[dict[str, Any]] = await sync_to_async(
+            lambda: list(top_expense_year_qs),
+        )()  # type: ignore[misc]
 
         report_data = {
             'year': year,
@@ -312,11 +350,11 @@ async def generate_yearly_report(
             'Yearly report generated successfully',
             user_id=user_id,
             year=year,
-            total_income=str(yearly_income['total']),
-            total_expense=str(yearly_expense['total']),
-            net_income=str(report_data['summary']['net_income']),
-            transactions_count=(yearly_income['count'] or 0)
-            + (yearly_expense['count'] or 0),
+            total_income=str(yearly_income['total']),  # type: ignore[index]
+            total_expense=str(yearly_expense['total']),  # type: ignore[index]
+            net_income=str(report_data['summary']['net_income']),  # type: ignore[index]
+            transactions_count=(yearly_income['count'] or 0)  # type: ignore[index]
+            + (yearly_expense['count'] or 0),  # type: ignore[index]
         )
 
     except Exception as e:
@@ -372,19 +410,35 @@ async def generate_user_statistics(
         )
 
         # Статистика по категориям
-        income_categories = (
-            await Income.objects.filter(user=user)
-            .values('category__name')
-            .annotate(total=Sum('amount'), count=Count('id'))
+        income_cat_qs = (
+            Income.objects.filter(user=user)
+            .values(
+                'category__name',
+            )
+            .annotate(
+                total=Sum('amount'),
+                count=Count('id'),
+            )
             .order_by('-total')[:10]
         )
+        income_categories: list[dict[str, Any]] = await sync_to_async(
+            lambda: list(income_cat_qs),
+        )()  # type: ignore[misc]
 
-        expense_categories = (
-            await Expense.objects.filter(user=user)
-            .values('category__name')
-            .annotate(total=Sum('amount'), count=Count('id'))
+        expense_cat_qs = (
+            Expense.objects.filter(user=user)
+            .values(
+                'category__name',
+            )
+            .annotate(
+                total=Sum('amount'),
+                count=Count('id'),
+            )
             .order_by('-total')[:10]
         )
+        expense_categories: list[dict[str, Any]] = await sync_to_async(
+            lambda: list(expense_cat_qs),
+        )()  # type: ignore[misc]
 
         # Статистика по времени
         first_income = await Income.objects.filter(user=user).aaggregate(
@@ -434,11 +488,11 @@ async def generate_user_statistics(
         logger.info(
             'User statistics generated successfully',
             user_id=user_id,
-            total_income=str(total_income['total']),
-            total_expense=str(total_expense['total']),
-            net_worth=str(stats_data['summary']['net_worth']),
-            total_transactions=stats_data['summary']['total_transactions'],
-            receipts_count=total_receipts['count'],
+            total_income=str(total_income['total']),  # type: ignore[index]
+            total_expense=str(total_expense['total']),  # type: ignore[index]
+            net_worth=str(stats_data['summary']['net_worth']),  # type: ignore[index]
+            total_transactions=stats_data['summary']['total_transactions'],  # type: ignore[index]
+            receipts_count=total_receipts['count'],  # type: ignore[index]
         )
 
     except Exception as e:

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import SetPasswordForm
@@ -27,11 +27,11 @@ class SetUserPasswordServiceTest(TestCase):
     fixtures: ClassVar[list[str]] = ['users.yaml']  # type: ignore[misc]
 
     def setUp(self) -> None:
-        user: UserType | None = User.objects.first()
+        user = User.objects.first()
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.user: UserType = cast('UserType', user)
         self.factory: RequestFactory = RequestFactory()
 
     def get_request(self) -> HttpRequest:

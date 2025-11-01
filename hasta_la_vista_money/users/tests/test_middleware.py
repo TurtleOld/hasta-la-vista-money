@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -9,9 +9,6 @@ from django.urls import reverse
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.middleware import CheckAdminMiddleware
 
-if TYPE_CHECKING:
-    from django.http import HttpResponseRedirect as HttpResponseRedirectType
-
 User = get_user_model()
 
 
@@ -21,7 +18,7 @@ class CheckAdminMiddlewareTest(TestCase):
     def setUp(self) -> None:
         self.factory: RequestFactory = RequestFactory()
         self.middleware: CheckAdminMiddleware = CheckAdminMiddleware(  # type: ignore[no-untyped-call]
-            get_response=lambda r: r
+            get_response=lambda r: r,
         )
         cache.clear()
 
@@ -47,10 +44,14 @@ class CheckAdminMiddlewareTest(TestCase):
                 request: HttpRequest = self.factory.get(path)
                 response: HttpResponse | HttpRequest = self.middleware(request)
                 response_redirect: HttpResponseRedirect = cast(
-                    HttpResponseRedirect, response
+                    'HttpResponseRedirect',
+                    response,
                 )
 
-                self.assertEqual(response_redirect.status_code, constants.REDIRECTS)
+                self.assertEqual(
+                    response_redirect.status_code,
+                    constants.REDIRECTS,
+                )
                 self.assertEqual(
                     response_redirect.url,
                     reverse('users:registration'),
@@ -66,7 +67,7 @@ class CheckAdminMiddlewareTest(TestCase):
         self.assertEqual(response, request)
 
     def test_with_superuser_allows_access_to_all_pages(self) -> None:
-        User.objects.create_superuser(
+        User.objects.create_superuser(  # type: ignore[attr-defined]
             username='admin',
             email='admin@example.com',
             password='admin123',
@@ -112,13 +113,14 @@ class CheckAdminMiddlewareTest(TestCase):
         request1: HttpRequest = self.factory.get('/')
         response1: HttpResponse | HttpRequest = self.middleware(request1)
         response1_redirect: HttpResponseRedirect = cast(
-            HttpResponseRedirect, response1
+            'HttpResponseRedirect',
+            response1,
         )
         self.assertEqual(response1_redirect.status_code, constants.REDIRECTS)
 
         cache.clear()
 
-        User.objects.create_superuser(
+        User.objects.create_superuser(  # type: ignore[attr-defined]
             username='admin',
             email='admin@example.com',
             password='admin123',
@@ -130,7 +132,7 @@ class CheckAdminMiddlewareTest(TestCase):
 
     def test_regular_user_does_not_prevent_redirect(self) -> None:
         User.objects.all().delete()
-        User.objects.create_user(
+        User.objects.create_user(  # type: ignore[attr-defined]
             username='regular',
             email='regular@example.com',
             password='regular123',
@@ -139,15 +141,18 @@ class CheckAdminMiddlewareTest(TestCase):
         request: HttpRequest = self.factory.get('/')
         response: HttpResponse | HttpRequest = self.middleware(request)
         response_redirect: HttpResponseRedirect = cast(
-            HttpResponseRedirect, response
+            'HttpResponseRedirect',
+            response,
         )
 
         self.assertEqual(response_redirect.status_code, constants.REDIRECTS)
         self.assertEqual(response_redirect.url, reverse('users:registration'))
 
-    def test_staff_user_without_superuser_does_not_prevent_redirect(self) -> None:
+    def test_staff_user_without_superuser_does_not_prevent_redirect(
+        self,
+    ) -> None:
         User.objects.all().delete()
-        User.objects.create_user(
+        User.objects.create_user(  # type: ignore[attr-defined]
             username='staff',
             email='staff@example.com',
             password='staff123',
@@ -157,7 +162,8 @@ class CheckAdminMiddlewareTest(TestCase):
         request: HttpRequest = self.factory.get('/')
         response: HttpResponse | HttpRequest = self.middleware(request)
         response_redirect: HttpResponseRedirect = cast(
-            HttpResponseRedirect, response
+            'HttpResponseRedirect',
+            response,
         )
 
         self.assertEqual(response_redirect.status_code, constants.REDIRECTS)
@@ -177,7 +183,8 @@ class CheckAdminMiddlewareTest(TestCase):
     ],
 )
 class CheckAdminMiddlewareIntegrationTest(TestCase):
-    """Integration tests for CheckAdminMiddleware in Django request/response cycle."""
+    """Integration tests for CheckAdminMiddleware
+    in Django request/response cycle."""
 
     def setUp(self) -> None:
         cache.clear()
@@ -206,7 +213,7 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
 
     def test_with_superuser_integration_allows_access(self) -> None:
         cache.clear()
-        User.objects.create_superuser(
+        User.objects.create_superuser(  # type: ignore[attr-defined]
             username='admin',
             email='admin@example.com',
             password='admin123',
@@ -230,7 +237,9 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
                 f'получен {response.status_code}',
             )
 
-    def test_cannot_bypass_protection_with_direct_url_manipulation(self) -> None:
+    def test_cannot_bypass_protection_with_direct_url_manipulation(
+        self,
+    ) -> None:
         User.objects.all().delete()
 
         bypass_attempts: list[str] = [
@@ -245,10 +254,13 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
                 response = self.client.get(path, follow=False)
 
                 self.assertEqual(response.status_code, constants.REDIRECTS)
-                assert isinstance(
-                    response, HttpResponseRedirect
-                ), 'Response should be HttpResponseRedirect'
+                self.assertIsInstance(
+                    response,
+                    HttpResponseRedirect,
+                    msg='Response should be HttpResponseRedirect',
+                )
+                assert isinstance(response, HttpResponseRedirect)
                 self.assertEqual(
-                    response.url,
+                    response.url,  # type: ignore[attr-defined]
                     reverse('users:registration'),
                 )

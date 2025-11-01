@@ -43,8 +43,8 @@ class BaseView:
     Base view for income-related views. Sets default template and success_url.
     """
 
-    template_name = 'income/income.html'
-    success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
+    template_name: str = 'income/income.html'
+    success_url: str | None = str(reverse_lazy(INCOME_LIST_URL_NAME))
 
 
 class IncomeCategoryBaseView(BaseView):
@@ -59,7 +59,7 @@ class IncomeView(
     LoginRequiredMixin,
     SuccessMessageMixin[IncomeForm],
     BaseView,
-    FilterView[Income, IncomeFilter],
+    FilterView[Income, IncomeFilter],  # type: ignore[misc]
 ):
     """
     View for displaying user's incomes with filtering and chart data.
@@ -97,14 +97,14 @@ class IncomeView(
             'category',
             'account',
         )
-        income_filter = IncomeFilter(
+        income_filter = IncomeFilter(  # type: ignore[no-untyped-call]
             self.request.GET,
             queryset=income_queryset,
             user=self.request.user,
         )
 
         flattened_categories = build_category_tree(
-            list(categories),
+            [dict(cat) for cat in categories],
             depth=depth_limit,
         )
 
@@ -145,7 +145,7 @@ class IncomeView(
             },
         )
 
-        return context
+        return context  # type: ignore[no-any-return]
 
 
 class IncomeCreateView(
@@ -164,7 +164,7 @@ class IncomeCreateView(
     no_permission_url = reverse_lazy('login')
     form_class = IncomeForm
     depth_limit = 3
-    success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
+    success_url = str(reverse_lazy(INCOME_LIST_URL_NAME))
 
     category_model = IncomeCategory
     account_model = Account
@@ -174,8 +174,8 @@ class IncomeCreateView(
         Provide form kwargs with user-specific category and account querysets.
         """
         kwargs = super().get_form_kwargs()
-        kwargs['category_queryset'] = self.get_category_queryset()
-        kwargs['account_queryset'] = self.get_account_queryset()
+        kwargs['category_queryset'] = self.get_category_queryset()  # type: ignore[no-untyped-call]
+        kwargs['account_queryset'] = self.get_account_queryset()  # type: ignore[no-untyped-call]
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -202,6 +202,8 @@ class IncomeCreateView(
             return self.form_invalid(form)
 
         try:
+            if not isinstance(self.request.user, User):
+                raise TypeError('User must be authenticated')
             IncomeOps.add_income(
                 user=self.request.user,
                 account=account,
@@ -227,7 +229,7 @@ class IncomeCreateView(
 
 class IncomeCopyView(
     LoginRequiredMixin,
-    SuccessMessageMixin[IncomeForm],  # type: ignore[type-arg]
+    SuccessMessageMixin[IncomeForm],
     BaseView,
     View,
 ):
@@ -242,8 +244,16 @@ class IncomeCopyView(
         Handle POST request to copy an income record.
         """
         income_id = kwargs.get('pk')
+        if not isinstance(request.user, User):
+            return JsonResponse(
+                {'success': False, 'error': 'User must be authenticated'},
+            )
+        if income_id is None:
+            return JsonResponse(
+                {'success': False, 'error': 'Income ID is required'},
+            )
         try:
-            IncomeOps.copy_income(user=request.user, income_id=income_id)
+            IncomeOps.copy_income(user=request.user, income_id=int(income_id))
             return JsonResponse({'success': True})
         except (ValueError, TypeError) as e:
             return JsonResponse({'success': False, 'error': str(e)})
@@ -251,7 +261,7 @@ class IncomeCopyView(
 
 class IncomeUpdateView(
     LoginRequiredMixin,
-    SuccessMessageMixin[IncomeForm],  # type: ignore[type-arg]
+    SuccessMessageMixin[IncomeForm],
     IncomeFormQuerysetMixin,
     BaseView,
     UpdateView[Income, IncomeForm],
@@ -264,7 +274,7 @@ class IncomeUpdateView(
     template_name = 'income/change_income.html'
     form_class = IncomeForm
     no_permission_url = reverse_lazy('login')
-    success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
+    success_url = str(reverse_lazy(INCOME_LIST_URL_NAME))
     depth_limit = 3
 
     category_model = IncomeCategory
@@ -311,8 +321,8 @@ class IncomeUpdateView(
         querysets for update.
         """
         kwargs = super().get_form_kwargs()
-        kwargs['category_queryset'] = self.get_category_queryset()
-        kwargs['account_queryset'] = self.get_account_queryset()
+        kwargs['category_queryset'] = self.get_category_queryset()  # type: ignore[no-untyped-call]
+        kwargs['account_queryset'] = self.get_account_queryset()  # type: ignore[no-untyped-call]
         return kwargs
 
     def form_valid(self, form: Any) -> HttpResponse:
@@ -326,6 +336,8 @@ class IncomeUpdateView(
         category = cd.get('category')
         date = cd.get('date')
         try:
+            if not isinstance(self.request.user, User):
+                raise TypeError('User must be authenticated')
             IncomeOps.update_income(
                 user=self.request.user,
                 income=income,
@@ -341,11 +353,11 @@ class IncomeUpdateView(
             return self.form_invalid(form)
 
 
-class IncomeDeleteView(
+class IncomeDeleteView(  # type: ignore[misc]
     LoginRequiredMixin,
     BaseView,
-    DeleteView[Income, Any],  # type: ignore[type-arg]
-    DeletionMixin,
+    DeleteView[Income, Any],
+    DeletionMixin[Any],
 ):
     """
     View for deleting an income record.
@@ -354,15 +366,22 @@ class IncomeDeleteView(
     model = Income
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
-    success_url: str | None = reverse_lazy(INCOME_LIST_URL_NAME)
+    success_url = str(reverse_lazy(INCOME_LIST_URL_NAME))
 
     def post(
-        self, request: HttpRequest, *args: object, **kwargs: object
+        self,
+        request: HttpRequest,
+        *args: object,
+        **kwargs: object,
     ) -> JsonResponse:
         """
         Handle POST request to delete an income record.
         """
         income = self.get_object()
+        if not isinstance(request.user, User):
+            return JsonResponse(
+                {'success': False, 'error': 'User must be authenticated'},
+            )
         try:
             IncomeOps.delete_income(user=request.user, income=income)
             return JsonResponse({'success': True})
@@ -402,7 +421,7 @@ class IncomeCategoryView(LoginRequiredMixin, ListView[IncomeCategory]):
             .all()
         )
         flattened_categories = build_category_tree(
-            list(categories),
+            [dict(cat) for cat in categories],
             depth=self.depth,
         )
         context = super().get_context_data(**kwargs)
@@ -416,7 +435,8 @@ class IncomeCategoryView(LoginRequiredMixin, ListView[IncomeCategory]):
 
 
 class IncomeCategoryCreateView(
-    LoginRequiredMixin, CreateView[IncomeCategory, AddCategoryIncomeForm]
+    LoginRequiredMixin,
+    CreateView[IncomeCategory, AddCategoryIncomeForm],
 ):
     """
     View for creating a new income category.
@@ -425,7 +445,7 @@ class IncomeCategoryCreateView(
     model = IncomeCategory
     template_name = 'income/add_category_income.html'
     form_class = AddCategoryIncomeForm
-    success_url: str | None = reverse_lazy('income:category_list')
+    success_url = str(reverse_lazy('income:category_list'))
     depth = 3
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -470,28 +490,33 @@ class IncomeCategoryCreateView(
         """
         Handle invalid form submission for income category creation.
         """
-        error_message = ''
+        error_message: str
         if 'name' in form.errors:
-            error_message = _('Такая категория уже была добавлена!')
+            error_message = str(_('Такая категория уже была добавлена!'))
         else:
-            error_message = _(
-                'Ошибка при добавлении категории. Проверьте введенные данные.',
+            error_message = str(
+                _(
+                    'Ошибка при добавлении категории. '
+                    'Проверьте введенные данные.',
+                ),
             )
         messages.error(self.request, error_message)
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class IncomeCategoryDeleteView(
-    DeleteObjectMixin, BaseView, DeleteView[IncomeCategory, Any]
-):  # type: ignore[type-arg]
+class IncomeCategoryDeleteView(  # type: ignore[misc]
+    DeleteObjectMixin,
+    BaseView,
+    DeleteView[IncomeCategory, Any],
+):
     """
     View for deleting an income category.
     """
 
     model = IncomeCategory
-    success_message = constants.SUCCESS_CATEGORY_INCOME_DELETED
-    error_message = constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY
-    success_url: str | None = reverse_lazy('income:category_list')
+    success_message = str(constants.SUCCESS_CATEGORY_INCOME_DELETED)
+    error_message = str(constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY)
+    success_url = str(reverse_lazy('income:category_list'))
 
 
 class IncomeGroupAjaxView(LoginRequiredMixin, View):
@@ -500,7 +525,10 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
     """
 
     def get(
-        self, request: HttpRequest, *args: object, **kwargs: object
+        self,
+        request: HttpRequest,
+        *args: object,
+        **kwargs: object,
     ) -> HttpResponse:
         """
         Handle GET request to retrieve incomes by group for AJAX.
@@ -543,7 +571,10 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
     """
 
     def get(
-        self, request: HttpRequest, *args: object, **kwargs: object
+        self,
+        request: HttpRequest,
+        *args: object,
+        **kwargs: object,
     ) -> HttpResponse:
         """
         Handle GET request to retrieve income data for AJAX.

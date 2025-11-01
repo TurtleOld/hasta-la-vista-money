@@ -18,9 +18,7 @@ def parse_json(
     :return: list[dict] | int | str | None
         Словарь внутри списка, либо None
     """
-    if isinstance(json_data, dict):
-        return _parse_dict(json_data, key)
-    return None
+    return _parse_dict(json_data, key)
 
 
 def _parse_dict(
@@ -44,7 +42,7 @@ def _parse_list(
 
 
 def _parse_value(
-    value: dict[str, Any] | list[dict[str, Any]],
+    value: Any,
     key: str,
 ) -> list[dict[str, Any]] | int | str | None:
     if isinstance(value, dict):

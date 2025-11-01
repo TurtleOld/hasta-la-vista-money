@@ -46,13 +46,13 @@ def collect_info_income(user: User) -> list[IncomeInfoDict]:
         List of dictionaries containing income records with related data.
     """
     return list(
-        user.income_users.select_related('user').values(
+        user.income_users.select_related('user').values(  # type: ignore[attr-defined]
             'id',
             'date',
             'account__name_account',
             'category__name',
             'amount',
-        )
+        ),
     )
 
 
@@ -69,13 +69,13 @@ def collect_info_expense(user: User) -> list[ExpenseInfoDict]:
         List of dictionaries containing expense records with related data.
     """
     return list(
-        user.expense_users.select_related('user').values(
+        user.expense_users.select_related('user').values(  # type: ignore[attr-defined]
             'id',
             'date',
             'account__name_account',
             'category__name',
             'amount',
-        )
+        ),
     )
 
 

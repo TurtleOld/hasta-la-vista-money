@@ -621,6 +621,7 @@ class TestAccountServices(TestCase):
         self.user = User.objects.get(id=1)
         self.account1 = Account.objects.filter(user=self.user).first()
         self.group = self.user.groups.first()
+        self.group_id: str | None
         if self.group:
             self.group_id = str(self.group.pk)
         else:
@@ -649,7 +650,8 @@ class TestAccountServices(TestCase):
             self.user,
             self.group_id,
         )
-        group_users = list(self.group.user_set.all())
+        assert self.group is not None
+        group_users = list(self.group.user_set.all())  # type: ignore[attr-defined]
         self.assertTrue(all(acc.user in group_users for acc in accounts))
 
     def test_get_sum_all_accounts(self) -> None:
@@ -912,7 +914,7 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
         """Test form initialization with user accounts."""
         form = TransferMoneyAccountForm(user=self.user)
 
-        self.assertEqual(form.fields['from_account'].queryset.count(), 2)
+        self.assertEqual(form.fields['from_account'].queryset.count(), 2)  # type: ignore[attr-defined]
 
         self.assertIn('amount', form.fields)
         self.assertIn('notes', form.fields)

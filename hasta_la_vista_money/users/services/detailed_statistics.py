@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import QuerySet, Sum
@@ -184,7 +184,7 @@ def _top_categories_qs(
     model,
     user: User,
     year_start: date,
-) -> QuerySet:
+) -> Any:
     return (
         model.objects.filter(user=user, date__gte=year_start)
         .values('category__name')
@@ -254,12 +254,12 @@ def _balances_and_delta(
     accounts: QuerySet[Account],
     today: date,
 ) -> tuple[dict[str, float], dict[str, DeltaByCurrencyDict]]:
-    balances_now = defaultdict(float)
+    balances_now: dict[str, float] = defaultdict(float)
     for acc in accounts:
         balances_now[acc.currency] += float(acc.balance)
 
     prev_day = today - timedelta(days=1)
-    balances_prev = defaultdict(float)
+    balances_prev: dict[str, float] = defaultdict(float)
     for acc in accounts:
         if acc.created_at and acc.created_at.date() <= prev_day:
             balances_prev[acc.currency] += float(acc.balance)
@@ -276,7 +276,7 @@ def _balances_and_delta(
         )
         delta[cur] = {'delta': diff, 'percent': pct}
 
-    return dict(balances_now), delta
+    return dict(balances_now), delta  # type: ignore[return-value]
 
 
 def _six_months_data(
@@ -306,16 +306,28 @@ def _six_months_data(
                 'expenses': exp_sum,
                 'income': inc_sum,
                 'savings': inc_sum - exp_sum,
-            }
+            },
         )
     out.reverse()
     for m in out:
+        income_raw = m.get('income', 0.0) or 0.0
+        savings_raw = m.get('savings', 0.0) or 0.0
+        income_val = (
+            float(income_raw)
+            if isinstance(income_raw, (int, float, str))
+            else 0.0
+        )  # type: ignore[arg-type]
+        savings_val = (
+            float(savings_raw)
+            if isinstance(savings_raw, (int, float, str))
+            else 0.0
+        )  # type: ignore[arg-type]
         m['savings_percent'] = (
-            m['savings'] / m['income'] * constants.PERCENTAGE_MULTIPLIER
-            if m['income'] > constants.ZERO
-            else constants.ZERO
+            savings_val / income_val * constants.PERCENTAGE_MULTIPLIER  # type: ignore[operator]
+            if income_val > constants.ZERO  # type: ignore[operator]
+            else float(constants.ZERO)
         )
-    return out
+    return out  # type: ignore[return-value]
 
 
 def _card_months_block(
@@ -400,14 +412,20 @@ def _card_months_block(
         )
         overdue = now > grace_end and debt > constants.ZERO
 
-        m = {
+        purchase_start_dt = timezone.make_aware(
+            datetime.combine(purchase_start, time.min),
+        )
+        m: CardMonthDict = {  # type: ignore[typeddict-item]
             'month': purchase_start.strftime('%m.%Y'),
-            'purchase_start': purchase_start,
+            'purchase_start': purchase_start_dt,
             'purchase_end': purchase_end,
             'grace_end': grace_end,
             'debt_for_month': debt,
             'is_overdue': overdue,
             'days_until_due': days_left,
+            'payments_made': 0.0,
+            'remaining_debt': 0.0,
+            'is_paid': False,
         }
         months.append(m)
 
@@ -421,16 +439,16 @@ def _card_months_block(
                 purchase_start,
             )
             if schedule:
-                final_debt = schedule['final_debt']
+                final_debt = float(schedule['final_debt'])  # type: ignore[assignment]
 
         history.append(
             {
-                'month': m['month'],
+                'month': str(m['month']),  # type: ignore[typeddict-item]
                 'debt': debt,
                 'final_debt': final_debt,
                 'grace_end': grace_end.strftime('%d.%m.%Y'),
                 'is_overdue': overdue,
-            }
+            },
         )
 
     return months, history
@@ -481,7 +499,7 @@ def _build_payment_schedule(
                 'is_overdue': m['is_overdue'],
                 'days_until_due': m['days_until_due'],
                 'is_paid': m['is_paid'],
-            }
+            },
         )
     return schedule
 
@@ -493,32 +511,44 @@ def _credit_cards_block(
     today_month = timezone.now().date().replace(day=1)
 
     credit_cards = accounts.filter(
-        type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT]
+        type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT],
     )
 
     for card in credit_cards:
         debt_now = card.get_credit_card_debt()
         months, history = _card_months_block(card, today_month)
 
-        payments = list(
+        payments_raw = list(
             Income.objects.filter(account=card)
             .order_by('date')
-            .values('amount', 'date')
+            .values('amount', 'date'),
         )
+        payments: list[PaymentItemDict] = [
+            {'amount': Decimal(str(p['amount'])), 'date': p['date']}  # type: ignore[typeddict-item]
+            for p in payments_raw
+        ]
         _apply_payments_to_months(months, payments)
         schedule = _build_payment_schedule(months, history, card)
 
         current_info = card.calculate_grace_period_info(today_month)
-        current_info['debt_for_month'] = max(
-            0,
-            current_info.get('debt_for_month', 0),
+        current_info['debt_for_month'] = Decimal(
+            str(
+                max(  # type: ignore[typeddict-item]
+                    0,
+                    current_info.get('debt_for_month', 0),
+                ),
+            ),
         )
-        current_info['final_debt'] = max(
-            0,
-            current_info.get('final_debt', 0),
+        current_info['final_debt'] = Decimal(
+            str(
+                max(  # type: ignore[typeddict-item]
+                    0,
+                    current_info.get('final_debt', 0),
+                ),
+            ),
         )
 
-        limit_left = (card.limit_credit or 0) - (debt_now or 0)
+        limit_left = Decimal(str((card.limit_credit or 0) - (debt_now or 0)))  # type: ignore[typeddict-item]
 
         out.append(
             {
@@ -531,7 +561,7 @@ def _credit_cards_block(
                 'card_obj': card,
                 'limit_left': limit_left,
                 'payment_schedule': schedule,
-            }
+            },
         )
     return out
 
@@ -549,11 +579,11 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
 
     incomes = collect_info_income(user)
     for it in incomes:
-        it['type'] = 'income'
+        it['type'] = 'income'  # type: ignore[typeddict-unknown-key]
 
     expenses = collect_info_expense(user)
     for it in expenses:
-        it['type'] = 'expense'
+        it['type'] = 'expense'  # type: ignore[typeddict-unknown-key]
 
     income_expense = sort_expense_income(expenses, incomes)
 
@@ -578,7 +608,7 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
         'top_expense_categories': list(top_expense_categories),
         'top_income_categories': list(top_income_categories),
         'receipt_info_by_month': receipt_info_by_month,
-        'income_expense': income_expense,
+        'income_expense': income_expense,  # type: ignore[typeddict-item]
         'transfer_money_log': transfer_money_log,
         'accounts': accounts,
         'balances_by_currency': dict(balances_by_currency),

@@ -50,7 +50,7 @@ class TestAccountSerializer(TestCase):
         serializer = AccountSerializer(self.account)
         data = serializer.data
 
-        self.assertEqual(data['id'], self.account.id)
+        self.assertEqual(data['id'], self.account.pk)
         self.assertEqual(data['name_account'], 'Test Account')
         self.assertEqual(data['balance'], '1000.50')
         self.assertEqual(data['currency'], 'RUB')
@@ -100,7 +100,8 @@ class TestAccountSerializer(TestCase):
         for field_name in writable_fields:
             field = serializer.fields[field_name]
             self.assertFalse(
-                field.read_only, f'Field {field_name} should be writable'
+                field.read_only,
+                f'Field {field_name} should be writable',
             )
 
     def test_account_serializer_multiple_accounts(self) -> None:

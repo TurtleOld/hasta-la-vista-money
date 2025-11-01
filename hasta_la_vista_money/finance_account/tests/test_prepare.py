@@ -283,7 +283,7 @@ class TestPrepareFunctions(TestCase):
 
     def test_sort_expense_income_empty_dict_inputs(self) -> None:
         """Test sort_expense_income with empty dict inputs."""
-        sorted_data = sort_expense_income({}, {})
+        sorted_data = sort_expense_income([], [])  # type: ignore[arg-type]
 
         self.assertIsNotNone(sorted_data)
         self.assertIsInstance(sorted_data, list)

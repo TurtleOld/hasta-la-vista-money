@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, cast
 
 from django.db.models import Sum
 from django.utils import timezone
@@ -36,8 +36,8 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
                 'title': 'Низкий баланс на счетах',
                 'message': 'На следующих счетах низкий баланс: {}'.format(
                     ', '.join(
-                        [acc.name_account for acc in low_balance_accounts]
-                    )
+                        [acc.name_account for acc in low_balance_accounts],
+                    ),
                 ),
                 'icon': 'bi-exclamation-triangle',
             },
@@ -82,4 +82,4 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
                 'icon': 'bi-check-circle',
             },
         )
-    return notifications
+    return [cast('NotificationDict', n) for n in notifications]

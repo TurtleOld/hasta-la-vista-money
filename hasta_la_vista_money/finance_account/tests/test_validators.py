@@ -1,6 +1,7 @@
 """Tests for finance account validators."""
 
 from decimal import Decimal, InvalidOperation
+from typing import cast
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -71,10 +72,10 @@ class TestValidatePositiveAmount(TestCase):
             with (
                 self.subTest(value=value),
                 self.assertRaises(
-                    (ValidationError, TypeError, InvalidOperation)
+                    (ValidationError, TypeError, InvalidOperation),
                 ),
             ):
-                validate_positive_amount(value)
+                validate_positive_amount(cast('Decimal', value))  # type: ignore[arg-type]
         valid_cases = [
             1,
             0.5,
@@ -83,7 +84,7 @@ class TestValidatePositiveAmount(TestCase):
         ]
         for value in valid_cases:
             with self.subTest(value=value):
-                validate_positive_amount(Decimal(value))
+                validate_positive_amount(Decimal(str(value)))  # type: ignore[arg-type]
 
 
 class TestValidateAccountBalance(TestCase):
@@ -179,18 +180,19 @@ class TestValidateDifferentAccounts(TestCase):
             validate_different_accounts(self.account1, self.account1)
 
         self.assertIn(
-            'Нельзя переводить деньги на тот же счет', str(context.exception)
+            'Нельзя переводить деньги на тот же счет',
+            str(context.exception),
         )
 
     def test_validate_different_accounts_none_first(self) -> None:
         """Test different accounts validation with None as first account."""
         with self.assertRaises(ValidationError):
-            validate_different_accounts(None, self.account2)
+            validate_different_accounts(None, self.account2)  # type: ignore[arg-type]
 
     def test_validate_different_accounts_none_second(self) -> None:
         """Test different accounts validation with None as second account."""
         with self.assertRaises(ValidationError):
-            validate_different_accounts(self.account1, None)
+            validate_different_accounts(self.account1, None)  # type: ignore[arg-type]
 
 
 class TestValidateCreditFieldsRequired(TestCase):
@@ -301,7 +303,8 @@ class TestValidateCreditFieldsRequired(TestCase):
             error_messages,
         )
         self.assertIn(
-            'Для кредитного счёта необходимо указать лимит', error_messages
+            'Для кредитного счёта необходимо указать лимит',
+            error_messages,
         )
         self.assertIn(
             'Для кредитного счёта необходимо указать дату платежа',

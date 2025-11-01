@@ -13,7 +13,7 @@ class IncomeFilterTest(TestCase):
     Test cases for the IncomeFilter.
     """
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'income.yaml',

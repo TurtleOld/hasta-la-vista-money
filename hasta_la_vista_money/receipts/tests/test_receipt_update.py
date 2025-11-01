@@ -18,7 +18,7 @@ class ReceiptUpdateViewTest(TestCase):
 
     def setUp(self) -> None:
         """Настройка тестовых данных."""
-        self.user = User.objects.create_user(
+        self.user = User.objects.create_user(  # type: ignore[attr-defined]
             username='testuser',
             email='test@example.com',
             password='testpass123',
@@ -89,8 +89,8 @@ class ReceiptUpdateViewTest(TestCase):
         initial_balance = self.initial_balance
 
         update_data = {
-            'seller': self.seller.id,
-            'account': self.account1.id,
+            'seller': self.seller.pk,
+            'account': self.account1.pk,
             'receipt_date': '2024-01-15 12:00:00',
             'number_receipt': 12345,
             'operation_type': 1,
@@ -129,8 +129,8 @@ class ReceiptUpdateViewTest(TestCase):
         initial_balance = self.initial_balance
 
         update_data = {
-            'seller': self.seller.id,
-            'account': self.account1.id,
+            'seller': self.seller.pk,
+            'account': self.account1.pk,
             'receipt_date': '2024-01-15 12:00:00',
             'number_receipt': 12345,
             'operation_type': 1,
@@ -167,8 +167,8 @@ class ReceiptUpdateViewTest(TestCase):
         initial_balance2 = self.account2.balance
 
         update_data = {
-            'seller': self.seller.id,
-            'account': self.account2.id,
+            'seller': self.seller.pk,
+            'account': self.account2.pk,
             'receipt_date': '2024-01-15 12:00:00',
             'number_receipt': 12345,
             'operation_type': 1,
@@ -213,8 +213,8 @@ class ReceiptUpdateViewTest(TestCase):
         initial_balance2 = self.account2.balance
 
         update_data = {
-            'seller': self.seller.id,
-            'account': self.account2.id,
+            'seller': self.seller.pk,
+            'account': self.account2.pk,
             'receipt_date': '2024-01-15 12:00:00',
             'number_receipt': 12345,
             'operation_type': 1,
@@ -259,8 +259,8 @@ class ReceiptUpdateViewTest(TestCase):
         initial_balance = self.initial_balance
 
         update_data = {
-            'seller': self.seller.id,
-            'account': self.account1.id,
+            'seller': self.seller.pk,
+            'account': self.account1.pk,
             'receipt_date': '2024-01-15 12:00:00',
             'number_receipt': 12345,
             'operation_type': 1,
@@ -293,7 +293,7 @@ class ReceiptUpdateViewTest(TestCase):
 
     def test_receipt_update_unauthorized_user(self) -> None:
         """Тест попытки обновления чека неавторизованным пользователем."""
-        other_user = User.objects.create_user(
+        other_user = User.objects.create_user(  # type: ignore[attr-defined]
             username='otheruser',
             email='other@example.com',
             password='otherpass123',
@@ -321,8 +321,8 @@ class ReceiptUpdateViewTest(TestCase):
         initial_balance = self.initial_balance
 
         update_data = {
-            'seller': self.seller.id,
-            'account': self.account1.id,
+            'seller': self.seller.pk,
+            'account': self.account1.pk,
             'receipt_date': '2024-01-15 12:00:00',
             'number_receipt': 12345,
             'operation_type': 1,
@@ -354,8 +354,8 @@ class ReceiptUpdateViewTest(TestCase):
         initial_balance = self.initial_balance
 
         update_data = {
-            'seller': self.seller.id,
-            'account': self.account1.id,
+            'seller': self.seller.pk,
+            'account': self.account1.pk,
             'receipt_date': '2024-01-15 12:00:00',
             'number_receipt': 12345,
             'operation_type': 1,
@@ -394,9 +394,11 @@ class ReceiptUpdateViewTest(TestCase):
         self.assertEqual(len(products), 2)
 
         product1 = products.filter(product_name='Товар 1').first()
+        assert product1 is not None
         self.assertEqual(product1.quantity, Decimal('0.70'))
         self.assertEqual(product1.amount, Decimal('70.00'))
 
         product2 = products.filter(product_name='Товар 2').first()
+        assert product2 is not None
         self.assertEqual(product2.quantity, Decimal('0.70'))
         self.assertEqual(product2.amount, Decimal('105.00'))

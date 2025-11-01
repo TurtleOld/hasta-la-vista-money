@@ -15,7 +15,7 @@ class IncomeViewsTest(TestCase):
     Test cases for income-related views.
     """
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'income.yaml',

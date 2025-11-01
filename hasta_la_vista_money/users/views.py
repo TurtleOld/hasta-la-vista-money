@@ -86,7 +86,10 @@ class ListUsers(
             user_update_pass_form = PasswordChangeForm(
                 user=self.request.user,
             )
-            user_statistics = get_user_statistics(self.request.user)
+            if isinstance(self.request.user, User):
+                user_statistics = get_user_statistics(self.request.user)
+            else:
+                user_statistics = None
 
             context['user_update'] = user_update
             context['user_update_pass_form'] = user_update_pass_form

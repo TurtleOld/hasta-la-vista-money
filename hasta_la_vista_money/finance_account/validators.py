@@ -55,11 +55,6 @@ def validate_different_accounts(
     Raises:
         ValidationError: If source and destination accounts are the same.
     """
-    if from_account is None or to_account is None:
-        raise ValidationError(
-            _('Нельзя выбирать одинаковые счета для перевода.'),
-            code='invalid_accounts',
-        )
     if from_account == to_account:
         raise ValidationError(
             _('Нельзя переводить деньги на тот же счет'),
@@ -68,8 +63,8 @@ def validate_different_accounts(
 
 
 def validate_credit_fields_required(
-    type_account: str,
-    bank: str,
+    type_account: str | None,
+    bank: str | None,
     limit_credit: Any = None,
     payment_due_date: Any = None,
     grace_period_days: Any = None,
@@ -103,12 +98,12 @@ def validate_credit_fields_required(
 
         if not payment_due_date:
             errors.append(
-                _('Для кредитного счёта необходимо указать дату платежа')
+                _('Для кредитного счёта необходимо указать дату платежа'),
             )
 
         if not grace_period_days or grace_period_days <= 0:
             errors.append(
-                _('Для кредитного счёта необходимо указать льготный период')
+                _('Для кредитного счёта необходимо указать льготный период'),
             )
 
         if errors:

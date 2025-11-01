@@ -14,7 +14,7 @@ class IncomeModelTest(TestCase):
     Test cases for the Income model.
     """
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'income.yaml',
@@ -50,7 +50,10 @@ class IncomeCategoryModelTest(TestCase):
     Test cases for the IncomeCategory model.
     """
 
-    fixtures: ClassVar[list[str]] = ['users.yaml', 'income_cat.yaml']
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
+        'users.yaml',
+        'income_cat.yaml',
+    ]
 
     def setUp(self) -> None:
         self.user = User.objects.get(pk=1)

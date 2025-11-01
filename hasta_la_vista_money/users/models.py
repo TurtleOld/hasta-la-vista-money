@@ -9,7 +9,7 @@ class User(AbstractUser):
     theme: CharField[Any, Any] = CharField(max_length=10, default='dark')
 
     def __str__(self) -> str:
-        return self.username
+        return str(self.username)
 
 
 class TokenAdmin(admin.ModelAdmin):

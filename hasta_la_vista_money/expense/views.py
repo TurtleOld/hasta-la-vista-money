@@ -78,7 +78,7 @@ class ExpenseCategoryBaseView(BaseView):
 class ExpenseView(
     LoginRequiredMixin,
     SuccessMessageMixin[AddExpenseForm],
-    FilterView[Expense, ExpenseFilter],
+    FilterView[Expense, ExpenseFilter],  # type: ignore[misc]
 ):
     """Main expense list view with filtering and pagination."""
 
@@ -127,7 +127,7 @@ class ExpenseView(
 
         expense_categories = expense_service.get_categories()
         flattened_categories = build_category_tree(
-            expense_categories,
+            list(expense_categories),
             depth=3,
         )
 
@@ -347,7 +347,7 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
 
         expense_categories = category_service.get_categories()
         flattened_categories = build_category_tree(
-            expense_categories,
+            list(expense_categories),
             depth=self.depth,
         )
 

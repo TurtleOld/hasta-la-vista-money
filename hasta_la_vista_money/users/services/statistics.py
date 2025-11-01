@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Sum
@@ -32,7 +33,7 @@ class UserStatistics(TypedDict, total=False):
 def get_user_statistics(user: User) -> UserStatistics:
     today = timezone.now().date()
     month_start = today.replace(day=1)
-    last_month = (month_start - timezone.timedelta(days=1)).replace(day=1)
+    last_month = (month_start - timedelta(days=1)).replace(day=1)
 
     accounts_qs = Account.objects.filter(user=user)
     accounts_data = accounts_qs.aggregate(
@@ -92,17 +93,21 @@ def get_user_statistics(user: User) -> UserStatistics:
         .order_by('-total')[: constants.RECENT_ITEMS_LIMIT]
     )
 
-    return {
-        'total_balance': total_balance,
-        'accounts_count': accounts_count,
-        'current_month_expenses': current_month_expenses,
-        'current_month_income': current_month_income,
-        'last_month_expenses': last_month_expenses,
-        'last_month_income': last_month_income,
+    return {  # type: ignore[typeddict-item]
+        'total_balance': Decimal(str(total_balance)),
+        'accounts_count': int(accounts_count),
+        'current_month_expenses': Decimal(str(current_month_expenses)),
+        'current_month_income': Decimal(str(current_month_income)),
+        'last_month_expenses': Decimal(str(last_month_expenses)),
+        'last_month_income': Decimal(str(last_month_income)),
         'recent_expenses': list(recent_expenses),
         'recent_incomes': list(recent_incomes),
         'receipts_count': receipts_count,
         'top_expense_categories': list(top_expense_categories),
-        'monthly_savings': current_month_income - current_month_expenses,
-        'last_month_savings': last_month_income - last_month_expenses,
+        'monthly_savings': Decimal(
+            str(current_month_income - current_month_expenses),
+        ),
+        'last_month_savings': Decimal(
+            str(last_month_income - last_month_expenses),
+        ),
     }

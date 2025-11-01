@@ -65,7 +65,7 @@ class Seller(models.Model):
     )
 
     def __str__(self) -> str:
-        return self.name_seller
+        return str(self.name_seller)
 
     objects = SellerManager()
 
@@ -245,6 +245,6 @@ class Receipt(models.Model):
         ]
 
     def datetime(self) -> datetime:
-        return self.receipt_date
+        return self.receipt_date  # type: ignore[no-any-return]
 
     objects = ReceiptManager()

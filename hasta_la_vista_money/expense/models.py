@@ -36,7 +36,7 @@ class ExpenseCategory(models.Model):
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['name']),
         ]
-        constraints: ClassVar[list[models.UniqueConstraint]] = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=['user', 'name'],
                 name='unique_user_category_expense',

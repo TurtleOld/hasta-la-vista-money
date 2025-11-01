@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from typing import TYPE_CHECKING, Any, Protocol
 
 from django.contrib import messages
@@ -6,16 +7,8 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-
     from django.forms import BaseForm, ModelForm
     from django.http import HttpRequest, HttpResponse
-else:
-    Generator = object
-    BaseForm = object
-    ModelForm = object
-    HttpRequest = object
-    HttpResponse = object
 
 
 def get_category_choices(

@@ -14,7 +14,7 @@ class IncomeFormTest(TestCase):
     Test cases for the IncomeForm.
     """
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'income_cat.yaml',
@@ -68,7 +68,7 @@ class IncomeFormTest(TestCase):
         )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
-        self.assertEqual(form.fields['category'].choices, category_choices)
+        self.assertEqual(form.fields['category'].choices, category_choices)  # type: ignore[attr-defined,assignment]
 
 
 class AddCategoryIncomeFormTest(TestCase):
@@ -76,7 +76,10 @@ class AddCategoryIncomeFormTest(TestCase):
     Test cases for the AddCategoryIncomeForm.
     """
 
-    fixtures: ClassVar[list[str]] = ['users.yaml', 'income_cat.yaml']
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
+        'users.yaml',
+        'income_cat.yaml',
+    ]
 
     def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
@@ -109,13 +112,15 @@ class AddCategoryIncomeFormTest(TestCase):
         self.assertIn('name', form.fields)
         self.assertIn('parent_category', form.fields)
 
-    def test_create_category_income_form_configure_category_choices(self) -> None:
+    def test_create_category_income_form_configure_category_choices(
+        self,
+    ) -> None:
         form = AddCategoryIncomeForm(
             category_queryset=IncomeCategory.objects.filter(user=self.user),
         )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
         self.assertEqual(
-            form.fields['parent_category'].choices,
+            form.fields['parent_category'].choices,  # type: ignore[attr-defined]
             category_choices,
         )

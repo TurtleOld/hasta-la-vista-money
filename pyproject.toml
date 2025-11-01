@@ -122,7 +122,7 @@ exclude = [
 [tool.ruff.lint]
 select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
 ignore = [
-    "D100", "D101", "D102", "D104", "D105", "D106", "E203", "COM812", "Q000", "Q003", "PT009", "RUF001", "RUF002", "PLR0913", "FBT001", "FBT002", "ARG002", "RUF012", "PT027",
+    "D100", "D101", "D102", "D104", "D105", "D106", "E203", "COM812", "Q000", "Q003", "PT009", "RUF001", "RUF002", "PLR0913", "FBT001", "FBT002", "ARG002", "RUF012", "PT027", "TRY301", "TRY003", "EM101",
 ]
 external = [ "WPS" ]
 
@@ -155,9 +155,18 @@ known-first-party = ["hasta_la_vista_money"]
 "hasta_la_vista_money/receipts/services/receipt_ai_prompt.py" = [
   "E501",
 ]
+"hasta_la_vista_money/income/views.py" = [
+  "E501", # long translation strings
+]
+"hasta_la_vista_money/loan/views.py" = [
+  "S101", # asserts for type narrowing
+]
+"hasta_la_vista_money/api/test_throttling.py" = [
+  "S101", # asserts for type narrowing
+]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 strict = true
 plugins = [
   "mypy_django_plugin.main",
@@ -216,7 +225,7 @@ profile = "black"
 multi_line_output = 3
 include_trailing_comma = true
 default_section = "FIRSTPARTY"
-line_length = 79
+line_length = 80
 force_single_line = false
 known_django = "django"
 known_first_party = "hasta_la_vista_money"

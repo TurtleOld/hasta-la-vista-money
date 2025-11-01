@@ -1,4 +1,5 @@
-from typing import Any, NamedTuple
+from collections.abc import Iterable
+from typing import Any, NamedTuple, cast
 
 from django.contrib.auth.models import Group
 from django.db.models import Sum
@@ -31,10 +32,10 @@ class ExpenseService:
         self.user = user
         self.request = request
 
-    def get_categories(self) -> QuerySet[dict[str, Any]]:
+    def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
-        return (
-            self.user.category_expense_users.select_related('user')
+        qs = (
+            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
             .values(
                 'id',
                 'name',
@@ -43,11 +44,12 @@ class ExpenseService:
             )
             .order_by('name', 'parent_category')
         )
+        return cast('Iterable[dict[str, str | int | None]]', qs)
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
-        return (
-            self.user.category_expense_users.select_related('user')
+        return (  # type: ignore[no-any-return]
+            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
             .order_by('parent_category__name', 'name')
             .all()
         )
@@ -61,34 +63,37 @@ class ExpenseService:
 
     def get_expense_form(self) -> AddExpenseForm:
         """Get expense form with user-specific querysets."""
-        return AddExpenseForm(  # type: ignore[call-untyped]
+        return AddExpenseForm(
             category_queryset=self.get_categories_queryset(),
             account_queryset=Account.objects.filter(user=self.user),
         )
 
-    def create_expense(self, form) -> Expense:
+    def create_expense(self, form: AddExpenseForm) -> Expense:
         """Create a new expense."""
         expense = form.save(commit=False)
         expense.user = self.user
         expense.save()
 
-        if expense.account and expense.amount is not None:
+        if expense.amount is not None:
             AccountService.apply_receipt_spend(expense.account, expense.amount)
 
         return expense
 
-    def update_expense(self, expense: Expense, form) -> None:
+    def update_expense(self, expense: Expense, form: AddExpenseForm) -> None:
         """Update an existing expense."""
-        expense = get_queryset_type_income_expenses(
-            expense.id,
+        expense_updated: Expense = get_queryset_type_income_expenses(  # type: ignore[assignment]
+            expense.id,  # type: ignore[attr-defined]
             Expense,
             form,
         )
 
-        amount = form.cleaned_data.get('amount')
-        account = form.cleaned_data.get('account')
+        amount = form.cleaned_data['amount']
+        account = form.cleaned_data['account']
         account_balance = get_object_or_404(Account, id=account.id)
-        old_account_balance = get_object_or_404(Account, id=expense.account.id)
+        old_account_balance = get_object_or_404(
+            Account,
+            id=expense_updated.account.id,
+        )
 
         if account_balance.user != self.user:
             error_msg = 'У вас нет прав для выполнения этого действия'
@@ -98,14 +103,14 @@ class ExpenseService:
         AccountService.adjust_on_receipt_update(
             old_account=old_account_balance,
             new_account=account_balance,
-            old_total_sum=expense.amount,
+            old_total_sum=expense_updated.amount,
             new_total_sum=amount,
         )
 
         # Update expense
-        expense.user = self.user
-        expense.amount = amount
-        expense.save()
+        expense_updated.user = self.user
+        expense_updated.amount = amount
+        expense_updated.save()
 
     def delete_expense(self, expense: Expense) -> None:
         """Delete an expense and restore account balance."""
@@ -127,7 +132,7 @@ class ExpenseService:
         new_expense = get_new_type_operation(Expense, expense_id, self.request)
         valid_expense = get_object_or_404(Expense, pk=new_expense.pk)
 
-        if valid_expense.account:
+        if valid_expense.account is not None:
             valid_expense.account.balance -= valid_expense.amount
             valid_expense.account.save()
 
@@ -180,7 +185,7 @@ class ExpenseService:
         else:
             try:
                 group = Group.objects.get(pk=group_id)
-                group_users = list(group.user_set.all())
+                group_users = list(group.user_set.all())  # type: ignore[attr-defined]
                 expenses = Expense.objects.filter(
                     user__in=group_users,
                 ).select_related('user', 'category', 'account')
@@ -198,20 +203,12 @@ class ExpenseService:
             {
                 'id': expense.pk,
                 'date': expense.date.strftime('%d.%m.%Y'),
-                'amount': float(expense.amount)
-                if expense.amount is not None
-                else 0,
-                'category_name': expense.category.name
-                if expense.category
-                else '',
-                'account_name': expense.account.name_account
-                if expense.account
-                else '',
+                'amount': float(expense.amount) if expense.amount else 0,
+                'category_name': expense.category.name,
+                'account_name': expense.account.name_account,
                 'user_name': expense.user.get_full_name()
-                or expense.user.username
-                if expense.user
-                else '',
-                'user_id': expense.user.pk if expense.user else None,
+                or expense.user.username,
+                'user_id': expense.user.pk,
                 'is_receipt': False,
                 'receipt_id': None,
                 'actions': '',  # Will be generated on frontend
@@ -229,10 +226,10 @@ class ExpenseCategoryService:
         self.user = user
         self.request = request
 
-    def get_categories(self) -> QuerySet[dict[str, Any]]:
+    def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
-        return (
-            self.user.category_expense_users.select_related('parent_category')
+        qs = (
+            self.user.category_expense_users.select_related('parent_category')  # type: ignore[attr-defined]
             .values(
                 'id',
                 'name',
@@ -241,11 +238,12 @@ class ExpenseCategoryService:
             )
             .order_by('name', 'parent_category')
         )
+        return cast('Iterable[dict[str, str | int | None]]', qs)
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
-        return (
-            self.user.category_expense_users.select_related('user')
+        return (  # type: ignore[no-any-return]
+            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
             .order_by('parent_category__name', 'name')
             .all()
         )
@@ -390,21 +388,13 @@ class ReceiptExpenseService:
         return [
             {
                 'id': f'receipt_{receipt.pk}',
-                'date': receipt.receipt_date.strftime('%d.%m.%Y')
-                if receipt.receipt_date
-                else '',
-                'amount': float(receipt.total_sum)
-                if receipt.total_sum is not None
-                else 0,
+                'date': receipt.receipt_date.strftime('%d.%m.%Y'),
+                'amount': float(receipt.total_sum) if receipt.total_sum else 0,
                 'category_name': RECEIPT_CATEGORY_NAME,
-                'account_name': receipt.account.name_account
-                if receipt.account
-                else '',
+                'account_name': receipt.account.name_account,
                 'user_name': receipt.user.get_full_name()
-                or receipt.user.username
-                if receipt.user
-                else '',
-                'user_id': receipt.user.pk if receipt.user else None,
+                or receipt.user.username,
+                'user_id': receipt.user.pk,
                 'is_receipt': True,
                 'receipt_id': receipt.pk,
                 'actions': '',  # No buttons for receipts

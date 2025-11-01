@@ -1,5 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar
-
+from typing import TYPE_CHECKING, ClassVar, cast
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -34,11 +33,11 @@ class LoginUserServiceTest(TestCase):
 
     def setUp(self) -> None:
         self.factory: RequestFactory = RequestFactory()
-        user: UserType | None = User.objects.first()
+        user = User.objects.first()
         if user is None:
             error_msg: str = 'No user found in fixtures'
             raise ValueError(error_msg)
-        self.user: UserType = user
+        self.user: UserType = cast('UserType', user)
         self.user.set_password('testpassword')
         self.user.save()
 
@@ -139,7 +138,7 @@ class LoginUserServiceTest(TestCase):
         mock_refresh_token: MagicMock,
     ) -> None:
         mock_refresh_token.for_user.side_effect = ValueError(
-            'Token generation failed'
+            'Token generation failed',
         )
 
         request: HttpRequest = self.get_request()
@@ -185,7 +184,7 @@ class LoginUserServiceTest(TestCase):
         mock_refresh_token: MagicMock,
     ) -> None:
         mock_refresh_token.for_user.side_effect = AttributeError(
-            'Attribute error'
+            'Attribute error',
         )
 
         request: HttpRequest = self.get_request()
@@ -252,7 +251,9 @@ class SetAuthCookiesInResponseTest(TestCase):
         mock_set_auth_cookies.return_value = response
 
         result: HttpResponse = set_auth_cookies_in_response(
-            response, access_token, refresh_token
+            response,
+            access_token,
+            refresh_token,
         )
 
         mock_set_auth_cookies.assert_called_once_with(
@@ -272,7 +273,10 @@ class SetAuthCookiesInResponseTest(TestCase):
 
         mock_set_auth_cookies.return_value = response
 
-        result: HttpResponse = set_auth_cookies_in_response(response, access_token)
+        result: HttpResponse = set_auth_cookies_in_response(
+            response,
+            access_token,
+        )
 
         mock_set_auth_cookies.assert_called_once_with(
             response,
@@ -293,7 +297,9 @@ class SetAuthCookiesInResponseTest(TestCase):
         mock_set_auth_cookies.return_value = response
 
         result: HttpResponse = set_auth_cookies_in_response(
-            response, access_token, refresh_token
+            response,
+            access_token,
+            refresh_token,
         )
 
         mock_set_auth_cookies.assert_called_once_with(

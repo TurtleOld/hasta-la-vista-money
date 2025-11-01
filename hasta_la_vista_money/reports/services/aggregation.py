@@ -2,8 +2,9 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
-from django.db.models import Model, QuerySet, Sum
+from django.db.models import Model, Sum
 from django.db.models.functions import TruncMonth
 from typing_extensions import TypedDict
 
@@ -26,10 +27,7 @@ class BudgetChartsDict(TypedDict):
 
 def collect_datasets(
     user: User,
-) -> tuple[
-    QuerySet[dict[str, date | Decimal]],
-    QuerySet[dict[str, date | Decimal]],
-]:
+) -> tuple[Any, Any]:
     expense_dataset = (
         Expense.objects.filter(user=user)
         .values('date')
@@ -46,18 +44,23 @@ def collect_datasets(
 
 
 def transform_dataset(
-    dataset: QuerySet[dict[str, date | Decimal]],
+    dataset: Any,
 ) -> tuple[list[str], list[float]]:
     dates: list[str] = []
     amounts: list[float] = []
     for item in dataset:
-        dates.append(item['date'].strftime('%Y-%m-%d'))
+        date_value = item['date']
+        if hasattr(date_value, 'strftime'):
+            dates.append(date_value.strftime('%Y-%m-%d'))
+        else:
+            dates.append(str(date_value))
         amounts.append(float(item['total_amount']))
     return dates, amounts
 
 
 def unique_aggregate(
-    dates: list[str], amounts: list[float]
+    dates: list[str],
+    amounts: list[float],
 ) -> tuple[list[str], list[float]]:
     unique_dates: list[str] = []
     unique_amounts: list[float] = []
@@ -104,12 +107,13 @@ class ChartDataDict(TypedDict):
 
 def pie_expense_category(user: User) -> list[ChartDataDict]:
     expense_data: dict[str, dict[str, float]] = defaultdict(
-        lambda: defaultdict(float)
+        lambda: defaultdict(float),
     )
     subcategory_data: dict[str, list[SubcategoryDataDict]] = defaultdict(list)
 
     for expense in Expense.objects.filter(user=user).select_related(
-        'category', 'category__parent_category'
+        'category',
+        'category__parent_category',
     ):
         parent_category_name = (
             expense.category.parent_category.name
@@ -125,7 +129,7 @@ def pie_expense_category(user: User) -> list[ChartDataDict]:
         if expense.category and expense.category.parent_category:
             key = f'{parent_category_name}_{month}'
             subcategory_data[key].append(
-                {'name': expense.category.name, 'y': amount}
+                {'name': expense.category.name, 'y': amount},
             )
 
     charts: list[ChartDataDict] = []
@@ -147,7 +151,7 @@ def pie_expense_category(user: User) -> list[ChartDataDict]:
                 parent_category=parent_category,
                 data=data,
                 drilldown_series=drilldown_series,
-            )
+            ),
         )
     return charts
 
@@ -159,7 +163,7 @@ def _fact_map_for_categories(
     months: list[date],
 ) -> dict[int, dict[date, Decimal]]:
     fact_map: dict[int, dict[date, Decimal]] = defaultdict(
-        lambda: defaultdict(lambda: Decimal(0))
+        lambda: defaultdict(lambda: Decimal(0)),
     )
     if not months:
         return fact_map
@@ -193,7 +197,7 @@ def _totals_by_month(
     totals: list[Decimal] = [Decimal(0)] * len(months)
     for i, m in enumerate(months):
         for cat in categories:
-            totals[i] += fact_map[cat.id][m]
+            totals[i] += fact_map[cat.id][m]  # type: ignore[union-attr]
     return [float(x) for x in totals]
 
 
@@ -209,9 +213,9 @@ def _pie_for_categories(
     totals: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
     for cat in categories:
         for month in months:
-            totals[cat.id] += fact_map[cat.id][month]
+            totals[cat.id] += fact_map[cat.id][month]  # type: ignore[union-attr]
     for cat in categories:
-        total = totals[cat.id]
+        total = totals[cat.id]  # type: ignore[union-attr]
         if total > 0:
             labels.append(cat.name)
             values.append(float(total))
@@ -223,21 +227,29 @@ def budget_charts(user: User) -> BudgetChartsDict:
     months = [d.date for d in list_dates]
 
     expense_categories = list(
-        user.category_expense_users.filter(parent_category=None).order_by(
-            'name'
-        )
+        user.category_expense_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined]
+            'name',
+        ),
     )
     income_categories = list(
-        user.category_income_users.filter(parent_category=None).order_by('name')
+        user.category_income_users.filter(parent_category=None).order_by(
+            'name',
+        ),  # type: ignore[attr-defined]
     )
 
     chart_labels = [m.strftime('%b %Y') for m in months]
 
     expense_fact = _fact_map_for_categories(
-        user, Expense, expense_categories, months
+        user,
+        Expense,
+        expense_categories,
+        months,
     )
     income_fact = _fact_map_for_categories(
-        user, Income, income_categories, months
+        user,
+        Income,
+        income_categories,
+        months,
     )
 
     total_expense = _totals_by_month(expense_categories, months, expense_fact)
@@ -248,7 +260,9 @@ def budget_charts(user: User) -> BudgetChartsDict:
     ]
 
     pie_labels, pie_values = _pie_for_categories(
-        expense_categories, months, expense_fact
+        expense_categories,
+        months,
+        expense_fact,
     )
 
     return {

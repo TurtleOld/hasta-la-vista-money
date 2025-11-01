@@ -27,7 +27,7 @@ from hasta_la_vista_money.users.models import User
 class TestLoan(TestCase):
     """Test cases for Loan application."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'income.yaml',
@@ -62,7 +62,8 @@ class TestLoan(TestCase):
     ) -> Loan:
         """Create test loan for testing purposes."""
         test_account = self._create_test_account(
-            'Test Loan Account', loan_amount
+            'Test Loan Account',
+            loan_amount,
         )
         return Loan.objects.create(
             user=self.user,
@@ -70,7 +71,7 @@ class TestLoan(TestCase):
             date=timezone.now(),
             loan_amount=loan_amount,
             annual_interest_rate=Decimal(
-                str(constants.TEST_INTEREST_RATE_MEDIUM)
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
             ),
             period_loan=constants.TEST_PERIOD_LONG,
             type_loan=type_loan,
@@ -104,7 +105,7 @@ class TestLoan(TestCase):
         response = self.client.post(url, data, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertTrue(
-            Loan.objects.filter(loan_amount=data['loan_amount']).exists()
+            Loan.objects.filter(loan_amount=data['loan_amount']).exists(),
         )
 
     def test_create_differentiated_loan(self) -> None:
@@ -115,7 +116,7 @@ class TestLoan(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, constants.REDIRECTS)
         self.assertTrue(
-            Loan.objects.filter(loan_amount=data['loan_amount']).exists()
+            Loan.objects.filter(loan_amount=data['loan_amount']).exists(),
         )
 
     def test_create_loan_invalid_data(self) -> None:
@@ -191,8 +192,8 @@ class TestLoan(TestCase):
             form.save()
             self.assertTrue(
                 Loan.objects.filter(
-                    loan_amount=constants.TEST_LOAN_AMOUNT_MEDIUM
-                ).exists()
+                    loan_amount=constants.TEST_LOAN_AMOUNT_MEDIUM,
+                ).exists(),
             )
 
     def test_payment_make_loan_form_validation(self) -> None:
@@ -277,7 +278,7 @@ class TestLoan(TestCase):
             start_date=timezone.now(),
             loan_amount=Decimal(constants.TEST_LOAN_AMOUNT_MEDIUM),
             annual_interest_rate=Decimal(
-                str(constants.TEST_INTEREST_RATE_MEDIUM)
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
             ),
             period_loan=constants.TEST_PERIOD_LONG,
         )
@@ -293,7 +294,7 @@ class TestLoan(TestCase):
             start_date=timezone.now(),
             loan_amount=Decimal(constants.TEST_LOAN_AMOUNT_MEDIUM),
             annual_interest_rate=Decimal(
-                str(constants.TEST_INTEREST_RATE_MEDIUM)
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
             ),
             period_loan=constants.TEST_PERIOD_LONG,
         )
@@ -306,7 +307,9 @@ class TestLoan(TestCase):
         result = self.loan1.calculate_sum_monthly_payment
         self.assertIsInstance(result, Decimal)
 
-    def test_loan_calculate_total_amount_loan_with_interest_property(self) -> None:
+    def test_loan_calculate_total_amount_loan_with_interest_property(
+        self,
+    ) -> None:
         """Test Loan calculate_total_amount_loan_with_interest property."""
         result = self.loan1.calculate_total_amount_loan_with_interest
         self.assertIsInstance(result, Decimal)
@@ -403,7 +406,7 @@ class TestLoan(TestCase):
             start_date=timezone.now(),
             loan_amount=Decimal(str(constants.TEST_LOAN_AMOUNT_MEDIUM)),
             annual_interest_rate=Decimal(
-                str(constants.TEST_INTEREST_RATE_MEDIUM)
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
             ),
             period_loan=constants.TEST_PERIOD_LONG,
         )
@@ -416,7 +419,9 @@ class TestLoan(TestCase):
         result = self.loan1.calculate_sum_monthly_payment
         self.assertIsInstance(result, Decimal)
 
-    def test_loan_calculate_sum_monthly_payment_with_zero_loan_amount(self) -> None:
+    def test_loan_calculate_sum_monthly_payment_with_zero_loan_amount(
+        self,
+    ) -> None:
         """
         Test Loan calculate_sum_monthly_payment property with zero loan amount.
         """
@@ -454,7 +459,8 @@ class TestLoanCalculator(TestCase):
         self.assertIn('monthly_payment', result)
         self.assertEqual(len(result['schedule']), constants.TEST_PERIOD_LONG)
         self.assertGreater(
-            result['total_payment'], constants.TEST_LOAN_AMOUNT_LARGE
+            result['total_payment'],
+            constants.TEST_LOAN_AMOUNT_LARGE,
         )
         self.assertGreater(result['overpayment'], 0)
 
@@ -481,7 +487,9 @@ class TestLoanCalculator(TestCase):
     def test_calculate_annuity_schedule_zero_rate(self) -> None:
         """Test annuity calculation with zero interest rate."""
         result = calculate_annuity_schedule(
-            constants.TEST_LOAN_AMOUNT_LARGE, 0, constants.TEST_PERIOD_LONG
+            constants.TEST_LOAN_AMOUNT_LARGE,
+            0,
+            constants.TEST_PERIOD_LONG,
         )
         schedule = result['schedule']
 
@@ -490,10 +498,12 @@ class TestLoanCalculator(TestCase):
             all(
                 abs(p - payments[0]) < constants.TOLERANCE_MEDIUM
                 for p in payments
-            )
+            ),
         )
         self.assertAlmostEqual(
-            result['overpayment'], 0, places=constants.DECIMAL_PLACES_ROUNDING
+            result['overpayment'],
+            0,
+            places=constants.DECIMAL_PLACES_ROUNDING,
         )
         self.assertAlmostEqual(
             result['total_payment'],
@@ -604,7 +614,7 @@ class TestLoanCalculator(TestCase):
 
         principal_payments = [p['principal'] for p in schedule]
         self.assertTrue(
-            all(p == principal_payments[0] for p in principal_payments)
+            all(p == principal_payments[0] for p in principal_payments),
         )
         self.assertAlmostEqual(
             principal_payments[0],
@@ -612,7 +622,9 @@ class TestLoanCalculator(TestCase):
             places=constants.DECIMAL_PLACES_PRECISION,
         )
 
-    def test_calculate_differentiated_schedule_decreasing_payments(self) -> None:
+    def test_calculate_differentiated_schedule_decreasing_payments(
+        self,
+    ) -> None:
         """Test that payments decrease over time in differentiated loan."""
         result = calculate_differentiated_schedule(
             constants.TEST_LOAN_AMOUNT_LARGE,
@@ -628,7 +640,9 @@ class TestLoanCalculator(TestCase):
     def test_calculate_differentiated_schedule_zero_rate(self) -> None:
         """Test differentiated calculation with zero interest rate."""
         result = calculate_differentiated_schedule(
-            constants.TEST_LOAN_AMOUNT_LARGE, 0, constants.TEST_PERIOD_LONG
+            constants.TEST_LOAN_AMOUNT_LARGE,
+            0,
+            constants.TEST_PERIOD_LONG,
         )
         schedule = result['schedule']
 
@@ -636,7 +650,9 @@ class TestLoanCalculator(TestCase):
             self.assertEqual(payment['interest'], 0)
             self.assertEqual(payment['payment'], payment['principal'])
         self.assertAlmostEqual(
-            result['overpayment'], 0, places=constants.DECIMAL_PLACES_ROUNDING
+            result['overpayment'],
+            0,
+            places=constants.DECIMAL_PLACES_ROUNDING,
         )
         self.assertAlmostEqual(
             result['total_payment'],
@@ -700,7 +716,8 @@ class TestLoanCalculator(TestCase):
         )
 
         self.assertGreater(
-            annuity_result['overpayment'], diff_result['overpayment']
+            annuity_result['overpayment'],
+            diff_result['overpayment'],
         )
 
     def test_calculate_schedule_edge_cases(self) -> None:
@@ -717,10 +734,12 @@ class TestLoanCalculator(TestCase):
         )
 
         self.assertEqual(
-            len(annuity_single['schedule']), constants.TEST_PERIOD_SHORT
+            len(annuity_single['schedule']),
+            constants.TEST_PERIOD_SHORT,
         )
         self.assertEqual(
-            len(diff_single['schedule']), constants.TEST_PERIOD_SHORT
+            len(diff_single['schedule']),
+            constants.TEST_PERIOD_SHORT,
         )
         self.assertEqual(annuity_single['schedule'][0]['balance'], 0)
         self.assertEqual(diff_single['schedule'][0]['balance'], 0)
@@ -764,7 +783,7 @@ class TestLoanCalculator(TestCase):
 class TestLoanCalculationIntegration(TestCase):
     """Integration tests for loan calculation tasks."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'loan.yaml',
@@ -786,14 +805,15 @@ class TestLoanCalculationIntegration(TestCase):
             start_date=timezone.now(),
             loan_amount=Decimal(constants.TEST_LOAN_AMOUNT_MEDIUM),
             annual_interest_rate=Decimal(
-                str(constants.TEST_INTEREST_RATE_MEDIUM)
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
             ),
             period_loan=constants.TEST_PERIOD_LONG,
         )
 
         final_count = PaymentSchedule.objects.filter(loan=self.loan1).count()
         self.assertEqual(
-            final_count, initial_count + constants.TEST_PERIOD_LONG
+            final_count,
+            initial_count + constants.TEST_PERIOD_LONG,
         )
 
     def test_calculate_differentiated_loan_creates_schedule(self) -> None:
@@ -806,14 +826,15 @@ class TestLoanCalculationIntegration(TestCase):
             start_date=timezone.now(),
             loan_amount=Decimal(constants.TEST_LOAN_AMOUNT_MEDIUM),
             annual_interest_rate=Decimal(
-                str(constants.TEST_INTEREST_RATE_MEDIUM)
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
             ),
             period_loan=constants.TEST_PERIOD_LONG,
         )
 
         final_count = PaymentSchedule.objects.filter(loan=self.loan1).count()
         self.assertEqual(
-            final_count, initial_count + constants.TEST_PERIOD_LONG
+            final_count,
+            initial_count + constants.TEST_PERIOD_LONG,
         )
 
     def test_calculate_loan_with_different_data_types(self) -> None:
@@ -838,7 +859,9 @@ class TestLoanCalculationIntegration(TestCase):
 
         for loan_amount, rate, period in test_cases:
             with self.subTest(
-                loan_amount=loan_amount, rate=rate, period=period
+                loan_amount=loan_amount,
+                rate=rate,
+                period=period,
             ):
                 calculate_annuity_loan(
                     user_id=self.user.pk,
@@ -850,7 +873,7 @@ class TestLoanCalculationIntegration(TestCase):
                 )
 
                 schedule_exists = PaymentSchedule.objects.filter(
-                    loan=self.loan1
+                    loan=self.loan1,
                 ).exists()
                 self.assertTrue(schedule_exists)
 
@@ -872,15 +895,18 @@ class TestLoanCalculationIntegration(TestCase):
         )
 
         calculator_result = calculate_annuity_schedule(
-            float(loan_amount), float(rate), period
+            float(loan_amount),
+            float(rate),
+            period,
         )
 
         schedule_payments = PaymentSchedule.objects.filter(
-            loan=self.loan1
+            loan=self.loan1,
         ).order_by('date')
 
         self.assertEqual(
-            len(schedule_payments), len(calculator_result['schedule'])
+            len(schedule_payments),
+            len(calculator_result['schedule']),
         )
 
         for i, payment in enumerate(schedule_payments):

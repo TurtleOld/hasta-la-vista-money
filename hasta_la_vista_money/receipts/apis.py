@@ -1,6 +1,7 @@
 import decimal
 import json
 from datetime import datetime
+from typing import Any
 
 from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
@@ -12,6 +13,7 @@ from drf_spectacular.utils import (
 from rest_framework import status
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
@@ -47,7 +49,7 @@ class ReceiptListAPIView(ListCreateAPIView):
             .prefetch_related('product')
         )
 
-    def list(self, request) -> Response:
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         queryset = self.get_queryset()
         serializer = ReceiptSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -100,7 +102,7 @@ class DataUrlAPIView(APIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
-    def post(self, request):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         serializer = ImageDataSerializer(data=request.data)
 
         if serializer.is_valid():
@@ -144,7 +146,7 @@ class SellerCreateAPIView(APIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
-    def post(self, request):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         serializer = SellerSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(user=request.user)
@@ -169,10 +171,10 @@ class ReceiptCreateAPIView(ListCreateAPIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
-    def post(self, request):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return self._process_request(request)
 
-    def _process_request(self, request) -> Response:
+    def _process_request(self, request: Request) -> Response:
         try:
             request_data = json.loads(request.body)
         except json.JSONDecodeError:
@@ -192,10 +194,18 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             return self._error_response('Такой чек уже был добавлен ранее')
 
         user, account = self._get_user_and_account(request_data)
-        if isinstance(user, Response):
-            return user
-        if isinstance(account, Response):
-            return account
+        if isinstance(user, Response) or user is None:
+            return (
+                user
+                if isinstance(user, Response)
+                else self._error_response('User not found')
+            )
+        if isinstance(account, Response) or account is None:
+            return (
+                account
+                if isinstance(account, Response)
+                else self._error_response('Account not found')
+            )
 
         receipt = self._create_receipt(request_data, user, account)
         return Response(
@@ -233,7 +243,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
     def _get_user_and_account(
         self,
         request_data: dict,
-    ) -> tuple[User | Response, Account | Response]:
+    ) -> tuple[User | Response | None, Account | Response | None]:
         user_id = request_data.get('user')
         account_id = request_data.get('finance_account')
 
@@ -264,13 +274,13 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         user: User,
         account: Account,
     ) -> Receipt:
-        seller_data = request_data.get('seller')
+        seller_data: dict = request_data.get('seller') or {}  # type: ignore[assignment]
         seller_data['user'] = user
 
         account.balance -= decimal.Decimal(str(request_data.get('total_sum')))
         account.save()
 
-        seller = Seller.objects.create(**seller_data)
+        seller = Seller.objects.create(**seller_data)  # type: ignore[arg-type]
 
         receipt_date = request_data.get('receipt_date')
         if isinstance(receipt_date, str):
@@ -292,7 +302,9 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             else None,
         )
 
-        self._create_products(request_data.get('product'), user, receipt)
+        products = request_data.get('product')
+        if products:
+            self._create_products(products, user, receipt)
         return receipt
 
     def _create_products(
@@ -337,7 +349,13 @@ class ReceiptDeleteAPIView(APIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
-    def delete(self, pk: int) -> Response:
+    def delete(
+        self,
+        request: Request,
+        pk: int,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Response:
         try:
             receipt = Receipt.objects.get(id=pk)
             receipt.delete()
@@ -381,7 +399,7 @@ class SellerAutocompleteAPIView(APIView):
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
 
-    def get(self, request):
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         query = request.GET.get('q', '').strip()
         sellers: QuerySet[Seller, Seller] = Seller.objects.filter(
             user=request.user,
@@ -427,7 +445,7 @@ class ProductAutocompleteAPIView(APIView):
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
 
-    def get(self, request):
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         query = request.GET.get('q', '').strip()
         products: QuerySet[Product, Product] = Product.objects.filter(
             user=request.user,

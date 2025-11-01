@@ -165,7 +165,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
                 grace_period_days=cleaned_data.get('grace_period_days'),
             )
 
-        return cleaned_data
+        return cleaned_data or {}
 
     class Meta:
         model = Account
@@ -261,7 +261,7 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
                 except ValidationError as e:
                     self.add_error('from_account', e.message)
 
-        return cleaned_data
+        return cleaned_data or {}
 
     def save(self, commit: bool = True) -> TransferMoneyLog:
         """Save the transfer using TransferService.

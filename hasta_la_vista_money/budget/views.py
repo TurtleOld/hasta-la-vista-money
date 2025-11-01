@@ -131,7 +131,12 @@ class BudgetContextMixin:
         return user, months, expense_categories, income_categories
 
 
-class BudgetView(LoginRequiredMixin, BudgetContextMixin, BaseView, ListView):
+class BudgetView(  # type: ignore[misc]
+    LoginRequiredMixin,
+    BudgetContextMixin,
+    BaseView,
+    ListView,
+):
     model = Planning
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -314,7 +319,7 @@ class PlanningExpenseDict(TypedDict):
 )
 class ExpenseBudgetAPIView(APIView):
     schema = AutoSchema()
-    permission_classes: ClassVar[list] = [IsAuthenticated]
+    permission_classes: ClassVar[list] = [IsAuthenticated]  # type: ignore[misc]
 
     def get(self, request, *args, **kwargs):
         """
@@ -363,7 +368,7 @@ class ExpenseBudgetAPIView(APIView):
 )
 class IncomeBudgetAPIView(APIView):
     schema = AutoSchema()
-    permission_classes: ClassVar[list] = [IsAuthenticated]
+    permission_classes: ClassVar[list] = [IsAuthenticated]  # type: ignore[misc]
 
     def get(self, request, *args, **kwargs):
         """

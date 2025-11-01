@@ -1,3 +1,5 @@
+from typing import cast
+
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.forms import AuthenticationForm
@@ -44,7 +46,7 @@ def login_user(
 
         messages.success(request, success_message)
         return {
-            'user': user,
+            'user': cast('User', user),
             'access': jwt_access_token,
             'refresh': jwt_refresh_token,
             'success': True,

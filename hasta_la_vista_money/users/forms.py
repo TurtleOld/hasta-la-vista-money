@@ -73,11 +73,11 @@ class RegisterUserForm(UserCreationForm[User]):
                 },
             ),
         }
-        help_texts: ClassVar[dict[str, str]] = {
+        help_texts: ClassVar[dict[str, Any]] = {  # type: ignore[misc]
             'username': _('Только буквы, цифры и @/./+/-/_'),
             'email': _('Укажите действующий email.'),
         }
-        error_messages: ClassVar[dict[str, dict[str, str]]] = {
+        error_messages: ClassVar[dict[str, dict[str, Any]]] = {  # type: ignore[misc]
             'username': {
                 'required': _('Пожалуйста, введите имя пользователя.'),
             },
@@ -98,7 +98,7 @@ class UpdateUserForm(ModelForm):
             'first_name',
             'last_name',
         ]
-        labels: ClassVar[dict[str, str]] = {
+        labels: ClassVar[dict[str, Any]] = {  # type: ignore[misc]
             'username': _('Имя пользователя'),
             'email': _('Email'),
             'first_name': _('Имя'),
@@ -130,13 +130,13 @@ class UpdateUserForm(ModelForm):
                 },
             ),
         }
-        help_texts: ClassVar[dict[str, str]] = {
+        help_texts: ClassVar[dict[str, Any]] = {  # type: ignore[misc]
             'username': _('Только буквы, цифры и @/./+/-/_'),
             'email': _('Укажите действующий email.'),
             'first_name': _('Ваше имя.'),
             'last_name': _('Ваша фамилия.'),
         }
-        error_messages: ClassVar[dict[str, dict[str, str]]] = {
+        error_messages: ClassVar[dict[str, dict[str, Any]]] = {  # type: ignore[misc]
             'username': {
                 'required': _('Пожалуйста, введите имя пользователя.'),
             },
@@ -152,7 +152,7 @@ class GroupCreateForm(ModelForm):
     class Meta:
         model: ClassVar[type[Group]] = Group
         fields: ClassVar[list[str]] = ['name']
-        labels: ClassVar[dict[str, str]] = {'name': _('Название группы')}
+        labels: ClassVar[dict[str, Any]] = {'name': _('Название группы')}  # type: ignore[misc]
         widgets: ClassVar[dict[str, Any]] = {
             'name': forms.TextInput(
                 attrs={
@@ -161,10 +161,10 @@ class GroupCreateForm(ModelForm):
                 },
             ),
         }
-        help_texts: ClassVar[dict[str, str]] = {
+        help_texts: ClassVar[dict[str, Any]] = {  # type: ignore[misc]
             'name': _('Введите уникальное название группы.'),
         }
-        error_messages: ClassVar[dict[str, dict[str, str]]] = {
+        error_messages: ClassVar[dict[str, dict[str, Any]]] = {  # type: ignore[misc]
             'name': {
                 'required': _('Пожалуйста, введите название группы.'),
             },
@@ -239,11 +239,11 @@ class AddUserToGroupForm(UserGroupBaseForm):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         if self.user_instance:
-            self.fields['group'].queryset = Group.objects.exclude(
+            self.fields['group'].queryset = Group.objects.exclude(  # type: ignore[attr-defined]
                 id__in=self.user_instance.groups.values_list('id', flat=True),
             )
         else:
-            self.fields['group'].queryset = Group.objects.none()
+            self.fields['group'].queryset = Group.objects.none()  # type: ignore[attr-defined]
 
     def save(self, request: HttpRequest) -> None:
         """Add user to selected group."""
@@ -260,9 +260,9 @@ class DeleteUserFromGroupForm(UserGroupBaseForm):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         if self.user_instance:
-            self.fields['group'].queryset = self.user_instance.groups.all()
+            self.fields['group'].queryset = self.user_instance.groups.all()  # type: ignore[attr-defined]
         else:
-            self.fields['group'].queryset = Group.objects.none()
+            self.fields['group'].queryset = Group.objects.none()  # type: ignore[attr-defined]
 
     def save(self, request: HttpRequest) -> None:
         """Remove user from selected group."""

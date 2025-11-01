@@ -14,8 +14,8 @@ from hasta_la_vista_money.users.models import User
 
 class Loan(models.Model):
     TYPE_LOAN: ClassVar[list[tuple[str, str]]] = [
-        ('Annuity', gettext_lazy('Аннуитетный')),
-        ('Differentiated', gettext_lazy('Дифференцированный')),
+        ('Annuity', str(gettext_lazy('Аннуитетный'))),
+        ('Differentiated', str(gettext_lazy('Дифференцированный'))),
     ]
 
     user = models.ForeignKey(
@@ -60,7 +60,7 @@ class Loan(models.Model):
 
     @property
     def calculate_sum_monthly_payment(self) -> Decimal:
-        payments = self.payment_schedule_loans.aggregate(
+        payments = self.payment_schedule_loans.aggregate(  # type: ignore[attr-defined]
             total=models.Sum('monthly_payment'),
         )['total'] or Decimal('0.00')
         return payments - Decimal(str(self.loan_amount))

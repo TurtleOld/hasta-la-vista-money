@@ -17,7 +17,6 @@ from django.forms import (
     NumberInput,
     Select,
     TextInput,
-    BaseFormSet,
     formset_factory,
 )
 from django.forms.fields import IntegerField

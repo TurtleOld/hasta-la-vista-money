@@ -1,3 +1,5 @@
+from typing import cast
+
 from django.contrib import messages
 from django.contrib.auth.models import Group
 from django.forms import ModelForm
@@ -16,16 +18,24 @@ class GroupDict(TypedDict):
 
 
 def get_user_groups(user: User) -> list[GroupDict]:
-    return list(
-        user.groups.all().prefetch_related('user_set').values('id', 'name'),
+    return cast(
+        'list[GroupDict]',
+        list(
+            user.groups.all().prefetch_related('user_set').values('id', 'name'),
+        ),
     )
 
 
 def get_groups_not_for_user(user: User) -> list[GroupDict]:
-    return list(
-        Group.objects.exclude(id__in=user.groups.values_list('id', flat=True))
-        .prefetch_related('user_set')
-        .values('id', 'name'),
+    return cast(
+        'list[GroupDict]',
+        list(
+            Group.objects.exclude(
+                id__in=user.groups.values_list('id', flat=True),
+            )
+            .prefetch_related('user_set')
+            .values('id', 'name'),
+        ),
     )
 
 

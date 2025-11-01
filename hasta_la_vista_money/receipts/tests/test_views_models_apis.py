@@ -30,7 +30,7 @@ from hasta_la_vista_money.users.models import User
 
 
 class TestReceipt(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'receipt_receipt.yaml',
@@ -62,8 +62,8 @@ class TestReceipt(TestCase):
         new_seller = Seller.objects.create(**new_seller_data)
 
         form_data = {
-            'seller': new_seller.id,
-            'account': self.account.id,
+            'seller': new_seller.pk,
+            'account': self.account.pk,
             'receipt_date': '2023-06-28 21:24',
             'number_receipt': 111,
             'operation_type': 1,
@@ -105,7 +105,7 @@ class TestReceipt(TestCase):
 
 
 class TestSeller(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'receipt_seller.yaml',
     ]
@@ -154,7 +154,7 @@ class TestSeller(TestCase):
 
 
 class TestProduct(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'receipt_product.yaml',
     ]
@@ -197,7 +197,7 @@ class TestProduct(TestCase):
 
 
 class TestReceiptModel(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -267,7 +267,7 @@ class TestReceiptModel(TestCase):
 
 
 class TestForms(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -340,8 +340,8 @@ class TestForms(TestCase):
             'nds20': '0.00',
         }
         form = ReceiptForm(data=form_data)
-        form.fields['account'].queryset = Account.objects.filter(user=self.user)
-        form.fields['seller'].queryset = Seller.objects.filter(user=self.user)
+        form.fields['account'].queryset = Account.objects.filter(user=self.user)  # type: ignore[attr-defined]
+        form.fields['seller'].queryset = Seller.objects.filter(user=self.user)  # type: ignore[attr-defined]  # type: ignore[attr-defined]
         self.assertTrue(form.is_valid())
 
     def test_receipt_form_missing_required_fields(self) -> None:
@@ -353,7 +353,7 @@ class TestForms(TestCase):
             'total_sum': '500.00',
         }
         form = ReceiptForm(data=form_data)
-        form.fields['seller'].queryset = Seller.objects.filter(user=self.user)
+        form.fields['seller'].queryset = Seller.objects.filter(user=self.user)  # type: ignore[attr-defined]
         self.assertFalse(form.is_valid())
         self.assertIn('account', form.errors)
 
@@ -395,7 +395,7 @@ class TestForms(TestCase):
 
 
 class TestReceiptFilter(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -449,7 +449,7 @@ class TestReceiptFilter(TestCase):
 
 
 class TestReceiptAPIs(APITestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -462,7 +462,7 @@ class TestReceiptAPIs(APITestCase):
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
         self.receipt = Receipt.objects.get(pk=1)
-        self.client.force_authenticate(user=self.user)
+        self.client.force_authenticate(user=self.user)  # type: ignore[attr-defined]
 
     def test_receipt_list_api(self) -> None:
         url = reverse_lazy('receipts:api_list')
@@ -471,7 +471,7 @@ class TestReceiptAPIs(APITestCase):
         self.assertIsInstance(response.json(), list)
 
     def test_receipt_list_api_unauthorized(self) -> None:
-        self.client.force_authenticate(user=None)
+        self.client.force_authenticate(user=None)  # type: ignore[attr-defined,arg-type]
         url = reverse_lazy('receipts:api_list')
         response = self.client.get(url)
         self.assertIn(
@@ -636,7 +636,7 @@ class TestServices(TestCase):
 
 
 class TestUploadImageView(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -701,7 +701,7 @@ class TestUploadImageView(TestCase):
 
 
 class TestProductByMonthView(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'receipt_seller.yaml',
@@ -725,7 +725,7 @@ class TestProductByMonthView(TestCase):
 
 
 class TestModelValidation(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -772,7 +772,7 @@ class TestModelValidation(TestCase):
 
 
 class TestReceiptOperations(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -827,7 +827,7 @@ class TestReceiptOperations(TestCase):
 
 
 class TestReceiptPermissions(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -876,7 +876,7 @@ class TestReceiptPermissions(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
         seller_form = response.context['receipt_form'].fields['seller']
-        seller_queryset = seller_form.queryset
+        seller_queryset = seller_form.queryset  # type: ignore[attr-defined]
         self.assertEqual(len(seller_queryset), 1)
         self.assertEqual(seller_queryset[0], self.seller1)
 
@@ -885,7 +885,7 @@ class TestReceiptPermissions(TestCase):
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         account_form = response.context['receipt_form'].fields['account']
-        account_queryset = account_form.queryset
+        account_queryset = account_form.queryset  # type: ignore[attr-defined]
         self.assertEqual(len(account_queryset), 2)
         for account in account_queryset:
             self.assertEqual(account.user, self.user1)

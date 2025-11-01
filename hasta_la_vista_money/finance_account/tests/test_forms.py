@@ -173,7 +173,7 @@ class TestTransferMoneyAccountForm(TestCase):
         """Test form initialization with user accounts."""
         form = TransferMoneyAccountForm(user=self.user)
 
-        self.assertEqual(form.fields['from_account'].queryset.count(), 2)
+        self.assertEqual(form.fields['from_account'].queryset.count(), 2)  # type: ignore[attr-defined]
         self.assertIn('amount', form.fields)
         self.assertIn('notes', form.fields)
 

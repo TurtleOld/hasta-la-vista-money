@@ -35,7 +35,7 @@ class ReceiptImportService:
         try:
             day, month, year = date_str.split(' ')[0].split('.')
             hour, minute = date_str.split(' ')[1].split(':')
-            aware_dt = timezone.datetime(
+            aware_dt = datetime(
                 int(year),
                 int(month),
                 int(day),
@@ -54,7 +54,7 @@ class ReceiptImportService:
         normalized_date = ReceiptImportService._normalize_date(date_str)
         day, month, year = normalized_date.split(' ')[0].split('.')
         hour, minute = normalized_date.split(' ')[1].split(':')
-        return timezone.datetime(
+        return datetime(
             int(year),
             int(month),
             int(day),
@@ -119,9 +119,10 @@ class ReceiptImportService:
 
     @staticmethod
     def _update_account_balance(account: Account, total_sum) -> None:
-        account_balance = get_object_or_404(Account, id=account.id)
+        account_balance = get_object_or_404(Account, pk=account.pk)
         AccountService.apply_receipt_spend(
-            account_balance, decimal.Decimal(total_sum)
+            account_balance,
+            decimal.Decimal(total_sum),
         )
 
     @staticmethod
@@ -146,14 +147,18 @@ class ReceiptImportService:
 
         number_receipt = data.get('number_receipt')
         if ReceiptImportService._check_exist_receipt(
-            user, number_receipt
+            user,
+            number_receipt,
         ).exists():
             return ReceiptImportResult(success=False, error='exists')
 
         seller = ReceiptImportService._create_or_update_seller(data, user)
         products = ReceiptImportService._create_products(data, user)
         receipt = ReceiptImportService._create_receipt(
-            data, user, account, seller
+            data,
+            user,
+            account,
+            seller,
         )
 
         if products:

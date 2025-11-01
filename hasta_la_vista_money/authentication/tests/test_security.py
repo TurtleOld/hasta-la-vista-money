@@ -1,4 +1,5 @@
 import unittest
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.http import HttpResponse
@@ -8,13 +9,16 @@ from rest_framework.test import APIRequestFactory
 from hasta_la_vista_money.authentication.authentication import set_auth_cookies
 from hasta_la_vista_money.users.factories import UserFactory
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User
+
 
 class XSSProtectionTestCase(TestCase):
     """Тесты защиты от XSS атак."""
 
     def setUp(self) -> None:
         """Настройка тестовых данных."""
-        self.user = UserFactory()
+        self.user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         self.factory = APIRequestFactory()
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
 

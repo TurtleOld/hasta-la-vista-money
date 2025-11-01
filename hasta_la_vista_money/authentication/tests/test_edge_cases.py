@@ -20,6 +20,7 @@ from hasta_la_vista_money.authentication.authentication import (
     set_auth_cookies,
 )
 from hasta_la_vista_money.users.factories import UserFactory
+from hasta_la_vista_money.users.models import User
 
 
 class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
@@ -57,7 +58,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_inactive_user(self) -> None:
         """Неактивный пользователь не может аутентифицироваться."""
-        user = UserFactory(is_active=False)
+        user: User = UserFactory(is_active=False)  # type: ignore[assignment,no-untyped-call]
         # Создаем токен вручную, так как AccessToken.for_user не работает
         # c неактивными пользователями
         payload = {
@@ -76,7 +77,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_deleted_user(self) -> None:
         """Токен удаленного пользователя возвращает None."""
-        user = UserFactory()
+        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         user_id = user.pk
         user.delete()
 
@@ -96,7 +97,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_multiple_cookies(self) -> None:
         """Несколько кук с одинаковым именем обрабатываются корректно."""
-        user = UserFactory()
+        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         valid_token = AccessToken.for_user(user)
 
         request = self.factory.get('/')
@@ -166,7 +167,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_missing_exp_claim(self) -> None:
         """Токен без exp возвращает None."""
-        user = UserFactory()
+        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         payload = {
             'user_id': user.pk,
             'iat': timezone.now(),
@@ -182,7 +183,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_missing_iat_claim(self) -> None:
         """Токен без iat невалиден."""
-        user = UserFactory()
+        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         payload = {
             'user_id': user.pk,
             'exp': timezone.now() + timedelta(hours=1),
@@ -198,7 +199,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_wrong_algorithm(self) -> None:
         """Токен с неправильным алгоритмом возвращает None."""
-        user = UserFactory()
+        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         payload = {
             'user_id': user.pk,
             'exp': timezone.now() + timedelta(hours=1),
@@ -215,7 +216,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_future_iat(self) -> None:
         """Токен с iat в будущем невалиден."""
-        user = UserFactory()
+        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
         payload = {
             'user_id': user.pk,
             'exp': timezone.now() + timedelta(hours=1),
@@ -335,7 +336,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
             'get_user',
             side_effect=RuntimeError('Database error'),
         ):
-            user = UserFactory()
+            user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
             valid_token = AccessToken.for_user(user)
 
             request = self.factory.get('/')
@@ -399,7 +400,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
     def test_authenticate_header_with_different_request_types(self) -> None:
         """authenticate_header работает с разными типами запросов."""
         django_request = HttpRequest()
-        header1 = self.auth.authenticate_header(django_request)
+        header1 = self.auth.authenticate_header(django_request)  # type: ignore[arg-type]
         self.assertEqual(header1, 'Bearer realm="api"')
 
         drf_request = Request(self.factory.get('/'))
