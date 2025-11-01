@@ -306,7 +306,9 @@ class TestLoan(TestCase):
         result = self.loan1.calculate_sum_monthly_payment
         self.assertIsInstance(result, Decimal)
 
-    def test_loan_calculate_total_amount_loan_with_interest_property(self) -> None:
+    def test_loan_calculate_total_amount_loan_with_interest_property(
+        self,
+    ) -> None:
         """Test Loan calculate_total_amount_loan_with_interest property."""
         result = self.loan1.calculate_total_amount_loan_with_interest
         self.assertIsInstance(result, Decimal)
@@ -416,7 +418,9 @@ class TestLoan(TestCase):
         result = self.loan1.calculate_sum_monthly_payment
         self.assertIsInstance(result, Decimal)
 
-    def test_loan_calculate_sum_monthly_payment_with_zero_loan_amount(self) -> None:
+    def test_loan_calculate_sum_monthly_payment_with_zero_loan_amount(
+        self,
+    ) -> None:
         """
         Test Loan calculate_sum_monthly_payment property with zero loan amount.
         """
@@ -612,7 +616,9 @@ class TestLoanCalculator(TestCase):
             places=constants.DECIMAL_PLACES_PRECISION,
         )
 
-    def test_calculate_differentiated_schedule_decreasing_payments(self) -> None:
+    def test_calculate_differentiated_schedule_decreasing_payments(
+        self,
+    ) -> None:
         """Test that payments decrease over time in differentiated loan."""
         result = calculate_differentiated_schedule(
             constants.TEST_LOAN_AMOUNT_LARGE,

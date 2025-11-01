@@ -41,7 +41,6 @@ class CookieJWTAuthentication(JWTAuthentication):
             if not isinstance(user, User):
                 self._raise_invalid_user_type(user)
                 return None
-            return user, validated_token
         except TypeError:
             raise
         except (
@@ -54,6 +53,8 @@ class CookieJWTAuthentication(JWTAuthentication):
             OSError,
         ):
             return None
+        else:
+            return user, validated_token
 
     def _raise_invalid_user_type(self, user: object) -> None:
         raise TypeError(

@@ -109,7 +109,9 @@ class AddCategoryIncomeFormTest(TestCase):
         self.assertIn('name', form.fields)
         self.assertIn('parent_category', form.fields)
 
-    def test_create_category_income_form_configure_category_choices(self) -> None:
+    def test_create_category_income_form_configure_category_choices(
+        self,
+    ) -> None:
         form = AddCategoryIncomeForm(
             category_queryset=IncomeCategory.objects.filter(user=self.user),
         )

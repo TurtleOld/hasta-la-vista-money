@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -8,9 +8,6 @@ from django.urls import reverse
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.middleware import CheckAdminMiddleware
-
-if TYPE_CHECKING:
-    from django.http import HttpResponseRedirect as HttpResponseRedirectType
 
 User = get_user_model()
 
@@ -47,10 +44,12 @@ class CheckAdminMiddlewareTest(TestCase):
                 request: HttpRequest = self.factory.get(path)
                 response: HttpResponse | HttpRequest = self.middleware(request)
                 response_redirect: HttpResponseRedirect = cast(
-                    HttpResponseRedirect, response
+                    'HttpResponseRedirect', response
                 )
 
-                self.assertEqual(response_redirect.status_code, constants.REDIRECTS)
+                self.assertEqual(
+                    response_redirect.status_code, constants.REDIRECTS
+                )
                 self.assertEqual(
                     response_redirect.url,
                     reverse('users:registration'),
@@ -112,7 +111,7 @@ class CheckAdminMiddlewareTest(TestCase):
         request1: HttpRequest = self.factory.get('/')
         response1: HttpResponse | HttpRequest = self.middleware(request1)
         response1_redirect: HttpResponseRedirect = cast(
-            HttpResponseRedirect, response1
+            'HttpResponseRedirect', response1
         )
         self.assertEqual(response1_redirect.status_code, constants.REDIRECTS)
 
@@ -139,13 +138,15 @@ class CheckAdminMiddlewareTest(TestCase):
         request: HttpRequest = self.factory.get('/')
         response: HttpResponse | HttpRequest = self.middleware(request)
         response_redirect: HttpResponseRedirect = cast(
-            HttpResponseRedirect, response
+            'HttpResponseRedirect', response
         )
 
         self.assertEqual(response_redirect.status_code, constants.REDIRECTS)
         self.assertEqual(response_redirect.url, reverse('users:registration'))
 
-    def test_staff_user_without_superuser_does_not_prevent_redirect(self) -> None:
+    def test_staff_user_without_superuser_does_not_prevent_redirect(
+        self,
+    ) -> None:
         User.objects.all().delete()
         User.objects.create_user(
             username='staff',
@@ -157,7 +158,7 @@ class CheckAdminMiddlewareTest(TestCase):
         request: HttpRequest = self.factory.get('/')
         response: HttpResponse | HttpRequest = self.middleware(request)
         response_redirect: HttpResponseRedirect = cast(
-            HttpResponseRedirect, response
+            'HttpResponseRedirect', response
         )
 
         self.assertEqual(response_redirect.status_code, constants.REDIRECTS)
@@ -177,7 +178,8 @@ class CheckAdminMiddlewareTest(TestCase):
     ],
 )
 class CheckAdminMiddlewareIntegrationTest(TestCase):
-    """Integration tests for CheckAdminMiddleware in Django request/response cycle."""
+    """Integration tests for CheckAdminMiddleware
+    in Django request/response cycle."""
 
     def setUp(self) -> None:
         cache.clear()
@@ -230,7 +232,9 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
                 f'получен {response.status_code}',
             )
 
-    def test_cannot_bypass_protection_with_direct_url_manipulation(self) -> None:
+    def test_cannot_bypass_protection_with_direct_url_manipulation(
+        self,
+    ) -> None:
         User.objects.all().delete()
 
         bypass_attempts: list[str] = [
@@ -245,10 +249,12 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
                 response = self.client.get(path, follow=False)
 
                 self.assertEqual(response.status_code, constants.REDIRECTS)
-                assert isinstance(
-                    response, HttpResponseRedirect
-                ), 'Response should be HttpResponseRedirect'
+                self.assertIsInstance(
+                    response,
+                    HttpResponseRedirect,
+                    msg='Response should be HttpResponseRedirect',
+                )
                 self.assertEqual(
                     response.url,
-                    reverse('users:registration'),
+                    reverse('users:registration'),  # type: ignore[attr-defined]
                 )

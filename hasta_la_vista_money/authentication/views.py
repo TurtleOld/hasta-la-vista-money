@@ -1,5 +1,6 @@
-from typing import Any, ClassVar
+from typing import Any
 
+from django.contrib.auth.models import AnonymousUser
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -15,10 +16,6 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from hasta_la_vista_money.api.throttling import (
-    AnonLoginRateThrottle,
-    LoginRateThrottle,
-)
 from hasta_la_vista_money.authentication.authentication import (
     clear_auth_cookies,
     get_refresh_token_from_cookie,
@@ -51,14 +48,17 @@ class SessionTokenObtainView(APIView):
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
 
-    def _validate_user(self, user) -> None:
+    def _validate_user(self, user: User | AnonymousUser) -> None:
         if not isinstance(user, User):
             raise TypeError(_('Пользователь не авторизован'))
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:
             self._validate_user(request.user)
-            refresh = RefreshToken.for_user(request.user)
+            user = request.user
+            if not isinstance(user, User):
+                raise TypeError(_('Пользователь не авторизован'))
+            refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
 
@@ -84,10 +84,6 @@ class CookieTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view that sets HttpOnly cookies"""
 
     schema = AutoSchema()
-    throttle_classes: ClassVar[list] = [
-        AnonLoginRateThrottle,
-        LoginRateThrottle,
-    ]
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:

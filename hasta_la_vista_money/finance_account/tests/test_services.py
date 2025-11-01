@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType
 else:
     from django.contrib.auth import get_user_model
+
     UserType = get_user_model()
 
 

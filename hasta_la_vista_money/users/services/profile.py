@@ -8,4 +8,4 @@ def update_user_profile(form: UpdateUserForm) -> User:
     user = form.save(commit=False)
     user.save()
     form.save_m2m()
-    return cast(User, user)
+    return cast('User', user)

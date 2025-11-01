@@ -1,5 +1,4 @@
 from typing import TYPE_CHECKING, ClassVar
-
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -272,7 +271,9 @@ class SetAuthCookiesInResponseTest(TestCase):
 
         mock_set_auth_cookies.return_value = response
 
-        result: HttpResponse = set_auth_cookies_in_response(response, access_token)
+        result: HttpResponse = set_auth_cookies_in_response(
+            response, access_token
+        )
 
         mock_set_auth_cookies.assert_called_once_with(
             response,
