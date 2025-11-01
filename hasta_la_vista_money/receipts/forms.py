@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import django_filters
 from django.core.exceptions import ValidationError
@@ -22,6 +22,9 @@ from django.forms import (
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
 from django_filters.fields import ModelChoiceField
+
+if TYPE_CHECKING:
+    from django.forms.formsets import BaseFormSet as BaseFormSetType
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -207,11 +210,16 @@ class ProductForm(ModelForm[Product]):
         return cleaned_data
 
 
-ProductFormSet = formset_factory(
+_ProductFormSet = formset_factory(
     ProductForm,
     extra=constants.FORMSET_EXTRA_DEFAULT,
     can_delete=True,
 )
+
+if TYPE_CHECKING:
+    ProductFormSet: type[BaseFormSetType[ProductForm]]
+else:
+    ProductFormSet = _ProductFormSet
 
 
 class ReceiptForm(ModelForm[Receipt]):

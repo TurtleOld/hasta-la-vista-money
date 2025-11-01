@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.conf import settings
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
@@ -9,7 +11,7 @@ class CookieJWTAuthenticationScheme(OpenApiAuthenticationExtension):
     )
     name = 'CookieJWTAuth'
 
-    def get_security_definition(self, auto_schema):
+    def get_security_definition(self, auto_schema: Any) -> dict[str, Any]:
         cookie_name = str(
             settings.SIMPLE_JWT.get('AUTH_COOKIE', 'access_token')
         )

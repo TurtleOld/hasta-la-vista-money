@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import io
 import json
 
@@ -28,7 +26,7 @@ class ReceiptImportServiceTests(TestCase):
             currency='RU',
         )
 
-    def test_process_uploaded_image_success(self):
+    def test_process_uploaded_image_success(self) -> None:
         # Prepare fake image file
         uploaded_file = SimpleUploadedFile(
             'test.jpg',

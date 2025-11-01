@@ -10,7 +10,7 @@ system_random = random.SystemRandom()
 
 
 @register.simple_tag()
-def word_hash():
+def word_hash() -> str:
     """Генерация хеша случайных наборов букв."""
     letters = string.ascii_letters
     random_string = ''.join(

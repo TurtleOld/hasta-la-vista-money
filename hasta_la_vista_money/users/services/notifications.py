@@ -1,3 +1,5 @@
+from typing import Literal, TypedDict
+
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -8,7 +10,16 @@ from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
 
 
-def get_user_notifications(user: User) -> list[dict[str, str]]:
+class NotificationDict(TypedDict):
+    """Словарь уведомления."""
+
+    type: Literal['warning', 'danger', 'success']
+    title: str
+    message: str
+    icon: str
+
+
+def get_user_notifications(user: User) -> list[NotificationDict]:
     today = timezone.now().date()
     month_start = today.replace(day=1)
     notifications = []

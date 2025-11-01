@@ -1,4 +1,4 @@
-from typing import ClassVar
+from typing import Any
 
 from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
@@ -18,7 +18,7 @@ from hasta_la_vista_money.users.models import User
 class TestExpenseService(TestCase):
     """Test cases for ExpenseService."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -40,8 +40,9 @@ class TestExpenseService(TestCase):
         categories = self.service.get_categories()
         self.assertIsInstance(categories, QuerySet)
         self.assertGreater(len(categories), 0)
-        if categories:
-            category = categories[0]
+        categories_list: list[dict[str, Any]] = list(categories)
+        if categories_list:
+            category: dict[str, Any] = categories_list[0]
             self.assertIn('id', category)
             self.assertIn('name', category)
             self.assertIn('parent_category', category)
@@ -135,7 +136,7 @@ class TestExpenseService(TestCase):
 class TestExpenseCategoryService(TestCase):
     """Test cases for ExpenseCategoryService."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: list[str] = [
         'users.yaml',
         'expense_cat.yaml',
     ]
@@ -181,7 +182,7 @@ class TestExpenseCategoryService(TestCase):
 class TestReceiptExpenseService(TestCase):
     """Test cases for ReceiptExpenseService."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: list[str] = [
         'users.yaml',
         'expense_cat.yaml',
     ]

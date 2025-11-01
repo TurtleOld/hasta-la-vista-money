@@ -1,15 +1,115 @@
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
-from typing import Any
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+
+
+class ExpenseDataRowDict(TypedDict):
+    """Строка данных расхода."""
+
+    category: str
+    category_id: int
+    fact: list[int]
+    plan: list[int]
+    diff: list[int]
+    percent: list[float | None]
+
+
+class IncomeDataRowDict(TypedDict):
+    """Строка данных дохода."""
+
+    category: str
+    category_id: int
+    fact: list[Decimal]
+    plan: list[Decimal]
+    diff: list[Decimal]
+    percent: list[float | None]
+
+
+class BudgetChartDataDict(TypedDict):
+    """Данные для графика бюджета."""
+
+    chart_labels: list[str]
+    chart_plan_execution_income: list[float]
+    chart_plan_execution_expense: list[float]
+    chart_balance: list[float]
+
+
+class AggregateBudgetDataDict(TypedDict):
+    """Агрегированные данные бюджета."""
+
+    months: list[date]
+    expense_data: list[ExpenseDataRowDict]
+    total_fact_expense: list[int]
+    total_plan_expense: list[int]
+    income_data: list[IncomeDataRowDict]
+    total_fact_income: list[Decimal]
+    total_plan_income: list[Decimal]
+    chart_data: BudgetChartDataDict
+
+
+class AggregateExpenseTableDict(TypedDict):
+    """Данные для таблицы расходов."""
+
+    months: list[date]
+    expense_data: list[ExpenseDataRowDict]
+    total_fact_expense: list[int]
+    total_plan_expense: list[int]
+
+
+class AggregateIncomeTableDict(TypedDict):
+    """Данные для таблицы доходов."""
+
+    months: list[date]
+    income_data: list[IncomeDataRowDict]
+    total_fact_income: list[Decimal]
+    total_plan_income: list[Decimal]
+
+
+class ExpenseApiDataRowDict(TypedDict):
+    """Строка данных расхода для API."""
+
+    category: str
+    category_id: int
+    months: list[str]
+    fact: list[int]
+    plan: list[int]
+    diff: list[int]
+    percent: list[float | None]
+
+
+class IncomeApiDataRowDict(TypedDict):
+    """Строка данных дохода для API."""
+
+    category: str
+    category_id: int
+    months: list[str]
+    fact: list[Decimal]
+    plan: list[Decimal]
+    diff: list[Decimal]
+    percent: list[float | None]
+
+
+class AggregateExpenseApiDict(TypedDict):
+    """Данные расходов для API."""
+
+    months: list[str]
+    data: list[ExpenseApiDataRowDict]
+
+
+class AggregateIncomeApiDict(TypedDict):
+    """Данные доходов для API."""
+
+    months: list[str]
+    data: list[IncomeApiDataRowDict]
 
 
 class BudgetDataError(Exception):
@@ -134,7 +234,7 @@ def _build_expense_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> list[dict[str, Any]]:
+) -> list[ExpenseDataRowDict]:
     """Build expense data structure with fact, plan, diff, and percent."""
     expense_data = []
 
@@ -169,7 +269,7 @@ def aggregate_budget_data(
     months: list[date],
     expense_categories: list[ExpenseCategory],
     income_categories: list[IncomeCategory],
-) -> dict[str, Any]:
+) -> AggregateBudgetDataDict:
     """Aggregate all budget data for context."""
     _validate_budget_inputs(user, months, expense_categories, income_categories)
 
@@ -295,7 +395,7 @@ def _build_income_data(
     income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> list[dict[str, Any]]:
+) -> list[IncomeDataRowDict]:
     """Build income data structure with fact, plan, diff, and percent."""
     income_data = []
 
@@ -331,7 +431,7 @@ def _build_chart_data(
     total_plan_income: list[Decimal],
     total_fact_expense: list[int],
     total_plan_expense: list[int],
-) -> dict[str, Any]:
+) -> BudgetChartDataDict:
     """Build chart data for budget visualization."""
     chart_labels = [m.strftime('%b %Y') for m in months]
     chart_plan_execution_income = []
@@ -439,7 +539,7 @@ def _build_expense_table_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> tuple[list[dict[str, Any]], list[int], list[int]]:
+) -> tuple[list[ExpenseDataRowDict], list[int], list[int]]:
     """Build expense table data structure."""
     expense_data = []
     total_fact_expense = [0] * len(months)
@@ -477,7 +577,7 @@ def aggregate_expense_table(
     user: User,
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> dict[str, Any]:
+) -> AggregateExpenseTableDict:
     """Aggregate data for the expense table view."""
     _validate_expense_table_inputs(user, months, expense_categories)
 
@@ -579,7 +679,7 @@ def _build_income_table_data(
     income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> tuple[list[dict[str, Any]], list[Decimal], list[Decimal]]:
+) -> tuple[list[IncomeDataRowDict], list[Decimal], list[Decimal]]:
     """Build income table data structure."""
     income_data = []
     total_fact_income = [Decimal(0)] * len(months)
@@ -617,7 +717,7 @@ def aggregate_income_table(
     user: User,
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> dict[str, Any]:
+) -> AggregateIncomeTableDict:
     """Aggregate data for the income table view."""
     _validate_income_table_inputs(user, months, income_categories)
 
@@ -716,7 +816,7 @@ def _build_expense_api_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> list[dict[str, Any]]:
+) -> list[ExpenseApiDataRowDict]:
     """Build expense API data structure."""
     data = []
 
@@ -748,7 +848,7 @@ def aggregate_expense_api(
     user: User,
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> dict[str, Any]:
+) -> AggregateExpenseApiDict:
     """Aggregate data for the expense API view."""
     _validate_expense_api_inputs(user, months, expense_categories)
 
@@ -840,7 +940,7 @@ def _build_income_api_data(
     income_plan_map: dict[int, dict[date, int]],
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> list[dict[str, Any]]:
+) -> list[IncomeApiDataRowDict]:
     """Build income API data structure."""
     data = []
 
@@ -872,7 +972,7 @@ def aggregate_income_api(
     user: User,
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> dict[str, Any]:
+) -> AggregateIncomeApiDict:
     """Aggregate data for the income API view."""
     _validate_income_api_inputs(user, months, income_categories)
 

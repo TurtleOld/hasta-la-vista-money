@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 import decimal
 import json
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from datetime import datetime
+from typing import Any
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -21,10 +20,6 @@ class ReceiptImportResult:
     success: bool
     error: str | None = None
     receipt: Receipt | None = None
-
-
-if TYPE_CHECKING:
-    from datetime import datetime
 
 
 class ReceiptImportService:

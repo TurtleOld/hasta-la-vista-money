@@ -1,16 +1,11 @@
-from __future__ import annotations
-
 from decimal import Decimal
-from typing import TYPE_CHECKING
 
 from django.db import transaction
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services import AccountService
+from hasta_la_vista_money.receipts.forms import ProductFormSet, ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.receipts.forms import ProductFormSet, ReceiptForm
 
 
 class ReceiptUpdaterService:

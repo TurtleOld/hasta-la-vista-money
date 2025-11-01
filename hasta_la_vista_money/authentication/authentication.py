@@ -27,10 +27,12 @@ class CookieJWTAuthentication(JWTAuthentication):
             raw_token = cookie_token.encode('utf-8')
         else:
             header = self.get_header(request)
-            if header is not None:
-                raw_token = self.get_raw_token(header)
-            else:
+            if header is None:
+                return None  # type: ignore[unreachable]
+            raw_token_raw = self.get_raw_token(header)
+            if raw_token_raw is None:
                 return None
+            raw_token = raw_token_raw
 
         try:
             validated_token = self.get_validated_token(raw_token)
@@ -38,8 +40,7 @@ class CookieJWTAuthentication(JWTAuthentication):
 
             if not isinstance(user, User):
                 self._raise_invalid_user_type(user)
-            else:
-                return user, validated_token
+                return None
         except TypeError:
             raise
         except (
@@ -52,8 +53,10 @@ class CookieJWTAuthentication(JWTAuthentication):
             OSError,
         ):
             return None
+        else:
+            return user, validated_token
 
-    def _raise_invalid_user_type(self, user) -> None:
+    def _raise_invalid_user_type(self, user: object) -> None:
         raise TypeError(
             _('Ожидался экземпляр User, получен {type_name}').format(
                 type_name=type(user),

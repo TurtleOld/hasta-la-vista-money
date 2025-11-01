@@ -194,7 +194,7 @@ class ExpenseCopyView(
 class ExpenseCreateView(
     LoginRequiredMixin,
     SuccessMessageMixin[AddExpenseForm],
-    CreateView[Expense, Any],
+    CreateView[Expense, AddExpenseForm],
 ):
     """View for creating a new expense."""
 
@@ -358,7 +358,7 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
 
 class ExpenseCategoryCreateView(
     LoginRequiredMixin,
-    CreateView[ExpenseCategory, Any],
+    CreateView[ExpenseCategory, AddCategoryForm],
 ):
     """View for creating a new expense category."""
 

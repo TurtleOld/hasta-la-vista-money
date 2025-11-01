@@ -22,19 +22,19 @@ class IncomeViewsTest(TestCase):
         'income_cat.yaml',
     ]
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.income = Income.objects.get(pk=1)
         self.income_type = IncomeCategory.objects.get(pk=1)
         self.parent_category = IncomeCategory.objects.get(name='Зарплата')
 
-    def test_list_income(self):
+    def test_list_income(self) -> None:
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('income:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_income_create(self):
+    def test_income_create(self) -> None:
         self.client.force_login(self.user)
         url = reverse_lazy('income:create')
         new_income = {
@@ -47,7 +47,7 @@ class IncomeViewsTest(TestCase):
         response = self.client.post(url, data=new_income, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_income_update(self):
+    def test_income_update(self) -> None:
         self.client.force_login(self.user)
         url = reverse_lazy('income:change', args=(self.income.pk,))
         update_income = {
@@ -61,27 +61,27 @@ class IncomeViewsTest(TestCase):
         updated_income = Income.objects.get(pk=self.income.pk)
         self.assertEqual(updated_income.amount, 25000)
 
-    def test_income_delete(self):
+    def test_income_delete(self) -> None:
         self.client.force_login(self.user)
         url = reverse_lazy('income:delete_income', args=(self.income.pk,))
         response = self.client.post(url, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_income_copy_view(self):
+    def test_income_copy_view(self) -> None:
         self.client.force_login(self.user)
         response = self.client.post(
             reverse_lazy('income:income_copy', args=[self.income.pk]),
         )
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_income_update_view_get(self):
+    def test_income_update_view_get(self) -> None:
         self.client.force_login(self.user)
         response = self.client.get(
             reverse_lazy('income:change', args=[self.income.pk]),
         )
         self.assertEqual(response.status_code, 200)
 
-    def test_income_update_view_post(self):
+    def test_income_update_view_post(self) -> None:
         self.client.force_login(self.user)
         data = {
             'category': self.income_type.pk,
@@ -95,24 +95,24 @@ class IncomeViewsTest(TestCase):
         )
         self.assertEqual(response.status_code, 302)
 
-    def test_income_delete_view(self):
+    def test_income_delete_view(self) -> None:
         self.client.force_login(self.user)
         response = self.client.post(
             reverse_lazy('income:delete_income', args=[self.income.pk]),
         )
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_income_category_view(self):
+    def test_income_category_view(self) -> None:
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('income:category_list'))
         self.assertEqual(response.status_code, 200)
 
-    def test_income_category_create_view_get(self):
+    def test_income_category_create_view_get(self) -> None:
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('income:create_category'))
         self.assertEqual(response.status_code, 200)
 
-    def test_income_category_create_view_post(self):
+    def test_income_category_create_view_post(self) -> None:
         self.client.force_login(self.user)
         data = {
             'name': 'New Test Category',
@@ -124,7 +124,7 @@ class IncomeViewsTest(TestCase):
         )
         self.assertEqual(response.status_code, 302)
 
-    def test_income_category_create_view_invalid_form(self):
+    def test_income_category_create_view_invalid_form(self) -> None:
         self.client.force_login(self.user)
         data = {
             'name': '',
@@ -136,7 +136,7 @@ class IncomeViewsTest(TestCase):
         )
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_income_category_delete_view(self):
+    def test_income_category_delete_view(self) -> None:
         self.client.force_login(self.user)
         response = self.client.post(
             reverse_lazy(
@@ -146,35 +146,35 @@ class IncomeViewsTest(TestCase):
         )
         self.assertEqual(response.status_code, 302)
 
-    def test_income_view_unauthenticated(self):
+    def test_income_view_unauthenticated(self) -> None:
         response = self.client.get(reverse_lazy('income:list'))
         self.assertEqual(response.status_code, 302)
 
-    def test_income_create_view_unauthenticated(self):
+    def test_income_create_view_unauthenticated(self) -> None:
         response = self.client.get(reverse_lazy('income:create'))
         self.assertEqual(response.status_code, 302)
 
-    def test_income_update_view_unauthenticated(self):
+    def test_income_update_view_unauthenticated(self) -> None:
         response = self.client.get(
             reverse_lazy('income:change', args=[self.income.pk]),
         )
         self.assertEqual(response.status_code, 302)
 
-    def test_income_delete_view_unauthenticated(self):
+    def test_income_delete_view_unauthenticated(self) -> None:
         response = self.client.post(
             reverse_lazy('income:delete_income', args=[self.income.pk]),
         )
         self.assertEqual(response.status_code, constants.REDIRECTS)
 
-    def test_income_category_view_unauthenticated(self):
+    def test_income_category_view_unauthenticated(self) -> None:
         response = self.client.get(reverse_lazy('income:category_list'))
         self.assertEqual(response.status_code, 302)
 
-    def test_income_category_create_view_unauthenticated(self):
+    def test_income_category_create_view_unauthenticated(self) -> None:
         response = self.client.get(reverse_lazy('income:create_category'))
         self.assertEqual(response.status_code, constants.REDIRECTS)
 
-    def test_income_category_delete_view_unauthenticated(self):
+    def test_income_category_delete_view_unauthenticated(self) -> None:
         response = self.client.post(
             reverse_lazy(
                 'income:delete_category_income',

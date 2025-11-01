@@ -7,19 +7,19 @@ from faker import Faker
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
 
-LENGTH_PASSWORD = 12
+LENGTH_PASSWORD: int = 12
 
 
 class TestUser(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml']  # type: ignore[misc]
 
     def setUp(self) -> None:
-        self.user1 = User.objects.get(pk=1)
-        self.user2 = User.objects.get(pk=2)
+        self.user1: User = User.objects.get(pk=1)
+        self.user2: User = User.objects.get(pk=2)
         self.client: Client = Client()
-        self.faker = Faker()
+        self.faker: Faker = Faker()
 
-    def test_create_user(self):
+    def test_create_user(self) -> None:
         self.client.force_login(self.user1)
         self.client.force_login(self.user2)
         url = reverse_lazy('users:registration')
@@ -27,12 +27,12 @@ class TestUser(TestCase):
         self.assertEqual(response.status_code, constants.REDIRECTS)
 
         Faker.seed(0)
-        username = self.faker.user_name()
-        first_name = self.faker.first_name()
-        last_name = self.faker.last_name()
-        email = self.faker.email()
-        set_password = self.faker.password(length=LENGTH_PASSWORD)
-        new_user = {
+        username: str = self.faker.user_name()
+        first_name: str = self.faker.first_name()
+        last_name: str = self.faker.last_name()
+        email: str = self.faker.email()
+        set_password: str = self.faker.password(length=LENGTH_PASSWORD)
+        new_user: dict[str, str | bool] = {
             'first_name': first_name,
             'last_name': last_name,
             'email': email,
@@ -45,13 +45,13 @@ class TestUser(TestCase):
         response = self.client.post(url, new_user, follow=True)
         self.assertRedirects(response, '/hasta-la-vista-money/')
 
-    def test_login_user_success(self):
+    def test_login_user_success(self) -> None:
         self.client.force_login(self.user1)
 
-        user = User.objects.get(username=self.user1)
+        user: User = User.objects.get(username=self.user1)
         self.assertTrue(user.is_authenticated)
 
-    def test_login_user_invalid_credentials(self):
+    def test_login_user_invalid_credentials(self) -> None:
         url = reverse_lazy('login')
         response = self.client.post(
             url,
@@ -70,7 +70,7 @@ class TestUser(TestCase):
 
         self.assertFalse(response.wsgi_request.user.is_authenticated)
 
-    def test_login_user_empty_fields(self):
+    def test_login_user_empty_fields(self) -> None:
         url = reverse_lazy('login')
         response = self.client.post(
             url,

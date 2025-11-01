@@ -1,15 +1,9 @@
-from __future__ import annotations
+from datetime import date
 
-from typing import TYPE_CHECKING
-
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.services import income as income_services
-
-if TYPE_CHECKING:
-    from datetime import date
-
-    from hasta_la_vista_money.finance_account.models import Account
-    from hasta_la_vista_money.income.models import Income, IncomeCategory
-    from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import User
 
 
 class IncomeOps:
