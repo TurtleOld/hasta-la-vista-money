@@ -40,8 +40,8 @@ def validate_account_balance(from_account: Account, amount: Decimal) -> None:
 
 
 def validate_different_accounts(
-    from_account: Account,
-    to_account: Account,
+    from_account: Account | None,
+    to_account: Account | None,
 ) -> None:
     """Validate that source and destination accounts are different.
 
@@ -53,8 +53,19 @@ def validate_different_accounts(
         to_account: The destination account.
 
     Raises:
-        ValidationError: If source and destination accounts are the same.
+        ValidationError: If source or destination account is None,
+            or if source and destination accounts are the same.
     """
+    if from_account is None:
+        raise ValidationError(
+            _('Необходимо указать счет-источник'),
+            code='missing_from_account',
+        )
+    if to_account is None:
+        raise ValidationError(
+            _('Необходимо указать счет-получатель'),
+            code='missing_to_account',
+        )
     if from_account == to_account:
         raise ValidationError(
             _('Нельзя переводить деньги на тот же счет'),

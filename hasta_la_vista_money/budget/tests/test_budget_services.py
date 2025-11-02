@@ -82,7 +82,8 @@ class BudgetServicesTestCase(TestCase):
         )
         self.assertIn('expense_data', data)
         self.assertIn('income_data', data)
-        self.assertIn('chart_labels', data)
+        self.assertIn('chart_data', data)
+        self.assertIn('chart_labels', data['chart_data'])
         self.assertEqual(len(data['months']), len(self.months))
 
     def test_aggregate_budget_data_error(self) -> None:

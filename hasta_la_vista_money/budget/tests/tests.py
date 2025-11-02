@@ -74,8 +74,10 @@ class BudgetViewsTest(TestCase):
             response.status_code == constants.SUCCESS_CODE
             and response.context is not None
         ):
-            self.assertIn('chart_plan_execution_income', response.context)
-            self.assertIn('chart_plan_execution_expense', response.context)
+            self.assertIn('chart_data', response.context)
+            chart_data = response.context['chart_data']
+            self.assertIn('chart_plan_execution_income', chart_data)
+            self.assertIn('chart_plan_execution_expense', chart_data)
 
     def test_generate_date_list_view(self) -> None:
         response = self.client.post(reverse('budget:generate_date'))
@@ -125,4 +127,6 @@ class BudgetViewsTest(TestCase):
             response.status_code == constants.SUCCESS_CODE
             and response.context is not None
         ):
-            self.assertIn('chart_plan_execution_income', response.context)
+            self.assertIn('chart_data', response.context)
+            chart_data = response.context['chart_data']
+            self.assertIn('chart_plan_execution_income', chart_data)

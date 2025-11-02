@@ -44,7 +44,7 @@ class BaseView:
     """
 
     template_name: str = 'income/income.html'
-    success_url: str | None = str(reverse_lazy(INCOME_LIST_URL_NAME))
+    success_url = reverse_lazy(INCOME_LIST_URL_NAME)
 
 
 class IncomeCategoryBaseView(BaseView):
@@ -55,7 +55,7 @@ class IncomeCategoryBaseView(BaseView):
     model = IncomeCategory
 
 
-class IncomeView(
+class IncomeView(  # type: ignore[misc]
     LoginRequiredMixin,
     SuccessMessageMixin[IncomeForm],
     BaseView,
@@ -148,7 +148,7 @@ class IncomeView(
         return context  # type: ignore[no-any-return]
 
 
-class IncomeCreateView(
+class IncomeCreateView(  # type: ignore[misc]
     LoginRequiredMixin,
     SuccessMessageMixin[IncomeForm],
     IncomeFormQuerysetMixin,
@@ -164,7 +164,7 @@ class IncomeCreateView(
     no_permission_url = reverse_lazy('login')
     form_class = IncomeForm
     depth_limit = 3
-    success_url = str(reverse_lazy(INCOME_LIST_URL_NAME))
+    success_url = reverse_lazy(INCOME_LIST_URL_NAME)
 
     category_model = IncomeCategory
     account_model = Account
@@ -259,7 +259,7 @@ class IncomeCopyView(
             return JsonResponse({'success': False, 'error': str(e)})
 
 
-class IncomeUpdateView(
+class IncomeUpdateView(  # type: ignore[misc]
     LoginRequiredMixin,
     SuccessMessageMixin[IncomeForm],
     IncomeFormQuerysetMixin,
@@ -274,7 +274,7 @@ class IncomeUpdateView(
     template_name = 'income/change_income.html'
     form_class = IncomeForm
     no_permission_url = reverse_lazy('login')
-    success_url = str(reverse_lazy(INCOME_LIST_URL_NAME))
+    success_url = reverse_lazy(INCOME_LIST_URL_NAME)
     depth_limit = 3
 
     category_model = IncomeCategory
@@ -366,7 +366,7 @@ class IncomeDeleteView(  # type: ignore[misc]
     model = Income
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
-    success_url = str(reverse_lazy(INCOME_LIST_URL_NAME))
+    success_url = reverse_lazy(INCOME_LIST_URL_NAME)
 
     def post(
         self,
@@ -445,7 +445,7 @@ class IncomeCategoryCreateView(
     model = IncomeCategory
     template_name = 'income/add_category_income.html'
     form_class = AddCategoryIncomeForm
-    success_url = str(reverse_lazy('income:category_list'))
+    success_url = reverse_lazy('income:category_list')
     depth = 3
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -516,7 +516,7 @@ class IncomeCategoryDeleteView(  # type: ignore[misc]
     model = IncomeCategory
     success_message = str(constants.SUCCESS_CATEGORY_INCOME_DELETED)
     error_message = str(constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY)
-    success_url = str(reverse_lazy('income:category_list'))
+    success_url = reverse_lazy('income:category_list')
 
 
 class IncomeGroupAjaxView(LoginRequiredMixin, View):

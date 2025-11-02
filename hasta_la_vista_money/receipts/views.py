@@ -58,16 +58,16 @@ logger = structlog.get_logger(__name__)
 
 class BaseView:
     template_name: str | Sequence[str] | None = 'receipts/receipts.html'
-    success_url: str = str(reverse_lazy('receipts:list'))
+    success_url: str = reverse_lazy('receipts:list')  # type: ignore[assignment]
 
 
-class ReceiptView(
+class ReceiptView(  # type: ignore[misc]
     LoginRequiredMixin,
     SuccessMessageMixin,  # type: ignore[type-arg]
-    BaseView,
+    BaseView,  # type: ignore[misc]
     FilterView[Receipt, ReceiptFilter],  # type: ignore[misc]
 ):
-    paginate_by: int = constants.PAGINATE_BY_DEFAULT
+    paginate_by: int = constants.PAGINATE_BY_DEFAULT  # type: ignore[assignment]
     model = Receipt
     filterset_class = ReceiptFilter
     no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
@@ -348,7 +348,7 @@ class ReceiptUpdateView(
     UpdateView[Receipt, ReceiptForm],
 ):
     template_name = 'receipts/receipt_update.html'
-    success_url = str(reverse_lazy('receipts:list'))
+    success_url = reverse_lazy('receipts:list')  # type: ignore[assignment]
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
     success_message = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
@@ -525,12 +525,16 @@ class ReceiptUpdateView(
 class ReceiptDeleteView(  # type: ignore[misc]
     LoginRequiredMixin,
     BaseView,
-    DeleteView[Receipt, ReceiptForm],
+    DeleteView,
 ):
     model = Receipt
-    form_class: type[ReceiptForm] = ReceiptForm
 
-    def form_valid(self, form: ReceiptForm) -> HttpResponse:
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
         receipt = self.get_object()
         account = receipt.account
         amount = receipt.total_sum
