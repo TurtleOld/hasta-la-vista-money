@@ -1,8 +1,10 @@
+from datetime import datetime, time
 from typing import TYPE_CHECKING, Any
 
 from django.db import models
 from django.db.models import Q, Sum
 from django.db.models.functions import TruncMonth
+from django.utils import timezone
 
 if TYPE_CHECKING:
     from datetime import date
@@ -29,7 +31,13 @@ class IncomeQuerySet(models.QuerySet['Income']):
         end_date: 'date',
     ) -> 'IncomeQuerySet':
         """Return incomes within a date range."""
-        return self.filter(date__gte=start_date, date__lte=end_date)
+        start_datetime = timezone.make_aware(
+            datetime.combine(start_date, time.min),
+        )
+        end_datetime = timezone.make_aware(
+            datetime.combine(end_date, time.max),
+        )
+        return self.filter(date__gte=start_datetime, date__lte=end_datetime)
 
     def for_category(self, category: 'IncomeCategory') -> 'IncomeQuerySet':
         """Return incomes for a specific category or its descendants."""
