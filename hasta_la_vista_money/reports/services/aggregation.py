@@ -232,9 +232,9 @@ def budget_charts(user: User) -> BudgetChartsDict:
         ),
     )
     income_categories = list(
-        user.category_income_users.filter(parent_category=None).order_by(
+        user.category_income_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined]
             'name',
-        ),  # type: ignore[attr-defined]
+        ),
     )
 
     chart_labels = [m.strftime('%b %Y') for m in months]
