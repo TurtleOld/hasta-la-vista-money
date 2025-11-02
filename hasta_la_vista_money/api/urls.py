@@ -6,7 +6,7 @@ urlpatterns = [
         'auth/',
         include(
             'hasta_la_vista_money.authentication.urls',
-            'authentication',
+            namespace='authentication',
         ),
     ),
     path(

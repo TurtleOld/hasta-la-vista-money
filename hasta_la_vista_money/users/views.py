@@ -103,8 +103,13 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
     template_name = 'users/login.html'
     form_class = UserLoginForm
     success_message = constants.SUCCESS_MESSAGE_LOGIN
-    next_page: str = str(reverse_lazy('applications:list'))
     redirect_authenticated_user = True
+
+    def get_success_url(self) -> str:
+        """Return the URL to redirect to after successful login."""
+        # Используем прямой путь, чтобы избежать циклического импорта
+        # при инициализации URL resolver
+        return '/hasta-la-vista-money/'
 
     def dispatch(
         self,
