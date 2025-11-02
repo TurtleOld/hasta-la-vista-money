@@ -314,12 +314,12 @@ def _six_months_data(
         savings_raw = m.get('savings', 0.0) or 0.0
         income_val = (
             float(income_raw)
-            if isinstance(income_raw, (int, float, str))
+            if isinstance(income_raw, int | float | str)
             else 0.0
         )  # type: ignore[arg-type]
         savings_val = (
             float(savings_raw)
-            if isinstance(savings_raw, (int, float, str))
+            if isinstance(savings_raw, int | float | str)
             else 0.0
         )  # type: ignore[arg-type]
         m['savings_percent'] = (
