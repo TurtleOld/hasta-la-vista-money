@@ -2,6 +2,7 @@ import base64
 import json
 import unittest
 from datetime import timedelta
+from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
 import jwt
@@ -20,7 +21,9 @@ from hasta_la_vista_money.authentication.authentication import (
     set_auth_cookies,
 )
 from hasta_la_vista_money.users.factories import UserFactory
-from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User
 
 
 class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
