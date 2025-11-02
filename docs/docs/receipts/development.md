@@ -555,29 +555,6 @@ python manage.py migrate receipts
 python manage.py showmigrations receipts
 ```
 
-### Мониторинг
-
-```python
-# Метрики производительности
-from django_prometheus.metrics import Counter, Histogram
-
-receipt_created = Counter(
-    'receipt_created_total',
-    'Number of receipts created'
-)
-
-receipt_processing_time = Histogram(
-    'receipt_processing_seconds',
-    'Time spent processing receipts'
-)
-
-# Использование в коде
-@receipt_processing_time.time()
-def process_receipt_image(image_file):
-    # ... обработка ...
-    receipt_created.inc()
-```
-
 ## Расширение функциональности
 
 ### Добавление новых типов операций

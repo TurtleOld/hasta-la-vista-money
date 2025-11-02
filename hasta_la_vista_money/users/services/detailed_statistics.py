@@ -2,11 +2,13 @@ from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
-from typing import Any
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
 from dateutil.relativedelta import relativedelta
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
@@ -30,6 +32,123 @@ from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services import (
+        GracePeriodInfoDict,
+    )
+
+
+class MonthDataDict(TypedDict):
+    """Данные за месяц."""
+
+    month: str
+    expenses: float
+    income: float
+    savings: float
+    savings_percent: float
+
+
+class ChartDataDict(TypedDict):
+    """Данные для графика."""
+
+    labels: list[str]
+    expense_data: list[float]
+    income_data: list[float]
+
+
+class DeltaByCurrencyDict(TypedDict, total=False):
+    """Изменение баланса по валютам."""
+
+    delta: float
+    percent: float | None
+
+
+class CardMonthDict(TypedDict):
+    """Данные месяца для кредитной карты."""
+
+    month: str
+    purchase_start: datetime
+    purchase_end: datetime
+    grace_end: datetime
+    debt_for_month: float
+    is_overdue: bool
+    days_until_due: int
+    payments_made: float
+    remaining_debt: float
+    is_paid: bool
+
+
+class CardHistoryDict(TypedDict):
+    """История по месяцам для кредитной карты."""
+
+    month: str
+    debt: float
+    final_debt: float
+    grace_end: str
+    is_overdue: bool
+
+
+class PaymentItemDict(TypedDict):
+    """Элемент платежа."""
+
+    amount: Decimal
+    date: date
+
+
+class PaymentScheduleItemDict(TypedDict):
+    """Элемент графика платежей."""
+
+    month: str
+    sum_expense: float
+    payments_made: float
+    remaining_debt: float
+    payment_due: str
+    is_overdue: bool
+    days_until_due: int
+    is_paid: bool
+
+
+class CreditCardDataDict(TypedDict, total=False):
+    """Данные кредитной карты."""
+
+    name: str
+    limit: Decimal | None
+    debt_now: Decimal | None
+    current_grace_info: 'GracePeriodInfoDict'
+    history: list[CardHistoryDict]
+    currency: str
+    card_obj: Account
+    limit_left: Decimal
+    payment_schedule: list[PaymentScheduleItemDict]
+
+
+class IncomeExpenseDict(TypedDict):
+    """Данные о доходе/расходе."""
+
+    id: int
+    date: date
+    account__name_account: str
+    category__name: str
+    amount: Decimal
+    type: str
+
+
+class UserDetailedStatisticsDict(TypedDict):
+    """Подробная статистика пользователя."""
+
+    months_data: list[MonthDataDict]
+    top_expense_categories: list
+    top_income_categories: list
+    receipt_info_by_month: QuerySet
+    income_expense: list[IncomeExpenseDict]
+    transfer_money_log: QuerySet
+    accounts: QuerySet
+    balances_by_currency: dict[str, float]
+    delta_by_currency: dict[str, DeltaByCurrencyDict]
+    chart_combined: ChartDataDict
+    user: User
+    credit_cards_data: list[CreditCardDataDict]
 
 
 def _month_bounds_for_offset(today: date, offset: int) -> tuple[date, date]:
@@ -65,7 +184,7 @@ def _top_categories_qs(
     model,
     user: User,
     year_start: date,
-) -> QuerySet:
+) -> Any:
     return (
         model.objects.filter(user=user, date__gte=year_start)
         .values('category__name')
@@ -84,7 +203,7 @@ def _dates_amounts(
     return dates, amounts
 
 
-def _build_chart(user: User) -> dict[str, list]:
+def _build_chart(user: User) -> ChartDataDict:
     exp_ds = (
         Expense.objects.filter(user=user)
         .values('date')
@@ -134,13 +253,13 @@ def _build_chart(user: User) -> dict[str, list]:
 def _balances_and_delta(
     accounts: QuerySet[Account],
     today: date,
-) -> tuple[dict, dict]:
-    balances_now = defaultdict(float)
+) -> tuple[dict[str, float], dict[str, DeltaByCurrencyDict]]:
+    balances_now: dict[str, float] = defaultdict(float)
     for acc in accounts:
         balances_now[acc.currency] += float(acc.balance)
 
     prev_day = today - timedelta(days=1)
-    balances_prev = defaultdict(float)
+    balances_prev: dict[str, float] = defaultdict(float)
     for acc in accounts:
         if acc.created_at and acc.created_at.date() <= prev_day:
             balances_prev[acc.currency] += float(acc.balance)
@@ -157,13 +276,13 @@ def _balances_and_delta(
         )
         delta[cur] = {'delta': diff, 'percent': pct}
 
-    return dict(balances_now), delta
+    return dict(balances_now), delta  # type: ignore[return-value]
 
 
 def _six_months_data(
     user: User,
     today: date,
-) -> list[dict[str, float | str]]:
+) -> list[MonthDataDict]:
     out = []
     for i in range(constants.STATISTICS_MONTHS_COUNT):
         m_start, m_end = _month_bounds_for_offset(today, i)
@@ -187,24 +306,36 @@ def _six_months_data(
                 'expenses': exp_sum,
                 'income': inc_sum,
                 'savings': inc_sum - exp_sum,
-            }
+            },
         )
     out.reverse()
     for m in out:
+        income_raw = m.get('income', 0.0) or 0.0
+        savings_raw = m.get('savings', 0.0) or 0.0
+        income_val = (
+            float(income_raw)
+            if isinstance(income_raw, int | float | str)
+            else 0.0
+        )  # type: ignore[arg-type]
+        savings_val = (
+            float(savings_raw)
+            if isinstance(savings_raw, int | float | str)
+            else 0.0
+        )  # type: ignore[arg-type]
         m['savings_percent'] = (
-            m['savings'] / m['income'] * constants.PERCENTAGE_MULTIPLIER
-            if m['income'] > constants.ZERO
-            else constants.ZERO
+            savings_val / income_val * constants.PERCENTAGE_MULTIPLIER  # type: ignore[operator]
+            if income_val > constants.ZERO  # type: ignore[operator]
+            else float(constants.ZERO)
         )
-    return out
+    return out  # type: ignore[return-value]
 
 
 def _card_months_block(
     card: Account,
     today_month: date,
-) -> tuple[list[dict], list[dict]]:
-    months: list[dict] = []
-    history: list[dict] = []
+) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
+    months: list[CardMonthDict] = []
+    history: list[CardHistoryDict] = []
     now = timezone.now()
 
     for i in range(constants.STATISTICS_YEAR_MONTHS_COUNT):
@@ -281,14 +412,20 @@ def _card_months_block(
         )
         overdue = now > grace_end and debt > constants.ZERO
 
-        m = {
+        purchase_start_dt = timezone.make_aware(
+            datetime.combine(purchase_start, time.min),
+        )
+        m: CardMonthDict = {  # type: ignore[typeddict-item]
             'month': purchase_start.strftime('%m.%Y'),
-            'purchase_start': purchase_start,
+            'purchase_start': purchase_start_dt,
             'purchase_end': purchase_end,
             'grace_end': grace_end,
             'debt_for_month': debt,
             'is_overdue': overdue,
             'days_until_due': days_left,
+            'payments_made': 0.0,
+            'remaining_debt': 0.0,
+            'is_paid': False,
         }
         months.append(m)
 
@@ -302,24 +439,24 @@ def _card_months_block(
                 purchase_start,
             )
             if schedule:
-                final_debt = schedule['final_debt']
+                final_debt = float(schedule['final_debt'])  # type: ignore[assignment]
 
         history.append(
             {
-                'month': m['month'],
+                'month': str(m['month']),  # type: ignore[typeddict-item]
                 'debt': debt,
                 'final_debt': final_debt,
                 'grace_end': grace_end.strftime('%d.%m.%Y'),
                 'is_overdue': overdue,
-            }
+            },
         )
 
     return months, history
 
 
 def _apply_payments_to_months(
-    months: list[dict],
-    payments: list[dict],
+    months: list[CardMonthDict],
+    payments: list[PaymentItemDict],
 ) -> None:
     total = sum(float(p['amount']) for p in payments)
     left = total
@@ -338,11 +475,11 @@ def _apply_payments_to_months(
 
 
 def _build_payment_schedule(
-    months: list[dict],
-    history: list[dict],
+    months: list[CardMonthDict],
+    history: list[CardHistoryDict],
     card: Account,
-) -> list[dict]:
-    schedule: list[dict] = []
+) -> list[PaymentScheduleItemDict]:
+    schedule: list[PaymentScheduleItemDict] = []
     for m in months:
         if m['debt_for_month'] <= constants.ZERO:
             continue
@@ -362,42 +499,56 @@ def _build_payment_schedule(
                 'is_overdue': m['is_overdue'],
                 'days_until_due': m['days_until_due'],
                 'is_paid': m['is_paid'],
-            }
+            },
         )
     return schedule
 
 
-def _credit_cards_block(accounts: QuerySet[Account]) -> list[dict]:
-    out: list[dict] = []
+def _credit_cards_block(
+    accounts: QuerySet[Account],
+) -> list[CreditCardDataDict]:
+    out: list[CreditCardDataDict] = []
     today_month = timezone.now().date().replace(day=1)
 
     credit_cards = accounts.filter(
-        type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT]
+        type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT],
     )
 
     for card in credit_cards:
         debt_now = card.get_credit_card_debt()
         months, history = _card_months_block(card, today_month)
 
-        payments = list(
+        payments_raw = list(
             Income.objects.filter(account=card)
             .order_by('date')
-            .values('amount', 'date')
+            .values('amount', 'date'),
         )
+        payments: list[PaymentItemDict] = [
+            {'amount': Decimal(str(p['amount'])), 'date': p['date']}  # type: ignore[typeddict-item]
+            for p in payments_raw
+        ]
         _apply_payments_to_months(months, payments)
         schedule = _build_payment_schedule(months, history, card)
 
         current_info = card.calculate_grace_period_info(today_month)
-        current_info['debt_for_month'] = max(
-            0,
-            current_info.get('debt_for_month', 0),
+        current_info['debt_for_month'] = Decimal(
+            str(
+                max(  # type: ignore[typeddict-item]
+                    0,
+                    current_info.get('debt_for_month', 0),
+                ),
+            ),
         )
-        current_info['final_debt'] = max(
-            0,
-            current_info.get('final_debt', 0),
+        current_info['final_debt'] = Decimal(
+            str(
+                max(  # type: ignore[typeddict-item]
+                    0,
+                    current_info.get('final_debt', 0),
+                ),
+            ),
         )
 
-        limit_left = (card.limit_credit or 0) - (debt_now or 0)
+        limit_left = Decimal(str((card.limit_credit or 0) - (debt_now or 0)))  # type: ignore[typeddict-item]
 
         out.append(
             {
@@ -410,12 +561,12 @@ def _credit_cards_block(accounts: QuerySet[Account]) -> list[dict]:
                 'card_obj': card,
                 'limit_left': limit_left,
                 'payment_schedule': schedule,
-            }
+            },
         )
     return out
 
 
-def get_user_detailed_statistics(user: User) -> dict[str, Any]:
+def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
     now = timezone.now()
     today = now.date()
 
@@ -428,11 +579,11 @@ def get_user_detailed_statistics(user: User) -> dict[str, Any]:
 
     incomes = collect_info_income(user)
     for it in incomes:
-        it['type'] = 'income'
+        it['type'] = 'income'  # type: ignore[typeddict-unknown-key]
 
     expenses = collect_info_expense(user)
     for it in expenses:
-        it['type'] = 'expense'
+        it['type'] = 'expense'  # type: ignore[typeddict-unknown-key]
 
     income_expense = sort_expense_income(expenses, incomes)
 
@@ -457,7 +608,7 @@ def get_user_detailed_statistics(user: User) -> dict[str, Any]:
         'top_expense_categories': list(top_expense_categories),
         'top_income_categories': list(top_income_categories),
         'receipt_info_by_month': receipt_info_by_month,
-        'income_expense': income_expense,
+        'income_expense': income_expense,  # type: ignore[typeddict-item]
         'transfer_money_log': transfer_money_log,
         'accounts': accounts,
         'balances_by_currency': dict(balances_by_currency),

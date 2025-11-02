@@ -35,7 +35,7 @@ class BootstrapFormMixin:
         Iterates through all form fields and adds the 'form-control' class
         to their widget attributes if not already present.
         """
-        for field in self.fields.values():
+        for field in self.fields.values():  # type: ignore[attr-defined]
             if hasattr(field.widget, 'attrs'):
                 current_class = field.widget.attrs.get('class', '')
                 if 'form-control' not in current_class:
@@ -64,12 +64,12 @@ class CreditFieldsMixin:
         ]
 
         for field_name in credit_fields:
-            if field_name in self.fields:
-                current_class = self.fields[field_name].widget.attrs.get(
+            if field_name in self.fields:  # type: ignore[attr-defined]
+                current_class = self.fields[field_name].widget.attrs.get(  # type: ignore[attr-defined]
                     'class',
                     '',
                 )
-                self.fields[field_name].widget.attrs['class'] = (
+                self.fields[field_name].widget.attrs['class'] = (  # type: ignore[attr-defined]
                     f'{current_class} credit-only-field'.strip()
                 )
 
@@ -87,16 +87,16 @@ class DateFieldMixin:
         Sets up payment_due_date with a date input widget and exchange_date
         with a datetime-local input widget, both with Bootstrap styling.
         """
-        if 'payment_due_date' in self.fields:
-            self.fields['payment_due_date'].widget = DateInput(
+        if 'payment_due_date' in self.fields:  # type: ignore[attr-defined]
+            self.fields['payment_due_date'].widget = DateInput(  # type: ignore[attr-defined]
                 attrs={
                     'type': 'date',
                     'class': 'form-control credit-only-field',
                 },
             )
 
-        if 'exchange_date' in self.fields:
-            self.fields['exchange_date'].widget = DateTimeInput(
+        if 'exchange_date' in self.fields:  # type: ignore[attr-defined]
+            self.fields['exchange_date'].widget = DateTimeInput(  # type: ignore[attr-defined]
                 attrs={
                     'type': 'datetime-local',
                     'class': 'form-control',
@@ -122,12 +122,12 @@ class FormValidationMixin:
         Raises:
             ValidationError: If amount is zero or negative.
         """
-        amount = self.cleaned_data.get('amount')
+        amount = self.cleaned_data.get('amount')  # type: ignore[attr-defined]
         if amount is not None and amount <= 0:
             msg = 'amount'
             raise self.get_form_error(
                 msg,
-                _('Сумма должна быть больше нуля'),
+                str(_('Сумма должна быть больше нуля')),
             )
         return amount
 

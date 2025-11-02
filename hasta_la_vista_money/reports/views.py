@@ -186,4 +186,4 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
 
 class ReportsAnalyticMixin(TemplateView):
     def get_context_report(self) -> dict[str, Any]:
-        return
+        return {}

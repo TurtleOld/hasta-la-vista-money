@@ -172,7 +172,9 @@ else:
 
 # Database
 if 'test' in sys.argv and not config(
-    'USE_DB_FOR_TESTS', default=False, cast=bool
+    'USE_DB_FOR_TESTS',
+    default=False,
+    cast=bool,
 ):
     DATABASES = {
         'default': {
@@ -192,7 +194,7 @@ elif config('GITHUB_WORKFLOW', default=''):
         },
     }
 elif config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
-    DATABASES: dict[str, Any] = {
+    DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': config('POSTGRES_DB', default='postgres'),
@@ -205,11 +207,11 @@ elif config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
     }
     database_url = config('DATABASE_URL', default='')
     if database_url:
-        DATABASES['default'] = dict(
+        DATABASES['default'] = dict(  # type: ignore[no-redef]
             dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE),
         )
 else:
-    DATABASES = {
+    DATABASES = {  # type: ignore[no-redef]
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
@@ -229,7 +231,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': (
             'django.contrib.auth.password_validation.NumericPasswordValidator'
-        )
+        ),
     },
 ]
 
@@ -464,7 +466,9 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_REFRESH': 'refresh_token',
     'AUTH_COOKIE_DOMAIN': None,
     'AUTH_COOKIE_SECURE': config(
-        'SESSION_COOKIE_SECURE', default=False, cast=bool
+        'SESSION_COOKIE_SECURE',
+        default=False,
+        cast=bool,
     ),
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',

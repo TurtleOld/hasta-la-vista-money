@@ -1,16 +1,13 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from typing import Any
 
 from django.db import transaction
+from django.forms.formsets import BaseFormSet
 from django.shortcuts import get_object_or_404
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services import AccountService
+from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.receipts.forms import ProductFormSet, ReceiptForm
 
 
 class ReceiptCreatorService:
@@ -20,13 +17,13 @@ class ReceiptCreatorService:
         *,
         user,
         receipt_form: ReceiptForm,
-        product_formset: ProductFormSet,
+        product_formset: BaseFormSet[Any],
         seller: Seller,
     ) -> Receipt | None:
         receipt = receipt_form.save(commit=False)
         total_sum = receipt.total_sum
         account = receipt.account
-        account_balance = get_object_or_404(Account, id=account.id)
+        account_balance = get_object_or_404(Account, pk=account.pk)
 
         if account_balance.user != user:
             return None
@@ -40,7 +37,8 @@ class ReceiptCreatorService:
 
         for product_form in product_formset:
             if product_form.cleaned_data and not product_form.cleaned_data.get(
-                'DELETE', False
+                'DELETE',
+                False,
             ):
                 product_data = product_form.cleaned_data
                 if (

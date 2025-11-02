@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import date
 from decimal import Decimal
 
@@ -33,7 +31,8 @@ def calculate_annuity_schedule(
         payment = round(payment_raw, constants.DECIMAL_PLACES_PRECISION)
         interest = remaining * monthly_rate
         principal = payment - round(
-            interest, constants.DECIMAL_PLACES_PRECISION
+            interest,
+            constants.DECIMAL_PLACES_PRECISION,
         )
         schedule.append(
             {
@@ -41,7 +40,8 @@ def calculate_annuity_schedule(
                 'payment': payment,
                 'interest': round(interest, constants.DECIMAL_PLACES_PRECISION),
                 'principal': round(
-                    principal, constants.DECIMAL_PLACES_PRECISION
+                    principal,
+                    constants.DECIMAL_PLACES_PRECISION,
                 ),
                 'balance': max(
                     constants.ZERO,
@@ -76,7 +76,8 @@ def calculate_annuity_schedule(
         'total_payment': total_payment,
         'overpayment': round(overpayment, constants.DECIMAL_PLACES_PRECISION),
         'monthly_payment': round(
-            payment_raw, constants.DECIMAL_PLACES_PRECISION
+            payment_raw,
+            constants.DECIMAL_PLACES_PRECISION,
         ),
     }
 
@@ -91,7 +92,7 @@ def calculate_differentiated_schedule(
     )
     principal_payment = amount / months
     schedule = []
-    total_payment = 0
+    total_payment = 0.0
     remaining = amount
     for i in range(1, months + 1):
         interest = remaining * monthly_rate

@@ -1,15 +1,116 @@
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import cast
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+
+
+class ExpenseDataRowDict(TypedDict):
+    """Строка данных расхода."""
+
+    category: str
+    category_id: int
+    fact: list[int]
+    plan: list[int]
+    diff: list[int]
+    percent: list[float | None]
+
+
+class IncomeDataRowDict(TypedDict):
+    """Строка данных дохода."""
+
+    category: str
+    category_id: int
+    fact: list[Decimal]
+    plan: list[Decimal]
+    diff: list[Decimal]
+    percent: list[float | None]
+
+
+class BudgetChartDataDict(TypedDict):
+    """Данные для графика бюджета."""
+
+    chart_labels: list[str]
+    chart_plan_execution_income: list[float]
+    chart_plan_execution_expense: list[float]
+    chart_balance: list[float]
+
+
+class AggregateBudgetDataDict(TypedDict):
+    """Агрегированные данные бюджета."""
+
+    months: list[date]
+    expense_data: list[ExpenseDataRowDict]
+    total_fact_expense: list[int]
+    total_plan_expense: list[int]
+    income_data: list[IncomeDataRowDict]
+    total_fact_income: list[Decimal]
+    total_plan_income: list[Decimal]
+    chart_data: BudgetChartDataDict
+
+
+class AggregateExpenseTableDict(TypedDict):
+    """Данные для таблицы расходов."""
+
+    months: list[date]
+    expense_data: list[ExpenseDataRowDict]
+    total_fact_expense: list[int]
+    total_plan_expense: list[int]
+
+
+class AggregateIncomeTableDict(TypedDict):
+    """Данные для таблицы доходов."""
+
+    months: list[date]
+    income_data: list[IncomeDataRowDict]
+    total_fact_income: list[Decimal]
+    total_plan_income: list[Decimal]
+
+
+class ExpenseApiDataRowDict(TypedDict):
+    """Строка данных расхода для API."""
+
+    category: str
+    category_id: int
+    months: list[str]
+    fact: list[int]
+    plan: list[int]
+    diff: list[int]
+    percent: list[float | None]
+
+
+class IncomeApiDataRowDict(TypedDict):
+    """Строка данных дохода для API."""
+
+    category: str
+    category_id: int
+    months: list[str]
+    fact: list[Decimal]
+    plan: list[Decimal]
+    diff: list[Decimal]
+    percent: list[float | None]
+
+
+class AggregateExpenseApiDict(TypedDict):
+    """Данные расходов для API."""
+
+    months: list[str]
+    data: list[ExpenseApiDataRowDict]
+
+
+class AggregateIncomeApiDict(TypedDict):
+    """Данные доходов для API."""
+
+    months: list[str]
+    data: list[IncomeApiDataRowDict]
 
 
 class BudgetDataError(Exception):
@@ -18,7 +119,13 @@ class BudgetDataError(Exception):
     """
 
 
-def get_categories(user: User, type_: str) -> QuerySet:
+def get_categories(
+    user: User,
+    type_: str,
+) -> (
+    QuerySet[ExpenseCategory, ExpenseCategory]
+    | QuerySet[IncomeCategory, IncomeCategory]
+):
     """
     Returns queryset of categories for the user by type (expense/income).
     Raises BudgetDataError if user is None.
@@ -27,10 +134,10 @@ def get_categories(user: User, type_: str) -> QuerySet:
         error_msg = 'User is required for category lookup.'
         raise BudgetDataError(error_msg)
     if type_ == 'expense':
-        return user.category_expense_users.filter(
+        return user.category_expense_users.filter(  # type: ignore[attr-defined,no-any-return]
             parent_category=None,
         ).order_by('name')
-    return user.category_income_users.filter(parent_category=None).order_by(
+    return user.category_income_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined,no-any-return]
         'name',
     )
 
@@ -123,8 +230,8 @@ def _calculate_expense_totals(
 
     for i, m in enumerate(months):
         for cat in expense_categories:
-            total_fact_expense[i] += expense_fact_map[cat.id][m]
-            total_plan_expense[i] += expense_plan_map[cat.id][m]
+            total_fact_expense[i] += expense_fact_map[cat.pk][m]
+            total_plan_expense[i] += expense_plan_map[cat.pk][m]
 
     return total_fact_expense, total_plan_expense
 
@@ -134,14 +241,14 @@ def _build_expense_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> list[dict[str, Any]]:
+) -> list[ExpenseDataRowDict]:
     """Build expense data structure with fact, plan, diff, and percent."""
     expense_data = []
 
     for cat in expense_categories:
         row = {
             'category': cat.name,
-            'category_id': cat.id,
+            'category_id': cat.pk,
             'fact': [],
             'plan': [],
             'diff': [],
@@ -149,8 +256,8 @@ def _build_expense_data(
         }
 
         for m in months:
-            fact = expense_fact_map[cat.id][m]
-            plan = expense_plan_map[cat.id][m]
+            fact = expense_fact_map[cat.pk][m]
+            plan = expense_plan_map[cat.pk][m]
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
@@ -159,7 +266,7 @@ def _build_expense_data(
             row['diff'].append(diff)
             row['percent'].append(percent)
 
-        expense_data.append(row)
+        expense_data.append(cast('ExpenseDataRowDict', row))
 
     return expense_data
 
@@ -169,7 +276,7 @@ def aggregate_budget_data(
     months: list[date],
     expense_categories: list[ExpenseCategory],
     income_categories: list[IncomeCategory],
-) -> dict[str, Any]:
+) -> AggregateBudgetDataDict:
     """Aggregate all budget data for context."""
     _validate_budget_inputs(user, months, expense_categories, income_categories)
 
@@ -177,22 +284,34 @@ def aggregate_budget_data(
     expense_plan_map = _get_expense_plans(user, months, expense_categories)
 
     total_fact_expense, total_plan_expense = _calculate_expense_totals(
-        expense_fact_map, expense_plan_map, months, expense_categories
+        expense_fact_map,
+        expense_plan_map,
+        months,
+        expense_categories,
     )
 
     expense_data = _build_expense_data(
-        expense_fact_map, expense_plan_map, months, expense_categories
+        expense_fact_map,
+        expense_plan_map,
+        months,
+        expense_categories,
     )
 
     income_fact_map = _get_income_facts(user, months, income_categories)
     income_plan_map = _get_income_plans(user, months, income_categories)
 
     total_fact_income, total_plan_income = _calculate_income_totals(
-        income_fact_map, income_plan_map, months, income_categories
+        income_fact_map,
+        income_plan_map,
+        months,
+        income_categories,
     )
 
     income_data = _build_income_data(
-        income_fact_map, income_plan_map, months, income_categories
+        income_fact_map,
+        income_plan_map,
+        months,
+        income_categories,
     )
 
     chart_data = _build_chart_data(
@@ -204,7 +323,7 @@ def aggregate_budget_data(
     )
 
     return {
-        **chart_data,
+        'chart_data': chart_data,
         'months': months,
         'expense_data': expense_data,
         'income_data': income_data,
@@ -262,7 +381,9 @@ def _get_income_plans(
         category_income__in=income_categories,
     ).values('category_income_id', 'date', 'amount')
 
-    income_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+    income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
+        lambda: defaultdict(lambda: Decimal(0)),
+    )
 
     for p in plans_inc:
         income_plan_map[p['category_income_id']][p['date']] = p[
@@ -284,8 +405,8 @@ def _calculate_income_totals(
 
     for i, m in enumerate(months):
         for cat in income_categories:
-            total_fact_income[i] += income_fact_map[cat.id][m]
-            total_plan_income[i] += income_plan_map[cat.id][m]
+            total_fact_income[i] += income_fact_map[cat.pk][m]
+            total_plan_income[i] += income_plan_map[cat.pk][m]
 
     return total_fact_income, total_plan_income
 
@@ -295,14 +416,14 @@ def _build_income_data(
     income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> list[dict[str, Any]]:
+) -> list[IncomeDataRowDict]:
     """Build income data structure with fact, plan, diff, and percent."""
     income_data = []
 
     for cat in income_categories:
         row = {
             'category': cat.name,
-            'category_id': cat.id,
+            'category_id': cat.pk,
             'fact': [],
             'plan': [],
             'diff': [],
@@ -310,8 +431,8 @@ def _build_income_data(
         }
 
         for m in months:
-            fact = income_fact_map[cat.id][m]
-            plan = income_plan_map[cat.id][m]
+            fact = income_fact_map[cat.pk][m]
+            plan = income_plan_map[cat.pk][m]
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
@@ -320,7 +441,7 @@ def _build_income_data(
             row['diff'].append(diff)
             row['percent'].append(percent)
 
-        income_data.append(row)
+        income_data.append(cast('IncomeDataRowDict', row))
 
     return income_data
 
@@ -331,34 +452,42 @@ def _build_chart_data(
     total_plan_income: list[Decimal],
     total_fact_expense: list[int],
     total_plan_expense: list[int],
-) -> dict[str, Any]:
+) -> BudgetChartDataDict:
     """Build chart data for budget visualization."""
     chart_labels = [m.strftime('%b %Y') for m in months]
     chart_plan_execution_income = []
     chart_plan_execution_expense = []
+    chart_balance = []
 
     for i in range(len(months)):
         income_percent = _calculate_percentage(
-            total_fact_income[i], total_plan_income[i]
+            total_fact_income[i],
+            total_plan_income[i],
         )
         expense_percent = _calculate_percentage(
-            total_fact_expense[i], total_plan_expense[i]
+            total_fact_expense[i],
+            total_plan_expense[i],
         )
+        balance = float(total_fact_income[i]) - float(total_fact_expense[i])
 
         chart_plan_execution_income.append(float(income_percent))
         chart_plan_execution_expense.append(float(expense_percent))
+        chart_balance.append(balance)
 
     return {
         'chart_labels': chart_labels,
         'chart_plan_execution_income': chart_plan_execution_income,
         'chart_plan_execution_expense': chart_plan_execution_expense,
+        'chart_balance': chart_balance,
     }
 
 
 def _calculate_percentage(fact: Decimal | int, plan: Decimal | int) -> Decimal:
     """Calculate percentage of fact vs plan."""
     if plan > 0:
-        return (fact / plan) * 100
+        fact_decimal = Decimal(fact) if isinstance(fact, int) else fact
+        plan_decimal = Decimal(plan) if isinstance(plan, int) else plan
+        return (fact_decimal / plan_decimal) * 100
     return Decimal(0) if fact == 0 else Decimal(100)
 
 
@@ -400,7 +529,9 @@ def _get_expense_table_facts(
         .annotate(total=Sum('amount'))
     )
 
-    expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+    expense_fact_map: dict[int, dict[date, int]] = defaultdict(
+        lambda: defaultdict(lambda: 0),
+    )
 
     for e in expenses:
         month_date = (
@@ -424,7 +555,9 @@ def _get_expense_table_plans(
         category_expense__in=expense_categories,
     ).values('category_expense_id', 'date', 'amount')
 
-    expense_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+    expense_plan_map: dict[int, dict[date, int]] = defaultdict(
+        lambda: defaultdict(lambda: 0),
+    )
 
     for pln in plans_expense:
         expense_plan_map[pln['category_expense_id']][pln['date']] = (
@@ -439,7 +572,7 @@ def _build_expense_table_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> tuple[list[dict[str, Any]], list[int], list[int]]:
+) -> tuple[list[ExpenseDataRowDict], list[int], list[int]]:
     """Build expense table data structure."""
     expense_data = []
     total_fact_expense = [0] * len(months)
@@ -448,7 +581,7 @@ def _build_expense_table_data(
     for cat in expense_categories:
         row = {
             'category': cat.name,
-            'category_id': cat.id,
+            'category_id': cat.pk,
             'fact': [],
             'plan': [],
             'diff': [],
@@ -456,8 +589,8 @@ def _build_expense_table_data(
         }
 
         for i, m in enumerate(months):
-            fact = expense_fact_map[cat.id][m]
-            plan = expense_plan_map[cat.id][m]
+            fact = expense_fact_map[cat.pk][m]
+            plan = expense_plan_map[cat.pk][m]
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
@@ -468,7 +601,7 @@ def _build_expense_table_data(
             total_fact_expense[i] += fact
             total_plan_expense[i] += plan
 
-        expense_data.append(row)
+        expense_data.append(cast('ExpenseDataRowDict', row))
 
     return expense_data, total_fact_expense, total_plan_expense
 
@@ -477,20 +610,27 @@ def aggregate_expense_table(
     user: User,
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> dict[str, Any]:
+) -> AggregateExpenseTableDict:
     """Aggregate data for the expense table view."""
     _validate_expense_table_inputs(user, months, expense_categories)
 
     expense_fact_map = _get_expense_table_facts(
-        user, months, expense_categories
+        user,
+        months,
+        expense_categories,
     )
     expense_plan_map = _get_expense_table_plans(
-        user, months, expense_categories
+        user,
+        months,
+        expense_categories,
     )
 
     expense_data, total_fact_expense, total_plan_expense = (
         _build_expense_table_data(
-            expense_fact_map, expense_plan_map, months, expense_categories
+            expense_fact_map,
+            expense_plan_map,
+            months,
+            expense_categories,
         )
     )
 
@@ -540,7 +680,9 @@ def _get_income_table_facts(
         .annotate(total=Sum('amount'))
     )
 
-    income_fact_map = defaultdict(lambda: defaultdict(lambda: Decimal(0)))
+    income_fact_map: dict[int, dict[date, Decimal]] = defaultdict(
+        lambda: defaultdict(lambda: Decimal(0)),
+    )
 
     for e in income_queryset:
         month_date = (
@@ -564,7 +706,9 @@ def _get_income_table_plans(
         category_income__in=income_categories,
     ).values('category_income_id', 'date', 'amount')
 
-    income_plan_map = defaultdict(lambda: defaultdict(lambda: Decimal(0)))
+    income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
+        lambda: defaultdict(lambda: Decimal(0)),
+    )
 
     for p in plans_inc:
         income_plan_map[p['category_income_id']][p['date']] = p[
@@ -579,7 +723,7 @@ def _build_income_table_data(
     income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> tuple[list[dict[str, Any]], list[Decimal], list[Decimal]]:
+) -> tuple[list[IncomeDataRowDict], list[Decimal], list[Decimal]]:
     """Build income table data structure."""
     income_data = []
     total_fact_income = [Decimal(0)] * len(months)
@@ -588,7 +732,7 @@ def _build_income_table_data(
     for cat in income_categories:
         row = {
             'category': cat.name,
-            'category_id': cat.id,
+            'category_id': cat.pk,
             'fact': [],
             'plan': [],
             'diff': [],
@@ -596,8 +740,8 @@ def _build_income_table_data(
         }
 
         for i, m in enumerate(months):
-            fact = income_fact_map[cat.id][m]
-            plan = income_plan_map[cat.id][m]
+            fact = income_fact_map[cat.pk][m]
+            plan = income_plan_map[cat.pk][m]
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
@@ -608,7 +752,7 @@ def _build_income_table_data(
             total_fact_income[i] += fact
             total_plan_income[i] += plan
 
-        income_data.append(row)
+        income_data.append(cast('IncomeDataRowDict', row))
 
     return income_data, total_fact_income, total_plan_income
 
@@ -617,7 +761,7 @@ def aggregate_income_table(
     user: User,
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> dict[str, Any]:
+) -> AggregateIncomeTableDict:
     """Aggregate data for the income table view."""
     _validate_income_table_inputs(user, months, income_categories)
 
@@ -626,7 +770,10 @@ def aggregate_income_table(
 
     income_data, total_fact_income, total_plan_income = (
         _build_income_table_data(
-            income_fact_map, income_plan_map, months, income_categories
+            income_fact_map,
+            income_plan_map,
+            months,
+            income_categories,
         )
     )
 
@@ -676,7 +823,9 @@ def _get_expense_api_facts(
         .annotate(total=Sum('amount'))
     )
 
-    expense_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+    expense_fact_map: dict[int, dict[date, int]] = defaultdict(
+        lambda: defaultdict(lambda: 0),
+    )
 
     for e in expenses:
         month_date = (
@@ -701,7 +850,9 @@ def _get_expense_api_plans(
         category_expense__in=expense_categories,
     ).values('category_expense_id', 'date', 'amount')
 
-    expense_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+    expense_plan_map: dict[int, dict[date, int]] = defaultdict(
+        lambda: defaultdict(lambda: 0),
+    )
 
     for pln in plans_expense:
         expense_plan_map[pln['category_expense_id']][pln['date']] = (
@@ -716,19 +867,19 @@ def _build_expense_api_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> list[dict[str, Any]]:
+) -> list[ExpenseApiDataRowDict]:
     """Build expense API data structure."""
     data = []
 
     for cat in expense_categories:
         row = {
             'category': cat.name,
-            'category_id': cat.id,
+            'category_id': cat.pk,
         }
 
         for m in months:
-            fact = expense_fact_map[cat.id][m]
-            plan = expense_plan_map[cat.id][m]
+            fact = expense_fact_map[cat.pk][m]
+            plan = expense_plan_map[cat.pk][m]
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
@@ -739,7 +890,7 @@ def _build_expense_api_data(
                 float(percent) if percent is not None else None
             )
 
-        data.append(row)
+        data.append(cast('ExpenseApiDataRowDict', row))
 
     return data
 
@@ -748,7 +899,7 @@ def aggregate_expense_api(
     user: User,
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> dict[str, Any]:
+) -> AggregateExpenseApiDict:
     """Aggregate data for the expense API view."""
     _validate_expense_api_inputs(user, months, expense_categories)
 
@@ -756,7 +907,10 @@ def aggregate_expense_api(
     expense_plan_map = _get_expense_api_plans(user, months, expense_categories)
 
     data = _build_expense_api_data(
-        expense_fact_map, expense_plan_map, months, expense_categories
+        expense_fact_map,
+        expense_plan_map,
+        months,
+        expense_categories,
     )
 
     return {'months': [m.isoformat() for m in months], 'data': data}
@@ -800,7 +954,9 @@ def _get_income_api_facts(
         .annotate(total=Sum('amount'))
     )
 
-    income_fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+    income_fact_map: dict[int, dict[date, int]] = defaultdict(
+        lambda: defaultdict(lambda: 0),
+    )
 
     for e in incomes:
         month_date = (
@@ -825,7 +981,9 @@ def _get_income_api_plans(
         category_income__in=income_categories,
     ).values('category_income_id', 'date', 'amount')
 
-    income_plan_map = defaultdict(lambda: defaultdict(lambda: 0))
+    income_plan_map: dict[int, dict[date, int]] = defaultdict(
+        lambda: defaultdict(lambda: 0),
+    )
 
     for pln in plans_income:
         income_plan_map[pln['category_income_id']][pln['date']] = (
@@ -840,19 +998,19 @@ def _build_income_api_data(
     income_plan_map: dict[int, dict[date, int]],
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> list[dict[str, Any]]:
+) -> list[IncomeApiDataRowDict]:
     """Build income API data structure."""
     data = []
 
     for cat in income_categories:
         row = {
             'category': cat.name,
-            'category_id': cat.id,
+            'category_id': cat.pk,
         }
 
         for m in months:
-            fact = income_fact_map[cat.id][m]
-            plan = income_plan_map[cat.id][m]
+            fact = income_fact_map[cat.pk][m]
+            plan = income_plan_map[cat.pk][m]
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
@@ -863,7 +1021,7 @@ def _build_income_api_data(
                 float(percent) if percent is not None else None
             )
 
-        data.append(row)
+        data.append(cast('IncomeApiDataRowDict', row))
 
     return data
 
@@ -872,7 +1030,7 @@ def aggregate_income_api(
     user: User,
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> dict[str, Any]:
+) -> AggregateIncomeApiDict:
     """Aggregate data for the income API view."""
     _validate_income_api_inputs(user, months, income_categories)
 
@@ -880,7 +1038,10 @@ def aggregate_income_api(
     income_plan_map = _get_income_api_plans(user, months, income_categories)
 
     data = _build_income_api_data(
-        income_fact_map, income_plan_map, months, income_categories
+        income_fact_map,
+        income_plan_map,
+        months,
+        income_categories,
     )
 
     return {'months': [m.isoformat() for m in months], 'data': data}

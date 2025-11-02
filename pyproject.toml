@@ -35,11 +35,12 @@ dependencies = [
     "granian[reload]>=2.3.4",
     "django-extensions>=4.1",
     "djangorestframework-stubs>=3.16.1",
-    "django-stubs>=5.2.1",
+    "django-stubs[compatible-mypy]>=5.2.1",
     "django-cors-headers>=4.7.0",
     "python-decouple>=3.8",
     "django-redis>=6.0.0",
     "django-compressor>=4.5.1",
+    "pyright>=1.1.407",
 ]
 
 [project.optional-dependencies]
@@ -64,8 +65,8 @@ dev = [
     "types-python-dateutil>=2.9.0.20241003",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "coverage>=7.3.2",
     "myst-parser>=4.0.0",
     "flower>=2.0.1",
@@ -121,7 +122,7 @@ exclude = [
 [tool.ruff.lint]
 select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
 ignore = [
-    "D100", "D101", "D102", "D104", "D105", "D106", "E203", "COM812", "Q000", "Q003", "PT009", "RUF001", "RUF002", "PLR0913", "FBT001", "FBT002", "ARG002", "RUF012", "PT027",
+    "D100", "D101", "D102", "D104", "D105", "D106", "E203", "COM812", "Q000", "Q003", "PT009", "RUF001", "RUF002", "PLR0913", "FBT001", "FBT002", "ARG002", "RUF012", "PT027", "TRY301", "TRY003", "EM101",
 ]
 external = [ "WPS" ]
 
@@ -154,9 +155,19 @@ known-first-party = ["hasta_la_vista_money"]
 "hasta_la_vista_money/receipts/services/receipt_ai_prompt.py" = [
   "E501",
 ]
+"hasta_la_vista_money/income/views.py" = [
+  "E501", # long translation strings
+]
+"hasta_la_vista_money/loan/views.py" = [
+  "S101", # asserts for type narrowing
+]
+"hasta_la_vista_money/api/test_throttling.py" = [
+  "S101", # asserts for type narrowing
+]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
+strict = true
 plugins = [
   "mypy_django_plugin.main",
   "mypy_drf_plugin.main",
@@ -166,28 +177,26 @@ check_untyped_defs = true
 disallow_any_generics = true
 disallow_untyped_calls = true
 disallow_untyped_decorators = true
-ignore_errors = false
-ignore_missing_imports = true
-implicit_reexport = false
-strict_optional = true
-strict_equality = true
-no_implicit_optional = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-warn_unused_configs = true
+no_implicit_reexport = true
 warn_unreachable = true
-warn_no_return = true
-warn_return_any = true
-disallow_incomplete_defs = true
-pretty = true
+warn_unused_ignores = true
 show_error_codes = true
+pretty = true
+follow_imports = "silent"
+ignore_missing_imports = true
+strict_equality = true
+
 exclude = [
   "migrations",
 ]
-
-[[tool.mypy.overrides]]
-module = "hasta_la_vista_money.*.migrations.*"
-ignore_errors = true
+enable_error_code = [
+  "ignore-without-code",  # Требует указания кода при # type: ignore
+  "redundant-expr",       # Обнаруживает бессмысленные выражения
+  "truthy-bool",          # Проверяет неявные приведения к bool
+]
+disable_error_code = [
+  "import",               # Временно отключаем для проблем с django-stubs
+]
 
 [tool.coverage.run]
 branch = true
@@ -216,7 +225,7 @@ profile = "black"
 multi_line_output = 3
 include_trailing_comma = true
 default_section = "FIRSTPARTY"
-line_length = 79
+line_length = 80
 force_single_line = false
 known_django = "django"
 known_first_party = "hasta_la_vista_money"
@@ -240,5 +249,5 @@ replace = "current_version = {new_version}"
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
 
-[mypy.plugins.django-stubs]
+[tool.django-stubs]
 django_settings_module = "config.django.base"

@@ -1,6 +1,8 @@
-from typing import Any
+from datetime import datetime
+from decimal import Decimal
 
 from django.db.models import Sum
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import Account
@@ -9,7 +11,38 @@ from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
 
-def get_user_export_data(user: User) -> dict[str, Any]:
+class UserInfoDict(TypedDict):
+    """Информация о пользователе для экспорта."""
+
+    username: str
+    email: str
+    first_name: str
+    last_name: str
+    date_joined: str
+    last_login: str | None
+
+
+class StatisticsDict(TypedDict):
+    """Статистика для экспорта."""
+
+    total_balance: float
+    total_expenses: float
+    total_incomes: float
+    receipts_count: int
+
+
+class UserExportData(TypedDict):
+    """Данные для экспорта пользователя."""
+
+    user_info: UserInfoDict
+    accounts: list[dict[str, str | Decimal | datetime | None]]
+    expenses: list[dict[str, str | Decimal | datetime]]
+    incomes: list[dict[str, str | Decimal | datetime]]
+    receipts: list[dict[str, str | Decimal | datetime | None]]
+    statistics: StatisticsDict
+
+
+def get_user_export_data(user: User) -> UserExportData:
     return {
         'user_info': {
             'username': user.username,

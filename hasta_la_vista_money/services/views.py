@@ -4,6 +4,7 @@ from typing import Any
 
 from django.db.models import Count, Model, QuerySet, Sum
 from django.db.models.functions import TruncMonth
+from django.forms import ModelForm
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 
@@ -23,7 +24,7 @@ class CategoryTreeBuilder:
             list(categories) if hasattr(categories, 'values') else categories
         )
         self.children_map: dict[int | None, list[dict[str, Any]]] = defaultdict(
-            list
+            list,
         )
         for c in self.cats:
             self.children_map[c['parent_category']].append(c)
@@ -71,15 +72,15 @@ def build_category_tree(
     yield from builder.build(parent_id=parent_id, current_depth=current_depth)
 
 
-def collect_info_receipt(user: User) -> QuerySet:
+def collect_info_receipt(user: User) -> Any:
     """
     Сбор информации о чеках для отображения на страницах сайта.
 
     :param user: User
-    :return: QuerySet
+    :return: QuerySet с данными о чеках
     """
     return (
-        user.receipt_users.annotate(
+        user.receipt_users.annotate(  # type: ignore[attr-defined]
             month=TruncMonth('receipt_date'),
         )
         .values(
@@ -94,11 +95,15 @@ def collect_info_receipt(user: User) -> QuerySet:
     )
 
 
-def get_queryset_type_income_expenses(type_id, model, form):
+def get_queryset_type_income_expenses(
+    type_id: int | None,
+    model: type[Model],
+    form: ModelForm[Any],
+) -> Model:
     """Функция получения queryset."""
     if type_id:
         return get_object_or_404(model, id=type_id)
-    return form.save(commit=False)
+    return form.save(commit=False)  # type: ignore[no-any-return]
 
 
 def get_new_type_operation(
@@ -109,14 +114,14 @@ def get_new_type_operation(
     """Get new type operation."""
     expense = get_object_or_404(model, pk=id_type_operation, user=request.user)
     if 'income' in request.path:
-        expense.account.balance += expense.amount
+        expense.account.balance += expense.amount  # type: ignore[attr-defined]
     else:
-        expense.account.balance -= expense.amount
-    expense.account.save()
-    return model.objects.create(
-        user=expense.user,
-        account=expense.account,
-        category=expense.category,
-        amount=expense.amount,
-        date=expense.date,
+        expense.account.balance -= expense.amount  # type: ignore[attr-defined]
+    expense.account.save()  # type: ignore[attr-defined]
+    return model.objects.create(  # type: ignore[no-any-return]
+        user=expense.user,  # type: ignore[attr-defined]
+        account=expense.account,  # type: ignore[attr-defined]
+        category=expense.category,  # type: ignore[attr-defined]
+        amount=expense.amount,  # type: ignore[attr-defined]
+        date=expense.date,  # type: ignore[attr-defined]
     )

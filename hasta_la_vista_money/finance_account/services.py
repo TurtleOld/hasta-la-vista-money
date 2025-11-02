@@ -3,7 +3,7 @@
 from calendar import monthrange
 from datetime import datetime, time
 from decimal import Decimal
-from typing import Any
+from typing import Any, TypedDict
 
 from dateutil.relativedelta import relativedelta
 from django.db import transaction
@@ -34,6 +34,39 @@ from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
 
+class GracePeriodInfoDict(TypedDict, total=False):
+    """Информация о льготном периоде кредитной карты."""
+
+    purchase_month: str
+    purchase_start: datetime
+    purchase_end: datetime
+    grace_end: datetime
+    debt_for_month: Decimal
+    payments_for_period: Decimal
+    final_debt: Decimal
+    is_overdue: bool
+    days_until_due: int
+
+
+class PaymentScheduleItemDict(TypedDict):
+    """Элемент графика платежей."""
+
+    date: datetime
+    amount: Decimal
+
+
+class RaiffeisenbankScheduleDict(TypedDict, total=False):
+    """График платежей для Raiffeisenbank."""
+
+    first_purchase_date: datetime
+    grace_end_date: datetime
+    total_initial_debt: Decimal
+    final_debt: Decimal
+    payments_schedule: list[PaymentScheduleItemDict]
+    days_until_grace_end: int
+    is_overdue: bool
+
+
 class TransferService:
     """Service for handling money transfers between accounts."""
 
@@ -44,7 +77,7 @@ class TransferService:
         to_account: Account,
         amount: Decimal,
         user: User,
-        exchange_date: str | None = None,
+        exchange_date: datetime | None = None,
         notes: str | None = None,
     ) -> TransferMoneyLog:
         """Transfer money between accounts with validation and logging."""
@@ -53,7 +86,7 @@ class TransferService:
         validate_account_balance(from_account, amount)
 
         if from_account.transfer_money(to_account, amount):
-            return TransferMoneyLog.objects.create(
+            return TransferMoneyLog.objects.create(  # type: ignore[misc]
                 user=user,
                 from_account=from_account,
                 to_account=to_account,
@@ -130,9 +163,10 @@ class AccountService:
         total_receipt_expense = receipt_aggregation['total_expense'] or 0
         total_receipt_return = receipt_aggregation['total_return'] or 0
 
-        return (total_expense + total_receipt_expense) - (
+        result = (total_expense + total_receipt_expense) - (
             total_income + total_receipt_return
         )
+        return Decimal(str(result))  # type: ignore[return-value]
 
     @staticmethod
     @transaction.atomic
@@ -153,7 +187,7 @@ class AccountService:
         new_total_sum: Decimal,
     ) -> None:
         """Adjust account balances when receipt is updated."""
-        if old_account.id == new_account.id:
+        if old_account.id == new_account.id:  # type: ignore[attr-defined]
             difference = new_total_sum - old_total_sum
             if difference == 0:
                 return
@@ -203,11 +237,11 @@ class AccountService:
             .first()
         )
         if first_expense and first_receipt:
-            return min(first_expense.date, first_receipt.receipt_date)
+            return min(first_expense.date, first_receipt.receipt_date)  # type: ignore[no-any-return]
         if first_expense:
-            return first_expense.date
+            return first_expense.date  # type: ignore[no-any-return]
         if first_receipt:
-            return first_receipt.receipt_date
+            return first_receipt.receipt_date  # type: ignore[no-any-return]
         return None
 
     @staticmethod
@@ -333,13 +367,17 @@ class AccountService:
                 payments_end,
             )
         else:
-            payments_for_period = constants.ZERO
+            payments_for_period = Decimal(str(constants.ZERO))
 
         final_debt = (debt_for_month or constants.ZERO) + (
             payments_for_period or constants.ZERO
         )
 
-        return debt_for_month, payments_for_period, final_debt
+        return (  # type: ignore[return-value]
+            debt_for_month or constants.ZERO,
+            payments_for_period or constants.ZERO,
+            final_debt,
+        )
 
     @staticmethod
     def _ensure_timezone_aware(dt: datetime) -> datetime:
@@ -352,7 +390,7 @@ class AccountService:
     def calculate_grace_period_info(
         account: Account,
         purchase_month: Any,
-    ) -> dict[str, Any]:
+    ) -> GracePeriodInfoDict:
         """Calculate grace period information for a credit card."""
         if account.type_account not in (
             ACCOUNT_TYPE_CREDIT_CARD,
@@ -453,7 +491,7 @@ class AccountService:
     def _calculate_payment_schedule(
         statement_dates: list[datetime],
         initial_debt: Decimal,
-    ) -> tuple[list[dict], Decimal]:
+    ) -> tuple[list[dict[str, Any]], Decimal]:
         """Calculate payment schedule for each statement."""
         payments_schedule = []
         remaining_debt = initial_debt
@@ -494,7 +532,7 @@ class AccountService:
     def calculate_raiffeisenbank_payment_schedule(
         account: Account,
         purchase_month: Any,
-    ) -> dict[str, Any]:
+    ) -> RaiffeisenbankScheduleDict:
         """Calculate payment schedule for Raiffeisenbank credit card."""
         if not AccountService._validate_raiffeisenbank_account(account):
             return {}
@@ -535,18 +573,18 @@ class AccountService:
         payments_schedule, final_debt = (
             AccountService._calculate_payment_schedule(
                 statement_dates,
-                initial_debt,
+                Decimal(str(initial_debt)),
             )
         )
 
         grace_end = AccountService._calculate_grace_end_date(first_purchase)
 
-        return {
+        return {  # type: ignore[typeddict-item]
             'first_purchase_date': first_purchase,
             'grace_end_date': grace_end,
-            'total_initial_debt': initial_debt,
+            'total_initial_debt': Decimal(str(initial_debt)),
             'final_debt': final_debt,
-            'payments_schedule': payments_schedule,
+            'payments_schedule': payments_schedule,  # type: ignore[typeddict-item]
             'days_until_grace_end': (
                 (grace_end.date() - timezone.now().date()).days
                 if timezone.now() <= grace_end
@@ -587,12 +625,16 @@ def get_accounts_for_user_or_group(
     return Account.objects.filter(user=user).select_related('user')
 
 
-def get_sum_all_accounts(accounts):
+def get_sum_all_accounts(accounts: Any) -> Decimal:
     """Calculate total balance for a queryset of accounts."""
-    return sum(acc.balance for acc in accounts)
+    total = sum(acc.balance for acc in accounts)
+    return Decimal(str(total))  # type: ignore[return-value]
 
 
-def get_transfer_money_log(user, limit=constants.TRANSFER_MONEY_LOG_LIMIT):
+def get_transfer_money_log(
+    user: Any,
+    limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
+) -> Any:
     """Get recent transfer logs for a user."""
     return TransferMoneyLog.objects.filter(user=user).order_by(
         '-exchange_date',

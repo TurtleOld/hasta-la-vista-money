@@ -621,12 +621,13 @@ class TestAccountServices(TestCase):
         self.user = User.objects.get(id=1)
         self.account1 = Account.objects.filter(user=self.user).first()
         self.group = self.user.groups.first()
+        self.group_id: str | None
         if self.group:
             self.group_id = str(self.group.pk)
         else:
             self.group_id = None
 
-    def test_get_accounts_for_user(self):
+    def test_get_accounts_for_user(self) -> None:
         """Test that get_accounts_for_user_or_group returns only user's
         accounts when group_id is None or 'my'."""
         accounts = account_services.get_accounts_for_user_or_group(
@@ -640,7 +641,7 @@ class TestAccountServices(TestCase):
         )
         self.assertTrue(all(acc.user == self.user for acc in accounts_my))
 
-    def test_get_accounts_for_group(self):
+    def test_get_accounts_for_group(self) -> None:
         """Test that get_accounts_for_user_or_group returns all accounts
         for users in the group."""
         if not self.group_id:
@@ -649,17 +650,18 @@ class TestAccountServices(TestCase):
             self.user,
             self.group_id,
         )
-        group_users = list(self.group.user_set.all())
+        assert self.group is not None
+        group_users = list(self.group.user_set.all())  # type: ignore[attr-defined]
         self.assertTrue(all(acc.user in group_users for acc in accounts))
 
-    def test_get_sum_all_accounts(self):
+    def test_get_sum_all_accounts(self) -> None:
         """Test that get_sum_all_accounts returns correct sum for queryset."""
         accounts = Account.objects.filter(user=self.user)
         expected_sum = sum(acc.balance for acc in accounts)
         result = account_services.get_sum_all_accounts(accounts)
         self.assertEqual(result, expected_sum)
 
-    def test_get_transfer_money_log(self):
+    def test_get_transfer_money_log(self) -> None:
         """Test that get_transfer_money_log returns recent logs for user."""
         logs = account_services.get_transfer_money_log(self.user)
         self.assertTrue(all(log.user == self.user for log in logs))
@@ -681,7 +683,7 @@ class TestAccountBusinessLogic(TestCase):
         'income_cat.yaml',
     ]
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.user = User.objects.get(id=1)
         self.account1 = Account.objects.get(name_account='Банковская карта')
         self.account2 = Account.objects.get(name_account='Основной счёт')
@@ -690,7 +692,7 @@ class TestAccountBusinessLogic(TestCase):
         self.account1.save()
         self.account2.save()
 
-    def test_transfer_money_success(self):
+    def test_transfer_money_success(self) -> None:
         amount = Decimal(100)
         initial_balance_1 = self.account1.balance
         initial_balance_2 = self.account2.balance
@@ -701,18 +703,18 @@ class TestAccountBusinessLogic(TestCase):
         self.assertEqual(self.account1.balance, initial_balance_1 - amount)
         self.assertEqual(self.account2.balance, initial_balance_2 + amount)
 
-    def test_transfer_money_insufficient(self):
+    def test_transfer_money_insufficient(self) -> None:
         amount = self.account1.balance + Decimal(1)
         result = self.account1.transfer_money(self.account2, amount)
         self.assertFalse(result)
 
-    def test_get_credit_card_debt(self):
+    def test_get_credit_card_debt(self) -> None:
         self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
         debt = self.account1.get_credit_card_debt()
         self.assertIsInstance(debt, Decimal)
 
-    def test_calculate_grace_period_info(self):
+    def test_calculate_grace_period_info(self) -> None:
         self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
 
@@ -912,7 +914,7 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
         """Test form initialization with user accounts."""
         form = TransferMoneyAccountForm(user=self.user)
 
-        self.assertEqual(form.fields['from_account'].queryset.count(), 2)
+        self.assertEqual(form.fields['from_account'].queryset.count(), 2)  # type: ignore[attr-defined]
 
         self.assertIn('amount', form.fields)
         self.assertIn('notes', form.fields)

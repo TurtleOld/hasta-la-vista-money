@@ -40,8 +40,8 @@ def validate_account_balance(from_account: Account, amount: Decimal) -> None:
 
 
 def validate_different_accounts(
-    from_account: Account,
-    to_account: Account,
+    from_account: Account | None,
+    to_account: Account | None,
 ) -> None:
     """Validate that source and destination accounts are different.
 
@@ -53,12 +53,18 @@ def validate_different_accounts(
         to_account: The destination account.
 
     Raises:
-        ValidationError: If source and destination accounts are the same.
+        ValidationError: If source or destination account is None,
+            or if source and destination accounts are the same.
     """
-    if from_account is None or to_account is None:
+    if from_account is None:
         raise ValidationError(
-            _('Нельзя выбирать одинаковые счета для перевода.'),
-            code='invalid_accounts',
+            _('Необходимо указать счет-источник'),
+            code='missing_from_account',
+        )
+    if to_account is None:
+        raise ValidationError(
+            _('Необходимо указать счет-получатель'),
+            code='missing_to_account',
         )
     if from_account == to_account:
         raise ValidationError(
@@ -68,8 +74,8 @@ def validate_different_accounts(
 
 
 def validate_credit_fields_required(
-    type_account: str,
-    bank: str,
+    type_account: str | None,
+    bank: str | None,
     limit_credit: Any = None,
     payment_due_date: Any = None,
     grace_period_days: Any = None,
@@ -103,12 +109,12 @@ def validate_credit_fields_required(
 
         if not payment_due_date:
             errors.append(
-                _('Для кредитного счёта необходимо указать дату платежа')
+                _('Для кредитного счёта необходимо указать дату платежа'),
             )
 
         if not grace_period_days or grace_period_days <= 0:
             errors.append(
-                _('Для кредитного счёта необходимо указать льготный период')
+                _('Для кредитного счёта необходимо указать льготный период'),
             )
 
         if errors:

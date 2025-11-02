@@ -1,16 +1,13 @@
-from __future__ import annotations
-
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import Any
 
 from django.db import transaction
+from django.forms.formsets import BaseFormSet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services import AccountService
+from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.receipts.forms import ProductFormSet, ReceiptForm
 
 
 class ReceiptUpdaterService:
@@ -21,7 +18,7 @@ class ReceiptUpdaterService:
         user,
         receipt: Receipt,
         form: ReceiptForm,
-        product_formset: ProductFormSet,
+        product_formset: BaseFormSet[Any],
     ) -> Receipt:
         old_total_sum = receipt.total_sum
         old_account = receipt.account
@@ -34,7 +31,8 @@ class ReceiptUpdaterService:
         new_total_sum = Decimal('0.00')
         for product_form in product_formset:
             if product_form.cleaned_data and not product_form.cleaned_data.get(
-                'DELETE', False
+                'DELETE',
+                False,
             ):
                 product_data = product_form.cleaned_data
                 if (

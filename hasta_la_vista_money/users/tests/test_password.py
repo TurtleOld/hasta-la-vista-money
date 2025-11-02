@@ -1,36 +1,50 @@
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import HttpRequest, HttpResponse
 from django.test import RequestFactory, TestCase
 
 from hasta_la_vista_money.users.services.password import set_user_password
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User as UserType
+else:
+    UserType = get_user_model()
+
 User = get_user_model()
+
+
+def _dummy_get_response(_request: HttpRequest) -> HttpResponse:
+    return HttpResponse()
 
 
 class SetUserPasswordServiceTest(TestCase):
     """Tests for set_user_password service function."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: ClassVar[list[str]] = ['users.yaml']  # type: ignore[misc]
 
-    def setUp(self):
-        self.user = User.objects.first()
-        self.factory = RequestFactory()
+    def setUp(self) -> None:
+        user = User.objects.first()
+        if user is None:
+            msg: str = 'No user found in fixtures'
+            raise ValueError(msg)
+        self.user: UserType = cast('UserType', user)
+        self.factory: RequestFactory = RequestFactory()
 
-    def get_request(self):
-        request = self.factory.post('/set-password/')
-        SessionMiddleware(lambda: None).process_request(request)
+    def get_request(self) -> HttpRequest:
+        request: HttpRequest = self.factory.post('/set-password/')
+        SessionMiddleware(_dummy_get_response).process_request(request)
         request.session.save()
-        MessageMiddleware(lambda: None).process_request(request)
+        MessageMiddleware(_dummy_get_response).process_request(request)
         return request
 
-    def test_set_user_password(self):
-        request = self.get_request()
+    def test_set_user_password(self) -> None:
+        request: HttpRequest = self.get_request()
         request.user = self.user
-        form = SetPasswordForm(
+        form: SetPasswordForm[UserType] = SetPasswordForm(
             user=self.user,
             data={
                 'new_password1': 'newsecurepassword',

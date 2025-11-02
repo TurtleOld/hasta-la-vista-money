@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import io
 import json
 
@@ -19,7 +17,9 @@ from hasta_la_vista_money.users.models import User
 class ReceiptImportServiceTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
-            username='tester', password='pass', email='t@example.com'
+            username='tester',
+            password='pass',
+            email='t@example.com',
         )
         self.account = Account.objects.create(
             user=self.user,
@@ -28,7 +28,7 @@ class ReceiptImportServiceTests(TestCase):
             currency='RU',
         )
 
-    def test_process_uploaded_image_success(self):
+    def test_process_uploaded_image_success(self) -> None:
         # Prepare fake image file
         uploaded_file = SimpleUploadedFile(
             'test.jpg',
@@ -87,9 +87,11 @@ class ReceiptImportServiceTests(TestCase):
         self.assertIsNotNone(result.receipt)
         self.assertTrue(
             Receipt.objects.filter(
-                user=self.user, number_receipt=data['number_receipt']
-            ).exists()
+                user=self.user,
+                number_receipt=data['number_receipt'],
+            ).exists(),
         )
 
         self.account.refresh_from_db()
-        self.assertEqual(float(self.account.balance), 1000 - data['total_sum'])
+        total_sum: float = float(data['total_sum'])  # type: ignore[arg-type]
+        self.assertEqual(float(self.account.balance), 1000 - total_sum)

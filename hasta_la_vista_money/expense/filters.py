@@ -10,7 +10,7 @@ from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 
 
-class ExpenseFilter(django_filters.FilterSet):
+class ExpenseFilter(django_filters.FilterSet):  # type: ignore[misc]
     category = django_filters.ModelChoiceFilter(
         queryset=ExpenseCategory.objects.all(),
         field_name='category',

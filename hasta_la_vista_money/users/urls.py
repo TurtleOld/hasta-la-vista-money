@@ -25,6 +25,12 @@ urlpatterns = [
     path('statistics/', UserStatisticsView.as_view(), name='statistics'),
     path('export-data/', ExportUserDataView.as_view(), name='export_data'),
     path('set-theme/', SwitchThemeView.as_view(), name='set_theme'),
-    path('groups/', include('hasta_la_vista_money.users.groups_urls')),
-    path('ajax/', include('hasta_la_vista_money.users.ajax_urls')),
+    path(
+        'groups/',
+        include('hasta_la_vista_money.users.groups_urls', namespace='groups'),
+    ),
+    path(
+        'ajax/',
+        include('hasta_la_vista_money.users.ajax_urls', namespace='ajax'),
+    ),
 ]

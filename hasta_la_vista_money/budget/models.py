@@ -1,23 +1,20 @@
-from __future__ import annotations
-
 from datetime import date
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-if TYPE_CHECKING:
-    from hasta_la_vista_money.expense.models import ExpenseCategory
-    from hasta_la_vista_money.income.models import IncomeCategory
-    from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.expense.models import ExpenseCategory
+from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.users.models import User
 
 
 class DateListQuerySet(models.QuerySet):
-    def for_user(self, user: User) -> models.QuerySet[DateList]:
+    def for_user(self, user: User) -> 'models.QuerySet[DateList]':
         """Filter date lists by user."""
         return self.filter(user=user)
 
-    def for_date(self, target_date: date) -> models.QuerySet[DateList]:
+    def for_date(self, target_date: date) -> 'models.QuerySet[DateList]':
         """Filter date lists by date."""
         return self.filter(date=target_date)
 
@@ -27,10 +24,10 @@ class DateListManager(models.Manager):
         return DateListQuerySet(self.model, using=self._db)
 
     def for_user(self, user: User) -> DateListQuerySet:
-        return self.get_queryset().for_user(user)
+        return self.get_queryset().for_user(user)  # type: ignore[return-value]
 
     def for_date(self, target_date: date) -> DateListQuerySet:
-        return self.get_queryset().for_date(target_date)
+        return self.get_queryset().for_date(target_date)  # type: ignore[return-value]
 
 
 class DateList(models.Model):
@@ -38,20 +35,20 @@ class DateList(models.Model):
     Stores a list of dates for a user, used for budget planning.
     """
 
-    user: User = models.ForeignKey(
+    user: User = models.ForeignKey(  # type: ignore[assignment]
         'users.User',
         on_delete=models.CASCADE,
         related_name='budget_date_lists',
         verbose_name=_('Пользователь'),
         help_text=_('Пользователь, для которого ведется список дат'),
     )
-    date: date = models.DateField(
+    date: date = models.DateField(  # type: ignore[assignment]
         default=date.today,
         verbose_name=_('Дата'),
         help_text=_('Дата планирования'),
         db_index=True,
     )
-    created_at: date = models.DateTimeField(
+    created_at = models.DateTimeField(  # type: ignore[assignment]
         auto_now_add=True,
         null=True,
         blank=True,
@@ -74,21 +71,21 @@ class DateList(models.Model):
 
 
 class PlanningQuerySet(models.QuerySet):
-    def expenses(self) -> models.QuerySet[Planning]:
+    def expenses(self) -> 'models.QuerySet[Planning]':
         """Filter only expense plans."""
         return self.filter(type=Planning.Type.EXPENSE)
 
-    def incomes(self) -> models.QuerySet[Planning]:
+    def incomes(self) -> 'models.QuerySet[Planning]':
         """Filter only income plans."""
         return self.filter(type=Planning.Type.INCOME)
 
-    def for_user(self, user: User) -> models.QuerySet[Planning]:
+    def for_user(self, user: User) -> 'models.QuerySet[Planning]':
         return self.filter(user=user)
 
-    def for_period(self, start: date, end: date) -> models.QuerySet[Planning]:
+    def for_period(self, start: date, end: date) -> 'models.QuerySet[Planning]':
         return self.filter(date__range=(start, end))
 
-    def with_related(self) -> models.QuerySet[Planning]:
+    def with_related(self) -> 'models.QuerySet[Planning]':
         """Optimize queries by joining related categories."""
         return self.select_related(
             'user',
@@ -99,19 +96,19 @@ class PlanningQuerySet(models.QuerySet):
 
 class PlanningManager(models.Manager):
     def get_queryset(self) -> PlanningQuerySet:
-        return PlanningQuerySet(self.model, using=self._db).with_related()
+        return PlanningQuerySet(self.model, using=self._db).with_related()  # type: ignore[return-value]
 
     def expenses(self) -> PlanningQuerySet:
-        return self.get_queryset().expenses()
+        return self.get_queryset().expenses()  # type: ignore[return-value]
 
     def incomes(self) -> PlanningQuerySet:
-        return self.get_queryset().incomes()
+        return self.get_queryset().incomes()  # type: ignore[return-value]
 
     def for_user(self, user: User) -> PlanningQuerySet:
-        return self.get_queryset().for_user(user)
+        return self.get_queryset().for_user(user)  # type: ignore[return-value]
 
     def for_period(self, start: date, end: date) -> PlanningQuerySet:
-        return self.get_queryset().for_period(start, end)
+        return self.get_queryset().for_period(start, end)  # type: ignore[return-value]
 
 
 class Planning(models.Model):
@@ -123,7 +120,7 @@ class Planning(models.Model):
         EXPENSE = 'expense', _('Расход')
         INCOME = 'income', _('Доход')
 
-    user: User = models.ForeignKey(
+    user: User = models.ForeignKey(  # type: ignore[assignment]
         'users.User',
         on_delete=models.CASCADE,
         related_name='plannings',
@@ -131,7 +128,7 @@ class Planning(models.Model):
         help_text=_('Пользователь, для которого ведется планирование'),
         db_index=True,
     )
-    category_expense: ExpenseCategory = models.ForeignKey(
+    category_expense: ExpenseCategory = models.ForeignKey(  # type: ignore[assignment]
         'expense.ExpenseCategory',
         null=True,
         blank=True,
@@ -140,7 +137,7 @@ class Planning(models.Model):
         verbose_name=_('Категория расхода'),
         help_text=_('Категория расхода (если применимо)'),
     )
-    category_income: IncomeCategory = models.ForeignKey(
+    category_income: IncomeCategory = models.ForeignKey(  # type: ignore[assignment]
         'income.IncomeCategory',
         null=True,
         blank=True,
@@ -149,20 +146,20 @@ class Planning(models.Model):
         verbose_name=_('Категория дохода'),
         help_text=_('Категория дохода (если применимо)'),
     )
-    date: date = models.DateField(
+    date: date = models.DateField(  # type: ignore[assignment]
         default=date.today,
         verbose_name=_('Дата'),
         help_text=_('Дата планирования'),
         db_index=True,
     )
-    amount: float = models.DecimalField(
+    amount: float = models.DecimalField(  # type: ignore[assignment]
         max_digits=12,
         decimal_places=2,
         default=0,
         verbose_name=_('Сумма'),
         help_text=_('Планируемая сумма'),
     )
-    type: str = models.CharField(
+    type: str = models.CharField(  # type: ignore[assignment]
         max_length=10,
         choices=Type.choices,
         default=Type.EXPENSE,
@@ -170,7 +167,7 @@ class Planning(models.Model):
         help_text=_('Тип планирования: расход или доход'),
         db_index=True,
     )
-    created_at: date = models.DateTimeField(
+    created_at = models.DateTimeField(  # type: ignore[assignment]
         auto_now_add=True,
         null=True,
         blank=True,
@@ -184,7 +181,7 @@ class Planning(models.Model):
         verbose_name = _('Планирование')
         verbose_name_plural = _('Планирования')
         ordering: ClassVar[list[str]] = ['-date']
-        constraints: ClassVar[list[models.UniqueConstraint]] = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [  # type: ignore[assignment]
             models.UniqueConstraint(
                 fields=[
                     'user',

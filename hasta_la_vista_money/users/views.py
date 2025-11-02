@@ -86,7 +86,10 @@ class ListUsers(
             user_update_pass_form = PasswordChangeForm(
                 user=self.request.user,
             )
-            user_statistics = get_user_statistics(self.request.user)
+            if isinstance(self.request.user, User):
+                user_statistics = get_user_statistics(self.request.user)
+            else:
+                user_statistics = None
 
             context['user_update'] = user_update
             context['user_update_pass_form'] = user_update_pass_form
@@ -100,8 +103,13 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
     template_name = 'users/login.html'
     form_class = UserLoginForm
     success_message = constants.SUCCESS_MESSAGE_LOGIN
-    next_page = reverse_lazy('applications:list')
     redirect_authenticated_user = True
+
+    def get_success_url(self) -> str:
+        """Return the URL to redirect to after successful login."""
+        # Используем прямой путь, чтобы избежать циклического импорта
+        # при инициализации URL resolver
+        return '/hasta-la-vista-money/'
 
     def dispatch(
         self,
@@ -110,7 +118,7 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
         **kwargs: Any,
     ) -> HttpResponseBase:
         if not hasattr(request, 'axes_checked'):
-            request.axes_checked = True
+            request.axes_checked = True  # type: ignore[attr-defined]
             if hasattr(request, 'axes_locked_out'):
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                     return JsonResponse(
@@ -167,10 +175,14 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
             else:
                 response = redirect(self.get_success_url())
 
+            access_token: str | None = self.jwt_access_token
+            refresh_token: str | None = self.jwt_refresh_token
+            if access_token is None:
+                return response
             return set_auth_cookies(
                 response,
-                self.jwt_access_token,
-                self.jwt_refresh_token,
+                access_token,
+                refresh_token,
             )
 
         error_message = 'Неправильный логин или пароль!'
@@ -396,7 +408,7 @@ class GroupDeleteView(
     success_message = _('Группа успешно удалена.')
 
     def form_valid(self, form: GroupDeleteForm) -> HttpResponse:
-        delete_group(form)
+        delete_group(form)  # type: ignore[arg-type]
         return super().form_valid(form)
 
     def get_success_url(self) -> str:

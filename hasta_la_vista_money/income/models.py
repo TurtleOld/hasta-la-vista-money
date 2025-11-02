@@ -36,8 +36,8 @@ class IncomeCategory(models.Model):
         indexes: ClassVar[list[models.Index]] = [models.Index(fields=['name'])]
         unique_together = ('user', 'name')
 
-    def __str__(self):
-        return self.name
+    def __str__(self) -> str:
+        return str(self.name)
 
 
 class Income(models.Model):
@@ -84,5 +84,5 @@ class Income(models.Model):
             models.Index(fields=['date', 'amount']),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.category)

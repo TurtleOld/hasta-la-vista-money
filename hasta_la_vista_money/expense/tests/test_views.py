@@ -1,5 +1,3 @@
-from typing import ClassVar
-
 from django.test import TestCase
 from django.urls import reverse_lazy
 
@@ -13,7 +11,7 @@ NEW_TEST_AMOUNT = 25000
 
 
 class TestExpenseViews(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
         'expense.yaml',
@@ -27,12 +25,12 @@ class TestExpenseViews(TestCase):
         self.expense_type = ExpenseCategory.objects.get(pk=1)
         self.parent_category = ExpenseCategory.objects.get(name='ЖКХ')
 
-    def test_list_expense(self):
+    def test_list_expense(self) -> None:
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('expense:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_expense_create(self):
+    def test_expense_create(self) -> None:
         self.client.force_login(self.user)
         new_expense = {
             'account': self.account.pk,
@@ -44,7 +42,7 @@ class TestExpenseViews(TestCase):
         response = self.client.post(url, data=new_expense, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_expense_update(self):
+    def test_expense_update(self) -> None:
         self.client.force_login(self.user)
         url = reverse_lazy('expense:change', kwargs={'pk': self.expense.pk})
         update_expense = {
@@ -58,13 +56,13 @@ class TestExpenseViews(TestCase):
         updated_expense = Expense.objects.get(pk=self.expense.pk)
         self.assertEqual(updated_expense.amount, NEW_TEST_AMOUNT)
 
-    def test_expense_delete(self):
+    def test_expense_delete(self) -> None:
         self.client.force_login(self.user)
         url = reverse_lazy('expense:delete', args=(self.expense.pk,))
         response = self.client.post(url, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
-    def test_category_expense_create(self):
+    def test_category_expense_create(self) -> None:
         self.client.force_login(self.user)
         new_category = {
             'name': 'Оплата счёта',
@@ -74,7 +72,7 @@ class TestExpenseViews(TestCase):
         response = self.client.post(url, data=new_category, follow=True)
         self.assertIn(response.status_code, [constants.SUCCESS_CODE, 302])
 
-    def test_category_expense_delete(self):
+    def test_category_expense_delete(self) -> None:
         self.client.force_login(self.user)
         url = reverse_lazy(
             'expense:delete_category_expense',
@@ -83,26 +81,26 @@ class TestExpenseViews(TestCase):
         response = self.client.post(url, follow=True)
         self.assertIn(response.status_code, [constants.SUCCESS_CODE, 302])
 
-    def test_expense_copy_view(self):
+    def test_expense_copy_view(self) -> None:
         self.client.force_login(self.user)
         response = self.client.post(
             reverse_lazy('expense:expense_copy', args=[self.expense.pk]),
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_delete_view(self):
+    def test_expense_delete_view(self) -> None:
         self.client.force_login(self.user)
         response = self.client.post(
             reverse_lazy('expense:delete', args=[self.expense.pk]),
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_category_view(self):
+    def test_expense_category_view(self) -> None:
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('expense:category_list'))
         self.assertEqual(response.status_code, 200)
 
-    def test_expense_category_create_view_invalid_form(self):
+    def test_expense_category_create_view_invalid_form(self) -> None:
         self.client.force_login(self.user)
         data = {
             'name': '',
@@ -114,7 +112,7 @@ class TestExpenseViews(TestCase):
         )
         self.assertIn(response.status_code, [constants.SUCCESS_CODE, 200])
 
-    def test_expense_category_delete_view(self):
+    def test_expense_category_delete_view(self) -> None:
         self.client.force_login(self.user)
         response = self.client.post(
             reverse_lazy(
@@ -124,11 +122,11 @@ class TestExpenseViews(TestCase):
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_view_unauthenticated(self):
+    def test_expense_view_unauthenticated(self) -> None:
         response = self.client.get(reverse_lazy('expense:list'))
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_create_view_unauthenticated(self):
+    def test_expense_create_view_unauthenticated(self) -> None:
         data = {
             'account': self.account.pk,
             'category': self.expense_type.pk,
@@ -138,7 +136,7 @@ class TestExpenseViews(TestCase):
         response = self.client.post(reverse_lazy('expense:create'), data)
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_update_view_unauthenticated(self):
+    def test_expense_update_view_unauthenticated(self) -> None:
         data = {
             'account': self.account.pk,
             'category': self.expense_type.pk,
@@ -151,17 +149,17 @@ class TestExpenseViews(TestCase):
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_delete_view_unauthenticated(self):
+    def test_expense_delete_view_unauthenticated(self) -> None:
         response = self.client.post(
             reverse_lazy('expense:delete', args=[self.expense.pk]),
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_category_view_unauthenticated(self):
+    def test_expense_category_view_unauthenticated(self) -> None:
         response = self.client.get(reverse_lazy('expense:category_list'))
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_category_create_view_unauthenticated(self):
+    def test_expense_category_create_view_unauthenticated(self) -> None:
         data = {
             'name': 'Test',
             'parent_category': self.parent_category.pk,
@@ -172,7 +170,7 @@ class TestExpenseViews(TestCase):
         )
         self.assertIn(response.status_code, [302, constants.REDIRECTS])
 
-    def test_expense_category_delete_view_unauthenticated(self):
+    def test_expense_category_delete_view_unauthenticated(self) -> None:
         response = self.client.post(
             reverse_lazy(
                 'expense:delete_category_expense',

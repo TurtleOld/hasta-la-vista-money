@@ -24,7 +24,8 @@ class DateListGenerator:
         actual = self._actual_date(current_date)
         start = self._start_date(actual)
         months = self._month_sequence(
-            start, constants.NUMBER_TWELFTH_MONTH_YEAR
+            start,
+            constants.NUMBER_TWELFTH_MONTH_YEAR,
         )
         self._ensure_dates(months)
         self._ensure_planning(months)
@@ -59,8 +60,9 @@ class DateListGenerator:
         """Создать записи DateList для отсутствующих дат."""
         existing = set(
             DateList.objects.filter(
-                user=self.user, date__in=months
-            ).values_list('date', flat=True)
+                user=self.user,
+                date__in=months,
+            ).values_list('date', flat=True),
         )
         to_create = [
             DateList(user=self.user, date=d)
@@ -76,14 +78,14 @@ class DateListGenerator:
             return
 
         if self.type_ == 'expense':
-            cats = list(ExpenseCategory.objects.filter(user=self.user))
+            expense_cats = list(ExpenseCategory.objects.filter(user=self.user))
             existing = set(
                 Planning.objects.filter(
                     user=self.user,
                     type='expense',
                     date__in=months,
-                    category_expense__in=cats,
-                ).values_list('category_expense_id', 'date')
+                    category_expense__in=expense_cats,
+                ).values_list('category_expense_id', 'date'),
             )
             to_create = [
                 Planning(
@@ -93,19 +95,21 @@ class DateListGenerator:
                     type='expense',
                     amount=0,
                 )
-                for c in cats
+                for c in expense_cats
                 for d in months
-                if (c.id, d) not in existing
+                if (c.pk, d) not in existing
             ]
         else:
-            cats = list(IncomeCategory.objects.filter(user=self.user))
+            income_cats: list[IncomeCategory] = list(
+                IncomeCategory.objects.filter(user=self.user),
+            )
             existing = set(
                 Planning.objects.filter(
                     user=self.user,
                     type='income',
                     date__in=months,
-                    category_income__in=cats,
-                ).values_list('category_income_id', 'date')
+                    category_income__in=income_cats,
+                ).values_list('category_income_id', 'date'),
             )
             to_create = [
                 Planning(
@@ -115,9 +119,9 @@ class DateListGenerator:
                     type='income',
                     amount=0,
                 )
-                for c in cats
+                for c in income_cats
                 for d in months
-                if (c.id, d) not in existing
+                if (c.pk, d) not in existing
             ]
 
         if to_create:

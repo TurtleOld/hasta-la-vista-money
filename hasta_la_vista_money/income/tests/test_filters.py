@@ -13,19 +13,19 @@ class IncomeFilterTest(TestCase):
     Test cases for the IncomeFilter.
     """
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'income.yaml',
         'income_cat.yaml',
     ]
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.income_type = IncomeCategory.objects.get(pk=1)
 
-    def test_income_filter(self):
+    def test_income_filter(self) -> None:
         filter_instance = IncomeFilter(
             data={},
             queryset=Income.objects.all(),
@@ -33,7 +33,7 @@ class IncomeFilterTest(TestCase):
         )
         self.assertIsNotNone(filter_instance.qs)
 
-    def test_income_filter_with_data(self):
+    def test_income_filter_with_data(self) -> None:
         filter_instance = IncomeFilter(
             data={
                 'category': self.income_type.pk,
@@ -44,7 +44,7 @@ class IncomeFilterTest(TestCase):
         )
         self.assertIsNotNone(filter_instance.qs)
 
-    def test_income_filter_property_qs(self):
+    def test_income_filter_property_qs(self) -> None:
         filter_instance = IncomeFilter(
             data={},
             queryset=Income.objects.all(),
@@ -54,7 +54,7 @@ class IncomeFilterTest(TestCase):
         self.assertIsNotNone(queryset)
         self.assertTrue(hasattr(queryset, 'values'))
 
-    def test_income_filter_init(self):
+    def test_income_filter_init(self) -> None:
         filter_instance = IncomeFilter(
             data={},
             queryset=Income.objects.all(),

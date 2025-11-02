@@ -127,7 +127,7 @@ class ExpenseView(
 
         expense_categories = expense_service.get_categories()
         flattened_categories = build_category_tree(
-            expense_categories,
+            list(expense_categories),
             depth=3,
         )
 
@@ -194,7 +194,7 @@ class ExpenseCopyView(
 class ExpenseCreateView(
     LoginRequiredMixin,
     SuccessMessageMixin[AddExpenseForm],
-    CreateView[Expense, Any],
+    CreateView[Expense, AddExpenseForm],
 ):
     """View for creating a new expense."""
 
@@ -347,7 +347,7 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
 
         expense_categories = category_service.get_categories()
         flattened_categories = build_category_tree(
-            expense_categories,
+            list(expense_categories),
             depth=self.depth,
         )
 
@@ -358,7 +358,7 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
 
 class ExpenseCategoryCreateView(
     LoginRequiredMixin,
-    CreateView[ExpenseCategory, Any],
+    CreateView[ExpenseCategory, AddCategoryForm],
 ):
     """View for creating a new expense category."""
 

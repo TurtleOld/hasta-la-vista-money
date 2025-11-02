@@ -1,9 +1,17 @@
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from hasta_la_vista_money.users.services.export import get_user_export_data
+from hasta_la_vista_money.users.services.export import (
+    UserExportData,
+    get_user_export_data,
+)
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User as UserType
+else:
+    UserType = get_user_model()
 
 User = get_user_model()
 
@@ -11,7 +19,7 @@ User = get_user_model()
 class GetUserExportDataServiceTest(TestCase):
     """Tests for get_user_export_data service function."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
@@ -23,11 +31,15 @@ class GetUserExportDataServiceTest(TestCase):
         'receipt_receipt.yaml',
     ]
 
-    def setUp(self):
-        self.user = User.objects.first()
+    def setUp(self) -> None:
+        user = User.objects.first()
+        if user is None:
+            msg: str = 'No user found in fixtures'
+            raise ValueError(msg)
+        self.user: UserType = cast('UserType', user)
 
-    def test_get_user_export_data(self):
-        data = get_user_export_data(self.user)
+    def test_get_user_export_data(self) -> None:
+        data: UserExportData = get_user_export_data(self.user)
         self.assertIn('user_info', data)
         self.assertIn('accounts', data)
         self.assertIn('expenses', data)

@@ -1,6 +1,7 @@
 """Tests for finance account views."""
 
 from decimal import Decimal
+from typing import cast
 
 from django.contrib.auth.models import Group
 from django.test import RequestFactory, TestCase
@@ -131,6 +132,7 @@ class TestAccountCreateView(TestCase):
 
         account = Account.objects.filter(user=self.user).first()
         self.assertIsNotNone(account)
+        assert account is not None
         self.assertEqual(account.name_account, 'Test Account')
 
     def test_account_create_view_post_invalid(self) -> None:
@@ -168,8 +170,8 @@ class TestChangeAccountView(TestCase):
 
     def setUp(self) -> None:
         """Set up test data."""
-        self.user = UserFactory()
-        self.account = AccountFactory(user=self.user)
+        self.user = cast('User', UserFactory())
+        self.account = cast('Account', AccountFactory(user=self.user))
         self.factory = RequestFactory()
 
     def test_change_account_view_get(self) -> None:
@@ -217,14 +219,20 @@ class TestTransferMoneyAccountView(TestCase):
     def setUp(self) -> None:
         """Set up test data."""
         self.factory = RequestFactory()
-        self.user = UserFactory()
-        self.account1 = AccountFactory(
-            user=self.user,
-            balance=Decimal('1000.00'),
+        self.user = cast('User', UserFactory())
+        self.account1 = cast(
+            'Account',
+            AccountFactory(
+                user=self.user,
+                balance=Decimal('1000.00'),
+            ),
         )
-        self.account2 = AccountFactory(
-            user=self.user,
-            balance=Decimal('500.00'),
+        self.account2 = cast(
+            'Account',
+            AccountFactory(
+                user=self.user,
+                balance=Decimal('500.00'),
+            ),
         )
 
     def test_transfer_money_view_get(self) -> None:
@@ -295,8 +303,8 @@ class TestDeleteAccountView(TestCase):
 
     def setUp(self) -> None:
         """Set up test data."""
-        self.user = UserFactory()
-        self.account = AccountFactory(user=self.user)
+        self.user = cast('User', UserFactory())
+        self.account = cast('Account', AccountFactory(user=self.user))
 
     def test_delete_account_view_post(self) -> None:
         """Test POST request to DeleteAccountView."""
@@ -318,7 +326,7 @@ class TestAjaxAccountsByGroupView(TestCase):
 
     def setUp(self) -> None:
         """Set up test data."""
-        self.user = UserFactory()
+        self.user = cast('User', UserFactory())
         self.factory = RequestFactory()
 
     async def test_ajax_accounts_by_group_get(self) -> None:

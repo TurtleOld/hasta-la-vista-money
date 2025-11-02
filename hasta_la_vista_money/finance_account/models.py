@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.db import models
 from django.urls import reverse
@@ -13,6 +13,11 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.services import (
+        GracePeriodInfoDict,
+    )
 
 
 class AccountQuerySet(models.QuerySet['Account']):
@@ -264,7 +269,7 @@ class Account(TimeStampedModel):
     def calculate_grace_period_info(
         self,
         purchase_month: Any,
-    ) -> dict[str, Any]:
+    ) -> 'GracePeriodInfoDict':
         """
         Calculates grace period information for a credit card.
         Logic: 1 month for purchases + 3 months for repayment.

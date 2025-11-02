@@ -1,3 +1,5 @@
+from typing import Literal, TypedDict, cast
+
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -8,7 +10,16 @@ from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.models import User
 
 
-def get_user_notifications(user: User) -> list[dict[str, str]]:
+class NotificationDict(TypedDict):
+    """Словарь уведомления."""
+
+    type: Literal['warning', 'danger', 'success']
+    title: str
+    message: str
+    icon: str
+
+
+def get_user_notifications(user: User) -> list[NotificationDict]:
     today = timezone.now().date()
     month_start = today.replace(day=1)
     notifications = []
@@ -25,8 +36,8 @@ def get_user_notifications(user: User) -> list[dict[str, str]]:
                 'title': 'Низкий баланс на счетах',
                 'message': 'На следующих счетах низкий баланс: {}'.format(
                     ', '.join(
-                        [acc.name_account for acc in low_balance_accounts]
-                    )
+                        [acc.name_account for acc in low_balance_accounts],
+                    ),
                 ),
                 'icon': 'bi-exclamation-triangle',
             },
@@ -71,4 +82,4 @@ def get_user_notifications(user: User) -> list[dict[str, str]]:
                 'icon': 'bi-check-circle',
             },
         )
-    return notifications
+    return [cast('NotificationDict', n) for n in notifications]

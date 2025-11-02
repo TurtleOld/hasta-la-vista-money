@@ -1,11 +1,14 @@
 """Tests for finance account services."""
 
+from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING, cast
 from unittest import mock
 
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils import timezone
 
 from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.factories import (
@@ -18,22 +21,32 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.users.factories import UserFactory
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User as UserType
+else:
+    from django.contrib.auth import get_user_model
+
+    UserType = get_user_model()
+
 
 class TestAccountServices(TestCase):
     """Test cases for account service functions."""
 
     def setUp(self) -> None:
-        self.user1 = UserFactory()
-        self.user2 = UserFactory()
+        self.user1: UserType = cast('UserType', UserFactory())
+        self.user2: UserType = cast('UserType', UserFactory())
 
-        self.account1 = AccountFactory(
-            user=self.user1, balance=Decimal('1000.00')
+        self.account1: Account = cast(
+            'Account',
+            AccountFactory(user=self.user1, balance=Decimal('1000.00')),
         )
-        self.account2 = AccountFactory(
-            user=self.user1, balance=Decimal('500.00')
+        self.account2: Account = cast(
+            'Account',
+            AccountFactory(user=self.user1, balance=Decimal('500.00')),
         )
-        self.account3 = AccountFactory(
-            user=self.user2, balance=Decimal('2000.00')
+        self.account3: Account = cast(
+            'Account',
+            AccountFactory(user=self.user2, balance=Decimal('2000.00')),
         )
 
     def test_get_accounts_for_user_or_group_none(self) -> None:
@@ -131,27 +144,39 @@ class TestAccountServices(TestCase):
         ]
         for case in testcases:
             with self.subTest(balances=case['balances']):
-                accounts = [
-                    AccountFactory(
-                        user=self.user1,
-                        balance=bal,
-                        currency='RUB',
+                balances_list: list[Decimal] = case['balances']  # type: ignore[assignment]
+                accounts_list: list[Account] = [
+                    cast(
+                        'Account',
+                        AccountFactory(
+                            user=self.user1,
+                            balance=bal,
+                            currency='RUB',
+                        ),
                     )
-                    for bal in case['balances']
+                    for bal in balances_list
                 ]
-                qs = Account.objects.filter(pk__in=[acc.pk for acc in accounts])
+                qs = Account.objects.filter(
+                    pk__in=[acc.pk for acc in accounts_list],
+                )  # type: ignore[attr-defined]
                 result = account_services.get_sum_all_accounts(qs)
                 self.assertEqual(result, case['expected'])
 
-        acc1 = AccountFactory(
-            user=self.user1,
-            balance=Decimal('100.00'),
-            currency='RUB',
+        acc1 = cast(
+            'Account',
+            AccountFactory(
+                user=self.user1,
+                balance=Decimal('100.00'),
+                currency='RUB',
+            ),
         )
-        acc2 = AccountFactory(
-            user=self.user1,
-            balance=Decimal('200.00'),
-            currency='USD',
+        acc2 = cast(
+            'Account',
+            AccountFactory(
+                user=self.user1,
+                balance=Decimal('200.00'),
+                currency='USD',
+            ),
         )
         qs = Account.objects.filter(pk__in=[acc1.pk, acc2.pk])
         result = account_services.get_sum_all_accounts(qs)
@@ -206,14 +231,20 @@ class TestTransferService(TestCase):
     """Test cases for TransferService."""
 
     def setUp(self) -> None:
-        self.user = UserFactory()
-        self.from_account = AccountFactory(
-            user=self.user,
-            balance=Decimal('1000.00'),
+        self.user: UserType = cast('UserType', UserFactory())
+        self.from_account: Account = cast(
+            'Account',
+            AccountFactory(
+                user=self.user,
+                balance=Decimal('1000.00'),
+            ),
         )
-        self.to_account = AccountFactory(
-            user=self.user,
-            balance=Decimal('500.00'),
+        self.to_account: Account = cast(
+            'Account',
+            AccountFactory(
+                user=self.user,
+                balance=Decimal('500.00'),
+            ),
         )
 
     def test_transfer_service_execute_transfer(self) -> None:
@@ -223,7 +254,12 @@ class TestTransferService(TestCase):
             to_account=self.to_account,
             amount=Decimal('200.00'),
             user=self.user,
-            exchange_date='2024-01-01',
+            exchange_date=datetime(
+                2024,
+                1,
+                1,
+                tzinfo=timezone.get_current_timezone(),
+            ),
             notes='Test transfer',
         )
 
@@ -247,7 +283,12 @@ class TestTransferService(TestCase):
                 to_account=self.to_account,
                 amount=Decimal('1500.00'),
                 user=self.user,
-                exchange_date='2024-01-01',
+                exchange_date=datetime(
+                    2024,
+                    1,
+                    1,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
                 notes='Test transfer',
             )
 
@@ -259,7 +300,12 @@ class TestTransferService(TestCase):
                 to_account=self.from_account,
                 amount=Decimal('200.00'),
                 user=self.user,
-                exchange_date='2024-01-01',
+                exchange_date=datetime(
+                    2024,
+                    1,
+                    1,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
                 notes='Test transfer',
             )
 
@@ -280,7 +326,12 @@ class TestTransferService(TestCase):
                     to_account=self.to_account,
                     amount=amount,
                     user=self.user,
-                    exchange_date='2024-01-01',
+                    exchange_date=datetime(
+                        2024,
+                        1,
+                        1,
+                        tzinfo=timezone.get_current_timezone(),
+                    ),
                     notes='Test transfer',
                 )
 
@@ -292,7 +343,12 @@ class TestTransferService(TestCase):
             to_account=self.to_account,
             amount=transfer_amount,
             user=self.user,
-            exchange_date='2024-01-01',
+            exchange_date=datetime(
+                2024,
+                1,
+                1,
+                tzinfo=timezone.get_current_timezone(),
+            ),
             notes='All funds',
         )
 
@@ -318,7 +374,12 @@ class TestTransferService(TestCase):
                 to_account=self.to_account,
                 amount=Decimal('200.00'),
                 user=self.user,
-                exchange_date='2024-01-01',
+                exchange_date=datetime(
+                    2024,
+                    1,
+                    1,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
                 notes='Should rollback',
             )
 
@@ -334,7 +395,12 @@ class TestTransferService(TestCase):
             to_account=self.to_account,
             amount=Decimal('700.00'),
             user=self.user,
-            exchange_date='2024-01-01',
+            exchange_date=datetime(
+                2024,
+                1,
+                1,
+                tzinfo=timezone.get_current_timezone(),
+            ),
             notes='First',
         )
 
@@ -344,7 +410,12 @@ class TestTransferService(TestCase):
                 to_account=self.to_account,
                 amount=Decimal('700.00'),
                 user=self.user,
-                exchange_date='2024-01-01',
+                exchange_date=datetime(
+                    2024,
+                    1,
+                    1,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
                 notes='Second',
             )
 

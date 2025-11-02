@@ -44,20 +44,20 @@ from hasta_la_vista_money.users.models import User
 logger = structlog.get_logger(__name__)
 
 
-class BaseView:
+class BaseView:  # type: ignore[misc]
     """Base view class with common template and success URL configuration."""
 
-    template_name = 'finance_account/account.html'
-    success_url = reverse_lazy('finance_account:list')
+    template_name = 'finance_account/account.html'  # type: ignore[misc]
+    success_url = reverse_lazy('finance_account:list')  # type: ignore[misc]
 
 
-class AccountBaseView(BaseView):
+class AccountBaseView(BaseView):  # type: ignore[misc]
     """Base view class for account-related operations."""
 
-    model = Account
+    model = Account  # type: ignore[misc]
 
 
-class AccountView(
+class AccountView(  # type: ignore[misc]
     LoginRequiredMixin,
     GroupAccountMixin,
     SuccessMessageMixin,
@@ -105,10 +105,10 @@ class AccountView(
             dict: Accounts and user groups for the current user.
         """
         user = self.request.user
-        accounts = self.get_accounts(user)
+        accounts = self.get_accounts(user)  # type: ignore[arg-type]
         return {
             'accounts': accounts,
-            'user_groups': user.groups.all(),
+            'user_groups': user.groups.all(),  # type: ignore[union-attr]
         }
 
     def _get_forms_context(self) -> dict[str, Any]:
@@ -120,7 +120,7 @@ class AccountView(
         """
         user = self.request.user
         account_transfer_money = (
-            Account.objects.by_user(user).select_related('user').all()
+            Account.objects.by_user(user).select_related('user').all()  # type: ignore[arg-type]
         )
         initial_form_data = {
             'from_account': account_transfer_money.first(),
@@ -129,7 +129,7 @@ class AccountView(
         return {
             'add_account_form': AddAccountForm(),
             'transfer_money_form': TransferMoneyAccountForm(
-                user=user,
+                user=user,  # type: ignore[arg-type]
                 initial=initial_form_data,
             ),
         }
@@ -142,7 +142,7 @@ class AccountView(
             dict: Recent transfer logs for the current user.
         """
         user = self.request.user
-        transfer_money_log = TransferMoneyLog.objects.by_user(user)
+        transfer_money_log = TransferMoneyLog.objects.by_user(user)  # type: ignore[arg-type]
         return {
             'transfer_money_log': transfer_money_log,
         }
@@ -155,9 +155,9 @@ class AccountView(
             dict: Total balances for user and group accounts.
         """
         user = self.request.user
-        accounts = Account.objects.by_user(user)
+        accounts = Account.objects.by_user(user)  # type: ignore[arg-type]
         sum_all_accounts = account_services.get_sum_all_accounts(accounts)
-        user_groups = user.groups.all()
+        user_groups = user.groups.all()  # type: ignore[union-attr]
         if user_groups.exists():
             users_in_groups = User.objects.filter(
                 groups__in=user_groups,
@@ -169,7 +169,7 @@ class AccountView(
             )
         else:
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.by_user(user).select_related('user'),
+                Account.objects.by_user(user).select_related('user'),  # type: ignore[arg-type]
             )
         return {
             'sum_all_accounts': sum_all_accounts,
@@ -212,7 +212,7 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
         Returns:
             str: Success redirect URL.
         """
-        return reverse_lazy('applications:list')
+        return str(reverse_lazy('applications:list'))
 
     def form_valid(self, form: AddAccountForm) -> HttpResponseRedirect:
         """
@@ -242,7 +242,7 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
             return HttpResponseRedirect(self.get_success_url())
 
 
-class ChangeAccountView(
+class ChangeAccountView(  # type: ignore[misc]
     LoginRequiredMixin,
     SuccessMessageMixin,
     AccountBaseView,
@@ -291,7 +291,7 @@ class ChangeAccountView(
             return context
 
 
-class TransferMoneyAccountView(
+class TransferMoneyAccountView(  # type: ignore[misc]
     LoginRequiredMixin,
     SuccessMessageMixin,
     AccountBaseView,
@@ -315,7 +315,8 @@ class TransferMoneyAccountView(
         return kwargs
 
     def form_valid(
-        self, form: TransferMoneyAccountForm
+        self,
+        form: TransferMoneyAccountForm,
     ) -> HttpResponseRedirect:
         """
         Process valid form submission.
@@ -332,7 +333,7 @@ class TransferMoneyAccountView(
             return HttpResponseRedirect(reverse('finance_account:list'))
         except ValidationError as e:
             messages.error(self.request, str(e))
-            return self.form_invalid(form)
+            return self.form_invalid(form)  # type: ignore[return-value]
         except Exception:
             logger.exception(
                 'Ошибка при переводе средств между счетами',
@@ -345,7 +346,7 @@ class TransferMoneyAccountView(
                     'Пожалуйста, попробуйте позже.',
                 ),
             )
-            return self.form_invalid(form)
+            return self.form_invalid(form)  # type: ignore[return-value]
 
 
 class DeleteAccountView(DeleteObjectMixin, LoginRequiredMixin, DeleteView):
@@ -391,7 +392,7 @@ class AjaxAccountsByGroupView(View):
         try:
             accounts = await sync_to_async(
                 account_services.get_accounts_for_user_or_group,
-            )(user, group_id)
+            )(user, group_id)  # type: ignore[arg-type]
             html = await sync_to_async(render_to_string)(
                 'finance_account/_account_cards_block.html',
                 {'accounts': accounts, 'request': request},
