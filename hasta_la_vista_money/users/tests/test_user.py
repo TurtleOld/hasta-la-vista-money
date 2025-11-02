@@ -51,6 +51,24 @@ class TestUser(TestCase):
         user: User = User.objects.get(username=self.user1)
         self.assertTrue(user.is_authenticated)
 
+    def test_login_user_redirect_after_success(self) -> None:
+        """Тест успешного редиректа после логина."""
+        url = reverse_lazy('login')
+        self.user1.set_password('testpassword')
+        self.user1.save()
+
+        response = self.client.post(
+            url,
+            {
+                'username': str(self.user1.username),
+                'password': 'testpassword',
+            },
+            follow=False,
+        )
+
+        self.assertEqual(response.status_code, constants.REDIRECTS)
+        self.assertRedirects(response, '/hasta-la-vista-money/')
+
     def test_login_user_invalid_credentials(self) -> None:
         url = reverse_lazy('login')
         response = self.client.post(
