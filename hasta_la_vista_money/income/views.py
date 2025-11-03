@@ -32,7 +32,7 @@ from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.mixins import IncomeFormQuerysetMixin
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.income.services.income_ops import IncomeOps
-from hasta_la_vista_money.services.views import build_category_tree
+from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 
 INCOME_LIST_URL_NAME = 'income:list'
@@ -103,8 +103,10 @@ class IncomeView(  # type: ignore[misc]
             user=self.request.user,
         )
 
-        flattened_categories = build_category_tree(
-            [dict(cat) for cat in categories],
+        flattened_categories = get_cached_category_tree(
+            user_id=user.id,
+            category_type='income',
+            categories=[dict(cat) for cat in categories],
             depth=depth_limit,
         )
 
@@ -420,8 +422,10 @@ class IncomeCategoryView(LoginRequiredMixin, ListView[IncomeCategory]):
             .order_by('parent_category_id')
             .all()
         )
-        flattened_categories = build_category_tree(
-            [dict(cat) for cat in categories],
+        flattened_categories = get_cached_category_tree(
+            user_id=user.id,
+            category_type='income',
+            categories=[dict(cat) for cat in categories],
             depth=self.depth,
         )
         context = super().get_context_data(**kwargs)

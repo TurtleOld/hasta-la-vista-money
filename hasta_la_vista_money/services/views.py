@@ -2,6 +2,7 @@ from collections import defaultdict
 from collections.abc import Generator
 from typing import Any
 
+from django.core.cache import cache
 from django.db.models import Count, Model, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.forms import ModelForm
@@ -70,6 +71,36 @@ def build_category_tree(
     """
     builder = CategoryTreeBuilder(categories=categories, depth=depth)
     yield from builder.build(parent_id=parent_id, current_depth=current_depth)
+
+
+def get_cached_category_tree(
+    user_id: int,
+    category_type: str,
+    categories: list[dict[str, Any]] | QuerySet,
+    depth: int = 2,
+) -> list[dict[str, Any]]:
+    """
+    Получение кешированного дерева категорий.
+
+    Args:
+        user_id: ID пользователя
+        category_type: Тип категорий (expense/income)
+        categories: Список или QuerySet категорий
+        depth: Глубина дерева
+
+    Returns:
+        Список категорий в виде дерева с подсчитанными потомками
+    """
+    cache_key = f'category_tree_{category_type}_{user_id}_{depth}'
+    cached_tree = cache.get(cache_key)
+
+    if cached_tree is not None:
+        return cached_tree
+
+    tree = list(build_category_tree(categories, depth=depth))
+    cache.set(cache_key, tree, 300)
+
+    return tree
 
 
 def collect_info_receipt(user: User) -> Any:

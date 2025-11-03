@@ -29,7 +29,7 @@ from hasta_la_vista_money.expense.services import (
     ExpenseService,
     ReceiptExpenseService,
 )
-from hasta_la_vista_money.services.views import build_category_tree
+from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 
 
@@ -126,8 +126,10 @@ class ExpenseView(
         )
 
         expense_categories = expense_service.get_categories()
-        flattened_categories = build_category_tree(
-            list(expense_categories),
+        flattened_categories = get_cached_category_tree(
+            user_id=user.id,
+            category_type='expense',
+            categories=list(expense_categories),
             depth=3,
         )
 
@@ -346,8 +348,10 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
         category_service = ExpenseCategoryService(user, self.request)
 
         expense_categories = category_service.get_categories()
-        flattened_categories = build_category_tree(
-            list(expense_categories),
+        flattened_categories = get_cached_category_tree(
+            user_id=user.id,
+            category_type='expense',
+            categories=list(expense_categories),
             depth=self.depth,
         )
 

@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from dateutil.relativedelta import relativedelta
+from django.core.cache import cache
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
 from typing_extensions import TypedDict
@@ -567,6 +568,21 @@ def _credit_cards_block(
 
 
 def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
+    """
+    Получение детальной статистики пользователя с кешированием.
+
+    Args:
+        user: Пользователь для которого собирается статистика
+
+    Returns:
+        Словарь с детальной статистикой пользователя
+    """
+    cache_key = f'user_stats_{user.id}'
+    cached_stats = cache.get(cache_key)
+
+    if cached_stats is not None:
+        return cached_stats
+
     now = timezone.now()
     today = now.date()
 
@@ -603,7 +619,7 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
 
     credit_cards_data = _credit_cards_block(accounts)
 
-    return {
+    stats = {
         'months_data': months_data,
         'top_expense_categories': list(top_expense_categories),
         'top_income_categories': list(top_income_categories),
@@ -617,3 +633,7 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
         'user': user,
         'credit_cards_data': credit_cards_data,
     }
+
+    cache.set(cache_key, stats, 600)
+
+    return stats

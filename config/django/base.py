@@ -164,11 +164,21 @@ else:
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': config('REDIS_LOCATION', cast=str),
-            'OPTIONAL': {
+            'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'CONNECTION_POOL_KWARGS': {'max_connections': 50},
+                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_TIMEOUT': 5,
             },
+            'KEY_PREFIX': 'hlvm',
+            'TIMEOUT': 300,
         },
     }
+
+# Session backend configuration
+if not DEBUG:
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'default'
 
 # Database
 if 'test' in sys.argv and not config(
@@ -249,6 +259,8 @@ AXES_VERBOSE = False
 AXES_ENABLE_ADMIN = False
 if 'test' in sys.argv:
     AXES_ENABLED = False
+if not DEBUG:
+    AXES_CACHE = 'default'
 
 # Internationalization
 LANGUAGE_CODE = config('LANGUAGE_CODE', default='ru-RU')

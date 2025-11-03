@@ -22,9 +22,21 @@ class EnvironmentValidator:
             valid = False
             ic(
                 'ALLOWED_HOSTS is not set, set it to a '
-                'comma-separated list of hosts'
+                'comma-separated list of hosts',
             )
         if not config('DATABASE_URL', cast=str, default=''):
             valid = False
             ic('DATABASE_URL is not set, set it to a valid database URL')
+
+        debug_mode = config('DEBUG', default=False, cast=bool)
+        if not debug_mode and not config(
+            'REDIS_LOCATION',
+            cast=str,
+            default='',
+        ):
+            valid = False
+            ic(
+                'REDIS_LOCATION is not set for production, set it to redis://host:port/db',
+            )
+
         return valid

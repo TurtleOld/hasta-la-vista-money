@@ -22,6 +22,21 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   hlvm-server:
     build:
       context: ./
@@ -44,6 +59,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - default
     healthcheck:
@@ -70,6 +87,7 @@ services:
 volumes:
   postgres_data:
   staticfiles_data:
+  redis_data:
 
 networks:
   default:
