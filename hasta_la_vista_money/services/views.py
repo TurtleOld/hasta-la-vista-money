@@ -85,13 +85,14 @@ def _convert_generators_to_lists(
     Returns:
         Узел с преобразованными генераторами в списки
     """
-    if 'children' in node and hasattr(node['children'], '__iter__'):
-        if not isinstance(node['children'], (list, tuple)):
-            node['children'] = list(node['children'])
-        node['children'] = [
-            _convert_generators_to_lists(child) for child in node['children']
+    result = dict(node)
+    if 'children' in result and hasattr(result['children'], '__iter__'):
+        if not isinstance(result['children'], (list, tuple)):
+            result['children'] = list(result['children'])
+        result['children'] = [
+            _convert_generators_to_lists(child) for child in result['children']
         ]
-    return node
+    return result
 
 
 def get_cached_category_tree(
