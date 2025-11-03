@@ -87,7 +87,7 @@ def _convert_generators_to_lists(
     """
     result = dict(node)
     if 'children' in result and hasattr(result['children'], '__iter__'):
-        if not isinstance(result['children'], (list, tuple)):
+        if not isinstance(result['children'], list | tuple):
             result['children'] = list(result['children'])
         result['children'] = [
             _convert_generators_to_lists(child) for child in result['children']
