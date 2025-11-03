@@ -73,6 +73,27 @@ def build_category_tree(
     yield from builder.build(parent_id=parent_id, current_depth=current_depth)
 
 
+def _convert_generators_to_lists(
+    node: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Рекурсивно преобразует генераторы в списки для сериализации.
+
+    Args:
+        node: Узел дерева категорий
+
+    Returns:
+        Узел с преобразованными генераторами в списки
+    """
+    if 'children' in node and hasattr(node['children'], '__iter__'):
+        if not isinstance(node['children'], (list, tuple)):
+            node['children'] = list(node['children'])
+        node['children'] = [
+            _convert_generators_to_lists(child) for child in node['children']
+        ]
+    return node
+
+
 def get_cached_category_tree(
     user_id: int,
     category_type: str,
@@ -97,7 +118,9 @@ def get_cached_category_tree(
     if cached_tree is not None:
         return cached_tree
 
-    tree = list(build_category_tree(categories, depth=depth))
+    tree_generator = build_category_tree(categories, depth=depth)
+    tree = [_convert_generators_to_lists(node) for node in tree_generator]
+
     cache.set(cache_key, tree, 300)
 
     return tree
