@@ -57,6 +57,7 @@ services:
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT}
       SENTRY_ENDPOINT: ${SENTRY_ENDPOINT}
       DEBUG: "false"
+      REDIS_LOCATION: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy

@@ -600,7 +600,16 @@ def get_accounts_for_user_or_group(
     user: User,
     group_id: str | None = None,
 ) -> QuerySet[Account]:
-    """Get accounts for user or group."""
+    """
+    Get accounts for user or group.
+
+    Args:
+        user: User instance
+        group_id: Optional group ID filter
+
+    Returns:
+        QuerySet of accounts for user or group
+    """
     if group_id == 'my':
         return Account.objects.filter(user=user).select_related('user')
 
@@ -616,7 +625,9 @@ def get_accounts_for_user_or_group(
 
     user_groups = user.groups.all()
     if user_groups.exists():
-        users_in_groups = User.objects.filter(groups__in=user_groups).distinct()
+        users_in_groups = User.objects.filter(
+            groups__in=user_groups,
+        ).distinct()
         return (
             Account.objects.filter(user__in=users_in_groups)
             .select_related('user')
