@@ -13,12 +13,6 @@
         font-size: 1.2rem;
         margin-top: 3rem;
     }
-    .wrapper-table-income th, td {
-        font-size: .7rem;
-    }
-    .wrapper-table-expense th, td {
-        font-size: .7rem;
-    }
     .account {
         font-size: 1rem;
         height: 100% !important;
@@ -46,16 +40,190 @@
     .button-receipt {
         height: auto !important;
     }
-    table {
-         th {
-             font-size: .7rem;
-         }
-        td {
-            font-size: .4rem;
-        }
 
+    .tabulator {
+        display: none;
     }
 
+    .mobile-cards {
+        display: block !important;
+    }
+
+    .header {
+        position: sticky;
+        top: 0;
+        z-index: 1020;
+        backdrop-filter: blur(10px);
+    }
+
+    .navbar {
+        padding: 0.5rem 1rem;
+    }
+
+    .navbar-nav:not(.navbar-nav-scroll) {
+        display: none !important;
+    }
+
+    .navbar-collapse {
+        display: none !important;
+    }
+}
+
+@media only screen and (min-width: 768px) {
+    .mobile-cards {
+        display: none;
+    }
+}
+
+.mobile-cards {
+    display: none;
+}
+
+.mobile-card {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+    transition: all 0.2s;
+
+    &:active {
+        transform: scale(0.98);
+    }
+
+    &-header {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+        color: #198754;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    &-body {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    &-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.25rem 0;
+
+        .label {
+            color: var(--bs-secondary-color);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .value {
+            font-weight: 500;
+            text-align: right;
+            font-size: 0.9rem;
+        }
+    }
+
+    &-actions {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--bs-border-color);
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+
+        .btn {
+            flex: 1;
+            max-width: 120px;
+        }
+    }
+}
+
+[data-bs-theme='dark'] .mobile-card {
+    background: #23272b;
+    border-color: #343a40;
+}
+
+.swipe-item {
+    position: relative;
+    transition: transform 0.3s ease;
+    touch-action: pan-y;
+    overflow: hidden;
+
+    &.swiping {
+        transition: none;
+    }
+}
+
+.swipe-actions {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: -1;
+
+    &.visible {
+        opacity: 1;
+        z-index: 1;
+    }
+
+    &[data-direction="left"] {
+        right: 0;
+        background: linear-gradient(to left, #dc3545, rgba(220, 53, 69, 0.8));
+    }
+
+    &[data-direction="right"] {
+        left: 0;
+        background: linear-gradient(to right, #0dcaf0, rgba(13, 202, 240, 0.8));
+    }
+}
+
+.swipe-action {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: all 0.2s;
+
+    i {
+        font-size: 1.25rem;
+    }
+
+    &.swipe-action-delete {
+        color: #dc3545;
+
+        &:active {
+            background: #dc3545;
+            color: white;
+        }
+    }
+
+    &.swipe-action-edit {
+        color: #0dcaf0;
+
+        &:active {
+            background: #0dcaf0;
+            color: white;
+        }
+    }
+}
+
+.mobile-card.swipe-item {
+    .mobile-card-actions {
+        display: none;
+    }
 }
 @media (min-width: 768px) and (max-width: 991px) {
     .remove-button {

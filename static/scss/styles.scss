@@ -7,6 +7,9 @@ $table-striped-bg: #d1f5e0 !important;
 @import "upload";
 @import "buttons";
 @import "fonts";
+@import "toast";
+@import "skeleton";
+@import "bottom_nav";
 @import "mobile";
 @import "loan";
 
@@ -16,6 +19,25 @@ $table-striped-bg: #d1f5e0 !important;
     height: 80px;
     border-radius: 50%;
     font-size: 2rem;
+}
+
+.htmx-indicator {
+    display: none;
+    margin-left: 1rem;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline-block;
+}
+
+.htmx-swapping {
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+}
+
+.htmx-settling {
+    opacity: 1;
+    transition: opacity 0.2s ease-in;
 }
 .credit-only-field-container {
     display: none;
@@ -724,6 +746,12 @@ table {
     fill: #dc3545 !important;
 }
 
+@media (min-width: 992px) {
+    .navbar-collapse {
+        display: flex !important;
+    }
+}
+
 @media (max-width: 991.98px) {
     .navbar-nav {
         gap: 0.5rem;
@@ -944,6 +972,9 @@ div.dtsp-searchPane .dtsp-paneInputButton {
 .tabulator {
     font-size: 0.9rem;
     border: 1px solid #dee2e6;
+    min-width: 1200px;
+    width: 100%;
+    overflow-x: auto;
 }
 .tabulator-header {
     background-color: #f8f9fa;
@@ -1169,12 +1200,6 @@ body.theme-fade {
 }
 .tabulator-col-group-cols .tabulator-col:last-child {
   border-right: 2px solid #3a3a3a !important;
-}
-// --- Горизонтальный скролл для таблицы ---
-.tabulator {
-  min-width: 1200px;
-  width: 100%;
-  overflow-x: auto;
 }
 // --- Если таблица в обёртке ---
 .tabulator-scroll-wrapper, .tabulator-scroll-container {
