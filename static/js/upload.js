@@ -305,15 +305,25 @@ class ReceiptUploader {
         if (numBytes === 0) {
             return '0 Б';
         }
+
         const k = 1024;
-        const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
+        const sizeUnits = new Map([
+            [0, 'Б'],
+            [1, 'КБ'],
+            [2, 'МБ'],
+            [3, 'ГБ']
+        ]);
+
         const i = Math.floor(Math.log(numBytes) / Math.log(k));
-        const safeIndex = Math.max(0, Math.min(i, sizes.length - 1));
-        const size = sizes[safeIndex];
-        if (!size) {
-            return sizes[0];
+        const safeIndex = Math.max(0, Math.min(i, 3));
+        const unit = sizeUnits.get(safeIndex);
+
+        if (!unit) {
+            return '0 Б';
         }
-        return Math.round(numBytes / (k ** safeIndex) * 100) / 100 + ' ' + size;
+
+        const value = Math.round(numBytes / (k ** safeIndex) * 100) / 100;
+        return value + ' ' + unit;
     }
 
     getCookie(name) {
