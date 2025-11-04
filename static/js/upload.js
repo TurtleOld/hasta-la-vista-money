@@ -298,12 +298,22 @@ class ReceiptUploader {
     }
 
     formatSize(bytes) {
-        if (bytes === 0) return '0 Б';
+        const numBytes = Number(bytes);
+        if (!Number.isFinite(numBytes) || numBytes < 0) {
+            return '0 Б';
+        }
+        if (numBytes === 0) {
+            return '0 Б';
+        }
         const k = 1024;
         const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        const safeIndex = Math.min(i, sizes.length - 1);
-        return Math.round(bytes / (k ** safeIndex) * 100) / 100 + ' ' + sizes[safeIndex];
+        const i = Math.floor(Math.log(numBytes) / Math.log(k));
+        const safeIndex = Math.max(0, Math.min(i, sizes.length - 1));
+        const size = sizes[safeIndex];
+        if (!size) {
+            return sizes[0];
+        }
+        return Math.round(numBytes / (k ** safeIndex) * 100) / 100 + ' ' + size;
     }
 
     getCookie(name) {
