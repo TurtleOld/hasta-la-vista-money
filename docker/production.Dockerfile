@@ -6,6 +6,8 @@ RUN pip install uv==0.7.13
 
 ENV PATH="/root/.local/bin:$PATH"
 
+RUN apk add --no-cache gcc python3-dev musl-dev linux-headers
+
 COPY pyproject.toml uv.lock ./
 
 RUN uv sync --dev
