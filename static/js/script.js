@@ -122,18 +122,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const formAction = loginForm.action;
             if (!formAction || typeof formAction !== 'string') {
-                alert('Ошибка: неверный URL формы');
+                window.toast.error('Ошибка: неверный URL формы');
                 return;
             }
 
             try {
                 const urlObj = new URL(formAction, window.location.origin);
                 if (urlObj.origin !== window.location.origin) {
-                    alert('Ошибка: неверный URL формы');
+                    window.toast.error('Ошибка: неверный URL формы');
                     return;
                 }
             } catch (e) {
-                alert('Ошибка: неверный формат URL');
+                window.toast.error('Ошибка: неверный формат URL');
                 return;
             }
 
@@ -149,24 +149,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (response.headers.get('content-type')?.includes('application/json')) {
                     const data = await response.json();
                     if (data.error) {
-                        alert(data.error);
+                        window.toast.error(data.error);
                     } else {
-                        alert('Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.');
+                        window.toast.error('Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.');
                     }
                 } else {
-                    alert('Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.');
+                    window.toast.error('Слишком много неудачных попыток входа. Ваш браузер и компьютер заблокированы для входа в это приложение. Попробуйте позже или обратитесь к администратору.');
                 }
                 return;
             }
 
             if (response.status >= 400 && response.status < 500) {
-                alert('Произошла ошибка при входе. Попробуйте еще раз.');
+                window.toast.error('Произошла ошибка при входе. Попробуйте еще раз.');
                 window.location.reload();
                 return;
             }
 
             if (response.status >= 500) {
-                alert('Произошла ошибка на сервере. Попробуйте позже.');
+                window.toast.error('Произошла ошибка на сервере. Попробуйте позже.');
                 window.location.reload();
                 return;
             }
@@ -177,16 +177,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     try {
                         const redirectUrl = new URL(data.redirect_url, window.location.origin);
                         if (redirectUrl.origin !== window.location.origin) {
-                            alert('Ошибка: неверный URL редиректа');
+                            window.toast.error('Ошибка: неверный URL редиректа');
                             return;
                         }
                         window.location.replace(redirectUrl.pathname + redirectUrl.search + redirectUrl.hash);
                     } catch (e) {
-                        alert('Ошибка: неверный формат URL редиректа');
+                        window.toast.error('Ошибка: неверный формат URL редиректа');
                         return;
                     }
                 } else if (data.success === false) {
-                    window.location.reload();
+                    if (data.error) {
+                        window.toast.error(data.error);
+                    } else if (data.errors) {
+                        const errorMessages = Object.values(data.errors).filter(msg => msg);
+                        if (errorMessages.length > 0) {
+                            window.toast.error(errorMessages.join(', '));
+                        } else {
+                            window.toast.error('Ошибка входа. Проверьте данные.');
+                        }
+                    } else {
+                        window.toast.error('Ошибка входа. Проверьте данные.');
+                    }
                 } else {
                     window.location.reload();
                 }
@@ -483,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         if (sessionResponse.status === 302) {
                             // Django сессия тоже истекла
-                            alert('Ваша сессия истекла. Пожалуйста, войдите снова.');
+                            window.toast.warning('Ваша сессия истекла. Пожалуйста, войдите снова.');
                             window.location.replace(window.LOGIN_URL);
                             return response;
                         }

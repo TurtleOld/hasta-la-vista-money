@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 {% load i18n %}
+{% url 'income:list' as income_list_url %}
 
 {% block title %}{% translate 'Изменить доходную операцию' %}{% endblock %}
 {% block content %}
@@ -8,7 +9,7 @@
         <div class="row">
             <div class="col-xl-6 position-absolute top-0 mt-5 start-50 translate-middle-x text-light">
                 {{ income_form.media }}
-                {% include 'income/_income_form.html' with form=income_form action_url=action_url|default:request.path cancel_url=cancel_url|default:cancel_url submit_label=_('Сохранить') cancel_label=_('Вернуться назад') %}
+                {% include 'income/_income_form.html' with form=income_form action_url=action_url|default:request.path cancel_url=income_list_url submit_label=_('Сохранить') cancel_label=_('Вернуться назад') %}
             </div>
             <!-- /.col-xl-12 d-flex justify-content-center -->
         </div>

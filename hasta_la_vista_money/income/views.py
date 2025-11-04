@@ -104,7 +104,7 @@ class IncomeView(  # type: ignore[misc]
         )
 
         flattened_categories = get_cached_category_tree(
-            user_id=user.id,
+            user_id=user.pk,
             category_type='income',
             categories=[dict(cat) for cat in categories],
             depth=depth_limit,
@@ -423,7 +423,7 @@ class IncomeCategoryView(LoginRequiredMixin, ListView[IncomeCategory]):
             .all()
         )
         flattened_categories = get_cached_category_tree(
-            user_id=user.id,
+            user_id=user.pk,
             category_type='income',
             categories=[dict(cat) for cat in categories],
             depth=self.depth,
