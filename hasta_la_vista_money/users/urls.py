@@ -4,6 +4,11 @@ from django.urls import include, path
 
 from hasta_la_vista_money.users.views import (
     CreateUser,
+    DashboardComparisonView,
+    DashboardDataView,
+    DashboardDrillDownView,
+    DashboardView,
+    DashboardWidgetConfigView,
     ExportUserDataView,
     ListUsers,
     LoginUser,
@@ -32,5 +37,26 @@ urlpatterns = [
     path(
         'ajax/',
         include('hasta_la_vista_money.users.ajax_urls', namespace='ajax'),
+    ),
+    path('dashboard/', DashboardView.as_view(), name='dashboard'),
+    path(
+        'dashboard/data/',
+        DashboardDataView.as_view(),
+        name='dashboard_data',
+    ),
+    path(
+        'dashboard/widget/',
+        DashboardWidgetConfigView.as_view(),
+        name='dashboard_widget',
+    ),
+    path(
+        'dashboard/drilldown/',
+        DashboardDrillDownView.as_view(),
+        name='dashboard_drilldown',
+    ),
+    path(
+        'dashboard/comparison/',
+        DashboardComparisonView.as_view(),
+        name='dashboard_comparison',
     ),
 ]

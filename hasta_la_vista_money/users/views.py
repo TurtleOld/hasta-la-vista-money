@@ -1,11 +1,16 @@
 import json
+import logging
+import traceback
+from decimal import Decimal
 from typing import Any
 
+from dateutil.parser import parse as parse_date
 from django.contrib import messages
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import QuerySet
 from django.forms import BaseForm
 from django.http import (
     HttpRequest,
@@ -36,8 +41,13 @@ from hasta_la_vista_money.users.forms import (
     UpdateUserForm,
     UserLoginForm,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import DashboardWidget, User
 from hasta_la_vista_money.users.services.auth import login_user
+from hasta_la_vista_money.users.services.dashboard_analytics import (
+    calculate_linear_trend,
+    get_drill_down_data,
+    get_period_comparison,
+)
 from hasta_la_vista_money.users.services.detailed_statistics import (
     get_user_detailed_statistics,
 )
@@ -107,8 +117,6 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to after successful login."""
-        # Используем прямой путь, чтобы избежать циклического импорта
-        # при инициализации URL resolver
         return '/hasta-la-vista-money/'
 
     def dispatch(
@@ -502,3 +510,244 @@ class SwitchThemeView(LoginRequiredMixin, View):
         theme = data.get('theme')
         set_user_theme(user, theme)
         return JsonResponse({'success': True})
+
+
+class DashboardView(LoginRequiredMixin, TemplateView):
+    """Представление для страницы дашборда."""
+
+    template_name = 'users/dashboard.html'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+
+        context['default_period'] = 'month'
+        context['available_widgets'] = [
+            {'type': 'balance', 'name': 'Баланс счетов'},
+            {'type': 'expenses_chart', 'name': 'График расходов'},
+            {'type': 'income_chart', 'name': 'График доходов'},
+            {'type': 'comparison', 'name': 'Сравнение периодов'},
+            {'type': 'trend', 'name': 'Тренды и прогнозы'},
+            {'type': 'top_categories', 'name': 'Топ категорий'},
+            {'type': 'recent_transactions', 'name': 'Последние операции'},
+        ]
+
+        return context
+
+
+class DashboardDataView(LoginRequiredMixin, View):
+    """Получение всех данных для дашборда в JSON."""
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        try:
+            user = request.user
+            if not isinstance(user, User):
+                return JsonResponse(
+                    {'error': 'User not authenticated'},
+                    status=401,
+                )
+
+            period = request.GET.get('period', 'month')
+
+            widgets = DashboardWidget.objects.filter(
+                user=user,
+                is_visible=True,
+            ).order_by('position')
+
+            stats = get_user_detailed_statistics(user)
+
+            serializable_stats = dict(stats)
+            for key, value in serializable_stats.items():
+                if isinstance(value, QuerySet):
+                    serializable_stats[key] = list(value.values())
+                elif (
+                    hasattr(value, '__class__')
+                    and value.__class__.__name__ == 'User'
+                ):
+                    serializable_stats[key] = {
+                        'id': value.id,
+                        'username': value.username,
+                    }
+
+            months_data = serializable_stats.get('months_data', [])
+            trends = {}
+            if months_data:
+                dates = []
+                expenses_values = []
+                for m in months_data:
+                    try:
+                        month_str = m.get('month', '')
+                        parsed_date = parse_date(month_str, dayfirst=False)
+                        dates.append(parsed_date.date().replace(day=1))
+                        expenses_values.append(
+                            Decimal(str(m.get('expenses', 0))),
+                        )
+                    except (ValueError, TypeError, AttributeError):
+                        continue
+
+                if (
+                    dates
+                    and expenses_values
+                    and len(dates) == len(expenses_values)
+                ):
+                    trends = calculate_linear_trend(dates, expenses_values)
+
+            comparison_data = get_period_comparison(user, period)
+
+            data = {
+                'widgets': list(widgets.values()),
+                'analytics': {
+                    'stats': serializable_stats,
+                    'trends': trends,
+                },
+                'comparison': comparison_data,
+            }
+
+            return JsonResponse(data, safe=False)
+        except (
+            ValueError,
+            TypeError,
+            AttributeError,
+            KeyError,
+            RuntimeError,
+        ) as e:
+            error_msg = str(e)
+            traceback_str = traceback.format_exc()
+            logger = logging.getLogger(__name__)
+            logger.exception('Dashboard data loading error')
+            return JsonResponse(
+                {
+                    'error': f'Internal server error: {error_msg}',
+                    'traceback': traceback_str,
+                },
+                status=500,
+            )
+
+
+class DashboardWidgetConfigView(LoginRequiredMixin, View):
+    """Управление конфигурацией виджетов."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        data = json.loads(request.body)
+        widget_id = data.get('widget_id')
+        widget_type = data.get('widget_type')
+        config = data.get('config', {})
+        position = data.get('position', 0)
+
+        if widget_id:
+            widget = get_object_or_404(
+                DashboardWidget,
+                id=widget_id,
+                user=user,
+            )
+            widget.config = config
+            widget.position = position
+            if 'is_visible' in data:
+                widget.is_visible = data['is_visible']
+            widget.save()
+        else:
+            widget = DashboardWidget.objects.create(
+                user=user,
+                widget_type=widget_type,
+                config=config,
+                position=position,
+            )
+
+        return JsonResponse(
+            {
+                'status': 'ok',
+                'widget_id': widget.id,
+            },
+        )
+
+    def delete(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        widget_id = request.GET.get('widget_id')
+        if not widget_id:
+            return JsonResponse({'error': 'widget_id required'}, status=400)
+
+        widget = get_object_or_404(
+            DashboardWidget,
+            id=widget_id,
+            user=user,
+        )
+        widget.delete()
+
+        return JsonResponse({'status': 'ok'})
+
+
+class DashboardDrillDownView(LoginRequiredMixin, View):
+    """Получение детализации по категориям (drill-down)."""
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        category_id = request.GET.get('category_id')
+        date_str = request.GET.get('date')
+        data_type = request.GET.get('type', 'expense')
+
+        if category_id:
+            try:
+                category_id = int(category_id)
+            except ValueError:
+                category_id = None
+
+        drill_data = get_drill_down_data(
+            user=user,
+            category_id=category_id,
+            date_str=date_str,
+            data_type=data_type,
+        )
+
+        return JsonResponse(drill_data)
+
+
+class DashboardComparisonView(LoginRequiredMixin, View):
+    """Сравнение периодов."""
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        period_type = request.GET.get('period', 'month')
+
+        comparison_data = get_period_comparison(
+            user=user,
+            period_type=period_type,
+        )
+
+        return JsonResponse(comparison_data)
