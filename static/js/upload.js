@@ -103,41 +103,77 @@ class ReceiptUploader {
 
     createPreview(file) {
         const container = document.getElementById('preview-container');
-        const previewId = `preview-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const previewId = `preview-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
         const previewCard = document.createElement('div');
         previewCard.className = 'preview-card';
         previewCard.id = previewId;
 
-        previewCard.innerHTML = `
-            <div class="preview-image-wrapper">
-                <img class="preview-image" alt="${file.name}">
-            </div>
-            <div class="preview-info">
-                <div class="preview-filename">${file.name}</div>
-                <div class="preview-size">${this.formatSize(file.size)}</div>
-                <div class="preview-progress">
-                    <div class="progress">
-                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-                    </div>
-                    <div class="preview-status">Ожидание...</div>
-                </div>
-            </div>
-            <button class="preview-remove" type="button" aria-label="Удалить">
-                <i class="bi bi-x"></i>
-            </button>
-        `;
+        const imageWrapper = document.createElement('div');
+        imageWrapper.className = 'preview-image-wrapper';
+
+        const img = document.createElement('img');
+        img.className = 'preview-image';
+        img.setAttribute('alt', file.name || '');
+
+        imageWrapper.appendChild(img);
+
+        const previewInfo = document.createElement('div');
+        previewInfo.className = 'preview-info';
+
+        const filenameDiv = document.createElement('div');
+        filenameDiv.className = 'preview-filename';
+        filenameDiv.textContent = file.name || '';
+
+        const sizeDiv = document.createElement('div');
+        sizeDiv.className = 'preview-size';
+        sizeDiv.textContent = this.formatSize(file.size);
+
+        const previewProgress = document.createElement('div');
+        previewProgress.className = 'preview-progress';
+
+        const progress = document.createElement('div');
+        progress.className = 'progress';
+
+        const progressBar = document.createElement('div');
+        progressBar.className = 'progress-bar';
+        progressBar.setAttribute('role', 'progressbar');
+        progressBar.style.width = '0%';
+
+        progress.appendChild(progressBar);
+
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'preview-status';
+        statusDiv.textContent = 'Ожидание...';
+
+        previewProgress.appendChild(progress);
+        previewProgress.appendChild(statusDiv);
+
+        previewInfo.appendChild(filenameDiv);
+        previewInfo.appendChild(sizeDiv);
+        previewInfo.appendChild(previewProgress);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'preview-remove';
+        removeBtn.setAttribute('type', 'button');
+        removeBtn.setAttribute('aria-label', 'Удалить');
+
+        const closeIcon = document.createElement('i');
+        closeIcon.className = 'bi bi-x';
+        removeBtn.appendChild(closeIcon);
+
+        previewCard.appendChild(imageWrapper);
+        previewCard.appendChild(previewInfo);
+        previewCard.appendChild(removeBtn);
 
         container.appendChild(previewCard);
 
         const reader = new FileReader();
         reader.onload = (e) => {
-            const img = previewCard.querySelector('.preview-image');
             img.src = e.target.result;
         };
         reader.readAsDataURL(file);
 
-        const removeBtn = previewCard.querySelector('.preview-remove');
         removeBtn.addEventListener('click', () => {
             this.removeFile(file, previewId);
         });

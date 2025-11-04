@@ -35,28 +35,42 @@ class ToastNotification {
 
     createToast(message, type) {
         const toast = document.createElement('div');
-        toast.className = `toast-notification toast-${type}`;
 
-        const iconMap = {
-            'success': 'bi-check-circle-fill',
-            'danger': 'bi-exclamation-circle-fill',
-            'info': 'bi-info-circle-fill',
-            'warning': 'bi-exclamation-triangle-fill'
-        };
+        const iconMap = new Map([
+            ['success', 'bi-check-circle-fill'],
+            ['danger', 'bi-exclamation-circle-fill'],
+            ['info', 'bi-info-circle-fill'],
+            ['warning', 'bi-exclamation-triangle-fill']
+        ]);
 
-        const icon = iconMap[type] || iconMap['info'];
+        const safeType = iconMap.has(type) ? type : 'info';
+        const icon = iconMap.get(safeType);
 
-        toast.innerHTML = `
-            <div class="toast-content">
-                <i class="bi ${icon} toast-icon"></i>
-                <span class="toast-message">${message}</span>
-                <button class="toast-close" aria-label="Закрыть">
-                    <i class="bi bi-x"></i>
-                </button>
-            </div>
-        `;
+        toast.className = `toast-notification toast-${safeType}`;
 
-        const closeBtn = toast.querySelector('.toast-close');
+        const content = document.createElement('div');
+        content.className = 'toast-content';
+
+        const iconElement = document.createElement('i');
+        iconElement.className = `bi ${icon} toast-icon`;
+
+        const messageElement = document.createElement('span');
+        messageElement.className = 'toast-message';
+        messageElement.textContent = message;
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'toast-close';
+        closeBtn.setAttribute('aria-label', 'Закрыть');
+
+        const closeIcon = document.createElement('i');
+        closeIcon.className = 'bi bi-x';
+        closeBtn.appendChild(closeIcon);
+
+        content.appendChild(iconElement);
+        content.appendChild(messageElement);
+        content.appendChild(closeBtn);
+        toast.appendChild(content);
+
         closeBtn.addEventListener('click', () => this.hide(toast));
 
         return toast;
