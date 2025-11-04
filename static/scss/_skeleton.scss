@@ -1,0 +1,145 @@
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 4px;
+    opacity: 0.7;
+}
+
+[data-bs-theme='dark'] .skeleton {
+    background: linear-gradient(90deg, #2d3238 25%, #3a3f47 50%, #2d3238 75%);
+    background-size: 200% 100%;
+}
+
+.skeleton-text {
+    height: 1rem;
+    margin-bottom: 0.5rem;
+
+    &.skeleton-text-sm {
+        height: 0.75rem;
+    }
+
+    &.skeleton-text-lg {
+        height: 1.25rem;
+    }
+}
+
+.skeleton-card {
+    height: 150px;
+    border-radius: 8px;
+}
+
+.skeleton-table {
+    width: 100%;
+
+    .skeleton-row {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+
+        .skeleton-cell {
+            flex: 1;
+            height: 2rem;
+            border-radius: 4px;
+        }
+    }
+}
+
+.skeleton-form {
+    .skeleton-input {
+        height: 38px;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+    }
+
+    .skeleton-label {
+        height: 1rem;
+        width: 30%;
+        margin-bottom: 0.5rem;
+        border-radius: 4px;
+    }
+}
+
+.skeleton-button {
+    height: 38px;
+    width: 120px;
+    border-radius: 6px;
+}
+
+#income-skeleton,
+#expense-skeleton {
+    padding: 2rem;
+
+    .skeleton-header {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+
+        .skeleton-cell {
+            flex: 1;
+            height: 2.5rem;
+            background: linear-gradient(90deg, #eafaf1 25%, #d1f5e0 50%, #eafaf1 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+    }
+
+    .skeleton-body {
+        .skeleton-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+
+            .skeleton-cell {
+                flex: 1;
+                height: 2rem;
+                background: linear-gradient(90deg, #f8f9fa 25%, #e9ecef 50%, #f8f9fa 75%);
+                background-size: 200% 100%;
+                animation: loading 1.5s infinite;
+            }
+        }
+    }
+}
+
+[data-bs-theme='dark'] {
+    #income-skeleton,
+    #expense-skeleton {
+        .skeleton-header .skeleton-cell {
+            background: linear-gradient(90deg, #2d4a3e 25%, #1e3329 50%, #2d4a3e 75%);
+            background-size: 200% 100%;
+        }
+
+        .skeleton-body .skeleton-row .skeleton-cell {
+            background: linear-gradient(90deg, #2d3238 25%, #3a3f47 50%, #2d3238 75%);
+            background-size: 200% 100%;
+        }
+    }
+}
+
+.skeleton-account-card {
+    height: 180px;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+}
+
+.skeleton-fade-out {
+    animation: fadeOut 0.3s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}

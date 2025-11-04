@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 {% load i18n %}
+{% url 'income:list' as income_list_url %}
 
 {% block title %}{% translate 'Добавить новый доход' %}{% endblock %}
 
@@ -16,7 +17,7 @@
                     </h5>
                 </div>
                 <div class="card-body p-4">
-                    {% include 'income/_income_form.html' with form=form action_url=action_url|default:request.path cancel_url=cancel_url|default:cancel_url submit_label=_('Добавить доход') cancel_label=_('Отмена') %}
+                    {% include 'income/_income_form.html' with form=form action_url=action_url|default:request.path cancel_url=income_list_url submit_label=_('Добавить доход') cancel_label=_('Отмена') %}
                 </div>
             </div>
         </div>

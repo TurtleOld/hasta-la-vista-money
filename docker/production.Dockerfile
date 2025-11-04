@@ -6,9 +6,11 @@ RUN pip install uv==0.7.13
 
 ENV PATH="/root/.local/bin:$PATH"
 
+RUN apk add --no-cache gcc python3-dev musl-dev linux-headers
+
 COPY pyproject.toml uv.lock ./
 
-RUN uv venv .venv && uv pip install -e '.[dev]'
+RUN uv sync --dev
 
 COPY . .
 
@@ -23,7 +25,7 @@ ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv venv .venv && uv pip install -e '.[dev]'
+RUN uv sync --dev
 
 COPY --from=builder /app /app
 

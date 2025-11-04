@@ -12,7 +12,7 @@ COPY --chown=appuser:appuser pyproject.toml uv.lock ./
 
 USER appuser
 
-RUN uv venv .venv && uv pip install -e '.[dev]'
+RUN uv sync --dev
 
 COPY --chown=appuser:appuser . .
 

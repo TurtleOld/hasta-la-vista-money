@@ -19,7 +19,7 @@
         <link nonce="{{request.csp_nonce}}" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet" integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA==" crossorigin="anonymous">
         <link nonce="{{request.csp_nonce}}" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
         {% compress css %}
-        <link rel="stylesheet" href="{% static 'css/styles.min.css' %}">
+        <link rel="stylesheet" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
         {% endcompress %}
     {% endblock %}
 </head>
@@ -47,6 +47,9 @@
     {% block content %}
     {% endblock %}
 
+    {% if user.is_authenticated %}
+        {% include '_bottom_nav.html' %}
+    {% endif %}
 
     <script nonce="{{request.csp_nonce}}" src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -55,6 +58,7 @@
     {% compress js %}
     <script src="{% static 'js/jquery-3.7.1.min.js' %}?v={% word_hash %}"></script>
     <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}?v={% word_hash %}"></script>
+    <script src="{% static 'js/notifications.js' %}?v={% word_hash %}"></script>
     <script src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
     <script src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
     <script src="{% static 'js/account_group_filter.js' %}?v={% word_hash %}"></script>
@@ -79,6 +83,9 @@
     {% endif %}
     {% if 'loan' in request.path %}
         <script src="{% static 'js/loan.js' %}?v={% word_hash %}"></script>
+    {% endif %}
+    {% if user.is_authenticated %}
+        <script src="{% static 'js/bottom-nav.js' %}?v={% word_hash %}"></script>
     {% endif %}
     {% endcompress %}
     <script nonce="{{request.csp_nonce}}">

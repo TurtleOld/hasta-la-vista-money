@@ -100,13 +100,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Вспомогательные функции для действий (заглушка)
 function editExpense(id) { // eslint-disable-line
-    alert('Редактировать расход: ' + id);
+    window.toast.info('Редактировать расход: ' + id);
 }
 function copyExpense(id) { // eslint-disable-line
-    alert('Копировать расход: ' + id);
+    window.toast.info('Копировать расход: ' + id);
 }
 function deleteExpense(id) { // eslint-disable-line
     if (confirm('Вы уверены, что хотите удалить этот расход?')) {
-        alert('Удалить расход: ' + id);
+        window.toast.success('Расход удален: ' + id);
     }
 }

@@ -1,0 +1,26 @@
+{% load i18n %}
+<nav class="bottom-nav">
+    <a href="{% url 'finance_account:list' %}" class="bottom-nav-item {% if 'finance_account' in request.path %}active{% endif %}">
+        <i class="bi bi-wallet2 icon"></i>
+        <span class="label">{% translate 'Счета' %}</span>
+    </a>
+
+    <a href="{% url 'income:list' %}" class="bottom-nav-item {% if 'income' in request.path and 'budget' not in request.path %}active{% endif %}">
+        <i class="bi bi-arrow-up-circle icon"></i>
+        <span class="label">{% translate 'Доходы' %}</span>
+    </a>
+
+    <a href="{% url 'expense:create' %}" class="bottom-nav-fab" id="bottom-nav-fab" data-income-url="{% url 'income:create' %}" data-expense-url="{% url 'expense:create' %}">
+        <i class="bi bi-plus-lg" id="fab-icon"></i>
+    </a>
+
+    <a href="{% url 'expense:list' %}" class="bottom-nav-item {% if 'expense' in request.path and 'budget' not in request.path %}active{% endif %}">
+        <i class="bi bi-arrow-down-circle icon"></i>
+        <span class="label">{% translate 'Расходы' %}</span>
+    </a>
+
+    <a href="{% url 'receipts:list' %}" class="bottom-nav-item {% if 'receipts' in request.path %}active{% endif %}">
+        <i class="bi bi-receipt icon"></i>
+        <span class="label">{% translate 'Чеки' %}</span>
+    </a>
+</nav>

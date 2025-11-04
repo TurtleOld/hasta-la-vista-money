@@ -1,0 +1,32 @@
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+<form method="POST" action="{{ action_url }}" hx-post="{{ action_url }}" hx-target="#form-container" hx-swap="outerHTML">
+    {% csrf_token %}
+    {% for field in add_expense_form %}
+        <div class="mb-3">
+            {{ field|as_crispy_field }}
+            {% if field.errors %}
+                <div class="invalid-feedback d-block">
+                    {% for error in field.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-success" hx-indicator="#form-spinner">
+            <i class="bi bi-graph-down-arrow me-2"></i>
+            {% translate 'Добавить расход' %}
+        </button>
+        <a href="{% url 'expense:list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>
+            {% translate 'Отмена' %}
+        </a>
+        <div id="form-spinner" class="spinner-border spinner-border-sm text-success htmx-indicator" role="status">
+            <span class="visually-hidden">{% translate 'Загрузка...' %}</span>
+        </div>
+    </div>
+</form>
