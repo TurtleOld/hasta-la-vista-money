@@ -12,6 +12,7 @@ class ReceiptUploader {
         };
 
         this.files = [];
+        this.fileToPreviewId = new Map();
         this.init();
     }
 
@@ -168,6 +169,8 @@ class ReceiptUploader {
 
         container.appendChild(previewCard);
 
+        this.fileToPreviewId.set(file, previewId);
+
         const reader = new FileReader();
         reader.onload = (e) => {
             img.src = e.target.result;
@@ -184,6 +187,8 @@ class ReceiptUploader {
         if (index > -1) {
             this.files.splice(index, 1);
         }
+
+        this.fileToPreviewId.delete(file);
 
         const previewCard = document.getElementById(previewId);
         if (previewCard) {
@@ -249,10 +254,10 @@ class ReceiptUploader {
         }
 
         this.files.forEach((file, index) => {
-            const previewCard = document.querySelectorAll('.preview-card')[index];
-            if (previewCard) {
+            const previewId = this.fileToPreviewId.get(file);
+            if (previewId) {
                 setTimeout(() => {
-                    this.uploadFile(file, previewCard.id);
+                    this.uploadFile(file, previewId);
                 }, index * 300);
             }
         });
@@ -297,7 +302,8 @@ class ReceiptUploader {
         const k = 1024;
         const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        const safeIndex = Math.min(i, sizes.length - 1);
+        return Math.round(bytes / (k ** safeIndex) * 100) / 100 + ' ' + sizes[safeIndex];
     }
 
     getCookie(name) {
