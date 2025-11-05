@@ -94,7 +94,7 @@ class DashboardManager {
         try {
             const url = `${this.apiBase}/data/?period=${this.period}`;
             console.log('Loading dashboard from:', url);
-            
+
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
@@ -124,10 +124,11 @@ class DashboardManager {
 
             const data = await response.json();
             console.log('Dashboard data loaded successfully:', data);
-            
+
             this.widgets = data.widgets || [];
             this.analyticsData = data.analytics || {};
             this.comparisonData = data.comparison || {};
+            this.recentTransactions = data.recent_transactions || [];
 
             this.renderWidgets();
         } catch (error) {
@@ -235,6 +236,11 @@ class DashboardManager {
             const contentDiv = chartContainer.parentElement;
             contentDiv.classList.remove('loading', 'error');
 
+            const loadingDiv = contentDiv.querySelector('.widget-loading');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+
             try {
                 let chart = this.charts.get(widget.id);
                 window.destroyChart?.(chart);
@@ -286,6 +292,8 @@ class DashboardManager {
                 return this.renderTrendChart(widget, containerId, initChart, chartConfigs);
             case 'top_categories':
                 return this.renderTopCategoriesChart(widget, containerId, initChart, chartConfigs);
+            case 'recent_transactions':
+                return this.renderRecentTransactions(widget, containerId);
             default:
                 return null;
         }
@@ -300,7 +308,19 @@ class DashboardManager {
         }
 
         const labels = stats.months_data.map((m) => m.month);
-        const balances = stats.months_data.map((m) => m.income - m.expenses);
+        const balances = stats.months_data.map((m) => {
+            if (m.balance !== undefined) {
+                return m.balance;
+            }
+            return m.income - m.expenses;
+        });
+
+        const balancesByCurrency = stats.balances_by_currency || {};
+        const currentBalance = Object.values(balancesByCurrency).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+
+        if (balances.length > 0 && currentBalance > 0) {
+            balances[balances.length - 1] = currentBalance;
+        }
 
         config.xAxis.data = labels;
         config.series[0].data = balances;
@@ -449,6 +469,89 @@ class DashboardManager {
         return chart;
     }
 
+    renderRecentTransactions(widget, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            return null;
+        }
+
+        const transactions = this.recentTransactions || [];
+        const contentDiv = container.parentElement;
+        if (contentDiv) {
+            contentDiv.classList.remove('loading', 'error');
+        }
+
+        if (transactions.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-inbox fs-3"></i>
+                    <p class="mt-2">Нет последних операций</p>
+                </div>
+            `;
+            return null;
+        }
+
+        const formatDate = (dateStr) => {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            });
+        };
+
+        const formatAmount = (amount, type) => {
+            const num = parseFloat(amount);
+            const formatted = num.toLocaleString('ru-RU', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+            const sign = type === 'expense' ? '-' : '+';
+            const color = type === 'expense' ? 'text-danger' : 'text-success';
+            return `<span class="${color}">${sign}${formatted} ₽</span>`;
+        };
+
+        const getTypeIcon = (type) => {
+            return type === 'expense'
+                ? '<i class="bi bi-arrow-down-circle text-danger"></i>'
+                : '<i class="bi bi-arrow-up-circle text-success"></i>';
+        };
+
+        const transactionsHtml = transactions
+            .map(
+                (transaction) => `
+            <div class="list-group-item border-0 px-0 py-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            ${getTypeIcon(transaction.type)}
+                            <strong>${transaction.category}</strong>
+                        </div>
+                        <small class="text-muted d-block">
+                            <i class="bi bi-wallet2"></i> ${transaction.account}
+                        </small>
+                        <small class="text-muted">
+                            <i class="bi bi-calendar3"></i> ${formatDate(transaction.date)}
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        ${formatAmount(transaction.amount, transaction.type)}
+                    </div>
+                </div>
+            </div>
+        `,
+            )
+            .join('');
+
+        container.innerHTML = `
+            <div class="list-group list-group-flush">
+                ${transactionsHtml}
+            </div>
+        `;
+
+        return null;
+    }
+
     async handleDrillDown(type, params) {
         const categoryName = params.name;
         const stats = this.analyticsData?.stats;
@@ -536,7 +639,7 @@ class DashboardManager {
             console.error('Bootstrap is not loaded');
             return;
         }
-        
+
         try {
             let modal = bootstrap.Modal.getInstance(modalElement);
             if (!modal) {
@@ -743,4 +846,3 @@ class DashboardManager {
 }
 
 window.DashboardManager = DashboardManager;
-

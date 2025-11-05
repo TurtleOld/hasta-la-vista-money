@@ -10,6 +10,7 @@ from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.cache import cache
 from django.db.models import QuerySet
 from django.forms import BaseForm
 from django.http import (
@@ -32,6 +33,9 @@ from hasta_la_vista_money.authentication.authentication import (
     set_auth_cookies,
 )
 from hasta_la_vista_money.custom_mixin import CustomSuccessURLUserMixin
+from hasta_la_vista_money.expense.models import Expense
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
     DeleteUserFromGroupForm,
@@ -537,6 +541,92 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 class DashboardDataView(LoginRequiredMixin, View):
     """Получение всех данных для дашборда в JSON."""
 
+    def _prepare_serializable_stats(
+        self,
+        stats: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Подготовить статистику для сериализации."""
+        serializable_stats = dict(stats)
+        for key, value in serializable_stats.items():
+            if isinstance(value, QuerySet):
+                serializable_stats[key] = list(value.values())
+            elif (
+                hasattr(value, '__class__')
+                and value.__class__.__name__ == 'User'
+            ):
+                serializable_stats[key] = {
+                    'id': value.id,
+                    'username': value.username,
+                }
+        return serializable_stats
+
+    def _calculate_trends(
+        self,
+        months_data: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Рассчитать тренды на основе данных за месяцы."""
+        trends = {}
+        if not months_data:
+            return trends
+
+        dates = []
+        expenses_values = []
+        for m in months_data:
+            try:
+                month_str = m.get('month', '')
+                parsed_date = parse_date(month_str, dayfirst=False)
+                dates.append(parsed_date.date().replace(day=1))
+                expenses_values.append(Decimal(str(m.get('expenses', 0))))
+            except (ValueError, TypeError, AttributeError):
+                continue
+
+        if dates and expenses_values and len(dates) == len(expenses_values):
+            trends = calculate_linear_trend(dates, expenses_values)
+
+        return trends
+
+    def _get_recent_transactions(self, user: User) -> list[dict[str, Any]]:
+        """Получить последние транзакции."""
+        recent_expenses = (
+            Expense.objects.filter(user=user)
+            .select_related('category', 'account')
+            .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
+        )
+        recent_incomes = (
+            Income.objects.filter(user=user)
+            .select_related('category', 'account')
+            .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
+        )
+
+        expense_transactions = [
+            {
+                'id': expense.id,
+                'type': 'expense',
+                'date': expense.date.isoformat(),
+                'amount': str(expense.amount),
+                'category': expense.category.name,
+                'account': expense.account.name_account,
+            }
+            for expense in recent_expenses
+        ]
+        income_transactions = [
+            {
+                'id': income.id,
+                'type': 'income',
+                'date': income.date.isoformat(),
+                'amount': str(income.amount),
+                'category': income.category.name,
+                'account': income.account.name_account,
+            }
+            for income in recent_incomes
+        ]
+
+        return sorted(
+            expense_transactions + income_transactions,
+            key=lambda x: x['date'],
+            reverse=True,
+        )[: constants.RECENT_ITEMS_LIMIT]
+
     def get(
         self,
         request: HttpRequest,
@@ -558,45 +648,25 @@ class DashboardDataView(LoginRequiredMixin, View):
                 is_visible=True,
             ).order_by('position')
 
+            cache_key = f'user_stats_{user.id}'
+            cache.delete(cache_key)
+
             stats = get_user_detailed_statistics(user)
 
-            serializable_stats = dict(stats)
-            for key, value in serializable_stats.items():
-                if isinstance(value, QuerySet):
-                    serializable_stats[key] = list(value.values())
-                elif (
-                    hasattr(value, '__class__')
-                    and value.__class__.__name__ == 'User'
-                ):
-                    serializable_stats[key] = {
-                        'id': value.id,
-                        'username': value.username,
-                    }
+            accounts = Account.objects.filter(user=user)
+            total_balance = sum(float(acc.balance) for acc in accounts)
+            if stats.get('months_data'):
+                for month_data in stats['months_data']:
+                    if not month_data.get('balance'):
+                        month_data['balance'] = total_balance
+
+            serializable_stats = self._prepare_serializable_stats(stats)
 
             months_data = serializable_stats.get('months_data', [])
-            trends = {}
-            if months_data:
-                dates = []
-                expenses_values = []
-                for m in months_data:
-                    try:
-                        month_str = m.get('month', '')
-                        parsed_date = parse_date(month_str, dayfirst=False)
-                        dates.append(parsed_date.date().replace(day=1))
-                        expenses_values.append(
-                            Decimal(str(m.get('expenses', 0))),
-                        )
-                    except (ValueError, TypeError, AttributeError):
-                        continue
-
-                if (
-                    dates
-                    and expenses_values
-                    and len(dates) == len(expenses_values)
-                ):
-                    trends = calculate_linear_trend(dates, expenses_values)
+            trends = self._calculate_trends(months_data)
 
             comparison_data = get_period_comparison(user, period)
+            recent_transactions = self._get_recent_transactions(user)
 
             data = {
                 'widgets': list(widgets.values()),
@@ -605,6 +675,7 @@ class DashboardDataView(LoginRequiredMixin, View):
                     'trends': trends,
                 },
                 'comparison': comparison_data,
+                'recent_transactions': recent_transactions,
             }
 
             return JsonResponse(data, safe=False)

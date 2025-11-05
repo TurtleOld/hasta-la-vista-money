@@ -10,6 +10,7 @@
 - JWT-токены для API аутентификации
 - Управление темами интерфейса
 - Статистику и экспорт данных пользователей
+- Интерактивный дашборд с настраиваемыми виджетами
 - Уведомления
 
 ## Модели
@@ -138,6 +139,11 @@ urlpatterns = [
     path('statistics/', UserStatisticsView.as_view(), name='statistics'),
     path('export-data/', ExportUserDataView.as_view(), name='export_data'),
     path('set-theme/', SwitchThemeView.as_view(), name='set_theme'),
+    path('dashboard/', DashboardView.as_view(), name='dashboard'),
+    path('dashboard/data/', DashboardDataView.as_view(), name='dashboard_data'),
+    path('dashboard/widget/', DashboardWidgetConfigView.as_view(), name='dashboard_widget'),
+    path('dashboard/drilldown/', DashboardDrillDownView.as_view(), name='dashboard_drilldown'),
+    path('dashboard/comparison/', DashboardComparisonView.as_view(), name='dashboard_comparison'),
     path('groups/', include('hasta_la_vista_money.users.groups_urls')),
     path('ajax/', include('hasta_la_vista_money.users.ajax_urls')),
 ]
@@ -175,6 +181,11 @@ urlpatterns = [
 6. **`UserStatisticsView`** - детальная статистика пользователя
 7. **`ExportUserDataView`** - экспорт данных пользователя
 8. **`SwitchThemeView`** - переключение темы интерфейса
+9. **`DashboardView`** - главная страница интерактивного дашборда
+10. **`DashboardDataView`** - API endpoint для получения данных дашборда
+11. **`DashboardWidgetConfigView`** - управление виджетами (создание, обновление, удаление)
+12. **`DashboardDrillDownView`** - API для drill-down данных по категориям
+13. **`DashboardComparisonView`** - API для сравнения периодов
 
 ### AJAX представления
 
@@ -199,6 +210,11 @@ urlpatterns = [
 
 ### `services/statistics.py`
 - `get_user_statistics()` - базовая статистика пользователя (баланс, расходы, доходы)
+
+### `services/dashboard_analytics.py`
+- `calculate_linear_trend()` - расчёт линейной регрессии и прогноза через NumPy
+- `get_period_comparison()` - сравнение текущего и предыдущего периода (месяц/квартал/год)
+- `get_drill_down_data()` - детализация данных по категориям для drill-down графиков
 
 ### Другие сервисы
 - `detailed_statistics.py` - детальная статистика (304 строки)
@@ -283,6 +299,7 @@ urlpatterns = [
 - `registration.html` - страница регистрации
 - `profile.html` - профиль пользователя (23KB)
 - `statistics.html` - статистика пользователя (35KB)
+- `dashboard.html` - интерактивный дашборд с настраиваемыми виджетами
 - `notifications.html` - уведомления
 - `set_password.html` - смена пароля
 - Шаблоны для управления группами
@@ -298,6 +315,8 @@ urlpatterns = [
 - `test_user.py` - тесты модели пользователя
 - `test_statistics.py` - тесты статистики
 - `test_notifications.py` - тесты уведомлений
+- `test_dashboard_analytics.py` - тесты аналитических сервисов дашборда
+- `test_dashboard_views.py` - тесты views дашборда
 - `test_urls.py` - тесты URL маршрутов (162 строки)
 - И другие тестовые модули для каждого сервиса
 
@@ -308,6 +327,7 @@ urlpatterns = [
 - `0001_initial.py` - создание кастомной модели User
 - `0002_user_theme.py` - добавление поля theme
 - `0003_alter_user_theme.py` - изменение поля theme
+- `0004_dashboardwidget.py` - создание модели DashboardWidget для настраиваемых виджетов
 
 ## Функционал личного кабинета пользователя
 
@@ -437,6 +457,187 @@ urlpatterns = [
 - **Динамическое переключение тем**
 - **Иконки Bootstrap Icons** для визуального улучшения
 - **Кастомные стили** с градиентами для аватара и современным дизайном карточек
+
+## Интерактивный дашборд
+
+### Обзор
+
+Дашборд (`/dashboard/`) предоставляет пользователю настраиваемый интерфейс для визуализации финансовых данных с помощью интерактивных виджетов. Реализован с использованием Apache ECharts для графиков и Sortable.js для drag-and-drop перестановки виджетов.
+
+### Модель DashboardWidget
+
+```python
+class DashboardWidget(Model):
+    user = ForeignKey(User, on_delete=CASCADE, related_name='dashboard_widgets')
+    widget_type = CharField(max_length=50)
+    position = PositiveIntegerField(default=0)
+    width = PositiveIntegerField(default=6)
+    height = PositiveIntegerField(default=300)
+    config = JSONField(default=dict)
+    is_visible = BooleanField(default=True)
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+```
+
+**Поля:**
+- `user` - владелец виджета
+- `widget_type` - тип виджета (balance, expenses_chart, income_chart, comparison, trend, top_categories, recent_transactions)
+- `position` - позиция виджета в сетке (для сортировки)
+- `width` - ширина виджета в колонках (1-12)
+- `height` - высота виджета в пикселях
+- `config` - дополнительные настройки виджета (JSON)
+- `is_visible` - видимость виджета
+
+### Доступные виджеты
+
+1. **Баланс счетов** (`balance`)
+   - График изменения баланса по месяцам
+
+2. **График расходов** (`expenses_chart`)
+   - Тренд расходов с возможностью drill-down по категориям
+
+3. **График доходов** (`income_chart`)
+   - Тренд доходов с возможностью drill-down по категориям
+
+4. **Сравнение периодов** (`comparison`)
+   - Сравнение текущего и предыдущего периода (месяц/квартал/год)
+
+5. **Тренды и прогнозы** (`trend`)
+   - Линейная регрессия расходов с прогнозом на 3 месяца вперёд
+
+6. **Топ категорий** (`top_categories`)
+   - Круговая диаграмма топ-10 категорий расходов с drill-down
+
+7. **Последние операции** (`recent_transactions`)
+   - Список последних 5 операций (расходы и доходы) с информацией о категории, счёте и дате
+
+### API Endpoints
+
+#### GET `/users/dashboard/data/`
+Получение всех данных для дашборда в JSON формате.
+
+**Параметры:**
+- `period` (query) - период для сравнения: `month`, `quarter`, `year` (по умолчанию: `month`)
+
+**Ответ:**
+```json
+{
+  "widgets": [...],
+  "analytics": {
+    "stats": {...},
+    "trends": {...}
+  },
+  "comparison": {...},
+  "recent_transactions": [...]
+}
+```
+
+#### POST `/users/dashboard/widget/`
+Управление виджетами (создание, обновление, удаление).
+
+**Тело запроса:**
+```json
+{
+  "widget_id": 1,  // опционально, для обновления/удаления
+  "widget_type": "balance",
+  "position": 0,
+  "width": 6,
+  "height": 300,
+  "config": {},
+  "action": "delete"  // опционально, для удаления
+}
+```
+
+#### GET `/users/dashboard/drilldown/`
+Получение drill-down данных по категории.
+
+**Параметры:**
+- `category_id` - ID категории
+- `type` - тип: `expense` или `income`
+
+#### GET `/users/dashboard/comparison/`
+Получение данных сравнения периодов.
+
+**Параметры:**
+- `period` - период: `month`, `quarter`, `year`
+
+### Сервисы аналитики
+
+#### `calculate_linear_trend(dates, values)`
+Рассчитывает линейную регрессию и прогноз на основе исторических данных.
+
+**Параметры:**
+- `dates` - список дат (list[date])
+- `values` - список значений для каждой даты (list[Decimal])
+
+**Возвращает:**
+```python
+{
+    'slope': float,  # коэффициент наклона
+    'intercept': float,  # точка пересечения
+    'r_squared': float,  # коэффициент детерминации (R²)
+    'trend_line': list[dict],  # точки линии тренда
+    'forecast': list[dict]  # прогноз на 3 месяца вперёд
+}
+```
+
+#### `get_period_comparison(user, period)`
+Сравнение текущего и предыдущего периода.
+
+**Параметры:**
+- `user` - пользователь (User)
+- `period` - период: `'month'`, `'quarter'`, `'year'`
+
+**Возвращает:**
+```python
+{
+    'current': {
+        'expenses': Decimal,
+        'income': Decimal
+    },
+    'previous': {
+        'expenses': Decimal,
+        'income': Decimal
+    }
+}
+```
+
+#### `get_drill_down_data(user, category_id, type)`
+Получение детализации по категории для drill-down графиков.
+
+**Параметры:**
+- `user` - пользователь (User)
+- `category_id` - ID категории
+- `type` - тип: `'expense'` или `'income'`
+
+### Frontend компоненты
+
+#### JavaScript модули
+
+- **`dashboard.js`** - основной класс `DashboardManager` для управления дашбордом
+- **`chart-configs.js`** - конфигурации графиков для ECharts
+- **`chart-utils.js`** - утилиты для работы с графиками
+
+#### Функциональность
+
+- **Drag & Drop** - перестановка виджетов с сохранением позиций
+- **Редактирование виджетов** - изменение размера и настроек
+- **Drill-down** - детализация данных по клику на элементы графиков
+- **Переключение периодов** - динамическое обновление данных при смене периода
+- **Адаптивный дизайн** - автоматическая подстройка под размер экрана
+
+### Использование
+
+#### Добавление нового типа виджета
+
+1. Добавить новый `case` в `renderWidgetChart()` в `dashboard.js`
+2. Реализовать метод рендеринга (например, `renderMyWidget()`)
+3. Добавить конфигурацию в `chart-configs.js` (если нужен график)
+4. Обновить список доступных виджетов в `DashboardView.get_context_data()`
+
+#### Кастомизация стилей
+
+Стили дашборда находятся в `static/scss/_dashboard.scss` и могут быть кастомизированы через переменные Bootstrap.
 
 ## Как использовать/расширять
 
