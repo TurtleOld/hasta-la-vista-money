@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Sum
@@ -35,6 +35,11 @@ def get_user_statistics(user: User) -> UserStatistics:
     month_start = today.replace(day=1)
     last_month = (month_start - timedelta(days=1)).replace(day=1)
 
+    month_start_dt = timezone.make_aware(
+        datetime.combine(month_start, time.min)
+    )
+    last_month_dt = timezone.make_aware(datetime.combine(last_month, time.min))
+
     accounts_qs = Account.objects.filter(user=user)
     accounts_data = accounts_qs.aggregate(
         total_balance=Sum('balance'),
@@ -44,13 +49,13 @@ def get_user_statistics(user: User) -> UserStatistics:
     accounts_count = accounts_data['accounts_count'] or constants.ZERO
 
     current_month_expenses = (
-        Expense.objects.filter(user=user, date__gte=month_start).aggregate(
+        Expense.objects.filter(user=user, date__gte=month_start_dt).aggregate(
             total=Sum('amount'),
         )['total']
         or constants.ZERO
     )
     current_month_income = (
-        Income.objects.filter(user=user, date__gte=month_start).aggregate(
+        Income.objects.filter(user=user, date__gte=month_start_dt).aggregate(
             total=Sum('amount'),
         )['total']
         or constants.ZERO
@@ -59,16 +64,16 @@ def get_user_statistics(user: User) -> UserStatistics:
     last_month_expenses = (
         Expense.objects.filter(
             user=user,
-            date__gte=last_month,
-            date__lt=month_start,
+            date__gte=last_month_dt,
+            date__lt=month_start_dt,
         ).aggregate(total=Sum('amount'))['total']
         or constants.ZERO
     )
     last_month_income = (
         Income.objects.filter(
             user=user,
-            date__gte=last_month,
-            date__lt=month_start,
+            date__gte=last_month_dt,
+            date__lt=month_start_dt,
         ).aggregate(total=Sum('amount'))['total']
         or constants.ZERO
     )
@@ -87,7 +92,7 @@ def get_user_statistics(user: User) -> UserStatistics:
     receipts_count = Receipt.objects.filter(user=user).count()
 
     top_expense_categories = (
-        Expense.objects.filter(user=user, date__gte=month_start)
+        Expense.objects.filter(user=user, date__gte=month_start_dt)
         .values('category__name')
         .annotate(total=Sum('amount'))
         .order_by('-total')[: constants.RECENT_ITEMS_LIMIT]

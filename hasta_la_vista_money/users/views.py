@@ -34,7 +34,10 @@ from hasta_la_vista_money.authentication.authentication import (
 )
 from hasta_la_vista_money.custom_mixin import CustomSuccessURLUserMixin
 from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
@@ -541,24 +544,98 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 class DashboardDataView(LoginRequiredMixin, View):
     """Получение всех данных для дашборда в JSON."""
 
+    def _serialize_account(self, account: Account) -> dict[str, Any]:
+        """Сериализовать объект Account."""
+        return {
+            'id': account.id,
+            'name_account': account.name_account,
+            'type_account': account.type_account,
+            'balance': str(account.balance),
+            'currency': account.currency,
+            'bank': account.bank,
+            'limit_credit': (
+                str(account.limit_credit) if account.limit_credit else None
+            ),
+            'payment_due_date': (
+                account.payment_due_date.isoformat()
+                if account.payment_due_date
+                else None
+            ),
+            'grace_period_days': account.grace_period_days,
+        }
+
+    def _serialize_transfer_log(
+        self,
+        transfer_log: TransferMoneyLog,
+    ) -> dict[str, Any]:
+        """Сериализовать объект TransferMoneyLog."""
+        return {
+            'id': transfer_log.id,
+            'user_id': transfer_log.user_id,
+            'from_account': self._serialize_value(transfer_log.from_account),
+            'to_account': self._serialize_value(transfer_log.to_account),
+            'amount': str(transfer_log.amount),
+            'exchange_date': (
+                transfer_log.exchange_date.isoformat()
+                if transfer_log.exchange_date
+                else None
+            ),
+            'notes': transfer_log.notes,
+            'created_at': (
+                transfer_log.created_at.isoformat()
+                if transfer_log.created_at
+                else None
+            ),
+            'updated_at': (
+                transfer_log.updated_at.isoformat()
+                if transfer_log.updated_at
+                else None
+            ),
+        }
+
+    def _serialize_user(self, user: Any) -> dict[str, Any]:
+        """Сериализовать объект User."""
+        return {
+            'id': user.id,
+            'username': user.username,
+        }
+
+    def _serialize_model(self, model_instance: Any) -> dict[str, Any]:
+        """Сериализовать модель Django."""
+        return {
+            'id': model_instance.id,
+            'model': model_instance.__class__.__name__,
+        }
+
+    def _serialize_value(self, value: Any) -> Any:
+        """Рекурсивно сериализует значение."""
+        if isinstance(value, (QuerySet, list, tuple)):
+            return [self._serialize_value(item) for item in value]
+        if isinstance(value, dict):
+            return {k: self._serialize_value(v) for k, v in value.items()}
+
+        type_serializers = {
+            Account: self._serialize_account,
+            TransferMoneyLog: self._serialize_transfer_log,
+        }
+        serializer = type_serializers.get(type(value))
+        if serializer:
+            return serializer(value)  # type: ignore[misc]
+
+        if hasattr(value, '__class__') and value.__class__.__name__ == 'User':
+            return self._serialize_user(value)
+        if hasattr(value, '_meta'):
+            return self._serialize_model(value)
+        return value
+
     def _prepare_serializable_stats(
         self,
         stats: dict[str, Any],
     ) -> dict[str, Any]:
         """Подготовить статистику для сериализации."""
-        serializable_stats = dict(stats)
-        for key, value in serializable_stats.items():
-            if isinstance(value, QuerySet):
-                serializable_stats[key] = list(value.values())
-            elif (
-                hasattr(value, '__class__')
-                and value.__class__.__name__ == 'User'
-            ):
-                serializable_stats[key] = {
-                    'id': value.id,
-                    'username': value.username,
-                }
-        return serializable_stats
+        return {
+            key: self._serialize_value(value) for key, value in stats.items()
+        }
 
     def _calculate_trends(
         self,
@@ -653,13 +730,6 @@ class DashboardDataView(LoginRequiredMixin, View):
 
             stats = get_user_detailed_statistics(user)
 
-            accounts = Account.objects.filter(user=user)
-            total_balance = sum(float(acc.balance) for acc in accounts)
-            if stats.get('months_data'):
-                for month_data in stats['months_data']:
-                    if not month_data.get('balance'):
-                        month_data['balance'] = total_balance
-
             serializable_stats = self._prepare_serializable_stats(stats)
 
             months_data = serializable_stats.get('months_data', [])
@@ -713,10 +783,27 @@ class DashboardWidgetConfigView(LoginRequiredMixin, View):
             return JsonResponse({'error': 'User not authenticated'}, status=401)
 
         data = json.loads(request.body)
+        action = data.get('action')
+
+        if action == 'delete':
+            widget_id = data.get('widget_id')
+            if not widget_id:
+                return JsonResponse({'error': 'widget_id required'}, status=400)
+
+            widget = get_object_or_404(
+                DashboardWidget,
+                id=widget_id,
+                user=user,
+            )
+            widget.delete()
+            return JsonResponse({'status': 'ok'})
+
         widget_id = data.get('widget_id')
         widget_type = data.get('widget_type')
         config = data.get('config', {})
         position = data.get('position', 0)
+        width = data.get('width')
+        height = data.get('height')
 
         if widget_id:
             widget = get_object_or_404(
@@ -726,6 +813,10 @@ class DashboardWidgetConfigView(LoginRequiredMixin, View):
             )
             widget.config = config
             widget.position = position
+            if width is not None:
+                widget.width = width
+            if height is not None:
+                widget.height = height
             if 'is_visible' in data:
                 widget.is_visible = data['is_visible']
             widget.save()
@@ -735,6 +826,8 @@ class DashboardWidgetConfigView(LoginRequiredMixin, View):
                 widget_type=widget_type,
                 config=config,
                 position=position,
+                width=width if width is not None else 6,
+                height=height if height is not None else 300,
             )
 
         return JsonResponse(

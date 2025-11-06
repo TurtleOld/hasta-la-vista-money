@@ -1,7 +1,7 @@
 """Services for finance account operations."""
 
 from calendar import monthrange
-from datetime import datetime, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, TypedDict
 
@@ -133,10 +133,31 @@ class AccountService:
         receipt_qs = Receipt.objects.filter(account=account)
 
         if start_date and end_date:
-            expense_qs = expense_qs.filter(date__range=(start_date, end_date))
-            income_qs = income_qs.filter(date__range=(start_date, end_date))
+            if isinstance(start_date, date) and not isinstance(
+                start_date, datetime
+            ):
+                start_date_dt = timezone.make_aware(
+                    datetime.combine(start_date, time.min),
+                )
+            else:
+                start_date_dt = start_date
+            if isinstance(end_date, date) and not isinstance(
+                end_date, datetime
+            ):
+                end_date_dt = timezone.make_aware(
+                    datetime.combine(end_date, time.max),
+                )
+            else:
+                end_date_dt = end_date
+
+            expense_qs = expense_qs.filter(
+                date__range=(start_date_dt, end_date_dt)
+            )
+            income_qs = income_qs.filter(
+                date__range=(start_date_dt, end_date_dt)
+            )
             receipt_qs = receipt_qs.filter(
-                receipt_date__range=(start_date, end_date),
+                receipt_date__range=(start_date_dt, end_date_dt),
             )
 
         total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
@@ -456,10 +477,23 @@ class AccountService:
         purchase_month: Any,
     ) -> tuple[datetime, datetime]:
         """Calculate purchase period for Raiffeisenbank."""
-        purchase_start = purchase_month.replace(day=1)
-        last_day = monthrange(purchase_start.year, purchase_start.month)[1]
+        if isinstance(purchase_month, datetime):
+            purchase_start_date = purchase_month.date().replace(day=1)
+        elif isinstance(purchase_month, date):
+            purchase_start_date = purchase_month.replace(day=1)
+        else:
+            purchase_start_date = purchase_month.replace(day=1)
+
+        purchase_start = timezone.make_aware(
+            datetime.combine(purchase_start_date, time.min),
+        )
+        last_day = monthrange(
+            purchase_start_date.year, purchase_start_date.month
+        )[1]
         purchase_end = timezone.make_aware(
-            datetime.combine(purchase_start.replace(day=last_day), time.max),
+            datetime.combine(
+                purchase_start_date.replace(day=last_day), time.max
+            ),
         )
         return purchase_start, purchase_end
 

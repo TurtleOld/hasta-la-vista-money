@@ -52,7 +52,7 @@ class CalculateLinearTrendTest(TestCase):
         self.assertIsInstance(result['r_squared'], float)
         self.assertIsInstance(result['trend_line'], list)
         self.assertIsInstance(result['forecast'], list)
-        self.assertEqual(len(result['forecast']), 3)
+        self.assertEqual(len(result['forecast']), 30)
 
     def test_calculate_linear_trend_with_insufficient_data(self) -> None:
         """Тест расчёта тренда с недостаточным количеством данных."""
@@ -85,7 +85,7 @@ class CalculateLinearTrendTest(TestCase):
 
         result = calculate_linear_trend(dates, values)
 
-        self.assertEqual(len(result['forecast']), 3)
+        self.assertEqual(len(result['forecast']), 30)
         for forecast_item in result['forecast']:
             self.assertIn('date', forecast_item)
             self.assertIn('value', forecast_item)

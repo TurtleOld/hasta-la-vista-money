@@ -1,6 +1,6 @@
 """Сервисы аналитики для дашборда."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -93,6 +93,7 @@ def get_period_comparison(
         Словарь с данными текущего и прошлого периода
     """
     today = timezone.now().date()
+    today_dt = timezone.make_aware(datetime.combine(today, time.max))
 
     if period_type == 'month':
         current_start = today.replace(day=1)
@@ -114,39 +115,57 @@ def get_period_comparison(
         previous_start = (current_start - timedelta(days=1)).replace(day=1)
         previous_end = current_start - timedelta(days=1)
 
+    current_start_dt = timezone.make_aware(
+        datetime.combine(current_start, time.min)
+    )
+    previous_start_dt = timezone.make_aware(
+        datetime.combine(previous_start, time.min)
+    )
+    previous_end_dt = timezone.make_aware(
+        datetime.combine(previous_end, time.max)
+    )
+
     current_expenses = Expense.objects.filter(
         user=user,
-        date__gte=current_start,
-        date__lte=today,
+        date__gte=current_start_dt,
+        date__lte=today_dt,
     ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
 
     previous_expenses = Expense.objects.filter(
         user=user,
-        date__gte=previous_start,
-        date__lte=previous_end,
+        date__gte=previous_start_dt,
+        date__lte=previous_end_dt,
     ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
 
     current_income = Income.objects.filter(
         user=user,
-        date__gte=current_start,
-        date__lte=today,
+        date__gte=current_start_dt,
+        date__lte=today_dt,
     ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
 
     previous_income = Income.objects.filter(
         user=user,
-        date__gte=previous_start,
-        date__lte=previous_end,
+        date__gte=previous_start_dt,
+        date__lte=previous_end_dt,
     ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
 
     expenses_change_percent = (
-        (current_expenses - previous_expenses) / previous_expenses * 100
+        float((current_expenses - previous_expenses) / previous_expenses * 100)
         if previous_expenses > 0
         else 0.0
     )
 
     income_change_percent = (
-        (current_income - previous_income) / previous_income * 100
+        float((current_income - previous_income) / previous_income * 100)
         if previous_income > 0
+        else 0.0
+    )
+
+    previous_savings = previous_income - previous_expenses
+    current_savings = current_income - current_expenses
+    savings_change_percent = (
+        float((current_savings - previous_savings) / previous_savings * 100)
+        if previous_savings > 0
         else 0.0
     )
 
@@ -156,28 +175,19 @@ def get_period_comparison(
             'end': today.isoformat(),
             'expenses': float(current_expenses),
             'income': float(current_income),
-            'savings': float(current_income - current_expenses),
+            'savings': float(current_savings),
         },
         'previous': {
             'start': previous_start.isoformat(),
             'end': previous_end.isoformat(),
             'expenses': float(previous_expenses),
             'income': float(previous_income),
-            'savings': float(previous_income - previous_expenses),
+            'savings': float(previous_savings),
         },
         'change_percent': {
-            'expenses': float(expenses_change_percent),
-            'income': float(income_change_percent),
-            'savings': (
-                float(
-                    (current_income - current_expenses)
-                    - (previous_income - previous_expenses),
-                )
-                / (previous_income - previous_expenses)
-                * 100
-                if (previous_income - previous_expenses) > 0
-                else 0.0
-            ),
+            'expenses': expenses_change_percent,
+            'income': income_change_percent,
+            'savings': savings_change_percent,
         },
     }
 
@@ -212,6 +222,11 @@ def get_drill_down_data(
     last_day = (month_start + relativedelta(months=1) - timedelta(days=1)).day
     month_end = month_start.replace(day=last_day)
 
+    month_start_dt = timezone.make_aware(
+        datetime.combine(month_start, time.min)
+    )
+    month_end_dt = timezone.make_aware(datetime.combine(month_end, time.max))
+
     if data_type == 'expense':
         model = Expense
         category_model = ExpenseCategory
@@ -225,8 +240,8 @@ def get_drill_down_data(
         top_categories = (
             model.objects.filter(
                 user=user,
-                date__gte=month_start,
-                date__lte=month_end,
+                date__gte=month_start_dt,
+                date__lte=month_end_dt,
                 **{f'{category_relation}__parent_category__isnull': True},
             )
             .values(
@@ -263,8 +278,8 @@ def get_drill_down_data(
     subcategories = (
         model.objects.filter(
             user=user,
-            date__gte=month_start,
-            date__lte=month_end,
+            date__gte=month_start_dt,
+            date__lte=month_end_dt,
             **{f'{category_relation}__parent_category_id': category_id},
         )
         .values(
@@ -288,8 +303,8 @@ def get_drill_down_data(
         transactions = list(
             model.objects.filter(
                 user=user,
-                date__gte=month_start,
-                date__lte=month_end,
+                date__gte=month_start_dt,
+                date__lte=month_end_dt,
                 **{f'{category_relation}__id': category_id},
             ).order_by('-date')[:20],
         )
