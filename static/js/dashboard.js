@@ -310,20 +310,23 @@ class DashboardManager {
         const labels = stats.months_data.map((m) => m.month);
         const balances = stats.months_data.map((m) => {
             if (m.balance !== undefined) {
-                return m.balance;
+                return parseFloat(m.balance.toFixed(2));
             }
-            return m.income - m.expenses;
+            return parseFloat((m.income - m.expenses).toFixed(2));
         });
-
-        const balancesByCurrency = stats.balances_by_currency || {};
-        const currentBalance = Object.values(balancesByCurrency).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
-
-        if (balances.length > 0 && currentBalance > 0) {
-            balances[balances.length - 1] = currentBalance;
-        }
 
         config.xAxis.data = labels;
         config.series[0].data = balances;
+        
+        config.tooltip.formatter = function(params) {
+            if (!params || params.length === 0) return '';
+            const param = params[0];
+            const value = typeof param.value === 'number' 
+                ? param.value 
+                : (Array.isArray(param.value) ? param.value[1] : param.value);
+            const formattedValue = parseFloat(value).toFixed(2);
+            return param.axisValue + '<br/>Баланс: ' + formattedValue;
+        };
 
         const chart = initChart(containerId, config);
         return chart;
