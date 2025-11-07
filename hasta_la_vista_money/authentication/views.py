@@ -48,14 +48,14 @@ class SessionTokenObtainView(APIView):
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
 
-    def _validate_user(self, user: User | AnonymousUser) -> None:  # type: ignore[misc]
+    def _validate_user(self, user: User | AnonymousUser) -> None:
         if not isinstance(user, User):
             raise TypeError(_('Пользователь не авторизован'))
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:
             if not isinstance(request.user, User):
-                self._validate_user(request.user)  # type: ignore[arg-type]
+                self._validate_user(request.user)
                 raise TypeError(_('Пользователь не авторизован'))
             user = request.user
             refresh = RefreshToken.for_user(user)

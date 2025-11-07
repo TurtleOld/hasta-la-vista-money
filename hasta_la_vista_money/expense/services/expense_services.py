@@ -35,7 +35,7 @@ class ExpenseService:
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
         qs = (
-            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
+            self.user.category_expense_users.select_related('user')
             .values(
                 'id',
                 'name',
@@ -48,8 +48,8 @@ class ExpenseService:
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
-        return (  # type: ignore[no-any-return]
-            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
+        return (
+            self.user.category_expense_users.select_related('user')
             .order_by('parent_category__name', 'name')
             .all()
         )
@@ -82,7 +82,7 @@ class ExpenseService:
     def update_expense(self, expense: Expense, form: AddExpenseForm) -> None:
         """Update an existing expense."""
         expense_updated: Expense = get_queryset_type_income_expenses(  # type: ignore[assignment]
-            expense.pk,  # type: ignore[attr-defined]
+            expense.pk,
             Expense,
             form,
         )
@@ -185,7 +185,7 @@ class ExpenseService:
         else:
             try:
                 group = Group.objects.get(pk=group_id)
-                group_users = list(group.user_set.all())  # type: ignore[attr-defined]
+                group_users = list(group.user_set.all())
                 expenses = Expense.objects.filter(
                     user__in=group_users,
                 ).select_related('user', 'category', 'account')
@@ -229,7 +229,7 @@ class ExpenseCategoryService:
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
         qs = (
-            self.user.category_expense_users.select_related('parent_category')  # type: ignore[attr-defined]
+            self.user.category_expense_users.select_related('parent_category')
             .values(
                 'id',
                 'name',
@@ -242,8 +242,8 @@ class ExpenseCategoryService:
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
-        return (  # type: ignore[no-any-return]
-            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
+        return (
+            self.user.category_expense_users.select_related('user')
             .order_by('parent_category__name', 'name')
             .all()
         )

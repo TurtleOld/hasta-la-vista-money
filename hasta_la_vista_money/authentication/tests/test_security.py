@@ -18,7 +18,7 @@ class XSSProtectionTestCase(TestCase):
 
     def setUp(self) -> None:
         """Настройка тестовых данных."""
-        self.user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
+        self.user: User = UserFactory()
         self.factory = APIRequestFactory()
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
 
