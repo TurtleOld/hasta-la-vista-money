@@ -27,6 +27,7 @@ from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django.views.generic.edit import UpdateView
 from django_filters.views import FilterView
+from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -57,19 +58,21 @@ logger = structlog.get_logger(__name__)
 
 
 class BaseView:
-    template_name: str | Sequence[str] | None = 'receipts/receipts.html'
-    success_url: str = reverse_lazy('receipts:list')  # type: ignore[assignment]
+    template_name: ClassVar[str | Sequence[str] | None] = (
+        'receipts/receipts.html'
+    )
+    success_url: ClassVar[StrOrPromise] = reverse_lazy('receipts:list')
 
 
-class ReceiptView(  # type: ignore[misc]
+class ReceiptView(
     LoginRequiredMixin,
-    SuccessMessageMixin,  # type: ignore[type-arg]
-    BaseView,  # type: ignore[misc]
-    FilterView[Receipt, ReceiptFilter],  # type: ignore[misc]
+    SuccessMessageMixin[Any],
+    BaseView,
+    FilterView[Receipt, ReceiptFilter],
 ):
-    paginate_by: int = constants.PAGINATE_BY_DEFAULT  # type: ignore[assignment]
+    paginate_by: int = constants.PAGINATE_BY_DEFAULT
     model = Receipt
-    filterset_class = ReceiptFilter
+    filterset_class: type[ReceiptFilter] = ReceiptFilter
     no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
 
     def get_queryset(self) -> QuerySet[Receipt]:
@@ -77,7 +80,7 @@ class ReceiptView(  # type: ignore[misc]
         if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
-                users_in_group = group.user_set.all()  # type: ignore[attr-defined]
+                users_in_group = group.user_set.all()
                 return Receipt.objects.for_users(users_in_group).with_related()
             except Group.DoesNotExist:
                 return Receipt.objects.none()
@@ -94,7 +97,7 @@ class ReceiptView(  # type: ignore[misc]
         if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
-                users_in_group = group.user_set.all()  # type: ignore[attr-defined]
+                users_in_group = group.user_set.all()
                 receipt_queryset = Receipt.objects.for_users(
                     users_in_group,
                 ).with_related()
@@ -180,7 +183,7 @@ class ReceiptView(  # type: ignore[misc]
         context['receipt_form'] = receipt_form
         context['product_formset'] = product_formset
         context['receipt_info_by_month'] = pages_receipt_table
-        context['user_groups'] = self.request.user.groups.all()  # type: ignore[union-attr]
+        context['user_groups'] = self.request.user.groups.all()
 
         return context
 
@@ -348,7 +351,7 @@ class ReceiptUpdateView(
     UpdateView[Receipt, ReceiptForm],
 ):
     template_name = 'receipts/receipt_update.html'
-    success_url = reverse_lazy('receipts:list')  # type: ignore[assignment]
+    success_url = reverse_lazy('receipts:list')
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
     success_message = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
@@ -498,10 +501,10 @@ class ReceiptUpdateView(
         # и валидные queryset'ы аккаунтов уже ограничивают пользователя выше.
 
         try:
-            old_account_obj = Account.objects.get(pk=old_account.pk)  # type: ignore[attr-defined]
-            new_account_obj = Account.objects.get(pk=new_account.pk)  # type: ignore[attr-defined]
+            old_account_obj = Account.objects.get(pk=old_account.pk)
+            new_account_obj = Account.objects.get(pk=new_account.pk)
 
-            if old_account.pk == new_account.pk:  # type: ignore[attr-defined]
+            if old_account.pk == new_account.pk:
                 difference = new_total_sum - old_total_sum
                 if difference > 0:
                     old_account_obj.balance -= difference
@@ -522,23 +525,23 @@ class ReceiptUpdateView(
             )
 
 
-class ReceiptDeleteView(  # type: ignore[misc]
+class ReceiptDeleteView(
     LoginRequiredMixin,
+    DeleteView[Receipt, Any],
     BaseView,
-    DeleteView,
 ):
     model = Receipt
 
     def post(
         self,
         request: HttpRequest,
-        *args: Any,
-        **kwargs: Any,
+        *args: object,
+        **kwargs: object,
     ) -> HttpResponse:
         receipt = self.get_object()
         account = receipt.account
         amount = receipt.total_sum
-        account_balance = get_object_or_404(Account, pk=account.pk)  # type: ignore[attr-defined]
+        account_balance = get_object_or_404(Account, pk=account.pk)
 
         try:
             if account_balance.user == self.request.user:
@@ -814,7 +817,7 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         total_sum: Decimal,
     ) -> None:
         """Update account balance after receipt creation."""
-        account_balance = get_object_or_404(Account, pk=account.pk)  # type: ignore[attr-defined]
+        account_balance = get_object_or_404(Account, pk=account.pk)
         account_balance.balance -= decimal.Decimal(total_sum)
         account_balance.save()
 
@@ -883,7 +886,7 @@ def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
     if group_id and group_id != 'my':
         try:
             group = Group.objects.get(pk=group_id)
-            users_in_group = group.user_set.all()  # type: ignore[attr-defined]
+            users_in_group = group.user_set.all()
             receipt_queryset = Receipt.objects.filter(user__in=users_in_group)
         except Group.DoesNotExist:
             receipt_queryset = Receipt.objects.none()
@@ -902,6 +905,6 @@ def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
         'receipts/receipts_block.html',
         {
             'receipts': receipts,
-            'user_groups': user.groups.all(),  # type: ignore[union-attr]
+            'user_groups': user.groups.all(),
         },
     )

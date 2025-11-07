@@ -48,7 +48,7 @@ class DateList(models.Model):
         help_text=_('Дата планирования'),
         db_index=True,
     )
-    created_at = models.DateTimeField(  # type: ignore[assignment]
+    created_at = models.DateTimeField(
         auto_now_add=True,
         null=True,
         blank=True,
@@ -167,7 +167,7 @@ class Planning(models.Model):
         help_text=_('Тип планирования: расход или доход'),
         db_index=True,
     )
-    created_at = models.DateTimeField(  # type: ignore[assignment]
+    created_at = models.DateTimeField(
         auto_now_add=True,
         null=True,
         blank=True,
@@ -181,7 +181,7 @@ class Planning(models.Model):
         verbose_name = _('Планирование')
         verbose_name_plural = _('Планирования')
         ordering: ClassVar[list[str]] = ['-date']
-        constraints: ClassVar[list[models.BaseConstraint]] = [  # type: ignore[assignment]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=[
                     'user',

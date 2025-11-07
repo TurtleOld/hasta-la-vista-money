@@ -73,11 +73,11 @@ class RegisterUserForm(UserCreationForm[User]):
                 },
             ),
         }
-        help_texts: ClassVar[dict[str, Any]] = {  # type: ignore[misc]
+        help_texts: ClassVar[dict[str, Any]] = {
             'username': _('Только буквы, цифры и @/./+/-/_'),
             'email': _('Укажите действующий email.'),
         }
-        error_messages: ClassVar[dict[str, dict[str, Any]]] = {  # type: ignore[misc]
+        error_messages: ClassVar[dict[str, dict[str, Any]]] = {
             'username': {
                 'required': _('Пожалуйста, введите имя пользователя.'),
             },
@@ -98,7 +98,7 @@ class UpdateUserForm(ModelForm):
             'first_name',
             'last_name',
         ]
-        labels: ClassVar[dict[str, Any]] = {  # type: ignore[misc]
+        labels: ClassVar[dict[str, Any]] = {
             'username': _('Имя пользователя'),
             'email': _('Email'),
             'first_name': _('Имя'),
@@ -130,13 +130,13 @@ class UpdateUserForm(ModelForm):
                 },
             ),
         }
-        help_texts: ClassVar[dict[str, Any]] = {  # type: ignore[misc]
+        help_texts: ClassVar[dict[str, Any]] = {
             'username': _('Только буквы, цифры и @/./+/-/_'),
             'email': _('Укажите действующий email.'),
             'first_name': _('Ваше имя.'),
             'last_name': _('Ваша фамилия.'),
         }
-        error_messages: ClassVar[dict[str, dict[str, Any]]] = {  # type: ignore[misc]
+        error_messages: ClassVar[dict[str, dict[str, Any]]] = {
             'username': {
                 'required': _('Пожалуйста, введите имя пользователя.'),
             },
@@ -161,10 +161,10 @@ class GroupCreateForm(ModelForm):
                 },
             ),
         }
-        help_texts: ClassVar[dict[str, Any]] = {  # type: ignore[misc]
+        help_texts: ClassVar[dict[str, Any]] = {
             'name': _('Введите уникальное название группы.'),
         }
-        error_messages: ClassVar[dict[str, dict[str, Any]]] = {  # type: ignore[misc]
+        error_messages: ClassVar[dict[str, dict[str, Any]]] = {
             'name': {
                 'required': _('Пожалуйста, введите название группы.'),
             },

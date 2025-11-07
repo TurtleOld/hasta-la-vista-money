@@ -38,6 +38,7 @@ from hasta_la_vista_money.users.views import AuthRequest
 
 INCOME_LIST_URL_NAME = 'income:list'
 
+
 class IncomeTyped(TypedDict):
     pk: int
     date: str

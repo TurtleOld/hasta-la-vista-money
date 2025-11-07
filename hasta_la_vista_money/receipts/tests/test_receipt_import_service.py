@@ -1,5 +1,6 @@
 import io
 import json
+from typing import Any, TypedDict
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -12,6 +13,19 @@ from hasta_la_vista_money.receipts.services.receipt_import import (
     ReceiptImportService,
 )
 from hasta_la_vista_money.users.models import User
+
+
+class ReceiptImportServiceTestsData(TypedDict):
+    name_seller: str
+    retail_place_address: str
+    retail_place: str
+    total_sum: float
+    operation_type: int
+    receipt_date: str
+    number_receipt: int
+    nds10: float
+    nds20: float
+    items: list[dict[str, Any]]
 
 
 class ReceiptImportServiceTests(TestCase):
@@ -37,7 +51,7 @@ class ReceiptImportServiceTests(TestCase):
         )
 
         # Fake JSON receipt response
-        data = {
+        data: ReceiptImportServiceTestsData = {
             'name_seller': 'Shop',
             'retail_place_address': 'Address',
             'retail_place': 'Place',
@@ -65,9 +79,6 @@ class ReceiptImportServiceTests(TestCase):
             ],
         }
 
-        # Patch analyze_image_with_ai to return JSON
-        # import moved to module level
-
         def fake_analyze(_):
             return json.dumps(data)
 
@@ -93,5 +104,5 @@ class ReceiptImportServiceTests(TestCase):
         )
 
         self.account.refresh_from_db()
-        total_sum: float = float(data['total_sum'])  # type: ignore[arg-type]
+        total_sum: float = float(data['total_sum'])
         self.assertEqual(float(self.account.balance), 1000 - total_sum)

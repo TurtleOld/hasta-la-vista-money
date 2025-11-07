@@ -40,7 +40,7 @@ class ReceiptListAPIView(ListCreateAPIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
-    def get_queryset(self) -> QuerySet[Receipt, Receipt]:  # type: ignore[override]
+    def get_queryset(self) -> QuerySet[Receipt, Receipt]:
         if getattr(self, 'swagger_fake_view', False):
             return Receipt.objects.none()
         return (
@@ -68,7 +68,7 @@ class SellerDetailAPIView(RetrieveAPIView):
     throttle_classes = (UserRateThrottle,)
     lookup_field = 'id'
 
-    def get_queryset(self) -> QuerySet[Seller, Seller]:  # type: ignore[override]
+    def get_queryset(self) -> QuerySet[Seller, Seller]:
         if getattr(self, 'swagger_fake_view', False):
             return Seller.objects.none()
         return Seller.objects.filter(
@@ -112,7 +112,7 @@ class DataUrlAPIView(APIView):
                     'Invalid data',
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            data_url = validated_data.get('data_url')  # type: ignore[attr-defined]
+            data_url = validated_data.get('data_url')
             if data_url is None:
                 return Response(
                     'Data URL is required',
@@ -274,13 +274,13 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         user: User,
         account: Account,
     ) -> Receipt:
-        seller_data: dict = request_data.get('seller') or {}  # type: ignore[assignment]
+        seller_data: dict = request_data.get('seller') or {}
         seller_data['user'] = user
 
         account.balance -= decimal.Decimal(str(request_data.get('total_sum')))
         account.save()
 
-        seller = Seller.objects.create(**seller_data)  # type: ignore[arg-type]
+        seller = Seller.objects.create(**seller_data)
 
         receipt_date = request_data.get('receipt_date')
         if isinstance(receipt_date, str):

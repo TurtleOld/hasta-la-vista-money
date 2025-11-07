@@ -44,20 +44,20 @@ from hasta_la_vista_money.users.models import User
 logger = structlog.get_logger(__name__)
 
 
-class BaseView:  # type: ignore[misc]
+class BaseView:
     """Base view class with common template and success URL configuration."""
 
-    template_name = 'finance_account/account.html'  # type: ignore[misc]
-    success_url = reverse_lazy('finance_account:list')  # type: ignore[misc]
+    template_name = 'finance_account/account.html'
+    success_url = reverse_lazy('finance_account:list')
 
 
-class AccountBaseView(BaseView):  # type: ignore[misc]
+class AccountBaseView(BaseView):
     """Base view class for account-related operations."""
 
-    model = Account  # type: ignore[misc]
+    model = Account
 
 
-class AccountView(  # type: ignore[misc]
+class AccountView(
     LoginRequiredMixin,
     GroupAccountMixin,
     SuccessMessageMixin,
@@ -105,10 +105,10 @@ class AccountView(  # type: ignore[misc]
             dict: Accounts and user groups for the current user.
         """
         user = self.request.user
-        accounts = self.get_accounts(user)  # type: ignore[arg-type]
+        accounts = self.get_accounts(user)
         return {
             'accounts': accounts,
-            'user_groups': user.groups.all(),  # type: ignore[union-attr]
+            'user_groups': user.groups.all(),
         }
 
     def _get_forms_context(self) -> dict[str, Any]:
@@ -155,9 +155,9 @@ class AccountView(  # type: ignore[misc]
             dict: Total balances for user and group accounts.
         """
         user = self.request.user
-        accounts = Account.objects.by_user(user)  # type: ignore[arg-type]
+        accounts = Account.objects.by_user(user)
         sum_all_accounts = account_services.get_sum_all_accounts(accounts)
-        user_groups = user.groups.all()  # type: ignore[union-attr]
+        user_groups = user.groups.all()
         if user_groups.exists():
             users_in_groups = User.objects.filter(
                 groups__in=user_groups,

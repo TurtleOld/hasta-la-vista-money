@@ -245,6 +245,6 @@ class Receipt(models.Model):
         ]
 
     def datetime(self) -> datetime:
-        return self.receipt_date  # type: ignore[no-any-return]
+        return self.receipt_date
 
     objects = ReceiptManager()
