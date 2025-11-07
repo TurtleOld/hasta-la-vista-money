@@ -163,7 +163,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         response = self.client.post(
             reverse('users:dashboard_widget'),
             data={
-                'widget_id': widget.id,
+                'widget_id': widget.pk,
                 'position': 1,
                 'width': 12,
                 'height': 400,
@@ -188,7 +188,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         response = self.client.post(
             reverse('users:dashboard_widget'),
             data={
-                'widget_id': widget.id,
+                'widget_id': widget.pk,
                 'action': 'delete',
             },
             content_type='application/json',
@@ -196,5 +196,5 @@ class DashboardWidgetConfigViewTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(
-            DashboardWidget.objects.filter(id=widget.id).exists(),
+            DashboardWidget.objects.filter(pk=widget.pk).exists(),
         )

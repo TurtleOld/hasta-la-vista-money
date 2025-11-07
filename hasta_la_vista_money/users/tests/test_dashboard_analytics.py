@@ -1,8 +1,9 @@
 """Тесты для сервисов аналитики дашборда."""
 
+from collections.abc import Sequence
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, cast
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -94,7 +95,7 @@ class CalculateLinearTrendTest(TestCase):
 class GetPeriodComparisonTest(TestCase):
     """Тесты для функции get_period_comparison."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: Sequence[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
@@ -139,7 +140,7 @@ class GetPeriodComparisonTest(TestCase):
 class GetDrillDownDataTest(TestCase):
     """Тесты для функции get_drill_down_data."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: Sequence[str] = [
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
@@ -161,7 +162,7 @@ class GetDrillDownDataTest(TestCase):
         if category is None:
             self.skipTest('No expense category found in fixtures')
 
-        result = get_drill_down_data(self.user, category.id, 'expense')
+        result = get_drill_down_data(self.user, category.pk, 'expense')
 
         self.assertIn('data', result)
         self.assertIsInstance(result['data'], list)
@@ -172,7 +173,7 @@ class GetDrillDownDataTest(TestCase):
         if category is None:
             self.skipTest('No income category found in fixtures')
 
-        result = get_drill_down_data(self.user, category.id, 'income')
+        result = get_drill_down_data(self.user, category.pk, 'income')
 
         self.assertIn('data', result)
         self.assertIsInstance(result['data'], list)
@@ -181,7 +182,11 @@ class GetDrillDownDataTest(TestCase):
         """Тест с несуществующей категорией."""
         invalid_category_id = 99999
 
-        result = get_drill_down_data(self.user, invalid_category_id, 'expense')
+        result = get_drill_down_data(
+            self.user,
+            str(invalid_category_id),
+            'expense',
+        )
 
         self.assertIn('data', result)
         self.assertEqual(result['data'], [])

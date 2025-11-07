@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, ClassVar, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -29,7 +30,7 @@ def _dummy_get_response(_request: HttpRequest) -> HttpResponse:
 class LoginUserServiceTest(TestCase):
     """Tests for login_user service function."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']  # type: ignore[misc]
+    fixtures: Sequence[str] = ['users.yaml']
 
     def setUp(self) -> None:
         self.factory: RequestFactory = RequestFactory()
@@ -37,7 +38,7 @@ class LoginUserServiceTest(TestCase):
         if user is None:
             error_msg: str = 'No user found in fixtures'
             raise ValueError(error_msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
         self.user.set_password('testpassword')
         self.user.save()
 

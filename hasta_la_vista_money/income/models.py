@@ -5,8 +5,10 @@ from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.income.managers import IncomeManager
+from hasta_la_vista_money.income.managers import IncomeQuerySet
 from hasta_la_vista_money.users.models import User
+
+IncomeManager = models.Manager.from_queryset(IncomeQuerySet)
 
 
 class IncomeCategory(models.Model):

@@ -39,7 +39,7 @@ class TestExpenseService(TestCase):
         """Test getting expense categories."""
         categories = self.service.get_categories()
         self.assertIsInstance(categories, QuerySet)
-        self.assertGreater(len(list(categories)), 0)  # type: ignore[arg-type]
+        self.assertGreater(len(list(categories)), 0)
         categories_list: list[dict[str, Any]] = list(categories)
         if categories_list:
             category: dict[str, Any] = categories_list[0]
@@ -153,7 +153,7 @@ class TestExpenseCategoryService(TestCase):
         """Test getting expense categories."""
         categories = self.service.get_categories()
         self.assertIsInstance(categories, QuerySet)
-        self.assertGreater(len(list(categories)), 0)  # type: ignore[arg-type]
+        self.assertGreater(len(list(categories)), 0)
 
     def test_get_categories_queryset(self) -> None:
         """Test getting categories queryset."""
