@@ -208,7 +208,7 @@ class AccountService:
         new_total_sum: Decimal,
     ) -> None:
         """Adjust account balances when receipt is updated."""
-        if old_account.id == new_account.id:  # type: ignore[attr-defined]
+        if old_account.pk == new_account.pk:  # type: ignore[attr-defined]
             difference = new_total_sum - old_total_sum
             if difference == 0:
                 return

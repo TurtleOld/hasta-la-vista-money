@@ -82,17 +82,17 @@ class ExpenseService:
     def update_expense(self, expense: Expense, form: AddExpenseForm) -> None:
         """Update an existing expense."""
         expense_updated: Expense = get_queryset_type_income_expenses(  # type: ignore[assignment]
-            expense.id,  # type: ignore[attr-defined]
+            expense.pk,  # type: ignore[attr-defined]
             Expense,
             form,
         )
 
         amount = form.cleaned_data['amount']
         account = form.cleaned_data['account']
-        account_balance = get_object_or_404(Account, id=account.id)
+        account_balance = get_object_or_404(Account, pk=account.pk)
         old_account_balance = get_object_or_404(
             Account,
-            id=expense_updated.account.id,
+            pk=expense_updated.account.pk,
         )
 
         if account_balance.user != self.user:
@@ -116,7 +116,7 @@ class ExpenseService:
         """Delete an expense and restore account balance."""
         account = expense.account
         amount = expense.amount
-        account_balance = get_object_or_404(Account, id=account.id)
+        account_balance = get_object_or_404(Account, pk=account.pk)
 
         if account_balance.user != self.user:
             error_msg = 'У вас нет прав для выполнения этого действия'

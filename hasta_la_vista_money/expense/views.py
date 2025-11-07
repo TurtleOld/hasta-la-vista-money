@@ -127,7 +127,7 @@ class ExpenseView(
 
         expense_categories = expense_service.get_categories()
         flattened_categories = get_cached_category_tree(
-            user_id=user.id,
+            user_id=user.pk,
             category_type='expense',
             categories=list(expense_categories),
             depth=3,
@@ -349,7 +349,7 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
 
         expense_categories = category_service.get_categories()
         flattened_categories = get_cached_category_tree(
-            user_id=user.id,
+            user_id=user.pk,
             category_type='expense',
             categories=list(expense_categories),
             depth=self.depth,

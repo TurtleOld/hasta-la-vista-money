@@ -197,7 +197,7 @@ def _totals_by_month(
     totals: list[Decimal] = [Decimal(0)] * len(months)
     for i, m in enumerate(months):
         for cat in categories:
-            totals[i] += fact_map[cat.id][m]  # type: ignore[union-attr]
+            totals[i] += fact_map[cat.pk][m]  # type: ignore[union-attr]
     return [float(x) for x in totals]
 
 
@@ -213,9 +213,9 @@ def _pie_for_categories(
     totals: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
     for cat in categories:
         for month in months:
-            totals[cat.id] += fact_map[cat.id][month]  # type: ignore[union-attr]
+            totals[cat.pk] += fact_map[cat.pk][month]  # type: ignore[union-attr]
     for cat in categories:
-        total = totals[cat.id]  # type: ignore[union-attr]
+        total = totals[cat.pk]  # type: ignore[union-attr]
         if total > 0:
             labels.append(cat.name)
             values.append(float(total))

@@ -498,10 +498,10 @@ class ReceiptUpdateView(
         # и валидные queryset'ы аккаунтов уже ограничивают пользователя выше.
 
         try:
-            old_account_obj = Account.objects.get(id=old_account.id)  # type: ignore[attr-defined]
-            new_account_obj = Account.objects.get(id=new_account.id)  # type: ignore[attr-defined]
+            old_account_obj = Account.objects.get(pk=old_account.pk)  # type: ignore[attr-defined]
+            new_account_obj = Account.objects.get(pk=new_account.pk)  # type: ignore[attr-defined]
 
-            if old_account.id == new_account.id:  # type: ignore[attr-defined]
+            if old_account.pk == new_account.pk:  # type: ignore[attr-defined]
                 difference = new_total_sum - old_total_sum
                 if difference > 0:
                     old_account_obj.balance -= difference
@@ -538,7 +538,7 @@ class ReceiptDeleteView(  # type: ignore[misc]
         receipt = self.get_object()
         account = receipt.account
         amount = receipt.total_sum
-        account_balance = get_object_or_404(Account, id=account.id)  # type: ignore[attr-defined]
+        account_balance = get_object_or_404(Account, pk=account.pk)  # type: ignore[attr-defined]
 
         try:
             if account_balance.user == self.request.user:
@@ -814,7 +814,7 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         total_sum: Decimal,
     ) -> None:
         """Update account balance after receipt creation."""
-        account_balance = get_object_or_404(Account, id=account.id)  # type: ignore[attr-defined]
+        account_balance = get_object_or_404(Account, pk=account.pk)  # type: ignore[attr-defined]
         account_balance.balance -= decimal.Decimal(total_sum)
         account_balance.save()
 

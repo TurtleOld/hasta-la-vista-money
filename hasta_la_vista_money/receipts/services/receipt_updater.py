@@ -56,8 +56,8 @@ class ReceiptUpdaterService:
         new_account = receipt.account
 
         # Корректировка балансов через сервис аккаунтов
-        old_account_obj = Account.objects.get(id=old_account.id)
-        new_account_obj = Account.objects.get(id=new_account.id)
+        old_account_obj = Account.objects.get(pk=old_account.pk)
+        new_account_obj = Account.objects.get(pk=new_account.pk)
         AccountService.adjust_on_receipt_update(
             old_account=old_account_obj,
             new_account=new_account_obj,

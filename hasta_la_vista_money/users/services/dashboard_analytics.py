@@ -194,7 +194,7 @@ def get_period_comparison(
 
 def get_drill_down_data(
     user: User,
-    category_id: int | None,
+    category_id: str | None,
     date_str: str | None,
     data_type: str = 'expense',
 ) -> dict[str, Any]:
@@ -313,7 +313,7 @@ def get_drill_down_data(
             {
                 'name': trans.date.strftime('%d.%m.%Y'),
                 'value': float(trans.amount),
-                'transaction_id': trans.id,
+                'transaction_id': trans.pk,
             }
             for trans in transactions
         ]

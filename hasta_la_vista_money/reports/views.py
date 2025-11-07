@@ -146,7 +146,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
         totals = [0] * len(months)
         for i, m in enumerate(months):
             for cat in categories:
-                totals[i] += fact_map[cat.id][m]
+                totals[i] += fact_map[cat.pk][m]
         return totals
 
     def _calculate_category_totals(self, categories, months, fact_map):
@@ -154,9 +154,9 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
         category_totals = defaultdict(lambda: Decimal(0))
         for cat in categories:
             for month in months:
-                amount = fact_map[cat.id][month]
+                amount = fact_map[cat.pk][month]
                 if amount:
-                    category_totals[cat.id] += amount
+                    category_totals[cat.pk] += amount
         return category_totals
 
     def _calculate_pie_data(self, categories, months, fact_map):
@@ -173,7 +173,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
         )
 
         for cat in categories:
-            total = category_totals[cat.id]
+            total = category_totals[cat.pk]
             if total > 0:
                 labels.append(cat.name)
                 values.append(float(total))

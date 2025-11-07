@@ -648,10 +648,10 @@ class IncomeGetAjaxView(LoginRequiredMixin, View):
                     'id': income.pk,
                     'date': income.date.strftime('%Y-%m-%d'),
                     'amount': float(income.amount),
-                    'category_id': income.category.id
+                    'category_id': income.category.pk
                     if income.category
                     else None,
-                    'account_id': income.account.id if income.account else None,
+                    'account_id': income.account.pk if income.account else None,
                 },
             }
             return JsonResponse(data)
