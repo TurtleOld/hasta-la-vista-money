@@ -1,8 +1,10 @@
 import json
 import logging
 import traceback
+from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from operator import itemgetter
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from dateutil.parser import parse as parse_date
 from django.contrib import messages
@@ -56,6 +58,8 @@ from hasta_la_vista_money.users.services.dashboard_analytics import (
     get_period_comparison,
 )
 from hasta_la_vista_money.users.services.detailed_statistics import (
+    MonthDataDict,
+    UserDetailedStatisticsDict,
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.services.export import get_user_export_data
@@ -74,6 +78,22 @@ from hasta_la_vista_money.users.services.profile import update_user_profile
 from hasta_la_vista_money.users.services.registration import register_user
 from hasta_la_vista_money.users.services.statistics import get_user_statistics
 from hasta_la_vista_money.users.services.theme import set_user_theme
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+class Transaction(TypedDict):
+    id: int
+    type: Literal['expense', 'income']
+    date: datetime
+    amount: str
+    category: str
+    account: str
+
+
+class AuthRequest(HttpRequest):
+    user: User
 
 
 class IndexView(TemplateView):
@@ -95,23 +115,19 @@ class ListUsers(
     template_name = 'users/profile.html'
     context_object_name = 'users'
     no_permission_url = reverse_lazy('login')
+    request: AuthRequest
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        if self.request.user.is_authenticated:
-            user_update = UpdateUserForm(instance=self.request.user)
-            user_update_pass_form = PasswordChangeForm(
-                user=self.request.user,
-            )
-            if isinstance(self.request.user, User):
-                user_statistics = get_user_statistics(self.request.user)
-            else:
-                user_statistics = None
-
-            context['user_update'] = user_update
-            context['user_update_pass_form'] = user_update_pass_form
-            context['user_statistics'] = user_statistics
-            context['user'] = self.request.user
+        user_update = UpdateUserForm(instance=self.request.user)
+        user_update_pass_form = PasswordChangeForm(
+            user=self.request.user,
+        )
+        user_statistics = get_user_statistics(self.request.user)
+        context['user_update'] = user_update
+        context['user_update_pass_form'] = user_update_pass_form
+        context['user_statistics'] = user_statistics
+        context['user'] = self.request.user
         return context
 
 
@@ -547,7 +563,7 @@ class DashboardDataView(LoginRequiredMixin, View):
     def _serialize_account(self, account: Account) -> dict[str, Any]:
         """Сериализовать объект Account."""
         return {
-            'id': account.id,
+            'id': account.pk,
             'name_account': account.name_account,
             'type_account': account.type_account,
             'balance': str(account.balance),
@@ -570,16 +586,12 @@ class DashboardDataView(LoginRequiredMixin, View):
     ) -> dict[str, Any]:
         """Сериализовать объект TransferMoneyLog."""
         return {
-            'id': transfer_log.id,
-            'user_id': transfer_log.user_id,
+            'id': transfer_log.pk,
+            'user_id': transfer_log.user.pk,
             'from_account': self._serialize_value(transfer_log.from_account),
             'to_account': self._serialize_value(transfer_log.to_account),
             'amount': str(transfer_log.amount),
-            'exchange_date': (
-                transfer_log.exchange_date.isoformat()
-                if transfer_log.exchange_date
-                else None
-            ),
+            'exchange_date': transfer_log.exchange_date.isoformat(),
             'notes': transfer_log.notes,
             'created_at': (
                 transfer_log.created_at.isoformat()
@@ -596,14 +608,14 @@ class DashboardDataView(LoginRequiredMixin, View):
     def _serialize_user(self, user: Any) -> dict[str, Any]:
         """Сериализовать объект User."""
         return {
-            'id': user.id,
+            'id': user.pk,
             'username': user.username,
         }
 
     def _serialize_model(self, model_instance: Any) -> dict[str, Any]:
         """Сериализовать модель Django."""
         return {
-            'id': model_instance.id,
+            'id': model_instance.pk,
             'model': model_instance.__class__.__name__,
         }
 
@@ -614,13 +626,13 @@ class DashboardDataView(LoginRequiredMixin, View):
         if isinstance(value, dict):
             return {k: self._serialize_value(v) for k, v in value.items()}
 
-        type_serializers = {
+        type_serializers: dict[type[Any], Callable[[Any], dict[str, Any]]] = {
             Account: self._serialize_account,
             TransferMoneyLog: self._serialize_transfer_log,
         }
         serializer = type_serializers.get(type(value))
         if serializer:
-            return serializer(value)  # type: ignore[misc]
+            return serializer(value)
 
         if hasattr(value, '__class__') and value.__class__.__name__ == 'User':
             return self._serialize_user(value)
@@ -630,7 +642,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
     def _prepare_serializable_stats(
         self,
-        stats: dict[str, Any],
+        stats: UserDetailedStatisticsDict,
     ) -> dict[str, Any]:
         """Подготовить статистику для сериализации."""
         return {
@@ -639,10 +651,10 @@ class DashboardDataView(LoginRequiredMixin, View):
 
     def _calculate_trends(
         self,
-        months_data: list[dict[str, Any]],
+        months_data: list[MonthDataDict],
     ) -> dict[str, Any]:
         """Рассчитать тренды на основе данных за месяцы."""
-        trends = {}
+        trends: dict[str, Any] = {}
         if not months_data:
             return trends
 
@@ -662,7 +674,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
         return trends
 
-    def _get_recent_transactions(self, user: User) -> list[dict[str, Any]]:
+    def _get_recent_transactions(self, user: User) -> list[Transaction]:
         """Получить последние транзакции."""
         recent_expenses = (
             Expense.objects.filter(user=user)
@@ -675,9 +687,9 @@ class DashboardDataView(LoginRequiredMixin, View):
             .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
         )
 
-        expense_transactions = [
+        expense_transactions: list[Transaction] = [
             {
-                'id': expense.id,
+                'id': expense.pk,
                 'type': 'expense',
                 'date': expense.date.isoformat(),
                 'amount': str(expense.amount),
@@ -686,9 +698,9 @@ class DashboardDataView(LoginRequiredMixin, View):
             }
             for expense in recent_expenses
         ]
-        income_transactions = [
+        income_transactions: list[Transaction] = [
             {
-                'id': income.id,
+                'id': income.pk,
                 'type': 'income',
                 'date': income.date.isoformat(),
                 'amount': str(income.amount),
@@ -698,11 +710,10 @@ class DashboardDataView(LoginRequiredMixin, View):
             for income in recent_incomes
         ]
 
-        return sorted(
-            expense_transactions + income_transactions,
-            key=lambda x: x['date'],
-            reverse=True,
-        )[: constants.RECENT_ITEMS_LIMIT]
+        transactions = expense_transactions + income_transactions
+        transactions.sort(key=itemgetter('date'), reverse=True)
+
+        return transactions[: constants.RECENT_ITEMS_LIMIT]
 
     def get(
         self,
@@ -725,12 +736,16 @@ class DashboardDataView(LoginRequiredMixin, View):
                 is_visible=True,
             ).order_by('position')
 
-            cache_key = f'user_stats_{user.id}'
+            cache_key = f'user_stats_{user.pk}'
             cache.delete(cache_key)
 
-            stats = get_user_detailed_statistics(user)
+            stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
+                user,
+            )
 
-            serializable_stats = self._prepare_serializable_stats(stats)
+            serializable_stats = self._prepare_serializable_stats(
+                stats,
+            )
 
             months_data = serializable_stats.get('months_data', [])
             trends = self._calculate_trends(months_data)
@@ -833,7 +848,7 @@ class DashboardWidgetConfigView(LoginRequiredMixin, View):
         return JsonResponse(
             {
                 'status': 'ok',
-                'widget_id': widget.id,
+                'widget_id': widget.pk,
             },
         )
 
@@ -877,12 +892,6 @@ class DashboardDrillDownView(LoginRequiredMixin, View):
         category_id = request.GET.get('category_id')
         date_str = request.GET.get('date')
         data_type = request.GET.get('type', 'expense')
-
-        if category_id:
-            try:
-                category_id = int(category_id)
-            except ValueError:
-                category_id = None
 
         drill_data = get_drill_down_data(
             user=user,
