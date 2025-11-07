@@ -68,7 +68,7 @@ class IncomeFormTest(TestCase):
         )
         category_choices = [('1', 'Category 1'), ('2', 'Category 2')]
         form.configure_category_choices(category_choices)
-        self.assertEqual(form.fields['category'].choices, category_choices)
+        self.assertEqual(form.fields['category'].choices, category_choices)  # type: ignore[attr-defined]
 
 
 class AddCategoryIncomeFormTest(TestCase):

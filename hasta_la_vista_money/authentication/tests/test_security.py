@@ -7,10 +7,13 @@ from django.test import TestCase
 from rest_framework.test import APIRequestFactory
 
 from hasta_la_vista_money.authentication.authentication import set_auth_cookies
-from hasta_la_vista_money.users.factories import UserFactory
+from hasta_la_vista_money.users.factories import UserFactoryTyped
+from hasta_la_vista_money.users.models import User as UserModel
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
+else:
+    User = UserModel
 
 
 class XSSProtectionTestCase(TestCase):
@@ -18,7 +21,7 @@ class XSSProtectionTestCase(TestCase):
 
     def setUp(self) -> None:
         """Настройка тестовых данных."""
-        self.user: User = UserFactory()
+        self.user: User = UserFactoryTyped()
         self.factory = APIRequestFactory()
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
 
