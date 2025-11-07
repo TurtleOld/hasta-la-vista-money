@@ -1,7 +1,6 @@
 import json
 import logging
 import traceback
-from datetime import datetime
 from decimal import Decimal
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
@@ -86,7 +85,7 @@ if TYPE_CHECKING:
 class Transaction(TypedDict):
     id: int
     type: Literal['expense', 'income']
-    date: datetime
+    date: str
     amount: str
     category: str
     account: str
