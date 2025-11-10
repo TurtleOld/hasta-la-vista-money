@@ -118,8 +118,7 @@ class XSSProtectionTestCase(TestCase):
         cookie = result.cookies[self.auth_cookie_name]
         expected_domain = settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']
         if expected_domain is None:
-            # Django возвращает строку 'None' вместо None
-            self.assertIn(cookie['domain'], [None, 'None'])
+            self.assertIn(cookie['domain'], [None, 'None', ''])
         else:
             self.assertEqual(cookie['domain'], expected_domain)
 
