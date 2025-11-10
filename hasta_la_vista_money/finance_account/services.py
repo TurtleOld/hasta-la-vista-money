@@ -187,7 +187,7 @@ class AccountService:
         result = (total_expense + total_receipt_expense) - (
             total_income + total_receipt_return
         )
-        return Decimal(str(result))  # type: ignore[return-value]
+        return Decimal(str(result))
 
     @staticmethod
     @transaction.atomic
@@ -208,7 +208,7 @@ class AccountService:
         new_total_sum: Decimal,
     ) -> None:
         """Adjust account balances when receipt is updated."""
-        if old_account.pk == new_account.pk:  # type: ignore[attr-defined]
+        if old_account.pk == new_account.pk:
             difference = new_total_sum - old_total_sum
             if difference == 0:
                 return
@@ -258,11 +258,11 @@ class AccountService:
             .first()
         )
         if first_expense and first_receipt:
-            return min(first_expense.date, first_receipt.receipt_date)  # type: ignore[no-any-return]
+            return min(first_expense.date, first_receipt.receipt_date)
         if first_expense:
-            return first_expense.date  # type: ignore[no-any-return]
+            return first_expense.date
         if first_receipt:
-            return first_receipt.receipt_date  # type: ignore[no-any-return]
+            return first_receipt.receipt_date
         return None
 
     @staticmethod
@@ -613,7 +613,7 @@ class AccountService:
 
         grace_end = AccountService._calculate_grace_end_date(first_purchase)
 
-        return {  # type: ignore[typeddict-item]
+        return {
             'first_purchase_date': first_purchase,
             'grace_end_date': grace_end,
             'total_initial_debt': Decimal(str(initial_debt)),
@@ -673,7 +673,7 @@ def get_accounts_for_user_or_group(
 def get_sum_all_accounts(accounts: Any) -> Decimal:
     """Calculate total balance for a queryset of accounts."""
     total = sum(acc.balance for acc in accounts)
-    return Decimal(str(total))  # type: ignore[return-value]
+    return Decimal(str(total))
 
 
 def get_transfer_money_log(

@@ -142,7 +142,7 @@ class TestAccount(TestCase):
         )
         self.assertRedirects(
             response,
-            '/finance_account/',
+            '/finance_account/change/1/',
             status_code=constants.REDIRECTS,
         )
 

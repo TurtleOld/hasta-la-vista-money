@@ -299,7 +299,7 @@ class Account(TimeStampedModel):
         )
 
 
-class TransferMoneyLogQuerySet(models.QuerySet):
+class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):
     """
     Custom QuerySet for TransferMoneyLog model with common filters.
     """
