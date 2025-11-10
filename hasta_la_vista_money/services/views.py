@@ -1,6 +1,7 @@
 from collections import defaultdict
 from collections.abc import Generator
-from typing import Any
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, TypeVar, Union, cast
 
 from django.core.cache import cache
 from django.db.models import Count, Model, QuerySet, Sum
@@ -11,13 +12,23 @@ from django.shortcuts import get_object_or_404
 
 from hasta_la_vista_money.users.models import User
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+    from hasta_la_vista_money.income.models import Income, IncomeCategory
+else:
+    from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+    from hasta_la_vista_money.income.models import Income, IncomeCategory
+
+M = TypeVar('M', bound=Model)
+ExpenseOrIncome = Union['Expense', 'Income']
+
 
 class CategoryTreeBuilder:
     """Строит дерево категорий и считает число всех потомков."""
 
     def __init__(
         self,
-        categories: list[dict[str, Any]] | QuerySet,
+        categories: list[dict[str, Any]] | QuerySet[Model, Model],
         depth: int,
     ) -> None:
         self.depth = depth
@@ -28,7 +39,9 @@ class CategoryTreeBuilder:
             list,
         )
         for c in self.cats:
-            self.children_map[c['parent_category']].append(c)
+            if isinstance(c, dict) and 'parent_category' in c:
+                parent_id: int | None = c.get('parent_category')
+                self.children_map[parent_id].append(c)
         self._memo: dict[int, int] = {}
 
     def count_desc(self, cid: int) -> int:
@@ -60,7 +73,7 @@ class CategoryTreeBuilder:
 
 
 def build_category_tree(
-    categories: list[dict[str, Any]] | QuerySet,
+    categories: list[dict[str, Any]] | QuerySet[Model, Model],
     parent_id: int | None = None,
     depth: int = 2,
     current_depth: int = 1,
@@ -98,7 +111,7 @@ def _convert_generators_to_lists(
 def get_cached_category_tree(
     user_id: int,
     category_type: str,
-    categories: list[dict[str, Any]] | QuerySet,
+    categories: list[dict[str, Any]] | QuerySet[Model, Model],
     depth: int = 2,
 ) -> list[dict[str, Any]]:
     """
@@ -117,7 +130,7 @@ def get_cached_category_tree(
     cached_tree = cache.get(cache_key)
 
     if cached_tree is not None:
-        return cached_tree
+        return cast('list[dict[str, Any]]', cached_tree)
 
     tree_generator = build_category_tree(categories, depth=depth)
     tree = [_convert_generators_to_lists(node) for node in tree_generator]
@@ -152,31 +165,57 @@ def collect_info_receipt(user: User) -> Any:
 
 def get_queryset_type_income_expenses(
     type_id: int | None,
-    model: type[Model],
-    form: ModelForm[Any],
-) -> Model:
+    model: type[M],
+    form: ModelForm[M],
+) -> M:
     """Функция получения queryset."""
     if type_id:
         return get_object_or_404(model, id=type_id)
-    return form.save(commit=False)  # type: ignore[no-any-return]
+    instance = form.save(commit=False)
+    if instance is None:
+        raise ValueError('Form save returned None')
+    return instance
 
 
-def get_new_type_operation(
-    model: type[Model],
+def get_new_type_operation[M: Model](
+    model: type[M],
     id_type_operation: int,
     request: HttpRequest,
-) -> Model:
+) -> M:
     """Get new type operation."""
-    expense = get_object_or_404(model, pk=id_type_operation, user=request.user)
+    expense = cast(
+        'ExpenseOrIncome',
+        get_object_or_404(model, pk=id_type_operation, user=request.user),
+    )
+    account = expense.account
+    amount = Decimal(str(expense.amount))
+
     if 'income' in request.path:
-        expense.account.balance += expense.amount  # type: ignore[attr-defined]
+        account.balance = Decimal(str(account.balance)) + amount
     else:
-        expense.account.balance -= expense.amount  # type: ignore[attr-defined]
-    expense.account.save()  # type: ignore[attr-defined]
-    return model.objects.create(  # type: ignore[no-any-return]
-        user=expense.user,  # type: ignore[attr-defined]
-        account=expense.account,  # type: ignore[attr-defined]
-        category=expense.category,  # type: ignore[attr-defined]
-        amount=expense.amount,  # type: ignore[attr-defined]
-        date=expense.date,  # type: ignore[attr-defined]
+        account.balance = Decimal(str(account.balance)) - amount
+    account.save()
+
+    if isinstance(expense, Income):
+        income_category: IncomeCategory = expense.category
+        return cast(
+            'M',
+            Income.objects.create(
+                user=expense.user,
+                account=expense.account,
+                category=income_category,
+                amount=expense.amount,
+                date=expense.date,
+            ),
+        )
+    expense_category: ExpenseCategory = expense.category
+    return cast(
+        'M',
+        Expense.objects.create(
+            user=expense.user,
+            account=expense.account,
+            category=expense_category,
+            amount=expense.amount,
+            date=expense.date,
+        ),
     )

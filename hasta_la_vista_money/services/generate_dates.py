@@ -30,7 +30,9 @@ class DateListGenerator:
         self._ensure_dates(months)
         self._ensure_planning(months)
 
-    def _actual_date(self, current_date: datetime | QuerySet[DateList]) -> date:
+    def _actual_date(
+        self, current_date: datetime | QuerySet[DateList] | date
+    ) -> date:
         """Вернуть опорную дату из datetime или QuerySet."""
         if isinstance(current_date, QuerySet):
             last = current_date.last()
@@ -38,12 +40,9 @@ class DateListGenerator:
                 error_msg = 'current_date must be datetime or QuerySet'
                 raise ValueError(error_msg)
             return last.date
-        if isinstance(current_date, date) and not isinstance(
-            current_date,
-            datetime,
-        ):
-            return current_date
-        return current_date.date()
+        if isinstance(current_date, datetime):
+            return current_date.date()
+        return current_date
 
     def _start_date(self, actual: date) -> date:
         """Вернуть месяц после последней даты в DateList или actual."""
@@ -82,7 +81,7 @@ class DateListGenerator:
             existing = set(
                 Planning.objects.filter(
                     user=self.user,
-                    type='expense',
+                    planning_type='expense',
                     date__in=months,
                     category_expense__in=expense_cats,
                 ).values_list('category_expense_id', 'date'),
@@ -92,7 +91,7 @@ class DateListGenerator:
                     user=self.user,
                     category_expense=c,
                     date=d,
-                    type='expense',
+                    planning_type='expense',
                     amount=0,
                 )
                 for c in expense_cats
@@ -106,7 +105,7 @@ class DateListGenerator:
             existing = set(
                 Planning.objects.filter(
                     user=self.user,
-                    type='income',
+                    planning_type='income',
                     date__in=months,
                     category_income__in=income_cats,
                 ).values_list('category_income_id', 'date'),
@@ -116,7 +115,7 @@ class DateListGenerator:
                     user=self.user,
                     category_income=c,
                     date=d,
-                    type='income',
+                    planning_type='income',
                     amount=0,
                 )
                 for c in income_cats
