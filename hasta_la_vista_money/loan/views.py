@@ -29,7 +29,7 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         user = get_object_or_404(User, username=self.request.user)
         loan_form = LoanForm()
-        payment_make_loan_form = PaymentMakeLoanForm(user=self.request.user)
+        payment_make_loan_form = PaymentMakeLoanForm(user=user)
         loan = user.loan_users.all()
         result_calculate = user.payment_schedule_users.select_related(
             'loan',
@@ -182,6 +182,14 @@ class PaymentMakeCreateView(
                 {
                     'success': False,
                     'errors': {'__all__': ['Счёт не выбран']},
+                },
+            )
+
+        if loan is None:
+            return JsonResponse(
+                {
+                    'success': False,
+                    'errors': {'__all__': ['Кредит не выбран']},
                 },
             )
 
