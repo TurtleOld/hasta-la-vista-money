@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from django.contrib import messages
 from django.db.models import Model, ProtectedError, QuerySet
@@ -107,6 +107,12 @@ class UpdateViewMixin:
         return {form_name: form}  # type: ignore[dict-item]
 
 
+class FormWithFields(Protocol):
+    """Protocol for forms with fields attribute."""
+
+    fields: dict[str, Any]
+
+
 class CategoryChoicesMixin:
     field: str
 
@@ -124,14 +130,19 @@ class CategoryChoicesMixin:
             depth: Глубина иерархии категорий.
         """
         super().__init__(*args, **kwargs)
+        if not hasattr(self, 'fields'):
+            return
+
+        form_self = cast('FormWithFields', self)
+        field_obj = form_self.fields.get(self.field)
         queryset_to_use = category_queryset or (
-            self.fields.get(self.field).queryset  # type: ignore[attr-defined]
-            if self.field in self.fields  # type: ignore[attr-defined]
+            field_obj.queryset
+            if field_obj is not None and self.field in form_self.fields
             else None
         )
         if queryset_to_use is not None:
-            if self.field in self.fields:  # type: ignore[attr-defined]
-                self.fields[self.field].queryset = queryset_to_use  # type: ignore[attr-defined]
+            if self.field in form_self.fields:
+                form_self.fields[self.field].queryset = queryset_to_use
             category_choices = list(
                 get_category_choices(
                     queryset=queryset_to_use,
@@ -139,7 +150,7 @@ class CategoryChoicesMixin:
                 ),
             )
             category_choices.insert(0, ('', '----------'))
-            self.fields[self.field].choices = category_choices  # type: ignore[attr-defined]
+            form_self.fields[self.field].choices = category_choices
 
 
 class CategoryChoicesConfigurerMixin:
@@ -154,7 +165,11 @@ class CategoryChoicesConfigurerMixin:
         Args:
             category_choices: Последовательность пар (value, label).
         """
-        self.fields[self.field].choices = category_choices  # type: ignore[attr-defined]
+        if not hasattr(self, 'fields'):
+            return
+        form_self = cast('FormWithFields', self)
+        if self.field in form_self.fields:
+            form_self.fields[self.field].choices = category_choices
 
 
 class FormQuerysetsMixin:
@@ -189,9 +204,13 @@ class FormQuerysetsMixin:
             or 'category'
         )
 
-        if category_queryset is not None and category_field in self.fields:  # type: ignore[attr-defined]
-            self.fields[category_field].queryset = category_queryset  # type: ignore[attr-defined]
+        if not hasattr(self, 'fields'):
+            return
+
+        form_self = cast('FormWithFields', self)
+        if category_queryset is not None and category_field in form_self.fields:
+            form_self.fields[category_field].queryset = category_queryset
 
         account_field = getattr(self, 'account_field_name', 'account')
-        if account_queryset is not None and account_field in self.fields:  # type: ignore[attr-defined]
-            self.fields[account_field].queryset = account_queryset  # type: ignore[attr-defined]
+        if account_queryset is not None and account_field in form_self.fields:
+            form_self.fields[account_field].queryset = account_queryset
