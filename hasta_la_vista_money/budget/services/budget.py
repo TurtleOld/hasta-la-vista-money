@@ -1,7 +1,6 @@
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
-from typing import cast
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
@@ -128,35 +127,37 @@ def get_categories(
 ):
     """
     Returns queryset of categories for the user by type (expense/income).
-    Raises BudgetDataError if user is None.
     """
-    if not user:
-        error_msg = 'User is required for category lookup.'
+    if user is None:
+        error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
     if type_ == 'expense':
-        return user.category_expense_users.filter(  # type: ignore[attr-defined,no-any-return]
+        return user.category_expense_users.filter(
             parent_category=None,
         ).order_by('name')
-    return user.category_income_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined,no-any-return]
+    return user.category_income_users.filter(parent_category=None).order_by(
         'name',
     )
 
 
 def _validate_budget_inputs(
-    user: User,
+    _user: User,
     months: list[date],
     expense_categories: list[ExpenseCategory],
     income_categories: list[IncomeCategory],
 ) -> None:
     """Validate required inputs for budget aggregation."""
-    if not user:
-        error_msg = 'User is required for budget aggregation.'
+    if _user is None:
+        error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
     if months is None:
         error_msg = 'Months list is required.'
         raise BudgetDataError(error_msg)
-    if expense_categories is None or income_categories is None:
-        error_msg = 'Expense and income categories are required.'
+    if expense_categories is None:
+        error_msg = 'Expense categories are required.'
+        raise BudgetDataError(error_msg)
+    if income_categories is None:
+        error_msg = 'Income categories are required.'
         raise BudgetDataError(error_msg)
 
 
@@ -204,7 +205,7 @@ def _get_expense_plans(
     plans_exp = Planning.objects.filter(
         user=user,
         date__in=months,
-        type='expense',
+        planning_type='expense',
         category_expense__in=expense_categories,
     ).values('category_expense_id', 'date', 'amount')
 
@@ -213,7 +214,8 @@ def _get_expense_plans(
     )
 
     for p in plans_exp:
-        expense_plan_map[p['category_expense_id']][p['date']] = p['amount'] or 0
+        amount = p['amount']
+        expense_plan_map[p['category_expense_id']][p['date']] = int(amount or 0)
 
     return expense_plan_map
 
@@ -246,7 +248,7 @@ def _build_expense_data(
     expense_data = []
 
     for cat in expense_categories:
-        row = {
+        row: ExpenseDataRowDict = {
             'category': cat.name,
             'category_id': cat.pk,
             'fact': [],
@@ -264,9 +266,11 @@ def _build_expense_data(
             row['fact'].append(fact)
             row['plan'].append(plan)
             row['diff'].append(diff)
-            row['percent'].append(percent)
+            row['percent'].append(
+                float(percent) if percent is not None else None
+            )
 
-        expense_data.append(cast('ExpenseDataRowDict', row))
+        expense_data.append(row)
 
     return expense_data
 
@@ -377,7 +381,7 @@ def _get_income_plans(
     plans_inc = Planning.objects.filter(
         user=user,
         date__in=months,
-        type='income',
+        planning_type='income',
         category_income__in=income_categories,
     ).values('category_income_id', 'date', 'amount')
 
@@ -421,7 +425,7 @@ def _build_income_data(
     income_data = []
 
     for cat in income_categories:
-        row = {
+        row: IncomeDataRowDict = {
             'category': cat.name,
             'category_id': cat.pk,
             'fact': [],
@@ -439,9 +443,11 @@ def _build_income_data(
             row['fact'].append(fact)
             row['plan'].append(plan)
             row['diff'].append(diff)
-            row['percent'].append(percent)
+            row['percent'].append(
+                float(percent) if percent is not None else None
+            )
 
-        income_data.append(cast('IncomeDataRowDict', row))
+        income_data.append(row)
 
     return income_data
 
@@ -492,13 +498,13 @@ def _calculate_percentage(fact: Decimal | int, plan: Decimal | int) -> Decimal:
 
 
 def _validate_expense_table_inputs(
-    user: User,
+    _user: User,
     months: list[date],
     expense_categories: list[ExpenseCategory],
 ) -> None:
     """Validate required inputs for expense table aggregation."""
-    if not user:
-        error_msg = 'User is required for expense table aggregation.'
+    if _user is None:
+        error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
     if months is None:
         error_msg = 'Months list is required.'
@@ -551,7 +557,7 @@ def _get_expense_table_plans(
     plans_expense = Planning.objects.filter(
         user=user,
         date__in=months,
-        type='expense',
+        planning_type='expense',
         category_expense__in=expense_categories,
     ).values('category_expense_id', 'date', 'amount')
 
@@ -560,8 +566,9 @@ def _get_expense_table_plans(
     )
 
     for pln in plans_expense:
-        expense_plan_map[pln['category_expense_id']][pln['date']] = (
-            pln['amount'] or 0
+        amount = pln['amount']
+        expense_plan_map[pln['category_expense_id']][pln['date']] = int(
+            amount or 0
         )
 
     return expense_plan_map
@@ -579,7 +586,7 @@ def _build_expense_table_data(
     total_plan_expense = [0] * len(months)
 
     for cat in expense_categories:
-        row = {
+        row: ExpenseDataRowDict = {
             'category': cat.name,
             'category_id': cat.pk,
             'fact': [],
@@ -597,11 +604,13 @@ def _build_expense_table_data(
             row['fact'].append(fact)
             row['plan'].append(plan)
             row['diff'].append(diff)
-            row['percent'].append(percent)
+            row['percent'].append(
+                float(percent) if percent is not None else None
+            )
             total_fact_expense[i] += fact
             total_plan_expense[i] += plan
 
-        expense_data.append(cast('ExpenseDataRowDict', row))
+        expense_data.append(row)
 
     return expense_data, total_fact_expense, total_plan_expense
 
@@ -643,13 +652,13 @@ def aggregate_expense_table(
 
 
 def _validate_income_table_inputs(
-    user: User,
+    _user: User,
     months: list[date],
     income_categories: list[IncomeCategory],
 ) -> None:
     """Validate required inputs for income table aggregation."""
-    if not user:
-        error_msg = 'User is required for income table aggregation.'
+    if _user is None:
+        error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
     if months is None:
         error_msg = 'Months list is required.'
@@ -702,7 +711,7 @@ def _get_income_table_plans(
     plans_inc = Planning.objects.filter(
         user=user,
         date__in=months,
-        type='income',
+        planning_type='income',
         category_income__in=income_categories,
     ).values('category_income_id', 'date', 'amount')
 
@@ -730,7 +739,7 @@ def _build_income_table_data(
     total_plan_income = [Decimal(0)] * len(months)
 
     for cat in income_categories:
-        row = {
+        row: IncomeDataRowDict = {
             'category': cat.name,
             'category_id': cat.pk,
             'fact': [],
@@ -748,11 +757,13 @@ def _build_income_table_data(
             row['fact'].append(fact)
             row['plan'].append(plan)
             row['diff'].append(diff)
-            row['percent'].append(percent)
+            row['percent'].append(
+                float(percent) if percent is not None else None
+            )
             total_fact_income[i] += fact
             total_plan_income[i] += plan
 
-        income_data.append(cast('IncomeDataRowDict', row))
+        income_data.append(row)
 
     return income_data, total_fact_income, total_plan_income
 
@@ -786,13 +797,13 @@ def aggregate_income_table(
 
 
 def _validate_expense_api_inputs(
-    user: User,
+    _user: User,
     months: list[date],
     expense_categories: list[ExpenseCategory],
 ) -> None:
     """Validate required inputs for expense API aggregation."""
-    if not user:
-        error_msg = 'User is required for expense API aggregation.'
+    if _user is None:
+        error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
     if months is None:
         error_msg = 'Months list is required.'
@@ -846,7 +857,7 @@ def _get_expense_api_plans(
     plans_expense = Planning.objects.filter(
         user=user,
         date__in=months,
-        type='expense',
+        planning_type='expense',
         category_expense__in=expense_categories,
     ).values('category_expense_id', 'date', 'amount')
 
@@ -855,8 +866,9 @@ def _get_expense_api_plans(
     )
 
     for pln in plans_expense:
-        expense_plan_map[pln['category_expense_id']][pln['date']] = (
-            pln['amount'] or 0
+        amount = pln['amount']
+        expense_plan_map[pln['category_expense_id']][pln['date']] = int(
+            amount or 0
         )
 
     return expense_plan_map
@@ -872,10 +884,10 @@ def _build_expense_api_data(
     data = []
 
     for cat in expense_categories:
-        row = {
-            'category': cat.name,
-            'category_id': cat.pk,
-        }
+        fact_list: list[int] = []
+        plan_list: list[int] = []
+        diff_list: list[int] = []
+        percent_list: list[float | None] = []
 
         for m in months:
             fact = expense_fact_map[cat.pk][m]
@@ -883,14 +895,22 @@ def _build_expense_api_data(
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
-            row[f'fact_{m}'] = float(fact) if fact is not None else None
-            row[f'plan_{m}'] = float(plan) if plan is not None else None
-            row[f'diff_{m}'] = float(diff) if diff is not None else None
-            row[f'percent_{m}'] = (
-                float(percent) if percent is not None else None
-            )
+            fact_list.append(fact)
+            plan_list.append(plan)
+            diff_list.append(diff)
+            percent_list.append(float(percent) if percent is not None else None)
 
-        data.append(cast('ExpenseApiDataRowDict', row))
+        row: ExpenseApiDataRowDict = {
+            'category': cat.name,
+            'category_id': cat.pk,
+            'months': [m.isoformat() for m in months],
+            'fact': fact_list,
+            'plan': plan_list,
+            'diff': diff_list,
+            'percent': percent_list,
+        }
+
+        data.append(row)
 
     return data
 
@@ -917,13 +937,13 @@ def aggregate_expense_api(
 
 
 def _validate_income_api_inputs(
-    user: User,
+    _user: User,
     months: list[date],
     income_categories: list[IncomeCategory],
 ) -> None:
     """Validate required inputs for income API aggregation."""
-    if not user:
-        error_msg = 'User is required for income API aggregation.'
+    if _user is None:
+        error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
     if months is None:
         error_msg = 'Months list is required.'
@@ -937,7 +957,7 @@ def _get_income_api_facts(
     user: User,
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> dict[int, dict[date, int]]:
+) -> dict[int, dict[date, Decimal]]:
     """Get income facts for API view."""
     if not months:
         return {}
@@ -954,8 +974,8 @@ def _get_income_api_facts(
         .annotate(total=Sum('amount'))
     )
 
-    income_fact_map: dict[int, dict[date, int]] = defaultdict(
-        lambda: defaultdict(lambda: 0),
+    income_fact_map: dict[int, dict[date, Decimal]] = defaultdict(
+        lambda: defaultdict(lambda: Decimal(0)),
     )
 
     for e in incomes:
@@ -963,7 +983,10 @@ def _get_income_api_facts(
             e['month'].date() if hasattr(e['month'], 'date') else e['month']
         )
         month_start = month_date.replace(day=1)
-        income_fact_map[e['category_id']][month_start] = e['total'] or 0
+        total = e['total']
+        income_fact_map[e['category_id']][month_start] = (
+            Decimal(str(total)) if total else Decimal(0)
+        )
 
     return income_fact_map
 
@@ -972,30 +995,31 @@ def _get_income_api_plans(
     user: User,
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> dict[int, dict[date, int]]:
+) -> dict[int, dict[date, Decimal]]:
     """Get income plans for API view."""
     plans_income = Planning.objects.filter(
         user=user,
         date__in=months,
-        type='income',
+        planning_type='income',
         category_income__in=income_categories,
     ).values('category_income_id', 'date', 'amount')
 
-    income_plan_map: dict[int, dict[date, int]] = defaultdict(
-        lambda: defaultdict(lambda: 0),
+    income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
+        lambda: defaultdict(lambda: Decimal(0)),
     )
 
     for pln in plans_income:
+        amount = pln['amount']
         income_plan_map[pln['category_income_id']][pln['date']] = (
-            pln['amount'] or 0
+            Decimal(str(amount)) if amount else Decimal(0)
         )
 
     return income_plan_map
 
 
 def _build_income_api_data(
-    income_fact_map: dict[int, dict[date, int]],
-    income_plan_map: dict[int, dict[date, int]],
+    income_fact_map: dict[int, dict[date, Decimal]],
+    income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[IncomeCategory],
 ) -> list[IncomeApiDataRowDict]:
@@ -1003,10 +1027,10 @@ def _build_income_api_data(
     data = []
 
     for cat in income_categories:
-        row = {
-            'category': cat.name,
-            'category_id': cat.pk,
-        }
+        fact_list: list[Decimal] = []
+        plan_list: list[Decimal] = []
+        diff_list: list[Decimal] = []
+        percent_list: list[float | None] = []
 
         for m in months:
             fact = income_fact_map[cat.pk][m]
@@ -1014,14 +1038,22 @@ def _build_income_api_data(
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
-            row[f'fact_{m}'] = float(fact) if fact is not None else None
-            row[f'plan_{m}'] = float(plan) if plan is not None else None
-            row[f'diff_{m}'] = float(diff) if diff is not None else None
-            row[f'percent_{m}'] = (
-                float(percent) if percent is not None else None
-            )
+            fact_list.append(fact)
+            plan_list.append(plan)
+            diff_list.append(diff)
+            percent_list.append(float(percent) if percent is not None else None)
 
-        data.append(cast('IncomeApiDataRowDict', row))
+        row: IncomeApiDataRowDict = {
+            'category': cat.name,
+            'category_id': cat.pk,
+            'months': [m.isoformat() for m in months],
+            'fact': fact_list,
+            'plan': plan_list,
+            'diff': diff_list,
+            'percent': percent_list,
+        }
+
+        data.append(row)
 
     return data
 
