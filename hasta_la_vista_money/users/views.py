@@ -623,7 +623,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
     def _serialize_value(self, value: Any) -> Any:
         """Рекурсивно сериализует значение."""
-        if isinstance(value, (QuerySet, list, tuple)):
+        if isinstance(value, QuerySet | list | tuple):
             return [self._serialize_value(item) for item in value]
         if isinstance(value, dict):
             return {k: self._serialize_value(v) for k, v in value.items()}
