@@ -81,7 +81,7 @@ class ExpenseService:
 
     def update_expense(self, expense: Expense, form: AddExpenseForm) -> None:
         """Update an existing expense."""
-        expense_updated: Expense = get_queryset_type_income_expenses(  # type: ignore[assignment]
+        expense_updated: Expense = get_queryset_type_income_expenses(
             expense.pk,
             Expense,
             form,

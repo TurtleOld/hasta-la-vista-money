@@ -78,7 +78,7 @@ class ExpenseCategoryBaseView(BaseView):
 class ExpenseView(
     LoginRequiredMixin,
     SuccessMessageMixin[AddExpenseForm],
-    FilterView[Expense, ExpenseFilter],  # type: ignore[misc]
+    FilterView,
 ):
     """Main expense list view with filtering and pagination."""
 
