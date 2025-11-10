@@ -1,8 +1,10 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import django_filters
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import UploadedFile
 from django.db.models import Min, QuerySet
 from django.forms import (
     CharField,
@@ -13,6 +15,7 @@ from django.forms import (
     DecimalField,
     FileField,
     Form,
+    ModelChoiceField,
     ModelForm,
     NumberInput,
     Select,
@@ -21,10 +24,14 @@ from django.forms import (
 )
 from django.forms.fields import IntegerField
 from django.utils.translation import gettext_lazy as _
-from django_filters.fields import ModelChoiceField
+from django_filters import widgets
 
 if TYPE_CHECKING:
     from django.forms.formsets import BaseFormSet as BaseFormSetType
+
+    from hasta_la_vista_money.users.models import User
+else:
+    User = get_user_model()
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -45,7 +52,7 @@ class ReceiptFilter(django_filters.FilterSet):
     )
     receipt_date = django_filters.DateFromToRangeFilter(
         label='',
-        widget=django_filters.widgets.RangeWidget(
+        widget=widgets.RangeWidget(
             attrs={
                 'class': 'form-control',
                 'type': 'date',
@@ -85,7 +92,7 @@ class ReceiptFilter(django_filters.FilterSet):
         ),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
@@ -95,18 +102,18 @@ class ReceiptFilter(django_filters.FilterSet):
             .annotate(min_id=Min('id'))
             .values_list('min_id', flat=True)
         )
-        self.filters['name_seller'].queryset = Seller.objects.filter(
+        self.filters['name_seller'].queryset = Seller.objects.filter(  # type: ignore[attr-defined]
             pk__in=seller_ids,
         )
 
-        self.filters['account'].queryset = (
+        self.filters['account'].queryset = (  # type: ignore[attr-defined]
             Account.objects.filter(user=self.user)
             .select_related('user')
             .only('id', 'name_account', 'user__id')
         )
 
     @property
-    def qs(self):
+    def qs(self) -> Any:
         queryset = super().qs
         return (
             queryset.select_related('seller', 'account', 'user')
@@ -116,9 +123,9 @@ class ReceiptFilter(django_filters.FilterSet):
 
     def filter_by_product_name(
         self,
-        queryset: QuerySet[Product],
+        queryset: QuerySet[Receipt],
         value: str,
-    ) -> QuerySet[Product]:
+    ) -> QuerySet[Receipt]:
         if value:
             return queryset.filter(product__product_name__icontains=value)
         return queryset
@@ -154,7 +161,7 @@ class SellerForm(ModelForm[Seller]):
             'retail_place',
         ]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields['retail_place_address'].required = False
         self.fields['retail_place'].required = False
@@ -199,8 +206,10 @@ class ProductForm(ModelForm[Product]):
             'amount',
         ]
 
-    def clean(self):
+    def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
+        if cleaned_data is None:
+            cleaned_data = {}
         quantity = cleaned_data.get('quantity')
         if quantity is not None and quantity <= constants.ZERO:
             self.add_error(
@@ -290,7 +299,9 @@ class ReceiptForm(ModelForm[Receipt]):
     products = ProductFormSet()
 
 
-def validate_image_jpg_png(value):
+def validate_image_jpg_png(value: UploadedFile) -> None:
+    if value.name is None:
+        raise ValidationError(_('Имя файла не указано'))
     ext = Path(value.name).suffix.lower()
     if ext not in ('.jpg', '.jpeg', '.png'):
         raise ValidationError(
@@ -316,15 +327,16 @@ class UploadImageForm(Form):
         validators=[validate_image_jpg_png],
     )
 
-    def __init__(self, user, *args, **kwargs):
+    def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
+        kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.fields['account'].queryset = Account.objects.filter(user=user)
-        if self.fields['account'].queryset.exists():
+        self.fields['account'].queryset = Account.objects.filter(user=user)  # type: ignore[attr-defined]
+        if self.fields['account'].queryset.exists():  # type: ignore[attr-defined]
             self.fields['account'].initial = self.fields[
                 'account'
-            ].queryset.first()
+            ].queryset.first()  # type: ignore[attr-defined]
 
-    def clean_file(self):
+    def clean_file(self) -> Any:
         file = self.cleaned_data.get('file')
         if file and file.size > constants.MAX_FILE_SIZE_BYTES:
             raise ValidationError(

@@ -1,3 +1,5 @@
+from typing import Any
+
 from django_stubs_ext.db.models import TypedModelMeta
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import CharField, ModelSerializer, Serializer
@@ -13,27 +15,27 @@ class InvalidProductDataError(ValidationError):
     default_detail = 'Invalid product data'
 
 
-class SellerSerializer(ModelSerializer):
+class SellerSerializer(ModelSerializer[Seller]):
     class Meta(TypedModelMeta):
         model = Seller
         fields = '__all__'
         read_only_fields = ('user',)
 
 
-class ProductSerializer(ModelSerializer):
+class ProductSerializer(ModelSerializer[Product]):
     class Meta(TypedModelMeta):
         model = Product
         fields = '__all__'
 
 
-class ReceiptSerializer(ModelSerializer):
+class ReceiptSerializer(ModelSerializer[Receipt]):
     product = ProductSerializer(many=True)
 
     class Meta(TypedModelMeta):
         model = Receipt
         fields = '__all__'
 
-    def create(self, validated_data):
+    def create(self, validated_data: dict[str, Any]) -> Receipt:
         products_data = validated_data.pop('product')
         seller_data = validated_data.pop('seller')
         seller_serializer = SellerSerializer(data=seller_data)
@@ -50,5 +52,5 @@ class ReceiptSerializer(ModelSerializer):
         return receipt
 
 
-class ImageDataSerializer(Serializer):
+class ImageDataSerializer(Serializer[dict[str, Any]]):
     data_url = CharField(required=True)

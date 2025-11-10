@@ -18,7 +18,7 @@ class ReceiptUpdateViewTest(TestCase):
 
     def setUp(self) -> None:
         """Настройка тестовых данных."""
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
             password='testpass123',
@@ -293,7 +293,7 @@ class ReceiptUpdateViewTest(TestCase):
 
     def test_receipt_update_unauthorized_user(self) -> None:
         """Тест попытки обновления чека неавторизованным пользователем."""
-        other_user = User.objects.create_user(  # type: ignore[attr-defined]
+        other_user = User.objects.create_user(
             username='otheruser',
             email='other@example.com',
             password='otherpass123',

@@ -8,6 +8,7 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.users.models import User
 
 
 class ReceiptCreatorService:
@@ -15,7 +16,7 @@ class ReceiptCreatorService:
     @transaction.atomic
     def create_manual_receipt(
         *,
-        user,
+        user: User,
         receipt_form: ReceiptForm,
         product_formset: BaseFormSet[Any],
         seller: Seller,

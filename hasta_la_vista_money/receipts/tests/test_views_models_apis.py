@@ -1,9 +1,10 @@
 import json
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import Mock, patch
 
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse_lazy
@@ -26,7 +27,11 @@ from hasta_la_vista_money.receipts.services import (
     analyze_image_with_ai,
     image_to_base64,
 )
-from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User as UserType
+else:
+    UserType = get_user_model()
 
 
 class TestReceipt(TestCase):
@@ -39,8 +44,8 @@ class TestReceipt(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
-        self.user2 = User.objects.get(pk=2)
+        self.user = UserType.objects.get(pk=1)
+        self.user2 = UserType.objects.get(pk=2)
         self.account = Account.objects.get(pk=1)
         self.receipt = Receipt.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
@@ -111,7 +116,7 @@ class TestSeller(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
 
     def test_seller_creation(self) -> None:
         seller_data = {
@@ -160,7 +165,7 @@ class TestProduct(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
 
     def test_product_creation(self) -> None:
         product_data = {
@@ -205,7 +210,7 @@ class TestReceiptModel(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
@@ -274,7 +279,7 @@ class TestForms(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
@@ -284,7 +289,7 @@ class TestForms(TestCase):
             'retail_place_address': 'ул. Тестовая, 1',
             'retail_place': 'Магазин "Тест"',
         }
-        form = SellerForm(data=form_data)  # type: ignore[no-untyped-call]
+        form = SellerForm(data=form_data)
         self.assertTrue(form.is_valid())
 
     def test_seller_form_empty_fields(self) -> None:
@@ -293,7 +298,7 @@ class TestForms(TestCase):
             'retail_place_address': '',
             'retail_place': '',
         }
-        form = SellerForm(data=form_data)  # type: ignore[no-untyped-call]
+        form = SellerForm(data=form_data)
         self.assertTrue(form.is_valid())
 
     def test_product_form_valid(self) -> None:
@@ -385,7 +390,7 @@ class TestForms(TestCase):
             'account': self.account.pk,
         }
 
-        form = UploadImageForm(  # type: ignore[no-untyped-call]
+        form = UploadImageForm(
             user=self.user,
             data=form_data,
             files={'file': test_file},
@@ -404,13 +409,13 @@ class TestReceiptFilter(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
     def test_filter_by_seller(self) -> None:
         filter_data = {'name_seller': self.seller.pk}
-        receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
+        receipt_filter = ReceiptFilter(
             data=filter_data,
             queryset=Receipt.objects.all(),
             user=self.user,
@@ -422,7 +427,7 @@ class TestReceiptFilter(TestCase):
 
     def test_filter_by_account(self) -> None:
         filter_data = {'account': self.account.pk}
-        receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
+        receipt_filter = ReceiptFilter(
             data=filter_data,
             queryset=Receipt.objects.all(),
             user=self.user,
@@ -437,7 +442,7 @@ class TestReceiptFilter(TestCase):
             'receipt_date_after': '2023-01-01',
             'receipt_date_before': '2023-12-31',
         }
-        receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
+        receipt_filter = ReceiptFilter(
             data=filter_data,
             queryset=Receipt.objects.all(),
             user=self.user,
@@ -458,11 +463,11 @@ class TestReceiptAPIs(APITestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
         self.receipt = Receipt.objects.get(pk=1)
-        self.client.force_authenticate(user=self.user)  # type: ignore[attr-defined]
+        self.client.force_authenticate(user=self.user)
 
     def test_receipt_list_api(self) -> None:
         url = reverse_lazy('receipts:api_list')
@@ -471,7 +476,7 @@ class TestReceiptAPIs(APITestCase):
         self.assertIsInstance(response.json(), list)
 
     def test_receipt_list_api_unauthorized(self) -> None:
-        self.client.force_authenticate(user=None)  # type: ignore[attr-defined,arg-type]
+        self.client.force_authenticate(user=None)
         url = reverse_lazy('receipts:api_list')
         response = self.client.get(url)
         self.assertIn(
@@ -599,7 +604,7 @@ class TestServices(TestCase):
         self.assertIn('ZmFrZS1pbWFnZS1jb250ZW50', result)
 
     @patch('hasta_la_vista_money.receipts.services.OpenAI')
-    def test_analyze_image_with_ai(self, mock_openai) -> None:
+    def test_analyze_image_with_ai(self, mock_openai: Mock) -> None:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = '{"test": "data"}'
@@ -620,7 +625,7 @@ class TestServices(TestCase):
         mock_client.chat.completions.create.assert_called_once()
 
     @patch('hasta_la_vista_money.receipts.services.OpenAI')
-    def test_analyze_image_with_ai_error(self, mock_openai) -> None:
+    def test_analyze_image_with_ai_error(self, mock_openai: Mock) -> None:
         mock_client = Mock()
         mock_client.chat.completions.create.side_effect = Exception('API Error')
         mock_openai.return_value = mock_client
@@ -642,7 +647,7 @@ class TestUploadImageView(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
 
     def test_upload_image_view_get(self) -> None:
@@ -657,7 +662,7 @@ class TestUploadImageView(TestCase):
         self.assertRedirects(response, '/login/?next=/receipts/upload/')
 
     @patch('hasta_la_vista_money.receipts.views.analyze_image_with_ai')
-    def test_upload_image_view_post(self, mock_analyze) -> None:
+    def test_upload_image_view_post(self, mock_analyze: Mock) -> None:
         mock_analyze.return_value = json.dumps(
             {
                 'name_seller': 'Тестовый продавец',
@@ -710,7 +715,7 @@ class TestProductByMonthView(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
 
     def test_product_by_month_view(self) -> None:
         self.client.force_login(self.user)
@@ -731,7 +736,7 @@ class TestModelValidation(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
 
     def test_receipt_negative_total_sum(self) -> None:
@@ -778,7 +783,7 @@ class TestReceiptOperations(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user = User.objects.get(pk=1)
+        self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.create(
             user=self.user,
@@ -833,8 +838,8 @@ class TestReceiptPermissions(TestCase):
     ]
 
     def setUp(self) -> None:
-        self.user1 = User.objects.get(pk=1)
-        self.user2 = User.objects.create_user(
+        self.user1 = UserType.objects.get(pk=1)
+        self.user2 = UserType.objects.create_user(
             username='testuser2',
             email='test2@example.com',
             password='testpass123',
@@ -876,7 +881,7 @@ class TestReceiptPermissions(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
         seller_form = response.context['receipt_form'].fields['seller']
-        seller_queryset = seller_form.queryset  # type: ignore[attr-defined]
+        seller_queryset = seller_form.queryset
         self.assertEqual(len(seller_queryset), 1)
         self.assertEqual(seller_queryset[0], self.seller1)
 
@@ -885,7 +890,7 @@ class TestReceiptPermissions(TestCase):
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         account_form = response.context['receipt_form'].fields['account']
-        account_queryset = account_form.queryset  # type: ignore[attr-defined]
+        account_queryset = account_form.queryset
         self.assertEqual(len(account_queryset), 2)
         for account in account_queryset:
             self.assertEqual(account.user, self.user1)

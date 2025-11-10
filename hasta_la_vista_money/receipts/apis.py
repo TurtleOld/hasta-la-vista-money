@@ -1,7 +1,7 @@
 import decimal
 import json
-from datetime import datetime
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, cast
 
 from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
@@ -34,7 +34,7 @@ from hasta_la_vista_money.users.models import User
     summary='Список чеков',
     description='Получить список всех чеков текущего пользователя',
 )
-class ReceiptListAPIView(ListCreateAPIView):
+class ReceiptListAPIView(ListCreateAPIView[Receipt]):
     schema = AutoSchema()
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
@@ -43,8 +43,9 @@ class ReceiptListAPIView(ListCreateAPIView):
     def get_queryset(self) -> QuerySet[Receipt, Receipt]:
         if getattr(self, 'swagger_fake_view', False):
             return Receipt.objects.none()
+        user = cast('User', self.request.user)
         return (
-            Receipt.objects.filter(user=self.request.user)
+            Receipt.objects.filter(user=user)
             .select_related('seller', 'account', 'user')
             .prefetch_related('product')
         )
@@ -60,7 +61,7 @@ class ReceiptListAPIView(ListCreateAPIView):
     summary='Детали продавца',
     description='Получить детальную информацию о продавце по ID',
 )
-class SellerDetailAPIView(RetrieveAPIView):
+class SellerDetailAPIView(RetrieveAPIView[Seller]):
     schema = AutoSchema()
     queryset = Seller.objects.all()
     serializer_class = SellerSerializer
@@ -71,8 +72,9 @@ class SellerDetailAPIView(RetrieveAPIView):
     def get_queryset(self) -> QuerySet[Seller, Seller]:
         if getattr(self, 'swagger_fake_view', False):
             return Seller.objects.none()
+        user = cast('User', self.request.user)
         return Seller.objects.filter(
-            user__id=self.request.user.pk,
+            user__id=user.pk,
         ).select_related(
             'user',
         )
@@ -164,7 +166,7 @@ class SellerCreateAPIView(APIView):
         400: OpenApiResponse(description='Неверные данные'),
     },
 )
-class ReceiptCreateAPIView(ListCreateAPIView):
+class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
     schema = AutoSchema()
     queryset = Receipt.objects.none()
     serializer_class = ReceiptSerializer
@@ -189,7 +191,9 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         except (ValueError, TypeError, decimal.InvalidOperation) as error:
             return self._error_response(str(error))
 
-    def _handle_receipt_creation(self, request_data: dict) -> Response:
+    def _handle_receipt_creation(
+        self, request_data: dict[str, Any]
+    ) -> Response:
         if self._check_existing_receipt(request_data):
             return self._error_response('Такой чек уже был добавлен ранее')
 
@@ -219,7 +223,9 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    def _validate_request_data(self, request_data: dict) -> Response | None:
+    def _validate_request_data(
+        self, request_data: dict[str, Any]
+    ) -> Response | None:
         required_fields = [
             'user',
             'finance_account',
@@ -232,20 +238,30 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             return self._error_response('Missing required data')
         return None
 
-    def _check_existing_receipt(self, request_data: dict) -> bool:
+    def _check_existing_receipt(self, request_data: dict[str, Any]) -> bool:
+        receipt_date = request_data.get('receipt_date')
+        total_sum = request_data.get('total_sum')
+        if receipt_date is None or total_sum is None:
+            return False
         return bool(
             Receipt.objects.filter(
-                receipt_date=request_data.get('receipt_date'),
-                total_sum=request_data.get('total_sum'),
+                receipt_date=receipt_date,
+                total_sum=total_sum,
             ).first(),
         )
 
     def _get_user_and_account(
         self,
-        request_data: dict,
+        request_data: dict[str, Any],
     ) -> tuple[User | Response | None, Account | Response | None]:
         user_id = request_data.get('user')
         account_id = request_data.get('finance_account')
+
+        if user_id is None:
+            return (
+                self._error_response('User ID is required'),
+                None,
+            )
 
         try:
             user = User.objects.get(id=user_id)
@@ -253,6 +269,12 @@ class ReceiptCreateAPIView(ListCreateAPIView):
             return (
                 self._error_response(f'User with id {user_id} does not exist'),
                 None,
+            )
+
+        if account_id is None:
+            return (
+                None,
+                self._error_response('Account ID is required'),
             )
 
         try:
@@ -270,14 +292,17 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 
     def _create_receipt(
         self,
-        request_data: dict,
+        request_data: dict[str, Any],
         user: User,
         account: Account,
     ) -> Receipt:
-        seller_data: dict = request_data.get('seller') or {}
+        seller_data: dict[str, Any] = request_data.get('seller') or {}
         seller_data['user'] = user
 
-        account.balance -= decimal.Decimal(str(request_data.get('total_sum')))
+        total_sum_value = request_data.get('total_sum')
+        if total_sum_value is None:
+            raise ValueError('total_sum is required')
+        account.balance -= decimal.Decimal(str(total_sum_value))
         account.save()
 
         seller = Seller.objects.create(**seller_data)
@@ -285,13 +310,15 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         receipt_date = request_data.get('receipt_date')
         if isinstance(receipt_date, str):
             receipt_date = datetime.fromisoformat(receipt_date)
+        elif receipt_date is None:
+            receipt_date = datetime.now(UTC)
 
         receipt = Receipt.objects.create(
             user=user,
             account=account,
             receipt_date=receipt_date,
             seller=seller,
-            total_sum=decimal.Decimal(str(request_data.get('total_sum'))),
+            total_sum=decimal.Decimal(str(total_sum_value)),
             number_receipt=request_data.get('number_receipt'),
             operation_type=request_data.get('operation_type'),
             nds10=decimal.Decimal(str(request_data.get('nds10')))
@@ -309,7 +336,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
 
     def _create_products(
         self,
-        products_data: list,
+        products_data: list[dict[str, Any]],
         user: User,
         receipt: Receipt,
     ) -> None:
@@ -325,7 +352,7 @@ class ReceiptCreateAPIView(ListCreateAPIView):
         products = Product.objects.bulk_create(products_objects)
         receipt.product.set(products)
 
-    def _process_product_data(self, product_data: dict) -> None:
+    def _process_product_data(self, product_data: dict[str, Any]) -> None:
         decimal_fields = ['price', 'quantity', 'amount']
         for field in decimal_fields:
             if field in product_data:
@@ -401,8 +428,9 @@ class SellerAutocompleteAPIView(APIView):
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         query = request.GET.get('q', '').strip()
+        user = cast('User', request.user)
         sellers: QuerySet[Seller, Seller] = Seller.objects.filter(
-            user=request.user,
+            user=user,
         ).only('name_seller')
         if query:
             sellers = sellers.filter(name_seller__icontains=query)
@@ -447,8 +475,9 @@ class ProductAutocompleteAPIView(APIView):
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         query = request.GET.get('q', '').strip()
+        user = cast('User', request.user)
         products: QuerySet[Product, Product] = Product.objects.filter(
-            user=request.user,
+            user=user,
         ).only('product_name')
         if query:
             products = products.filter(product_name__icontains=query)
