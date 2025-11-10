@@ -20,9 +20,10 @@ from django.utils import formats
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DeleteView, UpdateView
-from django.views.generic.edit import CreateView, DeletionMixin
+from django.views.generic.edit import CreateView
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
+from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
@@ -62,8 +63,11 @@ class BaseView:
     Base view for income-related views. Sets default template and success_url.
     """
 
-    template_name: str = 'income/income.html'
-    success_url = reverse_lazy(INCOME_LIST_URL_NAME)
+    def get_success_url(self) -> str | StrOrPromise | None:
+        return reverse_lazy(INCOME_LIST_URL_NAME)
+
+    def get_template_name(self) -> str | None:
+        return 'income/income.html'
 
 
 class IncomeCategoryBaseView(BaseView):
@@ -77,8 +81,8 @@ class IncomeCategoryBaseView(BaseView):
 class IncomeView(
     LoginRequiredMixin,
     SuccessMessageMixin[IncomeForm],
+    FilterView,
     BaseView,
-    FilterView[Income, IncomeFilter],  # type: ignore[misc]
 ):
     """
     View for displaying user's incomes with filtering and chart data.
@@ -87,6 +91,7 @@ class IncomeView(
     paginate_by = constants.PAGINATE_BY_DEFAULT
     model = Income
     filterset_class = IncomeFilter
+    template_name = 'income/income.html'
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
 
@@ -116,7 +121,7 @@ class IncomeView(
             'category',
             'account',
         )
-        income_filter = IncomeFilter(  # type: ignore[no-untyped-call]
+        income_filter = IncomeFilter(
             self.request.GET,
             queryset=income_queryset,
             user=self.request.user,
@@ -166,15 +171,15 @@ class IncomeView(
             },
         )
 
-        return context  # type: ignore[no-any-return]
+        return context
 
 
 class IncomeCreateView(
     LoginRequiredMixin,
     SuccessMessageMixin[IncomeForm],
     IncomeFormQuerysetMixin,
-    BaseView,
     CreateView[Income, IncomeForm],
+    BaseView,
 ):
     """
     View for creating a new income record.
@@ -284,8 +289,8 @@ class IncomeUpdateView(
     LoginRequiredMixin,
     SuccessMessageMixin[IncomeForm],
     IncomeFormQuerysetMixin,
-    BaseView,
     UpdateView[Income, IncomeForm],
+    BaseView,
 ):
     """
     View for updating an existing income record.
@@ -374,11 +379,10 @@ class IncomeUpdateView(
             return self.form_invalid(form)
 
 
-class IncomeDeleteView(  # type: ignore[misc]
+class IncomeDeleteView(
     LoginRequiredMixin,
+    DeleteView[Income, IncomeForm],
     BaseView,
-    DeleteView[Income, Any],
-    DeletionMixin[Any],
 ):
     """
     View for deleting an income record.
@@ -527,10 +531,10 @@ class IncomeCategoryCreateView(
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class IncomeCategoryDeleteView(  # type: ignore[misc]
+class IncomeCategoryDeleteView(
     DeleteObjectMixin,
+    DeleteView[IncomeCategory, AddCategoryIncomeForm],
     BaseView,
-    DeleteView[IncomeCategory, Any],
 ):
     """
     View for deleting an income category.

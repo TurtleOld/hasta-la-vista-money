@@ -14,6 +14,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
+from django.db.models import QuerySet
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
@@ -26,6 +27,7 @@ from django.views.generic import (
     ListView,
     UpdateView,
 )
+from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
@@ -40,6 +42,7 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.views import AuthRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -47,22 +50,31 @@ logger = structlog.get_logger(__name__)
 class BaseView:
     """Base view class with common template and success URL configuration."""
 
-    template_name = 'finance_account/account.html'
-    success_url = reverse_lazy('finance_account:list')
+    def get_template_name(self) -> str:
+        """Get the template name to render."""
+        return 'finance_account/account.html'
+
+    def get_success_url(self) -> str | StrOrPromise | None:
+        """Get the URL to redirect to after successful operation."""
+        return reverse_lazy('finance_account:list')
 
 
 class AccountBaseView(BaseView):
     """Base view class for account-related operations."""
 
-    model = Account
+    request: AuthRequest
+
+    def get_queryset(self) -> QuerySet[Account]:
+        """Get the queryset of accounts for the current user."""
+        return Account.objects.by_user(self.request.user)
 
 
 class AccountView(
     LoginRequiredMixin,
     GroupAccountMixin,
-    SuccessMessageMixin,
+    SuccessMessageMixin[Any],
+    ListView[Account],
     AccountBaseView,
-    ListView,
 ):
     """Display a list of user or group accounts with related forms
     and statistics.
@@ -75,8 +87,19 @@ class AccountView(
     """
 
     context_object_name = 'finance_account'
+    template_name = 'finance_account/account.html'
+    request: AuthRequest
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+    def get_queryset(self) -> QuerySet[Account]:
+        """Get the queryset of accounts for the current user."""
+        return Account.objects.by_user(self.request.user)
+
+    def get_context_data(
+        self,
+        *,
+        object_list: Any = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """Build the context for the account list page, including
         accounts, forms, logs, and statistics.
 
@@ -90,7 +113,10 @@ class AccountView(
         Returns:
             dict: Context for rendering the account list template.
         """
-        context = super().get_context_data(**kwargs)
+        context = super().get_context_data(
+            object_list=object_list,
+            **kwargs,
+        )
         context.update(self._get_accounts_context())
         context.update(self._get_forms_context())
         context.update(self._get_transfer_log_context())
@@ -120,7 +146,7 @@ class AccountView(
         """
         user = self.request.user
         account_transfer_money = (
-            Account.objects.by_user(user).select_related('user').all()  # type: ignore[arg-type]
+            Account.objects.by_user(user).select_related('user').all()
         )
         initial_form_data = {
             'from_account': account_transfer_money.first(),
@@ -129,7 +155,7 @@ class AccountView(
         return {
             'add_account_form': AddAccountForm(),
             'transfer_money_form': TransferMoneyAccountForm(
-                user=user,  # type: ignore[arg-type]
+                user=user,
                 initial=initial_form_data,
             ),
         }
@@ -142,7 +168,7 @@ class AccountView(
             dict: Recent transfer logs for the current user.
         """
         user = self.request.user
-        transfer_money_log = TransferMoneyLog.objects.by_user(user)  # type: ignore[arg-type]
+        transfer_money_log = TransferMoneyLog.objects.by_user(user)
         return {
             'transfer_money_log': transfer_money_log,
         }
@@ -169,7 +195,7 @@ class AccountView(
             )
         else:
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.by_user(user).select_related('user'),  # type: ignore[arg-type]
+                Account.objects.by_user(user).select_related('user'),
             )
         return {
             'sum_all_accounts': sum_all_accounts,
@@ -177,7 +203,11 @@ class AccountView(
         }
 
 
-class AccountCreateView(LoginRequiredMixin, CreateView):
+class AccountCreateView(
+    LoginRequiredMixin,
+    CreateView[Account, AddAccountForm],
+    AccountBaseView,
+):
     """
     Handles creation of a new account for the current user.
 
@@ -187,11 +217,16 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
 
     form_class = AddAccountForm
     template_name = 'finance_account/add_account.html'
-    model = Account
     no_permission_url = reverse_lazy('login')
     success_message = constants.SUCCESS_MESSAGE_ADDED_ACCOUNT
+    request: AuthRequest
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+    def get_context_data(
+        self,
+        *,
+        object_list: Any = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """
         Add the account creation form to the context.
 
@@ -201,7 +236,10 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
         Returns:
             dict: Context with the account creation form.
         """
-        context = super().get_context_data(**kwargs)
+        context = super().get_context_data(
+            object_list=object_list,
+            **kwargs,
+        )
         context['add_account_form'] = AddAccountForm()
         return context
 
@@ -242,11 +280,11 @@ class AccountCreateView(LoginRequiredMixin, CreateView):
             return HttpResponseRedirect(self.get_success_url())
 
 
-class ChangeAccountView(  # type: ignore[misc]
+class ChangeAccountView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
+    SuccessMessageMixin[AddAccountForm],
+    UpdateView[Account, AddAccountForm],
     AccountBaseView,
-    UpdateView,
 ):
     """
     Handles editing of an existing account.
@@ -255,11 +293,18 @@ class ChangeAccountView(  # type: ignore[misc]
     feedback on success or error.
     """
 
+    model = Account
     form_class = AddAccountForm
     template_name = 'finance_account/change_account.html'
     success_message = constants.SUCCESS_MESSAGE_CHANGED_ACCOUNT
+    request: AuthRequest
 
-    def get_context_data(self, **kwargs: Any) -> dict:
+    def get_context_data(
+        self,
+        *,
+        object_list: Any = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """
         Add the account edit form to the context.
 
@@ -270,7 +315,10 @@ class ChangeAccountView(  # type: ignore[misc]
             dict: Context with the account edit form.
         """
         try:
-            context = super().get_context_data(**kwargs)
+            context = super().get_context_data(
+                object_list=object_list,
+                **kwargs,
+            )
             form_class = self.get_form_class()
             form = form_class(**self.get_form_kwargs())
             context['add_account_form'] = form
@@ -286,16 +334,19 @@ class ChangeAccountView(  # type: ignore[misc]
                     'Пожалуйста, попробуйте позже.',
                 ),
             )
-            return super().get_context_data(**kwargs)
+            return super().get_context_data(
+                object_list=object_list,
+                **kwargs,
+            )
         else:
             return context
 
 
-class TransferMoneyAccountView(  # type: ignore[misc]
+class TransferMoneyAccountView(
     LoginRequiredMixin,
-    SuccessMessageMixin,
+    SuccessMessageMixin[TransferMoneyAccountForm],
+    FormView[TransferMoneyAccountForm],
     AccountBaseView,
-    FormView,
 ):
     """
     Handles money transfers between user accounts.
@@ -307,6 +358,7 @@ class TransferMoneyAccountView(  # type: ignore[misc]
     form_class = TransferMoneyAccountForm
     success_message = constants.SUCCESS_MESSAGE_TRANSFER_MONEY
     template_name = 'finance_account/transfer_money.html'
+    request: AuthRequest
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get form kwargs including user for account filtering."""
@@ -349,7 +401,11 @@ class TransferMoneyAccountView(  # type: ignore[misc]
             return self.form_invalid(form)  # type: ignore[return-value]
 
 
-class DeleteAccountView(DeleteObjectMixin, LoginRequiredMixin, DeleteView):
+class DeleteAccountView(
+    DeleteObjectMixin,
+    LoginRequiredMixin,
+    DeleteView[Account, Any],
+):
     """
     Handles deletion of an account.
 

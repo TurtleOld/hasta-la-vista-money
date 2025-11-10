@@ -1,7 +1,6 @@
 import decimal
 import json
 import re
-from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -14,6 +13,8 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, ProtectedError, QuerySet, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
+
+from hasta_la_vista_money.users.views import AuthRequest
 
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
@@ -58,22 +59,27 @@ logger = structlog.get_logger(__name__)
 
 
 class BaseView:
-    template_name: ClassVar[str | Sequence[str] | None] = (
-        'receipts/receipts.html'
-    )
-    success_url: ClassVar[StrOrPromise] = reverse_lazy('receipts:list')
+    """Base view class for receipts views."""
+
+    def get_template_name(self) -> str:
+        return 'receipts/receipts.html'
+
+    def get_success_url(self) -> str | StrOrPromise | None:
+        return reverse_lazy('receipts:list')
 
 
 class ReceiptView(
     LoginRequiredMixin,
-    SuccessMessageMixin[Any],
+    SuccessMessageMixin[ReceiptForm],
+    FilterView,
     BaseView,
-    FilterView[Receipt, ReceiptFilter],
 ):
     paginate_by: int = constants.PAGINATE_BY_DEFAULT
     model = Receipt
     filterset_class: type[ReceiptFilter] = ReceiptFilter
+    template_name: str = 'receipts/receipts.html'
     no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
+    request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Receipt]:
         group_id = self.request.GET.get('group_id') or 'my'
@@ -86,7 +92,12 @@ class ReceiptView(
                 return Receipt.objects.none()
         return Receipt.objects.for_user(self.request.user).with_related()
 
-    def get_context_data(self, **kwargs: object) -> dict[str, Any]:
+    def get_context_data(
+        self,
+        *,
+        object_list: Any = None,
+        **kwargs: object,
+    ) -> dict[str, object]:
         user = get_object_or_404(User, username=self.request.user)
         group_id = self.request.GET.get('group_id') or 'my'
 
@@ -120,8 +131,8 @@ class ReceiptView(
             seller_queryset = Seller.objects.unique_by_name_for_user(user)
             account_queryset = Account.objects.by_user_with_related(user)
 
-        seller_form = SellerForm()  # type: ignore[no-untyped-call]
-        receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
+        seller_form = SellerForm()
+        receipt_filter = ReceiptFilter(
             self.request.GET,
             queryset=receipt_queryset,
             user=self.request.user,
@@ -174,7 +185,10 @@ class ReceiptView(
             'receipts',
         )
 
-        context: dict[str, Any] = super().get_context_data(**kwargs)
+        context: dict[str, object] = super().get_context_data(
+            object_list=object_list,
+            **kwargs,
+        )
         context['receipts'] = page_receipts
         context['receipt_filter'] = receipt_filter
         context['total_receipts'] = total_receipts
@@ -188,11 +202,11 @@ class ReceiptView(
         return context
 
 
-class SellerCreateView(  # type: ignore[misc]
+class SellerCreateView(
     LoginRequiredMixin,
     SuccessMessageMixin[SellerForm],
-    BaseView,
     CreateView[Seller, SellerForm],
+    BaseView,
 ):
     model = Seller
     form_class: type[SellerForm] = SellerForm
@@ -201,7 +215,7 @@ class SellerCreateView(  # type: ignore[misc]
         self,
         request: HttpRequest,
     ) -> JsonResponse:
-        seller_form = SellerForm(request.POST)  # type: ignore[no-untyped-call]
+        seller_form = SellerForm(request.POST)
         if seller_form.is_valid():
             seller = seller_form.save(commit=False)
             if not isinstance(request.user, User):
@@ -221,11 +235,11 @@ class SellerCreateView(  # type: ignore[misc]
         return JsonResponse(response_data)
 
 
-class ReceiptCreateView(  # type: ignore[misc]
+class ReceiptCreateView(
     LoginRequiredMixin,
     SuccessMessageMixin[ReceiptForm],
-    BaseView,
     CreateView[Receipt, ReceiptForm],
+    BaseView,
 ):
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
@@ -344,25 +358,20 @@ class ReceiptCreateView(  # type: ignore[misc]
         context['product_formset'] = product_formset
         return self.render_to_response(context)
 
+    def get_absolute_url(self) -> str:
+        return reverse_lazy('receipts:list')
+
 
 class ReceiptUpdateView(
     LoginRequiredMixin,
     SuccessMessageMixin[ReceiptForm],
     UpdateView[Receipt, ReceiptForm],
+    BaseView,
 ):
-    template_name = 'receipts/receipt_update.html'
-    success_url = reverse_lazy('receipts:list')
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
-    success_message = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
-
-    def post(
-        self,
-        request: HttpRequest,
-        *args: object,
-        **kwargs: object,
-    ) -> HttpResponse:
-        return super().post(request, *args, **kwargs)
+    template_name: str = 'receipts/receipt_update.html'
+    success_message: str = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         try:
@@ -531,6 +540,10 @@ class ReceiptDeleteView(
     BaseView,
 ):
     model = Receipt
+    success_url = reverse_lazy('receipts:list')
+
+    def get_success_url(self) -> str | StrOrPromise:
+        return self.success_url
 
     def post(
         self,
@@ -556,14 +569,14 @@ class ReceiptDeleteView(
                     self.request,
                     constants.SUCCESS_MESSAGE_DELETE_RECEIPT,
                 )
-                return redirect(str(self.success_url))
+                return redirect(self.success_url)
         except ProtectedError:
             messages.error(
                 self.request,
                 constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT,
             )
-            return redirect(str(self.success_url))
-        return redirect(str(self.success_url))
+            return redirect(self.success_url)
+        return redirect(self.success_url)
 
 
 class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
