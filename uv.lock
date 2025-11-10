@@ -1090,6 +1090,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "sentry-sdk" },
     { name = "twisted", extra = ["http2", "tls"] },
+    { name = "types-django-filter" },
     { name = "urllib3" },
     { name = "whitenoise", extra = ["brotli"] },
 ]
@@ -1188,6 +1189,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "sentry-sdk", specifier = ">=2.22.0" },
     { name = "twisted", extras = ["http2", "tls"], specifier = ">=25.0.0" },
+    { name = "types-django-filter", specifier = ">=25.2.0.20251010" },
     { name = "types-python-dateutil", marker = "extra == 'dev'", specifier = ">=2.9.0.20241003" },
     { name = "urllib3", specifier = ">=2.0.2" },
     { name = "werkzeug", marker = "extra == 'dev'", specifier = ">=3.0.1" },
@@ -3053,6 +3055,18 @@ dependencies = [
 sdist = { url = "https://pkgs.safetycli.com/package/pavlovteam/pypi/packages/8f/28/7c85c8032b91dbe79725b6f17d2fffc595dff06a35c7a30a37bef73a1ab4/typer-0.20.0.tar.gz", hash = "sha256:1aaf6494031793e4876fb0bacfa6a912b551cf43c1e63c800df8b1a866720c37", size = 106492, upload-time = "2025-10-20T17:03:49.445Z" }
 wheels = [
     { url = "https://pkgs.safetycli.com/package/pavlovteam/pypi/packages/78/64/7713ffe4b5983314e9d436a90d5bd4f63b6054e2aca783a3cfc44cb95bbf/typer-0.20.0-py3-none-any.whl", hash = "sha256:5b463df6793ec1dca6213a3cf4c0f03bc6e322ac5e16e13ddd622a889489784a", size = 47028, upload-time = "2025-10-20T17:03:47.617Z" },
+]
+
+[[package]]
+name = "types-django-filter"
+version = "25.2.0.20251010"
+source = { registry = "https://pkgs.safetycli.com/repository/pavlovteam/project/hastalavistamoney/pypi/simple/" }
+dependencies = [
+    { name = "django-stubs" },
+]
+sdist = { url = "https://pkgs.safetycli.com/package/pavlovteam/pypi/packages/71/62/7d5b38a4421d6abe025f3a8e336f84916ebaa66f50badfa93c6fed04462b/types_django_filter-25.2.0.20251010.tar.gz", hash = "sha256:f250784a9e3aa1b260881317e6d5505c05bb43a1caa1b3039efd5f93aaff6389", size = 15629, upload-time = "2025-10-10T02:54:47.838Z" }
+wheels = [
+    { url = "https://pkgs.safetycli.com/package/pavlovteam/pypi/packages/44/df/870dff7e5fde095d1662b04575412b113cafcc38d4c16f6ecbd051a62d64/types_django_filter-25.2.0.20251010-py3-none-any.whl", hash = "sha256:58bc2c663ee9bf65db34346c2554a5b0d64f0033e090bfe651d398368bc9fab4", size = 19331, upload-time = "2025-10-10T02:54:46.992Z" },
 ]
 
 [[package]]

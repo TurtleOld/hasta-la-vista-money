@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from django.urls import include, path
 
@@ -90,7 +91,7 @@ class DebugToolbarSetup:
         return installed_apps, middleware
 
     @staticmethod
-    def do_urls(urlpatterns):
+    def do_urls(urlpatterns: list[Any]) -> list[Any]:
         if not show_toolbar():
             return urlpatterns
 

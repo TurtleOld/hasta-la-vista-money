@@ -217,11 +217,11 @@ elif config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
     }
     database_url = config('DATABASE_URL', default='')
     if database_url:
-        DATABASES['default'] = dict(  # type: ignore[no-redef]
+        DATABASES['default'] = dict(
             dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE),
         )
 else:
-    DATABASES = {  # type: ignore[no-redef]
+    DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
