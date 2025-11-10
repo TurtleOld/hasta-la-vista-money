@@ -27,7 +27,7 @@ class BudgetModelTest(TestCase):
         self.planning = Planning.objects.create(
             user=self.user,
             date=self.date,
-            type='expense',
+            planning_type='expense',
             amount=100,
         )
 
@@ -116,7 +116,7 @@ class BudgetViewsTest(TestCase):
 
     def test_budget_view_no_dates(self) -> None:
         self.client.logout()
-        user2 = User.objects.create_user(  # type: ignore[attr-defined]
+        user2 = User.objects.create_user(
             username='user2',
             password='pass',
         )
