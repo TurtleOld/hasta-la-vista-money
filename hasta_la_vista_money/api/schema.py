@@ -1,10 +1,24 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
-from drf_spectacular.extensions import OpenApiAuthenticationExtension
+
+if TYPE_CHECKING:
+    from drf_spectacular.extensions import (
+        OpenApiAuthenticationExtension as _OpenApiAuthExt,
+    )
+else:
+    from drf_spectacular.extensions import (
+        OpenApiAuthenticationExtension as _OpenApiAuthExt,
+    )
 
 
-class CookieJWTAuthenticationScheme(OpenApiAuthenticationExtension):
+class CookieJWTAuthenticationScheme(_OpenApiAuthExt):  # type: ignore[no-untyped-call]
+    """Authentication scheme for drf-spectacular.
+
+    Note: type: ignore[no-untyped-call] is needed due to drf-spectacular's
+    __init_subclass__ implementation which is not fully typed.
+    """
+
     target_class = (
         'hasta_la_vista_money.authentication.authentication.'
         'CookieJWTAuthentication'

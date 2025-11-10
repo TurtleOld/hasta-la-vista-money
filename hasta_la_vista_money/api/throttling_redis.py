@@ -5,6 +5,9 @@ These classes extend Django REST Framework's built-in throttling to use
 Redis cache backend for improved performance and scalability in production.
 """
 
+from typing import Any
+
+from django.http import HttpRequest
 from rest_framework.throttling import (
     AnonRateThrottle,
     SimpleRateThrottle,
@@ -45,7 +48,11 @@ class RedisLoginRateThrottle(SimpleRateThrottle):
     scope = 'login'
     cache_format = 'throttle_%(scope)s_%(ident)s'
 
-    def get_cache_key(self, request, view):
+    def get_cache_key(
+        self,
+        request: HttpRequest,
+        view: Any,
+    ) -> str | None:
         """
         Generate cache key for login throttling.
 
@@ -57,9 +64,9 @@ class RedisLoginRateThrottle(SimpleRateThrottle):
             Cache key string or None
         """
         if request.user.is_authenticated:
-            ident = request.user.pk
+            ident: int | str = request.user.pk
         else:
-            ident = self.get_ident(request)
+            ident = self.get_ident(request)  # type: ignore[arg-type]
 
         return self.cache_format % {
             'scope': self.scope,
