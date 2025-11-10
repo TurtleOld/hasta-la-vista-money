@@ -9,6 +9,43 @@ class DashboardManager {
         this.init();
     }
 
+    /* ========= helpers (безопасное построение DOM) ========= */
+
+    _el(tag, attrs = {}, ...children) {
+        const node = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs || {})) {
+            if (k === 'class') node.className = v;
+            else if (k === 'dataset' && v && typeof v === 'object') {
+                for (const [dk, dv] of Object.entries(v)) node.dataset[dk] = String(dv);
+            } else if (k === 'style' && v && typeof v === 'object') {
+                Object.assign(node.style, v);
+            } else if (k in node && k !== 'role' && k !== 'ariaLabel') {
+                try { node[k] = v; } catch { node.setAttribute(k, v); }
+            } else if (k === 'role') {
+                node.setAttribute('role', v);
+            } else if (k === 'ariaLabel') {
+                node.setAttribute('aria-label', v);
+            } else {
+                node.setAttribute(k, v);
+            }
+        }
+        for (const child of children.flat()) {
+            if (child == null) continue;
+            if (child instanceof Node) node.appendChild(child);
+            else node.appendChild(document.createTextNode(String(child)));
+        }
+        return node;
+    }
+
+    _icon(classList) {
+        return this._el('i', { class: classList });
+    }
+
+    _clear(node) {
+        if (!node) return;
+        while (node.firstChild) node.removeChild(node.firstChild);
+    }
+
     init() {
         this.setupEventListeners();
         this.loadDashboard();
@@ -24,7 +61,6 @@ class DashboardManager {
             addWidgetBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Add widget button clicked');
                 try {
                     this.showWidgetSelectModal();
                 } catch (error) {
@@ -62,7 +98,6 @@ class DashboardManager {
                 e.preventDefault();
                 e.stopPropagation();
                 const widgetType = widgetSelectBtn.dataset.widgetType;
-                console.log('Widget selected:', widgetType);
                 this.addWidget(widgetType);
                 return;
             }
@@ -92,8 +127,8 @@ class DashboardManager {
 
     async loadDashboard() {
         try {
-            const url = `${this.apiBase}/data/?period=${this.period}`;
-            console.log('Loading dashboard from:', url);
+            const qs = new URLSearchParams({ period: this.period });
+            const url = `${this.apiBase}/data/?${qs.toString()}`;
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -104,26 +139,21 @@ class DashboardManager {
                 credentials: 'same-origin',
             });
 
-            console.log('Response status:', response.status, response.statusText);
-
             if (!response.ok) {
                 let errorText = '';
                 try {
                     const errorData = await response.json();
                     errorText = errorData.error || JSON.stringify(errorData);
-                    console.error('Error response:', errorData);
                     if (errorData.traceback) {
                         console.error('Traceback:', errorData.traceback);
                     }
-                } catch (e) {
+                } catch {
                     errorText = await response.text();
-                    console.error('Error response (text):', errorText);
                 }
                 throw new Error(`Failed to load dashboard data: ${response.status} ${response.statusText}. ${errorText}`);
             }
 
             const data = await response.json();
-            console.log('Dashboard data loaded successfully:', data);
 
             this.widgets = data.widgets || [];
             this.analyticsData = data.analytics || {};
@@ -134,30 +164,22 @@ class DashboardManager {
         } catch (error) {
             console.error('Error loading dashboard:', error);
             const errorMessage = error.message || 'Ошибка загрузки данных дашборда';
-            console.error('Full error details:', {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-            });
             this.showError(errorMessage);
         }
     }
 
     renderWidgets() {
         const grid = document.getElementById('widgets-grid');
-        if (!grid) {
-            return;
-        }
+        if (!grid) return;
 
-        grid.innerHTML = '';
+        this._clear(grid);
 
         if (this.widgets.length === 0) {
-            grid.innerHTML = `
-                <div class="dashboard-empty-state">
-                    <i class="bi bi-graph-up fs-1 text-muted"></i>
-                    <p class="text-muted">Добавьте виджеты для отображения данных</p>
-                </div>
-            `;
+            const empty = this._el('div', { class: 'dashboard-empty-state' },
+                this._icon('bi bi-graph-up fs-1 text-muted'),
+                this._el('p', { class: 'text-muted' }, 'Добавьте виджеты для отображения данных'),
+            );
+            grid.appendChild(empty);
             return;
         }
 
@@ -171,42 +193,40 @@ class DashboardManager {
     }
 
     createWidgetElement(widget) {
-        const div = document.createElement('div');
-        div.className = 'widget';
-        div.dataset.widgetId = widget.id;
-        div.dataset.width = widget.width || 6;
+        const div = this._el('div', {
+            class: 'widget',
+            dataset: { widgetId: widget.id, width: widget.width || 6 },
+        });
         div.style.setProperty('--widget-height', `${widget.height || 300}px`);
 
-        const widgetTitle = this.getWidgetTitle(widget.widget_type);
+        const header = this._el('div', { class: 'widget-header' });
 
-        div.innerHTML = `
-            <div class="widget-header">
-                <h5>${widgetTitle}</h5>
-                <div class="widget-controls">
-                    <button class="btn-config-widget" title="Настройки">
-                        <i class="bi bi-gear"></i>
-                    </button>
-                    <button class="btn-remove-widget" title="Удалить">
-                        <i class="bi bi-x-circle"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="widget-content" id="widget-content-${widget.id}">
-                <div class="widget-loading">
-                    <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="visually-hidden">Загрузка...</span>
-                    </div>
-                </div>
-            </div>
-        `;
+        const h5 = this._el('h5');
+        // Безопасно вставляем заголовок как текст
+        h5.textContent = this.getWidgetTitle(widget.widget_type);
 
-        const chartContainer = document.createElement('div');
-        chartContainer.className = 'widget-chart';
-        chartContainer.id = `chart-${widget.id}`;
+        const controls = this._el('div', { class: 'widget-controls' });
+        const btnCfg = this._el('button', { class: 'btn-config-widget', title: 'Настройки', type: 'button', ariaLabel: 'Настройки' }, this._icon('bi bi-gear'));
+        const btnDel = this._el('button', { class: 'btn-remove-widget', title: 'Удалить', type: 'button', ariaLabel: 'Удалить' }, this._icon('bi bi-x-circle'));
+        controls.append(btnCfg, btnDel);
+
+        header.append(h5, controls);
+
+        const content = this._el('div', { class: 'widget-content', id: `widget-content-${widget.id}` });
+        const loading = this._el('div', { class: 'widget-loading' },
+            this._el('div', { class: 'spinner-border spinner-border-sm', role: 'status' },
+                this._el('span', { class: 'visually-hidden' }, 'Загрузка...')
+            )
+        );
+
+        const chartContainer = this._el('div', {
+            class: 'widget-chart',
+            id: `chart-${widget.id}`
+        });
         chartContainer.style.height = `${widget.height || 300}px`;
 
-        const contentDiv = div.querySelector('.widget-content');
-        contentDiv.appendChild(chartContainer);
+        content.append(loading, chartContainer);
+        div.append(header, content);
 
         return div;
     }
@@ -221,25 +241,21 @@ class DashboardManager {
             'top_categories': 'Топ категорий',
             'recent_transactions': 'Последние операции',
         };
-        return titles[widgetType] || widgetType;
+        // Возвращаем строку, которая дальше кладётся в textContent (безопасно)
+        return titles[widgetType] || String(widgetType || 'Виджет');
     }
 
     renderWidgetCharts() {
         this.widgets.forEach((widget) => {
             const chartId = `chart-${widget.id}`;
             const chartContainer = document.getElementById(chartId);
-
-            if (!chartContainer) {
-                return;
-            }
+            if (!chartContainer) return;
 
             const contentDiv = chartContainer.parentElement;
-            contentDiv.classList.remove('loading', 'error');
+            contentDiv?.classList.remove('loading', 'error');
 
-            const loadingDiv = contentDiv.querySelector('.widget-loading');
-            if (loadingDiv) {
-                loadingDiv.remove();
-            }
+            const loadingDiv = contentDiv?.querySelector('.widget-loading');
+            loadingDiv?.remove();
 
             try {
                 let chart = this.charts.get(widget.id);
@@ -249,23 +265,23 @@ class DashboardManager {
                 if (chart) {
                     this.charts.set(widget.id, chart);
                 } else {
-                    contentDiv.classList.add('error');
-                    contentDiv.innerHTML = `
-                        <div class="error">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <p>Не удалось отобразить виджет</p>
-                        </div>
-                    `;
+                    contentDiv?.classList.add('error');
+                    const err = this._el('div', { class: 'error' },
+                        this._icon('bi bi-exclamation-triangle'),
+                        this._el('p', null, 'Не удалось отобразить виджет'),
+                    );
+                    this._clear(contentDiv);
+                    contentDiv?.appendChild(err);
                 }
             } catch (error) {
                 console.error(`Error rendering widget ${widget.id}:`, error);
-                contentDiv.classList.add('error');
-                contentDiv.innerHTML = `
-                    <div class="error">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        <p>Ошибка отображения виджета</p>
-                    </div>
-                `;
+                contentDiv?.classList.add('error');
+                const err = this._el('div', { class: 'error' },
+                    this._icon('bi bi-exclamation-triangle'),
+                    this._el('p', null, 'Ошибка отображения виджета'),
+                );
+                this._clear(contentDiv);
+                contentDiv?.appendChild(err);
             }
         });
     }
@@ -302,43 +318,35 @@ class DashboardManager {
     renderBalanceChart(widget, containerId, initChart, chartConfigs) {
         const config = JSON.parse(JSON.stringify(chartConfigs.balance));
         const stats = this.analyticsData?.stats;
-
-        if (!stats?.months_data) {
-            return null;
-        }
+        if (!stats?.months_data) return null;
 
         const labels = stats.months_data.map((m) => m.month);
         const balances = stats.months_data.map((m) => {
-            if (m.balance !== undefined) {
-                return parseFloat(m.balance.toFixed(2));
-            }
+            if (m.balance !== undefined) return parseFloat(m.balance.toFixed(2));
             return parseFloat((m.income - m.expenses).toFixed(2));
         });
 
         config.xAxis.data = labels;
         config.series[0].data = balances;
-        
-        config.tooltip.formatter = function(params) {
+
+        config.tooltip.formatter = function (params) {
             if (!params || params.length === 0) return '';
             const param = params[0];
-            const value = typeof param.value === 'number' 
-                ? param.value 
+            const value = typeof param.value === 'number'
+                ? param.value
                 : (Array.isArray(param.value) ? param.value[1] : param.value);
             const formattedValue = parseFloat(value).toFixed(2);
-            return param.axisValue + '<br/>Баланс: ' + formattedValue;
+            // Возвращает строку для тултипа графика (это не DOM-вставка)
+            return `${param.axisValue}<br/>Баланс: ${formattedValue}`;
         };
 
-        const chart = initChart(containerId, config);
-        return chart;
+        return initChart(containerId, config);
     }
 
     renderExpensesChart(widget, containerId, initChart, chartConfigs) {
         const config = JSON.parse(JSON.stringify(chartConfigs.expensesTrend));
         const stats = this.analyticsData?.stats;
-
-        if (!stats?.months_data) {
-            return null;
-        }
+        if (!stats?.months_data) return null;
 
         const labels = stats.months_data.map((m) => m.month);
         const expenses = stats.months_data.map((m) => m.expenses);
@@ -361,21 +369,14 @@ class DashboardManager {
         }
 
         const chart = initChart(containerId, config);
-
-        window.addDrillDownHandler?.(chart, (params) => {
-            this.handleDrillDown('expense', params);
-        });
-
+        window.addDrillDownHandler?.(chart, (params) => this.handleDrillDown('expense', params));
         return chart;
     }
 
     renderIncomeChart(widget, containerId, initChart, chartConfigs) {
         const config = JSON.parse(JSON.stringify(chartConfigs.incomeTrend));
         const stats = this.analyticsData?.stats;
-
-        if (!stats?.months_data) {
-            return null;
-        }
+        if (!stats?.months_data) return null;
 
         const labels = stats.months_data.map((m) => m.month);
         const income = stats.months_data.map((m) => m.income);
@@ -383,42 +384,26 @@ class DashboardManager {
         config.xAxis.data = labels;
         config.series[0].data = income;
 
-        const chart = initChart(containerId, config);
-        return chart;
+        return initChart(containerId, config);
     }
 
     renderComparisonChart(widget, containerId, initChart, chartConfigs) {
         const config = JSON.parse(JSON.stringify(chartConfigs.comparison));
-
-        if (!this.comparisonData?.current) {
-            return null;
-        }
+        if (!this.comparisonData?.current) return null;
 
         const current = this.comparisonData.current;
         const previous = this.comparisonData.previous;
 
-        config.series[0].data = [
-            current.expenses,
-            current.income,
-            current.savings,
-        ];
-        config.series[1].data = [
-            previous.expenses,
-            previous.income,
-            previous.savings,
-        ];
+        config.series[0].data = [current.expenses, current.income, current.savings];
+        config.series[1].data = [previous.expenses, previous.income, previous.savings];
 
-        const chart = initChart(containerId, config);
-        return chart;
+        return initChart(containerId, config);
     }
 
     renderTrendChart(widget, containerId, initChart, chartConfigs) {
         const config = JSON.parse(JSON.stringify(chartConfigs.expensesTrend));
         const stats = this.analyticsData?.stats;
-
-        if (!stats?.months_data) {
-            return null;
-        }
+        if (!stats?.months_data) return null;
 
         const labels = stats.months_data.map((m) => m.month);
         const expenses = stats.months_data.map((m) => m.expenses);
@@ -434,7 +419,7 @@ class DashboardManager {
             if (trends.forecast) {
                 const forecastLabels = trends.forecast.map((f) => {
                     const d = new Date(f.date);
-                    return d.toLocaleDateString('ru-RU', {month: 'short', year: 'numeric'});
+                    return d.toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' });
                 });
                 const forecastValues = trends.forecast.map((f) => f.value);
                 config.xAxis.data = [...labels, ...forecastLabels];
@@ -443,17 +428,13 @@ class DashboardManager {
             }
         }
 
-        const chart = initChart(containerId, config);
-        return chart;
+        return initChart(containerId, config);
     }
 
     renderTopCategoriesChart(widget, containerId, initChart, chartConfigs) {
         const config = JSON.parse(JSON.stringify(chartConfigs.categoryDrillDown));
         const stats = this.analyticsData?.stats;
-
-        if (!stats?.top_expense_categories) {
-            return null;
-        }
+        if (!stats?.top_expense_categories) return null;
 
         const categories = stats.top_expense_categories.slice(0, 10);
         const data = categories.map((cat) => ({
@@ -464,35 +445,30 @@ class DashboardManager {
         config.series[0].data = data;
 
         const chart = initChart(containerId, config);
-
-        window.addDrillDownHandler?.(chart, (params) => {
-            this.handleDrillDown('expense', params);
-        });
-
+        window.addDrillDownHandler?.(chart, (params) => this.handleDrillDown('expense', params));
         return chart;
     }
 
     renderRecentTransactions(widget, containerId) {
         const container = document.getElementById(containerId);
-        if (!container) {
-            return null;
-        }
+        if (!container) return null;
 
         const transactions = this.recentTransactions || [];
         const contentDiv = container.parentElement;
-        if (contentDiv) {
-            contentDiv.classList.remove('loading', 'error');
-        }
+        contentDiv?.classList.remove('loading', 'error');
+
+        this._clear(container);
 
         if (transactions.length === 0) {
-            container.innerHTML = `
-                <div class="text-center text-muted py-4">
-                    <i class="bi bi-inbox fs-3"></i>
-                    <p class="mt-2">Нет последних операций</p>
-                </div>
-            `;
+            const empty = this._el('div', { class: 'text-center text-muted py-4' },
+                this._icon('bi bi-inbox fs-3'),
+                this._el('p', { class: 'mt-2' }, 'Нет последних операций'),
+            );
+            container.appendChild(empty);
             return null;
         }
+
+        const list = this._el('div', { class: 'list-group list-group-flush' });
 
         const formatDate = (dateStr) => {
             const date = new Date(dateStr);
@@ -503,78 +479,65 @@ class DashboardManager {
             });
         };
 
-        const formatAmount = (amount, type) => {
-            const num = parseFloat(amount);
-            const formatted = num.toLocaleString('ru-RU', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            });
+        const amountNode = (amount, type) => {
+            const num = Number(amount);
+            const formatted = isFinite(num)
+                ? num.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : String(amount);
             const sign = type === 'expense' ? '-' : '+';
-            const color = type === 'expense' ? 'text-danger' : 'text-success';
-            return `<span class="${color}">${sign}${formatted} ₽</span>`;
+            const cls = type === 'expense' ? 'text-danger' : 'text-success';
+            return this._el('span', { class: cls }, `${sign}${formatted} ₽`);
         };
 
-        const getTypeIcon = (type) => {
-            return type === 'expense'
-                ? '<i class="bi bi-arrow-down-circle text-danger"></i>'
-                : '<i class="bi bi-arrow-up-circle text-success"></i>';
+        const typeIconNode = (type) => {
+            return (type === 'expense')
+                ? this._icon('bi bi-arrow-down-circle text-danger')
+                : this._icon('bi bi-arrow-up-circle text-success');
         };
 
-        const transactionsHtml = transactions
-            .map(
-                (transaction) => `
-            <div class="list-group-item border-0 px-0 py-2">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                            ${getTypeIcon(transaction.type)}
-                            <strong>${transaction.category}</strong>
-                        </div>
-                        <small class="text-muted d-block">
-                            <i class="bi bi-wallet2"></i> ${transaction.account}
-                        </small>
-                        <small class="text-muted">
-                            <i class="bi bi-calendar3"></i> ${formatDate(transaction.date)}
-                        </small>
-                    </div>
-                    <div class="text-end">
-                        ${formatAmount(transaction.amount, transaction.type)}
-                    </div>
-                </div>
-            </div>
-        `,
-            )
-            .join('');
+        for (const t of transactions) {
+            const row = this._el('div', { class: 'list-group-item border-0 px-0 py-2' },
+                this._el('div', { class: 'd-flex justify-content-between align-items-start' },
+                    this._el('div', { class: 'flex-grow-1' },
+                        this._el('div', { class: 'd-flex align-items-center gap-2 mb-1' },
+                            typeIconNode(t.type),
+                            this._el('strong', null, String(t.category ?? '')),
+                        ),
+                        this._el('small', { class: 'text-muted d-block' },
+                            this._icon('bi bi-wallet2'), ' ',
+                            String(t.account ?? '')
+                        ),
+                        this._el('small', { class: 'text-muted' },
+                            this._icon('bi bi-calendar3'), ' ',
+                            formatDate(t.date)
+                        ),
+                    ),
+                    this._el('div', { class: 'text-end' }, amountNode(t.amount, t.type))
+                )
+            );
+            list.appendChild(row);
+        }
 
-        container.innerHTML = `
-            <div class="list-group list-group-flush">
-                ${transactionsHtml}
-            </div>
-        `;
-
+        container.appendChild(list);
         return null;
     }
 
     async handleDrillDown(type, params) {
-        const categoryName = params.name;
+        const categoryName = params?.name;
         const stats = this.analyticsData?.stats;
-
-        if (!stats?.top_expense_categories) {
-            return;
-        }
+        if (!stats?.top_expense_categories || !categoryName) return;
 
         const category = stats.top_expense_categories.find(
             (cat) => cat.category__name === categoryName
         );
-
-        if (!category?.category__id) {
-            return;
-        }
+        if (!category?.category__id) return;
 
         try {
-            const response = await fetch(
-                `${this.apiBase}/drilldown/?category_id=${category.category__id}&type=${type}`
-            );
+            const qs = new URLSearchParams({
+                category_id: String(category.category__id),
+                type: String(type),
+            });
+            const response = await fetch(`${this.apiBase}/drilldown/?${qs.toString()}`);
             const data = await response.json();
 
             if (data.data && data.data.length > 0) {
@@ -586,35 +549,34 @@ class DashboardManager {
     }
 
     updateChartWithDrillDown(chartIndex, drillData) {
+        const chartConfigs = window.chartConfigs;
+        if (!chartConfigs?.categoryDrillDown) return;
+
         const config = JSON.parse(JSON.stringify(chartConfigs.categoryDrillDown));
         config.series[0].data = drillData.data.map((item) => ({
             value: item.value,
             name: item.name,
         }));
 
-            const chart = this.charts.get(chartIndex);
-            window.updateChartOption?.(chart, config);
-        }
+        const chart = this.charts.get(chartIndex);
+        window.updateChartOption?.(chart, config);
+    }
 
     initSortable() {
         const grid = document.getElementById('widgets-grid');
-        if (!grid || this.sortable) {
-            return;
-        }
+        if (!grid || this.sortable) return;
 
         this.sortable = Sortable.create(grid, {
             animation: 150,
             handle: '.widget-header',
-            onEnd: (evt) => {
-                this.updateWidgetPositions();
-            },
+            onEnd: () => this.updateWidgetPositions(),
         });
     }
 
     async updateWidgetPositions() {
         const widgets = Array.from(document.querySelectorAll('.widget'));
         const positions = widgets.map((widget, index) => ({
-            id: parseInt(widget.dataset.widgetId),
+            id: parseInt(widget.dataset.widgetId, 10),
             position: index,
         }));
 
@@ -637,19 +599,14 @@ class DashboardManager {
             console.error('Widget select modal not found');
             return;
         }
-
         if (typeof bootstrap === 'undefined') {
             console.error('Bootstrap is not loaded');
             return;
         }
-
         try {
             let modal = bootstrap.Modal.getInstance(modalElement);
-            if (!modal) {
-                modal = new bootstrap.Modal(modalElement);
-            }
+            if (!modal) modal = new bootstrap.Modal(modalElement);
             modal.show();
-            console.log('Modal shown successfully');
         } catch (error) {
             console.error('Error showing modal:', error);
         }
@@ -659,11 +616,8 @@ class DashboardManager {
         const modalElement = document.getElementById('widget-select-modal');
         if (modalElement) {
             const modal = bootstrap.Modal.getInstance(modalElement);
-            if (modal) {
-                modal.hide();
-            }
+            modal?.hide();
         }
-
         if (!widgetType) {
             console.error('Widget type is required');
             return;
@@ -671,9 +625,7 @@ class DashboardManager {
 
         try {
             const csrfToken = this.getCsrfToken();
-            if (!csrfToken) {
-                throw new Error('CSRF token not found');
-            }
+            if (!csrfToken) throw new Error('CSRF token not found');
 
             const response = await fetch(`${this.apiBase}/widget/`, {
                 method: 'POST',
@@ -682,7 +634,7 @@ class DashboardManager {
                     'X-CSRFToken': csrfToken,
                 },
                 body: JSON.stringify({
-                    widget_type: widgetType,
+                    widget_type: String(widgetType),
                     position: this.widgets.length,
                     config: {},
                 }),
@@ -693,36 +645,27 @@ class DashboardManager {
                 throw new Error(errorData.error || 'Failed to create widget');
             }
 
-            const result = await response.json();
-            console.log('Widget added:', result);
-
             await this.loadDashboard();
         } catch (error) {
             console.error('Error adding widget:', error);
-            this.showError('Ошибка добавления виджета: ' + error.message);
+            this.showError('Ошибка добавления виджета: ' + (error?.message || 'Неизвестная ошибка'));
         }
     }
 
     async removeWidget(widgetId) {
-        if (!confirm('Удалить этот виджет?')) {
-            return;
-        }
+        if (!confirm('Удалить этот виджет?')) return;
 
         try {
-            const response = await fetch(`${this.apiBase}/widget/?widget_id=${widgetId}`, {
+            const response = await fetch(`${this.apiBase}/widget/?widget_id=${encodeURIComponent(widgetId)}`, {
                 method: 'DELETE',
-                headers: {
-                    'X-CSRFToken': this.getCsrfToken(),
-                },
+                headers: { 'X-CSRFToken': this.getCsrfToken() },
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to delete widget');
-            }
+            if (!response.ok) throw new Error('Failed to delete widget');
 
-            const chart = this.charts.get(parseInt(widgetId));
+            const chart = this.charts.get(parseInt(widgetId, 10));
             window.destroyChart?.(chart);
-            this.charts.delete(parseInt(widgetId));
+            this.charts.delete(parseInt(widgetId, 10));
 
             await this.loadDashboard();
         } catch (error) {
@@ -732,41 +675,45 @@ class DashboardManager {
     }
 
     showConfigModal(widgetId) {
-        const widget = this.widgets.find((w) => w.id === parseInt(widgetId));
-        if (!widget) {
-            return;
-        }
+        const widget = this.widgets.find((w) => w.id === parseInt(widgetId, 10));
+        if (!widget) return;
 
-        document.getElementById('config-widget-id').value = widgetId;
-        document.getElementById('config-width').value = widget.width || 6;
-        document.getElementById('config-height').value = widget.height || 300;
+        const idInput = document.getElementById('config-widget-id');
+        const widthInput = document.getElementById('config-width');
+        const heightInput = document.getElementById('config-height');
 
-        const modal = new bootstrap.Modal(document.getElementById('widget-config-modal'));
+        if (idInput) idInput.value = String(widgetId);
+        if (widthInput) widthInput.value = String(widget.width || 6);
+        if (heightInput) heightInput.value = String(widget.height || 300);
+
+        const modalEl = document.getElementById('widget-config-modal');
+        if (!modalEl) return;
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
         modal.show();
     }
 
     async saveWidgetConfig() {
-        const widgetId = parseInt(document.getElementById('config-widget-id').value);
-        const width = parseInt(document.getElementById('config-width').value);
-        const height = parseInt(document.getElementById('config-height').value);
+        const idEl = document.getElementById('config-widget-id');
+        const wEl = document.getElementById('config-width');
+        const hEl = document.getElementById('config-height');
+
+        const widgetId = parseInt(idEl?.value ?? '0', 10);
+        const width = parseInt(wEl?.value ?? '6', 10);
+        const height = parseInt(hEl?.value ?? '300', 10);
 
         const widget = this.widgets.find((w) => w.id === widgetId);
-        if (!widget) {
-            return;
-        }
+        if (!widget) return;
 
         try {
             await this.saveWidgetConfigToServer({
                 widget_id: widgetId,
-                width: width,
-                height: height,
+                width,
+                height,
                 config: widget.config,
             });
 
             const modal = bootstrap.Modal.getInstance(document.getElementById('widget-config-modal'));
-            if (modal) {
-                modal.hide();
-            }
+            modal?.hide();
 
             await this.loadDashboard();
         } catch (error) {
@@ -785,10 +732,7 @@ class DashboardManager {
             body: JSON.stringify(config),
         });
 
-        if (!response.ok) {
-            throw new Error('Failed to save widget config');
-        }
-
+        if (!response.ok) throw new Error('Failed to save widget config');
         return response.json();
     }
 
@@ -798,16 +742,15 @@ class DashboardManager {
         const btn = document.getElementById('edit-mode-btn');
 
         if (grid) {
+            grid.classList.toggle('edit-mode', this.editMode);
+        }
+        if (btn) {
+            // Не используем небезопасный innerHTML; строим кнопку с иконкой
+            this._clear(btn);
             if (this.editMode) {
-                grid.classList.add('edit-mode');
-                if (btn) {
-                    btn.textContent = 'Завершить редактирование';
-                }
+                btn.appendChild(document.createTextNode('Завершить редактирование'));
             } else {
-                grid.classList.remove('edit-mode');
-                if (btn) {
-                    btn.innerHTML = '<i class="bi bi-pencil"></i> Редактировать';
-                }
+                btn.append(this._icon('bi bi-pencil'), document.createTextNode(' Редактировать'));
             }
         }
     }
@@ -815,9 +758,8 @@ class DashboardManager {
     getCsrfToken() {
         let token = null;
 
-        if (document.querySelector('[name=csrfmiddlewaretoken]')) {
-            token = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        }
+        const inp = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (inp) token = inp.value;
 
         if (!token) {
             const cookies = document.cookie.split(';');
@@ -829,22 +771,36 @@ class DashboardManager {
                 }
             }
         }
-
         return token || '';
     }
 
     showError(message) {
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-danger alert-dismissible fade show';
-        alert.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        document.body.insertBefore(alert, document.body.firstChild);
+        // Безопасный алерт без innerHTML
+        let region = document.getElementById('alerts-region');
+        if (!region) {
+            region = this._el('div', { id: 'alerts-region' });
+            document.body.prepend(region);
+        }
 
-        setTimeout(() => {
-            alert.remove();
-        }, 5000);
+        const alert = this._el('div', {
+            class: 'alert alert-danger alert-dismissible fade show',
+            role: 'alert'
+        });
+
+        const text = this._el('span', null, String(message));
+        const btn = this._el('button', {
+            type: 'button',
+            class: 'btn-close',
+            ariaLabel: 'Close'
+        });
+
+        btn.addEventListener('click', () => alert.remove());
+
+        alert.append(text, btn);
+        region.prepend(alert);
+
+        const timer = setTimeout(() => alert.remove(), 5000);
+        btn.addEventListener('click', () => clearTimeout(timer));
     }
 }
 
