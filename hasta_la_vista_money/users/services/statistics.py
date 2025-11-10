@@ -98,7 +98,7 @@ def get_user_statistics(user: User) -> UserStatistics:
         .order_by('-total')[: constants.RECENT_ITEMS_LIMIT]
     )
 
-    return {  # type: ignore[typeddict-item]
+    return {
         'total_balance': Decimal(str(total_balance)),
         'accounts_count': int(accounts_count),
         'current_month_expenses': Decimal(str(current_month_expenses)),

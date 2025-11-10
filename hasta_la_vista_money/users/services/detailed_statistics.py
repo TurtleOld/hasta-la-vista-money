@@ -140,12 +140,12 @@ class UserDetailedStatisticsDict(TypedDict):
     """Подробная статистика пользователя."""
 
     months_data: list[MonthDataDict]
-    top_expense_categories: list
-    top_income_categories: list
-    receipt_info_by_month: QuerySet
+    top_expense_categories: list[dict[str, Any]]
+    top_income_categories: list[dict[str, Any]]
+    receipt_info_by_month: QuerySet[Receipt]
     income_expense: list[IncomeExpenseDict]
-    transfer_money_log: QuerySet
-    accounts: QuerySet
+    transfer_money_log: QuerySet[TransferMoneyLog]
+    accounts: QuerySet[Account]
     balances_by_currency: dict[str, float]
     delta_by_currency: dict[str, DeltaByCurrencyDict]
     chart_combined: ChartDataDict
@@ -169,7 +169,7 @@ def _month_bounds_for_offset(today: date, offset: int) -> tuple[date, date]:
 
 
 def _sum_amount_for_period(
-    model,
+    model: type[Expense] | type[Income],
     user: User,
     start: date,
     end: date,
@@ -186,7 +186,7 @@ def _sum_amount_for_period(
 
 
 def _top_categories_qs(
-    model,
+    model: type[Expense] | type[Income],
     user: User,
     year_start: date,
 ) -> Any:
@@ -200,7 +200,7 @@ def _top_categories_qs(
 
 
 def _dates_amounts(
-    dataset: Iterable[dict],
+    dataset: Iterable[dict[str, Any]],
 ) -> tuple[list[str], list[float]]:
     dates, amounts = [], []
     for item in dataset:
@@ -354,20 +354,20 @@ def _six_months_data(
             float(income_raw)
             if isinstance(income_raw, int | float | str)
             else 0.0
-        )  # type: ignore[arg-type]
+        )
         expenses_val = (
             float(expenses_raw)
             if isinstance(expenses_raw, int | float | str)
             else 0.0
-        )  # type: ignore[arg-type]
+        )
         savings_val = (
             float(savings_raw)
             if isinstance(savings_raw, int | float | str)
             else 0.0
-        )  # type: ignore[arg-type]
+        )
         m['savings_percent'] = (
-            savings_val / income_val * constants.PERCENTAGE_MULTIPLIER  # type: ignore[operator]
-            if income_val > constants.ZERO  # type: ignore[operator]
+            savings_val / income_val * constants.PERCENTAGE_MULTIPLIER
+            if income_val > constants.ZERO
             else float(constants.ZERO)
         )
 
@@ -464,7 +464,7 @@ def _card_months_block(
         )
         overdue = now > grace_end and debt > constants.ZERO
 
-        m: CardMonthDict = {  # type: ignore[typeddict-item]
+        m: CardMonthDict = {
             'month': purchase_start_date.strftime('%m.%Y'),
             'purchase_start': purchase_start,
             'purchase_end': purchase_end,
@@ -488,11 +488,11 @@ def _card_months_block(
                 purchase_start,
             )
             if schedule:
-                final_debt = float(schedule['final_debt'])  # type: ignore[assignment]
+                final_debt = float(schedule['final_debt'])
 
         history.append(
             {
-                'month': str(m['month']),  # type: ignore[typeddict-item]
+                'month': str(m['month']),
                 'debt': debt,
                 'final_debt': final_debt,
                 'grace_end': grace_end.strftime('%d.%m.%Y'),
@@ -573,7 +573,7 @@ def _credit_cards_block(
             .values('amount', 'date'),
         )
         payments: list[PaymentItemDict] = [
-            {'amount': Decimal(str(p['amount'])), 'date': p['date']}  # type: ignore[typeddict-item]
+            {'amount': Decimal(str(p['amount'])), 'date': p['date']}
             for p in payments_raw
         ]
         _apply_payments_to_months(months, payments)
@@ -582,7 +582,7 @@ def _credit_cards_block(
         current_info = card.calculate_grace_period_info(today_month)
         current_info['debt_for_month'] = Decimal(
             str(
-                max(  # type: ignore[typeddict-item]
+                max(
                     0,
                     current_info.get('debt_for_month', 0),
                 ),
@@ -590,14 +590,14 @@ def _credit_cards_block(
         )
         current_info['final_debt'] = Decimal(
             str(
-                max(  # type: ignore[typeddict-item]
+                max(
                     0,
                     current_info.get('final_debt', 0),
                 ),
             ),
         )
 
-        limit_left = Decimal(str((card.limit_credit or 0) - (debt_now or 0)))  # type: ignore[typeddict-item]
+        limit_left = Decimal(str((card.limit_credit or 0) - (debt_now or 0)))
 
         out.append(
             {
@@ -625,11 +625,11 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
     Returns:
         Словарь с детальной статистикой пользователя
     """
-    cache_key = f'user_stats_{user.pk}'  # type: ignore[attr-defined]
+    cache_key = f'user_stats_{user.pk}'
     cached_stats = cache.get(cache_key)
 
     if cached_stats is not None:
-        return cached_stats  # type: ignore[return-value]
+        return cached_stats  # type: ignore[no-any-return]
 
     now = timezone.now()
     today = now.date()
@@ -672,7 +672,7 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
         'top_expense_categories': list(top_expense_categories),
         'top_income_categories': list(top_income_categories),
         'receipt_info_by_month': receipt_info_by_month,
-        'income_expense': income_expense,  # type: ignore[typeddict-item]
+        'income_expense': income_expense,
         'transfer_money_log': transfer_money_log,
         'accounts': accounts,
         'balances_by_currency': dict(balances_by_currency),

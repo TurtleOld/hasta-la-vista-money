@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -36,14 +36,14 @@ def _dummy_get_response(_request: HttpRequest) -> HttpResponse:
 class GroupsServiceTest(TestCase):
     """Tests for user group services."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']  # type: ignore[misc]
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         user = User.objects.first()
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
         self.group: Group = Group.objects.create(name='TestGroup')
 
     def test_get_user_groups_and_not_for_user(self) -> None:

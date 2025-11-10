@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from dateutil.relativedelta import relativedelta
@@ -228,12 +228,14 @@ def get_drill_down_data(
     month_end_dt = timezone.make_aware(datetime.combine(month_end, time.max))
 
     if data_type == 'expense':
-        model = Expense
-        category_model = ExpenseCategory
+        model: type[Expense | Income] = Expense
+        category_model: type[ExpenseCategory | IncomeCategory] = ExpenseCategory
         category_relation = 'category'
     else:
-        model = Income
-        category_model = IncomeCategory
+        model = cast('type[Expense | Income]', Income)
+        category_model = cast(
+            'type[ExpenseCategory | IncomeCategory]', IncomeCategory
+        )
         category_relation = 'category'
 
     if category_id is None:

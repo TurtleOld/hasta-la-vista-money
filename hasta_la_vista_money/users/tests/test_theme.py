@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -23,7 +23,7 @@ class SetUserThemeServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
 
     def test_set_user_theme_light(self) -> None:
         result: bool = set_user_theme(self.user, 'light')

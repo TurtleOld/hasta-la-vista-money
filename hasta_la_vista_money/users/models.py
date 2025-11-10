@@ -43,5 +43,5 @@ class DashboardWidget(Model):
         return f'{self.user.username} - {self.widget_type}'
 
 
-class TokenAdmin(admin.ModelAdmin):
+class TokenAdmin(admin.ModelAdmin[Any]):
     search_fields = ('key', 'user__username')

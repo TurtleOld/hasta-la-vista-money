@@ -298,6 +298,7 @@ class UpdateUserView(
     template_name = 'users/profile.html'
     form_class = UpdateUserForm
     success_message = constants.SUCCESS_MESSAGE_CHANGED_PROFILE
+    request: AuthRequest
 
     def get_form(self, form_class: Any = None) -> UpdateUserForm:
         form = super().get_form(form_class)
@@ -307,6 +308,8 @@ class UpdateUserView(
     def post(
         self,
         request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
     ) -> JsonResponse:
         user_update = self.get_form()
         valid_form = (

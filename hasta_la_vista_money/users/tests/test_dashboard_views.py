@@ -1,6 +1,6 @@
 """Тесты для views дашборда."""
 
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -19,7 +19,7 @@ else:
 class DashboardViewTest(TestCase):
     """Тесты для DashboardView."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -29,7 +29,7 @@ class DashboardViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
         self.client.force_login(self.user)
 
     def test_dashboard_view_requires_login(self) -> None:
@@ -54,7 +54,7 @@ class DashboardViewTest(TestCase):
 class DashboardDataViewTest(TestCase):
     """Тесты для DashboardDataView."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
@@ -68,7 +68,7 @@ class DashboardDataViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
         self.client.force_login(self.user)
 
     def test_dashboard_data_view_requires_login(self) -> None:
@@ -119,7 +119,7 @@ class DashboardDataViewTest(TestCase):
 class DashboardWidgetConfigViewTest(TestCase):
     """Тесты для DashboardWidgetConfigView."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -129,7 +129,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
         self.client.force_login(self.user)
 
     def test_create_widget(self) -> None:
@@ -148,6 +148,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         widget = DashboardWidget.objects.filter(user=self.user).first()
         self.assertIsNotNone(widget)
+        assert widget is not None
         self.assertEqual(widget.widget_type, 'balance')
 
     def test_update_widget(self) -> None:

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -109,7 +109,7 @@ class GetPeriodComparisonTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
 
     def test_get_period_comparison_month(self) -> None:
         """Тест сравнения периодов для месяца."""
@@ -154,7 +154,7 @@ class GetDrillDownDataTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
 
     def test_get_drill_down_data_expense(self) -> None:
         """Тест получения drill-down данных для расходов."""
@@ -162,7 +162,7 @@ class GetDrillDownDataTest(TestCase):
         if category is None:
             self.skipTest('No expense category found in fixtures')
 
-        result = get_drill_down_data(self.user, category.pk, 'expense')
+        result = get_drill_down_data(self.user, str(category.pk), 'expense')
 
         self.assertIn('data', result)
         self.assertIsInstance(result['data'], list)
@@ -173,7 +173,7 @@ class GetDrillDownDataTest(TestCase):
         if category is None:
             self.skipTest('No income category found in fixtures')
 
-        result = get_drill_down_data(self.user, category.pk, 'income')
+        result = get_drill_down_data(self.user, str(category.pk), 'income')
 
         self.assertIn('data', result)
         self.assertIsInstance(result['data'], list)

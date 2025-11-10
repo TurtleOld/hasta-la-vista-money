@@ -87,7 +87,7 @@ class RegisterUserForm(UserCreationForm[User]):
         }
 
 
-class UpdateUserForm(ModelForm):
+class UpdateUserForm(ModelForm[User]):
     """Form for updating user profile information."""
 
     class Meta:
@@ -146,13 +146,13 @@ class UpdateUserForm(ModelForm):
         }
 
 
-class GroupCreateForm(ModelForm):
+class GroupCreateForm(ModelForm[Group]):
     """Form for creating new user groups."""
 
     class Meta:
         model: ClassVar[type[Group]] = Group
         fields: ClassVar[list[str]] = ['name']
-        labels: ClassVar[dict[str, Any]] = {'name': _('Название группы')}  # type: ignore[misc]
+        labels: ClassVar[dict[str, Any]] = {'name': _('Название группы')}
         widgets: ClassVar[dict[str, Any]] = {
             'name': forms.TextInput(
                 attrs={
@@ -174,7 +174,7 @@ class GroupCreateForm(ModelForm):
 class GroupDeleteForm(forms.Form):
     """Form for deleting user groups."""
 
-    group: forms.ModelChoiceField
+    group: forms.ModelChoiceField[Group]
     group = forms.ModelChoiceField(
         queryset=Group.objects.all(),
         label=_('Группа для удаления'),
@@ -189,9 +189,9 @@ class GroupDeleteForm(forms.Form):
 class UserGroupBaseForm(forms.Form):
     """Base form for user-group operations."""
 
-    user: forms.ModelChoiceField
-    group: forms.ModelChoiceField
-    user_instance: User | None = None  # Ensure attribute always exists
+    user: forms.ModelChoiceField[User]
+    group: forms.ModelChoiceField[Group]
+    user_instance: User | None = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
