@@ -144,6 +144,21 @@ async def generate_monthly_report(
             lambda: list(top_sellers_qs),
         )()
 
+        summary = {
+            'net_income': (income_stats['total_income'] or 0)
+            - (expense_stats['total_expense'] or 0),
+            'savings_rate': (
+                (
+                    (income_stats['total_income'] or 0)
+                    - (expense_stats['total_expense'] or 0)
+                )
+                / (income_stats['total_income'] or 1)
+                * 100
+            )
+            if income_stats['total_income']
+            else 0,
+        }
+
         report_data = {
             'period': {
                 'year': year,
@@ -157,20 +172,7 @@ async def generate_monthly_report(
             'top_income_categories': list(top_income_categories),
             'top_expense_categories': list(top_expense_categories),
             'top_sellers': list(top_sellers),
-            'summary': {
-                'net_income': (income_stats['total_income'] or 0)
-                - (expense_stats['total_expense'] or 0),
-                'savings_rate': (
-                    (
-                        (income_stats['total_income'] or 0)
-                        - (expense_stats['total_expense'] or 0)
-                    )
-                    / (income_stats['total_income'] or 1)
-                    * 100
-                )
-                if income_stats['total_income']
-                else 0,
-            },
+            'summary': summary,
         }
 
         logger.info(
@@ -180,7 +182,7 @@ async def generate_monthly_report(
             month=month,
             total_income=str(income_stats['total_income']),
             total_expense=str(expense_stats['total_expense']),
-            net_income=str(report_data['summary']['net_income']),
+            net_income=str(summary['net_income']),
             receipts_count=receipt_stats['total_receipts'],
         )
 
@@ -321,6 +323,20 @@ async def generate_yearly_report(
             lambda: list(top_expense_year_qs),
         )()
 
+        summary = {
+            'total_income': yearly_income['total'] or 0,
+            'total_expense': yearly_expense['total'] or 0,
+            'net_income': (yearly_income['total'] or 0)
+            - (yearly_expense['total'] or 0),
+            'savings_rate': (
+                ((yearly_income['total'] or 0) - (yearly_expense['total'] or 0))
+                / (yearly_income['total'] or 1)
+                * 100
+            )
+            if yearly_income['total']
+            else 0,
+        }
+
         report_data = {
             'year': year,
             'monthly_data': monthly_data,
@@ -328,22 +344,7 @@ async def generate_yearly_report(
             'yearly_expense': yearly_expense,
             'top_income_categories': list(top_income_categories),
             'top_expense_categories': list(top_expense_categories),
-            'summary': {
-                'total_income': yearly_income['total'] or 0,
-                'total_expense': yearly_expense['total'] or 0,
-                'net_income': (yearly_income['total'] or 0)
-                - (yearly_expense['total'] or 0),
-                'savings_rate': (
-                    (
-                        (yearly_income['total'] or 0)
-                        - (yearly_expense['total'] or 0)
-                    )
-                    / (yearly_income['total'] or 1)
-                    * 100
-                )
-                if yearly_income['total']
-                else 0,
-            },
+            'summary': summary,
         }
 
         logger.info(
@@ -352,7 +353,7 @@ async def generate_yearly_report(
             year=year,
             total_income=str(yearly_income['total']),
             total_expense=str(yearly_expense['total']),
-            net_income=str(report_data['summary']['net_income']),
+            net_income=str(summary['net_income']),
             transactions_count=(yearly_income['count'] or 0)
             + (yearly_expense['count'] or 0),
         )
@@ -451,6 +452,20 @@ async def generate_user_statistics(
             last_date=Max('date'),
         )
 
+        summary = {
+            'net_worth': (total_income['total'] or 0)
+            - (total_expense['total'] or 0),
+            'total_transactions': (total_income['count'] or 0)
+            + (total_expense['count'] or 0),
+            'avg_transaction': (
+                ((total_income['total'] or 0) + (total_expense['total'] or 0))
+                / ((total_income['count'] or 0) + (total_expense['count'] or 0))
+            )
+            if ((total_income['count'] or 0) + (total_expense['count'] or 0))
+            > 0
+            else 0,
+        }
+
         stats_data = {
             'user_id': user_id,
             'income': total_income,
@@ -462,27 +477,7 @@ async def generate_user_statistics(
                 'income': first_income,
                 'expense': first_expense,
             },
-            'summary': {
-                'net_worth': (total_income['total'] or 0)
-                - (total_expense['total'] or 0),
-                'total_transactions': (total_income['count'] or 0)
-                + (total_expense['count'] or 0),
-                'avg_transaction': (
-                    (
-                        (total_income['total'] or 0)
-                        + (total_expense['total'] or 0)
-                    )
-                    / (
-                        (total_income['count'] or 0)
-                        + (total_expense['count'] or 0)
-                    )
-                )
-                if (
-                    (total_income['count'] or 0) + (total_expense['count'] or 0)
-                )
-                > 0
-                else 0,
-            },
+            'summary': summary,
         }
 
         logger.info(
@@ -490,8 +485,8 @@ async def generate_user_statistics(
             user_id=user_id,
             total_income=str(total_income['total']),
             total_expense=str(total_expense['total']),
-            net_worth=str(stats_data['summary']['net_worth']),
-            total_transactions=stats_data['summary']['total_transactions'],
+            net_worth=str(summary['net_worth']),
+            total_transactions=summary['total_transactions'],
             receipts_count=total_receipts['count'],
         )
 

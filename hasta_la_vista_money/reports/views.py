@@ -1,8 +1,10 @@
 from collections import defaultdict
+from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
@@ -12,8 +14,8 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView
 
-from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.reports.services.aggregation import (
     budget_charts,
     collect_datasets,
@@ -26,41 +28,59 @@ from hasta_la_vista_money.reports.services.aggregation import (
 from hasta_la_vista_money.users.models import User
 
 
-class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
+class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
     template_name = 'reports/reports.html'
     no_permission_url = reverse_lazy('login')
     success_url = reverse_lazy('reports:list')
 
     @classmethod
-    def collect_datasets(cls, request):
+    def collect_datasets(cls, request: HttpRequest) -> tuple[Any, Any]:
+        if isinstance(request.user, AnonymousUser):
+            raise TypeError('User must be authenticated')
         return collect_datasets(request.user)
 
     @classmethod
-    def transform_data(cls, dataset):
+    def transform_data(cls, dataset: Any) -> tuple[list[str], list[float]]:
         return transform_dataset(dataset)
 
     @classmethod
-    def transform_data_expense(cls, expense_dataset):
+    def transform_data_expense(
+        cls, expense_dataset: Any
+    ) -> tuple[list[str], list[float]]:
         return cls.transform_data(expense_dataset)
 
     @classmethod
-    def transform_data_income(cls, income_dataset):
+    def transform_data_income(
+        cls, income_dataset: Any
+    ) -> tuple[list[str], list[float]]:
         return cls.transform_data(income_dataset)
 
     @classmethod
-    def unique_data(cls, dates, amounts):
+    def unique_data(
+        cls, dates: list[str], amounts: list[float]
+    ) -> tuple[list[str], list[float]]:
         return unique_aggregate(dates, amounts)
 
     @classmethod
-    def unique_expense_data(cls, expense_dates, expense_amounts):
+    def unique_expense_data(
+        cls,
+        expense_dates: list[str],
+        expense_amounts: list[float],
+    ) -> tuple[list[str], list[float]]:
         return cls.unique_data(expense_dates, expense_amounts)
 
     @classmethod
-    def unique_income_data(cls, income_dates, income_amounts):
+    def unique_income_data(
+        cls,
+        income_dates: list[str],
+        income_amounts: list[float],
+    ) -> tuple[list[str], list[float]]:
         return cls.unique_data(income_dates, income_amounts)
 
     @classmethod
-    def pie_expense_category(cls, request):
+    def pie_expense_category(cls, request: HttpRequest) -> list[dict[str, Any]]:
+        if isinstance(request.user, AnonymousUser):
+            raise TypeError('User must be authenticated')
         charts = pie_expense_category_service(request.user)
         charts_data = []
         for ch in charts:
@@ -82,18 +102,22 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         budget_chart_data = self.prepare_budget_charts(request)
-        template_name = self.template_name
-        if template_name is None:
-            template_name = 'reports/reports.html'
         return render(
             request,
-            template_name,
+            self.template_name,
             budget_chart_data,
         )
 
-    def _get_expense_data(self, user, categories, months):
+    def _get_expense_data(
+        self,
+        user: User,
+        categories: list[ExpenseCategory],
+        months: list[date],
+    ) -> dict[int, dict[date, Decimal | int]]:
         """Получить данные о расходах по категориям и месяцам."""
-        fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        fact_map: dict[int, dict[date, Decimal | int]] = defaultdict(
+            lambda: defaultdict(lambda: 0)
+        )
         if not months:
             return fact_map
 
@@ -116,9 +140,16 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
             fact_map[e['category_id']][month_date] = total_amount
         return fact_map
 
-    def _get_income_data(self, user, categories, months):
+    def _get_income_data(
+        self,
+        user: User,
+        categories: list[IncomeCategory],
+        months: list[date],
+    ) -> dict[int, dict[date, Decimal | int]]:
         """Получить данные о доходах по категориям и месяцам."""
-        fact_map = defaultdict(lambda: defaultdict(lambda: 0))
+        fact_map: dict[int, dict[date, Decimal | int]] = defaultdict(
+            lambda: defaultdict(lambda: 0)
+        )
         if not months:
             return fact_map
 
@@ -141,17 +172,28 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
             fact_map[e['category_id']][month_date] = total_amount
         return fact_map
 
-    def _calculate_totals(self, categories, months, fact_map):
+    def _calculate_totals(
+        self,
+        categories: list[ExpenseCategory | IncomeCategory],
+        months: list[date],
+        fact_map: dict[int, dict[date, Decimal | int]],
+    ) -> list[int]:
         """Рассчитать общие суммы по месяцам."""
-        totals = [0] * len(months)
+        totals: list[int] = [0] * len(months)
         for i, m in enumerate(months):
             for cat in categories:
-                totals[i] += fact_map[cat.pk][m]
+                value = fact_map[cat.pk][m]
+                totals[i] += int(value) if isinstance(value, Decimal) else value
         return totals
 
-    def _calculate_category_totals(self, categories, months, fact_map):
+    def _calculate_category_totals(
+        self,
+        categories: list[ExpenseCategory | IncomeCategory],
+        months: list[date],
+        fact_map: dict[int, dict[date, Decimal | int]],
+    ) -> dict[int, Decimal]:
         """Рассчитать общие суммы по категориям."""
-        category_totals = defaultdict(lambda: Decimal(0))
+        category_totals: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
         for cat in categories:
             for month in months:
                 amount = fact_map[cat.pk][month]
@@ -159,10 +201,15 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
                     category_totals[cat.pk] += amount
         return category_totals
 
-    def _calculate_pie_data(self, categories, months, fact_map):
+    def _calculate_pie_data(
+        self,
+        categories: list[ExpenseCategory | IncomeCategory],
+        months: list[date],
+        fact_map: dict[int, dict[date, Decimal | int]],
+    ) -> tuple[list[str], list[float]]:
         """Рассчитать данные для круговой диаграммы."""
-        labels = []
-        values = []
+        labels: list[str] = []
+        values: list[float] = []
         if not months or not categories:
             return labels, values
 
@@ -179,9 +226,14 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin, TemplateView):
                 values.append(float(total))
         return labels, values
 
-    def prepare_budget_charts(self, request):
+    def prepare_budget_charts(self, request: HttpRequest) -> dict[str, Any]:
         """Подготовка данных для графиков бюджета."""
-        return budget_charts(get_object_or_404(User, username=request.user))
+        if isinstance(request.user, AnonymousUser):
+            raise TypeError('User must be authenticated')
+        charts_data = budget_charts(
+            get_object_or_404(User, username=request.user),
+        )
+        return cast('dict[str, Any]', charts_data)
 
 
 class ReportsAnalyticMixin(TemplateView):

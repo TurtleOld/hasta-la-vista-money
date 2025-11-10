@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Model, Sum
+from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from typing_extensions import TypedDict
 
@@ -117,16 +117,14 @@ def pie_expense_category(user: User) -> list[ChartDataDict]:
     ):
         parent_category_name = (
             expense.category.parent_category.name
-            if expense.category and expense.category.parent_category
-            else (
-                expense.category.name if expense.category else 'Без категории'
-            )
+            if expense.category.parent_category
+            else expense.category.name
         )
         month = expense.date.strftime('%B %Y')
         amount = float(expense.amount or 0)
         expense_data[parent_category_name][month] += amount
 
-        if expense.category and expense.category.parent_category:
+        if expense.category.parent_category:
             key = f'{parent_category_name}_{month}'
             subcategory_data[key].append(
                 {'name': expense.category.name, 'y': amount},
@@ -158,7 +156,7 @@ def pie_expense_category(user: User) -> list[ChartDataDict]:
 
 def _fact_map_for_categories(
     user: User,
-    model: type[Model],
+    model: type[Expense | Income],
     categories: Sequence[ExpenseCategory | IncomeCategory],
     months: list[date],
 ) -> dict[int, dict[date, Decimal]]:
@@ -197,7 +195,7 @@ def _totals_by_month(
     totals: list[Decimal] = [Decimal(0)] * len(months)
     for i, m in enumerate(months):
         for cat in categories:
-            totals[i] += fact_map[cat.pk][m]  # type: ignore[union-attr]
+            totals[i] += fact_map[cat.pk][m]
     return [float(x) for x in totals]
 
 
@@ -213,9 +211,9 @@ def _pie_for_categories(
     totals: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
     for cat in categories:
         for month in months:
-            totals[cat.pk] += fact_map[cat.pk][month]  # type: ignore[union-attr]
+            totals[cat.pk] += fact_map[cat.pk][month]
     for cat in categories:
-        total = totals[cat.pk]  # type: ignore[union-attr]
+        total = totals[cat.pk]
         if total > 0:
             labels.append(cat.name)
             values.append(float(total))
@@ -227,12 +225,12 @@ def budget_charts(user: User) -> BudgetChartsDict:
     months = [d.date for d in list_dates]
 
     expense_categories = list(
-        user.category_expense_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined]
+        user.category_expense_users.filter(parent_category=None).order_by(
             'name',
         ),
     )
     income_categories = list(
-        user.category_income_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined]
+        user.category_income_users.filter(parent_category=None).order_by(
             'name',
         ),
     )
