@@ -106,6 +106,11 @@ class DashboardManager {
         return url.toString();
     }
 
+    async _safeFetch(relativePath, urlParams = null, fetchOptions = {}) {
+        const validatedUrl = this._buildURL(relativePath, urlParams);
+        return fetch(validatedUrl, fetchOptions);
+    }
+
     init() {
         this.setupEventListeners();
         this.loadDashboard();
@@ -166,9 +171,7 @@ class DashboardManager {
 
     async loadDashboard() {
         try {
-            const url = this._buildURL('data/', { period: this.period });
-
-            const response = await fetch(url, {
+            const response = await this._safeFetch('data/', { period: this.period }, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -522,11 +525,10 @@ class DashboardManager {
         if (!category?.category__id) return;
 
         try {
-            const url = this._buildURL('drilldown/', {
+            const response = await this._safeFetch('drilldown/', {
                 category_id: String(category.category__id),
                 type: String(type),
             });
-            const response = await fetch(url);
             const data = await response.json();
             if (data.data && data.data.length > 0) {
                 this.updateChartWithDrillDown(params.componentIndex, data);
@@ -605,7 +607,7 @@ class DashboardManager {
             const csrfToken = this.getCsrfToken();
             if (!csrfToken) throw new Error('CSRF token not found');
 
-            const response = await fetch(this._buildURL('widget/'), {
+            const response = await this._safeFetch('widget/', null, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({ widget_type: String(widgetType), position: this.widgets.length, config: {} }),
@@ -628,7 +630,7 @@ class DashboardManager {
         if (!Number.isInteger(id) || id < 0) { this.showError('Некорректный идентификатор виджета'); return; }
 
         try {
-            const response = await fetch(this._buildURL('widget/', { widget_id: id }), {
+            const response = await this._safeFetch('widget/', { widget_id: id }, {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': this.getCsrfToken() },
             });
@@ -692,7 +694,7 @@ class DashboardManager {
     }
 
     async saveWidgetConfigToServer(config) {
-        const response = await fetch(this._buildURL('widget/'), {
+        const response = await this._safeFetch('widget/', null, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrfToken() },
             body: JSON.stringify(config),
