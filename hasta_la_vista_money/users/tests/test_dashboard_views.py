@@ -1,12 +1,21 @@
 """Тесты для views дашборда."""
 
-from typing import TYPE_CHECKING
+import json
+from typing import TYPE_CHECKING, Any
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.contrib.auth.models import AnonymousUser
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from hasta_la_vista_money.users.models import DashboardWidget
+from hasta_la_vista_money.users.views import (
+    DashboardDataView,
+    DashboardComparisonView,
+    DashboardDrillDownView,
+    DashboardWidgetConfigView,
+)
 
 User = get_user_model()
 
@@ -115,6 +124,27 @@ class DashboardDataViewTest(TestCase):
         data = response.json()
         self.assertIn('comparison', data)
 
+    def test_dashboard_data_view_requires_authentication(self) -> None:
+        request = RequestFactory().get(reverse('users:dashboard_data'))
+        request.user = AnonymousUser()
+        response = DashboardDataView().get(request)
+        payload = json.loads(response.content.decode())
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(payload, {'error': 'User not authenticated'})
+
+    @patch('hasta_la_vista_money.users.views.get_user_detailed_statistics')
+    def test_dashboard_data_view_handles_error(
+        self,
+        mock_stats: Any,
+    ) -> None:
+        mock_stats.side_effect = ValueError('boom')
+        with patch('hasta_la_vista_money.users.views.cache.delete'):
+            response = self.client.get(reverse('users:dashboard_data'))
+        self.assertEqual(response.status_code, 500)
+        payload = response.json()
+        self.assertIn('error', payload)
+        self.assertIn('traceback', payload)
+
 
 class DashboardWidgetConfigViewTest(TestCase):
     """Тесты для DashboardWidgetConfigView."""
@@ -199,3 +229,75 @@ class DashboardWidgetConfigViewTest(TestCase):
         self.assertFalse(
             DashboardWidget.objects.filter(pk=widget.pk).exists(),
         )
+
+
+class DashboardAnalyticsEndpointsTest(TestCase):
+    """Тесты для дополнительных аналитических эндпоинтов."""
+
+    fixtures = [
+        'users.yaml',
+        'finance_account.yaml',
+        'expense_cat.yaml',
+        'expense.yaml',
+        'income_cat.yaml',
+        'income.yaml',
+    ]
+
+    def setUp(self) -> None:
+        user = User.objects.first()
+        if user is None:
+            msg = 'No user found in fixtures'
+            raise ValueError(msg)
+        self.user: UserType = user
+        self.client.force_login(self.user)
+        self.factory = RequestFactory()
+
+    @patch('hasta_la_vista_money.users.views.get_drill_down_data')
+    def test_dashboard_drilldown_returns_data(self, mock_drill: Any) -> None:
+        mock_drill.return_value = {'items': [1, 2]}
+        response = self.client.get(
+            reverse('users:dashboard_drilldown'),
+            {
+                'category_id': '5',
+                'date': '2025-01-01',
+                'type': 'income',
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'items': [1, 2]})
+        mock_drill.assert_called_once_with(
+            user=self.user,
+            category_id='5',
+            date_str='2025-01-01',
+            data_type='income',
+        )
+
+    def test_dashboard_drilldown_requires_authentication(self) -> None:
+        request = self.factory.get(reverse('users:dashboard_drilldown'))
+        request.user = AnonymousUser()
+        response = DashboardDrillDownView().get(request)
+        payload = json.loads(response.content.decode())
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(payload, {'error': 'User not authenticated'})
+
+    @patch('hasta_la_vista_money.users.views.get_period_comparison')
+    def test_dashboard_comparison_returns_data(self, mock_comparison: Any) -> None:
+        mock_comparison.return_value = {'result': 'ok'}
+        response = self.client.get(
+            reverse('users:dashboard_comparison'),
+            {'period': 'quarter'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'result': 'ok'})
+        mock_comparison.assert_called_once_with(
+            user=self.user,
+            period_type='quarter',
+        )
+
+    def test_dashboard_comparison_requires_authentication(self) -> None:
+        request = self.factory.get(reverse('users:dashboard_comparison'))
+        request.user = AnonymousUser()
+        response = DashboardComparisonView().get(request)
+        payload = json.loads(response.content.decode())
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(payload, {'error': 'User not authenticated'})
