@@ -1,34 +1,58 @@
+'use strict';
+
 class DashboardManager {
+    #apiBase = '/users/dashboard/';
+
     constructor() {
         this.widgets = [];
         this.charts = new Map();
         this.editMode = false;
         this.period = 'month';
         this.sortable = null;
-        this.apiBase = '/users/dashboard';
         this.init();
     }
-
-    /* ========= helpers (безопасное построение DOM) ========= */
-
     _el(tag, attrs = {}, ...children) {
         const node = document.createElement(tag);
-        for (const [k, v] of Object.entries(attrs || {})) {
-            if (k === 'class') node.className = v;
-            else if (k === 'dataset' && v && typeof v === 'object') {
-                for (const [dk, dv] of Object.entries(v)) node.dataset[dk] = String(dv);
-            } else if (k === 'style' && v && typeof v === 'object') {
+
+        const propWhitelist = new Set([
+            'id', 'class', 'title', 'type', 'value', 'role', 'ariaLabel'
+        ]);
+
+        for (const [kRaw, v] of Object.entries(attrs || {})) {
+            const k = String(kRaw);
+            if (k === '__proto__' || k === 'prototype' || k === 'constructor') continue;
+            if (/^on/i.test(k)) continue;
+
+            if (k === 'class') {
+                node.className = String(v);
+                continue;
+            }
+            if (k === 'style' && v && typeof v === 'object') {
                 Object.assign(node.style, v);
-            } else if (k in node && k !== 'role' && k !== 'ariaLabel') {
-                try { node[k] = v; } catch { node.setAttribute(k, v); }
-            } else if (k === 'role') {
-                node.setAttribute('role', v);
-            } else if (k === 'ariaLabel') {
-                node.setAttribute('aria-label', v);
-            } else {
-                node.setAttribute(k, v);
+                continue;
+            }
+            if (k === 'dataset' && v && typeof v === 'object') {
+                for (const [dkRaw, dv] of Object.entries(v)) {
+                    const dk = String(dkRaw);
+                    // dataset: только a-Z0-9 и _
+                    if (!/^[A-Za-z0-9_]+$/.test(dk)) continue;
+                    node.dataset[dk] = String(dv);
+                }
+                continue;
+            }
+            if (propWhitelist.has(k)) {
+                node[k] = v;
+                continue;
+            }
+            if (k === 'role' || k === 'ariaLabel') {
+                node.setAttribute(k === 'ariaLabel' ? 'aria-label' : 'role', String(v));
+                continue;
+            }
+            if (/^aria-[a-z0-9\-]+$/.test(k)) {
+                node.setAttribute(k, String(v));
             }
         }
+
         for (const child of children.flat()) {
             if (child == null) continue;
             if (child instanceof Node) node.appendChild(child);
@@ -37,13 +61,26 @@ class DashboardManager {
         return node;
     }
 
-    _icon(classList) {
-        return this._el('i', { class: classList });
-    }
+    _icon(cls) { return this._el('i', { class: cls }); }
 
-    _clear(node) {
-        if (!node) return;
-        while (node.firstChild) node.removeChild(node.firstChild);
+    _clear(node) { if (node) while (node.firstChild) node.removeChild(node.firstChild); }
+
+    _buildURL(relativePath, params) {
+        const path = String(relativePath || '');
+        const basePath = this.#apiBase.endsWith('/') ? this.#apiBase : this.#apiBase + '/';
+        const full = path.startsWith('/') ? path : basePath + path;
+        const url = new URL(full, window.location.origin);
+
+        // Жёсткое ограничение пути — ничего вне /users/dashboard/
+        if (!url.pathname.startsWith(basePath)) {
+            throw new Error('Blocked unexpected path');
+        }
+        if (params && typeof params === 'object') {
+            for (const [k, v] of Object.entries(params)) {
+                url.searchParams.set(k, String(v));
+            }
+        }
+        return url.toString();
     }
 
     init() {
@@ -57,48 +94,32 @@ class DashboardManager {
         const periodSelect = document.getElementById('period-select');
         const saveConfigBtn = document.getElementById('save-widget-config');
 
-        if (addWidgetBtn) {
-            addWidgetBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                try {
-                    this.showWidgetSelectModal();
-                } catch (error) {
-                    console.error('Error in showWidgetSelectModal:', error);
-                }
-            });
-        } else {
-            console.error('Add widget button not found');
-        }
+        addWidgetBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try { this.showWidgetSelectModal(); } catch (err) { console.error(err); }
+        });
 
-        if (editModeBtn) {
-            editModeBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.toggleEditMode();
-            });
-        }
+        editModeBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.toggleEditMode();
+        });
 
-        if (periodSelect) {
-            periodSelect.addEventListener('change', (e) => {
-                this.period = e.target.value;
-                this.loadDashboard();
-            });
-        }
+        periodSelect?.addEventListener('change', (e) => {
+            this.period = e.target.value;
+            this.loadDashboard();
+        });
 
-        if (saveConfigBtn) {
-            saveConfigBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.saveWidgetConfig();
-            });
-        }
+        saveConfigBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.saveWidgetConfig();
+        });
 
         document.addEventListener('click', (e) => {
             const widgetSelectBtn = e.target.closest('.widget-select-btn');
             if (widgetSelectBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                const widgetType = widgetSelectBtn.dataset.widgetType;
-                this.addWidget(widgetType);
+                e.preventDefault(); e.stopPropagation();
+                this.addWidget(widgetSelectBtn.dataset.widgetType);
                 return;
             }
 
@@ -106,10 +127,7 @@ class DashboardManager {
             if (removeBtn) {
                 e.preventDefault();
                 const widget = removeBtn.closest('.widget');
-                if (widget) {
-                    const widgetId = widget.dataset.widgetId;
-                    this.removeWidget(widgetId);
-                }
+                if (widget) this.removeWidget(widget.dataset.widgetId);
                 return;
             }
 
@@ -118,17 +136,14 @@ class DashboardManager {
                 e.preventDefault();
                 const widget = configBtn.closest('.widget');
                 const widgetId = widget?.dataset.widgetId;
-                if (widgetId) {
-                    this.showConfigModal(widgetId);
-                }
+                if (widgetId) this.showConfigModal(widgetId);
             }
         });
     }
 
     async loadDashboard() {
         try {
-            const qs = new URLSearchParams({ period: this.period });
-            const url = `${this.apiBase}/data/?${qs.toString()}`;
+            const url = this._buildURL('data/', { period: this.period });
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -144,9 +159,6 @@ class DashboardManager {
                 try {
                     const errorData = await response.json();
                     errorText = errorData.error || JSON.stringify(errorData);
-                    if (errorData.traceback) {
-                        console.error('Traceback:', errorData.traceback);
-                    }
                 } catch {
                     errorText = await response.text();
                 }
@@ -154,7 +166,6 @@ class DashboardManager {
             }
 
             const data = await response.json();
-
             this.widgets = data.widgets || [];
             this.analyticsData = data.analytics || {};
             this.comparisonData = data.comparison || {};
@@ -163,8 +174,7 @@ class DashboardManager {
             this.renderWidgets();
         } catch (error) {
             console.error('Error loading dashboard:', error);
-            const errorMessage = error.message || 'Ошибка загрузки данных дашборда';
-            this.showError(errorMessage);
+            this.showError(error.message || 'Ошибка загрузки данных дашборда');
         }
     }
 
@@ -175,74 +185,58 @@ class DashboardManager {
         this._clear(grid);
 
         if (this.widgets.length === 0) {
-            const empty = this._el('div', { class: 'dashboard-empty-state' },
-                this._icon('bi bi-graph-up fs-1 text-muted'),
-                this._el('p', { class: 'text-muted' }, 'Добавьте виджеты для отображения данных'),
+            grid.appendChild(
+                this._el('div', { class: 'dashboard-empty-state' },
+                    this._icon('bi bi-graph-up fs-1 text-muted'),
+                    this._el('p', { class: 'text-muted' }, 'Добавьте виджеты для отображения данных'),
+                )
             );
-            grid.appendChild(empty);
             return;
         }
 
-        this.widgets.forEach((widget) => {
-            const widgetElement = this.createWidgetElement(widget);
-            grid.appendChild(widgetElement);
-        });
-
+        this.widgets.forEach((widget) => grid.appendChild(this.createWidgetElement(widget)));
         this.initSortable();
         this.renderWidgetCharts();
     }
 
     createWidgetElement(widget) {
-        const div = this._el('div', {
-            class: 'widget',
-            dataset: { widgetId: widget.id, width: widget.width || 6 },
-        });
+        const div = this._el('div', { class: 'widget', dataset: { widgetId: widget.id, width: widget.width || 6 } });
         div.style.setProperty('--widget-height', `${widget.height || 300}px`);
 
         const header = this._el('div', { class: 'widget-header' });
+        const title = this._el('h5'); title.textContent = this.getWidgetTitle(widget.widget_type);
+        const controls = this._el('div', { class: 'widget-controls' },
+            this._el('button', { class: 'btn-config-widget', title: 'Настройки', type: 'button', ariaLabel: 'Настройки' }, this._icon('bi bi-gear')),
+            this._el('button', { class: 'btn-remove-widget', title: 'Удалить', type: 'button', ariaLabel: 'Удалить' }, this._icon('bi bi-x-circle')),
+        );
+        header.append(title, controls);
 
-        const h5 = this._el('h5');
-        // Безопасно вставляем заголовок как текст
-        h5.textContent = this.getWidgetTitle(widget.widget_type);
-
-        const controls = this._el('div', { class: 'widget-controls' });
-        const btnCfg = this._el('button', { class: 'btn-config-widget', title: 'Настройки', type: 'button', ariaLabel: 'Настройки' }, this._icon('bi bi-gear'));
-        const btnDel = this._el('button', { class: 'btn-remove-widget', title: 'Удалить', type: 'button', ariaLabel: 'Удалить' }, this._icon('bi bi-x-circle'));
-        controls.append(btnCfg, btnDel);
-
-        header.append(h5, controls);
-
-        const content = this._el('div', { class: 'widget-content', id: `widget-content-${widget.id}` });
-        const loading = this._el('div', { class: 'widget-loading' },
-            this._el('div', { class: 'spinner-border spinner-border-sm', role: 'status' },
-                this._el('span', { class: 'visually-hidden' }, 'Загрузка...')
+        const content = this._el('div', { class: 'widget-content', id: `widget-content-${widget.id}` },
+            this._el('div', { class: 'widget-loading' },
+                this._el('div', { class: 'spinner-border spinner-border-sm', role: 'status' },
+                    this._el('span', { class: 'visually-hidden' }, 'Загрузка...')
+                )
             )
         );
-
-        const chartContainer = this._el('div', {
-            class: 'widget-chart',
-            id: `chart-${widget.id}`
-        });
+        const chartContainer = this._el('div', { class: 'widget-chart', id: `chart-${widget.id}` });
         chartContainer.style.height = `${widget.height || 300}px`;
+        content.appendChild(chartContainer);
 
-        content.append(loading, chartContainer);
         div.append(header, content);
-
         return div;
     }
 
     getWidgetTitle(widgetType) {
-        const titles = {
-            'balance': 'Баланс счетов',
-            'expenses_chart': 'График расходов',
-            'income_chart': 'График доходов',
-            'comparison': 'Сравнение периодов',
-            'trend': 'Тренды и прогнозы',
-            'top_categories': 'Топ категорий',
-            'recent_transactions': 'Последние операции',
-        };
-        // Возвращаем строку, которая дальше кладётся в textContent (безопасно)
-        return titles[widgetType] || String(widgetType || 'Виджет');
+        switch (widgetType) {
+            case 'balance': return 'Баланс счетов';
+            case 'expenses_chart': return 'График расходов';
+            case 'income_chart': return 'График доходов';
+            case 'comparison': return 'Сравнение периодов';
+            case 'trend': return 'Тренды и прогнозы';
+            case 'top_categories': return 'Топ категорий';
+            case 'recent_transactions': return 'Последние операции';
+            default: return String(widgetType || 'Виджет');
+        }
     }
 
     renderWidgetCharts() {
@@ -253,9 +247,7 @@ class DashboardManager {
 
             const contentDiv = chartContainer.parentElement;
             contentDiv?.classList.remove('loading', 'error');
-
-            const loadingDiv = contentDiv?.querySelector('.widget-loading');
-            loadingDiv?.remove();
+            contentDiv?.querySelector('.widget-loading')?.remove();
 
             try {
                 let chart = this.charts.get(widget.id);
@@ -266,22 +258,24 @@ class DashboardManager {
                     this.charts.set(widget.id, chart);
                 } else {
                     contentDiv?.classList.add('error');
-                    const err = this._el('div', { class: 'error' },
-                        this._icon('bi bi-exclamation-triangle'),
-                        this._el('p', null, 'Не удалось отобразить виджет'),
-                    );
                     this._clear(contentDiv);
-                    contentDiv?.appendChild(err);
+                    contentDiv?.appendChild(
+                        this._el('div', { class: 'error' },
+                            this._icon('bi bi-exclamation-triangle'),
+                            this._el('p', null, 'Не удалось отобразить виджет'),
+                        )
+                    );
                 }
             } catch (error) {
                 console.error(`Error rendering widget ${widget.id}:`, error);
                 contentDiv?.classList.add('error');
-                const err = this._el('div', { class: 'error' },
-                    this._icon('bi bi-exclamation-triangle'),
-                    this._el('p', null, 'Ошибка отображения виджета'),
-                );
                 this._clear(contentDiv);
-                contentDiv?.appendChild(err);
+                contentDiv?.appendChild(
+                    this._el('div', { class: 'error' },
+                        this._icon('bi bi-exclamation-triangle'),
+                        this._el('p', null, 'Ошибка отображения виджета'),
+                    )
+                );
             }
         });
     }
@@ -291,27 +285,18 @@ class DashboardManager {
             console.error('Chart utilities not loaded');
             return null;
         }
-
         const initChart = window.initChart;
         const chartConfigs = window.chartConfigs;
 
         switch (widget.widget_type) {
-            case 'balance':
-                return this.renderBalanceChart(widget, containerId, initChart, chartConfigs);
-            case 'expenses_chart':
-                return this.renderExpensesChart(widget, containerId, initChart, chartConfigs);
-            case 'income_chart':
-                return this.renderIncomeChart(widget, containerId, initChart, chartConfigs);
-            case 'comparison':
-                return this.renderComparisonChart(widget, containerId, initChart, chartConfigs);
-            case 'trend':
-                return this.renderTrendChart(widget, containerId, initChart, chartConfigs);
-            case 'top_categories':
-                return this.renderTopCategoriesChart(widget, containerId, initChart, chartConfigs);
-            case 'recent_transactions':
-                return this.renderRecentTransactions(widget, containerId);
-            default:
-                return null;
+            case 'balance': return this.renderBalanceChart(widget, containerId, initChart, chartConfigs);
+            case 'expenses_chart': return this.renderExpensesChart(widget, containerId, initChart, chartConfigs);
+            case 'income_chart': return this.renderIncomeChart(widget, containerId, initChart, chartConfigs);
+            case 'comparison': return this.renderComparisonChart(widget, containerId, initChart, chartConfigs);
+            case 'trend': return this.renderTrendChart(widget, containerId, initChart, chartConfigs);
+            case 'top_categories': return this.renderTopCategoriesChart(widget, containerId, initChart, chartConfigs);
+            case 'recent_transactions': return this.renderRecentTransactions(widget, containerId);
+            default: return null;
         }
     }
 
@@ -328,18 +313,12 @@ class DashboardManager {
 
         config.xAxis.data = labels;
         config.series[0].data = balances;
-
         config.tooltip.formatter = function (params) {
             if (!params || params.length === 0) return '';
-            const param = params[0];
-            const value = typeof param.value === 'number'
-                ? param.value
-                : (Array.isArray(param.value) ? param.value[1] : param.value);
-            const formattedValue = parseFloat(value).toFixed(2);
-            // Возвращает строку для тултипа графика (это не DOM-вставка)
-            return `${param.axisValue}<br/>Баланс: ${formattedValue}`;
+            const p = params[0];
+            const value = typeof p.value === 'number' ? p.value : (Array.isArray(p.value) ? p.value[1] : p.value);
+            return `${p.axisValue}<br/>Баланс: ${parseFloat(value).toFixed(2)}`;
         };
-
         return initChart(containerId, config);
     }
 
@@ -383,7 +362,6 @@ class DashboardManager {
 
         config.xAxis.data = labels;
         config.series[0].data = income;
-
         return initChart(containerId, config);
     }
 
@@ -396,7 +374,6 @@ class DashboardManager {
 
         config.series[0].data = [current.expenses, current.income, current.savings];
         config.series[1].data = [previous.expenses, previous.income, previous.savings];
-
         return initChart(containerId, config);
     }
 
@@ -427,7 +404,6 @@ class DashboardManager {
                 config.series[2].data = [...Array(labels.length).fill(null), ...forecastValues];
             }
         }
-
         return initChart(containerId, config);
     }
 
@@ -437,12 +413,10 @@ class DashboardManager {
         if (!stats?.top_expense_categories) return null;
 
         const categories = stats.top_expense_categories.slice(0, 10);
-        const data = categories.map((cat) => ({
+        config.series[0].data = categories.map((cat) => ({
             value: parseFloat(cat.total),
             name: cat.category__name,
         }));
-
-        config.series[0].data = data;
 
         const chart = initChart(containerId, config);
         window.addDrillDownHandler?.(chart, (params) => this.handleDrillDown('expense', params));
@@ -460,11 +434,12 @@ class DashboardManager {
         this._clear(container);
 
         if (transactions.length === 0) {
-            const empty = this._el('div', { class: 'text-center text-muted py-4' },
-                this._icon('bi bi-inbox fs-3'),
-                this._el('p', { class: 'mt-2' }, 'Нет последних операций'),
+            container.appendChild(
+                this._el('div', { class: 'text-center text-muted py-4' },
+                    this._icon('bi bi-inbox fs-3'),
+                    this._el('p', { class: 'mt-2' }, 'Нет последних операций'),
+                )
             );
-            container.appendChild(empty);
             return null;
         }
 
@@ -472,13 +447,8 @@ class DashboardManager {
 
         const formatDate = (dateStr) => {
             const date = new Date(dateStr);
-            return date.toLocaleDateString('ru-RU', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            });
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
         };
-
         const amountNode = (amount, type) => {
             const num = Number(amount);
             const formatted = isFinite(num)
@@ -488,34 +458,32 @@ class DashboardManager {
             const cls = type === 'expense' ? 'text-danger' : 'text-success';
             return this._el('span', { class: cls }, `${sign}${formatted} ₽`);
         };
-
-        const typeIconNode = (type) => {
-            return (type === 'expense')
-                ? this._icon('bi bi-arrow-down-circle text-danger')
-                : this._icon('bi bi-arrow-up-circle text-success');
-        };
+        const typeIconNode = (type) => type === 'expense'
+            ? this._icon('bi bi-arrow-down-circle text-danger')
+            : this._icon('bi bi-arrow-up-circle text-success');
 
         for (const t of transactions) {
-            const row = this._el('div', { class: 'list-group-item border-0 px-0 py-2' },
-                this._el('div', { class: 'd-flex justify-content-between align-items-start' },
-                    this._el('div', { class: 'flex-grow-1' },
-                        this._el('div', { class: 'd-flex align-items-center gap-2 mb-1' },
-                            typeIconNode(t.type),
-                            this._el('strong', null, String(t.category ?? '')),
+            list.appendChild(
+                this._el('div', { class: 'list-group-item border-0 px-0 py-2' },
+                    this._el('div', { class: 'd-flex justify-content-between align-items-start' },
+                        this._el('div', { class: 'flex-grow-1' },
+                            this._el('div', { class: 'd-flex align-items-center gap-2 mb-1' },
+                                typeIconNode(t.type),
+                                this._el('strong', null, String(t.category ?? '')),
+                            ),
+                            this._el('small', { class: 'text-muted d-block' },
+                                this._icon('bi bi-wallet2'), ' ',
+                                String(t.account ?? '')
+                            ),
+                            this._el('small', { class: 'text-muted' },
+                                this._icon('bi bi-calendar3'), ' ',
+                                formatDate(t.date)
+                            ),
                         ),
-                        this._el('small', { class: 'text-muted d-block' },
-                            this._icon('bi bi-wallet2'), ' ',
-                            String(t.account ?? '')
-                        ),
-                        this._el('small', { class: 'text-muted' },
-                            this._icon('bi bi-calendar3'), ' ',
-                            formatDate(t.date)
-                        ),
-                    ),
-                    this._el('div', { class: 'text-end' }, amountNode(t.amount, t.type))
+                        this._el('div', { class: 'text-end' }, amountNode(t.amount, t.type))
+                    )
                 )
             );
-            list.appendChild(row);
         }
 
         container.appendChild(list);
@@ -527,19 +495,16 @@ class DashboardManager {
         const stats = this.analyticsData?.stats;
         if (!stats?.top_expense_categories || !categoryName) return;
 
-        const category = stats.top_expense_categories.find(
-            (cat) => cat.category__name === categoryName
-        );
+        const category = stats.top_expense_categories.find((c) => c.category__name === categoryName);
         if (!category?.category__id) return;
 
         try {
-            const qs = new URLSearchParams({
+            const url = this._buildURL('drilldown/', {
                 category_id: String(category.category__id),
                 type: String(type),
             });
-            const response = await fetch(`${this.apiBase}/drilldown/?${qs.toString()}`);
+            const response = await fetch(url);
             const data = await response.json();
-
             if (data.data && data.data.length > 0) {
                 this.updateChartWithDrillDown(params.componentIndex, data);
             }
@@ -595,56 +560,38 @@ class DashboardManager {
 
     showWidgetSelectModal() {
         const modalElement = document.getElementById('widget-select-modal');
-        if (!modalElement) {
-            console.error('Widget select modal not found');
-            return;
-        }
-        if (typeof bootstrap === 'undefined') {
-            console.error('Bootstrap is not loaded');
-            return;
-        }
+        if (!modalElement) { console.error('Widget select modal not found'); return; }
+        const bs = window.bootstrap;
+        if (!bs?.Modal) { console.error('Bootstrap Modal is not available'); return; }
         try {
-            let modal = bootstrap.Modal.getInstance(modalElement);
-            if (!modal) modal = new bootstrap.Modal(modalElement);
+            const modal = bs.Modal.getInstance(modalElement) || new bs.Modal(modalElement);
             modal.show();
-        } catch (error) {
-            console.error('Error showing modal:', error);
-        }
+        } catch (error) { console.error('Error showing modal:', error); }
     }
 
     async addWidget(widgetType) {
         const modalElement = document.getElementById('widget-select-modal');
-        if (modalElement) {
-            const modal = bootstrap.Modal.getInstance(modalElement);
+        const bs = window.bootstrap;
+        if (modalElement && bs?.Modal) {
+            const modal = bs.Modal.getInstance(modalElement);
             modal?.hide();
         }
-        if (!widgetType) {
-            console.error('Widget type is required');
-            return;
-        }
+        if (!widgetType) { console.error('Widget type is required'); return; }
 
         try {
             const csrfToken = this.getCsrfToken();
             if (!csrfToken) throw new Error('CSRF token not found');
 
-            const response = await fetch(`${this.apiBase}/widget/`, {
+            const response = await fetch(this._buildURL('widget/'), {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken,
-                },
-                body: JSON.stringify({
-                    widget_type: String(widgetType),
-                    position: this.widgets.length,
-                    config: {},
-                }),
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ widget_type: String(widgetType), position: this.widgets.length, config: {} }),
             });
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.error || 'Failed to create widget');
             }
-
             await this.loadDashboard();
         } catch (error) {
             console.error('Error adding widget:', error);
@@ -654,18 +601,20 @@ class DashboardManager {
 
     async removeWidget(widgetId) {
         if (!confirm('Удалить этот виджет?')) return;
+        const id = parseInt(String(widgetId), 10);
+        if (!Number.isInteger(id) || id < 0) { this.showError('Некорректный идентификатор виджета'); return; }
 
         try {
-            const response = await fetch(`${this.apiBase}/widget/?widget_id=${encodeURIComponent(widgetId)}`, {
+            const response = await fetch(this._buildURL('widget/', { widget_id: id }), {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': this.getCsrfToken() },
             });
 
             if (!response.ok) throw new Error('Failed to delete widget');
 
-            const chart = this.charts.get(parseInt(widgetId, 10));
+            const chart = this.charts.get(id);
             window.destroyChart?.(chart);
-            this.charts.delete(parseInt(widgetId, 10));
+            this.charts.delete(id);
 
             await this.loadDashboard();
         } catch (error) {
@@ -688,7 +637,9 @@ class DashboardManager {
 
         const modalEl = document.getElementById('widget-config-modal');
         if (!modalEl) return;
-        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        const bs = window.bootstrap;
+        if (!bs?.Modal) { console.error('Bootstrap Modal is not available'); return; }
+        const modal = bs.Modal.getInstance(modalEl) || new bs.Modal(modalEl);
         modal.show();
     }
 
@@ -705,15 +656,10 @@ class DashboardManager {
         if (!widget) return;
 
         try {
-            await this.saveWidgetConfigToServer({
-                widget_id: widgetId,
-                width,
-                height,
-                config: widget.config,
-            });
+            await this.saveWidgetConfigToServer({ widget_id: widgetId, width, height, config: widget.config });
 
-            const modal = bootstrap.Modal.getInstance(document.getElementById('widget-config-modal'));
-            modal?.hide();
+            const bs = window.bootstrap;
+            if (bs?.Modal) bs.Modal.getInstance(document.getElementById('widget-config-modal'))?.hide();
 
             await this.loadDashboard();
         } catch (error) {
@@ -723,15 +669,11 @@ class DashboardManager {
     }
 
     async saveWidgetConfigToServer(config) {
-        const response = await fetch(`${this.apiBase}/widget/`, {
+        const response = await fetch(this._buildURL('widget/'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': this.getCsrfToken(),
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.getCsrfToken() },
             body: JSON.stringify(config),
         });
-
         if (!response.ok) throw new Error('Failed to save widget config');
         return response.json();
     }
@@ -741,11 +683,9 @@ class DashboardManager {
         const grid = document.getElementById('widgets-grid');
         const btn = document.getElementById('edit-mode-btn');
 
-        if (grid) {
-            grid.classList.toggle('edit-mode', this.editMode);
-        }
+        grid?.classList.toggle('edit-mode', this.editMode);
+
         if (btn) {
-            // Не используем небезопасный innerHTML; строим кнопку с иконкой
             this._clear(btn);
             if (this.editMode) {
                 btn.appendChild(document.createTextNode('Завершить редактирование'));
@@ -757,50 +697,32 @@ class DashboardManager {
 
     getCsrfToken() {
         let token = null;
-
         const inp = document.querySelector('[name=csrfmiddlewaretoken]');
         if (inp) token = inp.value;
-
         if (!token) {
             const cookies = document.cookie.split(';');
             for (const cookie of cookies) {
-                const parts = cookie.trim().split('=');
-                if (parts.length === 2 && parts[0] === 'csrftoken') {
-                    token = parts[1];
-                    break;
-                }
+                const [name, val] = cookie.trim().split('=');
+                if (name === 'csrftoken') { token = val; break; }
             }
         }
         return token || '';
     }
 
     showError(message) {
-        // Безопасный алерт без innerHTML
         let region = document.getElementById('alerts-region');
         if (!region) {
             region = this._el('div', { id: 'alerts-region' });
             document.body.prepend(region);
         }
-
-        const alert = this._el('div', {
-            class: 'alert alert-danger alert-dismissible fade show',
-            role: 'alert'
-        });
-
-        const text = this._el('span', null, String(message));
-        const btn = this._el('button', {
-            type: 'button',
-            class: 'btn-close',
-            ariaLabel: 'Close'
-        });
-
-        btn.addEventListener('click', () => alert.remove());
-
-        alert.append(text, btn);
+        const alert = this._el('div', { class: 'alert alert-danger alert-dismissible fade show', role: 'alert' },
+            this._el('span', null, String(message)),
+            this._el('button', { type: 'button', class: 'btn-close', ariaLabel: 'Close' })
+        );
+        alert.querySelector('.btn-close').addEventListener('click', () => alert.remove());
         region.prepend(alert);
-
         const timer = setTimeout(() => alert.remove(), 5000);
-        btn.addEventListener('click', () => clearTimeout(timer));
+        alert.querySelector('.btn-close').addEventListener('click', () => clearTimeout(timer));
     }
 }
 
