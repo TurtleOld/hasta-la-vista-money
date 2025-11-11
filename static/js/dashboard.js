@@ -67,14 +67,37 @@ class DashboardManager {
 
     _buildURL(relativePath, params) {
         const path = String(relativePath || '');
+
+        if (!path || path.trim() === '') {
+            throw new Error('Empty path provided');
+        }
+
+        const trimmedPath = path.trim();
+
+        if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmedPath)) {
+            throw new Error('Protocol not allowed in path');
+        }
+
+        if (trimmedPath.includes('//')) {
+            throw new Error('Double slash not allowed in path');
+        }
+
         const basePath = this.#apiBase.endsWith('/') ? this.#apiBase : this.#apiBase + '/';
-        const full = path.startsWith('/') ? path : basePath + path;
+        const full = trimmedPath.startsWith('/') ? trimmedPath : basePath + trimmedPath;
         const url = new URL(full, window.location.origin);
 
-        // Жёсткое ограничение пути — ничего вне /users/dashboard/
+        if (url.origin !== window.location.origin) {
+            throw new Error('Cross-origin URL not allowed');
+        }
+
+        if (!['http:', 'https:'].includes(url.protocol)) {
+            throw new Error('Only HTTP/HTTPS protocols allowed');
+        }
+
         if (!url.pathname.startsWith(basePath)) {
             throw new Error('Blocked unexpected path');
         }
+
         if (params && typeof params === 'object') {
             for (const [k, v] of Object.entries(params)) {
                 url.searchParams.set(k, String(v));

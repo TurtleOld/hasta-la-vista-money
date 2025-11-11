@@ -1,3 +1,5 @@
+/* global echarts */
+
 function initChart(containerId, config) {
     const container = document.getElementById(containerId);
     if (!container) {
