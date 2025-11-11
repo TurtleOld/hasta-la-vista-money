@@ -34,21 +34,30 @@ class DashboardManager {
             if (k === 'dataset' && v && typeof v === 'object') {
                 for (const [dkRaw, dv] of Object.entries(v)) {
                     const dk = String(dkRaw);
-                    // dataset: только a-Z0-9 и _
+                    if (dk === '__proto__' || dk === 'prototype' || dk === 'constructor') continue;
                     if (!/^[A-Za-z0-9_]+$/.test(dk)) continue;
-                    node.dataset[dk] = String(dv);
+                    const dataAttrName = 'data-' + dk.replace(/_/g, '-');
+                    node.setAttribute(dataAttrName, String(dv));
                 }
                 continue;
             }
             if (propWhitelist.has(k)) {
-                node[k] = v;
+                if (k === 'id') {
+                    node.id = String(v);
+                } else if (k === 'title') {
+                    node.title = String(v);
+                } else if (k === 'type') {
+                    node.type = String(v);
+                } else if (k === 'value') {
+                    node.value = String(v);
+                } else if (k === 'role') {
+                    node.setAttribute('role', String(v));
+                } else if (k === 'ariaLabel') {
+                    node.setAttribute('aria-label', String(v));
+                }
                 continue;
             }
-            if (k === 'role' || k === 'ariaLabel') {
-                node.setAttribute(k === 'ariaLabel' ? 'aria-label' : 'role', String(v));
-                continue;
-            }
-            if (/^aria-[a-z0-9\-]+$/.test(k)) {
+            if (/^aria-[a-z0-9-]+$/.test(k)) {
                 node.setAttribute(k, String(v));
             }
         }
@@ -108,7 +117,12 @@ class DashboardManager {
 
     async _safeFetch(relativePath, urlParams = null, fetchOptions = {}) {
         const validatedUrl = this._buildURL(relativePath, urlParams);
-        return fetch(validatedUrl, fetchOptions);
+        // Security: URL is validated by _buildURL which ensures:
+        // - Only same-origin requests
+        // - Only HTTP/HTTPS protocols
+        // - Path starts with /users/dashboard/
+        // - No protocol injection or double slashes
+        return window.fetch(validatedUrl, fetchOptions);
     }
 
     init() {
