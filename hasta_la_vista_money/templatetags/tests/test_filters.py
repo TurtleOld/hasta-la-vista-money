@@ -21,4 +21,3 @@ class TemplateFiltersTest(SimpleTestCase):
 
     def test_comma_handles_invalid_value(self) -> None:
         self.assertEqual(comma(object()), '—')
-

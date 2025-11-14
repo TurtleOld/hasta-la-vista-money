@@ -9,4 +9,3 @@ class ExpenseTemplateTagsTest(SimpleTestCase):
 
     def test_startswith_returns_false(self) -> None:
         self.assertFalse(startswith('category:food', 'expense'))
-

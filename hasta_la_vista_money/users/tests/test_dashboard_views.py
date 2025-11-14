@@ -11,10 +11,9 @@ from django.urls import reverse
 
 from hasta_la_vista_money.users.models import DashboardWidget
 from hasta_la_vista_money.users.views import (
-    DashboardDataView,
     DashboardComparisonView,
+    DashboardDataView,
     DashboardDrillDownView,
-    DashboardWidgetConfigView,
 )
 
 User = get_user_model()
@@ -281,7 +280,9 @@ class DashboardAnalyticsEndpointsTest(TestCase):
         self.assertEqual(payload, {'error': 'User not authenticated'})
 
     @patch('hasta_la_vista_money.users.views.get_period_comparison')
-    def test_dashboard_comparison_returns_data(self, mock_comparison: Any) -> None:
+    def test_dashboard_comparison_returns_data(
+        self, mock_comparison: Any
+    ) -> None:
         mock_comparison.return_value = {'result': 'ok'}
         response = self.client.get(
             reverse('users:dashboard_comparison'),

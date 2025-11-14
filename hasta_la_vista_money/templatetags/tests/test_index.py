@@ -27,4 +27,3 @@ class IndexTemplateTagsTest(SimpleTestCase):
     def test_div_handles_errors(self) -> None:
         self.assertEqual(div(10, 0), '')
         self.assertEqual(div('a', 10), '')
-
