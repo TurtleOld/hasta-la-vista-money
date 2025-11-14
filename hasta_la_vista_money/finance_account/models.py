@@ -84,7 +84,7 @@ class AccountManager(models.Manager['Account']):
 
 class TimeStampedModel(models.Model):
     """
-    Abstract base class with a created_at timestamp.
+    Abstract base class with created_at and updated_at timestamps.
     """
 
     created_at = models.DateTimeField(
@@ -92,6 +92,12 @@ class TimeStampedModel(models.Model):
         null=True,
         blank=True,
         verbose_name=_('Дата и время создания'),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        null=True,
+        blank=True,
+        verbose_name=_('Дата и время обновления'),
     )
 
     class Meta:
@@ -293,7 +299,7 @@ class Account(TimeStampedModel):
         )
 
 
-class TransferMoneyLogQuerySet(models.QuerySet):
+class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):
     """
     Custom QuerySet for TransferMoneyLog model with common filters.
     """

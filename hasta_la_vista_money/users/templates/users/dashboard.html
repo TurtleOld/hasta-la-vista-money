@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% load static i18n %}
+{% load word_hash %}
+
+{% block title %}{% translate 'Дашборд' %}{% endblock %}
+
+{% block extra_css %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h2><i class="bi bi-speedometer2"></i> {% translate 'Интерактивный дашборд (Может содержать ошибки подсчётов)' %}</h2>
+        <div class="dashboard-controls">
+            <button type="button" id="add-widget-btn" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> {% translate 'Добавить виджет' %}
+            </button>
+            <button type="button" id="edit-mode-btn" class="btn btn-outline-secondary">
+                <i class="bi bi-pencil"></i> {% translate 'Редактировать' %}
+            </button>
+        </div>
+    </div>
+
+    <div class="dashboard-period-selector mb-4">
+        <label for="period-select" class="form-label">{% translate 'Период:' %}</label>
+        <select id="period-select" class="form-select">
+            <option value="month" selected>{% translate 'Месяц' %}</option>
+            <option value="quarter">{% translate 'Квартал' %}</option>
+            <option value="year">{% translate 'Год' %}</option>
+        </select>
+    </div>
+
+    <div id="widgets-grid" class="dashboard-grid">
+        <div class="dashboard-empty-state">
+            <i class="bi bi-graph-up fs-1 text-muted"></i>
+            <p class="text-muted">{% translate 'Добавьте виджеты для отображения данных' %}</p>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно выбора виджета -->
+<div class="modal fade" id="widget-select-modal" tabindex="-1" aria-labelledby="widget-select-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="widget-select-modal-label">
+                    <i class="bi bi-grid-3x3-gap"></i> {% translate 'Выберите виджет' %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="list-group list-group-flush">
+                    {% for widget in available_widgets %}
+                    <button type="button" class="list-group-item list-group-item-action widget-select-btn" data-widget-type="{{ widget.type }}">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-graph-up-arrow me-3 fs-5 text-primary"></i>
+                            <strong>{{ widget.name }}</strong>
+                        </div>
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно настройки виджета -->
+<div class="modal fade" id="widget-config-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{% translate 'Настройки виджета' %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="widget-config-form">
+                    <input type="hidden" id="config-widget-id">
+                    <div class="mb-3">
+                        <label for="config-width" class="form-label">{% translate 'Ширина (колонок 1-12)' %}</label>
+                        <input type="number" class="form-control" id="config-width" min="1" max="12" value="6">
+                    </div>
+                    <div class="mb-3">
+                        <label for="config-height" class="form-label">{% translate 'Высота (пикселей)' %}</label>
+                        <input type="number" class="form-control" id="config-height" min="200" value="300">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% translate 'Отмена' %}</button>
+                <button type="button" class="btn btn-primary" id="save-widget-config">{% translate 'Сохранить' %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% csrf_token %}
+<script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/chart-configs.js' %}?v={% word_hash %}"></script>
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/chart-utils.js' %}?v={% word_hash %}"></script>
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/dashboard.js' %}?v={% word_hash %}"></script>
+<script nonce="{{request.csp_nonce}}">
+    (function() {
+        function initDashboard() {
+            const grid = document.getElementById('widgets-grid');
+            if (!grid) {
+                console.error('Widgets grid not found');
+                return false;
+            }
+
+            if (window.chartConfigs && window.initChart && window.DashboardManager) {
+                console.log('Initializing DashboardManager...');
+                window.dashboardManager = new window.DashboardManager();
+                return true;
+            } else {
+                console.warn('Dashboard dependencies not ready:', {
+                    chartConfigs: !!window.chartConfigs,
+                    initChart: !!window.initChart,
+                    DashboardManager: !!window.DashboardManager
+                });
+            }
+            return false;
+        }
+
+        function waitForDependencies(attempts = 0) {
+            if (attempts > 10) {
+                console.error('Failed to load dashboard dependencies after 10 attempts');
+                return;
+            }
+
+            if (initDashboard()) {
+                console.log('Dashboard initialized successfully');
+                return;
+            }
+
+            setTimeout(() => {
+                waitForDependencies(attempts + 1);
+            }, 100);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                waitForDependencies();
+            });
+        } else {
+            waitForDependencies();
+        }
+    })();
+</script>
+{% endblock %}
+

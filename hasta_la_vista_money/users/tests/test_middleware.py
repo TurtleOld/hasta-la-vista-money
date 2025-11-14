@@ -17,8 +17,8 @@ class CheckAdminMiddlewareTest(TestCase):
 
     def setUp(self) -> None:
         self.factory: RequestFactory = RequestFactory()
-        self.middleware: CheckAdminMiddleware = CheckAdminMiddleware(  # type: ignore[no-untyped-call]
-            get_response=lambda r: r,
+        self.middleware: CheckAdminMiddleware = CheckAdminMiddleware(
+            get_response=lambda _: HttpResponse(),
         )
         cache.clear()
 
@@ -42,7 +42,7 @@ class CheckAdminMiddlewareTest(TestCase):
         for path in protected_paths:
             with self.subTest(path=path):
                 request: HttpRequest = self.factory.get(path)
-                response: HttpResponse | HttpRequest = self.middleware(request)
+                response: HttpResponse = self.middleware(request)
                 response_redirect: HttpResponseRedirect = cast(
                     'HttpResponseRedirect',
                     response,
@@ -62,12 +62,13 @@ class CheckAdminMiddlewareTest(TestCase):
 
         registration_path: str = reverse('users:registration')
         request: HttpRequest = self.factory.get(registration_path)
-        response: HttpResponse | HttpRequest = self.middleware(request)
+        response: HttpResponse = self.middleware(request)
 
-        self.assertEqual(response, request)
+        self.assertNotIsInstance(response, HttpResponseRedirect)
+        self.assertIsInstance(response, HttpResponse)
 
     def test_with_superuser_allows_access_to_all_pages(self) -> None:
-        User.objects.create_superuser(  # type: ignore[attr-defined]
+        User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
             password='admin123',
@@ -88,9 +89,10 @@ class CheckAdminMiddlewareTest(TestCase):
         for path in protected_paths:
             with self.subTest(path=path):
                 request: HttpRequest = self.factory.get(path)
-                response: HttpResponse | HttpRequest = self.middleware(request)
+                response: HttpResponse = self.middleware(request)
 
-                self.assertEqual(response, request)
+                self.assertNotIsInstance(response, HttpResponseRedirect)
+                self.assertIsInstance(response, HttpResponse)
 
     def test_cache_is_used_to_avoid_database_queries(self) -> None:
         User.objects.all().delete()
@@ -111,7 +113,7 @@ class CheckAdminMiddlewareTest(TestCase):
         User.objects.all().delete()
 
         request1: HttpRequest = self.factory.get('/')
-        response1: HttpResponse | HttpRequest = self.middleware(request1)
+        response1: HttpResponse = self.middleware(request1)
         response1_redirect: HttpResponseRedirect = cast(
             'HttpResponseRedirect',
             response1,
@@ -120,26 +122,27 @@ class CheckAdminMiddlewareTest(TestCase):
 
         cache.clear()
 
-        User.objects.create_superuser(  # type: ignore[attr-defined]
+        User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
             password='admin123',
         )
 
         request2: HttpRequest = self.factory.get('/')
-        response2: HttpResponse | HttpRequest = self.middleware(request2)
-        self.assertEqual(response2, request2)
+        response2: HttpResponse = self.middleware(request2)
+        self.assertNotIsInstance(response2, HttpResponseRedirect)
+        self.assertIsInstance(response2, HttpResponse)
 
     def test_regular_user_does_not_prevent_redirect(self) -> None:
         User.objects.all().delete()
-        User.objects.create_user(  # type: ignore[attr-defined]
+        User.objects.create_user(
             username='regular',
             email='regular@example.com',
             password='regular123',
         )
 
         request: HttpRequest = self.factory.get('/')
-        response: HttpResponse | HttpRequest = self.middleware(request)
+        response: HttpResponse = self.middleware(request)
         response_redirect: HttpResponseRedirect = cast(
             'HttpResponseRedirect',
             response,
@@ -152,7 +155,7 @@ class CheckAdminMiddlewareTest(TestCase):
         self,
     ) -> None:
         User.objects.all().delete()
-        User.objects.create_user(  # type: ignore[attr-defined]
+        User.objects.create_user(
             username='staff',
             email='staff@example.com',
             password='staff123',
@@ -160,7 +163,7 @@ class CheckAdminMiddlewareTest(TestCase):
         )
 
         request: HttpRequest = self.factory.get('/')
-        response: HttpResponse | HttpRequest = self.middleware(request)
+        response: HttpResponse = self.middleware(request)
         response_redirect: HttpResponseRedirect = cast(
             'HttpResponseRedirect',
             response,
@@ -213,7 +216,7 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
 
     def test_with_superuser_integration_allows_access(self) -> None:
         cache.clear()
-        User.objects.create_superuser(  # type: ignore[attr-defined]
+        User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
             password='admin123',
@@ -222,8 +225,9 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
         response = self.client.get('/')
 
         if response.status_code == constants.REDIRECTS:
+            assert isinstance(response, HttpResponseRedirect)
             self.assertNotEqual(
-                response.url,  # type: ignore[attr-defined]
+                response.url,
                 reverse('users:registration'),
                 msg='Не должно быть редиректа на регистрацию '
                 'при наличии суперпользователя',
@@ -261,6 +265,6 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
                 )
                 assert isinstance(response, HttpResponseRedirect)
                 self.assertEqual(
-                    response.url,  # type: ignore[attr-defined]
+                    response.url,
                     reverse('users:registration'),
                 )

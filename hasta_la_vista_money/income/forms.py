@@ -1,4 +1,4 @@
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.forms import (
     CharField,
@@ -19,7 +19,11 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
 
-class IncomeForm(CategoryChoicesConfigurerMixin, FormQuerysetsMixin, ModelForm):
+class IncomeForm(
+    CategoryChoicesConfigurerMixin,
+    FormQuerysetsMixin,
+    ModelForm[Income],
+):
     """Модельная форма отображения доходов на сайте."""
 
     category = ModelChoiceField(
@@ -57,7 +61,7 @@ class IncomeForm(CategoryChoicesConfigurerMixin, FormQuerysetsMixin, ModelForm):
 class AddCategoryIncomeForm(
     CategoryChoicesConfigurerMixin,
     CategoryChoicesMixin,
-    ModelForm,
+    ModelForm[IncomeCategory],
 ):
     name = CharField(
         label=_('Название категории'),
@@ -74,7 +78,7 @@ class AddCategoryIncomeForm(
     )
     field = 'parent_category'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Инициализирует queryset для поля 'parent_category'."""
         category_queryset = kwargs.pop('category_queryset', None)
         super().__init__(*args, category_queryset=category_queryset, **kwargs)

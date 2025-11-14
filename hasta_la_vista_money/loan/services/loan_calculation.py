@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from dateutil.relativedelta import relativedelta
 from django.shortcuts import get_object_or_404
@@ -13,7 +14,7 @@ def calculate_annuity_schedule(
     amount: float,
     annual_rate: float,
     months: int,
-) -> dict:
+) -> dict[str, Any]:
     monthly_rate = (
         annual_rate / constants.PERCENT_TO_DECIMAL / constants.MONTHS_IN_YEAR
     )
@@ -86,7 +87,7 @@ def calculate_differentiated_schedule(
     amount: float,
     annual_rate: float,
     months: int,
-) -> dict:
+) -> dict[str, Any]:
     monthly_rate = (
         annual_rate / constants.PERCENT_TO_DECIMAL / constants.MONTHS_IN_YEAR
     )
@@ -131,7 +132,7 @@ def _persist_schedule(
     user_id: int,
     loan_id: int,
     start_date: date,
-    schedule_data: dict,
+    schedule_data: dict[str, Any],
 ) -> None:
     user = get_object_or_404(User, id=user_id)
     loan = get_object_or_404(Loan, id=loan_id)
@@ -163,17 +164,10 @@ def calculate_annuity_loan_db(
     user_id: int,
     loan_id: int,
     start_date: date,
-    loan_amount,
-    annual_interest_rate,
-    period_loan,
+    loan_amount: Decimal,
+    annual_interest_rate: Decimal,
+    period_loan: int,
 ) -> None:
-    if not isinstance(loan_amount, Decimal):
-        loan_amount = Decimal(str(loan_amount))
-    if not isinstance(annual_interest_rate, Decimal):
-        annual_interest_rate = Decimal(str(annual_interest_rate))
-    if not isinstance(period_loan, Decimal):
-        period_loan = Decimal(str(period_loan))
-
     schedule_data = calculate_annuity_schedule(
         float(loan_amount),
         float(annual_interest_rate),
@@ -192,17 +186,10 @@ def calculate_differentiated_loan_db(
     user_id: int,
     loan_id: int,
     start_date: date,
-    loan_amount,
-    annual_interest_rate,
-    period_loan,
+    loan_amount: Decimal,
+    annual_interest_rate: Decimal,
+    period_loan: int,
 ) -> None:
-    if not isinstance(loan_amount, Decimal):
-        loan_amount = Decimal(str(loan_amount))
-    if not isinstance(annual_interest_rate, Decimal):
-        annual_interest_rate = Decimal(str(annual_interest_rate))
-    if not isinstance(period_loan, Decimal):
-        period_loan = Decimal(str(period_loan))
-
     schedule_data = calculate_differentiated_schedule(
         float(loan_amount),
         float(annual_interest_rate),
@@ -233,8 +220,8 @@ class LoanCalculationService:
                 user_id=user_id,
                 loan_id=loan.pk,
                 start_date=start_date,
-                loan_amount=loan_amount,
-                annual_interest_rate=annual_interest_rate,
+                loan_amount=Decimal(str(loan_amount)),
+                annual_interest_rate=Decimal(str(annual_interest_rate)),
                 period_loan=period_loan,
             )
         elif type_loan == 'Differentiated':
@@ -242,8 +229,8 @@ class LoanCalculationService:
                 user_id=user_id,
                 loan_id=loan.pk,
                 start_date=start_date,
-                loan_amount=loan_amount,
-                annual_interest_rate=annual_interest_rate,
+                loan_amount=Decimal(str(loan_amount)),
+                annual_interest_rate=Decimal(str(annual_interest_rate)),
                 period_loan=period_loan,
             )
         else:

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -19,7 +19,7 @@ User = get_user_model()
 class GetUserDetailedStatisticsServiceTest(TestCase):
     """Tests for get_user_detailed_statistics service function."""
 
-    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
@@ -36,7 +36,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
 
     def test_get_user_detailed_statistics(self) -> None:
         stats: UserDetailedStatisticsDict = get_user_detailed_statistics(

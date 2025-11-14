@@ -35,7 +35,7 @@ class ExpenseService:
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
         qs = (
-            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
+            self.user.category_expense_users.select_related('user')
             .values(
                 'id',
                 'name',
@@ -48,8 +48,8 @@ class ExpenseService:
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
-        return (  # type: ignore[no-any-return]
-            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
+        return (
+            self.user.category_expense_users.select_related('user')
             .order_by('parent_category__name', 'name')
             .all()
         )
@@ -81,18 +81,18 @@ class ExpenseService:
 
     def update_expense(self, expense: Expense, form: AddExpenseForm) -> None:
         """Update an existing expense."""
-        expense_updated: Expense = get_queryset_type_income_expenses(  # type: ignore[assignment]
-            expense.id,  # type: ignore[attr-defined]
+        expense_updated: Expense = get_queryset_type_income_expenses(
+            expense.pk,
             Expense,
             form,
         )
 
         amount = form.cleaned_data['amount']
         account = form.cleaned_data['account']
-        account_balance = get_object_or_404(Account, id=account.id)
+        account_balance = get_object_or_404(Account, pk=account.pk)
         old_account_balance = get_object_or_404(
             Account,
-            id=expense_updated.account.id,
+            pk=expense_updated.account.pk,
         )
 
         if account_balance.user != self.user:
@@ -116,7 +116,7 @@ class ExpenseService:
         """Delete an expense and restore account balance."""
         account = expense.account
         amount = expense.amount
-        account_balance = get_object_or_404(Account, id=account.id)
+        account_balance = get_object_or_404(Account, pk=account.pk)
 
         if account_balance.user != self.user:
             error_msg = 'У вас нет прав для выполнения этого действия'
@@ -185,7 +185,7 @@ class ExpenseService:
         else:
             try:
                 group = Group.objects.get(pk=group_id)
-                group_users = list(group.user_set.all())  # type: ignore[attr-defined]
+                group_users = list(group.user_set.all())
                 expenses = Expense.objects.filter(
                     user__in=group_users,
                 ).select_related('user', 'category', 'account')
@@ -229,7 +229,7 @@ class ExpenseCategoryService:
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
         qs = (
-            self.user.category_expense_users.select_related('parent_category')  # type: ignore[attr-defined]
+            self.user.category_expense_users.select_related('parent_category')
             .values(
                 'id',
                 'name',
@@ -242,8 +242,8 @@ class ExpenseCategoryService:
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
-        return (  # type: ignore[no-any-return]
-            self.user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
+        return (
+            self.user.category_expense_users.select_related('user')
             .order_by('parent_category__name', 'name')
             .all()
         )

@@ -1,13 +1,13 @@
 from decimal import Decimal
-from typing import Any
 
 from django.db import transaction
 from django.forms.formsets import BaseFormSet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services import AccountService
-from hasta_la_vista_money.receipts.forms import ReceiptForm
+from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt
+from hasta_la_vista_money.users.models import User
 
 
 class ReceiptUpdaterService:
@@ -15,10 +15,10 @@ class ReceiptUpdaterService:
     @transaction.atomic
     def update_receipt(
         *,
-        user,
+        user: User,
         receipt: Receipt,
         form: ReceiptForm,
-        product_formset: BaseFormSet[Any],
+        product_formset: BaseFormSet[ProductForm],
     ) -> Receipt:
         old_total_sum = receipt.total_sum
         old_account = receipt.account
@@ -56,8 +56,8 @@ class ReceiptUpdaterService:
         new_account = receipt.account
 
         # Корректировка балансов через сервис аккаунтов
-        old_account_obj = Account.objects.get(id=old_account.id)
-        new_account_obj = Account.objects.get(id=new_account.id)
+        old_account_obj = Account.objects.get(pk=old_account.pk)
+        new_account_obj = Account.objects.get(pk=new_account.pk)
         AccountService.adjust_on_receipt_update(
             old_account=old_account_obj,
             new_account=new_account_obj,

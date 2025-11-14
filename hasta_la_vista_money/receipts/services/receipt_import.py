@@ -1,11 +1,14 @@
 import decimal
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
+from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -13,6 +16,7 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts import services as receipts_services
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.users.models import User
 
 
 @dataclass
@@ -64,11 +68,17 @@ class ReceiptImportService:
         )
 
     @staticmethod
-    def _check_exist_receipt(user, number_receipt: int | None):
+    def _check_exist_receipt(
+        user: User,
+        number_receipt: int | None,
+    ) -> QuerySet[Receipt]:
         return Receipt.objects.filter(user=user, number_receipt=number_receipt)
 
     @staticmethod
-    def _create_or_update_seller(data: dict[str, Any], user) -> Seller:
+    def _create_or_update_seller(
+        data: dict[str, Any],
+        user: User,
+    ) -> Seller:
         return Seller.objects.update_or_create(
             user=user,
             name_seller=data.get('name_seller'),
@@ -82,7 +92,10 @@ class ReceiptImportService:
         )[0]
 
     @staticmethod
-    def _create_products(data: dict[str, Any], user) -> list[Product]:
+    def _create_products(
+        data: dict[str, Any],
+        user: User,
+    ) -> list[Product]:
         products_data = [
             Product(
                 user=user,
@@ -99,7 +112,7 @@ class ReceiptImportService:
     @staticmethod
     def _create_receipt(
         data: dict[str, Any],
-        user,
+        user: User,
         account: Account,
         seller: Seller,
     ) -> Receipt:
@@ -118,7 +131,10 @@ class ReceiptImportService:
         )
 
     @staticmethod
-    def _update_account_balance(account: Account, total_sum) -> None:
+    def _update_account_balance(
+        account: Account,
+        total_sum: decimal.Decimal | str | float,
+    ) -> None:
         account_balance = get_object_or_404(Account, pk=account.pk)
         AccountService.apply_receipt_spend(
             account_balance,
@@ -129,10 +145,10 @@ class ReceiptImportService:
     @transaction.atomic
     def process_uploaded_image(
         *,
-        user,
+        user: User,
         account: Account,
-        uploaded_file,
-        analyze_func=None,
+        uploaded_file: UploadedFile,
+        analyze_func: Callable[[UploadedFile], str] | None = None,
     ) -> ReceiptImportResult:
         try:
             func = analyze_func

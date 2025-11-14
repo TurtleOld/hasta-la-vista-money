@@ -15,6 +15,7 @@ from decouple import config
 from django.core.files.uploadedfile import UploadedFile
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
+from django.http import HttpRequest
 from openai import OpenAI as OpenAIDefault
 
 from hasta_la_vista_money import constants
@@ -22,7 +23,7 @@ from hasta_la_vista_money import constants
 T = TypeVar('T')
 
 
-def image_to_base64(uploaded_file) -> str:
+def image_to_base64(uploaded_file: UploadedFile) -> str:
     file_bytes = uploaded_file.read()
     encoded_str = base64.b64encode(file_bytes).decode('utf-8')
     encoded_str = (
@@ -33,7 +34,7 @@ def image_to_base64(uploaded_file) -> str:
     return f'data:image/jpeg;base64,{encoded_str}'
 
 
-def analyze_image_with_ai(image_base64: UploadedFile):
+def analyze_image_with_ai(image_base64: UploadedFile) -> str:
     # Allow tests to patch `hasta_la_vista_money.receipts.services.OpenAI`.
     try:
         services_mod = importlib.import_module(
@@ -150,7 +151,9 @@ def analyze_image_with_ai(image_base64: UploadedFile):
                 },
             ],
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        if not content:
+            raise TypeError('AI response content is None')
     except (
         ConnectionError,
         TimeoutError,
@@ -160,14 +163,16 @@ def analyze_image_with_ai(image_base64: UploadedFile):
     ) as e:
         error_msg = f'Ошибка при анализе изображения: {e!s}'
         raise RuntimeError(error_msg) from e
+    else:
+        return content
 
 
 def paginator_custom_view(
-    request,
+    request: HttpRequest,
     queryset: QuerySet[Any] | list[Any],
     paginate_by: int,
     page_name: str,
-) -> Page[Sequence[T]]:
+) -> Page[Sequence[Any]]:
     paginator = Paginator(queryset, paginate_by)
     num_page = request.GET.get(page_name)
     return paginator.get_page(num_page)

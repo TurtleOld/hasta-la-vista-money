@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from typing import ClassVar
 
 from django.db import models
@@ -9,7 +10,7 @@ from hasta_la_vista_money.income.models import IncomeCategory
 from hasta_la_vista_money.users.models import User
 
 
-class DateListQuerySet(models.QuerySet):
+class DateListQuerySet(models.QuerySet['DateList']):
     def for_user(self, user: User) -> 'models.QuerySet[DateList]':
         """Filter date lists by user."""
         return self.filter(user=user)
@@ -19,7 +20,7 @@ class DateListQuerySet(models.QuerySet):
         return self.filter(date=target_date)
 
 
-class DateListManager(models.Manager):
+class DateListManager(models.Manager['DateList']):
     def get_queryset(self) -> DateListQuerySet:
         return DateListQuerySet(self.model, using=self._db)
 
@@ -48,7 +49,7 @@ class DateList(models.Model):
         help_text=_('Дата планирования'),
         db_index=True,
     )
-    created_at = models.DateTimeField(  # type: ignore[assignment]
+    created_at = models.DateTimeField(
         auto_now_add=True,
         null=True,
         blank=True,
@@ -70,14 +71,14 @@ class DateList(models.Model):
         return f'{self.user} - {self.date}'
 
 
-class PlanningQuerySet(models.QuerySet):
+class PlanningQuerySet(models.QuerySet['Planning']):
     def expenses(self) -> 'models.QuerySet[Planning]':
         """Filter only expense plans."""
-        return self.filter(type=Planning.Type.EXPENSE)
+        return self.filter(planning_type=Planning.Type.EXPENSE)
 
     def incomes(self) -> 'models.QuerySet[Planning]':
         """Filter only income plans."""
-        return self.filter(type=Planning.Type.INCOME)
+        return self.filter(planning_type=Planning.Type.INCOME)
 
     def for_user(self, user: User) -> 'models.QuerySet[Planning]':
         return self.filter(user=user)
@@ -94,7 +95,7 @@ class PlanningQuerySet(models.QuerySet):
         )
 
 
-class PlanningManager(models.Manager):
+class PlanningManager(models.Manager['Planning']):
     def get_queryset(self) -> PlanningQuerySet:
         return PlanningQuerySet(self.model, using=self._db).with_related()  # type: ignore[return-value]
 
@@ -152,14 +153,14 @@ class Planning(models.Model):
         help_text=_('Дата планирования'),
         db_index=True,
     )
-    amount: float = models.DecimalField(  # type: ignore[assignment]
+    amount: Decimal = models.DecimalField(  # type: ignore[assignment]
         max_digits=12,
         decimal_places=2,
         default=0,
         verbose_name=_('Сумма'),
         help_text=_('Планируемая сумма'),
     )
-    type: str = models.CharField(  # type: ignore[assignment]
+    planning_type: str = models.CharField(  # type: ignore[assignment]
         max_length=10,
         choices=Type.choices,
         default=Type.EXPENSE,
@@ -167,7 +168,7 @@ class Planning(models.Model):
         help_text=_('Тип планирования: расход или доход'),
         db_index=True,
     )
-    created_at = models.DateTimeField(  # type: ignore[assignment]
+    created_at = models.DateTimeField(
         auto_now_add=True,
         null=True,
         blank=True,
@@ -181,29 +182,31 @@ class Planning(models.Model):
         verbose_name = _('Планирование')
         verbose_name_plural = _('Планирования')
         ordering: ClassVar[list[str]] = ['-date']
-        constraints: ClassVar[list[models.BaseConstraint]] = [  # type: ignore[assignment]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=[
                     'user',
                     'category_expense',
                     'category_income',
                     'date',
-                    'type',
+                    'planning_type',
                 ],
                 name='unique_planning_per_user_category_date_type',
             ),
         ]
         indexes: ClassVar[list[models.Index]] = [
-            models.Index(fields=['user', 'date', 'type']),
+            models.Index(fields=['user', 'date', 'planning_type']),
         ]
 
     def __str__(self) -> str:
-        return f'{self.user} - {self.date} - {self.type} - {self.amount}'
+        return (
+            f'{self.user} - {self.date} - {self.planning_type} - {self.amount}'
+        )
 
     def is_expense(self) -> bool:
         """Return True if this planning is for an expense."""
-        return self.type == self.Type.EXPENSE
+        return self.planning_type == self.Type.EXPENSE
 
     def is_income(self) -> bool:
         """Return True if this planning is for an income."""
-        return self.type == self.Type.INCOME
+        return self.planning_type == self.Type.INCOME

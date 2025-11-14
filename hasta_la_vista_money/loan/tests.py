@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 from django.test import TestCase
 from django.urls import reverse_lazy
@@ -81,7 +81,7 @@ class TestLoan(TestCase):
         self,
         type_loan: str = 'Annuity',
         loan_amount: int = constants.TEST_LOAN_AMOUNT_MEDIUM,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Get standard loan form data for testing."""
         return {
             'type_loan': type_loan,
@@ -390,8 +390,10 @@ class TestLoan(TestCase):
             user_id=self.user.pk,
             loan_id=self.loan1.pk,
             start_date=timezone.now(),
-            loan_amount=constants.TEST_LOAN_AMOUNT_MEDIUM,
-            annual_interest_rate=constants.TEST_INTEREST_RATE_MEDIUM,
+            loan_amount=Decimal(constants.TEST_LOAN_AMOUNT_MEDIUM),
+            annual_interest_rate=Decimal(
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
+            ),
             period_loan=constants.TEST_PERIOD_LONG,
         )
         self.assertTrue(
@@ -857,11 +859,25 @@ class TestLoanCalculationIntegration(TestCase):
             ),
         ]
 
-        for loan_amount, rate, period in test_cases:
+        for case in test_cases:
+            loan_amount_raw, rate_raw, period_raw = case
+            loan_amount = (
+                Decimal(str(loan_amount_raw))
+                if not isinstance(loan_amount_raw, Decimal)
+                else loan_amount_raw
+            )
+            rate = (
+                Decimal(str(rate_raw))
+                if not isinstance(rate_raw, Decimal)
+                else rate_raw
+            )
+            period = (
+                int(period_raw) if isinstance(period_raw, str) else period_raw
+            )
             with self.subTest(
-                loan_amount=loan_amount,
-                rate=rate,
-                period=period,
+                loan_amount=loan_amount_raw,
+                rate=rate_raw,
+                period=period_raw,
             ):
                 calculate_annuity_loan(
                     user_id=self.user.pk,
@@ -869,7 +885,7 @@ class TestLoanCalculationIntegration(TestCase):
                     start_date=timezone.now(),
                     loan_amount=loan_amount,
                     annual_interest_rate=rate,
-                    period_loan=period,
+                    period_loan=cast('int', period),
                 )
 
                 schedule_exists = PaymentSchedule.objects.filter(

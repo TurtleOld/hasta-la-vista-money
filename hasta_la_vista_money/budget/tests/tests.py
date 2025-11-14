@@ -18,7 +18,7 @@ class BudgetConfigTest(TestCase):
 
 class BudgetModelTest(TestCase):
     def setUp(self) -> None:
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(
             username='testuser',
             password='pass',
         )
@@ -27,7 +27,7 @@ class BudgetModelTest(TestCase):
         self.planning = Planning.objects.create(
             user=self.user,
             date=self.date,
-            type='expense',
+            planning_type='expense',
             amount=100,
         )
 
@@ -59,7 +59,7 @@ class BudgetUrlsTest(TestCase):
 class BudgetViewsTest(TestCase):
     def setUp(self) -> None:
         self.client = Client()
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(
             username='testuser',
             password='pass',
         )
@@ -116,7 +116,7 @@ class BudgetViewsTest(TestCase):
 
     def test_budget_view_no_dates(self) -> None:
         self.client.logout()
-        user2 = User.objects.create_user(  # type: ignore[attr-defined]
+        user2 = User.objects.create_user(
             username='user2',
             password='pass',
         )

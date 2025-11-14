@@ -20,6 +20,10 @@ from django.forms import (
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 
 
 class BootstrapFormMixin:
@@ -144,7 +148,9 @@ class FormValidationMixin:
         return ValidationError(message, code='invalid_value')
 
 
-class BaseAccountForm(BootstrapFormMixin, CreditFieldsMixin, ModelForm):
+class BaseAccountForm(
+    BootstrapFormMixin, CreditFieldsMixin, ModelForm[Account]
+):
     """Base form class for account-related forms with common functionality.
 
     Combines Bootstrap styling, credit field handling, and
@@ -159,7 +165,7 @@ class BaseAccountForm(BootstrapFormMixin, CreditFieldsMixin, ModelForm):
         self.add_credit_field_classes()
 
 
-class BaseTransferForm(BootstrapFormMixin, ModelForm):
+class BaseTransferForm(BootstrapFormMixin, ModelForm[TransferMoneyLog]):
     """Base form class for transfer-related forms.
 
     Provides Bootstrap styling and common field configuration for money

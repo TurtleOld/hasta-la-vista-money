@@ -5,6 +5,9 @@ financial accounts,
 with proper authentication and user-specific data filtering.
 """
 
+from typing import TYPE_CHECKING, cast
+
+from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import extend_schema
 from rest_framework.generics import ListCreateAPIView
@@ -13,6 +16,9 @@ from rest_framework.throttling import UserRateThrottle
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User
 
 
 @extend_schema(
@@ -23,7 +29,7 @@ from hasta_la_vista_money.finance_account.serializers import AccountSerializer
         'или создать новый счет'
     ),
 )
-class AccountListCreateAPIView(ListCreateAPIView):
+class AccountListCreateAPIView(ListCreateAPIView[Account]):
     """API view for listing and creating financial accounts.
 
     Provides endpoints for:
@@ -38,8 +44,9 @@ class AccountListCreateAPIView(ListCreateAPIView):
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Account, Account]:
         """Return queryset filtered by the current user."""
         if getattr(self, 'swagger_fake_view', False):
             return Account.objects.none()
-        return Account.objects.filter(user=self.request.user)
+        user = cast('User', self.request.user)
+        return Account.objects.filter(user=user)

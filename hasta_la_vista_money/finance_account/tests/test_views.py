@@ -1,7 +1,7 @@
 """Tests for finance account views."""
 
 from decimal import Decimal
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from django.contrib.auth.models import Group
 from django.test import RequestFactory, TestCase
@@ -22,6 +22,9 @@ from hasta_la_vista_money.finance_account.views import (
 )
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.views import AuthRequest
 
 
 class TestAccountView(TestCase):
@@ -76,7 +79,7 @@ class TestAccountView(TestCase):
     def test_account_view_context_methods(self) -> None:
         """Test individual context methods of AccountView."""
         view = AccountView()
-        view.request = self.factory.get('/')
+        view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
 
         accounts_context = view._get_accounts_context()
@@ -151,7 +154,7 @@ class TestAccountCreateView(TestCase):
     def test_account_create_view_get_context_data(self) -> None:
         """Test get_context_data method."""
         view = AccountCreateView()
-        view.request = self.factory.get('/')
+        view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
         view.object = None
 
@@ -204,7 +207,7 @@ class TestChangeAccountView(TestCase):
     def test_change_account_view_get_context_data(self) -> None:
         """Test get_context_data method."""
         view = ChangeAccountView()
-        view.request = self.factory.get('/')
+        view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
         view.kwargs = {'pk': self.account.pk}
         view.object = self.account
@@ -290,7 +293,7 @@ class TestTransferMoneyAccountView(TestCase):
     def test_transfer_money_view_get_form_kwargs(self) -> None:
         """Test get_form_kwargs method."""
         view = TransferMoneyAccountView()
-        view.request = self.factory.get('/')
+        view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
 
         kwargs = view.get_form_kwargs()

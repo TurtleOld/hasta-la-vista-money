@@ -144,7 +144,10 @@ class TestAccountServices(TestCase):
         ]
         for case in testcases:
             with self.subTest(balances=case['balances']):
-                balances_list: list[Decimal] = case['balances']  # type: ignore[assignment]
+                balances_list: list[Decimal] = cast(
+                    'list[Decimal]',
+                    case['balances'],
+                )
                 accounts_list: list[Account] = [
                     cast(
                         'Account',
@@ -158,7 +161,7 @@ class TestAccountServices(TestCase):
                 ]
                 qs = Account.objects.filter(
                     pk__in=[acc.pk for acc in accounts_list],
-                )  # type: ignore[attr-defined]
+                )
                 result = account_services.get_sum_all_accounts(qs)
                 self.assertEqual(result, case['expected'])
 

@@ -1,7 +1,6 @@
 import decimal
 import json
 import re
-from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -15,6 +14,8 @@ from django.db.models import Count, ProtectedError, QuerySet, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
 
+from hasta_la_vista_money.users.views import AuthRequest
+
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -27,6 +28,7 @@ from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django.views.generic.edit import UpdateView
 from django_filters.views import FilterView
+from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -57,33 +59,45 @@ logger = structlog.get_logger(__name__)
 
 
 class BaseView:
-    template_name: str | Sequence[str] | None = 'receipts/receipts.html'
-    success_url: str = reverse_lazy('receipts:list')  # type: ignore[assignment]
+    """Base view class for receipts views."""
+
+    def get_template_name(self) -> str:
+        return 'receipts/receipts.html'
+
+    def get_success_url(self) -> str | StrOrPromise | None:
+        return reverse_lazy('receipts:list')
 
 
-class ReceiptView(  # type: ignore[misc]
+class ReceiptView(
     LoginRequiredMixin,
-    SuccessMessageMixin,  # type: ignore[type-arg]
-    BaseView,  # type: ignore[misc]
-    FilterView[Receipt, ReceiptFilter],  # type: ignore[misc]
+    SuccessMessageMixin[ReceiptForm],
+    FilterView,
+    BaseView,
 ):
-    paginate_by: int = constants.PAGINATE_BY_DEFAULT  # type: ignore[assignment]
+    paginate_by: int = constants.PAGINATE_BY_DEFAULT
     model = Receipt
-    filterset_class = ReceiptFilter
+    filterset_class: type[ReceiptFilter] = ReceiptFilter
+    template_name: str = 'receipts/receipts.html'
     no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
+    request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Receipt]:
         group_id = self.request.GET.get('group_id') or 'my'
         if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
-                users_in_group = group.user_set.all()  # type: ignore[attr-defined]
+                users_in_group = group.user_set.all()
                 return Receipt.objects.for_users(users_in_group).with_related()
             except Group.DoesNotExist:
                 return Receipt.objects.none()
         return Receipt.objects.for_user(self.request.user).with_related()
 
-    def get_context_data(self, **kwargs: object) -> dict[str, Any]:
+    def get_context_data(
+        self,
+        *,
+        object_list: Any = None,
+        **kwargs: object,
+    ) -> dict[str, object]:
         user = get_object_or_404(User, username=self.request.user)
         group_id = self.request.GET.get('group_id') or 'my'
 
@@ -94,7 +108,7 @@ class ReceiptView(  # type: ignore[misc]
         if group_id and group_id != 'my':
             try:
                 group = Group.objects.get(pk=group_id)
-                users_in_group = group.user_set.all()  # type: ignore[attr-defined]
+                users_in_group = group.user_set.all()
                 receipt_queryset = Receipt.objects.for_users(
                     users_in_group,
                 ).with_related()
@@ -117,8 +131,8 @@ class ReceiptView(  # type: ignore[misc]
             seller_queryset = Seller.objects.unique_by_name_for_user(user)
             account_queryset = Account.objects.by_user_with_related(user)
 
-        seller_form = SellerForm()  # type: ignore[no-untyped-call]
-        receipt_filter = ReceiptFilter(  # type: ignore[no-untyped-call]
+        seller_form = SellerForm()
+        receipt_filter = ReceiptFilter(
             self.request.GET,
             queryset=receipt_queryset,
             user=self.request.user,
@@ -171,7 +185,10 @@ class ReceiptView(  # type: ignore[misc]
             'receipts',
         )
 
-        context: dict[str, Any] = super().get_context_data(**kwargs)
+        context: dict[str, object] = super().get_context_data(
+            object_list=object_list,
+            **kwargs,
+        )
         context['receipts'] = page_receipts
         context['receipt_filter'] = receipt_filter
         context['total_receipts'] = total_receipts
@@ -180,16 +197,16 @@ class ReceiptView(  # type: ignore[misc]
         context['receipt_form'] = receipt_form
         context['product_formset'] = product_formset
         context['receipt_info_by_month'] = pages_receipt_table
-        context['user_groups'] = self.request.user.groups.all()  # type: ignore[union-attr]
+        context['user_groups'] = self.request.user.groups.all()
 
         return context
 
 
-class SellerCreateView(  # type: ignore[misc]
+class SellerCreateView(
     LoginRequiredMixin,
     SuccessMessageMixin[SellerForm],
-    BaseView,
     CreateView[Seller, SellerForm],
+    BaseView,
 ):
     model = Seller
     form_class: type[SellerForm] = SellerForm
@@ -198,7 +215,7 @@ class SellerCreateView(  # type: ignore[misc]
         self,
         request: HttpRequest,
     ) -> JsonResponse:
-        seller_form = SellerForm(request.POST)  # type: ignore[no-untyped-call]
+        seller_form = SellerForm(request.POST)
         if seller_form.is_valid():
             seller = seller_form.save(commit=False)
             if not isinstance(request.user, User):
@@ -218,11 +235,11 @@ class SellerCreateView(  # type: ignore[misc]
         return JsonResponse(response_data)
 
 
-class ReceiptCreateView(  # type: ignore[misc]
+class ReceiptCreateView(
     LoginRequiredMixin,
     SuccessMessageMixin[ReceiptForm],
-    BaseView,
     CreateView[Receipt, ReceiptForm],
+    BaseView,
 ):
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
@@ -341,25 +358,20 @@ class ReceiptCreateView(  # type: ignore[misc]
         context['product_formset'] = product_formset
         return self.render_to_response(context)
 
+    def get_absolute_url(self) -> str:
+        return reverse_lazy('receipts:list')
+
 
 class ReceiptUpdateView(
     LoginRequiredMixin,
     SuccessMessageMixin[ReceiptForm],
     UpdateView[Receipt, ReceiptForm],
+    BaseView,
 ):
-    template_name = 'receipts/receipt_update.html'
-    success_url = reverse_lazy('receipts:list')  # type: ignore[assignment]
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
-    success_message = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
-
-    def post(
-        self,
-        request: HttpRequest,
-        *args: object,
-        **kwargs: object,
-    ) -> HttpResponse:
-        return super().post(request, *args, **kwargs)
+    template_name: str = 'receipts/receipt_update.html'
+    success_message: str = constants.SUCCESS_MESSAGE_UPDATE_RECEIPT
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         try:
@@ -498,10 +510,10 @@ class ReceiptUpdateView(
         # и валидные queryset'ы аккаунтов уже ограничивают пользователя выше.
 
         try:
-            old_account_obj = Account.objects.get(id=old_account.id)  # type: ignore[attr-defined]
-            new_account_obj = Account.objects.get(id=new_account.id)  # type: ignore[attr-defined]
+            old_account_obj = Account.objects.get(pk=old_account.pk)
+            new_account_obj = Account.objects.get(pk=new_account.pk)
 
-            if old_account.id == new_account.id:  # type: ignore[attr-defined]
+            if old_account.pk == new_account.pk:
                 difference = new_total_sum - old_total_sum
                 if difference > 0:
                     old_account_obj.balance -= difference
@@ -522,23 +534,27 @@ class ReceiptUpdateView(
             )
 
 
-class ReceiptDeleteView(  # type: ignore[misc]
+class ReceiptDeleteView(
     LoginRequiredMixin,
+    DeleteView[Receipt, Any],
     BaseView,
-    DeleteView,
 ):
     model = Receipt
+    success_url = reverse_lazy('receipts:list')
+
+    def get_success_url(self) -> str | StrOrPromise:
+        return self.success_url
 
     def post(
         self,
         request: HttpRequest,
-        *args: Any,
-        **kwargs: Any,
+        *args: object,
+        **kwargs: object,
     ) -> HttpResponse:
         receipt = self.get_object()
         account = receipt.account
         amount = receipt.total_sum
-        account_balance = get_object_or_404(Account, id=account.id)  # type: ignore[attr-defined]
+        account_balance = get_object_or_404(Account, pk=account.pk)
 
         try:
             if account_balance.user == self.request.user:
@@ -553,14 +569,14 @@ class ReceiptDeleteView(  # type: ignore[misc]
                     self.request,
                     constants.SUCCESS_MESSAGE_DELETE_RECEIPT,
                 )
-                return redirect(str(self.success_url))
+                return redirect(self.success_url)
         except ProtectedError:
             messages.error(
                 self.request,
                 constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT,
             )
-            return redirect(str(self.success_url))
-        return redirect(str(self.success_url))
+            return redirect(self.success_url)
+        return redirect(self.success_url)
 
 
 class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
@@ -814,7 +830,7 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         total_sum: Decimal,
     ) -> None:
         """Update account balance after receipt creation."""
-        account_balance = get_object_or_404(Account, id=account.id)  # type: ignore[attr-defined]
+        account_balance = get_object_or_404(Account, pk=account.pk)
         account_balance.balance -= decimal.Decimal(total_sum)
         account_balance.save()
 
@@ -883,7 +899,7 @@ def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
     if group_id and group_id != 'my':
         try:
             group = Group.objects.get(pk=group_id)
-            users_in_group = group.user_set.all()  # type: ignore[attr-defined]
+            users_in_group = group.user_set.all()
             receipt_queryset = Receipt.objects.filter(user__in=users_in_group)
         except Group.DoesNotExist:
             receipt_queryset = Receipt.objects.none()
@@ -902,6 +918,6 @@ def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
         'receipts/receipts_block.html',
         {
             'receipts': receipts,
-            'user_groups': user.groups.all(),  # type: ignore[union-attr]
+            'user_groups': user.groups.all(),
         },
     )

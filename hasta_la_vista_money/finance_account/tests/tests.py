@@ -142,7 +142,7 @@ class TestAccount(TestCase):
         )
         self.assertRedirects(
             response,
-            '/finance_account/',
+            '/finance_account/change/1/',
             status_code=constants.REDIRECTS,
         )
 
@@ -651,7 +651,7 @@ class TestAccountServices(TestCase):
             self.group_id,
         )
         assert self.group is not None
-        group_users = list(self.group.user_set.all())  # type: ignore[attr-defined]
+        group_users = list(self.group.user_set.all())
         self.assertTrue(all(acc.user in group_users for acc in accounts))
 
     def test_get_sum_all_accounts(self) -> None:

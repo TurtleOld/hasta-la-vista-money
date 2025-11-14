@@ -41,6 +41,7 @@ dependencies = [
     "django-redis>=6.0.0",
     "django-compressor>=4.5.1",
     "pyright>=1.1.407",
+    "types-django-filter>=25.2.0.20251010",
 ]
 
 [project.optional-dependencies]
@@ -185,18 +186,22 @@ pretty = true
 follow_imports = "silent"
 ignore_missing_imports = true
 strict_equality = true
+exclude = ["migrations"]
+enable_error_code = ["ignore-without-code","redundant-expr","truthy-bool"]
+disable_error_code = ["import"]
 
-exclude = [
-  "migrations",
-]
-enable_error_code = [
-  "ignore-without-code",  # Требует указания кода при # type: ignore
-  "redundant-expr",       # Обнаруживает бессмысленные выражения
-  "truthy-bool",          # Проверяет неявные приведения к bool
-]
-disable_error_code = [
-  "import",               # Временно отключаем для проблем с django-stubs
-]
+[tool.django-stubs]
+django_settings_module = "config.django.base"
+
+[[tool.mypy.overrides]]
+module = ["*.tests.*"]
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["*.models"]
+disable_error_code = ["var-annotated"]
 
 [tool.coverage.run]
 branch = true
@@ -248,6 +253,3 @@ replace = "current_version = {new_version}"
 [tool.bumpversion."file:pyproject.toml"]
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
-
-[tool.django-stubs]
-django_settings_module = "config.django.base"

@@ -60,7 +60,7 @@ class Loan(models.Model):
 
     @property
     def calculate_sum_monthly_payment(self) -> Decimal:
-        payments = self.payment_schedule_loans.aggregate(  # type: ignore[attr-defined]
+        payments = self.payment_schedule_loans.aggregate(
             total=models.Sum('monthly_payment'),
         )['total'] or Decimal('0.00')
         return payments - Decimal(str(self.loan_amount))

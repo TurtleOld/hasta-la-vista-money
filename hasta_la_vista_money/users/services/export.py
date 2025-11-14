@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import cast
 
 from django.db.models import Sum
 from typing_extensions import TypedDict
@@ -31,14 +32,49 @@ class StatisticsDict(TypedDict):
     receipts_count: int
 
 
+class AccountDict(TypedDict):
+    """Словарь с данными счета."""
+
+    name_account: str
+    balance: Decimal
+    currency: str
+    created_at: datetime | None
+
+
+class ExpenseDict(TypedDict):
+    """Словарь с данными расхода."""
+
+    amount: Decimal
+    date: datetime
+    category__name: str
+    account__name_account: str
+
+
+class IncomeDict(TypedDict):
+    """Словарь с данными дохода."""
+
+    amount: Decimal
+    date: datetime
+    category__name: str
+    account__name_account: str
+
+
+class ReceiptDict(TypedDict):
+    """Словарь с данными чека."""
+
+    receipt_date: datetime
+    seller__name_seller: str
+    total_sum: Decimal
+
+
 class UserExportData(TypedDict):
     """Данные для экспорта пользователя."""
 
     user_info: UserInfoDict
-    accounts: list[dict[str, str | Decimal | datetime | None]]
-    expenses: list[dict[str, str | Decimal | datetime]]
-    incomes: list[dict[str, str | Decimal | datetime]]
-    receipts: list[dict[str, str | Decimal | datetime | None]]
+    accounts: list[AccountDict]
+    expenses: list[ExpenseDict]
+    incomes: list[IncomeDict]
+    receipts: list[ReceiptDict]
     statistics: StatisticsDict
 
 
@@ -54,35 +90,47 @@ def get_user_export_data(user: User) -> UserExportData:
             if user.last_login
             else None,
         },
-        'accounts': list(
-            Account.objects.filter(user=user).values(
-                'name_account',
-                'balance',
-                'currency',
-                'created_at',
+        'accounts': cast(
+            'list[AccountDict]',
+            list(
+                Account.objects.filter(user=user).values(
+                    'name_account',
+                    'balance',
+                    'currency',
+                    'created_at',
+                ),
             ),
         ),
-        'expenses': list(
-            Expense.objects.filter(user=user).values(
-                'amount',
-                'date',
-                'category__name',
-                'account__name_account',
+        'expenses': cast(
+            'list[ExpenseDict]',
+            list(
+                Expense.objects.filter(user=user).values(
+                    'amount',
+                    'date',
+                    'category__name',
+                    'account__name_account',
+                ),
             ),
         ),
-        'incomes': list(
-            Income.objects.filter(user=user).values(
-                'amount',
-                'date',
-                'category__name',
-                'account__name_account',
+        'incomes': cast(
+            'list[IncomeDict]',
+            list(
+                Income.objects.filter(user=user).values(
+                    'amount',
+                    'date',
+                    'category__name',
+                    'account__name_account',
+                ),
             ),
         ),
-        'receipts': list(
-            Receipt.objects.filter(user=user).values(
-                'receipt_date',
-                'seller__name_seller',
-                'total_sum',
+        'receipts': cast(
+            'list[ReceiptDict]',
+            list(
+                Receipt.objects.filter(user=user).values(
+                    'receipt_date',
+                    'seller__name_seller',
+                    'total_sum',
+                ),
             ),
         ),
         'statistics': {

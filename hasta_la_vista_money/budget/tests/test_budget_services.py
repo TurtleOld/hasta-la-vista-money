@@ -35,12 +35,12 @@ class BudgetServicesTestCase(TestCase):
             raise ValueError('No user found in fixtures')
         self.user = user
         self.expense_categories = list(
-            self.user.category_expense_users.filter(  # type: ignore[attr-defined]
+            self.user.category_expense_users.filter(
                 parent_category=None,
             ),
         )
         self.income_categories = list(
-            self.user.category_income_users.filter(  # type: ignore[attr-defined]
+            self.user.category_income_users.filter(
                 parent_category=None,
             ),
         )

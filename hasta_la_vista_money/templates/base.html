@@ -86,8 +86,11 @@
     {% endif %}
     {% if user.is_authenticated %}
         <script src="{% static 'js/bottom-nav.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/upload.js' %}?v={% word_hash %}"></script>
     {% endif %}
     {% endcompress %}
+    {% block extra_js %}
+    {% endblock %}
     <script nonce="{{request.csp_nonce}}">
         window.SET_THEME_URL = "{% url 'users:set_theme' %}";
         window.LOGIN_URL = "{% url 'users:login' %}";

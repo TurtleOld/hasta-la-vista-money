@@ -1,7 +1,9 @@
 """Модуль форм по кредитам."""
 
+from decimal import Decimal
 from typing import Any, ClassVar
 
+from django.db.models import QuerySet
 from django.forms import (
     ChoiceField,
     DateTimeField,
@@ -15,9 +17,10 @@ from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
+from hasta_la_vista_money.users.models import User
 
 
-class LoanForm(ModelForm):
+class LoanForm(ModelForm[Loan]):
     date = DateTimeField(
         label=_('Дата'),
         widget=DateTimeInput(
@@ -75,22 +78,25 @@ class LoanForm(ModelForm):
         self.request_user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
-    def save(self, commit: bool = True) -> None:
+    def save(self, commit: bool = True) -> Loan:
         cd = self.cleaned_data
         form = super().save(commit=False)
         loan_amount = cd.get('loan_amount')
+        if loan_amount is None:
+            raise ValueError('loan_amount is required')
         form.user = self.request_user
         form.account = Account.objects.create(
             user=self.request_user,
-            name_account=_(f'Кредитный счёт на {loan_amount}'),
-            balance=loan_amount,
+            name_account=str(_(f'Кредитный счёт на {loan_amount}')),
+            balance=Decimal(str(loan_amount)),
             currency='RU',
             type_account=Account.TYPE_ACCOUNT_LIST[0][0],
         )
         form.save()
+        return form
 
 
-class PaymentMakeLoanForm(ModelForm):
+class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
     date = DateTimeField(
         label=_('Дата платежа'),
         widget=DateTimeInput(
@@ -119,7 +125,12 @@ class PaymentMakeLoanForm(ModelForm):
         help_text=_('Введите сумму платежа'),
     )
 
-    def __init__(self, user, *args, **kwargs):
+    def __init__(
+        self,
+        user: User,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Исключаем из выборки счетов все счета кредитов.
 
@@ -127,10 +138,10 @@ class PaymentMakeLoanForm(ModelForm):
         """
         super().__init__(*args, **kwargs)
         self.user = user
-        self.fields['account'].queryset = self.get_account_queryset()
-        self.fields['loan'].queryset = Loan.objects.filter(user=user)
+        self.fields['account'].queryset = self.get_account_queryset()  # type: ignore[attr-defined]
+        self.fields['loan'].queryset = Loan.objects.filter(user=user)  # type: ignore[attr-defined]
 
-    def get_account_queryset(self):
+    def get_account_queryset(self) -> QuerySet[Account]:
         accounts = Account.objects.filter(user=self.user)
 
         loan = Loan.objects.filter(user=self.user).values_list(

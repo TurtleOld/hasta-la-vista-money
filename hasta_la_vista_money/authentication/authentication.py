@@ -1,4 +1,4 @@
-from typing import ParamSpec, TypeVar, cast
+from typing import Literal, ParamSpec, TypeVar, cast
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
@@ -12,6 +12,7 @@ from hasta_la_vista_money.users.models import User
 
 T = TypeVar('T', bound=HttpResponse)
 P = ParamSpec('P')
+SameSite = Literal['Strict', 'Lax', 'None'] | None
 
 
 class CookieJWTAuthentication(JWTAuthentication):
@@ -28,7 +29,7 @@ class CookieJWTAuthentication(JWTAuthentication):
         else:
             header = self.get_header(request)
             if header is None:
-                return None  # type: ignore[unreachable]
+                return None
             raw_token_raw = self.get_raw_token(header)
             if raw_token_raw is None:
                 return None
@@ -74,6 +75,15 @@ def set_auth_cookies[T: HttpResponse](
 ) -> T:
     """Set JWT tokens as HttpOnly cookies in the response"""
     jwt_settings = settings.SIMPLE_JWT
+    samesite_value: SameSite = None
+    samesite_setting = jwt_settings.get('AUTH_COOKIE_SAMESITE')
+    if samesite_setting:
+        samesite_str = str(samesite_setting)
+        if samesite_str in ('Strict', 'Lax', 'None'):
+            samesite_value = cast('SameSite', samesite_str)
+        else:
+            samesite_value = None
+
     response.set_cookie(
         str(jwt_settings['AUTH_COOKIE']),
         access_token,
@@ -82,12 +92,12 @@ def set_auth_cookies[T: HttpResponse](
             if jwt_settings['AUTH_COOKIE_MAX_AGE'] is not None
             else None
         ),
-        domain=str(jwt_settings['AUTH_COOKIE_DOMAIN']),
+        domain=str(jwt_settings['AUTH_COOKIE_DOMAIN'])
+        if jwt_settings['AUTH_COOKIE_DOMAIN']
+        else None,
         secure=bool(jwt_settings['AUTH_COOKIE_SECURE']),
         httponly=bool(jwt_settings['AUTH_COOKIE_HTTP_ONLY']),
-        samesite=cast('str', jwt_settings['AUTH_COOKIE_SAMESITE'])
-        if jwt_settings['AUTH_COOKIE_SAMESITE']
-        else None,  # type: ignore[arg-type]
+        samesite=samesite_value,
         path=str(jwt_settings['AUTH_COOKIE_PATH']),
     )
     if refresh_token:
@@ -99,12 +109,12 @@ def set_auth_cookies[T: HttpResponse](
                 if jwt_settings['AUTH_COOKIE_REFRESH_MAX_AGE'] is not None
                 else None
             ),
-            domain=str(jwt_settings['AUTH_COOKIE_DOMAIN']),
+            domain=str(jwt_settings['AUTH_COOKIE_DOMAIN'])
+            if jwt_settings['AUTH_COOKIE_DOMAIN']
+            else None,
             secure=bool(jwt_settings['AUTH_COOKIE_SECURE']),
             httponly=bool(jwt_settings['AUTH_COOKIE_HTTP_ONLY']),
-            samesite=cast('str', jwt_settings['AUTH_COOKIE_SAMESITE'])
-            if jwt_settings['AUTH_COOKIE_SAMESITE']
-            else None,  # type: ignore[arg-type]
+            samesite=samesite_value,
             path=str(jwt_settings['AUTH_COOKIE_PATH']),
         )
 
