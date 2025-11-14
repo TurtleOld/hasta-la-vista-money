@@ -7,7 +7,9 @@ from config.django.validator_env import EnvironmentValidator
 
 class EnvironmentValidatorTest(SimpleTestCase):
     def test_validate_returns_true_for_ci_environment(self) -> None:
-        with patch.dict('config.django.validator_env.environ', {'CI': '1'}, clear=True):
+        with patch.dict(
+            'config.django.validator_env.environ', {'CI': '1'}, clear=True
+        ):
             validator = EnvironmentValidator()
             self.assertTrue(validator.validate())
 
@@ -20,11 +22,14 @@ class EnvironmentValidatorTest(SimpleTestCase):
                 'DEBUG': False,
                 'REDIS_LOCATION': '',
             }
+            _ = cast
             return values.get(key, default)
 
         with (
             patch.dict('config.django.validator_env.environ', {}, clear=True),
-            patch('config.django.validator_env.config', side_effect=fake_config),
+            patch(
+                'config.django.validator_env.config', side_effect=fake_config
+            ),
             patch('config.django.validator_env.ic') as mock_ic,
         ):
             validator = EnvironmentValidator()
@@ -40,13 +45,15 @@ class EnvironmentValidatorTest(SimpleTestCase):
                 'DEBUG': False,
                 'REDIS_LOCATION': 'redis://localhost:6379/0',
             }
+            _ = cast
             return values.get(key, default)
 
         with (
             patch.dict('config.django.validator_env.environ', {}, clear=True),
-            patch('config.django.validator_env.config', side_effect=fake_config),
+            patch(
+                'config.django.validator_env.config', side_effect=fake_config
+            ),
             patch('config.django.validator_env.ic'),
         ):
             validator = EnvironmentValidator()
             self.assertTrue(validator.validate())
-
