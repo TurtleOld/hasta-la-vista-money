@@ -1,7 +1,7 @@
 """Тесты для views дашборда."""
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -37,7 +37,7 @@ class DashboardViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.user: UserType = cast('UserType', user)
         self.client.force_login(self.user)
 
     def test_dashboard_view_requires_login(self) -> None:
@@ -76,7 +76,7 @@ class DashboardDataViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.user: UserType = cast('UserType', user)
         self.client.force_login(self.user)
 
     def test_dashboard_data_view_requires_login(self) -> None:
@@ -158,7 +158,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.user: UserType = cast('UserType', user)
         self.client.force_login(self.user)
 
     def test_create_widget(self) -> None:
@@ -177,7 +177,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         widget = DashboardWidget.objects.filter(user=self.user).first()
         self.assertIsNotNone(widget)
-        assert widget is not None
+        widget = cast('DashboardWidget', widget)
         self.assertEqual(widget.widget_type, 'balance')
 
     def test_update_widget(self) -> None:
@@ -247,7 +247,7 @@ class DashboardAnalyticsEndpointsTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.user: UserType = cast('UserType', user)
         self.client.force_login(self.user)
         self.factory = RequestFactory()
 
@@ -281,7 +281,8 @@ class DashboardAnalyticsEndpointsTest(TestCase):
 
     @patch('hasta_la_vista_money.users.views.get_period_comparison')
     def test_dashboard_comparison_returns_data(
-        self, mock_comparison: Any
+        self,
+        mock_comparison: Any,
     ) -> None:
         mock_comparison.return_value = {'result': 'ok'}
         response = self.client.get(
