@@ -138,7 +138,13 @@ const chartConfigs = {
     categoryDrillDown: {
         tooltip: {
             trigger: 'item',
-            formatter: '{a} <br/>{b}: {c} ({d}%)',
+            formatter: function(params) {
+                const seriesName = params.seriesName || '';
+                const name = params.name || '';
+                const value = params.value || 0;
+                const percent = params.percent || 0;
+                return seriesName + '<br/>' + name + ': ' + value + ' (' + percent + '%)';
+            },
         },
         legend: {
             orient: 'vertical',
@@ -277,4 +283,3 @@ const chartConfigs = {
 };
 
 window.chartConfigs = chartConfigs;
-
