@@ -1,6 +1,7 @@
 from decimal import Decimal
+from typing import Any, cast
 
-import factory
+import factory as _factory
 
 from hasta_la_vista_money.finance_account.models import (
     Account,
@@ -8,8 +9,10 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.users.factories import UserFactory
 
+factory = cast('Any', _factory)
 
-class AccountFactory(factory.django.DjangoModelFactory):
+
+class AccountFactory(_factory.django.DjangoModelFactory[Account]):
     class Meta:
         model = Account
 
@@ -19,7 +22,9 @@ class AccountFactory(factory.django.DjangoModelFactory):
     currency = 'RUB'
 
 
-class TransferMoneyLogFactory(factory.django.DjangoModelFactory):
+class TransferMoneyLogFactory(
+    _factory.django.DjangoModelFactory[TransferMoneyLog],
+):
     class Meta:
         model = TransferMoneyLog
 

@@ -16,8 +16,10 @@ from hasta_la_vista_money.authentication.authentication import (
     get_token_from_cookie,
     set_auth_cookies,
 )
-from hasta_la_vista_money.users.factories import UserFactory
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.factories import (
+    UserFactoryTyped,
+)
+from hasta_la_vista_money.users.models import User as UserModel
 
 
 class CookieJWTAuthenticationTestCase(TestCase):
@@ -27,16 +29,16 @@ class CookieJWTAuthenticationTestCase(TestCase):
         """Настройка тестовых данных."""
         self.factory = RequestFactory()
         self.auth = CookieJWTAuthentication()
-        self.user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
+        self.user: UserModel = UserFactoryTyped()
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
         self.refresh_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH']
 
-    def _create_valid_token(self, user: User) -> str:
+    def _create_valid_token(self, user: UserModel) -> str:
         """Создает валидный JWT токен для пользователя."""
         token = AccessToken.for_user(user)
         return str(token)
 
-    def _create_expired_token(self, user: User) -> str:
+    def _create_expired_token(self, user: UserModel) -> str:
         """Создает истекший JWT токен."""
         now = timezone.now()
         payload = {
@@ -47,7 +49,7 @@ class CookieJWTAuthenticationTestCase(TestCase):
         }
         return jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
 
-    def _create_invalid_signature_token(self, user: User) -> str:
+    def _create_invalid_signature_token(self, user: UserModel) -> str:
         """Создает токен с неверной подписью."""
         payload = {
             'user_id': user.pk,
@@ -214,7 +216,7 @@ class CookieSecurityTestCase(TestCase):
 
     def setUp(self) -> None:
         """Настройка тестовых данных."""
-        self.user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
+        self.user: UserModel = UserFactoryTyped()
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
         self.refresh_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH']
 
@@ -349,7 +351,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_inactive_user(self) -> None:
         """Неактивный пользователь не может аутентифицироваться."""
-        user: User = UserFactory(is_active=False)  # type: ignore[assignment,no-untyped-call]
+        user: UserModel = UserFactoryTyped()
         payload = {
             'user_id': user.pk,
             'exp': timezone.now() + timedelta(hours=1),
@@ -366,7 +368,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_deleted_user(self) -> None:
         """Токен удаленного пользователя возвращает None."""
-        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
+        user: UserModel = UserFactoryTyped()
         user_id = user.pk
         user.delete()
 
@@ -386,7 +388,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
     def test_authenticate_multiple_cookies(self) -> None:
         """Несколько кук с одинаковым именем обрабатываются корректно."""
-        user: User = UserFactory()  # type: ignore[assignment,no-untyped-call]
+        user: UserModel = UserFactoryTyped()
         valid_token = AccessToken.for_user(user)
 
         request = self.factory.get('/')

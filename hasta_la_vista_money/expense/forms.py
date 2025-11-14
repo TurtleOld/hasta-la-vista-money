@@ -76,7 +76,7 @@ class AddExpenseForm(FormQuerysetsMixin, ModelForm[Expense]):
         category = cleaned_data.get('category')
 
         if account_form and amount and category:
-            account = get_object_or_404(Account, id=account_form.id)
+            account = get_object_or_404(Account, pk=account_form.pk)
             if amount > account.balance:
                 self.add_error(
                     'account',

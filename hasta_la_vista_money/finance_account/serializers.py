@@ -4,14 +4,14 @@ This module provides Django REST Framework serializers for converting
 finance account models to and from JSON format for API communication.
 """
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from rest_framework import serializers
 
 from hasta_la_vista_money.finance_account.models import Account
 
 
-class AccountSerializer(serializers.ModelSerializer):
+class AccountSerializer(serializers.ModelSerializer[Account]):
     """Serializer for Account model.
 
     Converts Account model instances to JSON format for API responses,
@@ -33,7 +33,7 @@ class AccountSerializer(serializers.ModelSerializer):
         ]
         read_only_fields: ClassVar[list[str]] = ['id']
 
-    def create(self, validated_data):
+    def create(self, validated_data: dict[str, Any]) -> Account:
         """Override create to set user from request."""
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)

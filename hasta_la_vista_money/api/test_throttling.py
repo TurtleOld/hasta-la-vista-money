@@ -136,7 +136,7 @@ class AnonLoginRateThrottleTestCase(TestCase):
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
         anonymous = AnonymousUser()
-        request.user = anonymous  # type: ignore[assignment]
+        request.user = anonymous
 
         with patch.object(throttle, 'get_ident') as mock_get_ident:
             mock_get_ident.return_value = 'unauthenticated_ident'

@@ -75,7 +75,7 @@ class TestValidatePositiveAmount(TestCase):
                     (ValidationError, TypeError, InvalidOperation),
                 ),
             ):
-                validate_positive_amount(cast('Decimal', value))  # type: ignore[arg-type]
+                validate_positive_amount(cast('Decimal', value))
         valid_cases = [
             1,
             0.5,
@@ -84,7 +84,7 @@ class TestValidatePositiveAmount(TestCase):
         ]
         for value in valid_cases:
             with self.subTest(value=value):
-                validate_positive_amount(Decimal(str(value)))  # type: ignore[arg-type]
+                validate_positive_amount(Decimal(str(value)))
 
 
 class TestValidateAccountBalance(TestCase):
@@ -187,12 +187,12 @@ class TestValidateDifferentAccounts(TestCase):
     def test_validate_different_accounts_none_first(self) -> None:
         """Test different accounts validation with None as first account."""
         with self.assertRaises(ValidationError):
-            validate_different_accounts(None, self.account2)  # type: ignore[arg-type]
+            validate_different_accounts(None, self.account2)
 
     def test_validate_different_accounts_none_second(self) -> None:
         """Test different accounts validation with None as second account."""
         with self.assertRaises(ValidationError):
-            validate_different_accounts(self.account1, None)  # type: ignore[arg-type]
+            validate_different_accounts(self.account1, None)
 
 
 class TestValidateCreditFieldsRequired(TestCase):

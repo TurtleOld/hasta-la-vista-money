@@ -10,7 +10,7 @@ from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 
 
-class ExpenseFilter(django_filters.FilterSet):  # type: ignore[misc]
+class ExpenseFilter(django_filters.FilterSet):
     category = django_filters.ModelChoiceFilter(
         queryset=ExpenseCategory.objects.all(),
         field_name='category',
@@ -41,12 +41,12 @@ class ExpenseFilter(django_filters.FilterSet):  # type: ignore[misc]
         """
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.filters['category'].queryset = (
+        self.filters['category'].queryset = (  # type: ignore[attr-defined]
             ExpenseCategory.objects.filter(user=self.user)
             .distinct()
             .order_by('name')
         )
-        self.filters['account'].queryset = Account.objects.filter(
+        self.filters['account'].queryset = Account.objects.filter(  # type: ignore[attr-defined]
             user=self.user,
         )
 

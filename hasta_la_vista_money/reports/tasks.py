@@ -98,7 +98,7 @@ async def generate_monthly_report(
         )
         top_income_categories: list[dict[str, Any]] = await sync_to_async(
             lambda: list(top_income_qs),
-        )()  # type: ignore[misc]
+        )()
 
         # Топ категорий расходов
         top_expense_qs = (
@@ -115,7 +115,7 @@ async def generate_monthly_report(
         )
         top_expense_categories: list[dict[str, Any]] = await sync_to_async(
             lambda: list(top_expense_qs),
-        )()  # type: ignore[misc]
+        )()
 
         # Статистика по чекам
         receipt_stats = await Receipt.objects.filter(
@@ -142,7 +142,22 @@ async def generate_monthly_report(
         )
         top_sellers: list[dict[str, Any]] = await sync_to_async(
             lambda: list(top_sellers_qs),
-        )()  # type: ignore[misc]
+        )()
+
+        summary = {
+            'net_income': (income_stats['total_income'] or 0)
+            - (expense_stats['total_expense'] or 0),
+            'savings_rate': (
+                (
+                    (income_stats['total_income'] or 0)
+                    - (expense_stats['total_expense'] or 0)
+                )
+                / (income_stats['total_income'] or 1)
+                * 100
+            )
+            if income_stats['total_income']
+            else 0,
+        }
 
         report_data = {
             'period': {
@@ -157,20 +172,7 @@ async def generate_monthly_report(
             'top_income_categories': list(top_income_categories),
             'top_expense_categories': list(top_expense_categories),
             'top_sellers': list(top_sellers),
-            'summary': {
-                'net_income': (income_stats['total_income'] or 0)
-                - (expense_stats['total_expense'] or 0),
-                'savings_rate': (
-                    (
-                        (income_stats['total_income'] or 0)
-                        - (expense_stats['total_expense'] or 0)
-                    )
-                    / (income_stats['total_income'] or 1)
-                    * 100
-                )
-                if income_stats['total_income']
-                else 0,
-            },
+            'summary': summary,
         }
 
         logger.info(
@@ -178,10 +180,10 @@ async def generate_monthly_report(
             user_id=user_id,
             year=year,
             month=month,
-            total_income=str(income_stats['total_income']),  # type: ignore[index]
-            total_expense=str(expense_stats['total_expense']),  # type: ignore[index]
-            net_income=str(report_data['summary']['net_income']),  # type: ignore[index]
-            receipts_count=receipt_stats['total_receipts'],  # type: ignore[index]
+            total_income=str(income_stats['total_income']),
+            total_expense=str(expense_stats['total_expense']),
+            net_income=str(summary['net_income']),
+            receipts_count=receipt_stats['total_receipts'],
         )
 
     except Exception as e:
@@ -304,7 +306,7 @@ async def generate_yearly_report(
         )
         top_income_categories: list[dict[str, Any]] = await sync_to_async(
             lambda: list(top_income_year_qs),
-        )()  # type: ignore[misc]
+        )()
 
         top_expense_year_qs = (
             Expense.objects.filter(
@@ -319,7 +321,21 @@ async def generate_yearly_report(
         )
         top_expense_categories: list[dict[str, Any]] = await sync_to_async(
             lambda: list(top_expense_year_qs),
-        )()  # type: ignore[misc]
+        )()
+
+        summary = {
+            'total_income': yearly_income['total'] or 0,
+            'total_expense': yearly_expense['total'] or 0,
+            'net_income': (yearly_income['total'] or 0)
+            - (yearly_expense['total'] or 0),
+            'savings_rate': (
+                ((yearly_income['total'] or 0) - (yearly_expense['total'] or 0))
+                / (yearly_income['total'] or 1)
+                * 100
+            )
+            if yearly_income['total']
+            else 0,
+        }
 
         report_data = {
             'year': year,
@@ -328,33 +344,18 @@ async def generate_yearly_report(
             'yearly_expense': yearly_expense,
             'top_income_categories': list(top_income_categories),
             'top_expense_categories': list(top_expense_categories),
-            'summary': {
-                'total_income': yearly_income['total'] or 0,
-                'total_expense': yearly_expense['total'] or 0,
-                'net_income': (yearly_income['total'] or 0)
-                - (yearly_expense['total'] or 0),
-                'savings_rate': (
-                    (
-                        (yearly_income['total'] or 0)
-                        - (yearly_expense['total'] or 0)
-                    )
-                    / (yearly_income['total'] or 1)
-                    * 100
-                )
-                if yearly_income['total']
-                else 0,
-            },
+            'summary': summary,
         }
 
         logger.info(
             'Yearly report generated successfully',
             user_id=user_id,
             year=year,
-            total_income=str(yearly_income['total']),  # type: ignore[index]
-            total_expense=str(yearly_expense['total']),  # type: ignore[index]
-            net_income=str(report_data['summary']['net_income']),  # type: ignore[index]
-            transactions_count=(yearly_income['count'] or 0)  # type: ignore[index]
-            + (yearly_expense['count'] or 0),  # type: ignore[index]
+            total_income=str(yearly_income['total']),
+            total_expense=str(yearly_expense['total']),
+            net_income=str(summary['net_income']),
+            transactions_count=(yearly_income['count'] or 0)
+            + (yearly_expense['count'] or 0),
         )
 
     except Exception as e:
@@ -423,7 +424,7 @@ async def generate_user_statistics(
         )
         income_categories: list[dict[str, Any]] = await sync_to_async(
             lambda: list(income_cat_qs),
-        )()  # type: ignore[misc]
+        )()
 
         expense_cat_qs = (
             Expense.objects.filter(user=user)
@@ -438,7 +439,7 @@ async def generate_user_statistics(
         )
         expense_categories: list[dict[str, Any]] = await sync_to_async(
             lambda: list(expense_cat_qs),
-        )()  # type: ignore[misc]
+        )()
 
         # Статистика по времени
         first_income = await Income.objects.filter(user=user).aaggregate(
@@ -451,6 +452,20 @@ async def generate_user_statistics(
             last_date=Max('date'),
         )
 
+        summary = {
+            'net_worth': (total_income['total'] or 0)
+            - (total_expense['total'] or 0),
+            'total_transactions': (total_income['count'] or 0)
+            + (total_expense['count'] or 0),
+            'avg_transaction': (
+                ((total_income['total'] or 0) + (total_expense['total'] or 0))
+                / ((total_income['count'] or 0) + (total_expense['count'] or 0))
+            )
+            if ((total_income['count'] or 0) + (total_expense['count'] or 0))
+            > 0
+            else 0,
+        }
+
         stats_data = {
             'user_id': user_id,
             'income': total_income,
@@ -462,37 +477,17 @@ async def generate_user_statistics(
                 'income': first_income,
                 'expense': first_expense,
             },
-            'summary': {
-                'net_worth': (total_income['total'] or 0)
-                - (total_expense['total'] or 0),
-                'total_transactions': (total_income['count'] or 0)
-                + (total_expense['count'] or 0),
-                'avg_transaction': (
-                    (
-                        (total_income['total'] or 0)
-                        + (total_expense['total'] or 0)
-                    )
-                    / (
-                        (total_income['count'] or 0)
-                        + (total_expense['count'] or 0)
-                    )
-                )
-                if (
-                    (total_income['count'] or 0) + (total_expense['count'] or 0)
-                )
-                > 0
-                else 0,
-            },
+            'summary': summary,
         }
 
         logger.info(
             'User statistics generated successfully',
             user_id=user_id,
-            total_income=str(total_income['total']),  # type: ignore[index]
-            total_expense=str(total_expense['total']),  # type: ignore[index]
-            net_worth=str(stats_data['summary']['net_worth']),  # type: ignore[index]
-            total_transactions=stats_data['summary']['total_transactions'],  # type: ignore[index]
-            receipts_count=total_receipts['count'],  # type: ignore[index]
+            total_income=str(total_income['total']),
+            total_expense=str(total_expense['total']),
+            net_worth=str(summary['net_worth']),
+            total_transactions=summary['total_transactions'],
+            receipts_count=total_receipts['count'],
         )
 
     except Exception as e:

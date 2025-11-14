@@ -1,4 +1,4 @@
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import django_filters
 from django.forms import Select
@@ -30,23 +30,24 @@ class IncomeFilter(django_filters.FilterSet):
         widget=Select(attrs={'class': 'form-control mb-4'}),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize filter fields for the current user.
         """
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.filters['category'].queryset = (
+        self.filters['category'].queryset = (  # type: ignore[attr-defined]
             IncomeCategory.objects.filter(user=self.user)
             .distinct()
             .order_by('name')
         )
-        self.filters['account'].queryset = Account.objects.filter(
+        self.filters['account'].queryset = Account.objects.filter(  # type: ignore[attr-defined]
             user=self.user,
         )
 
     @property
-    def qs(self):
+    def qs(self) -> Any:
+        """Get the queryset of incomes for the current user."""
         queryset = super().qs
         return (
             queryset.filter(user=self.user)

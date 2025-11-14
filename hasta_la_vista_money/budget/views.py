@@ -1,11 +1,11 @@
 import json
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, ClassVar, TypedDict, overload
+from typing import Any, TypedDict, cast, overload
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum
-from django.http import JsonResponse
+from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -95,7 +95,7 @@ def get_plan_amount(
     q = Planning.objects.filter(
         user=user,
         date=month,
-        type=type_,
+        planning_type=type_,
     ).select_related('user', 'category_expense', 'category_income')
     if type_ == 'expense':
         if isinstance(category, ExpenseCategory):
@@ -109,7 +109,9 @@ def get_plan_amount(
         error_msg = 'Expected IncomeCategory for income type'
         raise ValueError(error_msg)
     plan = q.first()
-    return plan.amount if plan else 0
+    if plan:
+        return Decimal(str(plan.amount))
+    return 0
 
 
 class BaseView:
@@ -122,22 +124,33 @@ class BudgetContextMixin:
     for budget views.
     """
 
-    def get_budget_context(self):
+    request: HttpRequest
+
+    def get_budget_context(
+        self,
+    ) -> tuple[User, list[date], list[ExpenseCategory], list[IncomeCategory]]:
         user = get_object_or_404(User, username=self.request.user)
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date for d in list_dates]
-        expense_categories = list(get_categories(user, 'expense'))
-        income_categories = list(get_categories(user, 'income'))
+        expense_categories = cast(
+            'list[ExpenseCategory]',
+            list(get_categories(user, 'expense')),
+        )
+        income_categories = cast(
+            'list[IncomeCategory]',
+            list(get_categories(user, 'income')),
+        )
         return user, months, expense_categories, income_categories
 
 
-class BudgetView(  # type: ignore[misc]
+class BudgetView(
     LoginRequiredMixin,
     BudgetContextMixin,
     BaseView,
-    ListView,
+    ListView[Planning],
 ):
     model = Planning
+    template_name = 'budget.html'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
@@ -159,16 +172,18 @@ class BudgetView(  # type: ignore[misc]
         return context
 
 
-def generate_date_list_view(request):
+def generate_date_list_view(request: HttpRequest) -> HttpResponseRedirect:
     """Функция представления генерации дат."""
     if request.method == 'POST':
         user = request.user
         queryset_user = get_object_or_404(User, username=user)
         last_date_obj = queryset_user.budget_date_lists.last()
         if last_date_obj:
-            queryset_last_date = last_date_obj.date
+            queryset_last_date = timezone.make_aware(
+                datetime.combine(last_date_obj.date, datetime.min.time()),
+            )
         else:
-            queryset_last_date = timezone.now().date().replace(day=1)
+            queryset_last_date = timezone.now().replace(day=1)
         type_ = request.POST.get('type')
         generate_date_list(queryset_last_date, queryset_user, type_)
         if type_ == 'income':
@@ -178,7 +193,7 @@ def generate_date_list_view(request):
     return redirect(reverse_lazy('budget:expense_table'))
 
 
-def change_planning(request):
+def change_planning(request: HttpRequest) -> JsonResponse:
     """Функция для изменения сумм планирования."""
     try:
         data = json.loads(request.body.decode('utf-8'))
@@ -188,7 +203,7 @@ def change_planning(request):
         return JsonResponse({'error': 'error'})
 
 
-def save_planning(request):
+def save_planning(request: HttpRequest) -> JsonResponse:
     """AJAX: сохранить план по категории, месяцу, типу (расход/доход)"""
     if (
         request.method == 'POST'
@@ -203,28 +218,30 @@ def save_planning(request):
             amount = Decimal(0)
         type_ = data['type']
         if type_ == 'expense':
-            category = get_object_or_404(
+            expense_category = get_object_or_404(
                 ExpenseCategory,
                 id=data['category_id'],
             )
             plan, created = Planning.objects.get_or_create(
                 user=user,
-                category_expense=category,
+                category_expense=expense_category,
                 date=month,
-                type=type_,
+                planning_type=type_,
                 defaults={'amount': amount},
             )
         else:
-            category = get_object_or_404(IncomeCategory, id=data['category_id'])
+            income_category = get_object_or_404(
+                IncomeCategory, id=data['category_id']
+            )
             plan, created = Planning.objects.get_or_create(
                 user=user,
-                category_income=category,
+                category_income=income_category,
                 date=month,
-                type=type_,
+                planning_type=type_,
                 defaults={'amount': amount},
             )
         if not created:
-            plan.amount = amount
+            plan.amount = Decimal(str(amount))
             plan.save()
         return JsonResponse({'success': True, 'amount': str(plan.amount)})
     return JsonResponse({'success': False, 'error': 'Invalid request'})
@@ -234,7 +251,7 @@ class ExpenseTableView(
     LoginRequiredMixin,
     BudgetContextMixin,
     BaseView,
-    ListView,
+    ListView[Planning],
 ):
     model = Planning
     template_name = 'expense_table.html'
@@ -260,7 +277,7 @@ class IncomeTableView(
     LoginRequiredMixin,
     BudgetContextMixin,
     BaseView,
-    ListView,
+    ListView[Planning],
 ):
     model = Planning
     template_name = 'income_table.html'
@@ -319,16 +336,19 @@ class PlanningExpenseDict(TypedDict):
 )
 class ExpenseBudgetAPIView(APIView):
     schema = AutoSchema()
-    permission_classes: ClassVar[list] = [IsAuthenticated]  # type: ignore[misc]
+    permission_classes = [IsAuthenticated]
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request: Any, *args: Any, **kwargs: Any) -> Response:
         """
         Returns aggregated expense data for API response.
         """
         user = request.user
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date.replace(day=1) for d in list_dates]
-        expense_categories = list(get_categories(user, 'expense'))
+        expense_categories = cast(
+            'list[ExpenseCategory]',
+            list(get_categories(user, 'expense')),
+        )
         data = aggregate_expense_api(
             user=user,
             months=months,
@@ -368,16 +388,19 @@ class ExpenseBudgetAPIView(APIView):
 )
 class IncomeBudgetAPIView(APIView):
     schema = AutoSchema()
-    permission_classes: ClassVar[list] = [IsAuthenticated]  # type: ignore[misc]
+    permission_classes = [IsAuthenticated]
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request: Any, *args: Any, **kwargs: Any) -> Response:
         """
         Returns aggregated income data for API response.
         """
         user = request.user
         list_dates = DateList.objects.filter(user=user).order_by('date')
         months = [d.date.replace(day=1) for d in list_dates]
-        income_categories = list(get_categories(user, 'income'))
+        income_categories = cast(
+            'list[IncomeCategory]',
+            list(get_categories(user, 'income')),
+        )
         data = aggregate_income_api(
             user=user,
             months=months,

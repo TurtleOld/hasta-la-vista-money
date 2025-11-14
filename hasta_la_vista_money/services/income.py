@@ -95,7 +95,6 @@ def copy_income(user: User, income_id: int) -> Income:
         amount=income.amount,
         date=income.date,
     )
-    if new_income.account:
-        new_income.account.balance += new_income.amount
-        new_income.account.save()
+    new_income.account.balance += new_income.amount
+    new_income.account.save()
     return new_income

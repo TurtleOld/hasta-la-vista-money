@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -36,7 +36,7 @@ class GetUserExportDataServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = cast('UserType', user)
+        self.user: UserType = user
 
     def test_get_user_export_data(self) -> None:
         data: UserExportData = get_user_export_data(self.user)

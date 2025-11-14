@@ -1,11 +1,18 @@
 import json
-from typing import Any
+import logging
+import traceback
+from decimal import Decimal
+from operator import itemgetter
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
+from dateutil.parser import parse as parse_date
 from django.contrib import messages
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.cache import cache
+from django.db.models import QuerySet
 from django.forms import BaseForm
 from django.http import (
     HttpRequest,
@@ -27,6 +34,12 @@ from hasta_la_vista_money.authentication.authentication import (
     set_auth_cookies,
 )
 from hasta_la_vista_money.custom_mixin import CustomSuccessURLUserMixin
+from hasta_la_vista_money.expense.models import Expense
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
+from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
     DeleteUserFromGroupForm,
@@ -36,9 +49,16 @@ from hasta_la_vista_money.users.forms import (
     UpdateUserForm,
     UserLoginForm,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import DashboardWidget, User
 from hasta_la_vista_money.users.services.auth import login_user
+from hasta_la_vista_money.users.services.dashboard_analytics import (
+    calculate_linear_trend,
+    get_drill_down_data,
+    get_period_comparison,
+)
 from hasta_la_vista_money.users.services.detailed_statistics import (
+    MonthDataDict,
+    UserDetailedStatisticsDict,
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.services.export import get_user_export_data
@@ -57,6 +77,22 @@ from hasta_la_vista_money.users.services.profile import update_user_profile
 from hasta_la_vista_money.users.services.registration import register_user
 from hasta_la_vista_money.users.services.statistics import get_user_statistics
 from hasta_la_vista_money.users.services.theme import set_user_theme
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+class Transaction(TypedDict):
+    id: int
+    type: Literal['expense', 'income']
+    date: str
+    amount: str
+    category: str
+    account: str
+
+
+class AuthRequest(HttpRequest):
+    user: User
 
 
 class IndexView(TemplateView):
@@ -78,23 +114,19 @@ class ListUsers(
     template_name = 'users/profile.html'
     context_object_name = 'users'
     no_permission_url = reverse_lazy('login')
+    request: AuthRequest
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        if self.request.user.is_authenticated:
-            user_update = UpdateUserForm(instance=self.request.user)
-            user_update_pass_form = PasswordChangeForm(
-                user=self.request.user,
-            )
-            if isinstance(self.request.user, User):
-                user_statistics = get_user_statistics(self.request.user)
-            else:
-                user_statistics = None
-
-            context['user_update'] = user_update
-            context['user_update_pass_form'] = user_update_pass_form
-            context['user_statistics'] = user_statistics
-            context['user'] = self.request.user
+        user_update = UpdateUserForm(instance=self.request.user)
+        user_update_pass_form = PasswordChangeForm(
+            user=self.request.user,
+        )
+        user_statistics = get_user_statistics(self.request.user)
+        context['user_update'] = user_update
+        context['user_update_pass_form'] = user_update_pass_form
+        context['user_statistics'] = user_statistics
+        context['user'] = self.request.user
         return context
 
 
@@ -107,8 +139,6 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to after successful login."""
-        # Используем прямой путь, чтобы избежать циклического импорта
-        # при инициализации URL resolver
         return '/hasta-la-vista-money/'
 
     def dispatch(
@@ -268,6 +298,7 @@ class UpdateUserView(
     template_name = 'users/profile.html'
     form_class = UpdateUserForm
     success_message = constants.SUCCESS_MESSAGE_CHANGED_PROFILE
+    request: AuthRequest
 
     def get_form(self, form_class: Any = None) -> UpdateUserForm:
         form = super().get_form(form_class)
@@ -277,6 +308,8 @@ class UpdateUserView(
     def post(
         self,
         request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
     ) -> JsonResponse:
         user_update = self.get_form()
         valid_form = (
@@ -502,3 +535,394 @@ class SwitchThemeView(LoginRequiredMixin, View):
         theme = data.get('theme')
         set_user_theme(user, theme)
         return JsonResponse({'success': True})
+
+
+class DashboardView(LoginRequiredMixin, TemplateView):
+    """Представление для страницы дашборда."""
+
+    template_name = 'users/dashboard.html'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+
+        context['default_period'] = 'month'
+        context['available_widgets'] = [
+            {'type': 'balance', 'name': 'Баланс счетов'},
+            {'type': 'expenses_chart', 'name': 'График расходов'},
+            {'type': 'income_chart', 'name': 'График доходов'},
+            {'type': 'comparison', 'name': 'Сравнение периодов'},
+            {'type': 'trend', 'name': 'Тренды и прогнозы'},
+            {'type': 'top_categories', 'name': 'Топ категорий'},
+            {'type': 'recent_transactions', 'name': 'Последние операции'},
+        ]
+
+        return context
+
+
+class DashboardDataView(LoginRequiredMixin, View):
+    """Получение всех данных для дашборда в JSON."""
+
+    def _serialize_account(self, account: Account) -> dict[str, Any]:
+        """Сериализовать объект Account."""
+        return {
+            'id': account.pk,
+            'name_account': account.name_account,
+            'type_account': account.type_account,
+            'balance': str(account.balance),
+            'currency': account.currency,
+            'bank': account.bank,
+            'limit_credit': (
+                str(account.limit_credit) if account.limit_credit else None
+            ),
+            'payment_due_date': (
+                account.payment_due_date.isoformat()
+                if account.payment_due_date
+                else None
+            ),
+            'grace_period_days': account.grace_period_days,
+        }
+
+    def _serialize_transfer_log(
+        self,
+        transfer_log: TransferMoneyLog,
+    ) -> dict[str, Any]:
+        """Сериализовать объект TransferMoneyLog."""
+        return {
+            'id': transfer_log.pk,
+            'user_id': transfer_log.user.pk,
+            'from_account': self._serialize_value(transfer_log.from_account),
+            'to_account': self._serialize_value(transfer_log.to_account),
+            'amount': str(transfer_log.amount),
+            'exchange_date': transfer_log.exchange_date.isoformat(),
+            'notes': transfer_log.notes,
+            'created_at': (
+                transfer_log.created_at.isoformat()
+                if transfer_log.created_at
+                else None
+            ),
+            'updated_at': (
+                transfer_log.updated_at.isoformat()
+                if transfer_log.updated_at
+                else None
+            ),
+        }
+
+    def _serialize_user(self, user: Any) -> dict[str, Any]:
+        """Сериализовать объект User."""
+        return {
+            'id': user.pk,
+            'username': user.username,
+        }
+
+    def _serialize_model(self, model_instance: Any) -> dict[str, Any]:
+        """Сериализовать модель Django."""
+        return {
+            'id': model_instance.pk,
+            'model': model_instance.__class__.__name__,
+        }
+
+    def _serialize_value(self, value: Any) -> Any:
+        """Рекурсивно сериализует значение."""
+        if isinstance(value, QuerySet | list | tuple):
+            return [self._serialize_value(item) for item in value]
+        if isinstance(value, dict):
+            return {k: self._serialize_value(v) for k, v in value.items()}
+
+        type_serializers: dict[type[Any], Callable[[Any], dict[str, Any]]] = {
+            Account: self._serialize_account,
+            TransferMoneyLog: self._serialize_transfer_log,
+        }
+        serializer = type_serializers.get(type(value))
+        if serializer:
+            return serializer(value)
+
+        if hasattr(value, '__class__') and value.__class__.__name__ == 'User':
+            return self._serialize_user(value)
+        if hasattr(value, '_meta'):
+            return self._serialize_model(value)
+        return value
+
+    def _prepare_serializable_stats(
+        self,
+        stats: UserDetailedStatisticsDict,
+    ) -> dict[str, Any]:
+        """Подготовить статистику для сериализации."""
+        return {
+            key: self._serialize_value(value) for key, value in stats.items()
+        }
+
+    def _calculate_trends(
+        self,
+        months_data: list[MonthDataDict],
+    ) -> dict[str, Any]:
+        """Рассчитать тренды на основе данных за месяцы."""
+        trends: dict[str, Any] = {}
+        if not months_data:
+            return trends
+
+        dates = []
+        expenses_values = []
+        for m in months_data:
+            try:
+                month_str = m.get('month', '')
+                parsed_date = parse_date(month_str, dayfirst=False)
+                dates.append(parsed_date.date().replace(day=1))
+                expenses_values.append(Decimal(str(m.get('expenses', 0))))
+            except (ValueError, TypeError, AttributeError):
+                continue
+
+        if dates and expenses_values and len(dates) == len(expenses_values):
+            trends = calculate_linear_trend(dates, expenses_values)
+
+        return trends
+
+    def _get_recent_transactions(self, user: User) -> list[Transaction]:
+        """Получить последние транзакции."""
+        recent_expenses = (
+            Expense.objects.filter(user=user)
+            .select_related('category', 'account')
+            .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
+        )
+        recent_incomes = (
+            Income.objects.filter(user=user)
+            .select_related('category', 'account')
+            .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
+        )
+
+        expense_transactions: list[Transaction] = [
+            {
+                'id': expense.pk,
+                'type': 'expense',
+                'date': expense.date.isoformat(),
+                'amount': str(expense.amount),
+                'category': expense.category.name,
+                'account': expense.account.name_account,
+            }
+            for expense in recent_expenses
+        ]
+        income_transactions: list[Transaction] = [
+            {
+                'id': income.pk,
+                'type': 'income',
+                'date': income.date.isoformat(),
+                'amount': str(income.amount),
+                'category': income.category.name,
+                'account': income.account.name_account,
+            }
+            for income in recent_incomes
+        ]
+
+        transactions = expense_transactions + income_transactions
+        transactions.sort(key=itemgetter('date'), reverse=True)
+
+        return transactions[: constants.RECENT_ITEMS_LIMIT]
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        try:
+            user = request.user
+            if not isinstance(user, User):
+                return JsonResponse(
+                    {'error': 'User not authenticated'},
+                    status=401,
+                )
+
+            period = request.GET.get('period', 'month')
+
+            widgets = DashboardWidget.objects.filter(
+                user=user,
+                is_visible=True,
+            ).order_by('position')
+
+            cache_key = f'user_stats_{user.pk}'
+            cache.delete(cache_key)
+
+            stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
+                user,
+            )
+
+            serializable_stats = self._prepare_serializable_stats(
+                stats,
+            )
+
+            months_data = serializable_stats.get('months_data', [])
+            trends = self._calculate_trends(months_data)
+
+            comparison_data = get_period_comparison(user, period)
+            recent_transactions = self._get_recent_transactions(user)
+
+            data = {
+                'widgets': list(widgets.values()),
+                'analytics': {
+                    'stats': serializable_stats,
+                    'trends': trends,
+                },
+                'comparison': comparison_data,
+                'recent_transactions': recent_transactions,
+            }
+
+            return JsonResponse(data, safe=False)
+        except (
+            ValueError,
+            TypeError,
+            AttributeError,
+            KeyError,
+            RuntimeError,
+        ) as e:
+            error_msg = str(e)
+            traceback_str = traceback.format_exc()
+            logger = logging.getLogger(__name__)
+            logger.exception('Dashboard data loading error')
+            return JsonResponse(
+                {
+                    'error': f'Internal server error: {error_msg}',
+                    'traceback': traceback_str,
+                },
+                status=500,
+            )
+
+
+class DashboardWidgetConfigView(LoginRequiredMixin, View):
+    """Управление конфигурацией виджетов."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        data = json.loads(request.body)
+        action = data.get('action')
+
+        if action == 'delete':
+            widget_id = data.get('widget_id')
+            if not widget_id:
+                return JsonResponse({'error': 'widget_id required'}, status=400)
+
+            widget = get_object_or_404(
+                DashboardWidget,
+                id=widget_id,
+                user=user,
+            )
+            widget.delete()
+            return JsonResponse({'status': 'ok'})
+
+        widget_id = data.get('widget_id')
+        widget_type = data.get('widget_type')
+        config = data.get('config', {})
+        position = data.get('position', 0)
+        width = data.get('width')
+        height = data.get('height')
+
+        if widget_id:
+            widget = get_object_or_404(
+                DashboardWidget,
+                id=widget_id,
+                user=user,
+            )
+            widget.config = config
+            widget.position = position
+            if width is not None:
+                widget.width = width
+            if height is not None:
+                widget.height = height
+            if 'is_visible' in data:
+                widget.is_visible = data['is_visible']
+            widget.save()
+        else:
+            widget = DashboardWidget.objects.create(
+                user=user,
+                widget_type=widget_type,
+                config=config,
+                position=position,
+                width=width if width is not None else 6,
+                height=height if height is not None else 300,
+            )
+
+        return JsonResponse(
+            {
+                'status': 'ok',
+                'widget_id': widget.pk,
+            },
+        )
+
+    def delete(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        widget_id = request.GET.get('widget_id')
+        if not widget_id:
+            return JsonResponse({'error': 'widget_id required'}, status=400)
+
+        widget = get_object_or_404(
+            DashboardWidget,
+            id=widget_id,
+            user=user,
+        )
+        widget.delete()
+
+        return JsonResponse({'status': 'ok'})
+
+
+class DashboardDrillDownView(LoginRequiredMixin, View):
+    """Получение детализации по категориям (drill-down)."""
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        category_id = request.GET.get('category_id')
+        date_str = request.GET.get('date')
+        data_type = request.GET.get('type', 'expense')
+
+        drill_data = get_drill_down_data(
+            user=user,
+            category_id=category_id,
+            date_str=date_str,
+            data_type=data_type,
+        )
+
+        return JsonResponse(drill_data)
+
+
+class DashboardComparisonView(LoginRequiredMixin, View):
+    """Сравнение периодов."""
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> JsonResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        period_type = request.GET.get('period', 'month')
+
+        comparison_data = get_period_comparison(
+            user=user,
+            period_type=period_type,
+        )
+
+        return JsonResponse(comparison_data)

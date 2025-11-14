@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
@@ -13,7 +14,7 @@ class IncomeOps:
         user: User,
         account: Account,
         category: IncomeCategory,
-        amount,
+        amount: Decimal,
         when: date,
     ) -> Income:
         return income_services.add_income(user, account, category, amount, when)
@@ -25,7 +26,7 @@ class IncomeOps:
         income: Income,
         account: Account,
         category: IncomeCategory,
-        amount,
+        amount: Decimal,
         when: date,
     ) -> Income:
         return income_services.update_income(

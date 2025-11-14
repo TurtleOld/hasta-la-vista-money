@@ -1,7 +1,7 @@
 """Services for finance account operations."""
 
 from calendar import monthrange
-from datetime import datetime, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, TypedDict
 
@@ -133,10 +133,31 @@ class AccountService:
         receipt_qs = Receipt.objects.filter(account=account)
 
         if start_date and end_date:
-            expense_qs = expense_qs.filter(date__range=(start_date, end_date))
-            income_qs = income_qs.filter(date__range=(start_date, end_date))
+            if isinstance(start_date, date) and not isinstance(
+                start_date, datetime
+            ):
+                start_date_dt = timezone.make_aware(
+                    datetime.combine(start_date, time.min),
+                )
+            else:
+                start_date_dt = start_date
+            if isinstance(end_date, date) and not isinstance(
+                end_date, datetime
+            ):
+                end_date_dt = timezone.make_aware(
+                    datetime.combine(end_date, time.max),
+                )
+            else:
+                end_date_dt = end_date
+
+            expense_qs = expense_qs.filter(
+                date__range=(start_date_dt, end_date_dt)
+            )
+            income_qs = income_qs.filter(
+                date__range=(start_date_dt, end_date_dt)
+            )
             receipt_qs = receipt_qs.filter(
-                receipt_date__range=(start_date, end_date),
+                receipt_date__range=(start_date_dt, end_date_dt),
             )
 
         total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
@@ -166,7 +187,7 @@ class AccountService:
         result = (total_expense + total_receipt_expense) - (
             total_income + total_receipt_return
         )
-        return Decimal(str(result))  # type: ignore[return-value]
+        return Decimal(str(result))
 
     @staticmethod
     @transaction.atomic
@@ -187,7 +208,7 @@ class AccountService:
         new_total_sum: Decimal,
     ) -> None:
         """Adjust account balances when receipt is updated."""
-        if old_account.id == new_account.id:  # type: ignore[attr-defined]
+        if old_account.pk == new_account.pk:
             difference = new_total_sum - old_total_sum
             if difference == 0:
                 return
@@ -237,11 +258,11 @@ class AccountService:
             .first()
         )
         if first_expense and first_receipt:
-            return min(first_expense.date, first_receipt.receipt_date)  # type: ignore[no-any-return]
+            return min(first_expense.date, first_receipt.receipt_date)
         if first_expense:
-            return first_expense.date  # type: ignore[no-any-return]
+            return first_expense.date
         if first_receipt:
-            return first_receipt.receipt_date  # type: ignore[no-any-return]
+            return first_receipt.receipt_date
         return None
 
     @staticmethod
@@ -456,10 +477,23 @@ class AccountService:
         purchase_month: Any,
     ) -> tuple[datetime, datetime]:
         """Calculate purchase period for Raiffeisenbank."""
-        purchase_start = purchase_month.replace(day=1)
-        last_day = monthrange(purchase_start.year, purchase_start.month)[1]
+        if isinstance(purchase_month, datetime):
+            purchase_start_date = purchase_month.date().replace(day=1)
+        elif isinstance(purchase_month, date):
+            purchase_start_date = purchase_month.replace(day=1)
+        else:
+            purchase_start_date = purchase_month.replace(day=1)
+
+        purchase_start = timezone.make_aware(
+            datetime.combine(purchase_start_date, time.min),
+        )
+        last_day = monthrange(
+            purchase_start_date.year, purchase_start_date.month
+        )[1]
         purchase_end = timezone.make_aware(
-            datetime.combine(purchase_start.replace(day=last_day), time.max),
+            datetime.combine(
+                purchase_start_date.replace(day=last_day), time.max
+            ),
         )
         return purchase_start, purchase_end
 
@@ -579,7 +613,7 @@ class AccountService:
 
         grace_end = AccountService._calculate_grace_end_date(first_purchase)
 
-        return {  # type: ignore[typeddict-item]
+        return {
             'first_purchase_date': first_purchase,
             'grace_end_date': grace_end,
             'total_initial_debt': Decimal(str(initial_debt)),
@@ -639,7 +673,7 @@ def get_accounts_for_user_or_group(
 def get_sum_all_accounts(accounts: Any) -> Decimal:
     """Calculate total balance for a queryset of accounts."""
     total = sum(acc.balance for acc in accounts)
-    return Decimal(str(total))  # type: ignore[return-value]
+    return Decimal(str(total))
 
 
 def get_transfer_money_log(

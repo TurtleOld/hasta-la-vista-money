@@ -7,6 +7,7 @@ from the database, including income and expense information filtered by user.
 from datetime import date, datetime
 from decimal import Decimal
 from operator import itemgetter
+from typing import cast
 
 from typing_extensions import TypedDict
 
@@ -45,15 +46,14 @@ def collect_info_income(user: User) -> list[IncomeInfoDict]:
     Returns:
         List of dictionaries containing income records with related data.
     """
-    return list(
-        user.income_users.select_related('user').values(  # type: ignore[attr-defined]
-            'id',
-            'date',
-            'account__name_account',
-            'category__name',
-            'amount',
-        ),
+    queryset = user.income_users.select_related('user').values(
+        'id',
+        'date',
+        'account__name_account',
+        'category__name',
+        'amount',
     )
+    return cast('list[IncomeInfoDict]', list(queryset))
 
 
 def collect_info_expense(user: User) -> list[ExpenseInfoDict]:
@@ -68,15 +68,14 @@ def collect_info_expense(user: User) -> list[ExpenseInfoDict]:
     Returns:
         List of dictionaries containing expense records with related data.
     """
-    return list(
-        user.expense_users.select_related('user').values(  # type: ignore[attr-defined]
-            'id',
-            'date',
-            'account__name_account',
-            'category__name',
-            'amount',
-        ),
+    queryset = user.expense_users.select_related('user').values(
+        'id',
+        'date',
+        'account__name_account',
+        'category__name',
+        'amount',
     )
+    return cast('list[ExpenseInfoDict]', list(queryset))
 
 
 def sort_expense_income(
