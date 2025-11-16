@@ -59,7 +59,11 @@ class ExpenseFilter(django_filters.FilterSet):
     def get_expenses_with_annotations(self) -> list[dict[str, Any]]:
         """Возвращает список расходов с дополнительными полями
         для отображения."""
-        queryset = self.qs
+        queryset = self.qs.select_related(
+            'user',
+            'category',
+            'account',
+        ).all()
         expenses = queryset.values(
             'id',
             'date',
@@ -67,10 +71,10 @@ class ExpenseFilter(django_filters.FilterSet):
             'category__name',
             'category__parent_category__name',
             'amount',
-            'user',
+            'user__id',
+            'user__username',
         )
 
-        # Добавляем date_label для каждого расхода
         expense_list = []
         for expense in expenses:
             expense_dict = dict(expense)
@@ -81,9 +85,10 @@ class ExpenseFilter(django_filters.FilterSet):
                 expense_dict['date_label'] = ''
                 expense_dict['date_month'] = None
 
-            user_obj = queryset.model.objects.get(id=expense['id']).user
-            expense_dict['user'] = user_obj
-
+            expense_dict['user'] = {
+                'id': expense['user__id'],
+                'username': expense['user__username'],
+            }
             expense_list.append(expense_dict)
 
         return expense_list

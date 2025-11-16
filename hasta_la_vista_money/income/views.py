@@ -609,12 +609,28 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
         incomes = Income.objects.none()
 
         if group_id == 'my' or not group_id:
-            incomes = Income.objects.filter(user=user)
+            incomes = (
+                Income.objects.filter(user=user)
+                .select_related(
+                    'category',
+                    'account',
+                    'user',
+                )
+                .all()
+            )
         else:
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = User.objects.filter(groups=group)
-                incomes = Income.objects.filter(user__in=users_in_group)
+                incomes = (
+                    Income.objects.filter(user__in=users_in_group)
+                    .select_related(
+                        'category',
+                        'account',
+                        'user',
+                    )
+                    .all()
+                )
             except Group.DoesNotExist:
                 incomes = Income.objects.none()
 
@@ -628,11 +644,7 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
                 'user_name': income.user.username,
                 'user_id': income.user.pk,
             }
-            for income in incomes.select_related(
-                'category',
-                'account',
-                'user',
-            ).all()
+            for income in incomes
         ]
 
         return JsonResponse(data, safe=False)

@@ -16,6 +16,7 @@ from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import QuerySet
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -130,7 +131,10 @@ class AccountView(
         Returns:
             dict: Accounts and user groups for the current user.
         """
-        user = self.request.user
+        user = get_object_or_404(
+            User.objects.prefetch_related('groups'),
+            pk=self.request.user.pk,
+        )
         accounts = self.get_accounts(user)
         return {
             'accounts': accounts,
@@ -144,9 +148,12 @@ class AccountView(
         Returns:
             dict: Forms for account creation and money transfer.
         """
-        user = self.request.user
+        user = get_object_or_404(
+            User.objects.prefetch_related('groups'),
+            pk=self.request.user.pk,
+        )
         account_transfer_money = (
-            Account.objects.by_user(user).select_related('user').all()
+            Account.objects.filter(user=user).select_related('user').all()
         )
         initial_form_data = {
             'from_account': account_transfer_money.first(),
@@ -167,8 +174,17 @@ class AccountView(
         Returns:
             dict: Recent transfer logs for the current user.
         """
-        user = self.request.user
-        transfer_money_log = TransferMoneyLog.objects.by_user(user)
+        user = get_object_or_404(
+            User.objects.prefetch_related('groups'),
+            pk=self.request.user.pk,
+        )
+        transfer_money_log = TransferMoneyLog.objects.filter(
+            user=user,
+        ).select_related(
+            'to_account',
+            'from_account',
+            'user',
+        )
         return {
             'transfer_money_log': transfer_money_log,
         }
@@ -180,13 +196,17 @@ class AccountView(
         Returns:
             dict: Total balances for user and group accounts.
         """
-        user = self.request.user
-        accounts = Account.objects.by_user(user)
+        user = get_object_or_404(
+            User.objects.prefetch_related('groups'),
+            pk=self.request.user.pk,
+        )
+        accounts = (
+            Account.objects.filter(user=user).select_related('user').all()
+        )
         sum_all_accounts = account_services.get_sum_all_accounts(accounts)
-        user_groups = user.groups.all()
-        if user_groups.exists():
+        if user.groups.exists():
             users_in_groups = User.objects.filter(
-                groups__in=user_groups,
+                groups__in=user.groups.values_list('id', flat=True),
             ).distinct()
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
                 Account.objects.filter(user__in=users_in_groups).select_related(
@@ -195,7 +215,7 @@ class AccountView(
             )
         else:
             sum_all_accounts_in_group = account_services.get_sum_all_accounts(
-                Account.objects.by_user(user).select_related('user'),
+                Account.objects.filter(user=user).select_related('user').all(),
             )
         return {
             'sum_all_accounts': sum_all_accounts,

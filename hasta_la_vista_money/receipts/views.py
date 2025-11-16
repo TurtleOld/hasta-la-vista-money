@@ -98,7 +98,10 @@ class ReceiptView(
         object_list: Any = None,
         **kwargs: object,
     ) -> dict[str, object]:
-        user = get_object_or_404(User, username=self.request.user)
+        user = get_object_or_404(
+            User.objects.prefetch_related('groups'),
+            username=self.request.user,
+        )
         group_id = self.request.GET.get('group_id') or 'my'
 
         receipt_queryset: QuerySet[Receipt]
@@ -107,22 +110,23 @@ class ReceiptView(
 
         if group_id and group_id != 'my':
             try:
-                group = Group.objects.get(pk=group_id)
-                users_in_group = group.user_set.all()
-                receipt_queryset = Receipt.objects.for_users(
-                    users_in_group,
+                users_in_group = User.objects.filter(groups__id=group_id)
+                receipt_queryset = Receipt.objects.filter(
+                    user__in=users_in_group,
                 ).with_related()
-                seller_queryset = Seller.objects.unique_by_name_for_users(
+                seller_queryset = Seller.objects.unique_by_name_for_users(  # type: ignore[attr-defined]
                     users_in_group,
                 )
                 account_queryset = (
-                    Account.objects.filter(user__in=users_in_group)
+                    Account.objects.filter(
+                        user__in=users_in_group,
+                    )
                     .select_related('user')
                     .distinct()
                 )
             except Group.DoesNotExist:
-                receipt_queryset = Receipt.objects.for_users([]).with_related()
-                seller_queryset = Seller.objects.for_users([])
+                receipt_queryset = Receipt.objects.none()
+                seller_queryset = Seller.objects.none()
                 account_queryset = Account.objects.none()
         else:
             receipt_queryset = Receipt.objects.for_user(
@@ -197,7 +201,7 @@ class ReceiptView(
         context['receipt_form'] = receipt_form
         context['product_formset'] = product_formset
         context['receipt_info_by_month'] = pages_receipt_table
-        context['user_groups'] = self.request.user.groups.all()
+        context['user_groups'] = user.groups.all()
 
         return context
 
@@ -541,6 +545,18 @@ class ReceiptDeleteView(
 ):
     model = Receipt
     success_url = reverse_lazy('receipts:list')
+
+    def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
+        return get_object_or_404(
+            Receipt.objects.filter(user=self.request.user)
+            .select_related(
+                'account',
+                'seller',
+            )
+            .prefetch_related('product'),
+            pk=self.kwargs['pk'],
+            user=self.request.user,
+        )
 
     def get_success_url(self) -> str | StrOrPromise:
         return self.success_url
@@ -895,18 +911,25 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
 @require_GET
 def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
     group_id = request.GET.get('group_id') or 'my'
-    user = request.user
-    if group_id and group_id != 'my':
-        try:
-            group = Group.objects.get(pk=group_id)
-            users_in_group = group.user_set.all()
-            receipt_queryset = Receipt.objects.filter(user__in=users_in_group)
-        except Group.DoesNotExist:
-            receipt_queryset = Receipt.objects.none()
-    elif not isinstance(user, User):
+    if not isinstance(request.user, User):
         receipt_queryset = Receipt.objects.none()
+        user_groups = Group.objects.none()
     else:
-        receipt_queryset = Receipt.objects.filter(user=user)
+        user = User.objects.prefetch_related('groups').get(
+            pk=request.user.pk,
+        )
+        if group_id and group_id != 'my':
+            try:
+                group = Group.objects.get(pk=group_id)
+                users_in_group = group.user_set.all()
+                receipt_queryset = Receipt.objects.filter(
+                    user__in=users_in_group,
+                )
+            except Group.DoesNotExist:
+                receipt_queryset = Receipt.objects.none()
+        else:
+            receipt_queryset = Receipt.objects.filter(user=user)
+        user_groups = user.groups.all()
 
     receipts = (
         receipt_queryset.select_related('seller', 'user')
@@ -918,6 +941,6 @@ def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
         'receipts/receipts_block.html',
         {
             'receipts': receipts,
-            'user_groups': user.groups.all(),
+            'user_groups': user_groups,
         },
     )

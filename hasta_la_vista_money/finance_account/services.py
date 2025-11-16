@@ -134,7 +134,8 @@ class AccountService:
 
         if start_date and end_date:
             if isinstance(start_date, date) and not isinstance(
-                start_date, datetime
+                start_date,
+                datetime,
             ):
                 start_date_dt = timezone.make_aware(
                     datetime.combine(start_date, time.min),
@@ -142,7 +143,8 @@ class AccountService:
             else:
                 start_date_dt = start_date
             if isinstance(end_date, date) and not isinstance(
-                end_date, datetime
+                end_date,
+                datetime,
             ):
                 end_date_dt = timezone.make_aware(
                     datetime.combine(end_date, time.max),
@@ -151,10 +153,10 @@ class AccountService:
                 end_date_dt = end_date
 
             expense_qs = expense_qs.filter(
-                date__range=(start_date_dt, end_date_dt)
+                date__range=(start_date_dt, end_date_dt),
             )
             income_qs = income_qs.filter(
-                date__range=(start_date_dt, end_date_dt)
+                date__range=(start_date_dt, end_date_dt),
             )
             receipt_qs = receipt_qs.filter(
                 receipt_date__range=(start_date_dt, end_date_dt),
@@ -488,11 +490,13 @@ class AccountService:
             datetime.combine(purchase_start_date, time.min),
         )
         last_day = monthrange(
-            purchase_start_date.year, purchase_start_date.month
+            purchase_start_date.year,
+            purchase_start_date.month,
         )[1]
         purchase_end = timezone.make_aware(
             datetime.combine(
-                purchase_start_date.replace(day=last_day), time.max
+                purchase_start_date.replace(day=last_day),
+                time.max,
             ),
         )
         return purchase_start, purchase_end
@@ -657,10 +661,9 @@ def get_accounts_for_user_or_group(
             )
         return Account.objects.filter(user=user).select_related('user')
 
-    user_groups = user.groups.all()
-    if user_groups.exists():
+    if user.groups.exists():
         users_in_groups = User.objects.filter(
-            groups__in=user_groups,
+            groups__in=user.groups.values_list('id', flat=True),
         ).distinct()
         return (
             Account.objects.filter(user__in=users_in_groups)
@@ -677,10 +680,18 @@ def get_sum_all_accounts(accounts: Any) -> Decimal:
 
 
 def get_transfer_money_log(
-    user: Any,
+    user: User,
     limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
 ) -> Any:
     """Get recent transfer logs for a user."""
-    return TransferMoneyLog.objects.filter(user=user).order_by(
-        '-exchange_date',
-    )[:limit]
+    return (
+        TransferMoneyLog.objects.filter(user=user)
+        .select_related(
+            'to_account',
+            'from_account',
+            'user',
+        )
+        .order_by(
+            '-exchange_date',
+        )[:limit]
+    )
