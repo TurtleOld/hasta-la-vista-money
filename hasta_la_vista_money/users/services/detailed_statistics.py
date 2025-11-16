@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
 from django.db.models import QuerySet, Sum
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
@@ -387,6 +388,58 @@ def _card_months_block(
     history: list[CardHistoryDict] = []
     now = timezone.now()
 
+    first_month_date = today_month - relativedelta(
+        months=constants.STATISTICS_YEAR_MONTHS_COUNT - constants.ONE,
+    )
+    first_month_start = timezone.make_aware(
+        datetime.combine(first_month_date.replace(day=1), time.min),
+    )
+    last_month_date = today_month
+    last_day = monthrange(last_month_date.year, last_month_date.month)[1]
+    last_month_end = timezone.make_aware(
+        datetime.combine(
+            last_month_date.replace(day=last_day),
+            time.max,
+        ),
+    )
+
+    expenses_by_month = (
+        Expense.objects.filter(
+            account=card,
+            date__gte=first_month_start,
+            date__lte=last_month_end,
+        )
+        .annotate(month=TruncMonth('date'))
+        .values('month')
+        .annotate(total=Sum('amount'))
+    )
+
+    receipts_by_month = (
+        Receipt.objects.filter(
+            account=card,
+            receipt_date__gte=first_month_start,
+            receipt_date__lte=last_month_end,
+        )
+        .annotate(month=TruncMonth('receipt_date'))
+        .values('month', 'operation_type')
+        .annotate(total=Sum('total_sum'))
+    )
+
+    expenses_dict: dict[date, Decimal] = {}
+    for item in expenses_by_month:
+        month_date = item['month'].date().replace(day=1)
+        expenses_dict[month_date] = Decimal(str(item['total'] or 0))
+
+    receipts_dict: dict[date, dict[int, Decimal]] = defaultdict(
+        lambda: defaultdict(lambda: Decimal(0)),
+    )
+    for item in receipts_by_month:
+        month_date = item['month'].date().replace(day=1)
+        operation_type = item['operation_type']
+        receipts_dict[month_date][operation_type] = Decimal(
+            str(item['total'] or 0),
+        )
+
     for i in range(constants.STATISTICS_YEAR_MONTHS_COUNT):
         month_date = today_month - relativedelta(
             months=constants.STATISTICS_YEAR_MONTHS_COUNT - constants.ONE - i,
@@ -406,28 +459,14 @@ def _card_months_block(
             ),
         )
 
-        exp_sum = (
-            Expense.objects.filter(
-                account=card,
-                date__range=(purchase_start, purchase_end),
-            ).aggregate(total=Sum('amount'))['total']
-            or constants.ZERO
+        exp_sum = expenses_dict.get(purchase_start_date, Decimal(0))
+        rcpt_expense = receipts_dict[purchase_start_date].get(
+            RECEIPT_OPERATION_PURCHASE,
+            Decimal(0),
         )
-        rcpt_expense = (
-            Receipt.objects.filter(
-                account=card,
-                receipt_date__range=(purchase_start, purchase_end),
-                operation_type=RECEIPT_OPERATION_PURCHASE,
-            ).aggregate(total=Sum('total_sum'))['total']
-            or constants.ZERO
-        )
-        rcpt_return = (
-            Receipt.objects.filter(
-                account=card,
-                receipt_date__range=(purchase_start, purchase_end),
-                operation_type=RECEIPT_OPERATION_RETURN,
-            ).aggregate(total=Sum('total_sum'))['total']
-            or constants.ZERO
+        rcpt_return = receipts_dict[purchase_start_date].get(
+            RECEIPT_OPERATION_RETURN,
+            Decimal(0),
         )
 
         debt = float(exp_sum) + float(rcpt_expense) - float(rcpt_return)
@@ -653,7 +692,7 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
 
     transfer_money_log = (
         TransferMoneyLog.objects.filter(user=user)
-        .select_related('to_account', 'from_account')
+        .select_related('to_account', 'from_account', 'user')
         .order_by('-created_at')[: constants.TRANSFER_LOG_LIMIT]
     )
 

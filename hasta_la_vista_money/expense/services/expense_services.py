@@ -142,7 +142,7 @@ class ExpenseService:
         """Get expenses filtered by group."""
         expenses = Expense.objects.none()
         receipt_expense_list = []
-
+        user = User.objects.prefetch_related('groups').get(pk=self.user.pk)
         if not group_id or group_id == 'my':
             expenses = Expense.objects.filter(user=self.user).select_related(
                 'user',
@@ -150,7 +150,7 @@ class ExpenseService:
                 'account',
             )
             group_users = [self.user]
-        elif self.user.groups.filter(id=group_id).exists():
+        elif user.groups.filter(id=group_id).exists():
             group_users = list(User.objects.filter(groups__id=group_id))
             expenses = Expense.objects.filter(
                 user__in=group_users,
@@ -184,8 +184,7 @@ class ExpenseService:
             group_users = [self.user]
         else:
             try:
-                group = Group.objects.get(pk=group_id)
-                group_users = list(group.user_set.all())
+                group_users = list(User.objects.filter(groups__id=group_id))
                 expenses = Expense.objects.filter(
                     user__in=group_users,
                 ).select_related('user', 'category', 'account')

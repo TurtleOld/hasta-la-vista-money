@@ -4,6 +4,7 @@ import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import Sum
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -12,7 +13,11 @@ from django.views.generic import CreateView, DeleteView, ListView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
-from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
+from hasta_la_vista_money.loan.models import (
+    Loan,
+    PaymentMakeLoan,
+    PaymentSchedule,
+)
 from hasta_la_vista_money.loan.services.loan_calculation import (
     LoanCalculationService,
 )
@@ -30,16 +35,40 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
         user = get_object_or_404(User, username=self.request.user)
         loan_form = LoanForm()
         payment_make_loan_form = PaymentMakeLoanForm(user=user)
-        loan = user.loan_users.all()
+        loan = (
+            user.loan_users.select_related('account')
+            .prefetch_related('payment_schedule_loans')
+            .all()
+        )
         result_calculate = user.payment_schedule_users.select_related(
             'loan',
         ).all()
-        payment_make_loan = user.payment_make_loan_users.all()
+        payment_make_loan = user.payment_make_loan_users.select_related(
+            'account',
+            'loan',
+        ).all()
 
         total_loan_amount = sum(loan_item.loan_amount for loan_item in loan)
-        total_overpayment = sum(
-            float(loan_item.calculate_sum_monthly_payment) for loan_item in loan
-        )
+
+        loan_list = list(loan)
+        if loan_list:
+            loan_ids = [loan_item.pk for loan_item in loan_list]
+            payments_by_loan = (
+                PaymentSchedule.objects.filter(loan_id__in=loan_ids)
+                .values('loan_id')
+                .annotate(total=Sum('monthly_payment'))
+            )
+            payments_dict = {
+                item['loan_id']: float(item['total'] or 0)
+                for item in payments_by_loan
+            }
+            total_overpayment = sum(
+                payments_dict.get(loan_item.pk, 0.0)
+                - float(loan_item.loan_amount)
+                for loan_item in loan_list
+            )
+        else:
+            total_overpayment = 0.0
 
         context = super().get_context_data(**kwargs)
         context['loan_form'] = loan_form
