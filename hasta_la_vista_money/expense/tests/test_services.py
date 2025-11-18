@@ -1,8 +1,11 @@
 from typing import Any
+from unittest.mock import MagicMock
 
 from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
 
+from config.containers import CoreContainer
+from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.constants import RECEIPT_CATEGORY_NAME
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
@@ -34,6 +37,16 @@ class TestExpenseService(TestCase):
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
         self.service = ExpenseService(self.user, self.request)
+
+        self.mock_account_service = MagicMock(spec=AccountServiceProtocol)
+
+        CoreContainer.account_service.override(
+            lambda: self.mock_account_service
+        )
+
+    def tearDown(self) -> None:
+        """Очищаем переопределения после теста."""
+        CoreContainer.account_service.reset_override()
 
     def test_get_categories(self) -> None:
         """Test getting expense categories."""
@@ -70,7 +83,6 @@ class TestExpenseService(TestCase):
 
     def test_create_expense(self) -> None:
         """Test creating a new expense."""
-        initial_balance = self.account.balance
         form_data = {
             'account': self.account.pk,
             'category': self.expense_category.pk,
@@ -83,22 +95,35 @@ class TestExpenseService(TestCase):
             account_queryset=Account.objects.filter(user=self.user),
         )
         self.assertTrue(form.is_valid())
+
+        self.mock_account_service.apply_receipt_spend.return_value = (
+            self.account
+        )
+
         expense = self.service.create_expense(form)
         self.assertIsInstance(expense, Expense)
         self.assertEqual(expense.user, self.user)
         self.assertEqual(expense.amount, 1000)
-        self.account.refresh_from_db()
-        self.assertEqual(self.account.balance, initial_balance - 1000)
+
+        self.mock_account_service.apply_receipt_spend.assert_called_once_with(
+            self.account,
+            1000,
+        )
 
     def test_delete_expense(self) -> None:
         """Test deleting an expense."""
-        initial_balance = self.account.balance
         expense_amount = self.expense.amount
+
+        self.mock_account_service.refund_to_account.return_value = None
+
         self.service.delete_expense(self.expense)
         with self.assertRaises(Expense.DoesNotExist):
             Expense.objects.get(pk=self.expense.pk)
-        self.account.refresh_from_db()
-        self.assertEqual(self.account.balance, initial_balance + expense_amount)
+
+        self.mock_account_service.refund_to_account.assert_called_once_with(
+            self.account,
+            expense_amount,
+        )
 
     def test_get_expenses_by_group_my(self) -> None:
         """Test getting expenses for 'my' group."""
