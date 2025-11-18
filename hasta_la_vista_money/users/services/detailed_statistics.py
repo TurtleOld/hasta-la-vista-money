@@ -6,12 +6,15 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from dateutil.relativedelta import relativedelta
+from dependency_injector.wiring import Provide, inject
 from django.core.cache import cache
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
+from config.containers import CoreContainer
+from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
@@ -29,7 +32,6 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import collect_info_receipt
@@ -380,9 +382,13 @@ def _six_months_data(
     return out  # type: ignore[return-value]
 
 
+@inject
 def _card_months_block(
     card: Account,
     today_month: date,
+    account_service: AccountServiceProtocol = Provide[
+        CoreContainer.account_service
+    ],
 ) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
     months: list[CardMonthDict] = []
     history: list[CardHistoryDict] = []
@@ -488,9 +494,11 @@ def _card_months_block(
                 ),
             )
         elif getattr(card, 'bank', None) == 'RAIFFAISENBANK':
-            schedule = AccountService.calculate_raiffeisenbank_payment_schedule(
-                card,
-                purchase_start_date,
+            schedule = (
+                account_service.calculate_raiffeisenbank_payment_schedule(
+                    card,
+                    purchase_start_date,
+                )
             )
             grace_end = schedule['grace_end_date'] if schedule else purchase_end
         else:
@@ -522,9 +530,11 @@ def _card_months_block(
             getattr(card, 'bank', None) == 'RAIFFAISENBANK'
             and debt > constants.ZERO
         ):
-            schedule = AccountService.calculate_raiffeisenbank_payment_schedule(
-                card,
-                purchase_start,
+            schedule = (
+                account_service.calculate_raiffeisenbank_payment_schedule(
+                    card,
+                    purchase_start,
+                )
             )
             if schedule:
                 final_debt = float(schedule['final_debt'])

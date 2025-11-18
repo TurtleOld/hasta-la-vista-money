@@ -6,14 +6,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from dependency_injector.wiring import Provide, inject
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from config.containers import CoreContainer
+from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts import services as receipts_services
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.users.models import User
@@ -131,12 +133,16 @@ class ReceiptImportService:
         )
 
     @staticmethod
+    @inject
     def _update_account_balance(
         account: Account,
         total_sum: decimal.Decimal | str | float,
+        account_service: AccountServiceProtocol = Provide[
+            CoreContainer.account_service
+        ],
     ) -> None:
         account_balance = get_object_or_404(Account, pk=account.pk)
-        AccountService.apply_receipt_spend(
+        account_service.apply_receipt_spend(
             account_balance,
             decimal.Decimal(total_sum),
         )

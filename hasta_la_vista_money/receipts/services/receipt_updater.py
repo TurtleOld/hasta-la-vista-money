@@ -1,10 +1,12 @@
 from decimal import Decimal
 
+from dependency_injector.wiring import Provide, inject
 from django.db import transaction
 from django.forms.formsets import BaseFormSet
 
+from config.containers import CoreContainer
+from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt
 from hasta_la_vista_money.users.models import User
@@ -12,6 +14,7 @@ from hasta_la_vista_money.users.models import User
 
 class ReceiptUpdaterService:
     @staticmethod
+    @inject
     @transaction.atomic
     def update_receipt(
         *,
@@ -19,16 +22,16 @@ class ReceiptUpdaterService:
         receipt: Receipt,
         form: ReceiptForm,
         product_formset: BaseFormSet[ProductForm],
+        account_service: AccountServiceProtocol = Provide[
+            CoreContainer.account_service
+        ],
     ) -> Receipt:
         old_total_sum = receipt.total_sum
         old_account = receipt.account
-
         receipt = form.save()
-
-        # Пересобираем товары
         receipt.product.clear()
-
         new_total_sum = Decimal('0.00')
+
         for product_form in product_formset:
             if product_form.cleaned_data and not product_form.cleaned_data.get(
                 'DELETE',
@@ -55,10 +58,9 @@ class ReceiptUpdaterService:
 
         new_account = receipt.account
 
-        # Корректировка балансов через сервис аккаунтов
         old_account_obj = Account.objects.get(pk=old_account.pk)
         new_account_obj = Account.objects.get(pk=new_account.pk)
-        AccountService.adjust_on_receipt_update(
+        account_service.reconcile_account_balances(
             old_account=old_account_obj,
             new_account=new_account_obj,
             old_total_sum=old_total_sum,

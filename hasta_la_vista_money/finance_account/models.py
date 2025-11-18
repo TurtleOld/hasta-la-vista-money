@@ -2,11 +2,13 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from dependency_injector.wiring import Provide, inject
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 
+from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
@@ -272,9 +274,13 @@ class Account(TimeStampedModel):
             end_date=end_date,
         )
 
+    @inject
     def calculate_grace_period_info(
         self,
         purchase_month: Any,
+        account_service: AccountServiceProtocol = Provide[
+            'config.containers.CoreContainer.account_service'
+        ],
     ) -> 'GracePeriodInfoDict':
         """
         Calculates grace period information for a credit card.
@@ -289,11 +295,7 @@ class Account(TimeStampedModel):
             dict: Information about the grace period, including dates,
             debts, and overdue status.
         """
-        from hasta_la_vista_money.finance_account.services import (
-            AccountService,
-        )
-
-        return AccountService.calculate_grace_period_info(
+        return account_service.calculate_grace_period_info(
             account=self,
             purchase_month=purchase_month,
         )

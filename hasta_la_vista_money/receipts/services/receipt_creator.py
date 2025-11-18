@@ -1,11 +1,13 @@
 from typing import Any
 
+from dependency_injector.wiring import Provide, inject
 from django.db import transaction
 from django.forms.formsets import BaseFormSet
 from django.shortcuts import get_object_or_404
 
+from config.containers import CoreContainer
+from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.users.models import User
@@ -13,6 +15,7 @@ from hasta_la_vista_money.users.models import User
 
 class ReceiptCreatorService:
     @staticmethod
+    @inject
     @transaction.atomic
     def create_manual_receipt(
         *,
@@ -20,6 +23,9 @@ class ReceiptCreatorService:
         receipt_form: ReceiptForm,
         product_formset: BaseFormSet[Any],
         seller: Seller,
+        account_service: AccountServiceProtocol = Provide[
+            CoreContainer.account_service
+        ],
     ) -> Receipt | None:
         receipt = receipt_form.save(commit=False)
         total_sum = receipt.total_sum
@@ -29,7 +35,7 @@ class ReceiptCreatorService:
         if account_balance.user != user:
             return None
 
-        AccountService.apply_receipt_spend(account_balance, total_sum)
+        account_service.apply_receipt_spend(account_balance, total_sum)
 
         receipt.user = user
         receipt.seller = seller
