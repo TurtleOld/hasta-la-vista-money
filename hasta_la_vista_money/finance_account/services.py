@@ -203,28 +203,66 @@ class AccountService:
 
     @staticmethod
     @transaction.atomic
-    def adjust_on_receipt_update(
+    def refund_to_account(account: Account, amount: Decimal) -> Account:
+        """Return money to account balance with validation."""
+        validate_positive_amount(amount)
+        account.balance += amount
+        account.save()
+        return account
+
+    @staticmethod
+    def _adjust_balance_on_same_account(
+        account: Account,
+        old_total_sum: Decimal,
+        new_total_sum: Decimal,
+    ) -> None:
+        difference = new_total_sum - old_total_sum
+        if difference == 0:
+            return
+        if difference > 0:
+            AccountService.apply_receipt_spend(account, difference)
+        else:
+            AccountService.refund_to_account(account, abs(difference))
+
+    @staticmethod
+    def _adjust_balance_on_account_change(
         old_account: Account,
         new_account: Account,
         old_total_sum: Decimal,
         new_total_sum: Decimal,
     ) -> None:
-        """Adjust account balances when receipt is updated."""
-        if old_account.pk == new_account.pk:
-            difference = new_total_sum - old_total_sum
-            if difference == 0:
-                return
-            if difference > 0:
-                AccountService.apply_receipt_spend(old_account, difference)
-            else:
-                old_account.balance += abs(difference)
-                old_account.save()
-            return
-
-        # Different accounts: refund old, charge new
-        old_account.balance += old_total_sum
-        old_account.save()
+        AccountService.refund_to_account(old_account, old_total_sum)
         AccountService.apply_receipt_spend(new_account, new_total_sum)
+
+    @staticmethod
+    def _should_adjust_same_account(
+        old_account: Account,
+        new_account: Account,
+    ) -> bool:
+        return old_account.pk == new_account.pk
+
+    @staticmethod
+    @transaction.atomic
+    def reconcile_account_balances(
+        old_account: Account,
+        new_account: Account,
+        old_total_sum: Decimal,
+        new_total_sum: Decimal,
+    ) -> None:
+        """Reconcile account balances when amount or account changes."""
+        if AccountService._should_adjust_same_account(old_account, new_account):
+            AccountService._adjust_balance_on_same_account(
+                old_account,
+                old_total_sum,
+                new_total_sum,
+            )
+        else:
+            AccountService._adjust_balance_on_account_change(
+                old_account,
+                new_account,
+                old_total_sum,
+                new_total_sum,
+            )
 
     @staticmethod
     def _get_first_purchase_in_month(
@@ -633,65 +671,65 @@ class AccountService:
             ),
         }
 
+    @staticmethod
+    def get_accounts_for_user_or_group(
+        user: User,
+        group_id: str | None = None,
+    ) -> QuerySet[Account]:
+        """
+        Get accounts for user or group.
 
-def get_accounts_for_user_or_group(
-    user: User,
-    group_id: str | None = None,
-) -> QuerySet[Account]:
-    """
-    Get accounts for user or group.
+        Args:
+            user: User instance
+            group_id: Optional group ID filter
 
-    Args:
-        user: User instance
-        group_id: Optional group ID filter
+        Returns:
+            QuerySet of accounts for user or group
+        """
+        if group_id == 'my':
+            return Account.objects.filter(user=user).select_related('user')
 
-    Returns:
-        QuerySet of accounts for user or group
-    """
-    if group_id == 'my':
-        return Account.objects.filter(user=user).select_related('user')
+        if group_id:
+            users_in_group = User.objects.filter(groups__id=group_id).distinct()
+            if users_in_group.exists():
+                return (
+                    Account.objects.filter(user__in=users_in_group)
+                    .select_related('user')
+                    .distinct()
+                )
+            return Account.objects.filter(user=user).select_related('user')
 
-    if group_id:
-        users_in_group = User.objects.filter(groups__id=group_id).distinct()
-        if users_in_group.exists():
+        if user.groups.exists():
+            users_in_groups = User.objects.filter(
+                groups__in=user.groups.values_list('id', flat=True),
+            ).distinct()
             return (
-                Account.objects.filter(user__in=users_in_group)
+                Account.objects.filter(user__in=users_in_groups)
                 .select_related('user')
                 .distinct()
             )
         return Account.objects.filter(user=user).select_related('user')
 
-    if user.groups.exists():
-        users_in_groups = User.objects.filter(
-            groups__in=user.groups.values_list('id', flat=True),
-        ).distinct()
+    @staticmethod
+    def get_sum_all_accounts(accounts: Any) -> Decimal:
+        """Calculate total balance for a queryset of accounts."""
+        total = sum(acc.balance for acc in accounts)
+        return Decimal(str(total))
+
+    @staticmethod
+    def get_transfer_money_log(
+        user: User,
+        limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
+    ) -> Any:
+        """Get recent transfer logs for a user."""
         return (
-            Account.objects.filter(user__in=users_in_groups)
-            .select_related('user')
-            .distinct()
+            TransferMoneyLog.objects.filter(user=user)
+            .select_related(
+                'to_account',
+                'from_account',
+                'user',
+            )
+            .order_by(
+                '-exchange_date',
+            )[:limit]
         )
-    return Account.objects.filter(user=user).select_related('user')
-
-
-def get_sum_all_accounts(accounts: Any) -> Decimal:
-    """Calculate total balance for a queryset of accounts."""
-    total = sum(acc.balance for acc in accounts)
-    return Decimal(str(total))
-
-
-def get_transfer_money_log(
-    user: User,
-    limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
-) -> Any:
-    """Get recent transfer logs for a user."""
-    return (
-        TransferMoneyLog.objects.filter(user=user)
-        .select_related(
-            'to_account',
-            'from_account',
-            'user',
-        )
-        .order_by(
-            '-exchange_date',
-        )[:limit]
-    )
