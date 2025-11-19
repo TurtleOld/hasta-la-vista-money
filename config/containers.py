@@ -1,30 +1,26 @@
 from dependency_injector import containers, providers
+from openai import OpenAI
 
 from core.protocols.services import AccountServiceProtocol
-from hasta_la_vista_money.expense.protocols.services import (
-    ExpenseServiceProtocol,
-)
-from hasta_la_vista_money.expense.services.expense_services import (
-    ExpenseService,
+from hasta_la_vista_money.expense.containers import ExpenseContainer
+from hasta_la_vista_money.finance_account.containers import (
+    FinanceAccountContainer,
 )
 from hasta_la_vista_money.finance_account.services import AccountService
-from hasta_la_vista_money.receipts.protocols.services import (
-    ReceiptCreatorServiceProtocol,
-    ReceiptImportServiceProtocol,
-    ReceiptUpdaterServiceProtocol,
-)
-from hasta_la_vista_money.receipts.services.receipt_creator import (
-    ReceiptCreatorService,
-)
-from hasta_la_vista_money.receipts.services.receipt_import import (
-    ReceiptImportService,
-)
-from hasta_la_vista_money.receipts.services.receipt_updater import (
-    ReceiptUpdaterService,
-)
+from hasta_la_vista_money.income.containers import IncomeContainer
+from hasta_la_vista_money.loan.containers import LoanContainer
+from hasta_la_vista_money.receipts.containers import ReceiptsContainer
 
 
 class CoreContainer(containers.DeclarativeContainer):
+    config = providers.Configuration()
+
+    openai_client = providers.Singleton(
+        OpenAI,
+        base_url=config.openai.base_url,
+        api_key=config.openai.api_key,
+    )
+
     account_service: providers.Factory[AccountServiceProtocol] = (
         providers.Factory(
             AccountService,
@@ -35,32 +31,29 @@ class CoreContainer(containers.DeclarativeContainer):
 class ApplicationContainer(containers.DeclarativeContainer):
     config = providers.Configuration()
 
-    core = providers.Container(CoreContainer)
-
-    account_service: providers.Factory[AccountServiceProtocol] = (
-        core.account_service
+    core = providers.Container(
+        CoreContainer,
+        config=config.core,
     )
 
-    expense_service: providers.Factory[ExpenseServiceProtocol] = (
-        providers.Factory(
-            ExpenseService,
-        )
+    expense = providers.Container(
+        ExpenseContainer,
+        core=core,
     )
 
-    receipt_creator_service: providers.Factory[
-        ReceiptCreatorServiceProtocol
-    ] = providers.Factory(
-        ReceiptCreatorService,
+    income = providers.Container(
+        IncomeContainer,
+        core=core,
     )
 
-    receipt_updater_service: providers.Factory[
-        ReceiptUpdaterServiceProtocol
-    ] = providers.Factory(
-        ReceiptUpdaterService,
+    receipts = providers.Container(
+        ReceiptsContainer,
+        core=core,
     )
 
-    receipt_import_service: providers.Factory[ReceiptImportServiceProtocol] = (
-        providers.Factory(
-            ReceiptImportService,
-        )
+    finance_account = providers.Container(
+        FinanceAccountContainer,
+        core=core,
     )
+
+    loan = providers.Container(LoanContainer)
