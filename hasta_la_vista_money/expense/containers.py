@@ -16,4 +16,3 @@ class ExpenseContainer(containers.DeclarativeContainer):
     )
     expense_category_service = providers.Factory(ExpenseCategoryService)
     receipt_expense_service = providers.Factory(ReceiptExpenseService)
-

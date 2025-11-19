@@ -122,6 +122,9 @@ ACCOUNT_TYPE_CREDIT_CARD: Final = 'CreditCard'
 # Названия категорий
 RECEIPT_CATEGORY_NAME: Final = 'Покупки по чекам'
 
+# Dependency injection providers
+ACCOUNT_SERVICE_PROVIDER: Final = 'ApplicationContainer.core.account_service'
+
 # Числа
 ZERO: Final = 0
 ONE: Final = 1

@@ -7,4 +7,3 @@ from hasta_la_vista_money.loan.services.loan_calculation import (
 
 class LoanContainer(containers.DeclarativeContainer):
     loan_calculation_service = providers.Factory(LoanCalculationService)
-

@@ -10,4 +10,3 @@ class IncomeContainer(containers.DeclarativeContainer):
         IncomeOps,
         account_service=core.account_service,
     )
-

@@ -8,4 +8,3 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
 
     account_service = core.account_service
     transfer_service = providers.Factory(TransferService)
-

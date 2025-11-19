@@ -4,7 +4,6 @@ from unittest.mock import MagicMock
 from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
 
-from config.containers import CoreContainer
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.constants import RECEIPT_CATEGORY_NAME
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
@@ -36,17 +35,15 @@ class TestExpenseService(TestCase):
         self.expense_category = ExpenseCategory.objects.get(pk=1)
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
-        self.service = ExpenseService(self.user, self.request)
-
         self.mock_account_service = MagicMock(spec=AccountServiceProtocol)
-
-        CoreContainer.account_service.override(
-            lambda: self.mock_account_service
+        self.service = ExpenseService(
+            self.user,
+            self.request,
+            self.mock_account_service,
         )
 
     def tearDown(self) -> None:
-        """Очищаем переопределения после теста."""
-        CoreContainer.account_service.reset_override()
+        pass
 
     def test_get_categories(self) -> None:
         """Test getting expense categories."""

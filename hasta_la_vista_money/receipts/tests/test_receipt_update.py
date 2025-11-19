@@ -84,6 +84,9 @@ class ReceiptUpdateViewTest(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
+    def tearDown(self) -> None:
+        pass
+
     def test_receipt_update_increase_amount_same_account(self) -> None:
         """Тест увеличения суммы чека на том же счёте."""
         initial_balance = self.initial_balance

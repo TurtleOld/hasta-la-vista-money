@@ -1,12 +1,11 @@
 from decimal import Decimal
 
-from dependency_injector.wiring import Provide, inject
 from django.db import transaction
 from django.forms.formsets import BaseFormSet
 
-from config.containers import CoreContainer
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt
 from hasta_la_vista_money.users.models import User
@@ -14,7 +13,6 @@ from hasta_la_vista_money.users.models import User
 
 class ReceiptUpdaterService:
     @staticmethod
-    @inject
     @transaction.atomic
     def update_receipt(
         *,
@@ -22,10 +20,10 @@ class ReceiptUpdaterService:
         receipt: Receipt,
         form: ReceiptForm,
         product_formset: BaseFormSet[ProductForm],
-        account_service: AccountServiceProtocol = Provide[
-            CoreContainer.account_service
-        ],
+        account_service: AccountServiceProtocol | None = None,
     ) -> Receipt:
+        if account_service is None:
+            account_service = AccountService()
         old_total_sum = receipt.total_sum
         old_account = receipt.account
         receipt = form.save()

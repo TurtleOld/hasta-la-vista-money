@@ -1,7 +1,6 @@
 from collections.abc import Iterable
 from typing import Any, NamedTuple, cast
 
-from dependency_injector.wiring import Provide, inject
 from django.contrib.auth.models import Group
 from django.db.models import Sum
 from django.db.models.functions import ExtractYear, TruncMonth
@@ -10,7 +9,6 @@ from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils.formats import date_format
 
-from config.containers import CoreContainer
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.constants import (
     RECEIPT_CATEGORY_NAME,
@@ -19,6 +17,7 @@ from hasta_la_vista_money.constants import (
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import (
     get_new_type_operation,
@@ -30,9 +29,15 @@ from hasta_la_vista_money.users.models import User
 class ExpenseService:
     """Service class for expense-related operations."""
 
-    def __init__(self, user: User, request: HttpRequest):
+    def __init__(
+        self,
+        user: User,
+        request: HttpRequest,
+        account_service: AccountServiceProtocol | None = None,
+    ):
         self.user = user
         self.request = request
+        self.account_service = account_service or AccountService()
 
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
@@ -70,13 +75,9 @@ class ExpenseService:
             account_queryset=Account.objects.filter(user=self.user),
         )
 
-    @inject
     def create_expense(
         self,
         form: AddExpenseForm,
-        account_service: AccountServiceProtocol = Provide[
-            CoreContainer.account_service
-        ],
     ) -> Expense:
         """Create a new expense."""
         expense = form.save(commit=False)
@@ -84,18 +85,17 @@ class ExpenseService:
         expense.save()
 
         if expense.amount is not None:
-            account_service.apply_receipt_spend(expense.account, expense.amount)
+            self.account_service.apply_receipt_spend(
+                expense.account,
+                expense.amount,
+            )
 
         return expense
 
-    @inject
     def update_expense(
         self,
         expense: Expense,
         form: AddExpenseForm,
-        account_service: AccountServiceProtocol = Provide[
-            CoreContainer.account_service
-        ],
     ) -> None:
         """Update an existing expense."""
         expense_updated: Expense = get_queryset_type_income_expenses(
@@ -116,25 +116,20 @@ class ExpenseService:
             error_msg = 'У вас нет прав для выполнения этого действия'
             raise ValueError(error_msg)
 
-        account_service.reconcile_account_balances(
+        self.account_service.reconcile_account_balances(
             old_account=old_account_balance,
             new_account=account_balance,
             old_total_sum=expense_updated.amount,
             new_total_sum=amount,
         )
 
-        # Update expense
         expense_updated.user = self.user
         expense_updated.amount = amount
         expense_updated.save()
 
-    @inject
     def delete_expense(
         self,
         expense: Expense,
-        account_service: AccountServiceProtocol = Provide[
-            CoreContainer.account_service
-        ],
     ) -> None:
         """Delete an expense and restore account balance."""
         account = expense.account
@@ -145,25 +140,20 @@ class ExpenseService:
             error_msg = 'У вас нет прав для выполнения этого действия'
             raise ValueError(error_msg)
 
-        # Возврат средств при удалении расхода
-        account_service.refund_to_account(account_balance, amount)
+        self.account_service.refund_to_account(account_balance, amount)
         account_balance.save()
         expense.delete()
 
-    @inject
     def copy_expense(
         self,
         expense_id: int,
-        account_service: AccountServiceProtocol = Provide[
-            CoreContainer.account_service
-        ],
     ) -> Expense:
         """Copy an existing expense."""
         new_expense = get_new_type_operation(Expense, expense_id, self.request)
         valid_expense = get_object_or_404(Expense, pk=new_expense.pk)
 
         if valid_expense.account is not None:
-            account_service.apply_receipt_spend(
+            self.account_service.apply_receipt_spend(
                 valid_expense.account,
                 valid_expense.amount,
             )

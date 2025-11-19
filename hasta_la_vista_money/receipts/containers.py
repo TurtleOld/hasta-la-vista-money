@@ -23,4 +23,3 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         ReceiptUpdaterService,
         account_service=core.account_service,
     )
-

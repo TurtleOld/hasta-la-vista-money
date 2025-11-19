@@ -733,3 +733,8 @@ class AccountService:
                 '-exchange_date',
             )[:limit]
         )
+
+
+get_accounts_for_user_or_group = AccountService.get_accounts_for_user_or_group
+get_sum_all_accounts = AccountService.get_sum_all_accounts
+get_transfer_money_log = AccountService.get_transfer_money_log
