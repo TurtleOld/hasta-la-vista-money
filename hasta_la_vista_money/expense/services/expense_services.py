@@ -17,7 +17,6 @@ from hasta_la_vista_money.constants import (
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import (
     get_new_type_operation,
@@ -33,11 +32,11 @@ class ExpenseService:
         self,
         user: User,
         request: HttpRequest,
-        account_service: AccountServiceProtocol | None = None,
+        account_service: AccountServiceProtocol,
     ):
         self.user = user
         self.request = request
-        self.account_service = account_service or AccountService()
+        self.account_service = account_service
 
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
