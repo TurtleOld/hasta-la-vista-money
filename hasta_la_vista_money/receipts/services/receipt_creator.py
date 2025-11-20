@@ -6,25 +6,27 @@ from django.shortcuts import get_object_or_404
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.users.models import User
 
 
 class ReceiptCreatorService:
-    @staticmethod
+    def __init__(
+        self,
+        account_service: AccountServiceProtocol,
+    ) -> None:
+        self.account_service = account_service
+
     @transaction.atomic
     def create_manual_receipt(
+        self,
         *,
         user: User,
         receipt_form: ReceiptForm,
         product_formset: BaseFormSet[Any],
         seller: Seller,
-        account_service: AccountServiceProtocol | None = None,
     ) -> Receipt | None:
-        if account_service is None:
-            account_service = AccountService()
         receipt = receipt_form.save(commit=False)
         total_sum = receipt.total_sum
         account = receipt.account
@@ -33,7 +35,7 @@ class ReceiptCreatorService:
         if account_balance.user != user:
             return None
 
-        account_service.apply_receipt_spend(account_balance, total_sum)
+        self.account_service.apply_receipt_spend(account_balance, total_sum)
 
         receipt.user = user
         receipt.seller = seller

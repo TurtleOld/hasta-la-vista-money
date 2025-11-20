@@ -44,15 +44,7 @@ from hasta_la_vista_money.receipts.services import (
     analyze_image_with_ai,
     paginator_custom_view,
 )
-from hasta_la_vista_money.receipts.services.receipt_creator import (
-    ReceiptCreatorService,
-)
-from hasta_la_vista_money.receipts.services.receipt_import import (
-    ReceiptImportService,
-)
-from hasta_la_vista_money.receipts.services.receipt_updater import (
-    ReceiptUpdaterService,
-)
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
@@ -299,7 +291,11 @@ class ReceiptCreateView(
         product_formset: 'ProductFormSet',  # type: ignore[valid-type]
         seller: Seller,
     ) -> Receipt | None:
-        return ReceiptCreatorService.create_manual_receipt(
+        container = getattr(request, 'container', None)
+        if container is None:
+            container = ApplicationContainer()
+        receipt_creator_service = container.receipts.receipt_creator_service()
+        return receipt_creator_service.create_manual_receipt(
             user=cast('User', request.user),
             receipt_form=receipt_form,
             product_formset=product_formset,
@@ -462,7 +458,13 @@ class ReceiptUpdateView(
         seller_field.queryset = Seller.objects.for_user(current_user)
 
         if form.is_valid() and product_formset.is_valid():
-            ReceiptUpdaterService.update_receipt(
+            container = getattr(self.request, 'container', None)
+            if container is None:
+                container = ApplicationContainer()
+            receipt_updater_service = (
+                container.receipts.receipt_updater_service()
+            )
+            receipt_updater_service.update_receipt(
                 user=cast('User', self.request.user),
                 receipt=receipt,
                 form=form,
@@ -681,7 +683,11 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
                 messages.error(self.request, constants.INVALID_FILE_FORMAT)
                 return super().form_invalid(form)
 
-            result = ReceiptImportService.process_uploaded_image(
+            container = getattr(self.request, 'container', None)
+            if container is None:
+                container = ApplicationContainer()
+            receipt_import_service = container.receipts.receipt_import_service()
+            result = receipt_import_service.process_uploaded_image(
                 user=user,
                 account=account,
                 uploaded_file=uploaded_file,

@@ -14,7 +14,6 @@ from django.utils import timezone
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts import services as receipts_services
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.users.models import User
@@ -28,15 +27,13 @@ class ReceiptImportResult:
 
 
 class ReceiptImportService:
-    @staticmethod
-    def _clean_json_response(text: str) -> str:
+    def _clean_json_response(self, text: str) -> str:
         match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
         if match:
             return match.group(1)
         return text.strip()
 
-    @staticmethod
-    def _normalize_date(date_str: str) -> str:
+    def _normalize_date(self, date_str: str) -> str:
         try:
             day, month, year = date_str.split(' ')[0].split('.')
             hour, minute = date_str.split(' ')[1].split(':')
@@ -54,9 +51,8 @@ class ReceiptImportService:
             current_century = str(timezone.now().year)[:2]
             return f'{day}.{month}.{current_century}{year_short} {time}'
 
-    @staticmethod
-    def _parse_receipt_date(date_str: str) -> datetime:
-        normalized_date = ReceiptImportService._normalize_date(date_str)
+    def _parse_receipt_date(self, date_str: str) -> datetime:
+        normalized_date = self._normalize_date(date_str)
         day, month, year = normalized_date.split(' ')[0].split('.')
         hour, minute = normalized_date.split(' ')[1].split(':')
         return datetime(
@@ -68,15 +64,15 @@ class ReceiptImportService:
             tzinfo=timezone.get_current_timezone(),
         )
 
-    @staticmethod
     def _check_exist_receipt(
+        self,
         user: User,
         number_receipt: int | None,
     ) -> QuerySet[Receipt]:
         return Receipt.objects.filter(user=user, number_receipt=number_receipt)
 
-    @staticmethod
     def _create_or_update_seller(
+        self,
         data: dict[str, Any],
         user: User,
     ) -> Seller:
@@ -92,8 +88,8 @@ class ReceiptImportService:
             },
         )[0]
 
-    @staticmethod
     def _create_products(
+        self,
         data: dict[str, Any],
         user: User,
     ) -> list[Product]:
@@ -110,8 +106,8 @@ class ReceiptImportService:
         ]
         return Product.objects.bulk_create(products_data)
 
-    @staticmethod
     def _create_receipt(
+        self,
         data: dict[str, Any],
         user: User,
         account: Account,
@@ -121,7 +117,7 @@ class ReceiptImportService:
             user=user,
             account=account,
             number_receipt=data['number_receipt'],
-            receipt_date=ReceiptImportService._parse_receipt_date(
+            receipt_date=self._parse_receipt_date(
                 data['receipt_date'],
             ),
             nds10=data.get('nds10', 0),
@@ -131,23 +127,26 @@ class ReceiptImportService:
             seller=seller,
         )
 
-    @staticmethod
+    def __init__(
+        self,
+        account_service: AccountServiceProtocol,
+    ) -> None:
+        self.account_service = account_service
+
     def _update_account_balance(
+        self,
         account: Account,
         total_sum: decimal.Decimal | str | float,
-        account_service: AccountServiceProtocol | None = None,
     ) -> None:
-        if account_service is None:
-            account_service = AccountService()
         account_balance = get_object_or_404(Account, pk=account.pk)
-        account_service.apply_receipt_spend(
+        self.account_service.apply_receipt_spend(
             account_balance,
             decimal.Decimal(total_sum),
         )
 
-    @staticmethod
     @transaction.atomic
     def process_uploaded_image(
+        self,
         *,
         user: User,
         account: Account,
@@ -160,21 +159,21 @@ class ReceiptImportService:
                 func = receipts_services.analyze_image_with_ai
             raw = func(uploaded_file)
             if raw and 'json' in raw:
-                raw = ReceiptImportService._clean_json_response(raw)
+                raw = self._clean_json_response(raw)
             data = json.loads(raw)
         except (json.JSONDecodeError, ValueError, TypeError):
             return ReceiptImportResult(success=False, error='invalid_file')
 
         number_receipt = data.get('number_receipt')
-        if ReceiptImportService._check_exist_receipt(
+        if self._check_exist_receipt(
             user,
             number_receipt,
         ).exists():
             return ReceiptImportResult(success=False, error='exists')
 
-        seller = ReceiptImportService._create_or_update_seller(data, user)
-        products = ReceiptImportService._create_products(data, user)
-        receipt = ReceiptImportService._create_receipt(
+        seller = self._create_or_update_seller(data, user)
+        products = self._create_products(data, user)
+        receipt = self._create_receipt(
             data,
             user,
             account,
@@ -184,6 +183,9 @@ class ReceiptImportService:
         if products:
             receipt.product.set(products)
 
-        ReceiptImportService._update_account_balance(account, data['total_sum'])
+        self._update_account_balance(
+            account,
+            decimal.Decimal(data['total_sum']),
+        )
 
         return ReceiptImportResult(success=True, error=None, receipt=receipt)

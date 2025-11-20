@@ -18,7 +18,10 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         ReceiptCreatorService,
         account_service=core.account_service,
     )
-    receipt_import_service = providers.Factory(ReceiptImportService)
+    receipt_import_service = providers.Factory(
+        ReceiptImportService,
+        account_service=core.account_service,
+    )
     receipt_updater_service = providers.Factory(
         ReceiptUpdaterService,
         account_service=core.account_service,

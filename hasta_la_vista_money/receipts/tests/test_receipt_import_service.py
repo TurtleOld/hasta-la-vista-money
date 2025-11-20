@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.receipts import services as receipts_services
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.services.receipt_import import (
@@ -40,6 +41,10 @@ class ReceiptImportServiceTests(TestCase):
             name_account='Wallet',
             balance=1000,
             currency='RU',
+        )
+        self.account_service = AccountService()
+        self.receipt_import_service = ReceiptImportService(
+            account_service=self.account_service,
         )
 
     def test_process_uploaded_image_success(self) -> None:
@@ -85,7 +90,7 @@ class ReceiptImportServiceTests(TestCase):
         old_fn = receipts_services.analyze_image_with_ai
         receipts_services.analyze_image_with_ai = fake_analyze
         try:
-            result = ReceiptImportService.process_uploaded_image(
+            result = self.receipt_import_service.process_uploaded_image(
                 user=self.user,
                 account=self.account,
                 uploaded_file=uploaded_file,
