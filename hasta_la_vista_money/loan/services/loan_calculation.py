@@ -204,8 +204,8 @@ def calculate_differentiated_loan_db(
 
 
 class LoanCalculationService:
-    @staticmethod
     def run(
+        self,
         *,
         type_loan: str,
         user_id: int,

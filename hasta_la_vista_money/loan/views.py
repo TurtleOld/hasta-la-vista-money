@@ -18,9 +18,7 @@ from hasta_la_vista_money.loan.models import (
     PaymentMakeLoan,
     PaymentSchedule,
 )
-from hasta_la_vista_money.loan.services.loan_calculation import (
-    LoanCalculationService,
-)
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
@@ -138,7 +136,11 @@ class LoanCreateView(
             form.add_error(None, 'Не удалось найти созданный кредит')
             return self.form_invalid(form)
 
-        LoanCalculationService.run(
+        container = getattr(self.request, 'container', None)
+        if container is None:
+            container = ApplicationContainer()
+        loan_calculation_service = container.loan.loan_calculation_service()
+        loan_calculation_service.run(
             type_loan=str(type_loan),
             user_id=self.request.user.pk,
             loan=loan,
