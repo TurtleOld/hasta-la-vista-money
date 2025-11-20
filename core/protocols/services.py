@@ -69,6 +69,9 @@ class AccountServiceProtocol(Protocol):
     ) -> 'Account': ...
 
     @staticmethod
+    def refund_to_account(account: 'Account', amount: Decimal) -> 'Account': ...
+
+    @staticmethod
     def reconcile_account_balances(
         old_account: 'Account',
         new_account: 'Account',

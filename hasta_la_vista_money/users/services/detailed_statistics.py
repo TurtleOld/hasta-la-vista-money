@@ -602,8 +602,12 @@ def _build_payment_schedule(
     return schedule
 
 
+@inject
 def _credit_cards_block(
     accounts: QuerySet[Account],
+    account_service: AccountServiceProtocol = Provide[
+        CoreContainer.account_service
+    ],
 ) -> list[CreditCardDataDict]:
     out: list[CreditCardDataDict] = []
     today_month = timezone.now().date().replace(day=1)
@@ -613,7 +617,7 @@ def _credit_cards_block(
     )
 
     for card in credit_cards:
-        debt_now = card.get_credit_card_debt()
+        debt_now = account_service.get_credit_card_debt(card)
         months, history = _card_months_block(card, today_month)
 
         payments_raw = list(
@@ -628,7 +632,10 @@ def _credit_cards_block(
         _apply_payments_to_months(months, payments)
         schedule = _build_payment_schedule(months, history, card)
 
-        current_info = card.calculate_grace_period_info(today_month)
+        current_info = account_service.calculate_grace_period_info(
+            card,
+            today_month,
+        )
         current_info['debt_for_month'] = Decimal(
             str(
                 max(

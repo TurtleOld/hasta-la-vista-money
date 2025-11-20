@@ -14,7 +14,6 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
 )
 from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -29,6 +28,7 @@ from hasta_la_vista_money.finance_account.prepare import (
     sort_expense_income,
 )
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
+from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
     validate_credit_fields_required,
@@ -61,6 +61,7 @@ class TestAccount(TestCase):
 
     def setUp(self) -> None:
         self.user = User.objects.get(id=1)
+        self.account_service = AccountService()
 
         self.account1 = Account.objects.get(name_account='Банковская карта')
         self.account1.user = self.user
@@ -619,6 +620,7 @@ class TestAccountServices(TestCase):
 
     def setUp(self) -> None:
         self.user = User.objects.get(id=1)
+        self.account_service = AccountService()
         self.account1 = Account.objects.filter(user=self.user).first()
         self.group = self.user.groups.first()
         self.group_id: str | None
@@ -630,12 +632,12 @@ class TestAccountServices(TestCase):
     def test_get_accounts_for_user(self) -> None:
         """Test that get_accounts_for_user_or_group returns only user's
         accounts when group_id is None or 'my'."""
-        accounts = account_services.get_accounts_for_user_or_group(
+        accounts = self.account_service.get_accounts_for_user_or_group(
             self.user,
             None,
         )
         self.assertTrue(all(acc.user == self.user for acc in accounts))
-        accounts_my = account_services.get_accounts_for_user_or_group(
+        accounts_my = self.account_service.get_accounts_for_user_or_group(
             self.user,
             'my',
         )
@@ -646,7 +648,7 @@ class TestAccountServices(TestCase):
         for users in the group."""
         if not self.group_id:
             self.skipTest('User has no group for group test')
-        accounts = account_services.get_accounts_for_user_or_group(
+        accounts = self.account_service.get_accounts_for_user_or_group(
             self.user,
             self.group_id,
         )
@@ -658,12 +660,12 @@ class TestAccountServices(TestCase):
         """Test that get_sum_all_accounts returns correct sum for queryset."""
         accounts = Account.objects.filter(user=self.user)
         expected_sum = sum(acc.balance for acc in accounts)
-        result = account_services.get_sum_all_accounts(accounts)
+        result = self.account_service.get_sum_all_accounts(accounts)
         self.assertEqual(result, expected_sum)
 
     def test_get_transfer_money_log(self) -> None:
         """Test that get_transfer_money_log returns recent logs for user."""
-        logs = account_services.get_transfer_money_log(self.user)
+        logs = self.account_service.get_transfer_money_log(self.user)
         self.assertTrue(all(log.user == self.user for log in logs))
         self.assertLessEqual(len(logs), 10)
 
@@ -691,6 +693,7 @@ class TestAccountBusinessLogic(TestCase):
         self.account2.user = self.user
         self.account1.save()
         self.account2.save()
+        self.account_service = AccountService()
 
     def test_transfer_money_success(self) -> None:
         amount = Decimal(100)
@@ -711,14 +714,19 @@ class TestAccountBusinessLogic(TestCase):
     def test_get_credit_card_debt(self) -> None:
         self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
-        debt = self.account1.get_credit_card_debt()
+        debt = self.account_service.get_credit_card_debt(
+            self.account1,
+        )
         self.assertIsInstance(debt, Decimal)
 
     def test_calculate_grace_period_info(self) -> None:
         self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
 
-        info = self.account1.calculate_grace_period_info(timezone.now().date())
+        info = self.account_service.calculate_grace_period_info(
+            self.account1,
+            timezone.now().date(),
+        )
         self.assertIn('final_debt', info)
 
 

@@ -12,6 +12,9 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
 from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.tests.helpers import (
+    setup_container_for_request,
+)
 from hasta_la_vista_money.finance_account.views import (
     AccountCreateView,
     AccountView,
@@ -81,6 +84,7 @@ class TestAccountView(TestCase):
         view = AccountView()
         view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
+        setup_container_for_request(view.request)
 
         accounts_context = view._get_accounts_context()
         self.assertIn('accounts', accounts_context)
@@ -157,6 +161,7 @@ class TestAccountCreateView(TestCase):
         view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
         view.object = None
+        setup_container_for_request(view.request)
 
         context = view.get_context_data()
         self.assertIn('add_account_form', context)
@@ -295,6 +300,7 @@ class TestTransferMoneyAccountView(TestCase):
         view = TransferMoneyAccountView()
         view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
+        setup_container_for_request(view.request)
 
         kwargs = view.get_form_kwargs()
         self.assertIn('user', kwargs)
@@ -337,6 +343,7 @@ class TestAjaxAccountsByGroupView(TestCase):
         view = AjaxAccountsByGroupView()
         request = self.factory.get('/?group_id=my')
         request.user = self.user
+        setup_container_for_request(request)
 
         response = await view.get(request)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
@@ -346,6 +353,7 @@ class TestAjaxAccountsByGroupView(TestCase):
         view = AjaxAccountsByGroupView()
         request = self.factory.get('/?group_id=1')
         request.user = self.user
+        setup_container_for_request(request)
 
         response = await view.get(request)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
@@ -355,6 +363,7 @@ class TestAjaxAccountsByGroupView(TestCase):
         view = AjaxAccountsByGroupView()
         request = self.factory.get('/?group_id=invalid')
         request.user = self.user
+        setup_container_for_request(request)
 
         response = await view.get(request)
         self.assertEqual(response.status_code, 500)

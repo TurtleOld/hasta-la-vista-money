@@ -28,6 +28,7 @@ from hasta_la_vista_money.finance_account.base_forms import (
     DateFieldMixin,
     FormValidationMixin,
 )
+from hasta_la_vista_money.finance_account.services import TransferService
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -285,7 +286,8 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
 
         cleaned_data = self.cleaned_data
 
-        return TransferService.transfer_money(
+        transfer_service = TransferService()
+        return transfer_service.transfer_money(
             from_account=cleaned_data['from_account'],
             to_account=cleaned_data['to_account'],
             amount=cleaned_data['amount'],

@@ -30,9 +30,9 @@ from django.views.generic import (
 )
 from django_stubs_ext import StrOrPromise
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
-from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -203,18 +203,22 @@ class AccountView(
         accounts = (
             Account.objects.filter(user=user).select_related('user').all()
         )
-        sum_all_accounts = account_services.get_sum_all_accounts(accounts)
+        container = getattr(self.request, 'container', None)
+        if container is None:
+            container = ApplicationContainer()
+        account_service = container.core.account_service()
+        sum_all_accounts = account_service.get_sum_all_accounts(accounts)
         if user.groups.exists():
             users_in_groups = User.objects.filter(
                 groups__in=user.groups.values_list('id', flat=True),
             ).distinct()
-            sum_all_accounts_in_group = account_services.get_sum_all_accounts(
+            sum_all_accounts_in_group = account_service.get_sum_all_accounts(
                 Account.objects.filter(user__in=users_in_groups).select_related(
                     'user',
                 ),
             )
         else:
-            sum_all_accounts_in_group = account_services.get_sum_all_accounts(
+            sum_all_accounts_in_group = account_service.get_sum_all_accounts(
                 Account.objects.filter(user=user).select_related('user').all(),
             )
         return {
@@ -466,8 +470,12 @@ class AjaxAccountsByGroupView(View):
         group_id = request.GET.get('group_id')
         user = request.user
         try:
+            container = getattr(request, 'container', None)
+            if container is None:
+                container = ApplicationContainer()
+            account_service = container.core.account_service()
             accounts = await sync_to_async(
-                account_services.get_accounts_for_user_or_group,
+                account_service.get_accounts_for_user_or_group,
             )(user, group_id)  # type: ignore[arg-type]
             html = await sync_to_async(render_to_string)(
                 'finance_account/_account_cards_block.html',

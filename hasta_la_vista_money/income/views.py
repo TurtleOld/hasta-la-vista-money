@@ -32,7 +32,7 @@ from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.mixins import IncomeFormQuerysetMixin
 from hasta_la_vista_money.income.models import Income, IncomeCategory
-from hasta_la_vista_money.income.services.income_ops import IncomeOps
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.views import AuthRequest
@@ -230,7 +230,11 @@ class IncomeCreateView(
         try:
             if not isinstance(self.request.user, User):
                 raise TypeError('User must be authenticated')
-            IncomeOps.add_income(
+            container = getattr(self.request, 'container', None)
+            if container is None:
+                container = ApplicationContainer()
+            income_ops = container.income.income_ops()
+            income_ops.add_income(
                 user=self.request.user,
                 account=account,
                 category=category,
@@ -279,7 +283,11 @@ class IncomeCopyView(
                 {'success': False, 'error': 'Income ID is required'},
             )
         try:
-            IncomeOps.copy_income(user=request.user, income_id=int(income_id))
+            container = getattr(request, 'container', None)
+            if container is None:
+                container = ApplicationContainer()
+            income_ops = container.income.income_ops()
+            income_ops.copy_income(user=request.user, income_id=int(income_id))
             return JsonResponse({'success': True})
         except (ValueError, TypeError) as e:
             return JsonResponse({'success': False, 'error': str(e)})
@@ -364,7 +372,11 @@ class IncomeUpdateView(
         try:
             if not isinstance(self.request.user, User):
                 raise TypeError('User must be authenticated')
-            IncomeOps.update_income(
+            container = getattr(self.request, 'container', None)
+            if container is None:
+                container = ApplicationContainer()
+            income_ops = container.income.income_ops()
+            income_ops.update_income(
                 user=self.request.user,
                 income=income,
                 account=account,
@@ -408,7 +420,11 @@ class IncomeDeleteView(
                 {'success': False, 'error': 'User must be authenticated'},
             )
         try:
-            IncomeOps.delete_income(user=request.user, income=income)
+            container = getattr(request, 'container', None)
+            if container is None:
+                container = ApplicationContainer()
+            income_ops = container.income.income_ops()
+            income_ops.delete_income(user=request.user, income=income)
             return JsonResponse({'success': True})
         except (ValueError, TypeError) as e:
             return JsonResponse({'success': False, 'error': str(e)})

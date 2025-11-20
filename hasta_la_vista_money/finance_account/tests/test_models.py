@@ -14,6 +14,7 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.users.models import User
 
 
@@ -162,7 +163,8 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        debt = account.get_credit_card_debt()
+        account_service = AccountService()
+        debt = account_service.get_credit_card_debt(account)
         # Since there are no expenses/income records, debt should be 0
         self.assertEqual(debt, Decimal('0.00'))
 
@@ -176,7 +178,8 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        debt = account.get_credit_card_debt()
+        account_service = AccountService()
+        debt = account_service.get_credit_card_debt(account)
         self.assertEqual(debt, Decimal('0.00'))
 
     def test_account_calculate_grace_period_info(self) -> None:
@@ -192,7 +195,11 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        info = account.calculate_grace_period_info(timezone.now().date())
+        account_service = AccountService()
+        info = account_service.calculate_grace_period_info(
+            account,
+            timezone.now().date(),
+        )
 
         self.assertIn('final_debt', info)
         self.assertIn('days_until_due', info)
