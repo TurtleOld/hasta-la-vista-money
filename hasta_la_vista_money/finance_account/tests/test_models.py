@@ -10,11 +10,11 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.users.models import User
 
 
@@ -163,7 +163,8 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        account_service = AccountService()
+        container = ApplicationContainer()
+        account_service = container.finance_account.account_service()
         debt = account_service.get_credit_card_debt(account)
         # Since there are no expenses/income records, debt should be 0
         self.assertEqual(debt, Decimal('0.00'))
@@ -178,7 +179,8 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        account_service = AccountService()
+        container = ApplicationContainer()
+        account_service = container.finance_account.account_service()
         debt = account_service.get_credit_card_debt(account)
         self.assertEqual(debt, Decimal('0.00'))
 
@@ -195,7 +197,8 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        account_service = AccountService()
+        container = ApplicationContainer()
+        account_service = container.finance_account.account_service()
         info = account_service.calculate_grace_period_info(
             account,
             timezone.now().date(),

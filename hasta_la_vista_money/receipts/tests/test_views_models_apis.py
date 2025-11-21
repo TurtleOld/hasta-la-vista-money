@@ -12,7 +12,9 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from config.containers import CoreContainer
+from dependency_injector import providers
+
+from config.containers import ApplicationContainer
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -652,12 +654,13 @@ class TestUploadImageView(TestCase):
         self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.mock_account_service = MagicMock(spec=AccountServiceProtocol)
-        CoreContainer.account_service.override(
-            lambda: self.mock_account_service,
+        self.container = ApplicationContainer()
+        self.container.core.account_service.override(
+            providers.Object(self.mock_account_service),
         )
 
     def tearDown(self) -> None:
-        CoreContainer.account_service.reset_override()
+        self.container.core.account_service.reset_override()
 
     def test_upload_image_view_get(self) -> None:
         self.client.force_login(self.user)

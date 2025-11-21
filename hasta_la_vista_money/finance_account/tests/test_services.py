@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.factories import (
     AccountFactory,
     TransferMoneyLogFactory,
@@ -17,10 +18,6 @@ from hasta_la_vista_money.finance_account.factories import (
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
-)
-from hasta_la_vista_money.finance_account.services import (
-    AccountService,
-    TransferService,
 )
 from hasta_la_vista_money.users.factories import UserFactory
 
@@ -38,7 +35,8 @@ class TestAccountServices(TestCase):
     def setUp(self) -> None:
         self.user1: UserType = cast('UserType', UserFactory())
         self.user2: UserType = cast('UserType', UserFactory())
-        self.account_service = AccountService()
+        self.container = ApplicationContainer()
+        self.account_service = self.container.finance_account.account_service()
 
         self.account1: Account = cast(
             'Account',
@@ -239,7 +237,8 @@ class TestTransferService(TestCase):
 
     def setUp(self) -> None:
         self.user: UserType = cast('UserType', UserFactory())
-        self.transfer_service = TransferService()
+        self.container = ApplicationContainer()
+        self.transfer_service = self.container.finance_account.transfer_service()
         self.from_account: Account = cast(
             'Account',
             AccountFactory(
@@ -372,7 +371,7 @@ class TestTransferService(TestCase):
 
         with (
             mock.patch(
-                'hasta_la_vista_money.finance_account.services.TransferMoneyLog.objects.create',
+                'hasta_la_vista_money.finance_account.repositories.transfer_money_log_repository.TransferMoneyLogRepository.create_log',
                 side_effect=RuntimeError('fail on create'),
             ),
             self.assertRaises(RuntimeError),

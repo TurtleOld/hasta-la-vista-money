@@ -1,18 +1,15 @@
 from typing import Any
 from unittest.mock import MagicMock
 
+from dependency_injector import providers
 from django.db.models.query import QuerySet
 from django.test import RequestFactory, TestCase
 
+from config.containers import ApplicationContainer
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.constants import RECEIPT_CATEGORY_NAME
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-from hasta_la_vista_money.expense.services import (
-    ExpenseCategoryService,
-    ExpenseService,
-    ReceiptExpenseService,
-)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
@@ -36,15 +33,18 @@ class TestExpenseService(TestCase):
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
         self.mock_account_service = MagicMock(spec=AccountServiceProtocol)
-        self.service = ExpenseService(
-            self.user,
-            self.request,
-            self.mock_account_service,
-            ReceiptExpenseService,
+
+        self.container = ApplicationContainer()
+        self.container.core.account_service.override(
+            providers.Object(self.mock_account_service),
+        )
+        self.service = self.container.expense.expense_service(
+            user=self.user,
+            request=self.request,
         )
 
     def tearDown(self) -> None:
-        pass
+        self.container.core.account_service.reset_override()
 
     def test_get_categories(self) -> None:
         """Test getting expense categories."""
@@ -170,7 +170,12 @@ class TestExpenseCategoryService(TestCase):
         self.parent_category = ExpenseCategory.objects.get(name='ЖКХ')
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
-        self.service = ExpenseCategoryService(self.user, self.request)
+
+        self.container = ApplicationContainer()
+        self.service = self.container.expense.expense_category_service(
+            user=self.user,
+            request=self.request,
+        )
 
     def test_get_categories(self) -> None:
         """Test getting expense categories."""
@@ -215,7 +220,12 @@ class TestReceiptExpenseService(TestCase):
         self.user = User.objects.get(pk=1)
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
-        self.service = ReceiptExpenseService(self.user, self.request)
+
+        self.container = ApplicationContainer()
+        self.service = self.container.expense.receipt_expense_service(
+            user=self.user,
+            request=self.request,
+        )
 
     def test_get_receipt_expenses_no_category(self) -> None:
         """Test getting receipt expenses when category doesn't exist."""

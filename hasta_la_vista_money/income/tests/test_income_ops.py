@@ -1,15 +1,19 @@
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 from dependency_injector import providers
+from django.core.exceptions import PermissionDenied
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
-from hasta_la_vista_money.income.services.income_ops import IncomeOps
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.income.services.income_ops import IncomeOps
 
 
 class IncomeOpsTest(TestCase):
@@ -163,4 +167,3 @@ class IncomeOpsTest(TestCase):
         )
         self.assertNotEqual(copied_income.pk, self.income.pk)
         self.assertEqual(copied_income.user, self.user)
-from django.core.exceptions import PermissionDenied

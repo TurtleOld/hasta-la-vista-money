@@ -27,8 +27,8 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
     validate_credit_fields_required,
@@ -61,7 +61,8 @@ class TestAccount(TestCase):
 
     def setUp(self) -> None:
         self.user = User.objects.get(id=1)
-        self.account_service = AccountService()
+        self.container = ApplicationContainer()
+        self.account_service = self.container.finance_account.account_service()
 
         self.account1 = Account.objects.get(name_account='Банковская карта')
         self.account1.user = self.user
@@ -620,7 +621,8 @@ class TestAccountServices(TestCase):
 
     def setUp(self) -> None:
         self.user = User.objects.get(id=1)
-        self.account_service = AccountService()
+        self.container = ApplicationContainer()
+        self.account_service = self.container.finance_account.account_service()
         self.account1 = Account.objects.filter(user=self.user).first()
         self.group = self.user.groups.first()
         self.group_id: str | None
@@ -693,7 +695,8 @@ class TestAccountBusinessLogic(TestCase):
         self.account2.user = self.user
         self.account1.save()
         self.account2.save()
-        self.account_service = AccountService()
+        self.container = ApplicationContainer()
+        self.account_service = self.container.finance_account.account_service()
 
     def test_transfer_money_success(self) -> None:
         amount = Decimal(100)
