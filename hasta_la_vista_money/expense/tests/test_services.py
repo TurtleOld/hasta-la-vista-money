@@ -40,6 +40,7 @@ class TestExpenseService(TestCase):
             self.user,
             self.request,
             self.mock_account_service,
+            ReceiptExpenseService,
         )
 
     def tearDown(self) -> None:

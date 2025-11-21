@@ -27,6 +27,8 @@ container.wire(
         'hasta_la_vista_money.expense.views',
         'hasta_la_vista_money.loan.services.loan_calculation',
         'hasta_la_vista_money.loan.views',
+        'hasta_la_vista_money.income.services.income_ops',
+        'hasta_la_vista_money.income.views',
         'hasta_la_vista_money.receipts.services.receipt_creator',
         'hasta_la_vista_money.receipts.services.receipt_import',
         'hasta_la_vista_money.receipts.services.receipt_updater',
