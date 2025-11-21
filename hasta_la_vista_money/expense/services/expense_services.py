@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import Any, NamedTuple, cast
+from typing import Any, Callable, NamedTuple, cast
 
 from django.contrib.auth.models import Group
 from django.db.models import Sum
@@ -33,10 +33,17 @@ class ExpenseService:
         user: User,
         request: HttpRequest,
         account_service: AccountServiceProtocol,
+        receipt_expense_service_factory: Callable[
+            [User, HttpRequest], 'ReceiptExpenseService'
+        ],
     ):
         self.user = user
         self.request = request
         self.account_service = account_service
+        self.receipt_expense_service = receipt_expense_service_factory(
+            user=user,
+            request=request,
+        )
 
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
@@ -182,9 +189,8 @@ class ExpenseService:
         expenses = expenses.order_by('-date')
 
         if group_users:
-            receipt_service = ReceiptExpenseService(self.user, self.request)
             receipt_expense_list = (
-                receipt_service.get_receipt_expenses_by_users(
+                self.receipt_expense_service.get_receipt_expenses_by_users(
                     group_users,
                 )
             )
@@ -214,8 +220,7 @@ class ExpenseService:
                 expenses = Expense.objects.none()
 
         if group_users:
-            receipt_service = ReceiptExpenseService(self.user, self.request)
-            receipt_expense_list = receipt_service.get_receipt_data_by_users(
+            receipt_expense_list = self.receipt_expense_service.get_receipt_data_by_users(
                 group_users,
             )
 
