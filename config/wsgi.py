@@ -25,6 +25,8 @@ container.wire(
     modules=[
         'hasta_la_vista_money.expense.services.expense_services',
         'hasta_la_vista_money.expense.views',
+        'hasta_la_vista_money.income.services.income_ops',
+        'hasta_la_vista_money.income.views',
         'hasta_la_vista_money.receipts.services.receipt_creator',
         'hasta_la_vista_money.receipts.services.receipt_import',
         'hasta_la_vista_money.receipts.services.receipt_updater',
