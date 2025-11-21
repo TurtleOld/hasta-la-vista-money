@@ -33,8 +33,8 @@
                         {% for product in receipt.product.all|slice:":3" %}
                         <span class="badge bg-light text-dark me-1 mb-1">{{ product.product_name|truncatechars:20 }}</span>
                         {% endfor %}
-                        {% if receipt.product.count > 3 %}
-                        <span class="badge bg-secondary">+{{ receipt.product.count|add:"-3" }}</span>
+                        {% if receipt.product.all|length > 3 %}
+                        <span class="badge bg-secondary">+{{ receipt.product.all|length|add:"-3" }}</span>
                         {% endif %}
                     </div>
                 </div>

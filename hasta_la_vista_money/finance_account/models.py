@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import ClassVar
 
 from django.db import models
 from django.urls import reverse
@@ -13,11 +13,6 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
 )
 from hasta_la_vista_money.users.models import User
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.finance_account.services import (
-        GracePeriodInfoDict,
-    )
 
 
 class AccountQuerySet(models.QuerySet['Account']):
@@ -243,60 +238,6 @@ class Account(TimeStampedModel):
             to_account.save()
             return True
         return False
-
-    def get_credit_card_debt(
-        self,
-        start_date: Any | None = None,
-        end_date: Any | None = None,
-    ) -> Decimal | None:
-        """
-        Calculates the credit card (or credit account) debt for a given period.
-        If no period is specified, calculates the current debt.
-        Considers expenses, incomes, and receipts (purchases and returns).
-
-        Args:
-            start_date (date|datetime|None): Start of the period (inclusive).
-            end_date (date|datetime|None): End of the period (inclusive).
-
-        Returns:
-            Optional[Decimal]: The calculated debt, or None if not a credit
-            account.
-        """
-        from hasta_la_vista_money.finance_account.services import (
-            AccountService,
-        )
-
-        return AccountService.get_credit_card_debt(
-            account=self,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-    def calculate_grace_period_info(
-        self,
-        purchase_month: Any,
-    ) -> 'GracePeriodInfoDict':
-        """
-        Calculates grace period information for a credit card.
-        Logic: 1 month for purchases + 3 months for repayment.
-        Example: purchases in May -> repayment due by end of August.
-
-        Args:
-            purchase_month (date|datetime): The month of purchases
-            (first day of month).
-
-        Returns:
-            dict: Information about the grace period, including dates,
-            debts, and overdue status.
-        """
-        from hasta_la_vista_money.finance_account.services import (
-            AccountService,
-        )
-
-        return AccountService.calculate_grace_period_info(
-            account=self,
-            purchase_month=purchase_month,
-        )
 
 
 class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):

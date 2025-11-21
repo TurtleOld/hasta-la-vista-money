@@ -14,7 +14,9 @@ class EnvironmentValidatorTest(SimpleTestCase):
             self.assertTrue(validator.validate())
 
     def test_validate_returns_false_when_variables_missing(self) -> None:
-        def fake_config(key: str, cast=str, default=''):
+        def fake_config(
+            key: str, cast: type[str] | type[bool] = str, default: str = ''
+        ) -> str | bool:
             values: dict[str, object] = {
                 'SECRET_KEY': '',
                 'ALLOWED_HOSTS': '',
@@ -23,7 +25,8 @@ class EnvironmentValidatorTest(SimpleTestCase):
                 'REDIS_LOCATION': '',
             }
             _ = cast
-            return values.get(key, default)
+            result = values.get(key, default)
+            return cast(result) if result is not None else default
 
         with (
             patch.dict('config.django.validator_env.environ', {}, clear=True),
@@ -37,7 +40,9 @@ class EnvironmentValidatorTest(SimpleTestCase):
             self.assertGreaterEqual(mock_ic.call_count, 4)
 
     def test_validate_returns_true_with_complete_configuration(self) -> None:
-        def fake_config(key: str, cast=str, default=''):
+        def fake_config(
+            key: str, cast: type[str] | type[bool] = str, default: str = ''
+        ) -> str | bool:
             values: dict[str, object] = {
                 'SECRET_KEY': 'secret',
                 'ALLOWED_HOSTS': 'localhost',
@@ -46,7 +51,8 @@ class EnvironmentValidatorTest(SimpleTestCase):
                 'REDIS_LOCATION': 'redis://localhost:6379/0',
             }
             _ = cast
-            return values.get(key, default)
+            result = values.get(key, default)
+            return cast(result) if result is not None else default
 
         with (
             patch.dict('config.django.validator_env.environ', {}, clear=True),

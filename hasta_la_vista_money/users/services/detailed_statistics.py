@@ -6,12 +6,15 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from dateutil.relativedelta import relativedelta
+from dependency_injector.wiring import Provide, inject
 from django.core.cache import cache
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
+from config.containers import ApplicationContainer
+from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
@@ -29,7 +32,6 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import collect_info_receipt
@@ -380,10 +382,15 @@ def _six_months_data(
     return out  # type: ignore[return-value]
 
 
+@inject
 def _card_months_block(
     card: Account,
     today_month: date,
+    account_service: AccountServiceProtocol | None = None,
 ) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
+    if account_service is None:
+        container = ApplicationContainer()
+        account_service = container.core.account_service()
     months: list[CardMonthDict] = []
     history: list[CardHistoryDict] = []
     now = timezone.now()
@@ -488,9 +495,11 @@ def _card_months_block(
                 ),
             )
         elif getattr(card, 'bank', None) == 'RAIFFAISENBANK':
-            schedule = AccountService.calculate_raiffeisenbank_payment_schedule(
-                card,
-                purchase_start_date,
+            schedule = (
+                account_service.calculate_raiffeisenbank_payment_schedule(
+                    card,
+                    purchase_start_date,
+                )
             )
             grace_end = schedule['grace_end_date'] if schedule else purchase_end
         else:
@@ -522,9 +531,11 @@ def _card_months_block(
             getattr(card, 'bank', None) == 'RAIFFAISENBANK'
             and debt > constants.ZERO
         ):
-            schedule = AccountService.calculate_raiffeisenbank_payment_schedule(
-                card,
-                purchase_start,
+            schedule = (
+                account_service.calculate_raiffeisenbank_payment_schedule(
+                    card,
+                    purchase_start,
+                )
             )
             if schedule:
                 final_debt = float(schedule['final_debt'])
@@ -592,9 +603,14 @@ def _build_payment_schedule(
     return schedule
 
 
+@inject
 def _credit_cards_block(
     accounts: QuerySet[Account],
+    account_service: AccountServiceProtocol | None = None,
 ) -> list[CreditCardDataDict]:
+    if account_service is None:
+        container = ApplicationContainer()
+        account_service = container.core.account_service()
     out: list[CreditCardDataDict] = []
     today_month = timezone.now().date().replace(day=1)
 
@@ -603,7 +619,7 @@ def _credit_cards_block(
     )
 
     for card in credit_cards:
-        debt_now = card.get_credit_card_debt()
+        debt_now = account_service.get_credit_card_debt(card)
         months, history = _card_months_block(card, today_month)
 
         payments_raw = list(
@@ -618,7 +634,10 @@ def _credit_cards_block(
         _apply_payments_to_months(months, payments)
         schedule = _build_payment_schedule(months, history, card)
 
-        current_info = card.calculate_grace_period_info(today_month)
+        current_info = account_service.calculate_grace_period_info(
+            card,
+            today_month,
+        )
         current_info['debt_for_month'] = Decimal(
             str(
                 max(

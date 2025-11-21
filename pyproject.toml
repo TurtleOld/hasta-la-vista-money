@@ -42,6 +42,7 @@ dependencies = [
     "django-compressor>=4.5.1",
     "pyright>=1.1.407",
     "types-django-filter>=25.2.0.20251010",
+    "dependency-injector>=4.48.2",
 ]
 
 [project.optional-dependencies]

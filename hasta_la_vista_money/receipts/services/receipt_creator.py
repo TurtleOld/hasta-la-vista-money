@@ -1,20 +1,42 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 from django.forms.formsets import BaseFormSet
-from django.shortcuts import get_object_or_404
 
-from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services import AccountService
+from core.protocols.services import AccountServiceProtocol
+from core.repositories.protocols import (
+    ProductRepositoryProtocol,
+    ReceiptRepositoryProtocol,
+    SellerRepositoryProtocol,
+)
 from hasta_la_vista_money.receipts.forms import ReceiptForm
-from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
+        AccountRepository,
+    )
 
 
 class ReceiptCreatorService:
-    @staticmethod
+    def __init__(
+        self,
+        account_service: AccountServiceProtocol,
+        account_repository: 'AccountRepository',
+        product_repository: ProductRepositoryProtocol,
+        receipt_repository: ReceiptRepositoryProtocol,
+        seller_repository: SellerRepositoryProtocol,
+    ) -> None:
+        self.account_service = account_service
+        self.account_repository = account_repository
+        self.product_repository = product_repository
+        self.receipt_repository = receipt_repository
+        self.seller_repository = seller_repository
+
     @transaction.atomic
     def create_manual_receipt(
+        self,
         *,
         user: User,
         receipt_form: ReceiptForm,
@@ -24,12 +46,12 @@ class ReceiptCreatorService:
         receipt = receipt_form.save(commit=False)
         total_sum = receipt.total_sum
         account = receipt.account
-        account_balance = get_object_or_404(Account, pk=account.pk)
+        account_balance = self.account_repository.get_by_id(account.pk)
 
         if account_balance.user != user:
             return None
 
-        AccountService.apply_receipt_spend(account_balance, total_sum)
+        self.account_service.apply_receipt_spend(account_balance, total_sum)
 
         receipt.user = user
         receipt.seller = seller
@@ -47,13 +69,16 @@ class ReceiptCreatorService:
                     and product_data.get('price')
                     and product_data.get('quantity')
                 ):
-                    product = Product.objects.create(
+                    product = self.product_repository.create_product(
                         user=user,
                         product_name=product_data['product_name'],
                         price=product_data['price'],
                         quantity=product_data['quantity'],
                         amount=product_data['amount'],
                     )
-                    receipt.product.add(product)
+                    self.receipt_repository.add_product_to_receipt(
+                        receipt,
+                        product,
+                    )
 
         return receipt

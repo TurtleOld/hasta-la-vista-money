@@ -70,7 +70,7 @@ class BudgetServicesTestCase(TestCase):
     def test_get_categories_error(self) -> None:
         """Test get_categories raises error if user is None."""
         with self.assertRaises(BudgetDataError):
-            get_categories(None, 'expense')  # type: ignore[arg-type]
+            get_categories(None, 'expense')
 
     def test_aggregate_budget_data_success(self) -> None:
         """Test aggregate_budget_data returns correct structure."""

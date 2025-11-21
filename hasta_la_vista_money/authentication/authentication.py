@@ -29,7 +29,7 @@ class CookieJWTAuthentication(JWTAuthentication):
         else:
             header = self.get_header(request)
             if header is None:
-                return None
+                return None  # type: ignore[unreachable]
             raw_token_raw = self.get_raw_token(header)
             if raw_token_raw is None:
                 return None

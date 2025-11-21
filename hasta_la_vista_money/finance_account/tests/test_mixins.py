@@ -5,6 +5,9 @@ from django.test import RequestFactory, TestCase
 
 from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.tests.helpers import (
+    setup_container_for_request,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -53,6 +56,7 @@ class TestGroupAccountMixin(TestCase):
         mixin = GroupAccountMixin()
         mixin.request = self.factory.get('/')
         mixin.request.user = self.user3
+        setup_container_for_request(mixin.request)
 
         accounts = mixin.get_accounts(self.user3)
 
@@ -66,6 +70,7 @@ class TestGroupAccountMixin(TestCase):
         mixin = GroupAccountMixin()
         mixin.request = self.factory.get('/')
         mixin.request.user = self.user1
+        setup_container_for_request(mixin.request)
 
         accounts = mixin.get_accounts(self.user1)
 
@@ -89,6 +94,7 @@ class TestGroupAccountMixin(TestCase):
         mixin = GroupAccountMixin()
         mixin.request = self.factory.get('/')
         mixin.request.user = self.user1
+        setup_container_for_request(mixin.request)
 
         accounts = mixin.get_accounts(self.user1)
 
@@ -106,6 +112,7 @@ class TestGroupAccountMixin(TestCase):
         mixin = GroupAccountMixin()
         mixin.request = self.factory.get('/')
         mixin.request.user = self.user1
+        setup_container_for_request(mixin.request)
 
         accounts = mixin.get_accounts(self.user1)
 
@@ -139,6 +146,7 @@ class TestGroupAccountMixin(TestCase):
         mixin = GroupAccountMixin()
         mixin.request = self.factory.get('/')
         mixin.request.user = self.user1
+        setup_container_for_request(mixin.request)
 
         accounts = mixin.get_accounts(self.user1)
 
@@ -159,6 +167,7 @@ class TestGroupAccountMixin(TestCase):
         mixin = GroupAccountMixin()
         mixin.request = self.factory.get('/')
         mixin.request.user = self.user1
+        setup_container_for_request(mixin.request)
 
         accounts = mixin.get_accounts(self.user1)
 

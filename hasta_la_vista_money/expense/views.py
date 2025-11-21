@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Protocol
 
+from dependency_injector.wiring import Provide, inject
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
@@ -19,18 +20,21 @@ from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.expense.filters import ExpenseFilter
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-from hasta_la_vista_money.expense.services import (
-    ExpenseCategoryService,
-    ExpenseService,
-    ReceiptExpenseService,
+from hasta_la_vista_money.expense.protocols.services import (
+    ExpenseServiceProtocol,
 )
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
+
+
+class ServiceFactory(Protocol):
+    def __call__(self, *, user: User, request: HttpRequest) -> Any: ...
 
 
 class AbstractExpenseView(ABC):
@@ -79,6 +83,7 @@ class ExpenseView(
     LoginRequiredMixin,
     SuccessMessageMixin[AddExpenseForm],
     FilterView,
+    ExpenseServiceProtocol,
 ):
     """Main expense list view with filtering and pagination."""
 
@@ -88,8 +93,20 @@ class ExpenseView(
     context_object_name = 'expense'
     filterset_class = ExpenseFilter
     no_permission_url = reverse_lazy('login')
+    expense_service: ExpenseServiceProtocol
 
-    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    @inject
+    def get_context_data(
+        self,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
+        receipt_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.receipt_expense_service
+        ],
+        *args: Any,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """
         Get context data for expense list view.
 
@@ -99,8 +116,12 @@ class ExpenseView(
         context: dict[str, Any] = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
 
-        expense_service = ExpenseService(user, self.request)
-        receipt_service = ReceiptExpenseService(user, self.request)
+        expense_service = expense_service_factory(
+            user=user, request=self.request
+        )
+        receipt_service = receipt_service_factory(
+            user=user, request=self.request
+        )
 
         expense_queryset = Expense.objects.select_related(
             'user',
@@ -161,9 +182,13 @@ class ExpenseCopyView(
 
     no_permission_url = reverse_lazy('login')
 
+    @inject
     def post(
         self,
         request: HttpRequest,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
@@ -171,7 +196,10 @@ class ExpenseCopyView(
         if not isinstance(request.user, User):
             return HttpResponseForbidden(constants.USER_MUST_BE_AUTHENTICATED)
         expense_id = kwargs.get('pk')
-        expense_service = ExpenseService(request.user, request)
+        expense_service = expense_service_factory(
+            user=request.user,
+            request=request,
+        )
 
         if expense_id is None:
             messages.error(request, _('Некорректный идентификатор расхода.'))
@@ -206,13 +234,22 @@ class ExpenseCreateView(
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
     no_permission_url = reverse_lazy('login')
 
-    def get_form_kwargs(self) -> dict[str, Any]:
+    @inject
+    def get_form_kwargs(
+        self,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
+    ) -> dict[str, Any]:
         """Get form kwargs with user-specific querysets."""
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
             error_msg = 'User must be authenticated'
             raise TypeError(error_msg)
-        expense_service = ExpenseService(self.request.user, self.request)
+        expense_service = expense_service_factory(
+            user=self.request.user,
+            request=self.request,
+        )
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
 
@@ -223,12 +260,22 @@ class ExpenseCreateView(
             context['add_expense_form'] = self.get_form()
         return context
 
-    def form_valid(self, form: Any) -> HttpResponse:
+    @inject
+    def form_valid(
+        self,
+        form: Any,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
+    ) -> HttpResponse:
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
             error_msg = 'User must be authenticated'
             raise TypeError(error_msg)
-        expense_service = ExpenseService(self.request.user, self.request)
+        expense_service = expense_service_factory(
+            user=self.request.user,
+            request=self.request,
+        )
 
         try:
             expense_service.create_expense(form)
@@ -269,12 +316,21 @@ class ExpenseUpdateView(
             user=self.request.user,
         )
 
-    def get_form_kwargs(self) -> dict[str, Any]:
+    @inject
+    def get_form_kwargs(
+        self,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
+    ) -> dict[str, Any]:
         """Get form kwargs with user-specific querysets."""
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = ExpenseService(self.request.user, self.request)
+        expense_service = expense_service_factory(
+            user=self.request.user,
+            request=self.request,
+        )
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
 
@@ -284,11 +340,21 @@ class ExpenseUpdateView(
         context['add_expense_form'] = self.get_form()
         return context
 
-    def form_valid(self, form: Any) -> HttpResponse:
+    @inject
+    def form_valid(
+        self,
+        form: Any,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
+    ) -> HttpResponse:
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = ExpenseService(self.request.user, self.request)
+        expense_service = expense_service_factory(
+            user=self.request.user,
+            request=self.request,
+        )
 
         try:
             expense_service.update_expense(self.object, form)
@@ -317,11 +383,21 @@ class ExpenseDeleteView(
     context_object_name = 'expense'
     no_permission_url = reverse_lazy('login')
 
-    def form_valid(self, form: Any) -> HttpResponse:
+    @inject
+    def form_valid(
+        self,
+        form: Any,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
+    ) -> HttpResponse:
         """Handle valid form submission for deletion."""
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = ExpenseService(self.request.user, self.request)
+        expense_service = expense_service_factory(
+            user=self.request.user,
+            request=self.request,
+        )
 
         try:
             expense_service.delete_expense(self.get_object())
@@ -342,10 +418,20 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
     model = ExpenseCategory
     depth = 3
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+    @inject
+    def get_context_data(
+        self,
+        category_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_category_service
+        ],
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """Get context data for category list."""
         user = get_object_or_404(User, username=self.request.user)
-        category_service = ExpenseCategoryService(user, self.request)
+        category_service = category_service_factory(
+            user=user,
+            request=self.request,
+        )
 
         expense_categories = category_service.get_categories()
         flattened_categories = get_cached_category_tree(
@@ -371,25 +457,38 @@ class ExpenseCategoryCreateView(
     form_class = AddCategoryForm
     success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
 
-    def get_form_kwargs(self) -> dict[str, Any]:
+    @inject
+    def get_form_kwargs(
+        self,
+        category_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_category_service
+        ],
+    ) -> dict[str, Any]:
         """Get form kwargs with user-specific queryset."""
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        category_service = ExpenseCategoryService(
-            self.request.user,
-            self.request,
+        category_service = category_service_factory(
+            user=self.request.user,
+            request=self.request,
         )
         kwargs['category_queryset'] = category_service.get_categories_queryset()
         return kwargs
 
-    def form_valid(self, form: Any) -> HttpResponse:
+    @inject
+    def form_valid(
+        self,
+        form: Any,
+        category_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_category_service
+        ],
+    ) -> HttpResponse:
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        category_service = ExpenseCategoryService(
-            self.request.user,
-            self.request,
+        category_service = category_service_factory(
+            user=self.request.user,
+            request=self.request,
         )
 
         try:
@@ -437,9 +536,13 @@ class ExpenseCategoryDeleteView(
 class ExpenseGroupAjaxView(LoginRequiredMixin, View):
     """AJAX view for getting expenses by group."""
 
+    @inject
     def get(
         self,
         request: HttpRequest,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
@@ -447,7 +550,10 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
         if not isinstance(request.user, User):
             return HttpResponseForbidden(_('Вы не авторизованы'))
         group_id = request.GET.get('group_id')
-        expense_service = ExpenseService(request.user, request)
+        expense_service = expense_service_factory(
+            user=request.user,
+            request=request,
+        )
 
         try:
             all_expenses = expense_service.get_expenses_by_group(group_id)
@@ -468,9 +574,13 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
 class ExpenseDataAjaxView(LoginRequiredMixin, View):
     """AJAX view for getting expense data as JSON."""
 
+    @inject
     def get(
         self,
         request: HttpRequest,
+        expense_service_factory: ServiceFactory = Provide[
+            ApplicationContainer.expense.expense_service
+        ],
         *args: Any,
         **kwargs: Any,
     ) -> JsonResponse:
@@ -478,7 +588,10 @@ class ExpenseDataAjaxView(LoginRequiredMixin, View):
         if not isinstance(request.user, User):
             return JsonResponse({'error': _('Вы не авторизованы')}, status=403)
         group_id = request.GET.get('group_id')
-        expense_service = ExpenseService(request.user, request)
+        expense_service = expense_service_factory(
+            user=request.user,
+            request=request,
+        )
 
         try:
             all_data = expense_service.get_expense_data(group_id)

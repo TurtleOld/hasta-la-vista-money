@@ -251,4 +251,4 @@ class Receipt(models.Model):
     objects = ReceiptManager()
 
     def get_absolute_url(self) -> str:
-        return reverse_lazy('receipts:update', args=[self.pk])
+        return str(reverse_lazy('receipts:update', args=[self.pk]))

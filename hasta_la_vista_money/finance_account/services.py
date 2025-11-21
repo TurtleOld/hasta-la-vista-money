@@ -19,7 +19,6 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -29,8 +28,6 @@ from hasta_la_vista_money.finance_account.validators import (
     validate_different_accounts,
     validate_positive_amount,
 )
-from hasta_la_vista_money.income.models import Income
-from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
 
@@ -70,9 +67,15 @@ class RaiffeisenbankScheduleDict(TypedDict, total=False):
 class TransferService:
     """Service for handling money transfers between accounts."""
 
-    @staticmethod
+    def __init__(
+        self,
+        transfer_money_log_repository: Any,
+    ) -> None:
+        self.transfer_money_log_repository = transfer_money_log_repository
+
     @transaction.atomic
     def transfer_money(
+        self,
         from_account: Account,
         to_account: Account,
         amount: Decimal,
@@ -86,7 +89,7 @@ class TransferService:
         validate_account_balance(from_account, amount)
 
         if from_account.transfer_money(to_account, amount):
-            return TransferMoneyLog.objects.create(  # type: ignore[misc]
+            return self.transfer_money_log_repository.create_log(
                 user=user,
                 from_account=from_account,
                 to_account=to_account,
@@ -102,21 +105,30 @@ class TransferService:
 class AccountService:
     """Service for account-related operations."""
 
-    @staticmethod
-    def get_user_accounts(user: User) -> list[Account]:
+    def __init__(
+        self,
+        account_repository: Any,
+        transfer_money_log_repository: Any,
+        expense_repository: Any,
+        income_repository: Any,
+        receipt_repository: Any,
+    ) -> None:
+        self.account_repository = account_repository
+        self.transfer_money_log_repository = transfer_money_log_repository
+        self.expense_repository = expense_repository
+        self.income_repository = income_repository
+        self.receipt_repository = receipt_repository
+
+    def get_user_accounts(self, user: User) -> list[Account]:
         """Get all accounts for a specific user."""
-        return list(Account.objects.filter(user=user).select_related('user'))
+        return list(self.account_repository.get_by_user_with_related(user))
 
-    @staticmethod
-    def get_account_by_id(account_id: int, user: User) -> Account | None:
+    def get_account_by_id(self, account_id: int, user: User) -> Account | None:
         """Get a specific account by ID for a user."""
-        try:
-            return Account.objects.get(id=account_id, user=user)
-        except Account.DoesNotExist:
-            return None
+        return self.account_repository.get_by_id_and_user(account_id, user)
 
-    @staticmethod
     def get_credit_card_debt(
+        self,
         account: Account,
         start_date: Any | None = None,
         end_date: Any | None = None,
@@ -128,9 +140,9 @@ class AccountService:
         ):
             return None
 
-        expense_qs = Expense.objects.filter(account=account)
-        income_qs = Income.objects.filter(account=account)
-        receipt_qs = Receipt.objects.filter(account=account)
+        expense_qs = self.expense_repository.filter(account=account)
+        income_qs = self.income_repository.filter(account=account)
+        receipt_qs = self.receipt_repository.filter(account=account)
 
         if start_date and end_date:
             if isinstance(start_date, date) and not isinstance(
@@ -191,9 +203,7 @@ class AccountService:
         )
         return Decimal(str(result))
 
-    @staticmethod
-    @transaction.atomic
-    def apply_receipt_spend(account: Account, amount: Decimal) -> Account:
+    def apply_receipt_spend(self, account: Account, amount: Decimal) -> Account:
         """Apply spending by receipt to the account balance with validation."""
         validate_positive_amount(amount)
         validate_account_balance(account, amount)
@@ -201,33 +211,68 @@ class AccountService:
         account.save()
         return account
 
-    @staticmethod
-    @transaction.atomic
-    def adjust_on_receipt_update(
+    def refund_to_account(self, account: Account, amount: Decimal) -> Account:
+        """Return money to account balance with validation."""
+        validate_positive_amount(amount)
+        account.balance += amount
+        account.save()
+        return account
+
+    def _adjust_balance_on_same_account(
+        self,
+        account: Account,
+        old_total_sum: Decimal,
+        new_total_sum: Decimal,
+    ) -> None:
+        difference = new_total_sum - old_total_sum
+        if difference == 0:
+            return
+        if difference > 0:
+            self.apply_receipt_spend(account, difference)
+        else:
+            self.refund_to_account(account, abs(difference))
+
+    def _adjust_balance_on_account_change(
+        self,
         old_account: Account,
         new_account: Account,
         old_total_sum: Decimal,
         new_total_sum: Decimal,
     ) -> None:
-        """Adjust account balances when receipt is updated."""
-        if old_account.pk == new_account.pk:
-            difference = new_total_sum - old_total_sum
-            if difference == 0:
-                return
-            if difference > 0:
-                AccountService.apply_receipt_spend(old_account, difference)
-            else:
-                old_account.balance += abs(difference)
-                old_account.save()
-            return
+        self.refund_to_account(old_account, old_total_sum)
+        self.apply_receipt_spend(new_account, new_total_sum)
 
-        # Different accounts: refund old, charge new
-        old_account.balance += old_total_sum
-        old_account.save()
-        AccountService.apply_receipt_spend(new_account, new_total_sum)
+    def _should_adjust_same_account(
+        self,
+        old_account: Account,
+        new_account: Account,
+    ) -> bool:
+        return old_account.pk == new_account.pk
 
-    @staticmethod
+    def reconcile_account_balances(
+        self,
+        old_account: Account,
+        new_account: Account,
+        old_total_sum: Decimal,
+        new_total_sum: Decimal,
+    ) -> None:
+        """Reconcile account balances when amount or account changes."""
+        if self._should_adjust_same_account(old_account, new_account):
+            self._adjust_balance_on_same_account(
+                old_account,
+                old_total_sum,
+                new_total_sum,
+            )
+        else:
+            self._adjust_balance_on_account_change(
+                old_account,
+                new_account,
+                old_total_sum,
+                new_total_sum,
+            )
+
     def _get_first_purchase_in_month(
+        self,
         account: Account,
         month_start: datetime,
     ) -> datetime | None:
@@ -242,7 +287,7 @@ class AccountService:
         )
 
         first_expense = (
-            Expense.objects.filter(
+            self.expense_repository.filter(
                 account=account,
                 date__range=(month_start, month_end),
             )
@@ -251,7 +296,7 @@ class AccountService:
         )
 
         first_receipt = (
-            Receipt.objects.filter(
+            self.receipt_repository.filter(
                 account=account,
                 operation_type=RECEIPT_OPERATION_PURCHASE,
                 receipt_date__range=(month_start, month_end),
@@ -267,8 +312,8 @@ class AccountService:
             return first_receipt.receipt_date
         return None
 
-    @staticmethod
     def _calculate_purchase_period(
+        self,
         purchase_month: Any,
     ) -> tuple[datetime, datetime]:
         """Calculate purchase period start and end dates."""
@@ -285,8 +330,8 @@ class AccountService:
 
         return purchase_start, purchase_end
 
-    @staticmethod
     def _calculate_sberbank_grace_period(
+        self,
         purchase_start: datetime,
         purchase_end: datetime,
     ) -> tuple[datetime, datetime, datetime]:
@@ -311,14 +356,14 @@ class AccountService:
 
         return grace_end, payments_start, payments_end
 
-    @staticmethod
     def _calculate_raiffeisenbank_grace_period(
+        self,
         account: Account,
         purchase_start: datetime,
         purchase_end: datetime,
     ) -> tuple[datetime, datetime, datetime]:
         """Calculate grace period for Raiffeisenbank credit card."""
-        first_purchase = AccountService._get_first_purchase_in_month(
+        first_purchase = self._get_first_purchase_in_month(
             account,
             purchase_start,
         )
@@ -343,20 +388,20 @@ class AccountService:
 
         return grace_end, payments_start, payments_end
 
-    @staticmethod
     def _calculate_grace_period_by_bank(
+        self,
         account: Account,
         purchase_start: datetime,
         purchase_end: datetime,
     ) -> tuple[datetime, datetime, datetime]:
         """Calculate grace period based on bank type."""
         if account.bank == 'SBERBANK':
-            return AccountService._calculate_sberbank_grace_period(
+            return self._calculate_sberbank_grace_period(
                 purchase_start,
                 purchase_end,
             )
         if account.bank == 'RAIFFAISENBANK':
-            return AccountService._calculate_raiffeisenbank_grace_period(
+            return self._calculate_raiffeisenbank_grace_period(
                 account,
                 purchase_start,
                 purchase_end,
@@ -368,8 +413,8 @@ class AccountService:
         payments_end = grace_end
         return grace_end, payments_start, payments_end
 
-    @staticmethod
     def _calculate_debt_info(
+        self,
         account: Account,
         purchase_start: datetime,
         purchase_end: datetime,
@@ -377,14 +422,14 @@ class AccountService:
         payments_end: datetime,
     ) -> tuple[Decimal, Decimal, Decimal]:
         """Calculate debt information for the period."""
-        debt_for_month = AccountService.get_credit_card_debt(
+        debt_for_month = self.get_credit_card_debt(
             account,
             purchase_start,
             purchase_end,
         )
 
         if account.bank in ('SBERBANK', 'RAIFFAISENBANK'):
-            payments_for_period = AccountService.get_credit_card_debt(
+            payments_for_period = self.get_credit_card_debt(
                 account,
                 payments_start,
                 payments_end,
@@ -402,15 +447,14 @@ class AccountService:
             final_debt,
         )
 
-    @staticmethod
-    def _ensure_timezone_aware(dt: datetime) -> datetime:
+    def _ensure_timezone_aware(self, dt: datetime) -> datetime:
         """Ensure datetime is timezone aware."""
         if hasattr(dt, 'utcoffset') and timezone.is_naive(dt):
             return timezone.make_aware(dt)
         return dt
 
-    @staticmethod
     def calculate_grace_period_info(
+        self,
         account: Account,
         purchase_month: Any,
     ) -> GracePeriodInfoDict:
@@ -421,12 +465,12 @@ class AccountService:
         ):
             return {}
 
-        purchase_start, purchase_end = (
-            AccountService._calculate_purchase_period(purchase_month)
+        purchase_start, purchase_end = self._calculate_purchase_period(
+            purchase_month
         )
 
         grace_end, payments_start, payments_end = (
-            AccountService._calculate_grace_period_by_bank(
+            self._calculate_grace_period_by_bank(
                 account,
                 purchase_start,
                 purchase_end,
@@ -434,7 +478,7 @@ class AccountService:
         )
 
         debt_for_month, payments_for_period, final_debt = (
-            AccountService._calculate_debt_info(
+            self._calculate_debt_info(
                 account,
                 purchase_start,
                 purchase_end,
@@ -443,7 +487,7 @@ class AccountService:
             )
         )
 
-        grace_end = AccountService._ensure_timezone_aware(grace_end)
+        grace_end = self._ensure_timezone_aware(grace_end)
 
         return {
             'purchase_month': purchase_start.strftime('%m.%Y'),
@@ -463,8 +507,8 @@ class AccountService:
             ),
         }
 
-    @staticmethod
     def _validate_raiffeisenbank_account(
+        self,
         account: Account,
     ) -> bool:
         """Validate if account is eligible
@@ -474,8 +518,8 @@ class AccountService:
             and account.bank == 'RAIFFAISENBANK'
         )
 
-    @staticmethod
     def _calculate_purchase_period_for_raiffeisenbank(
+        self,
         purchase_month: Any,
     ) -> tuple[datetime, datetime]:
         """Calculate purchase period for Raiffeisenbank."""
@@ -501,8 +545,9 @@ class AccountService:
         )
         return purchase_start, purchase_end
 
-    @staticmethod
-    def _calculate_first_statement_date(first_purchase: datetime) -> datetime:
+    def _calculate_first_statement_date(
+        self, first_purchase: datetime
+    ) -> datetime:
         """Calculate first statement date for Raiffeisenbank."""
         first_statement_date = first_purchase.replace(
             day=constants.STATEMENT_DAY_NUMBER,
@@ -513,8 +558,8 @@ class AccountService:
             ).replace(day=constants.STATEMENT_DAY_NUMBER)
         return first_statement_date
 
-    @staticmethod
     def _generate_statement_dates(
+        self,
         first_statement_date: datetime,
     ) -> list[datetime]:
         """Generate list of statement dates for 3 months."""
@@ -525,8 +570,8 @@ class AccountService:
             current_date = current_date + relativedelta(months=constants.ONE)
         return statement_dates
 
-    @staticmethod
     def _calculate_payment_schedule(
+        self,
         statement_dates: list[datetime],
         initial_debt: Decimal,
     ) -> tuple[list[dict[str, Any]], Decimal]:
@@ -556,8 +601,7 @@ class AccountService:
 
         return payments_schedule, remaining_debt
 
-    @staticmethod
-    def _calculate_grace_end_date(first_purchase: datetime) -> datetime:
+    def _calculate_grace_end_date(self, first_purchase: datetime) -> datetime:
         """Calculate grace end date for Raiffeisenbank."""
         grace_end = first_purchase + relativedelta(
             days=constants.GRACE_PERIOD_DAYS_RAIFFEISENBANK,
@@ -566,22 +610,22 @@ class AccountService:
             datetime.combine(grace_end.date(), time.max),
         )
 
-    @staticmethod
     def calculate_raiffeisenbank_payment_schedule(
+        self,
         account: Account,
         purchase_month: Any,
     ) -> RaiffeisenbankScheduleDict:
         """Calculate payment schedule for Raiffeisenbank credit card."""
-        if not AccountService._validate_raiffeisenbank_account(account):
+        if not self._validate_raiffeisenbank_account(account):
             return {}
 
         purchase_start, purchase_end = (
-            AccountService._calculate_purchase_period_for_raiffeisenbank(
+            self._calculate_purchase_period_for_raiffeisenbank(
                 purchase_month,
             )
         )
 
-        first_purchase = AccountService._get_first_purchase_in_month(
+        first_purchase = self._get_first_purchase_in_month(
             account,
             purchase_start,
         )
@@ -592,15 +636,15 @@ class AccountService:
         if timezone.is_naive(first_purchase):
             first_purchase = timezone.make_aware(first_purchase)
 
-        first_statement_date = AccountService._calculate_first_statement_date(
+        first_statement_date = self._calculate_first_statement_date(
             first_purchase,
         )
-        statement_dates = AccountService._generate_statement_dates(
+        statement_dates = self._generate_statement_dates(
             first_statement_date,
         )
 
         initial_debt = (
-            AccountService.get_credit_card_debt(
+            self.get_credit_card_debt(
                 account,
                 purchase_start,
                 purchase_end,
@@ -608,14 +652,12 @@ class AccountService:
             or 0
         )
 
-        payments_schedule, final_debt = (
-            AccountService._calculate_payment_schedule(
-                statement_dates,
-                Decimal(str(initial_debt)),
-            )
+        payments_schedule, final_debt = self._calculate_payment_schedule(
+            statement_dates,
+            Decimal(str(initial_debt)),
         )
 
-        grace_end = AccountService._calculate_grace_end_date(first_purchase)
+        grace_end = self._calculate_grace_end_date(first_purchase)
 
         return {
             'first_purchase_date': first_purchase,
@@ -633,65 +675,35 @@ class AccountService:
             ),
         }
 
+    def get_accounts_for_user_or_group(
+        self,
+        user: User,
+        group_id: str | None = None,
+    ) -> QuerySet[Account]:
+        """
+        Get accounts for user or group.
 
-def get_accounts_for_user_or_group(
-    user: User,
-    group_id: str | None = None,
-) -> QuerySet[Account]:
-    """
-    Get accounts for user or group.
+        Args:
+            user: User instance
+            group_id: Optional group ID filter
 
-    Args:
-        user: User instance
-        group_id: Optional group ID filter
+        Returns:
+            QuerySet of accounts for user or group
+        """
+        return self.account_repository.get_by_user_and_group(user, group_id)
 
-    Returns:
-        QuerySet of accounts for user or group
-    """
-    if group_id == 'my':
-        return Account.objects.filter(user=user).select_related('user')
+    def get_sum_all_accounts(self, accounts: Any) -> Decimal:
+        """Calculate total balance for a queryset of accounts."""
+        total = sum(acc.balance for acc in accounts)
+        return Decimal(str(total))
 
-    if group_id:
-        users_in_group = User.objects.filter(groups__id=group_id).distinct()
-        if users_in_group.exists():
-            return (
-                Account.objects.filter(user__in=users_in_group)
-                .select_related('user')
-                .distinct()
-            )
-        return Account.objects.filter(user=user).select_related('user')
-
-    if user.groups.exists():
-        users_in_groups = User.objects.filter(
-            groups__in=user.groups.values_list('id', flat=True),
-        ).distinct()
-        return (
-            Account.objects.filter(user__in=users_in_groups)
-            .select_related('user')
-            .distinct()
+    def get_transfer_money_log(
+        self,
+        user: User,
+        limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
+    ) -> Any:
+        """Get recent transfer logs for a user."""
+        return self.transfer_money_log_repository.get_by_user_ordered(
+            user,
+            limit,
         )
-    return Account.objects.filter(user=user).select_related('user')
-
-
-def get_sum_all_accounts(accounts: Any) -> Decimal:
-    """Calculate total balance for a queryset of accounts."""
-    total = sum(acc.balance for acc in accounts)
-    return Decimal(str(total))
-
-
-def get_transfer_money_log(
-    user: User,
-    limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
-) -> Any:
-    """Get recent transfer logs for a user."""
-    return (
-        TransferMoneyLog.objects.filter(user=user)
-        .select_related(
-            'to_account',
-            'from_account',
-            'user',
-        )
-        .order_by(
-            '-exchange_date',
-        )[:limit]
-    )
