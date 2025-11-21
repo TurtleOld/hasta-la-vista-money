@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from django.db.models import QuerySet
 
@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.expense.forms import AddExpenseForm
 
 
+@runtime_checkable
 class ExpenseServiceProtocol(Protocol):
     def get_categories(self) -> Iterable[dict[str, str | int | None]]: ...
     def get_categories_queryset(self) -> QuerySet['ExpenseCategory']: ...

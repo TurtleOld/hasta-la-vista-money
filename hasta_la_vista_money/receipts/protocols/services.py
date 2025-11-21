@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from django.core.files.uploadedfile import UploadedFile
 from django.forms import BaseFormSet
@@ -13,9 +13,11 @@ from hasta_la_vista_money.receipts.services.receipt_import import (
 from hasta_la_vista_money.users.models import User
 
 
+@runtime_checkable
 class ReceiptCreatorServiceProtocol(Protocol):
     def create_manual_receipt(
         self,
+        *,
         user: User,
         receipt_form: ReceiptForm,
         product_formset: BaseFormSet[Any],
@@ -23,9 +25,11 @@ class ReceiptCreatorServiceProtocol(Protocol):
     ) -> Receipt | None: ...
 
 
+@runtime_checkable
 class ReceiptUpdaterServiceProtocol(Protocol):
     def update_receipt(
         self,
+        *,
         user: User,
         receipt: Receipt,
         form: ReceiptForm,
@@ -33,9 +37,11 @@ class ReceiptUpdaterServiceProtocol(Protocol):
     ) -> Receipt: ...
 
 
+@runtime_checkable
 class ReceiptImportServiceProtocol(Protocol):
     def process_uploaded_image(
         self,
+        *,
         user: User,
         account: Account,
         uploaded_file: UploadedFile,
