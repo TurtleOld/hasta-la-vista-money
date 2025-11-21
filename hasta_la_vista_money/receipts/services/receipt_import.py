@@ -4,19 +4,28 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 from django.db.models import QuerySet
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from core.protocols.services import AccountServiceProtocol
+from core.repositories.protocols import (
+    ProductRepositoryProtocol,
+    ReceiptRepositoryProtocol,
+    SellerRepositoryProtocol,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts import services as receipts_services
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
+        AccountRepository,
+    )
 
 
 @dataclass
@@ -27,6 +36,20 @@ class ReceiptImportResult:
 
 
 class ReceiptImportService:
+    def __init__(
+        self,
+        account_service: AccountServiceProtocol,
+        account_repository: 'AccountRepository',
+        receipt_repository: ReceiptRepositoryProtocol,
+        product_repository: ProductRepositoryProtocol,
+        seller_repository: SellerRepositoryProtocol,
+    ) -> None:
+        self.account_service = account_service
+        self.account_repository = account_repository
+        self.receipt_repository = receipt_repository
+        self.product_repository = product_repository
+        self.seller_repository = seller_repository
+
     def _clean_json_response(self, text: str) -> str:
         match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
         if match:
@@ -69,16 +92,22 @@ class ReceiptImportService:
         user: User,
         number_receipt: int | None,
     ) -> QuerySet[Receipt]:
-        return Receipt.objects.filter(user=user, number_receipt=number_receipt)
+        return self.receipt_repository.get_by_user_and_number(
+            user=user,
+            number_receipt=number_receipt,
+        )
 
     def _create_or_update_seller(
         self,
         data: dict[str, Any],
         user: User,
     ) -> Seller:
-        return Seller.objects.update_or_create(
+        name_seller = data.get('name_seller')
+        if not name_seller or not isinstance(name_seller, str):
+            name_seller = 'Неизвестный продавец'
+        return self.seller_repository.update_or_create_seller(
             user=user,
-            name_seller=data.get('name_seller'),
+            name_seller=name_seller,
             defaults={
                 'retail_place_address': data.get(
                     'retail_place_address',
@@ -86,7 +115,7 @@ class ReceiptImportService:
                 ),
                 'retail_place': data.get('retail_place', 'Нет данных'),
             },
-        )[0]
+        )
 
     def _create_products(
         self,
@@ -104,7 +133,7 @@ class ReceiptImportService:
             )
             for item in data.get('items', [])
         ]
-        return Product.objects.bulk_create(products_data)
+        return self.product_repository.bulk_create_products(products_data)
 
     def _create_receipt(
         self,
@@ -113,32 +142,25 @@ class ReceiptImportService:
         account: Account,
         seller: Seller,
     ) -> Receipt:
-        return Receipt.objects.create(
-            user=user,
-            account=account,
-            number_receipt=data['number_receipt'],
-            receipt_date=self._parse_receipt_date(
-                data['receipt_date'],
-            ),
-            nds10=data.get('nds10', 0),
-            nds20=data.get('nds20', 0),
-            operation_type=data.get('operation_type', 0),
-            total_sum=data['total_sum'],
-            seller=seller,
-        )
-
-    def __init__(
-        self,
-        account_service: AccountServiceProtocol,
-    ) -> None:
-        self.account_service = account_service
+        receipt_data = {
+            'user': user,
+            'account': account,
+            'number_receipt': data['number_receipt'],
+            'receipt_date': self._parse_receipt_date(data['receipt_date']),
+            'nds10': data.get('nds10', 0),
+            'nds20': data.get('nds20', 0),
+            'operation_type': data.get('operation_type', 0),
+            'total_sum': data['total_sum'],
+            'seller': seller,
+        }
+        return self.receipt_repository.create_receipt(**receipt_data)
 
     def _update_account_balance(
         self,
         account: Account,
         total_sum: decimal.Decimal | str | float,
     ) -> None:
-        account_balance = get_object_or_404(Account, pk=account.pk)
+        account_balance = self.account_repository.get_by_id(account.pk)
         self.account_service.apply_receipt_spend(
             account_balance,
             decimal.Decimal(total_sum),

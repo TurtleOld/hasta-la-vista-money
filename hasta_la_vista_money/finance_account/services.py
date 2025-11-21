@@ -19,7 +19,6 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -29,8 +28,6 @@ from hasta_la_vista_money.finance_account.validators import (
     validate_different_accounts,
     validate_positive_amount,
 )
-from hasta_la_vista_money.income.models import Income
-from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
 
@@ -70,6 +67,12 @@ class RaiffeisenbankScheduleDict(TypedDict, total=False):
 class TransferService:
     """Service for handling money transfers between accounts."""
 
+    def __init__(
+        self,
+        transfer_money_log_repository: Any,
+    ) -> None:
+        self.transfer_money_log_repository = transfer_money_log_repository
+
     @transaction.atomic
     def transfer_money(
         self,
@@ -86,7 +89,7 @@ class TransferService:
         validate_account_balance(from_account, amount)
 
         if from_account.transfer_money(to_account, amount):
-            return TransferMoneyLog.objects.create(  # type: ignore[misc]
+            return self.transfer_money_log_repository.create_log(
                 user=user,
                 from_account=from_account,
                 to_account=to_account,
@@ -102,16 +105,27 @@ class TransferService:
 class AccountService:
     """Service for account-related operations."""
 
+    def __init__(
+        self,
+        account_repository: Any,
+        transfer_money_log_repository: Any,
+        expense_repository: Any,
+        income_repository: Any,
+        receipt_repository: Any,
+    ) -> None:
+        self.account_repository = account_repository
+        self.transfer_money_log_repository = transfer_money_log_repository
+        self.expense_repository = expense_repository
+        self.income_repository = income_repository
+        self.receipt_repository = receipt_repository
+
     def get_user_accounts(self, user: User) -> list[Account]:
         """Get all accounts for a specific user."""
-        return list(Account.objects.filter(user=user).select_related('user'))
+        return list(self.account_repository.get_by_user_with_related(user))
 
     def get_account_by_id(self, account_id: int, user: User) -> Account | None:
         """Get a specific account by ID for a user."""
-        try:
-            return Account.objects.get(id=account_id, user=user)
-        except Account.DoesNotExist:
-            return None
+        return self.account_repository.get_by_id_and_user(account_id, user)
 
     def get_credit_card_debt(
         self,
@@ -126,9 +140,9 @@ class AccountService:
         ):
             return None
 
-        expense_qs = Expense.objects.filter(account=account)
-        income_qs = Income.objects.filter(account=account)
-        receipt_qs = Receipt.objects.filter(account=account)
+        expense_qs = self.expense_repository.filter(account=account)
+        income_qs = self.income_repository.filter(account=account)
+        receipt_qs = self.receipt_repository.filter(account=account)
 
         if start_date and end_date:
             if isinstance(start_date, date) and not isinstance(
@@ -273,7 +287,7 @@ class AccountService:
         )
 
         first_expense = (
-            Expense.objects.filter(
+            self.expense_repository.filter(
                 account=account,
                 date__range=(month_start, month_end),
             )
@@ -282,7 +296,7 @@ class AccountService:
         )
 
         first_receipt = (
-            Receipt.objects.filter(
+            self.receipt_repository.filter(
                 account=account,
                 operation_type=RECEIPT_OPERATION_PURCHASE,
                 receipt_date__range=(month_start, month_end),
@@ -451,8 +465,8 @@ class AccountService:
         ):
             return {}
 
-        purchase_start, purchase_end = (
-            self._calculate_purchase_period(purchase_month)
+        purchase_start, purchase_end = self._calculate_purchase_period(
+            purchase_month
         )
 
         grace_end, payments_start, payments_end = (
@@ -638,11 +652,9 @@ class AccountService:
             or 0
         )
 
-        payments_schedule, final_debt = (
-            self._calculate_payment_schedule(
-                statement_dates,
-                Decimal(str(initial_debt)),
-            )
+        payments_schedule, final_debt = self._calculate_payment_schedule(
+            statement_dates,
+            Decimal(str(initial_debt)),
         )
 
         grace_end = self._calculate_grace_end_date(first_purchase)
@@ -678,29 +690,7 @@ class AccountService:
         Returns:
             QuerySet of accounts for user or group
         """
-        if group_id == 'my':
-            return Account.objects.filter(user=user).select_related('user')
-
-        if group_id:
-            users_in_group = User.objects.filter(groups__id=group_id).distinct()
-            if users_in_group.exists():
-                return (
-                    Account.objects.filter(user__in=users_in_group)
-                    .select_related('user')
-                    .distinct()
-                )
-            return Account.objects.filter(user=user).select_related('user')
-
-        if user.groups.exists():
-            users_in_groups = User.objects.filter(
-                groups__in=user.groups.values_list('id', flat=True),
-            ).distinct()
-            return (
-                Account.objects.filter(user__in=users_in_groups)
-                .select_related('user')
-                .distinct()
-            )
-        return Account.objects.filter(user=user).select_related('user')
+        return self.account_repository.get_by_user_and_group(user, group_id)
 
     def get_sum_all_accounts(self, accounts: Any) -> Decimal:
         """Calculate total balance for a queryset of accounts."""
@@ -713,14 +703,7 @@ class AccountService:
         limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
     ) -> Any:
         """Get recent transfer logs for a user."""
-        return (
-            TransferMoneyLog.objects.filter(user=user)
-            .select_related(
-                'to_account',
-                'from_account',
-                'user',
-            )
-            .order_by(
-                '-exchange_date',
-            )[:limit]
+        return self.transfer_money_log_repository.get_by_user_ordered(
+            user,
+            limit,
         )

@@ -1,12 +1,11 @@
-from collections.abc import Iterable
-from typing import Any, Callable, NamedTuple, cast
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from django.contrib.auth.models import Group
 from django.db.models import Sum
 from django.db.models.functions import ExtractYear, TruncMonth
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
-from django.shortcuts import get_object_or_404
 from django.utils.formats import date_format
 
 from core.protocols.services import AccountServiceProtocol
@@ -16,13 +15,23 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import (
     get_new_type_operation,
     get_queryset_type_income_expenses,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.expense.repositories import (
+        ExpenseCategoryRepository,
+        ExpenseRepository,
+    )
+    from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
+        AccountRepository,
+    )
+    from hasta_la_vista_money.receipts.repositories.receipt_repository import (
+        ReceiptRepository,
+    )
 
 
 class ExpenseService:
@@ -33,16 +42,24 @@ class ExpenseService:
         user: User,
         request: HttpRequest,
         account_service: AccountServiceProtocol,
-        receipt_expense_service_factory: Callable[
-            [User, HttpRequest], 'ReceiptExpenseService'
-        ],
+        account_repository: 'AccountRepository',
+        expense_repository: 'ExpenseRepository',
+        expense_category_repository: 'ExpenseCategoryRepository',
+        receipt_repository: 'ReceiptRepository',
+        receipt_expense_service_factory: Callable[..., 'ReceiptExpenseService'],
     ):
         self.user = user
         self.request = request
         self.account_service = account_service
+        self.account_repository = account_repository
+        self.expense_repository = expense_repository
+        self.expense_category_repository = expense_category_repository
+        self.receipt_repository = receipt_repository
         self.receipt_expense_service = receipt_expense_service_factory(
             user=user,
             request=request,
+            expense_category_repository=expense_category_repository,
+            receipt_repository=receipt_repository,
         )
 
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
@@ -71,14 +88,14 @@ class ExpenseService:
         """Get form querysets for expense forms."""
         return {
             'category_queryset': self.get_categories_queryset(),
-            'account_queryset': Account.objects.filter(user=self.user),
+            'account_queryset': self.account_repository.get_by_user(self.user),
         }
 
     def get_expense_form(self) -> AddExpenseForm:
         """Get expense form with user-specific querysets."""
         return AddExpenseForm(
             category_queryset=self.get_categories_queryset(),
-            account_queryset=Account.objects.filter(user=self.user),
+            account_queryset=self.account_repository.get_by_user(self.user),
         )
 
     def create_expense(
@@ -86,9 +103,14 @@ class ExpenseService:
         form: AddExpenseForm,
     ) -> Expense:
         """Create a new expense."""
-        expense = form.save(commit=False)
-        expense.user = self.user
-        expense.save()
+        expense_data = form.cleaned_data
+        expense = self.expense_repository.create_expense(
+            user=self.user,
+            account=expense_data['account'],
+            category=expense_data['category'],
+            amount=expense_data['amount'],
+            date=expense_data['date'],
+        )
 
         if expense.amount is not None:
             self.account_service.apply_receipt_spend(
@@ -112,10 +134,9 @@ class ExpenseService:
 
         amount = form.cleaned_data['amount']
         account = form.cleaned_data['account']
-        account_balance = get_object_or_404(Account, pk=account.pk)
-        old_account_balance = get_object_or_404(
-            Account,
-            pk=expense_updated.account.pk,
+        account_balance = self.account_repository.get_by_id(account.pk)
+        old_account_balance = self.account_repository.get_by_id(
+            expense_updated.account.pk,
         )
 
         if account_balance.user != self.user:
@@ -140,7 +161,7 @@ class ExpenseService:
         """Delete an expense and restore account balance."""
         account = expense.account
         amount = expense.amount
-        account_balance = get_object_or_404(Account, pk=account.pk)
+        account_balance = self.account_repository.get_by_id(account.pk)
 
         if account_balance.user != self.user:
             error_msg = 'У вас нет прав для выполнения этого действия'
@@ -156,7 +177,7 @@ class ExpenseService:
     ) -> Expense:
         """Copy an existing expense."""
         new_expense = get_new_type_operation(Expense, expense_id, self.request)
-        valid_expense = get_object_or_404(Expense, pk=new_expense.pk)
+        valid_expense = self.expense_repository.get_by_id(new_expense.pk)
 
         if valid_expense.account is not None:
             self.account_service.apply_receipt_spend(
@@ -168,21 +189,18 @@ class ExpenseService:
 
     def get_expenses_by_group(self, group_id: str | None) -> list[Any]:
         """Get expenses filtered by group."""
-        expenses = Expense.objects.none()
+        expenses = self.expense_repository.filter(id__isnull=True)
         receipt_expense_list = []
         user = User.objects.prefetch_related('groups').get(pk=self.user.pk)
         if not group_id or group_id == 'my':
-            expenses = Expense.objects.filter(user=self.user).select_related(
-                'user',
-                'category',
-                'account',
-            )
+            expenses = self.expense_repository.get_by_user(self.user)
             group_users = [self.user]
         elif user.groups.filter(id=group_id).exists():
             group_users = list(User.objects.filter(groups__id=group_id))
-            expenses = Expense.objects.filter(
-                user__in=group_users,
-            ).select_related('user', 'category', 'account')
+            expenses = self.expense_repository.get_by_user_and_group(
+                self.user,
+                group_id,
+            )
         else:
             group_users = []
 
@@ -199,29 +217,28 @@ class ExpenseService:
 
     def get_expense_data(self, group_id: str | None) -> list[dict[str, Any]]:
         """Get expense data as dictionary for AJAX responses."""
-        expenses = Expense.objects.none()
+        expenses = self.expense_repository.filter(id__isnull=True)
         receipt_expense_list = []
 
         if group_id == 'my' or not group_id:
-            expenses = Expense.objects.filter(user=self.user).select_related(
-                'user',
-                'category',
-                'account',
-            )
+            expenses = self.expense_repository.get_by_user(self.user)
             group_users = [self.user]
         else:
             try:
                 group_users = list(User.objects.filter(groups__id=group_id))
-                expenses = Expense.objects.filter(
-                    user__in=group_users,
-                ).select_related('user', 'category', 'account')
+                expenses = self.expense_repository.get_by_user_and_group(
+                    self.user,
+                    group_id,
+                )
             except Group.DoesNotExist:
                 group_users = []
-                expenses = Expense.objects.none()
+                expenses = self.expense_repository.filter(id__isnull=True)
 
         if group_users:
-            receipt_expense_list = self.receipt_expense_service.get_receipt_data_by_users(
-                group_users,
+            receipt_expense_list = (
+                self.receipt_expense_service.get_receipt_data_by_users(
+                    group_users,
+                )
             )
 
         data = [
@@ -247,9 +264,15 @@ class ExpenseService:
 class ExpenseCategoryService:
     """Service class for expense category operations."""
 
-    def __init__(self, user: User, request: HttpRequest):
+    def __init__(
+        self,
+        user: User,
+        request: HttpRequest,
+        expense_category_repository: 'ExpenseCategoryRepository',
+    ):
         self.user = user
         self.request = request
+        self.expense_category_repository = expense_category_repository
 
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
@@ -277,20 +300,31 @@ class ExpenseCategoryService:
         """Create a new expense category."""
         category = form.save(commit=False)
         category.user = self.user
-        category.save()
-        return category
+        return self.expense_category_repository.create_category(
+            user=category.user,
+            name=category.name,
+            parent_category=category.parent_category,
+        )
 
 
 class ReceiptExpenseService:
     """Service class for receipt expense operations."""
 
-    def __init__(self, user: User, request: HttpRequest):
+    def __init__(
+        self,
+        user: User,
+        request: HttpRequest,
+        expense_category_repository: 'ExpenseCategoryRepository',
+        receipt_repository: 'ReceiptRepository',
+    ):
         self.user = user
         self.request = request
+        self.expense_category_repository = expense_category_repository
+        self.receipt_repository = receipt_repository
 
     def get_receipt_expenses(self) -> list[Any]:
         """Get receipt expenses for the user."""
-        receipt_category = ExpenseCategory.objects.filter(
+        receipt_category = self.expense_category_repository.filter(
             user=self.user,
             name=RECEIPT_CATEGORY_NAME,
         ).first()
@@ -309,7 +343,7 @@ class ReceiptExpenseService:
             date_label: str
 
         receipt_expenses = (
-            Receipt.objects.filter(
+            self.receipt_repository.filter(
                 user=self.user,
                 operation_type=RECEIPT_OPERATION_PURCHASE,
             )
@@ -351,7 +385,7 @@ class ReceiptExpenseService:
     ) -> list[dict[str, Any]]:
         """Get receipt expenses for multiple users."""
         receipt_expenses = (
-            Receipt.objects.filter(
+            self.receipt_repository.filter(
                 user__in=users,
                 operation_type=RECEIPT_OPERATION_PURCHASE,
             )
@@ -405,7 +439,7 @@ class ReceiptExpenseService:
         users: list[User],
     ) -> list[dict[str, Any]]:
         """Get receipt data as dictionary for AJAX responses."""
-        receipts = Receipt.objects.filter(
+        receipts = self.receipt_repository.filter(
             user__in=users,
             operation_type=RECEIPT_OPERATION_PURCHASE,
         ).select_related('account', 'user')

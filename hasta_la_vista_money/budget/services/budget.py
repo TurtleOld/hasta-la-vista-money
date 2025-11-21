@@ -6,6 +6,8 @@ from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from typing_extensions import TypedDict
 
+from config.containers import ApplicationContainer
+
 from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
@@ -119,7 +121,7 @@ class BudgetDataError(Exception):
 
 
 def get_categories(
-    user: User,
+    user: User | None,
     type_: str,
 ) -> (
     QuerySet[ExpenseCategory, ExpenseCategory]
@@ -141,10 +143,10 @@ def get_categories(
 
 
 def _validate_budget_inputs(
-    _user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    income_categories: list[IncomeCategory],
+    _user: User | None,
+    months: list[date] | None,
+    expense_categories: list[ExpenseCategory] | None,
+    income_categories: list[IncomeCategory] | None,
 ) -> None:
     """Validate required inputs for budget aggregation."""
     if _user is None:
@@ -170,8 +172,10 @@ def _get_expense_facts(
     if not months:
         return {}
 
+    container = ApplicationContainer()
+    expense_repository = container.expense.expense_repository()
     expenses = (
-        Expense.objects.filter(
+        expense_repository.filter(
             user=user,
             category__in=expense_categories,
             date__gte=months[0],
@@ -202,7 +206,9 @@ def _get_expense_plans(
     expense_categories: list[ExpenseCategory],
 ) -> dict[int, dict[date, int]]:
     """Get expense plans data for given user and months."""
-    plans_exp = Planning.objects.filter(
+    container = ApplicationContainer()
+    planning_repository = container.budget.planning_repository()
+    plans_exp = planning_repository.filter(
         user=user,
         date__in=months,
         planning_type='expense',
@@ -347,8 +353,10 @@ def _get_income_facts(
     if not months:
         return {}
 
+    container = ApplicationContainer()
+    income_repository = container.income.income_repository()
     income_queryset = (
-        Income.objects.filter(
+        income_repository.filter(
             user=user,
             category__in=income_categories,
             date__gte=months[0],
@@ -378,7 +386,9 @@ def _get_income_plans(
     income_categories: list[IncomeCategory],
 ) -> dict[int, dict[date, Decimal]]:
     """Get income plans data for given user and months."""
-    plans_inc = Planning.objects.filter(
+    container = ApplicationContainer()
+    planning_repository = container.budget.planning_repository()
+    plans_inc = planning_repository.filter(
         user=user,
         date__in=months,
         planning_type='income',
@@ -498,9 +508,9 @@ def _calculate_percentage(fact: Decimal | int, plan: Decimal | int) -> Decimal:
 
 
 def _validate_expense_table_inputs(
-    _user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
+    _user: User | None,
+    months: list[date] | None,
+    expense_categories: list[ExpenseCategory] | None,
 ) -> None:
     """Validate required inputs for expense table aggregation."""
     if _user is None:
@@ -523,8 +533,10 @@ def _get_expense_table_facts(
     if not months:
         return {}
 
+    container = ApplicationContainer()
+    expense_repository = container.expense.expense_repository()
     expenses = (
-        Expense.objects.filter(
+        expense_repository.filter(
             user=user,
             category__in=expense_categories,
             date__gte=months[0],
@@ -554,7 +566,9 @@ def _get_expense_table_plans(
     expense_categories: list[ExpenseCategory],
 ) -> dict[int, dict[date, int]]:
     """Get expense plans for table view."""
-    plans_expense = Planning.objects.filter(
+    container = ApplicationContainer()
+    planning_repository = container.budget.planning_repository()
+    plans_expense = planning_repository.filter(
         user=user,
         date__in=months,
         planning_type='expense',
@@ -652,9 +666,9 @@ def aggregate_expense_table(
 
 
 def _validate_income_table_inputs(
-    _user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
+    _user: User | None,
+    months: list[date] | None,
+    income_categories: list[IncomeCategory] | None,
 ) -> None:
     """Validate required inputs for income table aggregation."""
     if _user is None:
@@ -677,8 +691,10 @@ def _get_income_table_facts(
     if not months:
         return {}
 
+    container = ApplicationContainer()
+    income_repository = container.income.income_repository()
     income_queryset = (
-        Income.objects.filter(
+        income_repository.filter(
             user=user,
             category__in=income_categories,
             date__gte=months[0],
@@ -708,7 +724,9 @@ def _get_income_table_plans(
     income_categories: list[IncomeCategory],
 ) -> dict[int, dict[date, Decimal]]:
     """Get income plans for table view."""
-    plans_inc = Planning.objects.filter(
+    container = ApplicationContainer()
+    planning_repository = container.budget.planning_repository()
+    plans_inc = planning_repository.filter(
         user=user,
         date__in=months,
         planning_type='income',
@@ -797,9 +815,9 @@ def aggregate_income_table(
 
 
 def _validate_expense_api_inputs(
-    _user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
+    _user: User | None,
+    months: list[date] | None,
+    expense_categories: list[ExpenseCategory] | None,
 ) -> None:
     """Validate required inputs for expense API aggregation."""
     if _user is None:
@@ -822,8 +840,10 @@ def _get_expense_api_facts(
     if not months:
         return {}
 
+    container = ApplicationContainer()
+    expense_repository = container.expense.expense_repository()
     expenses = (
-        Expense.objects.filter(
+        expense_repository.filter(
             user=user,
             category__in=expense_categories,
             date__gte=months[0],
@@ -854,7 +874,9 @@ def _get_expense_api_plans(
     expense_categories: list[ExpenseCategory],
 ) -> dict[int, dict[date, int]]:
     """Get expense plans for API view."""
-    plans_expense = Planning.objects.filter(
+    container = ApplicationContainer()
+    planning_repository = container.budget.planning_repository()
+    plans_expense = planning_repository.filter(
         user=user,
         date__in=months,
         planning_type='expense',
@@ -937,9 +959,9 @@ def aggregate_expense_api(
 
 
 def _validate_income_api_inputs(
-    _user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
+    _user: User | None,
+    months: list[date] | None,
+    income_categories: list[IncomeCategory] | None,
 ) -> None:
     """Validate required inputs for income API aggregation."""
     if _user is None:
@@ -962,8 +984,10 @@ def _get_income_api_facts(
     if not months:
         return {}
 
+    container = ApplicationContainer()
+    income_repository = container.income.income_repository()
     incomes = (
-        Income.objects.filter(
+        income_repository.filter(
             user=user,
             category__in=income_categories,
             date__gte=months[0],
@@ -997,7 +1021,9 @@ def _get_income_api_plans(
     income_categories: list[IncomeCategory],
 ) -> dict[int, dict[date, Decimal]]:
     """Get income plans for API view."""
-    plans_income = Planning.objects.filter(
+    container = ApplicationContainer()
+    planning_repository = container.budget.planning_repository()
+    plans_income = planning_repository.filter(
         user=user,
         date__in=months,
         planning_type='income',
