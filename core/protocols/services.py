@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
 
 from django.db.models import QuerySet
 
@@ -19,77 +19,57 @@ if TYPE_CHECKING:
     )
 
 
+@runtime_checkable
 class AccountServiceProtocol(Protocol):
-    @staticmethod
-    def get_user_accounts(user: User) -> list['Account']: ...
+    def get_user_accounts(self, user: User) -> list['Account']: ...
 
-    @staticmethod
     def get_account_by_id(
-        account_id: int, user: User
+        self, account_id: int, user: User
     ) -> Optional['Account']: ...
 
-    @staticmethod
     def get_credit_card_debt(
+        self,
         account: 'Account',
         start_date: Any | None = None,
         end_date: Any | None = None,
     ) -> Decimal | None: ...
 
-    @staticmethod
     def calculate_grace_period_info(
+        self,
         account: 'Account',
         purchase_month: Any,
     ) -> 'GracePeriodInfoDict': ...
 
-    @staticmethod
-    def calculate_payment_schedule(
-        account: 'Account',
-        purchase_month: Any,
-    ) -> 'PaymentScheduleItemDict': ...
-
-    @staticmethod
     def calculate_raiffeisenbank_payment_schedule(
+        self,
         account: 'Account',
         purchase_month: Any,
     ) -> 'RaiffeisenbankScheduleDict': ...
 
-    @staticmethod
-    def transfer_money(
-        from_account: 'Account',
-        to_account: 'Account',
-        amount: Decimal,
-        user: User,
-        exchange_date: datetime | None = None,
-        notes: str | None = None,
-    ) -> 'TransferMoneyLog': ...
-
-    @staticmethod
     def apply_receipt_spend(
-        account: 'Account', amount: Decimal
+        self, account: 'Account', amount: Decimal
     ) -> 'Account': ...
 
-    @staticmethod
-    def refund_to_account(account: 'Account', amount: Decimal) -> 'Account': ...
+    def refund_to_account(self, account: 'Account', amount: Decimal) -> 'Account': ...
 
-    @staticmethod
     def reconcile_account_balances(
+        self,
         old_account: 'Account',
         new_account: 'Account',
         old_total_sum: Decimal,
         new_total_sum: Decimal,
     ) -> None: ...
 
-    @staticmethod
     def get_transfer_money_log(
+        self,
         user: User,
         limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
     ) -> Any: ...
 
-    @staticmethod
     def get_accounts_for_user_or_group(
+        self,
         user: User,
         group_id: str | None = None,
     ) -> QuerySet['Account']: ...
 
-    @staticmethod
-    def get_sum_all_accounts(accounts: Any) -> Decimal: ...
+    def get_sum_all_accounts(self, accounts: Any) -> Decimal: ...
