@@ -2,11 +2,11 @@ from collections import OrderedDict
 from typing import Any, Literal, TypedDict
 
 from dependency_injector.wiring import Provide, inject
-from django.core.exceptions import PermissionDenied
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import PermissionDenied
 from django.db.models.aggregates import Sum
 from django.db.models.functions import TruncMonth
 from django.http import (
@@ -27,6 +27,7 @@ from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.models import Account
@@ -35,7 +36,6 @@ from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.mixins import IncomeFormQuerysetMixin
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.income.services.income_ops import IncomeOps
-from config.containers import ApplicationContainer
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.views import AuthRequest

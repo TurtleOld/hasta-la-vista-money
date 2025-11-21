@@ -12,6 +12,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import (
@@ -22,7 +23,6 @@ from hasta_la_vista_money.loan.models import (
 from hasta_la_vista_money.loan.services.loan_calculation import (
     LoanCalculationService,
 )
-from config.containers import ApplicationContainer
 from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
@@ -147,7 +147,7 @@ class LoanCreateView(
             form.add_error(None, 'Не удалось найти созданный кредит')
             return self.form_invalid(form)
 
-        loan_calculation_service().run(
+        loan_calculation_service.run(
             type_loan=str(type_loan),
             user_id=self.request.user.pk,
             loan=loan,

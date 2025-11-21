@@ -4,6 +4,8 @@ This module provides reusable mixin classes that add functionality to views,
 including group-based account filtering and user-specific data access.
 """
 
+from typing import cast
+
 from django.db.models import QuerySet
 from django.http import HttpRequest
 
@@ -44,4 +46,5 @@ class GroupAccountMixin:
         if container is None:
             container = ApplicationContainer()
         account_service = container.core.account_service()
-        return account_service.get_accounts_for_user_or_group(user, group_id)
+        result = account_service.get_accounts_for_user_or_group(user, group_id)
+        return cast('QuerySet[Account, Account]', result)

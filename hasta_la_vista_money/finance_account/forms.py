@@ -28,12 +28,10 @@ from hasta_la_vista_money.finance_account.base_forms import (
     DateFieldMixin,
     FormValidationMixin,
 )
-from hasta_la_vista_money.finance_account.services import TransferService
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.finance_account.services import TransferService
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
     validate_credit_fields_required,
@@ -202,7 +200,14 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
     including balance checks, account differences, and amount validation.
     """
 
-    def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        user: User,
+        transfer_service: Any,
+        account_repository: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """Initialize transfer form with user-specific account choices.
 
         Sets up form fields with accounts filtered by the specified user
@@ -210,12 +215,16 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
 
         Args:
             user: User whose accounts should be available for transfer.
+            transfer_service: TransferService instance from DI container.
+            account_repository: AccountRepository instance from DI container.
             *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
         """
         super().__init__(*args, **kwargs)
+        self.transfer_service = transfer_service
+        self.account_repository = account_repository
 
-        user_accounts = Account.objects.filter(user=user)
+        user_accounts = self.account_repository.get_by_user(user)
 
         self.fields['from_account'] = ModelChoiceField(
             label=_('Со счёта:'),
@@ -286,8 +295,7 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
 
         cleaned_data = self.cleaned_data
 
-        transfer_service = TransferService()
-        return transfer_service.transfer_money(
+        return self.transfer_service.transfer_money(
             from_account=cleaned_data['from_account'],
             to_account=cleaned_data['to_account'],
             amount=cleaned_data['amount'],
