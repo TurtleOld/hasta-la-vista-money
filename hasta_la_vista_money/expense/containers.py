@@ -13,6 +13,7 @@ class ExpenseContainer(containers.DeclarativeContainer):
     expense_service = providers.Factory(
         ExpenseService,
         account_service=core.account_service,
+        receipt_expense_service_factory=receipt_expense_service.provider,
     )
     expense_category_service = providers.Factory(ExpenseCategoryService)
     receipt_expense_service = providers.Factory(ReceiptExpenseService)
