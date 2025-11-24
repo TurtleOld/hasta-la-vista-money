@@ -16,6 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.budget.models import DateList, Planning
 from hasta_la_vista_money.budget.services.budget import (
     aggregate_budget_data,
@@ -161,12 +162,16 @@ class BudgetView(
         user, months, expense_categories, income_categories = (
             self.get_budget_context()
         )
+        container = getattr(self.request, 'container', None)
+        if container is None:
+            container = ApplicationContainer()
         context.update(
             aggregate_budget_data(
                 user=user,
                 months=months,
                 expense_categories=expense_categories,
                 income_categories=income_categories,
+                container=container,
             ),
         )
         return context
@@ -231,7 +236,8 @@ def save_planning(request: HttpRequest) -> JsonResponse:
             )
         else:
             income_category = get_object_or_404(
-                IncomeCategory, id=data['category_id']
+                IncomeCategory,
+                id=data['category_id'],
             )
             plan, created = Planning.objects.get_or_create(
                 user=user,
@@ -263,11 +269,15 @@ class ExpenseTableView(
         """
         context = super().get_context_data(**kwargs)
         user, months, expense_categories, _ = self.get_budget_context()
+        container = getattr(self.request, 'container', None)
+        if container is None:
+            container = ApplicationContainer()
         context.update(
             aggregate_expense_table(
                 user=user,
                 months=months,
                 expense_categories=expense_categories,
+                container=container,
             ),
         )
         return context
@@ -289,11 +299,15 @@ class IncomeTableView(
         """
         context = super().get_context_data(**kwargs)
         user, months, _, income_categories = self.get_budget_context()
+        container = getattr(self.request, 'container', None)
+        if container is None:
+            container = ApplicationContainer()
         context.update(
             aggregate_income_table(
                 user=user,
                 months=months,
                 income_categories=income_categories,
+                container=container,
             ),
         )
         return context
@@ -349,10 +363,14 @@ class ExpenseBudgetAPIView(APIView):
             'list[ExpenseCategory]',
             list(get_categories(user, 'expense')),
         )
+        container = getattr(request, 'container', None)
+        if container is None:
+            container = ApplicationContainer()
         data = aggregate_expense_api(
             user=user,
             months=months,
             expense_categories=expense_categories,
+            container=container,
         )
         return Response(data)
 
@@ -401,9 +419,13 @@ class IncomeBudgetAPIView(APIView):
             'list[IncomeCategory]',
             list(get_categories(user, 'income')),
         )
+        container = getattr(request, 'container', None)
+        if container is None:
+            container = ApplicationContainer()
         data = aggregate_income_api(
             user=user,
             months=months,
             income_categories=income_categories,
+            container=container,
         )
         return Response(data)
