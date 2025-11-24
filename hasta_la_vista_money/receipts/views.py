@@ -399,7 +399,7 @@ class ReceiptUpdateView(
             receipt = receipt_repository.get_by_id(self.kwargs['pk'])
             if receipt.user != self.request.user:
                 raise Http404('Receipt not found')
-            return receipt  # noqa: TRY300
+            return receipt
         except Receipt.DoesNotExist:
             logger.exception('Receipt not found', pk=self.kwargs['pk'])
             raise

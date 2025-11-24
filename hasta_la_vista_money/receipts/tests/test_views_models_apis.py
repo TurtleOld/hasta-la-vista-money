@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import MagicMock, Mock, patch
@@ -739,7 +739,7 @@ class TestUploadImageView(TestCase):
         mock_create_receipt.return_value = mock_receipt
 
         mock_parse_date.return_value = timezone.make_aware(
-            datetime(2023, 5, 16, 19, 35, tzinfo=dt_timezone.utc),
+            datetime(2023, 5, 16, 19, 35, tzinfo=UTC),
             timezone.utc,
         )
 
