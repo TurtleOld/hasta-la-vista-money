@@ -83,7 +83,6 @@ class ExpenseView(
     LoginRequiredMixin,
     SuccessMessageMixin[AddExpenseForm],
     FilterView,
-    ExpenseServiceProtocol,
 ):
     """Main expense list view with filtering and pagination."""
 
@@ -117,10 +116,12 @@ class ExpenseView(
         user = get_object_or_404(User, username=self.request.user)
 
         expense_service = expense_service_factory(
-            user=user, request=self.request
+            user=user,
+            request=self.request,
         )
         receipt_service = receipt_service_factory(
-            user=user, request=self.request
+            user=user,
+            request=self.request,
         )
 
         expense_queryset = Expense.objects.select_related(

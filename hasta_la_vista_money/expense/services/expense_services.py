@@ -152,6 +152,7 @@ class ExpenseService:
 
         expense_updated.user = self.user
         expense_updated.amount = amount
+        expense_updated.account = account
         expense_updated.save()
 
     def delete_expense(
