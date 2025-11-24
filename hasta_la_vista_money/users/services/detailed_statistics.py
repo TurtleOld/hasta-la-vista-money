@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from dateutil.relativedelta import relativedelta
-from dependency_injector.wiring import Provide, inject
+from dependency_injector.wiring import inject
 from django.core.cache import cache
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth

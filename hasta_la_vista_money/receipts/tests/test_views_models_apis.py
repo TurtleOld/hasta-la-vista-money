@@ -1,9 +1,10 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import MagicMock, Mock, patch
 
+from dependency_injector import providers
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -11,8 +12,6 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
-
-from dependency_injector import providers
 
 from config.containers import ApplicationContainer
 from core.protocols.services import AccountServiceProtocol
@@ -740,7 +739,8 @@ class TestUploadImageView(TestCase):
         mock_create_receipt.return_value = mock_receipt
 
         mock_parse_date.return_value = timezone.make_aware(
-            datetime(2023, 5, 16, 19, 35),  # noqa: DTZ001
+            datetime(2023, 5, 16, 19, 35, tzinfo=dt_timezone.utc),
+            timezone.utc,
         )
 
         mock_get_object.return_value = self.account

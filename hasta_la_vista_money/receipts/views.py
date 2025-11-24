@@ -18,7 +18,7 @@ from hasta_la_vista_money.users.views import AuthRequest
 
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -83,7 +83,9 @@ class ReceiptView(
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = list(group.user_set.all())
-                return receipt_repository.get_by_users_with_related(users_in_group)
+                return receipt_repository.get_by_users_with_related(
+                    users_in_group,
+                )
             except Group.DoesNotExist:
                 return receipt_repository.filter(pk__in=[])
         return receipt_repository.get_by_user_with_related(self.request.user)
@@ -396,9 +398,8 @@ class ReceiptUpdateView(
             receipt_repository = container.receipts.receipt_repository()
             receipt = receipt_repository.get_by_id(self.kwargs['pk'])
             if receipt.user != self.request.user:
-                from django.http import Http404
                 raise Http404('Receipt not found')
-            return receipt
+            return receipt  # noqa: TRY300
         except Receipt.DoesNotExist:
             logger.exception('Receipt not found', pk=self.kwargs['pk'])
             raise
@@ -987,7 +988,9 @@ def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
             try:
                 group = Group.objects.get(pk=group_id)
                 users_in_group = list(group.user_set.all())
-                receipt_queryset = receipt_repository.get_by_users(users_in_group)
+                receipt_queryset = receipt_repository.get_by_users(
+                    users_in_group,
+                )
             except Group.DoesNotExist:
                 receipt_queryset = receipt_repository.filter(pk__in=[])
         else:

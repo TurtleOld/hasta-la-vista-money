@@ -12,4 +12,3 @@ class BudgetContainer(containers.DeclarativeContainer):
 
     planning_repository = providers.Singleton(PlanningRepository)
     date_list_repository = providers.Singleton(DateListRepository)
-
