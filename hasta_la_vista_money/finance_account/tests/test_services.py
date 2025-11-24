@@ -238,7 +238,9 @@ class TestTransferService(TestCase):
     def setUp(self) -> None:
         self.user: UserType = cast('UserType', UserFactory())
         self.container = ApplicationContainer()
-        self.transfer_service = self.container.finance_account.transfer_service()
+        self.transfer_service = (
+            self.container.finance_account.transfer_service()
+        )
         self.from_account: Account = cast(
             'Account',
             AccountFactory(

@@ -8,6 +8,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
@@ -27,7 +28,6 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
-from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,

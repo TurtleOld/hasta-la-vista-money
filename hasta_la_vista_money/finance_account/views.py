@@ -40,7 +40,6 @@ from hasta_la_vista_money.finance_account.forms import (
 from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import (
     Account,
-    TransferMoneyLog,
 )
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.views import AuthRequest
@@ -160,7 +159,9 @@ class AccountView(
         if container is None:
             container = ApplicationContainer()
         account_repository = container.finance_account.account_repository()
-        account_transfer_money = account_repository.get_by_user_with_related(user)
+        account_transfer_money = account_repository.get_by_user_with_related(
+            user,
+        )
         initial_form_data = {
             'from_account': account_transfer_money.first(),
             'to_account': account_transfer_money.first(),
@@ -218,9 +219,6 @@ class AccountView(
         accounts = account_repository.get_by_user_with_related(user)
         sum_all_accounts = account_service.get_sum_all_accounts(accounts)
         if user.groups.exists():
-            users_in_groups = User.objects.filter(
-                groups__in=user.groups.values_list('id', flat=True),
-            ).distinct()
             accounts_in_group = account_repository.get_by_user_and_group(
                 user,
                 None,
@@ -402,10 +400,13 @@ class TransferMoneyAccountView(
         kwargs['user'] = self.request.user
         container = getattr(self.request, 'container', None)
         if container is None:
-            from config.containers import ApplicationContainer
             container = ApplicationContainer()
-        kwargs['transfer_service'] = container.finance_account.transfer_service()
-        kwargs['account_repository'] = container.finance_account.account_repository()
+        kwargs['transfer_service'] = (
+            container.finance_account.transfer_service()
+        )
+        kwargs['account_repository'] = (
+            container.finance_account.account_repository()
+        )
         return kwargs
 
     def form_valid(

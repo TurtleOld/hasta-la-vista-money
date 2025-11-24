@@ -6,11 +6,11 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
-from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -315,10 +315,12 @@ class TestTransferMoneyLogModel(TestCase):
     def test_transfer_money_log_model_meta(self) -> None:
         """Test TransferMoneyLog model meta options."""
         self.assertEqual(
-            TransferMoneyLog._meta.verbose_name, 'Лог перевода денег'
+            TransferMoneyLog._meta.verbose_name,
+            'Лог перевода денег',
         )
         self.assertEqual(
-            TransferMoneyLog._meta.verbose_name_plural, 'Логи переводов денег'
+            TransferMoneyLog._meta.verbose_name_plural,
+            'Логи переводов денег',
         )
         self.assertEqual(TransferMoneyLog._meta.ordering, ['-exchange_date'])
 
