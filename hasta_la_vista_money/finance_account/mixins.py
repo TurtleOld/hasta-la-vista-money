@@ -9,7 +9,6 @@ from typing import cast
 from django.db.models import QuerySet
 from django.http import HttpRequest
 
-from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
@@ -42,9 +41,6 @@ class GroupAccountMixin:
             QuerySet of accounts filtered by user or group membership.
         """
         group_id = self.get_group_id()
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        account_service = container.core.account_service()
+        account_service = self.request.container.core.account_service()
         result = account_service.get_accounts_for_user_or_group(user, group_id)
         return cast('QuerySet[Account, Account]', result)
