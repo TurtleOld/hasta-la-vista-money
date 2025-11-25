@@ -30,7 +30,6 @@ from django.views.generic.edit import UpdateView
 from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
-from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
@@ -74,10 +73,9 @@ class ReceiptView(
     request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Receipt]:
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        receipt_repository = container.receipts.receipt_repository()
+        receipt_repository = (
+            self.request.container.receipts.receipt_repository()
+        )
         group_id = self.request.GET.get('group_id') or 'my'
         if group_id and group_id != 'my':
             try:
@@ -106,12 +104,13 @@ class ReceiptView(
         seller_queryset: QuerySet[Seller]
         account_queryset: QuerySet[Account]
 
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        receipt_repository = container.receipts.receipt_repository()
-        seller_repository = container.receipts.seller_repository()
-        account_repository = container.finance_account.account_repository()
+        receipt_repository = (
+            self.request.container.receipts.receipt_repository()
+        )
+        seller_repository = self.request.container.receipts.seller_repository()
+        account_repository = (
+            self.request.container.finance_account.account_repository()
+        )
 
         if group_id and group_id != 'my':
             try:
@@ -289,10 +288,7 @@ class ReceiptCreateView(
         number_receipt = receipt_form.cleaned_data.get('number_receipt')
         if not isinstance(request.user, User):
             raise TypeError('User must be authenticated')
-        container = getattr(request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        receipt_repository = container.receipts.receipt_repository()
+        receipt_repository = request.container.receipts.receipt_repository()
         return receipt_repository.get_by_user_and_number(
             user=request.user,
             number_receipt=number_receipt,
@@ -305,10 +301,9 @@ class ReceiptCreateView(
         product_formset: 'ProductFormSet',  # type: ignore[valid-type]
         seller: Seller,
     ) -> Receipt | None:
-        container = getattr(request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        receipt_creator_service = container.receipts.receipt_creator_service()
+        receipt_creator_service = (
+            request.container.receipts.receipt_creator_service()
+        )
         result = receipt_creator_service.create_manual_receipt(
             user=cast('User', request.user),
             receipt_form=receipt_form,
@@ -392,28 +387,26 @@ class ReceiptUpdateView(
         try:
             if not isinstance(self.request.user, User):
                 raise TypeError('User must be authenticated')
-            container = getattr(self.request, 'container', None)
-            if container is None:
-                container = ApplicationContainer()
-            receipt_repository = container.receipts.receipt_repository()
+            receipt_repository = (
+                self.request.container.receipts.receipt_repository()
+            )
             receipt = receipt_repository.get_by_id(self.kwargs['pk'])
             if receipt.user != self.request.user:
                 raise Http404('Receipt not found')
-            return receipt
         except Receipt.DoesNotExist:
             logger.exception('Receipt not found', pk=self.kwargs['pk'])
             raise
+        return receipt
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context: dict[str, Any] = super().get_context_data(**kwargs)
         receipt_form = self.get_form()
 
         current_user = cast('User', self.request.user)
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        account_repository = container.finance_account.account_repository()
-        seller_repository = container.receipts.seller_repository()
+        account_repository = (
+            self.request.container.finance_account.account_repository()
+        )
+        seller_repository = self.request.container.receipts.seller_repository()
         account_field = cast(
             'ModelChoiceField[Account]',
             receipt_form.fields['account'],
@@ -450,11 +443,10 @@ class ReceiptUpdateView(
         if not isinstance(self.request.user, User):
             raise TypeError('User must be authenticated')
         current_user = self.request.user
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        account_repository = container.finance_account.account_repository()
-        seller_repository = container.receipts.seller_repository()
+        account_repository = (
+            self.request.container.finance_account.account_repository()
+        )
+        seller_repository = self.request.container.receipts.seller_repository()
         account_field = cast(
             'ModelChoiceField[Account]',
             form.fields['account'],
@@ -471,11 +463,10 @@ class ReceiptUpdateView(
         product_formset = ProductFormSet(self.request.POST)
 
         current_user = cast('User', self.request.user)
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        account_repository = container.finance_account.account_repository()
-        seller_repository = container.receipts.seller_repository()
+        account_repository = (
+            self.request.container.finance_account.account_repository()
+        )
+        seller_repository = self.request.container.receipts.seller_repository()
         account_field = cast(
             'ModelChoiceField[Account]',
             form.fields['account'],
@@ -487,11 +478,8 @@ class ReceiptUpdateView(
         seller_field.queryset = seller_repository.get_by_user(current_user)
 
         if form.is_valid() and product_formset.is_valid():
-            container = getattr(self.request, 'container', None)
-            if container is None:
-                container = ApplicationContainer()
             receipt_updater_service = (
-                container.receipts.receipt_updater_service()
+                self.request.container.receipts.receipt_updater_service()
             )
             receipt_updater_service.update_receipt(
                 user=cast('User', self.request.user),
@@ -544,10 +532,9 @@ class ReceiptUpdateView(
         # Примечание: проверку владельца счёта опускаем, так как доступ к чеку
         # и валидные queryset'ы аккаунтов уже ограничивают пользователя выше.
 
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        account_repository = container.finance_account.account_repository()
+        account_repository = (
+            self.request.container.finance_account.account_repository()
+        )
         try:
             old_account_obj = account_repository.get_by_id(old_account.pk)
             new_account_obj = account_repository.get_by_id(new_account.pk)
@@ -584,16 +571,17 @@ class ReceiptDeleteView(
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         if not isinstance(self.request.user, User):
             raise TypeError('User must be authenticated')
-        return get_object_or_404(
-            Receipt.objects.filter(user=self.request.user)
-            .select_related(
-                'account',
-                'seller',
-            )
-            .prefetch_related('product'),
-            pk=self.kwargs['pk'],
-            user=self.request.user,
+        receipt_repository = (
+            self.request.container.receipts.receipt_repository()
         )
+        receipt = (
+            receipt_repository.get_by_user_with_related(self.request.user)
+            .filter(pk=self.kwargs['pk'])
+            .first()
+        )
+        if receipt is None:
+            raise Http404('Receipt not found')
+        return receipt
 
     def get_success_url(self) -> str:
         return str(self.success_url)
@@ -650,10 +638,9 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
 
         current_user = cast('User', self.request.user)
 
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        receipt_repository = container.receipts.receipt_repository()
+        receipt_repository = (
+            self.request.container.receipts.receipt_repository()
+        )
 
         all_purchased_products = (
             receipt_repository.filter(user=current_user)
@@ -723,10 +710,9 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
                 messages.error(self.request, constants.INVALID_FILE_FORMAT)
                 return super().form_invalid(form)
 
-            container = getattr(self.request, 'container', None)
-            if container is None:
-                container = ApplicationContainer()
-            receipt_import_service = container.receipts.receipt_import_service()
+            receipt_import_service = (
+                self.request.container.receipts.receipt_import_service()
+            )
             result = receipt_import_service.process_uploaded_image(
                 user=user,
                 account=account,
@@ -830,10 +816,7 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         user: User,
     ) -> Seller:
         """Create or update seller from receipt data."""
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        seller_repository = container.receipts.seller_repository()
+        seller_repository = self.request.container.receipts.seller_repository()
         return seller_repository.update_or_create_seller(
             user=user,
             name_seller=decode_json_receipt.get('name_seller', ''),
@@ -866,10 +849,9 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
             )
             for item in decode_json_receipt.get('items', [])
         ]
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        product_repository = container.receipts.product_repository()
+        product_repository = (
+            self.request.container.receipts.product_repository()
+        )
         return product_repository.bulk_create_products(products_data)
 
     def _create_receipt(
@@ -880,10 +862,9 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         seller: Seller,
     ) -> Receipt:
         """Create receipt from processed data."""
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        receipt_repository = container.receipts.receipt_repository()
+        receipt_repository = (
+            self.request.container.receipts.receipt_repository()
+        )
         return receipt_repository.create_receipt(
             user=user,
             account=account,
@@ -913,10 +894,9 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         user: User,
         number_receipt: int | None,
     ) -> QuerySet[Receipt]:
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        receipt_repository = container.receipts.receipt_repository()
+        receipt_repository = (
+            self.request.container.receipts.receipt_repository()
+        )
         return receipt_repository.get_by_user_and_number(
             user=user,
             number_receipt=number_receipt,
@@ -972,10 +952,7 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
 
 @require_GET
 def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
-    container = getattr(request, 'container', None)
-    if container is None:
-        container = ApplicationContainer()
-    receipt_repository = container.receipts.receipt_repository()
+    receipt_repository = request.container.receipts.receipt_repository()
     group_id = request.GET.get('group_id') or 'my'
     if not isinstance(request.user, User):
         receipt_queryset = receipt_repository.filter(pk__in=[])

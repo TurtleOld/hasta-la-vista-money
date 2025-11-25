@@ -391,7 +391,11 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         if isinstance(user, User):
-            context.update(get_user_detailed_statistics(user).items())
+            context.update(
+                get_user_detailed_statistics(
+                    user, container=self.request.container
+                ).items()
+            )
         return context
 
 
@@ -743,6 +747,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
             stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
                 user,
+                container=request.container,
             )
 
             serializable_stats = self._prepare_serializable_stats(

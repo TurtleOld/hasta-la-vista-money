@@ -30,7 +30,6 @@ from django.views.generic import (
 )
 from django_stubs_ext import StrOrPromise
 
-from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.forms import (
@@ -92,10 +91,9 @@ class AccountView(
 
     def get_queryset(self) -> QuerySet[Account]:
         """Get the queryset of accounts for the current user."""
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        account_repository = container.finance_account.account_repository()
+        account_repository = (
+            self.request.container.finance_account.account_repository()
+        )
         return account_repository.get_by_user(self.request.user)
 
     def get_context_data(
@@ -155,10 +153,9 @@ class AccountView(
             User.objects.prefetch_related('groups'),
             pk=self.request.user.pk,
         )
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        account_repository = container.finance_account.account_repository()
+        account_repository = (
+            self.request.container.finance_account.account_repository()
+        )
         account_transfer_money = account_repository.get_by_user_with_related(
             user,
         )
@@ -170,7 +167,7 @@ class AccountView(
             'add_account_form': AddAccountForm(),
             'transfer_money_form': TransferMoneyAccountForm(
                 user=user,
-                transfer_service=container.finance_account.transfer_service(),
+                transfer_service=self.request.container.finance_account.transfer_service(),
                 account_repository=account_repository,
                 initial=initial_form_data,
             ),
@@ -187,9 +184,7 @@ class AccountView(
             User.objects.prefetch_related('groups'),
             pk=self.request.user.pk,
         )
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
+        container = self.request.container
         transfer_money_log_repository = (
             container.finance_account.transfer_money_log_repository()
         )
@@ -211,11 +206,10 @@ class AccountView(
             User.objects.prefetch_related('groups'),
             pk=self.request.user.pk,
         )
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
-        account_repository = container.finance_account.account_repository()
-        account_service = container.core.account_service()
+        account_repository = (
+            self.request.container.finance_account.account_repository()
+        )
+        account_service = self.request.container.core.account_service()
         accounts = account_repository.get_by_user_with_related(user)
         sum_all_accounts = account_service.get_sum_all_accounts(accounts)
         if user.groups.exists():
@@ -398,14 +392,11 @@ class TransferMoneyAccountView(
         """Get form kwargs including user for account filtering."""
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
-        container = getattr(self.request, 'container', None)
-        if container is None:
-            container = ApplicationContainer()
         kwargs['transfer_service'] = (
-            container.finance_account.transfer_service()
+            self.request.container.finance_account.transfer_service()
         )
         kwargs['account_repository'] = (
-            container.finance_account.account_repository()
+            self.request.container.finance_account.account_repository()
         )
         return kwargs
 
@@ -489,10 +480,7 @@ class AjaxAccountsByGroupView(View):
         group_id = request.GET.get('group_id')
         user = request.user
         try:
-            container = getattr(request, 'container', None)
-            if container is None:
-                container = ApplicationContainer()
-            account_service = container.core.account_service()
+            account_service = request.container.core.account_service()
             accounts = await sync_to_async(
                 account_service.get_accounts_for_user_or_group,
             )(user, group_id)

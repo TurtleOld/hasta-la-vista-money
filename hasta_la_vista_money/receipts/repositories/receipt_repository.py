@@ -1,8 +1,12 @@
 """Django репозиторий для Receipt модели."""
 
-from django.db.models import QuerySet
+from datetime import datetime
 
-from hasta_la_vista_money.receipts.models import Receipt
+from django.db.models import QuerySet, Sum
+from django.db.models.functions import TruncMonth
+
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.models import Product, Receipt
 from hasta_la_vista_money.users.models import User
 
 
@@ -55,3 +59,21 @@ class ReceiptRepository:
     def filter(self, **kwargs: object) -> QuerySet[Receipt]:
         """Фильтровать receipts."""
         return Receipt.objects.filter(**kwargs)
+
+    def filter_by_account_and_date_range(
+        self,
+        account: Account,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> QuerySet[Receipt]:
+        """Фильтровать receipts по счету и периоду."""
+        return (
+            Receipt.objects.filter(
+                account=account,
+                receipt_date__gte=start_date,
+                receipt_date__lte=end_date,
+            )
+            .annotate(month=TruncMonth('receipt_date'))
+            .values('month', 'operation_type')
+            .annotate(total=Sum('total_sum'))
+        )

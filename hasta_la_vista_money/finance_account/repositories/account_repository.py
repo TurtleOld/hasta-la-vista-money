@@ -37,8 +37,37 @@ class AccountRepository:
         user: User,
         group_id: str | None = None,
     ) -> QuerySet[Account]:
-        """Получить accounts пользователя или группы."""
-        if group_id == 'my' or not group_id:
+        """Получить accounts пользователя или группы.
+
+        Семантика параметра group_id:
+        - 'my': только счета самого пользователя
+        - None: все доступные счета (свои + из всех групп пользователя)
+        - '123' (ID группы): счета всех пользователей из указанной группы
+
+        Args:
+            user: Пользователь, для которого получаем счета
+            group_id: ID группы или 'my' для фильтрации, None для всех доступных
+
+        Returns:
+            QuerySet счетов в соответствии с фильтром
+        """
+        if group_id == 'my':
+            return Account.objects.filter(user=user).select_related('user')
+
+        if group_id is None:
+            user_with_groups = User.objects.prefetch_related('groups').get(
+                pk=user.pk,
+            )
+            user_groups = user_with_groups.groups.all()
+            if user_groups.exists():
+                users_in_groups = User.objects.filter(
+                    groups__in=user_groups,
+                ).distinct()
+                return (
+                    Account.objects.filter(user__in=users_in_groups)
+                    .select_related('user')
+                    .distinct()
+                )
             return Account.objects.filter(user=user).select_related('user')
 
         users_in_group = User.objects.filter(groups__id=group_id).distinct()

@@ -1,9 +1,11 @@
 """Django репозиторий для Income модели."""
 
-from datetime import date
+from datetime import date, datetime
+from typing import Any
 
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Sum
 
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
 
@@ -33,6 +35,19 @@ class IncomeRepository:
     ) -> QuerySet[Income]:
         """Получить incomes пользователя за период."""
         return Income.objects.for_user(user).for_period(start_date, end_date)
+
+    def filter_by_user_and_date_range(
+        self,
+        user: User,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> QuerySet[Income]:
+        """Фильтровать incomes пользователя за период (datetime)."""
+        return Income.objects.filter(
+            user=user,
+            date__gte=start_date,
+            date__lte=end_date,
+        )
 
     def get_by_category(
         self,
@@ -65,3 +80,50 @@ class IncomeRepository:
     ) -> QuerySet[Income]:
         """Фильтровать incomes с select_related."""
         return Income.objects.filter(**kwargs).select_related(*related_fields)
+
+    def filter_by_account(
+        self,
+        account: Account,
+    ) -> QuerySet[Income]:
+        """Фильтровать incomes по счету."""
+        return Income.objects.filter(account=account).order_by('date')
+
+    def get_aggregated_by_date(
+        self,
+        user: User,
+    ) -> QuerySet[dict[str, Any]]:
+        """Получить агрегированные incomes по датам."""
+        return (
+            Income.objects.filter(user=user)
+            .values('date')
+            .annotate(total_amount=Sum('amount'))
+            .order_by('date')
+        )
+
+    def get_top_categories(
+        self,
+        user: User,
+        year_start: datetime,
+        limit: int = 10,
+    ) -> QuerySet[dict[str, Any]]:
+        """Получить топ категорий доходов."""
+        return (
+            Income.objects.filter(user=user, date__gte=year_start)
+            .values('category__name')
+            .annotate(total=Sum('amount'))
+            .order_by('-total')[:limit]
+        )
+
+    def filter_by_user_category_and_month(
+        self,
+        user: User,
+        category: IncomeCategory,
+        month: date,
+    ) -> QuerySet[Income]:
+        """Фильтровать incomes по пользователю, категории и месяцу."""
+        return Income.objects.filter(
+            user=user,
+            category=category,
+            date__year=month.year,
+            date__month=month.month,
+        ).select_related('user', 'category')

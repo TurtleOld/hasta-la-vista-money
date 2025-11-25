@@ -1,7 +1,6 @@
 from typing import Any
 
 import structlog
-from dependency_injector.wiring import Provide, inject
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
@@ -12,16 +11,12 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView
 
-from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import (
     Loan,
     PaymentMakeLoan,
     PaymentSchedule,
-)
-from hasta_la_vista_money.loan.services.loan_calculation import (
-    LoanCalculationService,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -106,13 +101,9 @@ class LoanCreateView(
         kwargs['user'] = self.request.user
         return kwargs
 
-    @inject
     def form_valid(
         self,
         form: LoanForm,
-        loan_calculation_service: LoanCalculationService = Provide[
-            ApplicationContainer.loan.loan_calculation_service
-        ],
     ) -> Any:
         type_loan = form.cleaned_data.get('type_loan')
         date = form.cleaned_data.get('date')
@@ -147,6 +138,9 @@ class LoanCreateView(
             form.add_error(None, 'Не удалось найти созданный кредит')
             return self.form_invalid(form)
 
+        loan_calculation_service = (
+            self.request.container.loan.loan_calculation_service()
+        )
         loan_calculation_service.run(
             type_loan=str(type_loan),
             user_id=self.request.user.pk,

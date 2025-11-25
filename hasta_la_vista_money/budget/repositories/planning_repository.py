@@ -5,6 +5,8 @@ from datetime import date
 from django.db.models import QuerySet
 
 from hasta_la_vista_money.budget.models import Planning
+from hasta_la_vista_money.expense.models import ExpenseCategory
+from hasta_la_vista_money.income.models import IncomeCategory
 from hasta_la_vista_money.users.models import User
 
 
@@ -65,3 +67,31 @@ class PlanningRepository:
     def filter(self, **kwargs: object) -> QuerySet[Planning]:
         """Фильтровать plannings."""
         return Planning.objects.filter(**kwargs)
+
+    def filter_by_user_date_and_type(
+        self,
+        user: User,
+        month: date,
+        planning_type: str,
+    ) -> QuerySet[Planning]:
+        """Фильтровать planning по пользователю, дате и типу."""
+        return Planning.objects.filter(
+            user=user,
+            date=month,
+            planning_type=planning_type,
+        ).select_related('user', 'category_expense', 'category_income')
+
+    def filter_by_user_category_and_month(
+        self,
+        user: User,
+        category: ExpenseCategory | IncomeCategory,
+        month: date,
+        planning_type: str,
+    ) -> Planning | None:
+        """Получить planning по пользователю, категории и месяцу."""
+        qs = self.filter_by_user_date_and_type(user, month, planning_type)
+        if planning_type == 'expense' and isinstance(category, ExpenseCategory):
+            return qs.filter(category_expense=category).first()
+        if planning_type == 'income' and isinstance(category, IncomeCategory):
+            return qs.filter(category_income=category).first()
+        return None
