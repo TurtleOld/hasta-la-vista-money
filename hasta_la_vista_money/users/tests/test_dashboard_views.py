@@ -139,10 +139,13 @@ class DashboardDataViewTest(TestCase):
         mock_stats: Any,
     ) -> None:
         mock_stats.side_effect = ValueError('boom')
+        request = RequestFactory().get(reverse('users:dashboard_data'))
+        request.user = self.user
+        setup_container_for_request(request)
         with patch('hasta_la_vista_money.users.views.cache.delete'):
-            response = self.client.get(reverse('users:dashboard_data'))
+            response = DashboardDataView().get(request)
         self.assertEqual(response.status_code, 500)
-        payload = response.json()
+        payload = json.loads(response.content.decode())
         self.assertIn('error', payload)
         self.assertIn('traceback', payload)
 

@@ -206,6 +206,11 @@ disable_error_code = ["var-annotated"]
 
 [tool.coverage.run]
 branch = true
+omit = [
+    "*/dependency_injector/*",
+    "*/site-packages/*",
+    "*/__pycache__/*",
+]
 
 [tool.coverage.report]
 exclude_lines = [
