@@ -27,7 +27,8 @@ class AccountPageContextService:
 
         Args:
             account_repository: Repository for account operations.
-            transfer_money_log_repository: Repository for transfer log operations.
+            transfer_money_log_repository: Repository for transfer log
+                operations.
             account_service: Service for account business logic.
             transfer_service: Service for transfer operations.
         """

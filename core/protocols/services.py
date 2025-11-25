@@ -65,6 +65,12 @@ class AccountServiceProtocol(Protocol):
         limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
     ) -> Any: ...
 
+    def get_users_for_group(
+        self,
+        user: User,
+        group_id: str | None = None,
+    ) -> list[User]: ...
+
     def get_accounts_for_user_or_group(
         self,
         user: User,

@@ -88,11 +88,17 @@ class AccountView(
     request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Account]:
-        """Get the queryset of accounts for the current user."""
-        account_repository = (
-            self.request.container.finance_account.account_repository()
+        """Get the queryset of accounts for the current user or group.
+
+        Uses GroupAccountMixin to get group_id and account_service
+        to filter accounts by user or group.
+        """
+        account_service = self.request.container.core.account_service()
+        group_id = self.get_group_id()
+        return account_service.get_accounts_for_user_or_group(
+            self.request.user,
+            group_id,
         )
-        return account_repository.get_by_user(self.request.user)
 
     def get_context_data(
         self,
@@ -115,7 +121,8 @@ class AccountView(
             **kwargs,
         )
 
-        page_context_service = self.request.container.finance_account.account_page_context_service()
+        container = self.request.container.finance_account
+        page_context_service = container.account_page_context_service()
 
         user = page_context_service.get_user_with_groups(
             self.request.user.pk,
