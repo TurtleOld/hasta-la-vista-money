@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
@@ -168,10 +169,21 @@ class TestTransferMoneyAccountForm(TestCase):
             balance=Decimal('500.00'),
             currency='RUB',
         )
+        self.container = ApplicationContainer()
+        self.transfer_service = (
+            self.container.finance_account.transfer_service()
+        )
+        self.account_repository = (
+            self.container.finance_account.account_repository()
+        )
 
     def test_form_initialization(self) -> None:
         """Test form initialization with user accounts."""
-        form = TransferMoneyAccountForm(user=self.user)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+        )
 
         self.assertEqual(form.fields['from_account'].queryset.count(), 2)  # type: ignore[attr-defined]
         self.assertIn('amount', form.fields)
@@ -192,7 +204,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1,
             'to_account': self.account2,
         }
-        form = TransferMoneyAccountForm(user=self.user, initial=initial_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            initial=initial_data,
+        )
 
         self.assertEqual(form.initial['from_account'], self.account1)
         self.assertEqual(form.initial['to_account'], self.account2)
@@ -206,7 +223,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertTrue(form.is_valid())
 
     def test_form_validation_same_accounts(self) -> None:
@@ -218,7 +240,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
         self.assertIn('to_account', form.errors)
 
@@ -231,7 +258,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
         self.assertIn('from_account', form.errors)
 
@@ -244,7 +276,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
         self.assertIn('amount', form.errors)
 
@@ -257,7 +294,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
         self.assertIn('amount', form.errors)
 
@@ -267,7 +309,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'amount': Decimal('100.00'),
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
 
     def test_form_validation_invalid_account(self) -> None:
@@ -290,7 +337,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
 
     def test_form_save(self) -> None:
@@ -302,7 +354,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertTrue(form.is_valid())
 
         transfer_log = form.save()
@@ -327,7 +384,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertTrue(form.is_valid())
 
         with self.assertRaises(ValueError):
@@ -342,7 +404,12 @@ class TestTransferMoneyAccountForm(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
 
         self.assertFalse(form.is_valid())
         self.assertIn('to_account', form.errors)

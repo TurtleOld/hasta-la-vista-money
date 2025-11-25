@@ -16,17 +16,17 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from hasta_la_vista_money.budget.models import DateList, Planning
+from hasta_la_vista_money.budget.models import Planning
+from hasta_la_vista_money.budget.repositories import (
+    PlanningRepository,
+)
 from hasta_la_vista_money.budget.services.budget import (
-    aggregate_budget_data,
-    aggregate_expense_api,
-    aggregate_expense_table,
-    aggregate_income_api,
-    aggregate_income_table,
     get_categories,
 )
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.expense.models import ExpenseCategory
+from hasta_la_vista_money.expense.repositories import ExpenseRepository
+from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.income.repositories import IncomeRepository
 from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.users.models import User
 
@@ -54,34 +54,27 @@ def get_fact_amount(
     category: ExpenseCategory | IncomeCategory,
     month: date,
     type_: str,
+    expense_repository: ExpenseRepository | None = None,
+    income_repository: IncomeRepository | None = None,
 ) -> Decimal | int:
+    if expense_repository is None or income_repository is None:
+        raise ValueError(
+            'expense_repository and income_repository must be provided'
+        )
+
     if type_ == 'expense':
         if isinstance(category, ExpenseCategory):
-            return (
-                Expense.objects.filter(
-                    user=user,
-                    category=category,
-                    date__year=month.year,
-                    date__month=month.month,
-                )
-                .select_related('user', 'category')
-                .aggregate(total=Sum('amount'))['total']
-                or 0
+            qs = expense_repository.filter_by_user_category_and_month(
+                user, category, month
             )
+            return qs.aggregate(total=Sum('amount'))['total'] or 0
         error_msg = 'Expected ExpenseCategory for expense type'
         raise ValueError(error_msg)
     if isinstance(category, IncomeCategory):
-        return (
-            Income.objects.filter(
-                user=user,
-                category=category,
-                date__year=month.year,
-                date__month=month.month,
-            )
-            .select_related('user', 'category')
-            .aggregate(total=Sum('amount'))['total']
-            or 0
+        qs = income_repository.filter_by_user_category_and_month(
+            user, category, month
         )
+        return qs.aggregate(total=Sum('amount'))['total'] or 0
     error_msg = 'Expected IncomeCategory for income type'
     raise ValueError(error_msg)
 
@@ -91,24 +84,14 @@ def get_plan_amount(
     category: ExpenseCategory | IncomeCategory,
     month: date,
     type_: str,
+    planning_repository: PlanningRepository | None = None,
 ) -> Decimal | int:
-    q = Planning.objects.filter(
-        user=user,
-        date=month,
-        planning_type=type_,
-    ).select_related('user', 'category_expense', 'category_income')
-    if type_ == 'expense':
-        if isinstance(category, ExpenseCategory):
-            q = q.filter(category_expense=category)
-        else:
-            error_msg = 'Expected ExpenseCategory for expense type'
-            raise ValueError(error_msg)
-    elif isinstance(category, IncomeCategory):
-        q = q.filter(category_income=category)
-    else:
-        error_msg = 'Expected IncomeCategory for income type'
-        raise ValueError(error_msg)
-    plan = q.first()
+    if planning_repository is None:
+        raise ValueError('planning_repository must be provided')
+
+    plan = planning_repository.filter_by_user_category_and_month(
+        user, category, month, type_
+    )
     if plan:
         return Decimal(str(plan.amount))
     return 0
@@ -130,7 +113,10 @@ class BudgetContextMixin:
         self,
     ) -> tuple[User, list[date], list[ExpenseCategory], list[IncomeCategory]]:
         user = get_object_or_404(User, username=self.request.user)
-        list_dates = DateList.objects.filter(user=user).order_by('date')
+        date_list_repository = (
+            self.request.container.budget.date_list_repository()
+        )
+        list_dates = date_list_repository.get_by_user_ordered(user)
         months = [d.date for d in list_dates]
         expense_categories = cast(
             'list[ExpenseCategory]',
@@ -161,8 +147,9 @@ class BudgetView(
         user, months, expense_categories, income_categories = (
             self.get_budget_context()
         )
+        budget_service = self.request.container.budget.budget_service()
         context.update(
-            aggregate_budget_data(
+            budget_service.aggregate_budget_data(
                 user=user,
                 months=months,
                 expense_categories=expense_categories,
@@ -217,12 +204,13 @@ def save_planning(request: HttpRequest) -> JsonResponse:
         except (ValueError, TypeError, KeyError):
             amount = Decimal(0)
         type_ = data['type']
+        planning_repository = request.container.budget.planning_repository()
         if type_ == 'expense':
             expense_category = get_object_or_404(
                 ExpenseCategory,
                 id=data['category_id'],
             )
-            plan, created = Planning.objects.get_or_create(
+            plan, created = planning_repository.get_or_create_planning(
                 user=user,
                 category_expense=expense_category,
                 date=month,
@@ -231,9 +219,10 @@ def save_planning(request: HttpRequest) -> JsonResponse:
             )
         else:
             income_category = get_object_or_404(
-                IncomeCategory, id=data['category_id']
+                IncomeCategory,
+                id=data['category_id'],
             )
-            plan, created = Planning.objects.get_or_create(
+            plan, created = planning_repository.get_or_create_planning(
                 user=user,
                 category_income=income_category,
                 date=month,
@@ -263,8 +252,9 @@ class ExpenseTableView(
         """
         context = super().get_context_data(**kwargs)
         user, months, expense_categories, _ = self.get_budget_context()
+        budget_service = self.request.container.budget.budget_service()
         context.update(
-            aggregate_expense_table(
+            budget_service.aggregate_expense_table(
                 user=user,
                 months=months,
                 expense_categories=expense_categories,
@@ -289,8 +279,9 @@ class IncomeTableView(
         """
         context = super().get_context_data(**kwargs)
         user, months, _, income_categories = self.get_budget_context()
+        budget_service = self.request.container.budget.budget_service()
         context.update(
-            aggregate_income_table(
+            budget_service.aggregate_income_table(
                 user=user,
                 months=months,
                 income_categories=income_categories,
@@ -343,13 +334,17 @@ class ExpenseBudgetAPIView(APIView):
         Returns aggregated expense data for API response.
         """
         user = request.user
-        list_dates = DateList.objects.filter(user=user).order_by('date')
+        date_list_repository = (
+            self.request.container.budget.date_list_repository()
+        )
+        list_dates = date_list_repository.get_by_user_ordered(user)
         months = [d.date.replace(day=1) for d in list_dates]
         expense_categories = cast(
             'list[ExpenseCategory]',
             list(get_categories(user, 'expense')),
         )
-        data = aggregate_expense_api(
+        budget_service = self.request.container.budget.budget_service()
+        data = budget_service.aggregate_expense_api(
             user=user,
             months=months,
             expense_categories=expense_categories,
@@ -395,13 +390,17 @@ class IncomeBudgetAPIView(APIView):
         Returns aggregated income data for API response.
         """
         user = request.user
-        list_dates = DateList.objects.filter(user=user).order_by('date')
+        date_list_repository = (
+            self.request.container.budget.date_list_repository()
+        )
+        list_dates = date_list_repository.get_by_user_ordered(user)
         months = [d.date.replace(day=1) for d in list_dates]
         income_categories = cast(
             'list[IncomeCategory]',
             list(get_categories(user, 'income')),
         )
-        data = aggregate_income_api(
+        budget_service = self.request.container.budget.budget_service()
+        data = budget_service.aggregate_income_api(
             user=user,
             months=months,
             income_categories=income_categories,

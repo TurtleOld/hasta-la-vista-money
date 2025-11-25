@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from hasta_la_vista_money.finance_account import services as account_services
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.factories import (
     AccountFactory,
     TransferMoneyLogFactory,
@@ -35,6 +35,8 @@ class TestAccountServices(TestCase):
     def setUp(self) -> None:
         self.user1: UserType = cast('UserType', UserFactory())
         self.user2: UserType = cast('UserType', UserFactory())
+        self.container = ApplicationContainer()
+        self.account_service = self.container.finance_account.account_service()
 
         self.account1: Account = cast(
             'Account',
@@ -51,7 +53,7 @@ class TestAccountServices(TestCase):
 
     def test_get_accounts_for_user_or_group_none(self) -> None:
         """Test get_accounts_for_user_or_group with None group_id."""
-        accounts = account_services.get_accounts_for_user_or_group(
+        accounts = self.account_service.get_accounts_for_user_or_group(
             self.user1,
             None,
         )
@@ -63,7 +65,7 @@ class TestAccountServices(TestCase):
 
     def test_get_accounts_for_user_or_group_my(self) -> None:
         """Test get_accounts_for_user_or_group with 'my' group_id."""
-        accounts = account_services.get_accounts_for_user_or_group(
+        accounts = self.account_service.get_accounts_for_user_or_group(
             self.user1,
             'my',
         )
@@ -79,7 +81,7 @@ class TestAccountServices(TestCase):
         self.user1.groups.add(group)
         self.user2.groups.add(group)
 
-        accounts = account_services.get_accounts_for_user_or_group(
+        accounts = self.account_service.get_accounts_for_user_or_group(
             self.user1,
             str(group.pk),
         )
@@ -91,7 +93,7 @@ class TestAccountServices(TestCase):
 
     def test_get_accounts_for_user_or_group_invalid_group(self) -> None:
         """Test get_accounts_for_user_or_group with invalid group_id."""
-        accounts = account_services.get_accounts_for_user_or_group(
+        accounts = self.account_service.get_accounts_for_user_or_group(
             self.user1,
             '999',
         )
@@ -106,20 +108,20 @@ class TestAccountServices(TestCase):
         accounts = Account.objects.filter(user=self.user1)
         expected_sum = sum(acc.balance for acc in accounts)
 
-        result = account_services.get_sum_all_accounts(accounts)
+        result = self.account_service.get_sum_all_accounts(accounts)
         self.assertEqual(result, expected_sum)
         self.assertEqual(result, Decimal('1500.00'))
 
     def test_get_sum_all_accounts_empty_queryset(self) -> None:
         """Test get_sum_all_accounts with empty queryset."""
         accounts = Account.objects.none()
-        result = account_services.get_sum_all_accounts(accounts)
+        result = self.account_service.get_sum_all_accounts(accounts)
         self.assertEqual(result, Decimal('0.00'))
 
     def test_get_sum_all_accounts_single_account(self) -> None:
         """Test get_sum_all_accounts with single account."""
         accounts = Account.objects.filter(pk=self.account1.pk)
-        result = account_services.get_sum_all_accounts(accounts)
+        result = self.account_service.get_sum_all_accounts(accounts)
         self.assertEqual(result, Decimal('1000.00'))
 
     def test_get_sum_all_accounts_parametrized(self) -> None:
@@ -162,7 +164,7 @@ class TestAccountServices(TestCase):
                 qs = Account.objects.filter(
                     pk__in=[acc.pk for acc in accounts_list],
                 )
-                result = account_services.get_sum_all_accounts(qs)
+                result = self.account_service.get_sum_all_accounts(qs)
                 self.assertEqual(result, case['expected'])
 
         acc1 = cast(
@@ -182,7 +184,7 @@ class TestAccountServices(TestCase):
             ),
         )
         qs = Account.objects.filter(pk__in=[acc1.pk, acc2.pk])
-        result = account_services.get_sum_all_accounts(qs)
+        result = self.account_service.get_sum_all_accounts(qs)
         self.assertEqual(result, Decimal('300.00'))
 
     def test_get_transfer_money_log(self) -> None:
@@ -206,14 +208,14 @@ class TestAccountServices(TestCase):
             amount=Decimal('300.00'),
         )
 
-        logs = account_services.get_transfer_money_log(self.user1)
+        logs = self.account_service.get_transfer_money_log(self.user1)
 
         self.assertEqual(logs.count(), 2)
         self.assertTrue(all(log.user == self.user1 for log in logs))
 
     def test_get_transfer_money_log_empty(self) -> None:
         """Test get_transfer_money_log with no transfers."""
-        logs = account_services.get_transfer_money_log(self.user1)
+        logs = self.account_service.get_transfer_money_log(self.user1)
         self.assertEqual(logs.count(), 0)
 
     def test_get_transfer_money_log_limit(self) -> None:
@@ -226,7 +228,7 @@ class TestAccountServices(TestCase):
                 amount=Decimal('10.00'),
             )
 
-        logs = account_services.get_transfer_money_log(self.user1)
+        logs = self.account_service.get_transfer_money_log(self.user1)
         self.assertLessEqual(logs.count(), 10)
 
 
@@ -235,6 +237,10 @@ class TestTransferService(TestCase):
 
     def setUp(self) -> None:
         self.user: UserType = cast('UserType', UserFactory())
+        self.container = ApplicationContainer()
+        self.transfer_service = (
+            self.container.finance_account.transfer_service()
+        )
         self.from_account: Account = cast(
             'Account',
             AccountFactory(
@@ -252,7 +258,7 @@ class TestTransferService(TestCase):
 
     def test_transfer_service_execute_transfer(self) -> None:
         """Test TransferService execute_transfer method."""
-        transfer_log = account_services.TransferService.transfer_money(
+        transfer_log = self.transfer_service.transfer_money(
             from_account=self.from_account,
             to_account=self.to_account,
             amount=Decimal('200.00'),
@@ -281,7 +287,7 @@ class TestTransferService(TestCase):
     def test_transfer_service_insufficient_funds(self) -> None:
         """Test TransferService with insufficient funds."""
         with self.assertRaises(ValidationError):
-            account_services.TransferService.transfer_money(
+            self.transfer_service.transfer_money(
                 from_account=self.from_account,
                 to_account=self.to_account,
                 amount=Decimal('1500.00'),
@@ -298,7 +304,7 @@ class TestTransferService(TestCase):
     def test_transfer_service_same_account(self) -> None:
         """Test TransferService with same account."""
         with self.assertRaises(ValidationError):
-            account_services.TransferService.transfer_money(
+            self.transfer_service.transfer_money(
                 from_account=self.from_account,
                 to_account=self.from_account,
                 amount=Decimal('200.00'),
@@ -324,7 +330,7 @@ class TestTransferService(TestCase):
                 self.subTest(amount=amount),
                 self.assertRaises(ValidationError),
             ):
-                account_services.TransferService.transfer_money(
+                self.transfer_service.transfer_money(
                     from_account=self.from_account,
                     to_account=self.to_account,
                     amount=amount,
@@ -341,7 +347,7 @@ class TestTransferService(TestCase):
     def test_transfer_service_amount_equals_balance_boundary(self) -> None:
         """Boundary: transferring exactly available balance should succeed."""
         transfer_amount = self.from_account.balance
-        account_services.TransferService.transfer_money(
+        self.transfer_service.transfer_money(
             from_account=self.from_account,
             to_account=self.to_account,
             amount=transfer_amount,
@@ -367,12 +373,12 @@ class TestTransferService(TestCase):
 
         with (
             mock.patch(
-                'hasta_la_vista_money.finance_account.services.TransferMoneyLog.objects.create',
+                'hasta_la_vista_money.finance_account.repositories.transfer_money_log_repository.TransferMoneyLogRepository.create_log',
                 side_effect=RuntimeError('fail on create'),
             ),
             self.assertRaises(RuntimeError),
         ):
-            account_services.TransferService.transfer_money(
+            self.transfer_service.transfer_money(
                 from_account=self.from_account,
                 to_account=self.to_account,
                 amount=Decimal('200.00'),
@@ -393,7 +399,7 @@ class TestTransferService(TestCase):
 
     def test_sequential_large_transfers_only_first_succeeds(self) -> None:
         """Два последовательных крупных перевода: второй должен упасть."""
-        account_services.TransferService.transfer_money(
+        self.transfer_service.transfer_money(
             from_account=self.from_account,
             to_account=self.to_account,
             amount=Decimal('700.00'),
@@ -408,7 +414,7 @@ class TestTransferService(TestCase):
         )
 
         with self.assertRaises(ValidationError):
-            account_services.TransferService.transfer_money(
+            self.transfer_service.transfer_money(
                 from_account=self.from_account,
                 to_account=self.to_account,
                 amount=Decimal('700.00'),

@@ -1,9 +1,10 @@
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
+from dependency_injector import providers
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -12,6 +13,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from config.containers import ApplicationContainer
+from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
@@ -649,6 +652,14 @@ class TestUploadImageView(TestCase):
     def setUp(self) -> None:
         self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
+        self.mock_account_service = MagicMock(spec=AccountServiceProtocol)
+        self.container = ApplicationContainer()
+        self.container.core.account_service.override(
+            providers.Object(self.mock_account_service),
+        )
+
+    def tearDown(self) -> None:
+        self.container.core.account_service.reset_override()
 
     def test_upload_image_view_get(self) -> None:
         self.client.force_login(self.user)
@@ -662,7 +673,34 @@ class TestUploadImageView(TestCase):
         self.assertRedirects(response, '/login/?next=/receipts/upload/')
 
     @patch('hasta_la_vista_money.receipts.views.analyze_image_with_ai')
-    def test_upload_image_view_post(self, mock_analyze: Mock) -> None:
+    @patch(
+        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._update_account_balance',
+    )
+    @patch(
+        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._parse_receipt_date',
+    )
+    @patch(
+        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._create_receipt',
+    )
+    @patch(
+        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._create_or_update_seller',
+    )
+    @patch(
+        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._create_products',
+    )
+    @patch(
+        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._check_exist_receipt',
+    )
+    def test_upload_image_view_post(
+        self,
+        mock_check_exist: Mock,
+        mock_create_products: Mock,
+        mock_create_seller: Mock,
+        mock_create_receipt: Mock,
+        mock_parse_date: Mock,
+        mock_update_balance: Mock,
+        mock_analyze: Mock,
+    ) -> None:
         mock_analyze.return_value = json.dumps(
             {
                 'name_seller': 'Тестовый продавец',
@@ -681,6 +719,28 @@ class TestUploadImageView(TestCase):
             },
         )
 
+        mock_queryset = MagicMock()
+        mock_queryset.exists.return_value = False
+        mock_check_exist.return_value = mock_queryset
+
+        mock_seller = MagicMock(spec=Seller)
+        mock_seller.pk = 1
+        mock_create_seller.return_value = mock_seller
+
+        mock_create_products.return_value = []
+
+        mock_receipt = MagicMock(spec=Receipt)
+        mock_receipt.pk = 1
+        mock_receipt.product.set = Mock()
+        mock_create_receipt.return_value = mock_receipt
+
+        mock_parse_date.return_value = timezone.make_aware(
+            datetime(2023, 5, 16, 19, 35),  # noqa: DTZ001
+            UTC,
+        )
+
+        mock_update_balance.return_value = None
+
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:upload')
 
@@ -698,11 +758,10 @@ class TestUploadImageView(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
 
-        receipt = Receipt.objects.filter(
-            user=self.user,
-            number_receipt='12345',
-        ).first()
-        self.assertIsNotNone(receipt)
+        mock_update_balance.assert_called_once()
+        call_args = mock_update_balance.call_args
+        self.assertEqual(call_args[0][0], self.account)
+        self.assertEqual(call_args[0][1], Decimal('100.00'))
 
 
 class TestProductByMonthView(TestCase):

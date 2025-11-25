@@ -8,10 +8,13 @@ from typing import TYPE_CHECKING, Any
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
 from django.db.models import QuerySet, Sum
-from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
+from core.protocols.services import AccountServiceProtocol
+
+if TYPE_CHECKING:
+    from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
@@ -20,6 +23,7 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_RETURN,
 )
 from hasta_la_vista_money.expense.models import Expense
+from hasta_la_vista_money.expense.repositories import ExpenseRepository
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -29,9 +33,10 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
-from hasta_la_vista_money.finance_account.services import AccountService
 from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.income.repositories import IncomeRepository
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.receipts.repositories import ReceiptRepository
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.users.models import User
 
@@ -174,15 +179,29 @@ def _sum_amount_for_period(
     user: User,
     start: date,
     end: date,
-    date_field: str,
+    container: 'ApplicationContainer',
+    expense_repository: ExpenseRepository | None = None,
+    income_repository: IncomeRepository | None = None,
 ) -> float:
     start_dt = timezone.make_aware(datetime.combine(start, time.min))
     end_dt = timezone.make_aware(datetime.combine(end, time.max))
 
-    qs = model.objects.filter(
-        user=user,
-        **{f'{date_field}__gte': start_dt, f'{date_field}__lte': end_dt},
-    )
+    if model == Expense:
+        if expense_repository is None:
+            expense_repository = container.expense.expense_repository()
+        qs = expense_repository.filter_by_user_and_date_range(
+            user, start_dt, end_dt
+        )
+    elif model == Income:
+        if income_repository is None:
+            income_repository = container.income.income_repository()
+        qs = income_repository.filter_by_user_and_date_range(
+            user, start_dt, end_dt
+        )
+    else:
+        error_msg = f'Unsupported model type: {model}'
+        raise ValueError(error_msg)
+
     return float(qs.aggregate(total=Sum('amount'))['total'] or 0)
 
 
@@ -190,14 +209,25 @@ def _top_categories_qs(
     model: type[Expense] | type[Income],
     user: User,
     year_start: date,
+    container: 'ApplicationContainer',
+    expense_repository: ExpenseRepository | None = None,
+    income_repository: IncomeRepository | None = None,
 ) -> Any:
     year_start_dt = timezone.make_aware(datetime.combine(year_start, time.min))
-    return (
-        model.objects.filter(user=user, date__gte=year_start_dt)
-        .values('category__name')
-        .annotate(total=Sum('amount'))
-        .order_by('-total')[: constants.TOP_CATEGORIES_LIMIT]
-    )
+    if model == Expense:
+        if expense_repository is None:
+            expense_repository = container.expense.expense_repository()
+        return expense_repository.get_top_categories(
+            user, year_start_dt, constants.TOP_CATEGORIES_LIMIT
+        )
+    if model == Income:
+        if income_repository is None:
+            income_repository = container.income.income_repository()
+        return income_repository.get_top_categories(
+            user, year_start_dt, constants.TOP_CATEGORIES_LIMIT
+        )
+    error_msg = f'Unsupported model type: {model}'
+    raise ValueError(error_msg)
 
 
 def _dates_amounts(
@@ -210,19 +240,19 @@ def _dates_amounts(
     return dates, amounts
 
 
-def _build_chart(user: User) -> ChartDataDict:
-    exp_ds = (
-        Expense.objects.filter(user=user)
-        .values('date')
-        .annotate(total_amount=Sum('amount'))
-        .order_by('date')
-    )
-    inc_ds = (
-        Income.objects.filter(user=user)
-        .values('date')
-        .annotate(total_amount=Sum('amount'))
-        .order_by('date')
-    )
+def _build_chart(
+    user: User,
+    container: 'ApplicationContainer',
+    expense_repository: ExpenseRepository | None = None,
+    income_repository: IncomeRepository | None = None,
+) -> ChartDataDict:
+    if expense_repository is None:
+        expense_repository = container.expense.expense_repository()
+    if income_repository is None:
+        income_repository = container.income.income_repository()
+
+    exp_ds = expense_repository.get_aggregated_by_date(user)
+    inc_ds = income_repository.get_aggregated_by_date(user)
 
     exp_dates, exp_amts = _dates_amounts(exp_ds)
     inc_dates, inc_amts = _dates_amounts(inc_ds)
@@ -289,6 +319,9 @@ def _balances_and_delta(
 def _six_months_data(
     user: User,
     today: date,
+    container: 'ApplicationContainer',
+    expense_repository: ExpenseRepository | None = None,
+    income_repository: IncomeRepository | None = None,
 ) -> list[MonthDataDict]:
     out = []
 
@@ -299,14 +332,18 @@ def _six_months_data(
             user,
             m_start,
             m_end,
-            'date',
+            container,
+            expense_repository=expense_repository,
+            income_repository=income_repository,
         )
         inc_sum = _sum_amount_for_period(
             Income,
             user,
             m_start,
             m_end,
-            'date',
+            container,
+            expense_repository=expense_repository,
+            income_repository=income_repository,
         )
         out.append(
             {
@@ -333,14 +370,18 @@ def _six_months_data(
             user,
             date(2000, 1, 1),
             period_end_date,
-            'date',
+            container,
+            expense_repository=expense_repository,
+            income_repository=income_repository,
         )
         total_expense_before = _sum_amount_for_period(
             Expense,
             user,
             date(2000, 1, 1),
             period_end_date,
-            'date',
+            container,
+            expense_repository=expense_repository,
+            income_repository=income_repository,
         )
 
         running_balance = total_income_before - total_expense_before
@@ -380,14 +421,10 @@ def _six_months_data(
     return out  # type: ignore[return-value]
 
 
-def _card_months_block(
-    card: Account,
+def _calculate_card_date_range(
     today_month: date,
-) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
-    months: list[CardMonthDict] = []
-    history: list[CardHistoryDict] = []
-    now = timezone.now()
-
+) -> tuple[datetime, datetime]:
+    """Вычисляет диапазон дат для статистики карты."""
     first_month_date = today_month - relativedelta(
         months=constants.STATISTICS_YEAR_MONTHS_COUNT - constants.ONE,
     )
@@ -402,29 +439,14 @@ def _card_months_block(
             time.max,
         ),
     )
+    return first_month_start, last_month_end
 
-    expenses_by_month = (
-        Expense.objects.filter(
-            account=card,
-            date__gte=first_month_start,
-            date__lte=last_month_end,
-        )
-        .annotate(month=TruncMonth('date'))
-        .values('month')
-        .annotate(total=Sum('amount'))
-    )
 
-    receipts_by_month = (
-        Receipt.objects.filter(
-            account=card,
-            receipt_date__gte=first_month_start,
-            receipt_date__lte=last_month_end,
-        )
-        .annotate(month=TruncMonth('receipt_date'))
-        .values('month', 'operation_type')
-        .annotate(total=Sum('total_sum'))
-    )
-
+def _build_expenses_receipts_dicts(
+    expenses_by_month: QuerySet[dict[str, Any]],
+    receipts_by_month: QuerySet[dict[str, Any]],
+) -> tuple[dict[date, Decimal], dict[date, dict[int, Decimal]]]:
+    """Строит словари expenses и receipts по месяцам."""
     expenses_dict: dict[date, Decimal] = {}
     for item in expenses_by_month:
         month_date = item['month'].date().replace(day=1)
@@ -439,103 +461,170 @@ def _card_months_block(
         receipts_dict[month_date][operation_type] = Decimal(
             str(item['total'] or 0),
         )
+    return expenses_dict, receipts_dict
+
+
+def _calculate_grace_period_end(
+    card: Account,
+    purchase_start_date: date,
+    purchase_end: datetime,
+    account_service: AccountServiceProtocol,
+) -> datetime:
+    """Вычисляет дату окончания льготного периода."""
+    bank = getattr(card, 'bank', None)
+    if bank == 'SBERBANK':
+        grace_end_date = purchase_start_date + relativedelta(
+            months=constants.GRACE_PERIOD_MONTHS_SBERBANK,
+        )
+        last_grace_day = monthrange(
+            grace_end_date.year,
+            grace_end_date.month,
+        )[1]
+        return timezone.make_aware(
+            datetime.combine(
+                grace_end_date.replace(day=last_grace_day),
+                time.max,
+            ),
+        )
+    if bank == 'RAIFFAISENBANK':
+        schedule = account_service.calculate_raiffeisenbank_payment_schedule(
+            card,
+            purchase_start_date,
+        )
+        return schedule['grace_end_date'] if schedule else purchase_end
+    return purchase_end
+
+
+def _build_single_card_month(
+    month_date: date,
+    expenses_dict: dict[date, Decimal],
+    receipts_dict: dict[date, dict[int, Decimal]],
+    card: Account,
+    account_service: AccountServiceProtocol,
+    now: datetime,
+) -> tuple[CardMonthDict, float]:
+    """Строит данные для одного месяца карты."""
+    purchase_start_date = month_date.replace(day=1)
+    last_day = monthrange(
+        purchase_start_date.year,
+        purchase_start_date.month,
+    )[1]
+    purchase_start = timezone.make_aware(
+        datetime.combine(purchase_start_date, time.min),
+    )
+    purchase_end = timezone.make_aware(
+        datetime.combine(
+            purchase_start_date.replace(day=last_day),
+            time.max,
+        ),
+    )
+
+    exp_sum = expenses_dict.get(purchase_start_date, Decimal(0))
+    rcpt_expense = receipts_dict[purchase_start_date].get(
+        RECEIPT_OPERATION_PURCHASE,
+        Decimal(0),
+    )
+    rcpt_return = receipts_dict[purchase_start_date].get(
+        RECEIPT_OPERATION_RETURN,
+        Decimal(0),
+    )
+
+    debt = float(exp_sum) + float(rcpt_expense) - float(rcpt_return)
+    grace_end = _calculate_grace_period_end(
+        card,
+        purchase_start_date,
+        purchase_end,
+        account_service,
+    )
+
+    days_left = (
+        (grace_end.date() - now.date()).days
+        if now <= grace_end
+        else constants.ZERO
+    )
+    overdue = now > grace_end and debt > constants.ZERO
+
+    month_data: CardMonthDict = {
+        'month': purchase_start_date.strftime('%m.%Y'),
+        'purchase_start': purchase_start,
+        'purchase_end': purchase_end,
+        'grace_end': grace_end,
+        'debt_for_month': debt,
+        'is_overdue': overdue,
+        'days_until_due': days_left,
+        'payments_made': 0.0,
+        'remaining_debt': 0.0,
+        'is_paid': False,
+    }
+
+    final_debt = debt
+    if (
+        getattr(card, 'bank', None) == 'RAIFFAISENBANK'
+        and debt > constants.ZERO
+    ):
+        schedule = account_service.calculate_raiffeisenbank_payment_schedule(
+            card,
+            purchase_start,
+        )
+        if schedule:
+            final_debt = float(schedule['final_debt'])
+
+    return month_data, final_debt
+
+
+def _card_months_block(
+    card: Account,
+    today_month: date,
+    account_service: AccountServiceProtocol,
+    expense_repository: ExpenseRepository,
+    receipt_repository: ReceiptRepository,
+) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
+    """Строит блок данных по месяцам для карты."""
+    now = timezone.now()
+    first_month_start, last_month_end = _calculate_card_date_range(today_month)
+
+    expenses_by_month = expense_repository.filter_by_user_and_account(
+        user=card.user,
+        account=card,
+        start_date=first_month_start,
+        end_date=last_month_end,
+    )
+
+    receipts_by_month = receipt_repository.filter_by_account_and_date_range(
+        account=card,
+        start_date=first_month_start,
+        end_date=last_month_end,
+    )
+
+    expenses_dict, receipts_dict = _build_expenses_receipts_dicts(
+        expenses_by_month,
+        receipts_by_month,
+    )
+
+    months: list[CardMonthDict] = []
+    history: list[CardHistoryDict] = []
 
     for i in range(constants.STATISTICS_YEAR_MONTHS_COUNT):
         month_date = today_month - relativedelta(
             months=constants.STATISTICS_YEAR_MONTHS_COUNT - constants.ONE - i,
         )
-        purchase_start_date = month_date.replace(day=1)
-        last_day = monthrange(
-            purchase_start_date.year,
-            purchase_start_date.month,
-        )[1]
-        purchase_start = timezone.make_aware(
-            datetime.combine(purchase_start_date, time.min),
+        month_data, final_debt = _build_single_card_month(
+            month_date,
+            expenses_dict,
+            receipts_dict,
+            card,
+            account_service,
+            now,
         )
-        purchase_end = timezone.make_aware(
-            datetime.combine(
-                purchase_start_date.replace(day=last_day),
-                time.max,
-            ),
-        )
-
-        exp_sum = expenses_dict.get(purchase_start_date, Decimal(0))
-        rcpt_expense = receipts_dict[purchase_start_date].get(
-            RECEIPT_OPERATION_PURCHASE,
-            Decimal(0),
-        )
-        rcpt_return = receipts_dict[purchase_start_date].get(
-            RECEIPT_OPERATION_RETURN,
-            Decimal(0),
-        )
-
-        debt = float(exp_sum) + float(rcpt_expense) - float(rcpt_return)
-
-        if getattr(card, 'bank', None) == 'SBERBANK':
-            grace_end_date = purchase_start_date + relativedelta(
-                months=constants.GRACE_PERIOD_MONTHS_SBERBANK,
-            )
-            last_grace_day = monthrange(
-                grace_end_date.year,
-                grace_end_date.month,
-            )[1]
-            grace_end = timezone.make_aware(
-                datetime.combine(
-                    grace_end_date.replace(
-                        day=last_grace_day,
-                    ),
-                    time.max,
-                ),
-            )
-        elif getattr(card, 'bank', None) == 'RAIFFAISENBANK':
-            schedule = AccountService.calculate_raiffeisenbank_payment_schedule(
-                card,
-                purchase_start_date,
-            )
-            grace_end = schedule['grace_end_date'] if schedule else purchase_end
-        else:
-            grace_end = purchase_end
-
-        days_left = (
-            (grace_end.date() - now.date()).days
-            if now <= grace_end
-            else constants.ZERO
-        )
-        overdue = now > grace_end and debt > constants.ZERO
-
-        m: CardMonthDict = {
-            'month': purchase_start_date.strftime('%m.%Y'),
-            'purchase_start': purchase_start,
-            'purchase_end': purchase_end,
-            'grace_end': grace_end,
-            'debt_for_month': debt,
-            'is_overdue': overdue,
-            'days_until_due': days_left,
-            'payments_made': 0.0,
-            'remaining_debt': 0.0,
-            'is_paid': False,
-        }
-        months.append(m)
-
-        final_debt = debt
-        if (
-            getattr(card, 'bank', None) == 'RAIFFAISENBANK'
-            and debt > constants.ZERO
-        ):
-            schedule = AccountService.calculate_raiffeisenbank_payment_schedule(
-                card,
-                purchase_start,
-            )
-            if schedule:
-                final_debt = float(schedule['final_debt'])
+        months.append(month_data)
 
         history.append(
             {
-                'month': str(m['month']),
-                'debt': debt,
+                'month': str(month_data['month']),
+                'debt': month_data['debt_for_month'],
                 'final_debt': final_debt,
-                'grace_end': grace_end.strftime('%d.%m.%Y'),
-                'is_overdue': overdue,
+                'grace_end': month_data['grace_end'].strftime('%d.%m.%Y'),
+                'is_overdue': month_data['is_overdue'],
             },
         )
 
@@ -594,6 +683,10 @@ def _build_payment_schedule(
 
 def _credit_cards_block(
     accounts: QuerySet[Account],
+    account_service: AccountServiceProtocol,
+    income_repository: IncomeRepository,
+    expense_repository: ExpenseRepository,
+    receipt_repository: ReceiptRepository,
 ) -> list[CreditCardDataDict]:
     out: list[CreditCardDataDict] = []
     today_month = timezone.now().date().replace(day=1)
@@ -603,13 +696,17 @@ def _credit_cards_block(
     )
 
     for card in credit_cards:
-        debt_now = card.get_credit_card_debt()
-        months, history = _card_months_block(card, today_month)
+        debt_now = account_service.get_credit_card_debt(card)
+        months, history = _card_months_block(
+            card,
+            today_month,
+            account_service=account_service,
+            expense_repository=expense_repository,
+            receipt_repository=receipt_repository,
+        )
 
         payments_raw = list(
-            Income.objects.filter(account=card)
-            .order_by('date')
-            .values('amount', 'date'),
+            income_repository.filter_by_account(card).values('amount', 'date'),
         )
         payments: list[PaymentItemDict] = [
             {'amount': Decimal(str(p['amount'])), 'date': p['date']}
@@ -618,7 +715,10 @@ def _credit_cards_block(
         _apply_payments_to_months(months, payments)
         schedule = _build_payment_schedule(months, history, card)
 
-        current_info = card.calculate_grace_period_info(today_month)
+        current_info = account_service.calculate_grace_period_info(
+            card,
+            today_month,
+        )
         current_info['debt_for_month'] = Decimal(
             str(
                 max(
@@ -654,12 +754,16 @@ def _credit_cards_block(
     return out
 
 
-def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
+def get_user_detailed_statistics(
+    user: User,
+    container: 'ApplicationContainer',
+) -> UserDetailedStatisticsDict:
     """
     Получение детальной статистики пользователя с кешированием.
 
     Args:
         user: Пользователь для которого собирается статистика
+        container: DI контейнер приложения
 
     Returns:
         Словарь с детальной статистикой пользователя
@@ -670,13 +774,37 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
     if cached_stats is not None:
         return cached_stats  # type: ignore[no-any-return]
 
+    expense_repository = container.expense.expense_repository()
+    income_repository = container.income.income_repository()
+    receipt_repository = container.receipts.receipt_repository()
+    account_repository = container.finance_account.account_repository()
+    transfer_money_log_repository = (
+        container.finance_account.transfer_money_log_repository()
+    )
+
     now = timezone.now()
     today = now.date()
 
-    months_data = _six_months_data(user, today)
+    months_data = _six_months_data(
+        user, today, container, expense_repository, income_repository
+    )
     year_start = today.replace(month=1, day=1)
-    top_expense_categories = _top_categories_qs(Expense, user, year_start)
-    top_income_categories = _top_categories_qs(Income, user, year_start)
+    top_expense_categories = _top_categories_qs(
+        Expense,
+        user,
+        year_start,
+        container,
+        expense_repository,
+        income_repository,
+    )
+    top_income_categories = _top_categories_qs(
+        Income,
+        user,
+        year_start,
+        container,
+        expense_repository,
+        income_repository,
+    )
 
     receipt_info_by_month = collect_info_receipt(user=user)
 
@@ -690,21 +818,29 @@ def get_user_detailed_statistics(user: User) -> UserDetailedStatisticsDict:
 
     income_expense = sort_expense_income(expenses, incomes)
 
-    transfer_money_log = (
-        TransferMoneyLog.objects.filter(user=user)
-        .select_related('to_account', 'from_account', 'user')
-        .order_by('-created_at')[: constants.TRANSFER_LOG_LIMIT]
+    transfer_money_log = transfer_money_log_repository.get_by_user_ordered(
+        user=user,
+        limit=constants.TRANSFER_LOG_LIMIT,
     )
 
-    accounts = Account.objects.filter(user=user).select_related('user')
+    accounts = account_repository.get_by_user_with_related(user)
     balances_by_currency, delta_by_currency = _balances_and_delta(
         accounts,
         today,
     )
 
-    chart_combined = _build_chart(user)
+    chart_combined = _build_chart(
+        user, container, expense_repository, income_repository
+    )
 
-    credit_cards_data = _credit_cards_block(accounts)
+    account_service = container.core.account_service()
+    credit_cards_data = _credit_cards_block(
+        accounts,
+        account_service=account_service,
+        income_repository=income_repository,
+        expense_repository=expense_repository,
+        receipt_repository=receipt_repository,
+    )
 
     stats = {
         'months_data': months_data,

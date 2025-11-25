@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import PermissionDenied
 from django.db.models.aggregates import Sum
 from django.db.models.functions import TruncMonth
 from django.http import (
@@ -32,7 +33,6 @@ from hasta_la_vista_money.income.filters import IncomeFilter
 from hasta_la_vista_money.income.forms import AddCategoryIncomeForm, IncomeForm
 from hasta_la_vista_money.income.mixins import IncomeFormQuerysetMixin
 from hasta_la_vista_money.income.models import Income, IncomeCategory
-from hasta_la_vista_money.income.services.income_ops import IncomeOps
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.views import AuthRequest
@@ -210,7 +210,10 @@ class IncomeCreateView(
         """
         return super().get_context_data(**kwargs)
 
-    def form_valid(self, form: Any) -> HttpResponse:
+    def form_valid(
+        self,
+        form: Any,
+    ) -> HttpResponse:
         """
         Handle valid form submission for income creation.
         """
@@ -230,7 +233,8 @@ class IncomeCreateView(
         try:
             if not isinstance(self.request.user, User):
                 raise TypeError('User must be authenticated')
-            IncomeOps.add_income(
+            income_ops = self.request.container.income.income_ops()
+            income_ops.add_income(
                 user=self.request.user,
                 account=account,
                 category=category,
@@ -239,7 +243,7 @@ class IncomeCreateView(
             )
             messages.success(self.request, constants.SUCCESS_INCOME_ADDED)
             return HttpResponseRedirect(str(self.success_url))
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, PermissionDenied) as e:
             form.add_error(None, str(e))
             return self.form_invalid(form)
 
@@ -265,7 +269,12 @@ class IncomeCopyView(
 
     no_permission_url = reverse_lazy('login')
 
-    def post(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(
+        self,
+        request: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
         """
         Handle POST request to copy an income record.
         """
@@ -279,9 +288,10 @@ class IncomeCopyView(
                 {'success': False, 'error': 'Income ID is required'},
             )
         try:
-            IncomeOps.copy_income(user=request.user, income_id=int(income_id))
+            income_ops = request.container.income.income_ops()
+            income_ops.copy_income(user=request.user, income_id=int(income_id))
             return JsonResponse({'success': True})
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, PermissionDenied) as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -351,7 +361,10 @@ class IncomeUpdateView(
         kwargs['account_queryset'] = self.get_account_queryset()
         return kwargs
 
-    def form_valid(self, form: Any) -> HttpResponse:
+    def form_valid(
+        self,
+        form: Any,
+    ) -> HttpResponse:
         """
         Handle valid form submission for income update.
         """
@@ -364,7 +377,8 @@ class IncomeUpdateView(
         try:
             if not isinstance(self.request.user, User):
                 raise TypeError('User must be authenticated')
-            IncomeOps.update_income(
+            income_ops = self.request.container.income.income_ops()
+            income_ops.update_income(
                 user=self.request.user,
                 income=income,
                 account=account,
@@ -374,7 +388,7 @@ class IncomeUpdateView(
             )
             messages.success(self.request, constants.SUCCESS_INCOME_UPDATE)
             return super().form_valid(form)
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, PermissionDenied) as e:
             form.add_error(None, str(e))
             return self.form_invalid(form)
 
@@ -408,9 +422,10 @@ class IncomeDeleteView(
                 {'success': False, 'error': 'User must be authenticated'},
             )
         try:
-            IncomeOps.delete_income(user=request.user, income=income)
+            income_ops = request.container.income.income_ops()
+            income_ops.delete_income(user=request.user, income=income)
             return JsonResponse({'success': True})
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, PermissionDenied) as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
 

@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.users.services.detailed_statistics import (
     UserDetailedStatisticsDict,
     get_user_detailed_statistics,
@@ -39,8 +40,10 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.user: UserType = user
 
     def test_get_user_detailed_statistics(self) -> None:
+        container = ApplicationContainer()
         stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
             self.user,
+            container=container,
         )
         self.assertIn('months_data', stats)
         self.assertIn('top_expense_categories', stats)

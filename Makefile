@@ -11,6 +11,7 @@ lint:
 format:
 	@cd hasta_la_vista_money && echo "Running ruff..." && uv run ruff format && uv run ruff check --fix
 	@cd config && echo "Running ruff on config..." && uv run ruff format && uv run ruff check --fix
+	@cd core && echo "Running ruff on core..." && uv run ruff format && uv run ruff check --fix
 
 pre-commit:
 	@echo "Running pre-commit on all files..." && uv run pre-commit run --all-files

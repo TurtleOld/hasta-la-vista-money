@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -162,7 +163,9 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        debt = account.get_credit_card_debt()
+        container = ApplicationContainer()
+        account_service = container.finance_account.account_service()
+        debt = account_service.get_credit_card_debt(account)
         # Since there are no expenses/income records, debt should be 0
         self.assertEqual(debt, Decimal('0.00'))
 
@@ -176,7 +179,9 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        debt = account.get_credit_card_debt()
+        container = ApplicationContainer()
+        account_service = container.finance_account.account_service()
+        debt = account_service.get_credit_card_debt(account)
         self.assertEqual(debt, Decimal('0.00'))
 
     def test_account_calculate_grace_period_info(self) -> None:
@@ -192,7 +197,12 @@ class TestAccountModel(TestCase):
             currency='RUB',
         )
 
-        info = account.calculate_grace_period_info(timezone.now().date())
+        container = ApplicationContainer()
+        account_service = container.finance_account.account_service()
+        info = account_service.calculate_grace_period_info(
+            account,
+            timezone.now().date(),
+        )
 
         self.assertIn('final_debt', info)
         self.assertIn('days_until_due', info)
@@ -305,10 +315,12 @@ class TestTransferMoneyLogModel(TestCase):
     def test_transfer_money_log_model_meta(self) -> None:
         """Test TransferMoneyLog model meta options."""
         self.assertEqual(
-            TransferMoneyLog._meta.verbose_name, 'Лог перевода денег'
+            TransferMoneyLog._meta.verbose_name,
+            'Лог перевода денег',
         )
         self.assertEqual(
-            TransferMoneyLog._meta.verbose_name_plural, 'Логи переводов денег'
+            TransferMoneyLog._meta.verbose_name_plural,
+            'Логи переводов денег',
         )
         self.assertEqual(TransferMoneyLog._meta.ordering, ['-exchange_date'])
 

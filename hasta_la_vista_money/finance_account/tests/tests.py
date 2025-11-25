@@ -8,13 +8,13 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
 from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.finance_account import services as account_services
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -61,6 +61,14 @@ class TestAccount(TestCase):
 
     def setUp(self) -> None:
         self.user = User.objects.get(id=1)
+        self.container = ApplicationContainer()
+        self.account_service = self.container.finance_account.account_service()
+        self.transfer_service = (
+            self.container.finance_account.transfer_service()
+        )
+        self.account_repository = (
+            self.container.finance_account.account_repository()
+        )
 
         self.account1 = Account.objects.get(name_account='Банковская карта')
         self.account1.user = self.user
@@ -358,6 +366,8 @@ class TestAccount(TestCase):
         """Тест валидации формы TransferMoneyAccountForm."""
         form = TransferMoneyAccountForm(
             user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account2.pk,
@@ -370,6 +380,8 @@ class TestAccount(TestCase):
 
         form = TransferMoneyAccountForm(
             user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account1.pk,
@@ -382,6 +394,8 @@ class TestAccount(TestCase):
 
         form = TransferMoneyAccountForm(
             user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account2.pk,
@@ -396,6 +410,8 @@ class TestAccount(TestCase):
         """Тест сохранения формы TransferMoneyAccountForm."""
         form = TransferMoneyAccountForm(
             user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account2.pk,
@@ -513,7 +529,11 @@ class TestAccount(TestCase):
 
     def test_transfer_money_form_initialization(self) -> None:
         """Тест инициализации формы TransferMoneyAccountForm."""
-        form = TransferMoneyAccountForm(user=self.user)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+        )
 
         self.assertIn('from_account', form.fields)
         self.assertIn('to_account', form.fields)
@@ -571,6 +591,8 @@ class TestAccount(TestCase):
         """Тест метода clean формы TransferMoneyAccountForm."""
         form: TransferMoneyAccountForm = TransferMoneyAccountForm(
             user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
             data={
                 'from_account': self.account1.pk,
                 'to_account': self.account1.pk,
@@ -619,6 +641,8 @@ class TestAccountServices(TestCase):
 
     def setUp(self) -> None:
         self.user = User.objects.get(id=1)
+        self.container = ApplicationContainer()
+        self.account_service = self.container.finance_account.account_service()
         self.account1 = Account.objects.filter(user=self.user).first()
         self.group = self.user.groups.first()
         self.group_id: str | None
@@ -630,12 +654,12 @@ class TestAccountServices(TestCase):
     def test_get_accounts_for_user(self) -> None:
         """Test that get_accounts_for_user_or_group returns only user's
         accounts when group_id is None or 'my'."""
-        accounts = account_services.get_accounts_for_user_or_group(
+        accounts = self.account_service.get_accounts_for_user_or_group(
             self.user,
             None,
         )
         self.assertTrue(all(acc.user == self.user for acc in accounts))
-        accounts_my = account_services.get_accounts_for_user_or_group(
+        accounts_my = self.account_service.get_accounts_for_user_or_group(
             self.user,
             'my',
         )
@@ -646,7 +670,7 @@ class TestAccountServices(TestCase):
         for users in the group."""
         if not self.group_id:
             self.skipTest('User has no group for group test')
-        accounts = account_services.get_accounts_for_user_or_group(
+        accounts = self.account_service.get_accounts_for_user_or_group(
             self.user,
             self.group_id,
         )
@@ -658,12 +682,12 @@ class TestAccountServices(TestCase):
         """Test that get_sum_all_accounts returns correct sum for queryset."""
         accounts = Account.objects.filter(user=self.user)
         expected_sum = sum(acc.balance for acc in accounts)
-        result = account_services.get_sum_all_accounts(accounts)
+        result = self.account_service.get_sum_all_accounts(accounts)
         self.assertEqual(result, expected_sum)
 
     def test_get_transfer_money_log(self) -> None:
         """Test that get_transfer_money_log returns recent logs for user."""
-        logs = account_services.get_transfer_money_log(self.user)
+        logs = self.account_service.get_transfer_money_log(self.user)
         self.assertTrue(all(log.user == self.user for log in logs))
         self.assertLessEqual(len(logs), 10)
 
@@ -691,6 +715,8 @@ class TestAccountBusinessLogic(TestCase):
         self.account2.user = self.user
         self.account1.save()
         self.account2.save()
+        self.container = ApplicationContainer()
+        self.account_service = self.container.finance_account.account_service()
 
     def test_transfer_money_success(self) -> None:
         amount = Decimal(100)
@@ -711,14 +737,19 @@ class TestAccountBusinessLogic(TestCase):
     def test_get_credit_card_debt(self) -> None:
         self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
-        debt = self.account1.get_credit_card_debt()
+        debt = self.account_service.get_credit_card_debt(
+            self.account1,
+        )
         self.assertIsInstance(debt, Decimal)
 
     def test_calculate_grace_period_info(self) -> None:
         self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD
         self.account1.save()
 
-        info = self.account1.calculate_grace_period_info(timezone.now().date())
+        info = self.account_service.calculate_grace_period_info(
+            self.account1,
+            timezone.now().date(),
+        )
         self.assertIn('final_debt', info)
 
 
@@ -909,10 +940,21 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             balance=Decimal('500.00'),
             currency='RUB',
         )
+        self.container = ApplicationContainer()
+        self.transfer_service = (
+            self.container.finance_account.transfer_service()
+        )
+        self.account_repository = (
+            self.container.finance_account.account_repository()
+        )
 
     def test_form_initialization(self) -> None:
         """Test form initialization with user accounts."""
-        form = TransferMoneyAccountForm(user=self.user)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+        )
 
         self.assertEqual(form.fields['from_account'].queryset.count(), 2)  # type: ignore[attr-defined]
 
@@ -937,7 +979,12 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertTrue(form.is_valid())
 
     def test_form_validation_same_accounts(self) -> None:
@@ -949,7 +996,12 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
         self.assertIn('to_account', form.errors)
 
@@ -962,7 +1014,12 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
         self.assertIn('from_account', form.errors)
 
@@ -975,7 +1032,12 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertFalse(form.is_valid())
         self.assertIn('amount', form.errors)
 
@@ -988,7 +1050,12 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertTrue(form.is_valid())
 
         transfer_log = form.save()
@@ -1013,7 +1080,12 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
             'notes': 'Test transfer',
         }
-        form = TransferMoneyAccountForm(user=self.user, data=form_data)
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+            data=form_data,
+        )
         self.assertTrue(form.is_valid())
 
         with self.assertRaises(ValueError):
