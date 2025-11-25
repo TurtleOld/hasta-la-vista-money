@@ -6,9 +6,11 @@ from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from typing_extensions import TypedDict
 
-from config.containers import ApplicationContainer
 from hasta_la_vista_money.expense.models import ExpenseCategory
+from hasta_la_vista_money.expense.repositories import ExpenseRepository
 from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.income.repositories import IncomeRepository
+from hasta_la_vista_money.budget.repositories import PlanningRepository
 from hasta_la_vista_money.users.models import User
 
 
@@ -118,6 +120,591 @@ class BudgetDataError(Exception):
     """
 
 
+class BudgetService:
+    """Сервис для агрегации данных бюджета."""
+
+    def __init__(
+        self,
+        expense_repository: ExpenseRepository,
+        income_repository: IncomeRepository,
+        planning_repository: PlanningRepository,
+    ) -> None:
+        self.expense_repository = expense_repository
+        self.income_repository = income_repository
+        self.planning_repository = planning_repository
+
+    def _get_expense_facts(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+    ) -> dict[int, dict[date, int]]:
+        """Get expense facts data for given user and months."""
+        if not months:
+            return {}
+
+        expenses = (
+            self.expense_repository.filter(
+                user=user,
+                category__in=expense_categories,
+                date__gte=months[0],
+                date__lte=months[-1],
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('category_id', 'month')
+            .annotate(total=Sum('amount'))
+        )
+
+        expense_fact_map: dict[int, dict[date, int]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
+
+        for e in expenses:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            month_start = month_date.replace(day=1)
+            expense_fact_map[e['category_id']][month_start] = e['total'] or 0
+
+        return expense_fact_map
+
+    def _get_expense_plans(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+    ) -> dict[int, dict[date, int]]:
+        """Get expense plans data for given user and months."""
+        plans_exp = self.planning_repository.filter(
+            user=user,
+            date__in=months,
+            planning_type='expense',
+            category_expense__in=expense_categories,
+        ).values('category_expense_id', 'date', 'amount')
+
+        expense_plan_map: dict[int, dict[date, int]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
+
+        for p in plans_exp:
+            amount = p['amount']
+            expense_plan_map[p['category_expense_id']][p['date']] = int(amount or 0)
+
+        return expense_plan_map
+
+    def _get_income_facts(
+        self,
+        user: User,
+        months: list[date],
+        income_categories: list[IncomeCategory],
+    ) -> dict[int, dict[date, Decimal]]:
+        """Get income facts data for given user and months."""
+        if not months:
+            return {}
+
+        income_queryset = (
+            self.income_repository.filter(
+                user=user,
+                category__in=income_categories,
+                date__gte=months[0],
+                date__lte=months[-1],
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('category_id', 'month')
+            .annotate(total=Sum('amount'))
+        )
+
+        income_fact_map: dict[int, dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal(0)),
+        )
+
+        for e in income_queryset:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            income_fact_map[e['category_id']][month_date] = e['total'] or Decimal(0)
+
+        return income_fact_map
+
+    def _get_income_plans(
+        self,
+        user: User,
+        months: list[date],
+        income_categories: list[IncomeCategory],
+    ) -> dict[int, dict[date, Decimal]]:
+        """Get income plans data for given user and months."""
+        plans_inc = self.planning_repository.filter(
+            user=user,
+            date__in=months,
+            planning_type='income',
+            category_income__in=income_categories,
+        ).values('category_income_id', 'date', 'amount')
+
+        income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal(0)),
+        )
+
+        for p in plans_inc:
+            income_plan_map[p['category_income_id']][p['date']] = p[
+                'amount'
+            ] or Decimal(0)
+
+        return income_plan_map
+
+    def aggregate_budget_data(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+        income_categories: list[IncomeCategory],
+    ) -> AggregateBudgetDataDict:
+        """Aggregate all budget data for context."""
+        _validate_budget_inputs(user, months, expense_categories, income_categories)
+
+        expense_fact_map = self._get_expense_facts(
+            user,
+            months,
+            expense_categories,
+        )
+        expense_plan_map = self._get_expense_plans(
+            user,
+            months,
+            expense_categories,
+        )
+
+        total_fact_expense, total_plan_expense = _calculate_expense_totals(
+            expense_fact_map,
+            expense_plan_map,
+            months,
+            expense_categories,
+        )
+
+        expense_data = _build_expense_data(
+            expense_fact_map,
+            expense_plan_map,
+            months,
+            expense_categories,
+        )
+
+        income_fact_map = self._get_income_facts(
+            user,
+            months,
+            income_categories,
+        )
+        income_plan_map = self._get_income_plans(
+            user,
+            months,
+            income_categories,
+        )
+
+        total_fact_income, total_plan_income = _calculate_income_totals(
+            income_fact_map,
+            income_plan_map,
+            months,
+            income_categories,
+        )
+
+        income_data = _build_income_data(
+            income_fact_map,
+            income_plan_map,
+            months,
+            income_categories,
+        )
+
+        chart_data = _build_chart_data(
+            months,
+            total_fact_income,
+            total_plan_income,
+            total_fact_expense,
+            total_plan_expense,
+        )
+
+        return {
+            'chart_data': chart_data,
+            'months': months,
+            'expense_data': expense_data,
+            'income_data': income_data,
+            'total_fact_expense': total_fact_expense,
+            'total_plan_expense': total_plan_expense,
+            'total_fact_income': total_fact_income,
+            'total_plan_income': total_plan_income,
+        }
+
+    def _get_expense_table_facts(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+    ) -> dict[int, dict[date, int]]:
+        """Get expense facts for table view."""
+        if not months:
+            return {}
+
+        expenses = (
+            self.expense_repository.filter(
+                user=user,
+                category__in=expense_categories,
+                date__gte=months[0],
+                date__lte=months[-1],
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('category_id', 'month')
+            .annotate(total=Sum('amount'))
+        )
+
+        expense_fact_map: dict[int, dict[date, int]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
+
+        for e in expenses:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            expense_fact_map[e['category_id']][month_date] = e['total'] or 0
+
+        return expense_fact_map
+
+    def _get_expense_table_plans(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+    ) -> dict[int, dict[date, int]]:
+        """Get expense plans for table view."""
+        plans_expense = self.planning_repository.filter(
+            user=user,
+            date__in=months,
+            planning_type='expense',
+            category_expense__in=expense_categories,
+        ).values('category_expense_id', 'date', 'amount')
+
+        expense_plan_map: dict[int, dict[date, int]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
+
+        for pln in plans_expense:
+            amount = pln['amount']
+            expense_plan_map[pln['category_expense_id']][pln['date']] = int(
+                amount or 0,
+            )
+
+        return expense_plan_map
+
+    def aggregate_expense_table(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+    ) -> AggregateExpenseTableDict:
+        """Aggregate data for the expense table view."""
+        _validate_expense_table_inputs(user, months, expense_categories)
+
+        expense_fact_map = self._get_expense_table_facts(
+            user,
+            months,
+            expense_categories,
+        )
+        expense_plan_map = self._get_expense_table_plans(
+            user,
+            months,
+            expense_categories,
+        )
+
+        expense_data, total_fact_expense, total_plan_expense = (
+            _build_expense_table_data(
+                expense_fact_map,
+                expense_plan_map,
+                months,
+                expense_categories,
+            )
+        )
+
+        return {
+            'months': months,
+            'expense_data': expense_data,
+            'total_fact_expense': total_fact_expense,
+            'total_plan_expense': total_plan_expense,
+        }
+
+    def _get_income_table_facts(
+        self,
+        user: User,
+        months: list[date],
+        income_categories: list[IncomeCategory],
+    ) -> dict[int, dict[date, Decimal]]:
+        """Get income facts for table view."""
+        if not months:
+            return {}
+
+        income_queryset = (
+            self.income_repository.filter(
+                user=user,
+                category__in=income_categories,
+                date__gte=months[0],
+                date__lte=months[-1],
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('category_id', 'month')
+            .annotate(total=Sum('amount'))
+        )
+
+        income_fact_map: dict[int, dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal(0)),
+        )
+
+        for e in income_queryset:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            income_fact_map[e['category_id']][month_date] = e['total'] or Decimal(0)
+
+        return income_fact_map
+
+    def _get_income_table_plans(
+        self,
+        user: User,
+        months: list[date],
+        income_categories: list[IncomeCategory],
+    ) -> dict[int, dict[date, Decimal]]:
+        """Get income plans for table view."""
+        plans_inc = self.planning_repository.filter(
+            user=user,
+            date__in=months,
+            planning_type='income',
+            category_income__in=income_categories,
+        ).values('category_income_id', 'date', 'amount')
+
+        income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal(0)),
+        )
+
+        for p in plans_inc:
+            income_plan_map[p['category_income_id']][p['date']] = p[
+                'amount'
+            ] or Decimal(0)
+
+        return income_plan_map
+
+    def aggregate_income_table(
+        self,
+        user: User,
+        months: list[date],
+        income_categories: list[IncomeCategory],
+    ) -> AggregateIncomeTableDict:
+        """Aggregate data for the income table view."""
+        _validate_income_table_inputs(user, months, income_categories)
+
+        income_fact_map = self._get_income_table_facts(
+            user,
+            months,
+            income_categories,
+        )
+        income_plan_map = self._get_income_table_plans(
+            user,
+            months,
+            income_categories,
+        )
+
+        income_data, total_fact_income, total_plan_income = (
+            _build_income_table_data(
+                income_fact_map,
+                income_plan_map,
+                months,
+                income_categories,
+            )
+        )
+
+        return {
+            'months': months,
+            'income_data': income_data,
+            'total_fact_income': total_fact_income,
+            'total_plan_income': total_plan_income,
+        }
+
+    def _get_expense_api_facts(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+    ) -> dict[int, dict[date, int]]:
+        """Get expense facts for API view."""
+        if not months:
+            return {}
+
+        expenses = (
+            self.expense_repository.filter(
+                user=user,
+                category__in=expense_categories,
+                date__gte=months[0],
+                date__lte=months[-1],
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('category_id', 'month')
+            .annotate(total=Sum('amount'))
+        )
+
+        expense_fact_map: dict[int, dict[date, int]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
+
+        for e in expenses:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            month_start = month_date.replace(day=1)
+            expense_fact_map[e['category_id']][month_start] = e['total'] or 0
+
+        return expense_fact_map
+
+    def _get_expense_api_plans(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+    ) -> dict[int, dict[date, int]]:
+        """Get expense plans for API view."""
+        plans_expense = self.planning_repository.filter(
+            user=user,
+            date__in=months,
+            planning_type='expense',
+            category_expense__in=expense_categories,
+        ).values('category_expense_id', 'date', 'amount')
+
+        expense_plan_map: dict[int, dict[date, int]] = defaultdict(
+            lambda: defaultdict(lambda: 0),
+        )
+
+        for pln in plans_expense:
+            amount = pln['amount']
+            expense_plan_map[pln['category_expense_id']][pln['date']] = int(
+                amount or 0,
+            )
+
+        return expense_plan_map
+
+    def aggregate_expense_api(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[ExpenseCategory],
+    ) -> AggregateExpenseApiDict:
+        """Aggregate data for the expense API view."""
+        _validate_expense_api_inputs(user, months, expense_categories)
+
+        expense_fact_map = self._get_expense_api_facts(
+            user,
+            months,
+            expense_categories,
+        )
+        expense_plan_map = self._get_expense_api_plans(
+            user,
+            months,
+            expense_categories,
+        )
+
+        data = _build_expense_api_data(
+            expense_fact_map,
+            expense_plan_map,
+            months,
+            expense_categories,
+        )
+
+        return {'months': [m.isoformat() for m in months], 'data': data}
+
+    def _get_income_api_facts(
+        self,
+        user: User,
+        months: list[date],
+        income_categories: list[IncomeCategory],
+    ) -> dict[int, dict[date, Decimal]]:
+        """Get income facts for API view."""
+        if not months:
+            return {}
+
+        incomes = (
+            self.income_repository.filter(
+                user=user,
+                category__in=income_categories,
+                date__gte=months[0],
+                date__lte=months[-1],
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('category_id', 'month')
+            .annotate(total=Sum('amount'))
+        )
+
+        income_fact_map: dict[int, dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal(0)),
+        )
+
+        for e in incomes:
+            month_date = (
+                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+            )
+            month_start = month_date.replace(day=1)
+            total = e['total']
+            income_fact_map[e['category_id']][month_start] = (
+                Decimal(str(total)) if total else Decimal(0)
+            )
+
+        return income_fact_map
+
+    def _get_income_api_plans(
+        self,
+        user: User,
+        months: list[date],
+        income_categories: list[IncomeCategory],
+    ) -> dict[int, dict[date, Decimal]]:
+        """Get income plans for API view."""
+        plans_income = self.planning_repository.filter(
+            user=user,
+            date__in=months,
+            planning_type='income',
+            category_income__in=income_categories,
+        ).values('category_income_id', 'date', 'amount')
+
+        income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
+            lambda: defaultdict(lambda: Decimal(0)),
+        )
+
+        for pln in plans_income:
+            amount = pln['amount']
+            income_plan_map[pln['category_income_id']][pln['date']] = (
+                Decimal(str(amount)) if amount else Decimal(0)
+            )
+
+        return income_plan_map
+
+    def aggregate_income_api(
+        self,
+        user: User,
+        months: list[date],
+        income_categories: list[IncomeCategory],
+    ) -> AggregateIncomeApiDict:
+        """Aggregate data for the income API view."""
+        _validate_income_api_inputs(user, months, income_categories)
+
+        income_fact_map = self._get_income_api_facts(
+            user,
+            months,
+            income_categories,
+        )
+        income_plan_map = self._get_income_api_plans(
+            user,
+            months,
+            income_categories,
+        )
+
+        data = _build_income_api_data(
+            income_fact_map,
+            income_plan_map,
+            months,
+            income_categories,
+        )
+
+        return {'months': [m.isoformat() for m in months], 'data': data}
+
+
 def get_categories(
     user: User | None,
     type_: str,
@@ -161,67 +748,6 @@ def _validate_budget_inputs(
         raise BudgetDataError(error_msg)
 
 
-def _get_expense_facts(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, int]]:
-    """Get expense facts data for given user and months."""
-    if not months:
-        return {}
-
-    expense_repository = container.expense.expense_repository()
-    expenses = (
-        expense_repository.filter(
-            user=user,
-            category__in=expense_categories,
-            date__gte=months[0],
-            date__lte=months[-1],
-        )
-        .annotate(month=TruncMonth('date'))
-        .values('category_id', 'month')
-        .annotate(total=Sum('amount'))
-    )
-
-    expense_fact_map: dict[int, dict[date, int]] = defaultdict(
-        lambda: defaultdict(lambda: 0),
-    )
-
-    for e in expenses:
-        month_date = (
-            e['month'].date() if hasattr(e['month'], 'date') else e['month']
-        )
-        month_start = month_date.replace(day=1)
-        expense_fact_map[e['category_id']][month_start] = e['total'] or 0
-
-    return expense_fact_map
-
-
-def _get_expense_plans(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, int]]:
-    """Get expense plans data for given user and months."""
-    planning_repository = container.budget.planning_repository()
-    plans_exp = planning_repository.filter(
-        user=user,
-        date__in=months,
-        planning_type='expense',
-        category_expense__in=expense_categories,
-    ).values('category_expense_id', 'date', 'amount')
-
-    expense_plan_map: dict[int, dict[date, int]] = defaultdict(
-        lambda: defaultdict(lambda: 0),
-    )
-
-    for p in plans_exp:
-        amount = p['amount']
-        expense_plan_map[p['category_expense_id']][p['date']] = int(amount or 0)
-
-    return expense_plan_map
 
 
 def _calculate_expense_totals(
@@ -279,151 +805,6 @@ def _build_expense_data(
     return expense_data
 
 
-def aggregate_budget_data(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> AggregateBudgetDataDict:
-    """Aggregate all budget data for context."""
-    _validate_budget_inputs(user, months, expense_categories, income_categories)
-
-    expense_fact_map = _get_expense_facts(
-        user,
-        months,
-        expense_categories,
-        container,
-    )
-    expense_plan_map = _get_expense_plans(
-        user,
-        months,
-        expense_categories,
-        container,
-    )
-
-    total_fact_expense, total_plan_expense = _calculate_expense_totals(
-        expense_fact_map,
-        expense_plan_map,
-        months,
-        expense_categories,
-    )
-
-    expense_data = _build_expense_data(
-        expense_fact_map,
-        expense_plan_map,
-        months,
-        expense_categories,
-    )
-
-    income_fact_map = _get_income_facts(
-        user,
-        months,
-        income_categories,
-        container,
-    )
-    income_plan_map = _get_income_plans(
-        user,
-        months,
-        income_categories,
-        container,
-    )
-
-    total_fact_income, total_plan_income = _calculate_income_totals(
-        income_fact_map,
-        income_plan_map,
-        months,
-        income_categories,
-    )
-
-    income_data = _build_income_data(
-        income_fact_map,
-        income_plan_map,
-        months,
-        income_categories,
-    )
-
-    chart_data = _build_chart_data(
-        months,
-        total_fact_income,
-        total_plan_income,
-        total_fact_expense,
-        total_plan_expense,
-    )
-
-    return {
-        'chart_data': chart_data,
-        'months': months,
-        'expense_data': expense_data,
-        'income_data': income_data,
-        'total_fact_expense': total_fact_expense,
-        'total_plan_expense': total_plan_expense,
-        'total_fact_income': total_fact_income,
-        'total_plan_income': total_plan_income,
-    }
-
-
-def _get_income_facts(
-    user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, Decimal]]:
-    """Get income facts data for given user and months."""
-    if not months:
-        return {}
-
-    income_repository = container.income.income_repository()
-    income_queryset = (
-        income_repository.filter(
-            user=user,
-            category__in=income_categories,
-            date__gte=months[0],
-            date__lte=months[-1],
-        )
-        .annotate(month=TruncMonth('date'))
-        .values('category_id', 'month')
-        .annotate(total=Sum('amount'))
-    )
-
-    income_fact_map: dict[int, dict[date, Decimal]] = defaultdict(
-        lambda: defaultdict(lambda: Decimal(0)),
-    )
-
-    for e in income_queryset:
-        month_date = (
-            e['month'].date() if hasattr(e['month'], 'date') else e['month']
-        )
-        income_fact_map[e['category_id']][month_date] = e['total'] or Decimal(0)
-
-    return income_fact_map
-
-
-def _get_income_plans(
-    user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, Decimal]]:
-    """Get income plans data for given user and months."""
-    planning_repository = container.budget.planning_repository()
-    plans_inc = planning_repository.filter(
-        user=user,
-        date__in=months,
-        planning_type='income',
-        category_income__in=income_categories,
-    ).values('category_income_id', 'date', 'amount')
-
-    income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
-        lambda: defaultdict(lambda: Decimal(0)),
-    )
-
-    for p in plans_inc:
-        income_plan_map[p['category_income_id']][p['date']] = p[
-            'amount'
-        ] or Decimal(0)
-
-    return income_plan_map
 
 
 def _calculate_income_totals(
@@ -543,68 +924,6 @@ def _validate_expense_table_inputs(
         raise BudgetDataError(error_msg)
 
 
-def _get_expense_table_facts(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, int]]:
-    """Get expense facts for table view."""
-    if not months:
-        return {}
-
-    expense_repository = container.expense.expense_repository()
-    expenses = (
-        expense_repository.filter(
-            user=user,
-            category__in=expense_categories,
-            date__gte=months[0],
-            date__lte=months[-1],
-        )
-        .annotate(month=TruncMonth('date'))
-        .values('category_id', 'month')
-        .annotate(total=Sum('amount'))
-    )
-
-    expense_fact_map: dict[int, dict[date, int]] = defaultdict(
-        lambda: defaultdict(lambda: 0),
-    )
-
-    for e in expenses:
-        month_date = (
-            e['month'].date() if hasattr(e['month'], 'date') else e['month']
-        )
-        expense_fact_map[e['category_id']][month_date] = e['total'] or 0
-
-    return expense_fact_map
-
-
-def _get_expense_table_plans(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, int]]:
-    """Get expense plans for table view."""
-    planning_repository = container.budget.planning_repository()
-    plans_expense = planning_repository.filter(
-        user=user,
-        date__in=months,
-        planning_type='expense',
-        category_expense__in=expense_categories,
-    ).values('category_expense_id', 'date', 'amount')
-
-    expense_plan_map: dict[int, dict[date, int]] = defaultdict(
-        lambda: defaultdict(lambda: 0),
-    )
-
-    for pln in plans_expense:
-        amount = pln['amount']
-        expense_plan_map[pln['category_expense_id']][pln['date']] = int(
-            amount or 0,
-        )
-
-    return expense_plan_map
 
 
 def _build_expense_table_data(
@@ -648,43 +967,6 @@ def _build_expense_table_data(
     return expense_data, total_fact_expense, total_plan_expense
 
 
-def aggregate_expense_table(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    container: ApplicationContainer,
-) -> AggregateExpenseTableDict:
-    """Aggregate data for the expense table view."""
-    _validate_expense_table_inputs(user, months, expense_categories)
-
-    expense_fact_map = _get_expense_table_facts(
-        user,
-        months,
-        expense_categories,
-        container,
-    )
-    expense_plan_map = _get_expense_table_plans(
-        user,
-        months,
-        expense_categories,
-        container,
-    )
-
-    expense_data, total_fact_expense, total_plan_expense = (
-        _build_expense_table_data(
-            expense_fact_map,
-            expense_plan_map,
-            months,
-            expense_categories,
-        )
-    )
-
-    return {
-        'months': months,
-        'expense_data': expense_data,
-        'total_fact_expense': total_fact_expense,
-        'total_plan_expense': total_plan_expense,
-    }
 
 
 def _validate_income_table_inputs(
@@ -704,67 +986,6 @@ def _validate_income_table_inputs(
         raise BudgetDataError(error_msg)
 
 
-def _get_income_table_facts(
-    user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, Decimal]]:
-    """Get income facts for table view."""
-    if not months:
-        return {}
-
-    income_repository = container.income.income_repository()
-    income_queryset = (
-        income_repository.filter(
-            user=user,
-            category__in=income_categories,
-            date__gte=months[0],
-            date__lte=months[-1],
-        )
-        .annotate(month=TruncMonth('date'))
-        .values('category_id', 'month')
-        .annotate(total=Sum('amount'))
-    )
-
-    income_fact_map: dict[int, dict[date, Decimal]] = defaultdict(
-        lambda: defaultdict(lambda: Decimal(0)),
-    )
-
-    for e in income_queryset:
-        month_date = (
-            e['month'].date() if hasattr(e['month'], 'date') else e['month']
-        )
-        income_fact_map[e['category_id']][month_date] = e['total'] or Decimal(0)
-
-    return income_fact_map
-
-
-def _get_income_table_plans(
-    user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, Decimal]]:
-    """Get income plans for table view."""
-    planning_repository = container.budget.planning_repository()
-    plans_inc = planning_repository.filter(
-        user=user,
-        date__in=months,
-        planning_type='income',
-        category_income__in=income_categories,
-    ).values('category_income_id', 'date', 'amount')
-
-    income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
-        lambda: defaultdict(lambda: Decimal(0)),
-    )
-
-    for p in plans_inc:
-        income_plan_map[p['category_income_id']][p['date']] = p[
-            'amount'
-        ] or Decimal(0)
-
-    return income_plan_map
 
 
 def _build_income_table_data(
@@ -808,43 +1029,6 @@ def _build_income_table_data(
     return income_data, total_fact_income, total_plan_income
 
 
-def aggregate_income_table(
-    user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> AggregateIncomeTableDict:
-    """Aggregate data for the income table view."""
-    _validate_income_table_inputs(user, months, income_categories)
-
-    income_fact_map = _get_income_table_facts(
-        user,
-        months,
-        income_categories,
-        container,
-    )
-    income_plan_map = _get_income_table_plans(
-        user,
-        months,
-        income_categories,
-        container,
-    )
-
-    income_data, total_fact_income, total_plan_income = (
-        _build_income_table_data(
-            income_fact_map,
-            income_plan_map,
-            months,
-            income_categories,
-        )
-    )
-
-    return {
-        'months': months,
-        'income_data': income_data,
-        'total_fact_income': total_fact_income,
-        'total_plan_income': total_plan_income,
-    }
 
 
 def _validate_expense_api_inputs(
@@ -864,227 +1048,6 @@ def _validate_expense_api_inputs(
         raise BudgetDataError(error_msg)
 
 
-def _get_expense_api_facts(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, int]]:
-    """Get expense facts for API view."""
-    if not months:
-        return {}
-
-    expense_repository = container.expense.expense_repository()
-    expenses = (
-        expense_repository.filter(
-            user=user,
-            category__in=expense_categories,
-            date__gte=months[0],
-            date__lte=months[-1],
-        )
-        .annotate(month=TruncMonth('date'))
-        .values('category_id', 'month')
-        .annotate(total=Sum('amount'))
-    )
-
-    expense_fact_map: dict[int, dict[date, int]] = defaultdict(
-        lambda: defaultdict(lambda: 0),
-    )
-
-    for e in expenses:
-        month_date = (
-            e['month'].date() if hasattr(e['month'], 'date') else e['month']
-        )
-        month_start = month_date.replace(day=1)
-        expense_fact_map[e['category_id']][month_start] = e['total'] or 0
-
-    return expense_fact_map
-
-
-def _get_expense_api_plans(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, int]]:
-    """Get expense plans for API view."""
-    planning_repository = container.budget.planning_repository()
-    plans_expense = planning_repository.filter(
-        user=user,
-        date__in=months,
-        planning_type='expense',
-        category_expense__in=expense_categories,
-    ).values('category_expense_id', 'date', 'amount')
-
-    expense_plan_map: dict[int, dict[date, int]] = defaultdict(
-        lambda: defaultdict(lambda: 0),
-    )
-
-    for pln in plans_expense:
-        amount = pln['amount']
-        expense_plan_map[pln['category_expense_id']][pln['date']] = int(
-            amount or 0,
-        )
-
-    return expense_plan_map
-
-
-def _build_expense_api_data(
-    expense_fact_map: dict[int, dict[date, int]],
-    expense_plan_map: dict[int, dict[date, int]],
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-) -> list[ExpenseApiDataRowDict]:
-    """Build expense API data structure."""
-    data = []
-
-    for cat in expense_categories:
-        fact_list: list[int] = []
-        plan_list: list[int] = []
-        diff_list: list[int] = []
-        percent_list: list[float | None] = []
-
-        for m in months:
-            fact = expense_fact_map[cat.pk][m]
-            plan = expense_plan_map[cat.pk][m]
-            diff = fact - plan
-            percent = (fact / plan * 100) if plan else None
-
-            fact_list.append(fact)
-            plan_list.append(plan)
-            diff_list.append(diff)
-            percent_list.append(float(percent) if percent is not None else None)
-
-        row: ExpenseApiDataRowDict = {
-            'category': cat.name,
-            'category_id': cat.pk,
-            'months': [m.isoformat() for m in months],
-            'fact': fact_list,
-            'plan': plan_list,
-            'diff': diff_list,
-            'percent': percent_list,
-        }
-
-        data.append(row)
-
-    return data
-
-
-def aggregate_expense_api(
-    user: User,
-    months: list[date],
-    expense_categories: list[ExpenseCategory],
-    container: ApplicationContainer,
-) -> AggregateExpenseApiDict:
-    """Aggregate data for the expense API view."""
-    _validate_expense_api_inputs(user, months, expense_categories)
-
-    expense_fact_map = _get_expense_api_facts(
-        user,
-        months,
-        expense_categories,
-        container,
-    )
-    expense_plan_map = _get_expense_api_plans(
-        user,
-        months,
-        expense_categories,
-        container,
-    )
-
-    data = _build_expense_api_data(
-        expense_fact_map,
-        expense_plan_map,
-        months,
-        expense_categories,
-    )
-
-    return {'months': [m.isoformat() for m in months], 'data': data}
-
-
-def _validate_income_api_inputs(
-    _user: User | None,
-    months: list[date] | None,
-    income_categories: list[IncomeCategory] | None,
-) -> None:
-    """Validate required inputs for income API aggregation."""
-    if _user is None:
-        error_msg = 'User is required.'
-        raise BudgetDataError(error_msg)
-    if months is None:
-        error_msg = 'Months list is required.'
-        raise BudgetDataError(error_msg)
-    if income_categories is None:
-        error_msg = 'Income categories are required.'
-        raise BudgetDataError(error_msg)
-
-
-def _get_income_api_facts(
-    user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, Decimal]]:
-    """Get income facts for API view."""
-    if not months:
-        return {}
-
-    income_repository = container.income.income_repository()
-    incomes = (
-        income_repository.filter(
-            user=user,
-            category__in=income_categories,
-            date__gte=months[0],
-            date__lte=months[-1],
-        )
-        .annotate(month=TruncMonth('date'))
-        .values('category_id', 'month')
-        .annotate(total=Sum('amount'))
-    )
-
-    income_fact_map: dict[int, dict[date, Decimal]] = defaultdict(
-        lambda: defaultdict(lambda: Decimal(0)),
-    )
-
-    for e in incomes:
-        month_date = (
-            e['month'].date() if hasattr(e['month'], 'date') else e['month']
-        )
-        month_start = month_date.replace(day=1)
-        total = e['total']
-        income_fact_map[e['category_id']][month_start] = (
-            Decimal(str(total)) if total else Decimal(0)
-        )
-
-    return income_fact_map
-
-
-def _get_income_api_plans(
-    user: User,
-    months: list[date],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> dict[int, dict[date, Decimal]]:
-    """Get income plans for API view."""
-    planning_repository = container.budget.planning_repository()
-    plans_income = planning_repository.filter(
-        user=user,
-        date__in=months,
-        planning_type='income',
-        category_income__in=income_categories,
-    ).values('category_income_id', 'date', 'amount')
-
-    income_plan_map: dict[int, dict[date, Decimal]] = defaultdict(
-        lambda: defaultdict(lambda: Decimal(0)),
-    )
-
-    for pln in plans_income:
-        amount = pln['amount']
-        income_plan_map[pln['category_income_id']][pln['date']] = (
-            Decimal(str(amount)) if amount else Decimal(0)
-        )
-
-    return income_plan_map
 
 
 def _build_income_api_data(
@@ -1128,33 +1091,63 @@ def _build_income_api_data(
     return data
 
 
-def aggregate_income_api(
-    user: User,
+def _build_expense_api_data(
+    expense_fact_map: dict[int, dict[date, int]],
+    expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
-    income_categories: list[IncomeCategory],
-    container: ApplicationContainer,
-) -> AggregateIncomeApiDict:
-    """Aggregate data for the income API view."""
-    _validate_income_api_inputs(user, months, income_categories)
+    expense_categories: list[ExpenseCategory],
+) -> list[ExpenseApiDataRowDict]:
+    """Build expense API data structure."""
+    data = []
 
-    income_fact_map = _get_income_api_facts(
-        user,
-        months,
-        income_categories,
-        container,
-    )
-    income_plan_map = _get_income_api_plans(
-        user,
-        months,
-        income_categories,
-        container,
-    )
+    for cat in expense_categories:
+        fact_list: list[int] = []
+        plan_list: list[int] = []
+        diff_list: list[int] = []
+        percent_list: list[float | None] = []
 
-    data = _build_income_api_data(
-        income_fact_map,
-        income_plan_map,
-        months,
-        income_categories,
-    )
+        for m in months:
+            fact = expense_fact_map[cat.pk][m]
+            plan = expense_plan_map[cat.pk][m]
+            diff = fact - plan
+            percent = (fact / plan * 100) if plan else None
 
-    return {'months': [m.isoformat() for m in months], 'data': data}
+            fact_list.append(fact)
+            plan_list.append(plan)
+            diff_list.append(diff)
+            percent_list.append(float(percent) if percent is not None else None)
+
+        row: ExpenseApiDataRowDict = {
+            'category': cat.name,
+            'category_id': cat.pk,
+            'months': [m.isoformat() for m in months],
+            'fact': fact_list,
+            'plan': plan_list,
+            'diff': diff_list,
+            'percent': percent_list,
+        }
+
+        data.append(row)
+
+    return data
+
+
+
+
+def _validate_income_api_inputs(
+    _user: User | None,
+    months: list[date] | None,
+    income_categories: list[IncomeCategory] | None,
+) -> None:
+    """Validate required inputs for income API aggregation."""
+    if _user is None:
+        error_msg = 'User is required.'
+        raise BudgetDataError(error_msg)
+    if months is None:
+        error_msg = 'Months list is required.'
+        raise BudgetDataError(error_msg)
+    if income_categories is None:
+        error_msg = 'Income categories are required.'
+        raise BudgetDataError(error_msg)
+
+

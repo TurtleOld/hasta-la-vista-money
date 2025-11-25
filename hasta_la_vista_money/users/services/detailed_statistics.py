@@ -177,6 +177,7 @@ def _sum_amount_for_period(
     user: User,
     start: date,
     end: date,
+    container: 'ApplicationContainer',
     expense_repository: ExpenseRepository | None = None,
     income_repository: IncomeRepository | None = None,
 ) -> float:
@@ -185,14 +186,12 @@ def _sum_amount_for_period(
 
     if model == Expense:
         if expense_repository is None:
-            container = ApplicationContainer()
             expense_repository = container.expense.expense_repository()
         qs = expense_repository.filter_by_user_and_date_range(
             user, start_dt, end_dt
         )
     elif model == Income:
         if income_repository is None:
-            container = ApplicationContainer()
             income_repository = container.income.income_repository()
         qs = income_repository.filter_by_user_and_date_range(
             user, start_dt, end_dt
@@ -208,20 +207,19 @@ def _top_categories_qs(
     model: type[Expense] | type[Income],
     user: User,
     year_start: date,
+    container: 'ApplicationContainer',
     expense_repository: ExpenseRepository | None = None,
     income_repository: IncomeRepository | None = None,
 ) -> Any:
     year_start_dt = timezone.make_aware(datetime.combine(year_start, time.min))
     if model == Expense:
         if expense_repository is None:
-            container = ApplicationContainer()
             expense_repository = container.expense.expense_repository()
         return expense_repository.get_top_categories(
             user, year_start_dt, constants.TOP_CATEGORIES_LIMIT
         )
     if model == Income:
         if income_repository is None:
-            container = ApplicationContainer()
             income_repository = container.income.income_repository()
         return income_repository.get_top_categories(
             user, year_start_dt, constants.TOP_CATEGORIES_LIMIT
@@ -242,12 +240,13 @@ def _dates_amounts(
 
 def _build_chart(
     user: User,
+    container: 'ApplicationContainer',
     expense_repository: ExpenseRepository | None = None,
     income_repository: IncomeRepository | None = None,
 ) -> ChartDataDict:
     if expense_repository is None:
-        container = ApplicationContainer()
         expense_repository = container.expense.expense_repository()
+    if income_repository is None:
         income_repository = container.income.income_repository()
 
     exp_ds = expense_repository.get_aggregated_by_date(user)
@@ -318,6 +317,7 @@ def _balances_and_delta(
 def _six_months_data(
     user: User,
     today: date,
+    container: 'ApplicationContainer',
     expense_repository: ExpenseRepository | None = None,
     income_repository: IncomeRepository | None = None,
 ) -> list[MonthDataDict]:
@@ -330,6 +330,7 @@ def _six_months_data(
             user,
             m_start,
             m_end,
+            container,
             expense_repository=expense_repository,
             income_repository=income_repository,
         )
@@ -338,6 +339,7 @@ def _six_months_data(
             user,
             m_start,
             m_end,
+            container,
             expense_repository=expense_repository,
             income_repository=income_repository,
         )
@@ -366,6 +368,7 @@ def _six_months_data(
             user,
             date(2000, 1, 1),
             period_end_date,
+            container,
             expense_repository=expense_repository,
             income_repository=income_repository,
         )
@@ -374,6 +377,7 @@ def _six_months_data(
             user,
             date(2000, 1, 1),
             period_end_date,
+            container,
             expense_repository=expense_repository,
             income_repository=income_repository,
         )
@@ -780,14 +784,14 @@ def get_user_detailed_statistics(
     today = now.date()
 
     months_data = _six_months_data(
-        user, today, expense_repository, income_repository
+        user, today, container, expense_repository, income_repository
     )
     year_start = today.replace(month=1, day=1)
     top_expense_categories = _top_categories_qs(
-        Expense, user, year_start, expense_repository, income_repository
+        Expense, user, year_start, container, expense_repository, income_repository
     )
     top_income_categories = _top_categories_qs(
-        Income, user, year_start, expense_repository, income_repository
+        Income, user, year_start, container, expense_repository, income_repository
     )
 
     receipt_info_by_month = collect_info_receipt(user=user)
@@ -813,9 +817,8 @@ def get_user_detailed_statistics(
         today,
     )
 
-    chart_combined = _build_chart(user, expense_repository, income_repository)
+    chart_combined = _build_chart(user, container, expense_repository, income_repository)
 
-    container = ApplicationContainer()
     account_service = container.core.account_service()
     credit_cards_data = _credit_cards_block(
         accounts,

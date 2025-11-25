@@ -21,11 +21,6 @@ from hasta_la_vista_money.budget.repositories import (
     PlanningRepository,
 )
 from hasta_la_vista_money.budget.services.budget import (
-    aggregate_budget_data,
-    aggregate_expense_api,
-    aggregate_expense_table,
-    aggregate_income_api,
-    aggregate_income_table,
     get_categories,
 )
 from hasta_la_vista_money.expense.models import ExpenseCategory
@@ -152,13 +147,13 @@ class BudgetView(
         user, months, expense_categories, income_categories = (
             self.get_budget_context()
         )
+        budget_service = self.request.container.budget.budget_service()
         context.update(
-            aggregate_budget_data(
+            budget_service.aggregate_budget_data(
                 user=user,
                 months=months,
                 expense_categories=expense_categories,
                 income_categories=income_categories,
-                container=self.request.container,
             ),
         )
         return context
@@ -257,12 +252,12 @@ class ExpenseTableView(
         """
         context = super().get_context_data(**kwargs)
         user, months, expense_categories, _ = self.get_budget_context()
+        budget_service = self.request.container.budget.budget_service()
         context.update(
-            aggregate_expense_table(
+            budget_service.aggregate_expense_table(
                 user=user,
                 months=months,
                 expense_categories=expense_categories,
-                container=self.request.container,
             ),
         )
         return context
@@ -284,12 +279,12 @@ class IncomeTableView(
         """
         context = super().get_context_data(**kwargs)
         user, months, _, income_categories = self.get_budget_context()
+        budget_service = self.request.container.budget.budget_service()
         context.update(
-            aggregate_income_table(
+            budget_service.aggregate_income_table(
                 user=user,
                 months=months,
                 income_categories=income_categories,
-                container=self.request.container,
             ),
         )
         return context
@@ -348,11 +343,11 @@ class ExpenseBudgetAPIView(APIView):
             'list[ExpenseCategory]',
             list(get_categories(user, 'expense')),
         )
-        data = aggregate_expense_api(
+        budget_service = self.request.container.budget.budget_service()
+        data = budget_service.aggregate_expense_api(
             user=user,
             months=months,
             expense_categories=expense_categories,
-            container=self.request.container,
         )
         return Response(data)
 
@@ -404,10 +399,10 @@ class IncomeBudgetAPIView(APIView):
             'list[IncomeCategory]',
             list(get_categories(user, 'income')),
         )
-        data = aggregate_income_api(
+        budget_service = self.request.container.budget.budget_service()
+        data = budget_service.aggregate_income_api(
             user=user,
             months=months,
             income_categories=income_categories,
-            container=self.request.container,
         )
         return Response(data)
