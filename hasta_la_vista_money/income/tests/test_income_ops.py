@@ -110,7 +110,7 @@ class IncomeOpsTest(TestCase):
 
         self.account_service.apply_receipt_spend.assert_called_once_with(
             self.account,
-            self.income.amount,
+            Decimal('150000.00'),
         )
         self.account_service.refund_to_account.assert_called_once_with(
             self.alt_account,

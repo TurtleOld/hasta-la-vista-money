@@ -2,11 +2,11 @@ from dependency_injector import containers, providers
 from openai import OpenAI
 
 from core.protocols.services import AccountServiceProtocol
+from hasta_la_vista_money.budget.containers import BudgetContainer
 from hasta_la_vista_money.expense.containers import ExpenseContainer
 from hasta_la_vista_money.finance_account.containers import (
     FinanceAccountContainer,
 )
-from hasta_la_vista_money.budget.containers import BudgetContainer
 from hasta_la_vista_money.income.containers import IncomeContainer
 from hasta_la_vista_money.loan.containers import LoanContainer
 from hasta_la_vista_money.receipts.containers import ReceiptsContainer

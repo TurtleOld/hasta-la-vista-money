@@ -677,9 +677,6 @@ class TestUploadImageView(TestCase):
         'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._update_account_balance',
     )
     @patch(
-        'hasta_la_vista_money.receipts.services.receipt_import.get_object_or_404',
-    )
-    @patch(
         'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._parse_receipt_date',
     )
     @patch(
@@ -701,7 +698,6 @@ class TestUploadImageView(TestCase):
         mock_create_seller: Mock,
         mock_create_receipt: Mock,
         mock_parse_date: Mock,
-        mock_get_object: Mock,
         mock_update_balance: Mock,
         mock_analyze: Mock,
     ) -> None:
@@ -739,11 +735,10 @@ class TestUploadImageView(TestCase):
         mock_create_receipt.return_value = mock_receipt
 
         mock_parse_date.return_value = timezone.make_aware(
-            datetime(2023, 5, 16, 19, 35, tzinfo=UTC),
-            timezone.utc,
+            datetime(2023, 5, 16, 19, 35),  # noqa: DTZ001
+            UTC,
         )
 
-        mock_get_object.return_value = self.account
         mock_update_balance.return_value = None
 
         self.client.force_login(self.user)

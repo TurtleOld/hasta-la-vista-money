@@ -130,6 +130,7 @@ class TestGroupAccountMixin(TestCase):
         mixin = GroupAccountMixin()
         mixin.request = self.factory.get('/')
         mixin.request.user = user4
+        setup_container_for_request(mixin.request)
 
         accounts = mixin.get_accounts(user4)
 

@@ -3,7 +3,6 @@ from typing import ClassVar
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
-from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.budget.services.budget import (
     BudgetDataError,
     aggregate_budget_data,
@@ -46,9 +45,8 @@ class BudgetServicesTestCase(TestCase):
                 parent_category=None,
             ),
         )
-        self.dates = list(
-            DateList.objects.filter(user=self.user).order_by('date'),
-        )
+        date_list_repository = self.container.budget.date_list_repository()
+        self.dates = list(date_list_repository.get_by_user_ordered(self.user))
         self.months = [d.date for d in self.dates]
 
     def test_get_categories_expense(self) -> None:

@@ -9,6 +9,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
+from core.test_helpers import setup_container_for_request
 from hasta_la_vista_money.users.models import DashboardWidget
 from hasta_la_vista_money.users.views import (
     DashboardComparisonView,
@@ -126,6 +127,7 @@ class DashboardDataViewTest(TestCase):
     def test_dashboard_data_view_requires_authentication(self) -> None:
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = AnonymousUser()
+        setup_container_for_request(request)
         response = DashboardDataView().get(request)
         payload = json.loads(response.content.decode())
         self.assertEqual(response.status_code, 401)
@@ -274,6 +276,7 @@ class DashboardAnalyticsEndpointsTest(TestCase):
     def test_dashboard_drilldown_requires_authentication(self) -> None:
         request = self.factory.get(reverse('users:dashboard_drilldown'))
         request.user = AnonymousUser()
+        setup_container_for_request(request)
         response = DashboardDrillDownView().get(request)
         payload = json.loads(response.content.decode())
         self.assertEqual(response.status_code, 401)
@@ -299,6 +302,7 @@ class DashboardAnalyticsEndpointsTest(TestCase):
     def test_dashboard_comparison_requires_authentication(self) -> None:
         request = self.factory.get(reverse('users:dashboard_comparison'))
         request.user = AnonymousUser()
+        setup_container_for_request(request)
         response = DashboardComparisonView().get(request)
         payload = json.loads(response.content.decode())
         self.assertEqual(response.status_code, 401)

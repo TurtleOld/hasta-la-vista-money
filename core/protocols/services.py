@@ -1,4 +1,3 @@
-from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
 
@@ -10,11 +9,9 @@ from hasta_la_vista_money.users.models import User
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import (
         Account,
-        TransferMoneyLog,
     )
     from hasta_la_vista_money.finance_account.services import (
         GracePeriodInfoDict,
-        PaymentScheduleItemDict,
         RaiffeisenbankScheduleDict,
     )
 
@@ -50,7 +47,9 @@ class AccountServiceProtocol(Protocol):
         self, account: 'Account', amount: Decimal
     ) -> 'Account': ...
 
-    def refund_to_account(self, account: 'Account', amount: Decimal) -> 'Account': ...
+    def refund_to_account(
+        self, account: 'Account', amount: Decimal
+    ) -> 'Account': ...
 
     def reconcile_account_balances(
         self,
