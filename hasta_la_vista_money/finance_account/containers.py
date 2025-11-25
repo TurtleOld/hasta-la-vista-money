@@ -1,6 +1,9 @@
 from dependency_injector import containers, providers
 
 from core.protocols.services import AccountServiceProtocol
+from hasta_la_vista_money.finance_account.page_context_service import (
+    AccountPageContextService,
+)
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
     TransferMoneyLogRepository,
@@ -35,4 +38,11 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
     transfer_service = providers.Factory(
         TransferService,
         transfer_money_log_repository=transfer_money_log_repository,
+    )
+    account_page_context_service = providers.Factory(
+        AccountPageContextService,
+        account_repository=account_repository,
+        transfer_money_log_repository=transfer_money_log_repository,
+        account_service=account_service,
+        transfer_service=transfer_service,
     )
