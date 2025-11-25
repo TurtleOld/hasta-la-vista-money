@@ -90,7 +90,6 @@ class BudgetServicesTestCase(TestCase):
                 self.months,
                 self.expense_categories,
                 self.income_categories,
-                self.container,
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
@@ -98,7 +97,6 @@ class BudgetServicesTestCase(TestCase):
                 None,  # type: ignore[arg-type]
                 self.expense_categories,
                 self.income_categories,
-                self.container,
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
@@ -106,7 +104,6 @@ class BudgetServicesTestCase(TestCase):
                 self.months,
                 None,  # type: ignore[arg-type]
                 self.income_categories,
-                self.container,
             )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
@@ -114,7 +111,6 @@ class BudgetServicesTestCase(TestCase):
                 self.months,
                 self.expense_categories,
                 None,  # type: ignore[arg-type]
-                self.container,
             )
 
     def test_aggregate_budget_data_empty_months(self) -> None:
@@ -168,21 +164,18 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.expense_categories,
-                self.container,
             )  # type: ignore[arg-type]
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_table(
                 self.user,
                 None,
                 self.expense_categories,
-                self.container,
             )  # type: ignore[arg-type]
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_table(
                 self.user,
                 self.months,
                 None,
-                self.container,
             )  # type: ignore[arg-type]
 
     def test_aggregate_expense_table_empty_months(self) -> None:
@@ -225,21 +218,18 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.income_categories,
-                self.container,
             )  # type: ignore[arg-type]
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_table(
                 self.user,
                 None,
                 self.income_categories,
-                self.container,
             )  # type: ignore[arg-type]
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_table(
                 self.user,
                 self.months,
                 None,
-                self.container,
             )  # type: ignore[arg-type]
 
     def test_aggregate_income_table_empty_months(self) -> None:
@@ -281,21 +271,18 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.expense_categories,
-                self.container,
             )  # type: ignore[arg-type]
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_api(
                 self.user,
                 None,
                 self.expense_categories,
-                self.container,
             )  # type: ignore[arg-type]
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_api(
                 self.user,
                 self.months,
                 None,
-                self.container,
             )  # type: ignore[arg-type]
 
     def test_aggregate_expense_api_empty_months(self) -> None:
@@ -339,21 +326,18 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.income_categories,
-                self.container,
             )  # type: ignore[arg-type]
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_api(
                 self.user,
                 None,
                 self.income_categories,
-                self.container,
             )  # type: ignore[arg-type]
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_api(
                 self.user,
                 self.months,
                 None,
-                self.container,
             )  # type: ignore[arg-type]
 
     def test_aggregate_income_api_empty_months(self) -> None:
