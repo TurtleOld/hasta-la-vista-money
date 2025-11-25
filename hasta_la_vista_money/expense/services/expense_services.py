@@ -1,7 +1,6 @@
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
-from django.contrib.auth.models import Group
 from django.db.models import Sum
 from django.db.models.functions import ExtractYear, TruncMonth
 from django.db.models.query import QuerySet
@@ -193,17 +192,17 @@ class ExpenseService:
         expenses = self.expense_repository.filter(id__isnull=True)
         receipt_expense_list = []
         user = User.objects.prefetch_related('groups').get(pk=self.user.pk)
-        if not group_id or group_id == 'my':
-            expenses = self.expense_repository.get_by_user(self.user)
-            group_users = [self.user]
-        elif user.groups.filter(id=group_id).exists():
-            group_users = list(User.objects.filter(groups__id=group_id))
-            expenses = self.expense_repository.get_by_user_and_group(
-                self.user,
-                group_id,
-            )
-        else:
-            group_users = []
+
+        group_users = self.account_service.get_users_for_group(user, group_id)
+
+        if group_users:
+            if len(group_users) == 1 and group_users[0] == user:
+                expenses = self.expense_repository.get_by_user(self.user)
+            else:
+                expenses = self.expense_repository.get_by_user_and_group(
+                    self.user,
+                    group_id,
+                )
 
         expenses = expenses.order_by('-date')
 
@@ -220,20 +219,18 @@ class ExpenseService:
         """Get expense data as dictionary for AJAX responses."""
         expenses = self.expense_repository.filter(id__isnull=True)
         receipt_expense_list = []
+        user = User.objects.prefetch_related('groups').get(pk=self.user.pk)
 
-        if group_id == 'my' or not group_id:
-            expenses = self.expense_repository.get_by_user(self.user)
-            group_users = [self.user]
-        else:
-            try:
-                group_users = list(User.objects.filter(groups__id=group_id))
+        group_users = self.account_service.get_users_for_group(user, group_id)
+
+        if group_users:
+            if len(group_users) == 1 and group_users[0] == user:
+                expenses = self.expense_repository.get_by_user(self.user)
+            else:
                 expenses = self.expense_repository.get_by_user_and_group(
                     self.user,
                     group_id,
                 )
-            except Group.DoesNotExist:
-                group_users = []
-                expenses = self.expense_repository.filter(id__isnull=True)
 
         if group_users:
             receipt_expense_list = (

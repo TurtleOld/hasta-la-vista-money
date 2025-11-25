@@ -77,16 +77,14 @@ class ReceiptView(
             self.request.container.receipts.receipt_repository()
         )
         group_id = self.request.GET.get('group_id') or 'my'
-        if group_id and group_id != 'my':
-            try:
-                group = Group.objects.get(pk=group_id)
-                users_in_group = list(group.user_set.all())
-                return receipt_repository.get_by_users_with_related(
-                    users_in_group,
-                )
-            except Group.DoesNotExist:
-                return receipt_repository.filter(pk__in=[])
-        return receipt_repository.get_by_user_with_related(self.request.user)
+        account_service = self.request.container.core.account_service()
+        users_in_group = account_service.get_users_for_group(
+            self.request.user,
+            group_id,
+        )
+        if users_in_group:
+            return receipt_repository.get_by_users_with_related(users_in_group)
+        return receipt_repository.filter(pk__in=[])
 
     def get_context_data(
         self,
@@ -112,29 +110,24 @@ class ReceiptView(
             self.request.container.finance_account.account_repository()
         )
 
-        if group_id and group_id != 'my':
-            try:
-                users_in_group = list(User.objects.filter(groups__id=group_id))
-                receipt_queryset = receipt_repository.get_by_users_with_related(
-                    users_in_group,
-                )
-                seller_queryset = seller_repository.unique_by_name_for_users(
-                    users_in_group,
-                )
-                account_queryset = account_repository.get_by_user_and_group(
-                    user,
-                    group_id,
-                )
-            except Group.DoesNotExist:
-                receipt_queryset = receipt_repository.filter(pk__in=[])
-                seller_queryset = seller_repository.filter(pk__in=[])
-                account_queryset = account_repository.filter(pk__in=[])
-        else:
-            receipt_queryset = receipt_repository.get_by_user_with_related(
-                self.request.user,
+        account_service = self.request.container.core.account_service()
+        users_in_group = account_service.get_users_for_group(user, group_id)
+
+        if users_in_group:
+            receipt_queryset = receipt_repository.get_by_users_with_related(
+                users_in_group,
             )
-            seller_queryset = seller_repository.unique_by_name_for_user(user)
-            account_queryset = account_repository.get_by_user_with_related(user)
+            seller_queryset = seller_repository.unique_by_name_for_users(
+                users_in_group,
+            )
+            account_queryset = account_repository.get_by_user_and_group(
+                user,
+                group_id,
+            )
+        else:
+            receipt_queryset = receipt_repository.filter(pk__in=[])
+            seller_queryset = seller_repository.filter(pk__in=[])
+            account_queryset = account_repository.filter(pk__in=[])
 
         seller_form = SellerForm()
         receipt_filter = ReceiptFilter(
@@ -961,17 +954,14 @@ def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
         user = User.objects.prefetch_related('groups').get(
             pk=request.user.pk,
         )
-        if group_id and group_id != 'my':
-            try:
-                group = Group.objects.get(pk=group_id)
-                users_in_group = list(group.user_set.all())
-                receipt_queryset = receipt_repository.get_by_users(
-                    users_in_group,
-                )
-            except Group.DoesNotExist:
-                receipt_queryset = receipt_repository.filter(pk__in=[])
+        account_service = request.container.core.account_service()
+        users_in_group = account_service.get_users_for_group(user, group_id)
+
+        if users_in_group:
+            receipt_queryset = receipt_repository.get_by_users(users_in_group)
         else:
-            receipt_queryset = receipt_repository.get_by_user(user)
+            receipt_queryset = receipt_repository.filter(pk__in=[])
+
         user_groups = user.groups.all()
 
     receipts = (

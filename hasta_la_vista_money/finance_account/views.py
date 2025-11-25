@@ -16,7 +16,6 @@ from django.core.exceptions import ValidationError
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import QuerySet
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -40,7 +39,6 @@ from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import (
     Account,
 )
-from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.views import AuthRequest
 
 logger = structlog.get_logger(__name__)
@@ -90,11 +88,17 @@ class AccountView(
     request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Account]:
-        """Get the queryset of accounts for the current user."""
-        account_repository = (
-            self.request.container.finance_account.account_repository()
+        """Get the queryset of accounts for the current user or group.
+
+        Uses GroupAccountMixin to get group_id and account_service
+        to filter accounts by user or group.
+        """
+        account_service = self.request.container.core.account_service()
+        group_id = self.get_group_id()
+        return account_service.get_accounts_for_user_or_group(
+            self.request.user,
+            group_id,
         )
-        return account_repository.get_by_user(self.request.user)
 
     def get_context_data(
         self,
@@ -102,12 +106,9 @@ class AccountView(
         object_list: Any = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Build the context for the account list page, including
-        accounts, forms, logs, and statistics.
+        """Build the context for the account list page.
 
-        Aggregates data from multiple sources to provide a comprehensive
-        view of the user's
-        financial accounts and related operations.
+        Delegates context building to AccountPageContextService.
 
         Args:
             **kwargs: Additional context parameters.
@@ -119,116 +120,27 @@ class AccountView(
             object_list=object_list,
             **kwargs,
         )
-        context.update(self._get_accounts_context())
-        context.update(self._get_forms_context())
-        context.update(self._get_transfer_log_context())
-        context.update(self._get_sums_context())
-        return context
 
-    def _get_accounts_context(self) -> dict[str, Any]:
-        """
-        Get context with accounts and user groups.
+        container = self.request.container.finance_account
+        page_context_service = container.account_page_context_service()
 
-        Returns:
-            dict: Accounts and user groups for the current user.
-        """
-        user = get_object_or_404(
-            User.objects.prefetch_related('groups'),
-            pk=self.request.user.pk,
+        user = page_context_service.get_user_with_groups(
+            self.request.user.pk,
         )
-        accounts = self.get_accounts(user)
-        return {
-            'accounts': accounts,
-            'user_groups': user.groups.all(),
-        }
-
-    def _get_forms_context(self) -> dict[str, Any]:
-        """
-        Get context with forms for adding and transferring accounts.
-
-        Returns:
-            dict: Forms for account creation and money transfer.
-        """
-        user = get_object_or_404(
-            User.objects.prefetch_related('groups'),
-            pk=self.request.user.pk,
-        )
-        account_repository = (
-            self.request.container.finance_account.account_repository()
-        )
-        account_transfer_money = account_repository.get_by_user_with_related(
+        group_id = self.get_group_id()
+        accounts = page_context_service.get_accounts_for_user_or_group(
             user,
+            group_id,
         )
-        initial_form_data = {
-            'from_account': account_transfer_money.first(),
-            'to_account': account_transfer_money.first(),
-        }
-        return {
-            'add_account_form': AddAccountForm(),
-            'transfer_money_form': TransferMoneyAccountForm(
-                user=user,
-                transfer_service=self.request.container.finance_account.transfer_service(),
-                account_repository=account_repository,
-                initial=initial_form_data,
-            ),
-        }
 
-    def _get_transfer_log_context(self) -> dict[str, Any]:
-        """
-        Get context with recent transfer logs.
+        page_context = page_context_service.build_account_list_context(
+            user,
+            accounts,
+            group_id,
+        )
 
-        Returns:
-            dict: Recent transfer logs for the current user.
-        """
-        user = get_object_or_404(
-            User.objects.prefetch_related('groups'),
-            pk=self.request.user.pk,
-        )
-        container = self.request.container
-        transfer_money_log_repository = (
-            container.finance_account.transfer_money_log_repository()
-        )
-        transfer_money_log = (
-            transfer_money_log_repository.get_by_user_with_related(user)
-        )
-        return {
-            'transfer_money_log': transfer_money_log,
-        }
-
-    def _get_sums_context(self) -> dict[str, Any]:
-        """
-        Get context with account balance statistics.
-
-        Returns:
-            dict: Total balances for user and group accounts.
-        """
-        user = get_object_or_404(
-            User.objects.prefetch_related('groups'),
-            pk=self.request.user.pk,
-        )
-        account_repository = (
-            self.request.container.finance_account.account_repository()
-        )
-        account_service = self.request.container.core.account_service()
-        accounts = account_repository.get_by_user_with_related(user)
-        sum_all_accounts = account_service.get_sum_all_accounts(accounts)
-        if user.groups.exists():
-            accounts_in_group = account_repository.get_by_user_and_group(
-                user,
-                None,
-            )
-            sum_all_accounts_in_group = account_service.get_sum_all_accounts(
-                accounts_in_group,
-            )
-        else:
-            accounts_user = account_repository.get_by_user_with_related(user)
-            sum_all_accounts_in_group = account_service.get_sum_all_accounts(
-                accounts_user,
-            )
-        return {
-            'sum_all_accounts': sum_all_accounts,
-            'sum_all_accounts_in_group': sum_all_accounts_in_group,
-        }
+        context.update(page_context)
+        return context
 
 
 class AccountCreateView(

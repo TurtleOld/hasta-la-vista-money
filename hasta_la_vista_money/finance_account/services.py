@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any, TypedDict
 
 from dateutil.relativedelta import relativedelta
+from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import DecimalField, Q, Sum
 from django.db.models.functions import Coalesce
@@ -674,6 +675,40 @@ class AccountService:
                 timezone.now() > grace_end and final_debt > constants.ZERO
             ),
         }
+
+    def get_users_for_group(
+        self,
+        user: User,
+        group_id: str | None = None,
+    ) -> list[User]:
+        """
+        Get list of users for a specific group or user.
+
+        Common logic for group filtering used across the application.
+        Handles 'my', None, and group ID cases.
+
+        Args:
+            user: Current user instance
+            group_id: Optional group ID filter:
+                - 'my' or None: return only current user
+                - group ID (str): return all users in the group
+
+        Returns:
+            List of User instances for the specified group or user.
+
+        Raises:
+            Group.DoesNotExist: If group_id is provided but group doesn't exist
+                (should be handled by caller)
+        """
+        if not group_id or group_id == 'my':
+            return [user]
+
+        try:
+            group = Group.objects.get(pk=group_id)
+        except Group.DoesNotExist:
+            return []
+        else:
+            return list(group.user_set.all())
 
     def get_accounts_for_user_or_group(
         self,

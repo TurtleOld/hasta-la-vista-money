@@ -3,7 +3,6 @@ from typing import Any, Literal, TypedDict
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models.aggregates import Sum
@@ -577,27 +576,19 @@ class IncomeGroupAjaxView(LoginRequiredMixin, View):
         """
         group_id = request.GET.get('group_id')
         user = request.user
-        incomes = Income.objects.none()
+        account_service = request.container.core.account_service()
+        users_in_group = account_service.get_users_for_group(user, group_id)
 
-        if group_id == 'my' or not group_id:
-            incomes = Income.objects.filter(user=user).select_related(
+        if users_in_group:
+            incomes = Income.objects.filter(
+                user__in=users_in_group,
+            ).select_related(
                 'user',
                 'category',
                 'account',
             )
         else:
-            try:
-                group = Group.objects.get(pk=group_id)
-                users_in_group = User.objects.filter(groups=group)
-                incomes = Income.objects.filter(
-                    user__in=users_in_group,
-                ).select_related(
-                    'user',
-                    'category',
-                    'account',
-                )
-            except Group.DoesNotExist:
-                incomes = Income.objects.none()
+            incomes = Income.objects.none()
 
         context = {
             'income_by_month': incomes,
@@ -621,11 +612,12 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
         """
         group_id = request.GET.get('group_id', 'my')
         user = request.user
-        incomes = Income.objects.none()
+        account_service = request.container.core.account_service()
+        users_in_group = account_service.get_users_for_group(user, group_id)
 
-        if group_id == 'my' or not group_id:
+        if users_in_group:
             incomes = (
-                Income.objects.filter(user=user)
+                Income.objects.filter(user__in=users_in_group)
                 .select_related(
                     'category',
                     'account',
@@ -634,20 +626,7 @@ class IncomeDataAjaxView(LoginRequiredMixin, View):
                 .all()
             )
         else:
-            try:
-                group = Group.objects.get(pk=group_id)
-                users_in_group = User.objects.filter(groups=group)
-                incomes = (
-                    Income.objects.filter(user__in=users_in_group)
-                    .select_related(
-                        'category',
-                        'account',
-                        'user',
-                    )
-                    .all()
-                )
-            except Group.DoesNotExist:
-                incomes = Income.objects.none()
+            incomes = Income.objects.none()
 
         data = [
             {
