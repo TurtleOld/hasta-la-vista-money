@@ -80,26 +80,22 @@ class TestAccountView(TestCase):
         self.assertIn('user_groups', response.context)
 
     def test_account_view_context_methods(self) -> None:
-        """Test individual context methods of AccountView."""
+        """Test context data structure of AccountView."""
         view = AccountView()
         view.request = cast('AuthRequest', self.factory.get('/'))
         view.request.user = self.user
         setup_container_for_request(view.request)
 
-        accounts_context = view._get_accounts_context()
-        self.assertIn('accounts', accounts_context)
-        self.assertIn('user_groups', accounts_context)
+        view.object_list = view.get_queryset()
+        context = view.get_context_data()
 
-        forms_context = view._get_forms_context()
-        self.assertIn('add_account_form', forms_context)
-        self.assertIn('transfer_money_form', forms_context)
-
-        transfer_log_context = view._get_transfer_log_context()
-        self.assertIn('transfer_money_log', transfer_log_context)
-
-        sums_context = view._get_sums_context()
-        self.assertIn('sum_all_accounts', sums_context)
-        self.assertIn('sum_all_accounts_in_group', sums_context)
+        self.assertIn('accounts', context)
+        self.assertIn('user_groups', context)
+        self.assertIn('add_account_form', context)
+        self.assertIn('transfer_money_form', context)
+        self.assertIn('transfer_money_log', context)
+        self.assertIn('sum_all_accounts', context)
+        self.assertIn('sum_all_accounts_in_group', context)
 
 
 class TestAccountCreateView(TestCase):
