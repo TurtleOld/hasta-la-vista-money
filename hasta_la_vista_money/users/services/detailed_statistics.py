@@ -11,8 +11,10 @@ from django.db.models import QuerySet, Sum
 from django.utils import timezone
 from typing_extensions import TypedDict
 
-from config.containers import ApplicationContainer
 from core.protocols.services import AccountServiceProtocol
+
+if TYPE_CHECKING:
+    from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
@@ -788,10 +790,20 @@ def get_user_detailed_statistics(
     )
     year_start = today.replace(month=1, day=1)
     top_expense_categories = _top_categories_qs(
-        Expense, user, year_start, container, expense_repository, income_repository
+        Expense,
+        user,
+        year_start,
+        container,
+        expense_repository,
+        income_repository,
     )
     top_income_categories = _top_categories_qs(
-        Income, user, year_start, container, expense_repository, income_repository
+        Income,
+        user,
+        year_start,
+        container,
+        expense_repository,
+        income_repository,
     )
 
     receipt_info_by_month = collect_info_receipt(user=user)
@@ -817,7 +829,9 @@ def get_user_detailed_statistics(
         today,
     )
 
-    chart_combined = _build_chart(user, container, expense_repository, income_repository)
+    chart_combined = _build_chart(
+        user, container, expense_repository, income_repository
+    )
 
     account_service = container.core.account_service()
     credit_cards_data = _credit_cards_block(

@@ -6,11 +6,11 @@ from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from typing_extensions import TypedDict
 
+from hasta_la_vista_money.budget.repositories import PlanningRepository
 from hasta_la_vista_money.expense.models import ExpenseCategory
 from hasta_la_vista_money.expense.repositories import ExpenseRepository
 from hasta_la_vista_money.income.models import IncomeCategory
 from hasta_la_vista_money.income.repositories import IncomeRepository
-from hasta_la_vista_money.budget.repositories import PlanningRepository
 from hasta_la_vista_money.users.models import User
 
 
@@ -188,7 +188,9 @@ class BudgetService:
 
         for p in plans_exp:
             amount = p['amount']
-            expense_plan_map[p['category_expense_id']][p['date']] = int(amount or 0)
+            expense_plan_map[p['category_expense_id']][p['date']] = int(
+                amount or 0
+            )
 
         return expense_plan_map
 
@@ -222,7 +224,9 @@ class BudgetService:
             month_date = (
                 e['month'].date() if hasattr(e['month'], 'date') else e['month']
             )
-            income_fact_map[e['category_id']][month_date] = e['total'] or Decimal(0)
+            income_fact_map[e['category_id']][month_date] = e[
+                'total'
+            ] or Decimal(0)
 
         return income_fact_map
 
@@ -259,7 +263,9 @@ class BudgetService:
         income_categories: list[IncomeCategory],
     ) -> AggregateBudgetDataDict:
         """Aggregate all budget data for context."""
-        _validate_budget_inputs(user, months, expense_categories, income_categories)
+        _validate_budget_inputs(
+            user, months, expense_categories, income_categories
+        )
 
         expense_fact_map = self._get_expense_facts(
             user,
@@ -456,7 +462,9 @@ class BudgetService:
             month_date = (
                 e['month'].date() if hasattr(e['month'], 'date') else e['month']
             )
-            income_fact_map[e['category_id']][month_date] = e['total'] or Decimal(0)
+            income_fact_map[e['category_id']][month_date] = e[
+                'total'
+            ] or Decimal(0)
 
         return income_fact_map
 
@@ -748,8 +756,6 @@ def _validate_budget_inputs(
         raise BudgetDataError(error_msg)
 
 
-
-
 def _calculate_expense_totals(
     expense_fact_map: dict[int, dict[date, int]],
     expense_plan_map: dict[int, dict[date, int]],
@@ -803,8 +809,6 @@ def _build_expense_data(
         expense_data.append(row)
 
     return expense_data
-
-
 
 
 def _calculate_income_totals(
@@ -924,8 +928,6 @@ def _validate_expense_table_inputs(
         raise BudgetDataError(error_msg)
 
 
-
-
 def _build_expense_table_data(
     expense_fact_map: dict[int, dict[date, int]],
     expense_plan_map: dict[int, dict[date, int]],
@@ -967,8 +969,6 @@ def _build_expense_table_data(
     return expense_data, total_fact_expense, total_plan_expense
 
 
-
-
 def _validate_income_table_inputs(
     _user: User | None,
     months: list[date] | None,
@@ -984,8 +984,6 @@ def _validate_income_table_inputs(
     if income_categories is None:
         error_msg = 'Income categories are required.'
         raise BudgetDataError(error_msg)
-
-
 
 
 def _build_income_table_data(
@@ -1029,8 +1027,6 @@ def _build_income_table_data(
     return income_data, total_fact_income, total_plan_income
 
 
-
-
 def _validate_expense_api_inputs(
     _user: User | None,
     months: list[date] | None,
@@ -1046,8 +1042,6 @@ def _validate_expense_api_inputs(
     if expense_categories is None:
         error_msg = 'Expense categories are required.'
         raise BudgetDataError(error_msg)
-
-
 
 
 def _build_income_api_data(
@@ -1132,8 +1126,6 @@ def _build_expense_api_data(
     return data
 
 
-
-
 def _validate_income_api_inputs(
     _user: User | None,
     months: list[date] | None,
@@ -1149,5 +1141,3 @@ def _validate_income_api_inputs(
     if income_categories is None:
         error_msg = 'Income categories are required.'
         raise BudgetDataError(error_msg)
-
-

@@ -119,12 +119,11 @@ class BudgetServicesTestCase(TestCase):
 
     def test_aggregate_budget_data_empty_months(self) -> None:
         """Test aggregate_budget_data with empty months list."""
-        data = aggregate_budget_data(
+        data = self.budget_service.aggregate_budget_data(
             user=self.user,
             months=[],
             expense_categories=self.expense_categories,
             income_categories=self.income_categories,
-            container=self.container,
         )
         self.assertEqual(data['months'], [])
         # Проверяем, что для каждой категории массивы пустые
@@ -141,12 +140,11 @@ class BudgetServicesTestCase(TestCase):
 
     def test_aggregate_budget_data_no_categories(self) -> None:
         """Test aggregate_budget_data with no categories."""
-        data = aggregate_budget_data(
+        data = self.budget_service.aggregate_budget_data(
             user=self.user,
             months=self.months,
             expense_categories=[],
             income_categories=[],
-            container=self.container,
         )
         self.assertEqual(data['expense_data'], [])
         self.assertEqual(data['income_data'], [])
@@ -188,11 +186,10 @@ class BudgetServicesTestCase(TestCase):
             )  # type: ignore[arg-type]
 
     def test_aggregate_expense_table_empty_months(self) -> None:
-        data = aggregate_expense_table(
+        data = self.budget_service.aggregate_expense_table(
             user=self.user,
             months=[],
             expense_categories=self.expense_categories,
-            container=self.container,
         )
         self.assertEqual(data['months'], [])
         for row in data['expense_data']:
@@ -202,11 +199,10 @@ class BudgetServicesTestCase(TestCase):
             self.assertEqual(row['percent'], [])
 
     def test_aggregate_expense_table_empty_categories(self) -> None:
-        data = aggregate_expense_table(
+        data = self.budget_service.aggregate_expense_table(
             user=self.user,
             months=self.months,
             expense_categories=[],
-            container=self.container,
         )
         self.assertEqual(data['expense_data'], [])
 
@@ -247,11 +243,10 @@ class BudgetServicesTestCase(TestCase):
             )  # type: ignore[arg-type]
 
     def test_aggregate_income_table_empty_months(self) -> None:
-        data = aggregate_income_table(
+        data = self.budget_service.aggregate_income_table(
             user=self.user,
             months=[],
             income_categories=self.income_categories,
-            container=self.container,
         )
         self.assertEqual(data['months'], [])
         for row in data['income_data']:
@@ -261,11 +256,10 @@ class BudgetServicesTestCase(TestCase):
             self.assertEqual(row['percent'], [])
 
     def test_aggregate_income_table_empty_categories(self) -> None:
-        data = aggregate_income_table(
+        data = self.budget_service.aggregate_income_table(
             user=self.user,
             months=self.months,
             income_categories=[],
-            container=self.container,
         )
         self.assertEqual(data['income_data'], [])
 
@@ -305,11 +299,10 @@ class BudgetServicesTestCase(TestCase):
             )  # type: ignore[arg-type]
 
     def test_aggregate_expense_api_empty_months(self) -> None:
-        data = aggregate_expense_api(
+        data = self.budget_service.aggregate_expense_api(
             user=self.user,
             months=[],
             expense_categories=self.expense_categories,
-            container=self.container,
         )
         self.assertEqual(data['months'], [])
         for row in data['data']:
@@ -321,11 +314,10 @@ class BudgetServicesTestCase(TestCase):
             )
 
     def test_aggregate_expense_api_empty_categories(self) -> None:
-        data = aggregate_expense_api(
+        data = self.budget_service.aggregate_expense_api(
             user=self.user,
             months=self.months,
             expense_categories=[],
-            container=self.container,
         )
         self.assertEqual(data['data'], [])
 
@@ -365,11 +357,10 @@ class BudgetServicesTestCase(TestCase):
             )  # type: ignore[arg-type]
 
     def test_aggregate_income_api_empty_months(self) -> None:
-        data = aggregate_income_api(
+        data = self.budget_service.aggregate_income_api(
             user=self.user,
             months=[],
             income_categories=self.income_categories,
-            container=self.container,
         )
         self.assertEqual(data['months'], [])
         for row in data['data']:
@@ -381,10 +372,9 @@ class BudgetServicesTestCase(TestCase):
             )
 
     def test_aggregate_income_api_empty_categories(self) -> None:
-        data = aggregate_income_api(
+        data = self.budget_service.aggregate_income_api(
             user=self.user,
             months=self.months,
             income_categories=[],
-            container=self.container,
         )
         self.assertEqual(data['data'], [])
