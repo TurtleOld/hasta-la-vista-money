@@ -428,7 +428,7 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Hasta La Vista, Money! API',
     'DESCRIPTION': 'API для системы домашнего учета финансов',
-    'VERSION': '1.7.0',
+    'VERSION': '1.8.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
     'AUTHENTICATION_WHITELIST': [
