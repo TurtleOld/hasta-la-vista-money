@@ -43,9 +43,9 @@ class ReceiptCreatorService:
         self,
         *,
         user: User,
-        account: "Account",
-        receipt_data: "ReceiptCreateData",
-        seller_data: "SellerCreateData",
+        account: 'Account',
+        receipt_data: 'ReceiptCreateData',
+        seller_data: 'SellerCreateData',
         products_data: Iterable[dict[str, Any]] | None = None,
         manual: bool = False,
     ) -> Receipt:
@@ -132,16 +132,16 @@ class ReceiptCreatorService:
         self,
         *,
         user: User,
-        seller_data: "SellerCreateData",
+        seller_data: 'SellerCreateData',
     ) -> Seller:
-        name_seller = seller_data.name_seller or "Неизвестный продавец"
+        name_seller = seller_data.name_seller or 'Неизвестный продавец'
         return self.seller_repository.update_or_create_seller(
             user=user,
             name_seller=name_seller,
             defaults={
-                "retail_place_address": seller_data.retail_place_address
-                or "Нет данных",
-                "retail_place": seller_data.retail_place or "Нет данных",
+                'retail_place_address': seller_data.retail_place_address
+                or 'Нет данных',
+                'retail_place': seller_data.retail_place or 'Нет данных',
             },
         )
 
@@ -150,16 +150,16 @@ class ReceiptCreatorService:
         *,
         user: User,
         products_data: Iterable[dict[str, Any]] | None,
-    ) -> list["Product"]:
-        products: list["Product"] = []
+    ) -> list['Product']:
+        products: list['Product'] = []
         if products_data is None:
             return products
 
         for raw_product in products_data:
-            product_name = raw_product.get("product_name")
-            price = raw_product.get("price")
-            quantity = raw_product.get("quantity")
-            amount = raw_product.get("amount")
+            product_name = raw_product.get('product_name')
+            price = raw_product.get('price')
+            quantity = raw_product.get('quantity')
+            amount = raw_product.get('amount')
 
             if product_name is None or price is None or quantity is None:
                 continue
@@ -168,12 +168,12 @@ class ReceiptCreatorService:
                 Product(
                     user=user,
                     product_name=str(product_name),
-                    category=str(raw_product.get("category", "")),
+                    category=str(raw_product.get('category', '')),
                     price=Decimal(str(price)),
                     quantity=Decimal(str(quantity)),
                     amount=Decimal(str(amount or 0)),
-                    nds_type=raw_product.get("nds_type"),
-                    nds_sum=Decimal(str(raw_product.get("nds_sum", 0))),
+                    nds_type=raw_product.get('nds_type'),
+                    nds_sum=Decimal(str(raw_product.get('nds_sum', 0))),
                 )
             )
 
