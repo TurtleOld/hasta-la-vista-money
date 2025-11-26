@@ -1,8 +1,12 @@
 from collections.abc import Callable
+from typing import TYPE_CHECKING, cast
 
 from django.http import HttpRequest, HttpResponse
 
 from config.containers import ApplicationContainer
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
 
 
 class CoreMiddleware:
@@ -15,5 +19,6 @@ class CoreMiddleware:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        request.container = self.container
-        return self.get_response(request)
+        request_with_container = cast('RequestWithContainer', request)
+        request_with_container.container = self.container
+        return self.get_response(request_with_container)
