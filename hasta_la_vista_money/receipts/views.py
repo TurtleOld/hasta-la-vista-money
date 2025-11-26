@@ -31,6 +31,7 @@ from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.views import BaseEntityFilterView
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
@@ -59,17 +60,10 @@ class BaseView:
         return reverse_lazy('receipts:list')
 
 
-class ReceiptView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[ReceiptForm],
-    FilterView,
-    BaseView,
-):
-    paginate_by: int = constants.PAGINATE_BY_DEFAULT
+class ReceiptView(BaseEntityFilterView, BaseView):
     model = Receipt
     filterset_class: type[ReceiptFilter] = ReceiptFilter
     template_name: str = 'receipts/receipts.html'
-    no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
     request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Receipt]:

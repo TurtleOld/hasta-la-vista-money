@@ -21,6 +21,7 @@ from django.views.generic.list import ListView
 from django_filters.views import FilterView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.views import BaseEntityFilterView
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.expense.filters import ExpenseFilter
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
@@ -74,19 +75,13 @@ class ExpenseCategoryBaseView(BaseView):
         return str(reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL))
 
 
-class ExpenseView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    FilterView,
-):
+class ExpenseView(BaseEntityFilterView, ExpenseBaseView):
     """Main expense list view with filtering and pagination."""
 
     model = Expense
     template_name = constants.EXPENSE_TEMPLATE
-    paginate_by = constants.PAGINATE_BY_DEFAULT
     context_object_name = 'expense'
     filterset_class = ExpenseFilter
-    no_permission_url = reverse_lazy('login')
     expense_service: ExpenseServiceProtocol
 
     def get_context_data(

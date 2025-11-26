@@ -673,32 +673,8 @@ class TestUploadImageView(TestCase):
         self.assertRedirects(response, '/login/?next=/receipts/upload/')
 
     @patch('hasta_la_vista_money.receipts.views.analyze_image_with_ai')
-    @patch(
-        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._update_account_balance',
-    )
-    @patch(
-        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._parse_receipt_date',
-    )
-    @patch(
-        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._create_receipt',
-    )
-    @patch(
-        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._create_or_update_seller',
-    )
-    @patch(
-        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._create_products',
-    )
-    @patch(
-        'hasta_la_vista_money.receipts.services.receipt_import.ReceiptImportService._check_exist_receipt',
-    )
     def test_upload_image_view_post(
         self,
-        mock_check_exist: Mock,
-        mock_create_products: Mock,
-        mock_create_seller: Mock,
-        mock_create_receipt: Mock,
-        mock_parse_date: Mock,
-        mock_update_balance: Mock,
         mock_analyze: Mock,
     ) -> None:
         mock_analyze.return_value = json.dumps(
@@ -719,28 +695,6 @@ class TestUploadImageView(TestCase):
             },
         )
 
-        mock_queryset = MagicMock()
-        mock_queryset.exists.return_value = False
-        mock_check_exist.return_value = mock_queryset
-
-        mock_seller = MagicMock(spec=Seller)
-        mock_seller.pk = 1
-        mock_create_seller.return_value = mock_seller
-
-        mock_create_products.return_value = []
-
-        mock_receipt = MagicMock(spec=Receipt)
-        mock_receipt.pk = 1
-        mock_receipt.product.set = Mock()
-        mock_create_receipt.return_value = mock_receipt
-
-        mock_parse_date.return_value = timezone.make_aware(
-            datetime(2023, 5, 16, 19, 35),  # noqa: DTZ001
-            UTC,
-        )
-
-        mock_update_balance.return_value = None
-
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:upload')
 
@@ -758,9 +712,9 @@ class TestUploadImageView(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
 
-        mock_update_balance.assert_called_once()
-        call_args = mock_update_balance.call_args
-        self.assertEqual(call_args[0][0], self.account)
+        self.mock_account_service.apply_receipt_spend.assert_called_once()
+        call_args = self.mock_account_service.apply_receipt_spend.call_args
+        self.assertEqual(call_args[0][0].pk, self.account.pk)
         self.assertEqual(call_args[0][1], Decimal('100.00'))
 
 
