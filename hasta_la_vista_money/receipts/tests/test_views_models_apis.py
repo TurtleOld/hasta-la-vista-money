@@ -14,6 +14,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from config.containers import ApplicationContainer
+from config.middleware import CoreMiddleware
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -657,9 +658,11 @@ class TestUploadImageView(TestCase):
         self.container.core.account_service.override(
             providers.Object(self.mock_account_service),
         )
+        CoreMiddleware.container = self.container
 
     def tearDown(self) -> None:
         self.container.core.account_service.reset_override()
+        CoreMiddleware.container = ApplicationContainer()
 
     def test_upload_image_view_get(self) -> None:
         self.client.force_login(self.user)

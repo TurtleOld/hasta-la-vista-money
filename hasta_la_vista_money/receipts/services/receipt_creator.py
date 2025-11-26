@@ -168,7 +168,7 @@ class ReceiptCreatorService:
                 Product(
                     user=user,
                     product_name=str(product_name),
-                    category=raw_product.get("category"),
+                    category=str(raw_product.get("category", "")),
                     price=Decimal(str(price)),
                     quantity=Decimal(str(quantity)),
                     amount=Decimal(str(amount or 0)),
