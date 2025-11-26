@@ -1,7 +1,8 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 from django.forms.formsets import BaseFormSet
@@ -57,7 +58,9 @@ class ReceiptCreatorService:
             receipt_data.total_sum,
         )
 
-        seller = self._create_or_update_seller(user=user, seller_data=seller_data)
+        seller = self._create_or_update_seller(
+            user=user, seller_data=seller_data
+        )
         receipt = self.receipt_repository.create_receipt(
             user=user,
             account=account,
@@ -71,9 +74,13 @@ class ReceiptCreatorService:
             manual=manual,
         )
 
-        products = self._prepare_products(user=user, products_data=products_data)
+        products = self._prepare_products(
+            user=user, products_data=products_data
+        )
         if products:
-            created_products = self.product_repository.bulk_create_products(products)
+            created_products = self.product_repository.bulk_create_products(
+                products
+            )
             for product in created_products:
                 self.receipt_repository.add_product_to_receipt(receipt, product)
 
@@ -151,7 +158,7 @@ class ReceiptCreatorService:
         user: User,
         products_data: Iterable[dict[str, Any]] | None,
     ) -> list['Product']:
-        products: list['Product'] = []
+        products: list[Product] = []
         if products_data is None:
             return products
 

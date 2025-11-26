@@ -27,7 +27,6 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django.views.generic.edit import UpdateView
-from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants

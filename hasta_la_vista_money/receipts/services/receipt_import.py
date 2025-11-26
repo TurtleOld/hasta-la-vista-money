@@ -1,9 +1,9 @@
 import json
 import re
 from collections.abc import Callable
-from decimal import Decimal
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from django.core.files.uploadedfile import UploadedFile
@@ -21,6 +21,7 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
+
 
 @dataclass
 class ReceiptImportResult:
@@ -132,7 +133,9 @@ class ReceiptImportService:
                 operation_type=data.get('operation_type', 0),
             ),
             seller_data=SellerCreateData(
-                name_seller=str(data.get('name_seller', 'Неизвестный продавец')),
+                name_seller=str(
+                    data.get('name_seller', 'Неизвестный продавец')
+                ),
                 retail_place_address=data.get('retail_place_address'),
                 retail_place=data.get('retail_place'),
             ),

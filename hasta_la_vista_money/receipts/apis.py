@@ -20,15 +20,15 @@ from rest_framework.views import APIView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import Receipt, Seller
-from hasta_la_vista_money.receipts.services.receipt_creator import (
-    ReceiptCreateData,
-    SellerCreateData,
-)
+from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
     ImageDataSerializer,
     ReceiptSerializer,
     SellerSerializer,
+)
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    ReceiptCreateData,
+    SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -321,9 +321,9 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
                 name_seller=str(
                     (request_data.get('seller') or {}).get('name_seller', '')
                 ),
-                retail_place_address=(
-                    request_data.get('seller') or {}
-                ).get('retail_place_address'),
+                retail_place_address=(request_data.get('seller') or {}).get(
+                    'retail_place_address'
+                ),
                 retail_place=(request_data.get('seller') or {}).get(
                     'retail_place'
                 ),

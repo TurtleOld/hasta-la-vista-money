@@ -22,7 +22,6 @@ from django.views import View
 from django.views.generic import DeleteView, UpdateView
 from django.views.generic.edit import CreateView
 from django.views.generic.list import ListView
-from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
