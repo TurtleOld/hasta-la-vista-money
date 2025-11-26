@@ -16,11 +16,15 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView
 from django.views.generic.list import ListView
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.core.views import BaseEntityFilterView
+from hasta_la_vista_money.core.views import (
+    BaseEntityCreateView,
+    BaseEntityFilterView,
+    BaseEntityUpdateView,
+)
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.expense.filters import ExpenseFilter
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
@@ -202,18 +206,13 @@ class ExpenseCopyView(
             return redirect(constants.EXPENSE_LIST_URL)
 
 
-class ExpenseCreateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    CreateView[Expense, AddExpenseForm],
-):
+class ExpenseCreateView(BaseEntityCreateView[Expense, AddExpenseForm]):
     """View for creating a new expense."""
 
     model = Expense
     template_name = 'expense/add_expense.html'
     form_class = AddExpenseForm
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
-    no_permission_url = reverse_lazy('login')
 
     def get_form_kwargs(
         self,
@@ -269,18 +268,13 @@ class ExpenseCreateView(
         )
 
 
-class ExpenseUpdateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    UpdateView[Expense, AddExpenseForm],
-):
+class ExpenseUpdateView(BaseEntityUpdateView[Expense, AddExpenseForm]):
     """View for updating an existing expense."""
 
     model = Expense
     template_name = 'expense/change_expense.html'
     form_class = AddExpenseForm
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
-    no_permission_url = reverse_lazy('login')
 
     def get_object(self, queryset: Any = None) -> Expense:
         """Get the expense object to update."""

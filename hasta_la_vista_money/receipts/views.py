@@ -1,7 +1,3 @@
-import decimal
-import json
-import re
-from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -21,16 +17,18 @@ if TYPE_CHECKING:
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
-from django.utils import timezone
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
-from django.views.generic.edit import UpdateView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.core.views import BaseEntityFilterView
+from hasta_la_vista_money.core.views import (
+    BaseEntityCreateView,
+    BaseEntityFilterView,
+    BaseEntityUpdateView,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
@@ -39,7 +37,7 @@ from hasta_la_vista_money.receipts.forms import (
     SellerForm,
     UploadImageForm,
 )
-from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.receipts.services import (
     analyze_image_with_ai,
     paginator_custom_view,
@@ -227,9 +225,7 @@ class SellerCreateView(
 
 
 class ReceiptCreateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[ReceiptForm],
-    CreateView[Receipt, ReceiptForm],
+    BaseEntityCreateView[Receipt, ReceiptForm],
     BaseView,
 ):
     model = Receipt
@@ -359,9 +355,7 @@ class ReceiptCreateView(
 
 
 class ReceiptUpdateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[ReceiptForm],
-    UpdateView[Receipt, ReceiptForm],
+    BaseEntityUpdateView[Receipt, ReceiptForm],
     BaseView,
 ):
     model = Receipt
@@ -747,193 +741,6 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         if isinstance(uploaded_file, list):
             uploaded_file = uploaded_file[0]
         return uploaded_file
-
-    def _process_uploaded_file(self, uploaded_file: Any) -> dict[str, Any]:
-        """Process uploaded file and return decoded JSON receipt."""
-        json_receipt: Any = analyze_image_with_ai(uploaded_file)
-        if json_receipt and 'json' in json_receipt:
-            json_receipt = self.clean_json_response(json_receipt)
-        result: dict[str, Any] = json.loads(json_receipt)
-        return result
-
-    def _handle_receipt_processing(
-        self,
-        decode_json_receipt: dict[str, Any],
-        user: User,
-        account: Account,
-    ) -> HttpResponse:
-        """Handle receipt processing logic."""
-        number_receipt = decode_json_receipt['number_receipt']
-        receipt_exists = self.check_exist_receipt(user, number_receipt)
-
-        if receipt_exists.exists():
-            messages.error(
-                self.request,
-                gettext_lazy(constants.RECEIPT_ALREADY_EXISTS),
-            )
-            return super().form_invalid(self.get_form())
-
-        seller = self._create_or_update_seller(decode_json_receipt, user)
-        products = self._create_products(decode_json_receipt, user)
-        receipt = self._create_receipt(
-            decode_json_receipt,
-            user,
-            account,
-            seller,
-        )
-
-        if products:
-            receipt.product.set(products)
-
-        self._update_account_balance(
-            account,
-            decode_json_receipt['total_sum'],
-        )
-
-        messages.success(
-            self.request,
-            'Чек успешно загружен и обработан!',
-        )
-        return super().form_valid(self.get_form())
-
-    def _create_or_update_seller(
-        self,
-        decode_json_receipt: dict[str, Any],
-        user: User,
-    ) -> Seller:
-        """Create or update seller from receipt data."""
-        seller_repository = self.request.container.receipts.seller_repository()
-        return seller_repository.update_or_create_seller(
-            user=user,
-            name_seller=decode_json_receipt.get('name_seller', ''),
-            defaults={
-                'retail_place_address': decode_json_receipt.get(
-                    'retail_place_address',
-                    'Нет данных',
-                ),
-                'retail_place': decode_json_receipt.get(
-                    'retail_place',
-                    'Нет данных',
-                ),
-            },
-        )
-
-    def _create_products(
-        self,
-        decode_json_receipt: dict[str, Any],
-        user: User,
-    ) -> list[Product]:
-        """Create products from receipt data."""
-        products_data = [
-            Product(
-                user=user,
-                product_name=item['product_name'],
-                category=item['category'],
-                price=item['price'],
-                quantity=item['quantity'],
-                amount=item['amount'],
-            )
-            for item in decode_json_receipt.get('items', [])
-        ]
-        product_repository = (
-            self.request.container.receipts.product_repository()
-        )
-        return product_repository.bulk_create_products(products_data)
-
-    def _create_receipt(
-        self,
-        decode_json_receipt: dict[str, Any],
-        user: User,
-        account: Account,
-        seller: Seller,
-    ) -> Receipt:
-        """Create receipt from processed data."""
-        receipt_repository = (
-            self.request.container.receipts.receipt_repository()
-        )
-        return receipt_repository.create_receipt(
-            user=user,
-            account=account,
-            number_receipt=decode_json_receipt['number_receipt'],
-            receipt_date=self._parse_receipt_date(
-                decode_json_receipt['receipt_date'],
-            ),
-            nds10=decode_json_receipt.get('nds10', 0),
-            nds20=decode_json_receipt.get('nds20', 0),
-            operation_type=decode_json_receipt.get('operation_type', 0),
-            total_sum=decode_json_receipt['total_sum'],
-            seller=seller,
-        )
-
-    def _update_account_balance(
-        self,
-        account: Account,
-        total_sum: Decimal,
-    ) -> None:
-        """Update account balance after receipt creation."""
-        account_balance = get_object_or_404(Account, pk=account.pk)
-        account_balance.balance -= decimal.Decimal(total_sum)
-        account_balance.save()
-
-    def check_exist_receipt(
-        self,
-        user: User,
-        number_receipt: int | None,
-    ) -> QuerySet[Receipt]:
-        receipt_repository = (
-            self.request.container.receipts.receipt_repository()
-        )
-        return receipt_repository.get_by_user_and_number(
-            user=user,
-            number_receipt=number_receipt,
-        )
-
-    @staticmethod
-    def clean_json_response(text: str) -> str:
-        match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
-        if match:
-            return match.group(1)
-        return text.strip()
-
-    @staticmethod
-    def _parse_receipt_date(date_str: str) -> datetime:
-        """Parse receipt date string into timezone-aware datetime."""
-        normalized_date = UploadImageView.normalize_date(date_str)
-        day, month, year = normalized_date.split(' ')[0].split('.')
-        hour, minute = normalized_date.split(' ')[1].split(':')
-        return timezone.make_aware(
-            datetime(
-                int(year),
-                int(month),
-                int(day),
-                int(hour),
-                int(minute),
-                tzinfo=timezone.get_current_timezone(),
-            ),
-            timezone.get_current_timezone(),
-        )
-
-    @staticmethod
-    def normalize_date(date_str: str) -> str:
-        try:
-            day, month, year = date_str.split(' ')[0].split('.')
-            hour, minute = date_str.split(' ')[1].split(':')
-            aware_dt = timezone.make_aware(
-                datetime(
-                    int(year),
-                    int(month),
-                    int(day),
-                    int(hour),
-                    int(minute),
-                    tzinfo=timezone.get_current_timezone(),
-                ),
-                timezone.get_current_timezone(),
-            )
-            return aware_dt.strftime('%d.%m.%Y %H:%M')
-        except ValueError:
-            day, month, year_short, time = date_str.replace(' ', '.').split('.')
-            current_century = str(timezone.now().year)[:2]
-            return f'{day}.{month}.{current_century}{year_short} {time}'
 
 
 @require_GET

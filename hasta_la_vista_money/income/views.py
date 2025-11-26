@@ -19,13 +19,17 @@ from django.urls import reverse_lazy
 from django.utils import formats
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import DeleteView, UpdateView
+from django.views.generic import DeleteView
 from django.views.generic.edit import CreateView
 from django.views.generic.list import ListView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.core.views import BaseEntityFilterView
+from hasta_la_vista_money.core.views import (
+    BaseEntityCreateView,
+    BaseEntityFilterView,
+    BaseEntityUpdateView,
+)
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.filters import IncomeFilter
@@ -167,10 +171,8 @@ class IncomeView(BaseEntityFilterView, BaseView):
 
 
 class IncomeCreateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[IncomeForm],
+    BaseEntityCreateView[Income, IncomeForm],
     IncomeFormQuerysetMixin,
-    CreateView[Income, IncomeForm],
     BaseView,
 ):
     """
@@ -179,7 +181,6 @@ class IncomeCreateView(
 
     model = Income
     template_name = 'income/create_income.html'
-    no_permission_url = reverse_lazy('login')
     form_class = IncomeForm
     depth_limit = 3
     success_url = reverse_lazy(INCOME_LIST_URL_NAME)
@@ -288,10 +289,8 @@ class IncomeCopyView(
 
 
 class IncomeUpdateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[IncomeForm],
+    BaseEntityUpdateView[Income, IncomeForm],
     IncomeFormQuerysetMixin,
-    UpdateView[Income, IncomeForm],
     BaseView,
 ):
     """
@@ -301,7 +300,6 @@ class IncomeUpdateView(
     model = Income
     template_name = 'income/change_income.html'
     form_class = IncomeForm
-    no_permission_url = reverse_lazy('login')
     success_url = reverse_lazy(INCOME_LIST_URL_NAME)
     depth_limit = 3
 
