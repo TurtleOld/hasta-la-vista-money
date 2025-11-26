@@ -5,7 +5,7 @@ listing, creation, editing, deletion, and money transfer operations. Includes
 comprehensive error handling, user authentication, and AJAX support.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from asgiref.sync import sync_to_async
@@ -13,7 +13,6 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
-from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import QuerySet
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.template.loader import render_to_string
@@ -30,6 +29,7 @@ from django.views.generic import (
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.types import WSGIRequestWithContainer
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
@@ -95,9 +95,12 @@ class AccountView(
         """
         account_service = self.request.container.core.account_service()
         group_id = self.get_group_id()
-        return account_service.get_accounts_for_user_or_group(
-            self.request.user,
-            group_id,
+        return cast(
+            'QuerySet[Account, Account]',
+            account_service.get_accounts_for_user_or_group(
+                self.request.user,
+                group_id,
+            ),
         )
 
     def get_context_data(
@@ -376,7 +379,7 @@ class AjaxAccountsByGroupView(View):
 
     async def get(
         self,
-        request: WSGIRequest,
+        request: WSGIRequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:

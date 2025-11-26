@@ -341,7 +341,7 @@ class TestAjaxAccountsByGroupView(TestCase):
         request.user = self.user
         setup_container_for_request(request)
 
-        response = await view.get(request)
+        response = await view.get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     async def test_ajax_accounts_by_group_get_with_group_id(self) -> None:
@@ -351,7 +351,7 @@ class TestAjaxAccountsByGroupView(TestCase):
         request.user = self.user
         setup_container_for_request(request)
 
-        response = await view.get(request)
+        response = await view.get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     async def test_ajax_accounts_by_group_get_exception(self) -> None:
@@ -361,5 +361,5 @@ class TestAjaxAccountsByGroupView(TestCase):
         request.user = self.user
         setup_container_for_request(request)
 
-        response = await view.get(request)
+        response = await view.get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, 500)

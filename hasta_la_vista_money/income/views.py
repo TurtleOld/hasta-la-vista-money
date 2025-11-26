@@ -8,7 +8,6 @@ from django.core.exceptions import PermissionDenied
 from django.db.models.aggregates import Sum
 from django.db.models.functions import TruncMonth
 from django.http import (
-    HttpRequest,
     HttpResponse,
     HttpResponseRedirect,
     JsonResponse,
@@ -25,6 +24,7 @@ from django.views.generic.list import ListView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.core.views import (
     BaseEntityCreateView,
     BaseEntityFilterView,
@@ -85,6 +85,8 @@ class IncomeView(BaseEntityFilterView, BaseView):
     """
     View for displaying user's incomes with filtering and chart data.
     """
+
+    request: RequestWithContainer
 
     model = Income
     filterset_class = IncomeFilter
@@ -175,6 +177,7 @@ class IncomeCreateView(
     IncomeFormQuerysetMixin,
     BaseView,
 ):
+    request: RequestWithContainer
     """
     View for creating a new income record.
     """
@@ -261,10 +264,11 @@ class IncomeCopyView(
     """
 
     no_permission_url = reverse_lazy('login')
+    request: RequestWithContainer
 
     def post(
         self,
-        request: Any,
+        request: RequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
@@ -293,6 +297,7 @@ class IncomeUpdateView(
     IncomeFormQuerysetMixin,
     BaseView,
 ):
+    request: RequestWithContainer
     """
     View for updating an existing income record.
     """
@@ -396,10 +401,11 @@ class IncomeDeleteView(
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
     success_url = reverse_lazy(INCOME_LIST_URL_NAME)
+    request: RequestWithContainer
 
-    def post(
+    def post(  # type: ignore[override]
         self,
-        request: HttpRequest,
+        request: RequestWithContainer,
         *args: object,
         **kwargs: object,
     ) -> JsonResponse:

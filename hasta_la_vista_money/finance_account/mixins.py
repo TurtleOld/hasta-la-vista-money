@@ -7,8 +7,8 @@ including group-based account filtering and user-specific data access.
 from typing import cast
 
 from django.db.models import QuerySet
-from django.http import HttpRequest
 
+from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
@@ -20,7 +20,7 @@ class GroupAccountMixin:
     account access and group-based financial management.
     """
 
-    request: HttpRequest
+    request: RequestWithContainer
 
     def get_group_id(self) -> str | None:
         """Extract group_id from request parameters.

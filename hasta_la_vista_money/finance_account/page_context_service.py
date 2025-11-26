@@ -1,6 +1,6 @@
 """Service for building page context for account views."""
 
-from typing import Any
+from typing import Any, cast
 
 from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
@@ -65,16 +65,18 @@ class AccountPageContextService:
         Returns:
             QuerySet of accounts.
         """
-        return self.account_service.get_accounts_for_user_or_group(
-            user,
-            group_id,
+        return cast(
+            'QuerySet[Account]',
+            self.account_service.get_accounts_for_user_or_group(
+                user,
+                group_id,
+            ),
         )
 
     def build_account_list_context(
         self,
         user: User,
         accounts: QuerySet[Account],
-        group_id: str | None = None,
     ) -> dict[str, Any]:
         """Build complete context for account list page.
 
@@ -161,7 +163,7 @@ class AccountPageContextService:
             )
         else:
             accounts_user = self.account_repository.get_by_user_with_related(
-                user
+                user,
             )
             sum_all_accounts_in_group = (
                 self.account_service.get_sum_all_accounts(accounts_user)

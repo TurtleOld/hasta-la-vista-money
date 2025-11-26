@@ -3,7 +3,7 @@
 from calendar import monthrange
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from dateutil.relativedelta import relativedelta
 from django.contrib.auth.models import Group
@@ -90,13 +90,16 @@ class TransferService:
         validate_account_balance(from_account, amount)
 
         if from_account.transfer_money(to_account, amount):
-            return self.transfer_money_log_repository.create_log(
-                user=user,
-                from_account=from_account,
-                to_account=to_account,
-                amount=amount,
-                exchange_date=exchange_date,
-                notes=notes or '',
+            return cast(
+                'TransferMoneyLog',
+                self.transfer_money_log_repository.create_log(
+                    user=user,
+                    from_account=from_account,
+                    to_account=to_account,
+                    amount=amount,
+                    exchange_date=exchange_date,
+                    notes=notes or '',
+                ),
             )
 
         error_msg = 'Transfer failed - insufficient funds or invalid accounts'
@@ -126,7 +129,10 @@ class AccountService:
 
     def get_account_by_id(self, account_id: int, user: User) -> Account | None:
         """Get a specific account by ID for a user."""
-        return self.account_repository.get_by_id_and_user(account_id, user)
+        return cast(
+            'Account | None',
+            self.account_repository.get_by_id_and_user(account_id, user),
+        )
 
     def get_credit_card_debt(
         self,
@@ -306,11 +312,14 @@ class AccountService:
             .first()
         )
         if first_expense and first_receipt:
-            return min(first_expense.date, first_receipt.receipt_date)
+            return cast(
+                'datetime | None',
+                min(first_expense.date, first_receipt.receipt_date),
+            )
         if first_expense:
-            return first_expense.date
+            return cast('datetime | None', first_expense.date)
         if first_receipt:
-            return first_receipt.receipt_date
+            return cast('datetime | None', first_receipt.receipt_date)
         return None
 
     def _calculate_purchase_period(
@@ -467,7 +476,7 @@ class AccountService:
             return {}
 
         purchase_start, purchase_end = self._calculate_purchase_period(
-            purchase_month
+            purchase_month,
         )
 
         grace_end, payments_start, payments_end = (
@@ -547,7 +556,8 @@ class AccountService:
         return purchase_start, purchase_end
 
     def _calculate_first_statement_date(
-        self, first_purchase: datetime
+        self,
+        first_purchase: datetime,
     ) -> datetime:
         """Calculate first statement date for Raiffeisenbank."""
         first_statement_date = first_purchase.replace(
@@ -725,7 +735,10 @@ class AccountService:
         Returns:
             QuerySet of accounts for user or group
         """
-        return self.account_repository.get_by_user_and_group(user, group_id)
+        return cast(
+            'QuerySet[Account, Account]',
+            self.account_repository.get_by_user_and_group(user, group_id),
+        )
 
     def get_sum_all_accounts(self, accounts: Any) -> Decimal:
         """Calculate total balance for a queryset of accounts."""

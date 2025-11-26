@@ -128,7 +128,7 @@ class DashboardDataViewTest(TestCase):
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = AnonymousUser()
         setup_container_for_request(request)
-        response = DashboardDataView().get(request)
+        response = DashboardDataView().get(request)  # type: ignore[arg-type]
         payload = json.loads(response.content.decode())
         self.assertEqual(response.status_code, 401)
         self.assertEqual(payload, {'error': 'User not authenticated'})
@@ -143,7 +143,7 @@ class DashboardDataViewTest(TestCase):
         request.user = self.user
         setup_container_for_request(request)
         with patch('hasta_la_vista_money.users.views.cache.delete'):
-            response = DashboardDataView().get(request)
+            response = DashboardDataView().get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, 500)
         payload = json.loads(response.content.decode())
         self.assertIn('error', payload)

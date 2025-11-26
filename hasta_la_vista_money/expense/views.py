@@ -5,7 +5,6 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.http import (
-    HttpRequest,
     HttpResponse,
     HttpResponseForbidden,
     HttpResponseRedirect,
@@ -20,6 +19,7 @@ from django.views.generic import CreateView, DeleteView, DetailView
 from django.views.generic.list import ListView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.core.views import (
     BaseEntityCreateView,
     BaseEntityFilterView,
@@ -54,6 +54,7 @@ class ExpenseBaseView(BaseView):
     """Base view for expense-related operations."""
 
     model = Expense
+    request: RequestWithContainer
 
     @property
     def template_name(self) -> str:
@@ -86,6 +87,7 @@ class ExpenseView(BaseEntityFilterView, ExpenseBaseView):
     context_object_name = 'expense'
     filterset_class = ExpenseFilter
     expense_service: ExpenseServiceProtocol
+    request: RequestWithContainer
 
     def get_context_data(
         self,
@@ -167,13 +169,14 @@ class ExpenseCopyView(
     ExpenseBaseView,
     View,
 ):
+    request: RequestWithContainer
     """View for copying an existing expense."""
 
     no_permission_url = reverse_lazy('login')
 
     def post(
         self,
-        request: HttpRequest,
+        request: RequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
@@ -213,6 +216,7 @@ class ExpenseCreateView(BaseEntityCreateView[Expense, AddExpenseForm]):
     template_name = 'expense/add_expense.html'
     form_class = AddExpenseForm
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
+    request: RequestWithContainer
 
     def get_form_kwargs(
         self,
@@ -275,6 +279,7 @@ class ExpenseUpdateView(BaseEntityUpdateView[Expense, AddExpenseForm]):
     template_name = 'expense/change_expense.html'
     form_class = AddExpenseForm
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
+    request: RequestWithContainer
 
     def get_object(self, queryset: Any = None) -> Expense:
         """Get the expense object to update."""
@@ -335,6 +340,7 @@ class ExpenseDeleteView(
     DetailView[Expense],
     DeleteView[Expense, Any],
 ):
+    request: RequestWithContainer
     """View for deleting an expense."""
 
     model = Expense
@@ -373,6 +379,7 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
     template_name = constants.EXPENSE_CATEGORY_TEMPLATE
     model = ExpenseCategory
     depth = 3
+    request: RequestWithContainer
 
     def get_context_data(
         self,
@@ -404,6 +411,7 @@ class ExpenseCategoryCreateView(
     LoginRequiredMixin,
     CreateView[ExpenseCategory, AddCategoryForm],
 ):
+    request: RequestWithContainer
     """View for creating a new expense category."""
 
     model = ExpenseCategory
@@ -474,6 +482,7 @@ class ExpenseCategoryDeleteView(
     LoginRequiredMixin,
     DeleteView[ExpenseCategory, Any],
 ):
+    request: RequestWithContainer
     """View for deleting an expense category."""
 
     model = ExpenseCategory
@@ -488,7 +497,7 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
 
     def get(
         self,
-        request: HttpRequest,
+        request: RequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
@@ -522,7 +531,7 @@ class ExpenseDataAjaxView(LoginRequiredMixin, View):
 
     def get(
         self,
-        request: HttpRequest,
+        request: RequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> JsonResponse:

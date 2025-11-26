@@ -54,7 +54,7 @@ class TestGroupAccountMixin(TestCase):
     def test_get_accounts_user_only(self) -> None:
         """Test get_accounts method for user without groups."""
         mixin = GroupAccountMixin()
-        mixin.request = self.factory.get('/')
+        mixin.request = self.factory.get('/')  # type: ignore[assignment]
         mixin.request.user = self.user3
         setup_container_for_request(mixin.request)
 
@@ -68,7 +68,7 @@ class TestGroupAccountMixin(TestCase):
     def test_get_accounts_user_with_groups(self) -> None:
         """Test get_accounts method for user with groups."""
         mixin = GroupAccountMixin()
-        mixin.request = self.factory.get('/')
+        mixin.request = self.factory.get('/')  # type: ignore[assignment]
         mixin.request.user = self.user1
         setup_container_for_request(mixin.request)
 
@@ -92,7 +92,7 @@ class TestGroupAccountMixin(TestCase):
         )
 
         mixin = GroupAccountMixin()
-        mixin.request = self.factory.get('/')
+        mixin.request = self.factory.get('/')  # type: ignore[assignment]
         mixin.request.user = self.user1
         setup_container_for_request(mixin.request)
 
@@ -110,7 +110,7 @@ class TestGroupAccountMixin(TestCase):
         self.user1.groups.add(empty_group)
 
         mixin = GroupAccountMixin()
-        mixin.request = self.factory.get('/')
+        mixin.request = self.factory.get('/')  # type: ignore[assignment]
         mixin.request.user = self.user1
         setup_container_for_request(mixin.request)
 
@@ -128,7 +128,7 @@ class TestGroupAccountMixin(TestCase):
         )
 
         mixin = GroupAccountMixin()
-        mixin.request = self.factory.get('/')
+        mixin.request = self.factory.get('/')  # type: ignore[assignment]
         mixin.request.user = user4
         setup_container_for_request(mixin.request)
 
@@ -145,7 +145,7 @@ class TestGroupAccountMixin(TestCase):
         )
 
         mixin = GroupAccountMixin()
-        mixin.request = self.factory.get('/')
+        mixin.request = self.factory.get('/')  # type: ignore[assignment]
         mixin.request.user = self.user1
         setup_container_for_request(mixin.request)
 
@@ -166,7 +166,7 @@ class TestGroupAccountMixin(TestCase):
         )
 
         mixin = GroupAccountMixin()
-        mixin.request = self.factory.get('/')
+        mixin.request = self.factory.get('/')  # type: ignore[assignment]
         mixin.request.user = self.user1
         setup_container_for_request(mixin.request)
 

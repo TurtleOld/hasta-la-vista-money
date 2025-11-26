@@ -196,7 +196,8 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
             return self._error_response(str(error))
 
     def _handle_receipt_creation(
-        self, request_data: dict[str, Any]
+        self,
+        request_data: dict[str, Any],
     ) -> Response:
         if self._check_existing_receipt(request_data):
             return self._error_response('Такой чек уже был добавлен ранее')
@@ -228,7 +229,8 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         )
 
     def _validate_request_data(
-        self, request_data: dict[str, Any]
+        self,
+        request_data: dict[str, Any],
     ) -> Response | None:
         required_fields = [
             'user',
@@ -304,31 +306,37 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
             self.request.container.receipts.receipt_creator_service()
         )
 
-        return receipt_creator_service.create_receipt_with_products(
-            user=user,
-            account=account,
-            receipt_data=ReceiptCreateData(
-                receipt_date=self._parse_receipt_date(
-                    request_data.get('receipt_date'),
+        return cast(
+            'Receipt',
+            receipt_creator_service.create_receipt_with_products(
+                user=user,
+                account=account,
+                receipt_data=ReceiptCreateData(
+                    receipt_date=self._parse_receipt_date(
+                        request_data.get('receipt_date'),
+                    ),
+                    total_sum=self._get_decimal(request_data['total_sum']),
+                    number_receipt=request_data.get('number_receipt'),
+                    operation_type=request_data.get('operation_type'),
+                    nds10=self._get_optional_decimal(request_data.get('nds10')),
+                    nds20=self._get_optional_decimal(request_data.get('nds20')),
                 ),
-                total_sum=self._get_decimal(request_data['total_sum']),
-                number_receipt=request_data.get('number_receipt'),
-                operation_type=request_data.get('operation_type'),
-                nds10=self._get_optional_decimal(request_data.get('nds10')),
-                nds20=self._get_optional_decimal(request_data.get('nds20')),
+                seller_data=SellerCreateData(
+                    name_seller=str(
+                        (request_data.get('seller') or {}).get(
+                            'name_seller',
+                            '',
+                        ),
+                    ),
+                    retail_place_address=(request_data.get('seller') or {}).get(
+                        'retail_place_address',
+                    ),
+                    retail_place=(request_data.get('seller') or {}).get(
+                        'retail_place',
+                    ),
+                ),
+                products_data=request_data.get('product', []),
             ),
-            seller_data=SellerCreateData(
-                name_seller=str(
-                    (request_data.get('seller') or {}).get('name_seller', '')
-                ),
-                retail_place_address=(request_data.get('seller') or {}).get(
-                    'retail_place_address'
-                ),
-                retail_place=(request_data.get('seller') or {}).get(
-                    'retail_place'
-                ),
-            ),
-            products_data=request_data.get('product', []),
         )
 
     def _get_decimal(self, value: Any) -> decimal.Decimal:

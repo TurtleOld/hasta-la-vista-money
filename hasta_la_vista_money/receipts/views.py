@@ -10,7 +10,7 @@ from django.db.models import Count, ProtectedError, QuerySet, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
 
-from hasta_la_vista_money.users.views import AuthRequest
+from hasta_la_vista_money.core.types import RequestWithContainer
 
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
@@ -61,7 +61,7 @@ class ReceiptView(BaseEntityFilterView, BaseView):
     model = Receipt
     filterset_class: type[ReceiptFilter] = ReceiptFilter
     template_name: str = 'receipts/receipts.html'
-    request: AuthRequest
+    request: RequestWithContainer
 
     def get_queryset(self) -> QuerySet[Receipt]:
         receipt_repository = (
@@ -74,8 +74,14 @@ class ReceiptView(BaseEntityFilterView, BaseView):
             group_id,
         )
         if users_in_group:
-            return receipt_repository.get_by_users_with_related(users_in_group)
-        return receipt_repository.filter(pk__in=[])
+            return cast(
+                'QuerySet[Receipt, Receipt]',
+                receipt_repository.get_by_users_with_related(users_in_group),
+            )
+        return cast(
+            'QuerySet[Receipt, Receipt]',
+            receipt_repository.filter(pk__in=[]),
+        )
 
     def get_context_data(
         self,
@@ -160,17 +166,20 @@ class ReceiptView(BaseEntityFilterView, BaseView):
             .order_by('-month')
         )
 
+        paginate_by_value = (
+            self.paginate_by if self.paginate_by is not None else 10
+        )
         page_receipts: Any = paginator_custom_view(
             self.request,
             total_receipts,
-            self.paginate_by,
+            paginate_by_value,
             'receipts',
         )
 
         pages_receipt_table: Any = paginator_custom_view(
             self.request,
             receipt_info_by_month,
-            self.paginate_by,
+            paginate_by_value,
             'receipts',
         )
 
@@ -228,6 +237,7 @@ class ReceiptCreateView(
     BaseEntityCreateView[Receipt, ReceiptForm],
     BaseView,
 ):
+    request: RequestWithContainer
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
     success_message = constants.SUCCESS_MESSAGE_CREATE_RECEIPT
@@ -239,7 +249,7 @@ class ReceiptCreateView(
         **kwargs: object,
     ) -> None:
         super().setup(request, *args, **kwargs)
-        self.request = request
+        self.request = cast('RequestWithContainer', request)
 
     def get_form(
         self,
@@ -264,21 +274,24 @@ class ReceiptCreateView(
 
     @staticmethod
     def check_exist_receipt(
-        request: HttpRequest,
+        request: RequestWithContainer,
         receipt_form: ReceiptForm,
     ) -> QuerySet[Receipt]:
         number_receipt = receipt_form.cleaned_data.get('number_receipt')
         if not isinstance(request.user, User):
             raise TypeError('User must be authenticated')
         receipt_repository = request.container.receipts.receipt_repository()
-        return receipt_repository.get_by_user_and_number(
-            user=request.user,
-            number_receipt=number_receipt,
+        return cast(
+            'QuerySet[Receipt, Receipt]',
+            receipt_repository.get_by_user_and_number(
+                user=request.user,
+                number_receipt=number_receipt,
+            ),
         )
 
     @staticmethod
     def create_receipt(
-        request: HttpRequest,
+        request: RequestWithContainer,
         receipt_form: ReceiptForm,
         product_formset: 'ProductFormSet',  # type: ignore[valid-type]
         seller: Seller,
@@ -328,7 +341,7 @@ class ReceiptCreateView(
         context['product_formset'] = ProductFormSet()
         return context
 
-    def form_valid(self, form: ReceiptForm) -> HttpResponse:
+    def form_valid(self, form: ReceiptForm) -> HttpResponse:  # type: ignore[override]
         seller = cast('Seller', form.cleaned_data.get('seller'))
         product_formset = ProductFormSet(self.request.POST)
 
@@ -362,6 +375,7 @@ class ReceiptUpdateView(
     form_class: type[ReceiptForm] = ReceiptForm
     template_name: str = 'receipts/receipt_update.html'
     success_message: str = str(constants.SUCCESS_MESSAGE_UPDATE_RECEIPT)
+    request: RequestWithContainer
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         try:
@@ -376,7 +390,7 @@ class ReceiptUpdateView(
         except Receipt.DoesNotExist:
             logger.exception('Receipt not found', pk=self.kwargs['pk'])
             raise
-        return receipt
+        return cast('Receipt', receipt)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context: dict[str, Any] = super().get_context_data(**kwargs)
@@ -438,7 +452,7 @@ class ReceiptUpdateView(
         seller_field.queryset = seller_repository.get_by_user(current_user)
         return form
 
-    def form_valid(self, form: ReceiptForm) -> HttpResponse:
+    def form_valid(self, form: ReceiptForm) -> HttpResponse:  # type: ignore[override]
         receipt = self.get_object()
         product_formset = ProductFormSet(self.request.POST)
 
@@ -547,6 +561,7 @@ class ReceiptDeleteView(
 ):
     model = Receipt
     success_url = reverse_lazy('receipts:list')
+    request: RequestWithContainer
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         if not isinstance(self.request.user, User):
@@ -561,7 +576,7 @@ class ReceiptDeleteView(
         )
         if receipt is None:
             raise Http404('Receipt not found')
-        return receipt
+        return cast('Receipt', receipt)
 
     def get_success_url(self) -> str:
         return str(self.success_url)
@@ -604,6 +619,7 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
     template_name = 'receipts/purchased_products.html'
     model = Receipt
     login_url = '/login/'
+    request: RequestWithContainer
 
     def get_context_data(
         self,
@@ -675,6 +691,7 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
     template_name = 'receipts/upload_image.html'
     form_class: type[UploadImageForm] = UploadImageForm
     success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))  # type: ignore[misc]
+    request: RequestWithContainer
 
     def get_form_kwargs(self) -> dict[str, Any]:
         kwargs = super().get_form_kwargs()
@@ -744,7 +761,7 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
 
 
 @require_GET
-def ajax_receipts_by_group(request: HttpRequest) -> HttpResponse:
+def ajax_receipts_by_group(request: RequestWithContainer) -> HttpResponse:
     receipt_repository = request.container.receipts.receipt_repository()
     group_id = request.GET.get('group_id') or 'my'
     if not isinstance(request.user, User):

@@ -190,13 +190,17 @@ def _sum_amount_for_period(
         if expense_repository is None:
             expense_repository = container.expense.expense_repository()
         qs = expense_repository.filter_by_user_and_date_range(
-            user, start_dt, end_dt
+            user,
+            start_dt,
+            end_dt,
         )
     elif model == Income:
         if income_repository is None:
             income_repository = container.income.income_repository()
         qs = income_repository.filter_by_user_and_date_range(
-            user, start_dt, end_dt
+            user,
+            start_dt,
+            end_dt,
         )
     else:
         error_msg = f'Unsupported model type: {model}'
@@ -218,13 +222,17 @@ def _top_categories_qs(
         if expense_repository is None:
             expense_repository = container.expense.expense_repository()
         return expense_repository.get_top_categories(
-            user, year_start_dt, constants.TOP_CATEGORIES_LIMIT
+            user,
+            year_start_dt,
+            constants.TOP_CATEGORIES_LIMIT,
         )
     if model == Income:
         if income_repository is None:
             income_repository = container.income.income_repository()
         return income_repository.get_top_categories(
-            user, year_start_dt, constants.TOP_CATEGORIES_LIMIT
+            user,
+            year_start_dt,
+            constants.TOP_CATEGORIES_LIMIT,
         )
     error_msg = f'Unsupported model type: {model}'
     raise ValueError(error_msg)
@@ -443,8 +451,8 @@ def _calculate_card_date_range(
 
 
 def _build_expenses_receipts_dicts(
-    expenses_by_month: QuerySet[dict[str, Any]],
-    receipts_by_month: QuerySet[dict[str, Any]],
+    expenses_by_month: QuerySet[Expense, dict[str, Any]],
+    receipts_by_month: QuerySet[Receipt, dict[str, Any]],
 ) -> tuple[dict[date, Decimal], dict[date, dict[int, Decimal]]]:
     """Строит словари expenses и receipts по месяцам."""
     expenses_dict: dict[date, Decimal] = {}
@@ -786,7 +794,11 @@ def get_user_detailed_statistics(
     today = now.date()
 
     months_data = _six_months_data(
-        user, today, container, expense_repository, income_repository
+        user,
+        today,
+        container,
+        expense_repository,
+        income_repository,
     )
     year_start = today.replace(month=1, day=1)
     top_expense_categories = _top_categories_qs(
@@ -830,7 +842,10 @@ def get_user_detailed_statistics(
     )
 
     chart_combined = _build_chart(
-        user, container, expense_repository, income_repository
+        user,
+        container,
+        expense_repository,
+        income_repository,
     )
 
     account_service = container.core.account_service()

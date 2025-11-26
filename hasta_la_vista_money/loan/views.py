@@ -12,6 +12,7 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 from hasta_la_vista_money.loan.models import (
     Loan,
@@ -90,6 +91,7 @@ class LoanCreateView(
     success_url = reverse_lazy('loan:list')
     success_message = constants.SUCCESS_MESSAGE_LOAN_CREATE
     no_permission_url = reverse_lazy('login')
+    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)

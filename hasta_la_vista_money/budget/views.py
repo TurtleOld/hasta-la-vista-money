@@ -5,7 +5,7 @@ from typing import Any, TypedDict, cast, overload
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum
-from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -23,6 +23,7 @@ from hasta_la_vista_money.budget.repositories import (
 from hasta_la_vista_money.budget.services.budget import (
     get_categories,
 )
+from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.expense.models import ExpenseCategory
 from hasta_la_vista_money.expense.repositories import ExpenseRepository
 from hasta_la_vista_money.income.models import IncomeCategory
@@ -59,22 +60,26 @@ def get_fact_amount(
 ) -> Decimal | int:
     if expense_repository is None or income_repository is None:
         raise ValueError(
-            'expense_repository and income_repository must be provided'
+            'expense_repository and income_repository must be provided',
         )
 
     if type_ == 'expense':
         if isinstance(category, ExpenseCategory):
-            qs = expense_repository.filter_by_user_category_and_month(
-                user, category, month
+            qs_expense = expense_repository.filter_by_user_category_and_month(
+                user,
+                category,
+                month,
             )
-            return qs.aggregate(total=Sum('amount'))['total'] or 0
+            return qs_expense.aggregate(total=Sum('amount'))['total'] or 0
         error_msg = 'Expected ExpenseCategory for expense type'
         raise ValueError(error_msg)
     if isinstance(category, IncomeCategory):
-        qs = income_repository.filter_by_user_category_and_month(
-            user, category, month
+        qs_income = income_repository.filter_by_user_category_and_month(
+            user,
+            category,
+            month,
         )
-        return qs.aggregate(total=Sum('amount'))['total'] or 0
+        return qs_income.aggregate(total=Sum('amount'))['total'] or 0
     error_msg = 'Expected IncomeCategory for income type'
     raise ValueError(error_msg)
 
@@ -90,7 +95,10 @@ def get_plan_amount(
         raise ValueError('planning_repository must be provided')
 
     plan = planning_repository.filter_by_user_category_and_month(
-        user, category, month, type_
+        user,
+        category,
+        month,
+        type_,
     )
     if plan:
         return Decimal(str(plan.amount))
@@ -107,7 +115,7 @@ class BudgetContextMixin:
     for budget views.
     """
 
-    request: HttpRequest
+    request: RequestWithContainer
 
     def get_budget_context(
         self,
@@ -137,6 +145,7 @@ class BudgetView(
 ):
     model = Planning
     template_name = 'budget.html'
+    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
@@ -159,7 +168,9 @@ class BudgetView(
         return context
 
 
-def generate_date_list_view(request: HttpRequest) -> HttpResponseRedirect:
+def generate_date_list_view(
+    request: RequestWithContainer,
+) -> HttpResponseRedirect:
     """Функция представления генерации дат."""
     if request.method == 'POST':
         user = request.user
@@ -180,7 +191,7 @@ def generate_date_list_view(request: HttpRequest) -> HttpResponseRedirect:
     return redirect(reverse_lazy('budget:expense_table'))
 
 
-def change_planning(request: HttpRequest) -> JsonResponse:
+def change_planning(request: RequestWithContainer) -> JsonResponse:
     """Функция для изменения сумм планирования."""
     try:
         data = json.loads(request.body.decode('utf-8'))
@@ -190,7 +201,7 @@ def change_planning(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'error': 'error'})
 
 
-def save_planning(request: HttpRequest) -> JsonResponse:
+def save_planning(request: RequestWithContainer) -> JsonResponse:
     """AJAX: сохранить план по категории, месяцу, типу (расход/доход)"""
     if (
         request.method == 'POST'
@@ -244,6 +255,7 @@ class ExpenseTableView(
 ):
     model = Planning
     template_name = 'expense_table.html'
+    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
@@ -271,6 +283,7 @@ class IncomeTableView(
 ):
     model = Planning
     template_name = 'income_table.html'
+    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
