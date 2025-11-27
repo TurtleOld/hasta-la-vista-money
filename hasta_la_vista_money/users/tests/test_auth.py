@@ -38,7 +38,8 @@ class LoginUserServiceTest(TestCase):
         if user is None:
             error_msg: str = 'No user found in fixtures'
             raise ValueError(error_msg)
-        self.user: UserType = user
+        self.assertIsInstance(user, User)
+        self.user: User = user
         self.user.set_password('testpassword')
         self.user.save()
 
@@ -60,10 +61,10 @@ class LoginUserServiceTest(TestCase):
         )
         form.is_valid()
         result: LoginResult = login_user(request, form, 'Success!')
-        self.assertTrue(result['success'])
+        self.assertTrue(result.get('success', False))
         self.assertIn('access', result)
         self.assertIn('refresh', result)
-        self.assertEqual(result['user'], self.user)
+        self.assertEqual(result.get('user'), self.user)
 
     def test_login_user_failure(self) -> None:
         request: HttpRequest = self.get_request()
@@ -76,7 +77,7 @@ class LoginUserServiceTest(TestCase):
         )
         form.is_valid()
         result: LoginResult = login_user(request, form, 'Fail!')
-        self.assertFalse(result['success'])
+        self.assertFalse(result.get('success', True))
 
     def test_login_user_nonexistent_user(self) -> None:
         request: HttpRequest = self.get_request()
@@ -89,7 +90,7 @@ class LoginUserServiceTest(TestCase):
         )
         form.is_valid()
         result: LoginResult = login_user(request, form, 'Fail!')
-        self.assertFalse(result['success'])
+        self.assertFalse(result.get('success', True))
 
     def test_login_user_inactive_user(self) -> None:
         self.user.is_active = False
@@ -105,7 +106,7 @@ class LoginUserServiceTest(TestCase):
         )
         form.is_valid()
         result: LoginResult = login_user(request, form, 'Fail!')
-        self.assertFalse(result['success'])
+        self.assertFalse(result.get('success', True))
 
     @patch('hasta_la_vista_money.users.services.auth.RefreshToken')
     def test_login_user_jwt_token_generation_success(
@@ -129,9 +130,9 @@ class LoginUserServiceTest(TestCase):
         form.is_valid()
         result: LoginResult = login_user(request, form, 'Success!')
 
-        self.assertTrue(result['success'])
-        self.assertEqual(result['access'], 'mock_access_token')
-        self.assertEqual(result['refresh'], 'mock_refresh_token')
+        self.assertTrue(result.get('success', False))
+        self.assertEqual(result.get('access'), 'mock_access_token')
+        self.assertEqual(result.get('refresh'), 'mock_refresh_token')
 
     @patch('hasta_la_vista_money.users.services.auth.RefreshToken')
     def test_login_user_jwt_token_generation_failure(
@@ -153,9 +154,9 @@ class LoginUserServiceTest(TestCase):
         form.is_valid()
         result: LoginResult = login_user(request, form, 'Success!')
 
-        self.assertTrue(result['success'])
-        self.assertIsNone(result['access'])
-        self.assertIsNone(result['refresh'])
+        self.assertTrue(result.get('success', False))
+        self.assertIsNone(result.get('access'))
+        self.assertIsNone(result.get('refresh'))
 
     @patch('hasta_la_vista_money.users.services.auth.RefreshToken')
     def test_login_user_jwt_token_type_error(
@@ -175,9 +176,9 @@ class LoginUserServiceTest(TestCase):
         form.is_valid()
         result: LoginResult = login_user(request, form, 'Success!')
 
-        self.assertTrue(result['success'])
-        self.assertIsNone(result['access'])
-        self.assertIsNone(result['refresh'])
+        self.assertTrue(result.get('success', False))
+        self.assertIsNone(result.get('access'))
+        self.assertIsNone(result.get('refresh'))
 
     @patch('hasta_la_vista_money.users.services.auth.RefreshToken')
     def test_login_user_jwt_token_attribute_error(
@@ -199,9 +200,9 @@ class LoginUserServiceTest(TestCase):
         form.is_valid()
         result: LoginResult = login_user(request, form, 'Success!')
 
-        self.assertTrue(result['success'])
-        self.assertIsNone(result['access'])
-        self.assertIsNone(result['refresh'])
+        self.assertTrue(result.get('success', False))
+        self.assertIsNone(result.get('access'))
+        self.assertIsNone(result.get('refresh'))
 
     def test_login_user_empty_form_data(self) -> None:
         request: HttpRequest = self.get_request()

@@ -68,7 +68,7 @@ class CheckAdminMiddlewareTest(TestCase):
         self.assertIsInstance(response, HttpResponse)
 
     def test_with_superuser_allows_access_to_all_pages(self) -> None:
-        User.objects.create_superuser(
+        User.objects.create_superuser(  # type: ignore[attr-defined]
             username='admin',
             email='admin@example.com',
             password='admin123',
@@ -122,7 +122,7 @@ class CheckAdminMiddlewareTest(TestCase):
 
         cache.clear()
 
-        User.objects.create_superuser(
+        User.objects.create_superuser(  # type: ignore[attr-defined]
             username='admin',
             email='admin@example.com',
             password='admin123',
@@ -135,7 +135,7 @@ class CheckAdminMiddlewareTest(TestCase):
 
     def test_regular_user_does_not_prevent_redirect(self) -> None:
         User.objects.all().delete()
-        User.objects.create_user(
+        User.objects.create_user(  # type: ignore[attr-defined]
             username='regular',
             email='regular@example.com',
             password='regular123',
@@ -155,7 +155,7 @@ class CheckAdminMiddlewareTest(TestCase):
         self,
     ) -> None:
         User.objects.all().delete()
-        User.objects.create_user(
+        User.objects.create_user(  # type: ignore[attr-defined]
             username='staff',
             email='staff@example.com',
             password='staff123',
@@ -216,7 +216,7 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
 
     def test_with_superuser_integration_allows_access(self) -> None:
         cache.clear()
-        User.objects.create_superuser(
+        User.objects.create_superuser(  # type: ignore[attr-defined]
             username='admin',
             email='admin@example.com',
             password='admin123',
@@ -225,7 +225,7 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
         response = self.client.get('/')
 
         if response.status_code == constants.REDIRECTS:
-            assert isinstance(response, HttpResponseRedirect)
+            self.assertIsInstance(response, HttpResponseRedirect)
             self.assertNotEqual(
                 response.url,
                 reverse('users:registration'),
@@ -263,7 +263,6 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
                     HttpResponseRedirect,
                     msg='Response should be HttpResponseRedirect',
                 )
-                assert isinstance(response, HttpResponseRedirect)
                 self.assertEqual(
                     response.url,
                     reverse('users:registration'),

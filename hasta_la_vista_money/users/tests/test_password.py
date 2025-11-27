@@ -31,7 +31,8 @@ class SetUserPasswordServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.assertIsInstance(user, User)
+        self.user: User = user
         self.factory: RequestFactory = RequestFactory()
 
     def get_request(self) -> HttpRequest:

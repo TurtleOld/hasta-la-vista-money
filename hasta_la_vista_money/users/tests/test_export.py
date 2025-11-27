@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -36,17 +36,18 @@ class GetUserExportDataServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.assertIsInstance(user, User)
+        self.user: User = cast('User', user)
 
     def test_get_user_export_data(self) -> None:
-        data: UserExportData = get_user_export_data(self.user)
+        data: UserExportData = get_user_export_data(self.user)  # type: ignore[arg-type]
         self.assertIn('user_info', data)
         self.assertIn('accounts', data)
         self.assertIn('expenses', data)
         self.assertIn('incomes', data)
         self.assertIn('receipts', data)
         self.assertIn('statistics', data)
-        self.assertEqual(data['user_info']['username'], self.user.username)
+        self.assertEqual(data['user_info']['username'], self.user.username)  # type: ignore[attr-defined]
         self.assertIsInstance(data['accounts'], list)
         self.assertIsInstance(data['expenses'], list)
         self.assertIsInstance(data['incomes'], list)

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -24,16 +24,17 @@ class UpdateUserProfileServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.assertIsInstance(user, User)
+        self.user: User = cast('User', user)
 
     def test_update_user_profile(self) -> None:
         form: UpdateUserForm = UpdateUserForm(
-            instance=self.user,
+            instance=self.user,  # type: ignore[arg-type]
             data={
-                'username': self.user.username,
+                'username': self.user.username,  # type: ignore[attr-defined]
                 'email': 'newemail@example.com',
                 'first_name': 'NewName',
-                'last_name': self.user.last_name,
+                'last_name': self.user.last_name,  # type: ignore[attr-defined]
             },
         )
         self.assertTrue(form.is_valid())

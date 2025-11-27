@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -43,14 +43,15 @@ class GroupsServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
-        self.user: UserType = user
+        self.assertIsInstance(user, User)
+        self.user: User = cast('User', user)
         self.group: Group = Group.objects.create(name='TestGroup')
 
     def test_get_user_groups_and_not_for_user(self) -> None:
-        self.user.groups.add(self.group)
-        user_groups: list[GroupDict] = get_user_groups(self.user)
+        self.user.groups.add(self.group)  # type: ignore[attr-defined]
+        user_groups: list[GroupDict] = get_user_groups(self.user)  # type: ignore[arg-type]
         self.assertTrue(any(g['name'] == 'TestGroup' for g in user_groups))
-        not_for_user: list[GroupDict] = get_groups_not_for_user(self.user)
+        not_for_user: list[GroupDict] = get_groups_not_for_user(self.user)  # type: ignore[arg-type]
         self.assertFalse(any(g['name'] == 'TestGroup' for g in not_for_user))
 
     def test_create_and_delete_group(self) -> None:
@@ -76,11 +77,11 @@ class GroupsServiceTest(TestCase):
         )
         self.assertTrue(add_form.is_valid())
         add_form.save(request)
-        self.assertIn(self.group, self.user.groups.all())
+        self.assertIn(self.group, self.user.groups.all())  # type: ignore[attr-defined]
 
         remove_form: DeleteUserFromGroupForm = DeleteUserFromGroupForm(
             data={'user': self.user.pk, 'group': self.group.pk},
         )
         self.assertTrue(remove_form.is_valid())
         remove_form.save(request)
-        self.assertNotIn(self.group, self.user.groups.all())
+        self.assertNotIn(self.group, self.user.groups.all())  # type: ignore[attr-defined]

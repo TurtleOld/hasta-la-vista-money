@@ -38,7 +38,6 @@ class LoginRateThrottleTestCase(TestCase):
         cache_key = throttle.get_cache_key(request, None)  # type: ignore[arg-type]
 
         self.assertIsNotNone(cache_key)
-        assert cache_key is not None
         self.assertIn('login', cache_key)
         self.assertIn(str(self.user.pk), cache_key)
 
@@ -56,7 +55,6 @@ class LoginRateThrottleTestCase(TestCase):
             cache_key = throttle.get_cache_key(request, None)  # type: ignore[arg-type]
 
             self.assertIsNotNone(cache_key)
-            assert cache_key is not None
             self.assertIn('login', cache_key)
             self.assertIn('anonymous_ident', cache_key)
 
@@ -78,7 +76,7 @@ class LoginRateThrottleTestCase(TestCase):
         self.assertTrue(allowed2)
         self.assertFalse(allowed3)
         wait_time = throttle.wait()
-        assert wait_time is not None
+        self.assertIsNotNone(wait_time)
         self.assertGreater(wait_time, 0)
 
         throttle.cache.delete(cache_key)
@@ -126,7 +124,6 @@ class AnonLoginRateThrottleTestCase(TestCase):
             cache_key = throttle.get_cache_key(request, None)  # type: ignore[arg-type]
 
             self.assertIsNotNone(cache_key)
-            assert cache_key is not None
             self.assertIn('anon', cache_key)
             self.assertIn('anonymous_ident', cache_key)
 
@@ -144,7 +141,6 @@ class AnonLoginRateThrottleTestCase(TestCase):
             cache_key = throttle.get_cache_key(request, None)  # type: ignore[arg-type]
 
             self.assertIsNotNone(cache_key)
-            assert cache_key is not None
             self.assertIn('anon', cache_key)
             self.assertIn('unauthenticated_ident', cache_key)
 
@@ -171,7 +167,7 @@ class AnonLoginRateThrottleTestCase(TestCase):
             self.assertTrue(allowed2)
             self.assertFalse(allowed3)
             wait_time = throttle.wait()
-            assert wait_time is not None
+            self.assertIsNotNone(wait_time)
             self.assertGreater(wait_time, 0)
 
             throttle.cache.delete(cache_key)
