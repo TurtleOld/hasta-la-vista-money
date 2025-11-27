@@ -16,14 +16,14 @@ class InvalidProductDataError(ValidationError):
 
 
 class SellerSerializer(ModelSerializer[Seller]):
-    class Meta(TypedModelMeta):
+    class Meta(TypedModelMeta):  # type: ignore[misc]
         model = Seller
         fields = '__all__'
         read_only_fields = ('user',)
 
 
 class ProductSerializer(ModelSerializer[Product]):
-    class Meta(TypedModelMeta):
+    class Meta(TypedModelMeta):  # type: ignore[misc]
         model = Product
         fields = '__all__'
 
@@ -31,7 +31,7 @@ class ProductSerializer(ModelSerializer[Product]):
 class ReceiptSerializer(ModelSerializer[Receipt]):
     product = ProductSerializer(many=True)
 
-    class Meta(TypedModelMeta):
+    class Meta(TypedModelMeta):  # type: ignore[misc]
         model = Receipt
         fields = '__all__'
 

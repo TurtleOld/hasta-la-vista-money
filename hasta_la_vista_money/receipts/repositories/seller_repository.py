@@ -25,19 +25,19 @@ class SellerRepository:
 
     def get_by_user(self, user: User) -> QuerySet[Seller]:
         """Получить всех продавцов пользователя."""
-        return Seller.objects.for_user(user)
+        return Seller.objects.for_user(user)  # type: ignore[attr-defined]
 
     def get_by_users(self, users: list[User]) -> QuerySet[Seller]:
         """Получить всех продавцов для списка пользователей."""
-        return Seller.objects.for_users(users)
+        return Seller.objects.for_users(users)  # type: ignore[attr-defined]
 
     def unique_by_name_for_user(self, user: User) -> QuerySet[Seller]:
         """Получить уникальных продавцов по имени для пользователя."""
-        return Seller.objects.unique_by_name_for_user(user)
+        return Seller.objects.unique_by_name_for_user(user)  # type: ignore[attr-defined]
 
     def unique_by_name_for_users(self, users: list[User]) -> QuerySet[Seller]:
         """Получить уникальных продавцов по имени для списка пользователей."""
-        return Seller.objects.unique_by_name_for_users(users)
+        return Seller.objects.unique_by_name_for_users(users)  # type: ignore[attr-defined]
 
     def filter(self, **kwargs: object) -> QuerySet[Seller]:
         """Фильтровать продавцов."""
