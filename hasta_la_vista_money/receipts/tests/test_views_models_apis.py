@@ -32,6 +32,9 @@ from hasta_la_vista_money.receipts.services import (
     analyze_image_with_ai,
     image_to_base64,
 )
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    ReceiptCreatorService,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType
@@ -655,7 +658,9 @@ class TestUploadImageView(TestCase):
         self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.mock_account_service = MagicMock(spec=AccountServiceProtocol)
-        self.mock_account_service.apply_receipt_spend.return_value = self.account  # noqa: E501
+        self.mock_account_service.apply_receipt_spend.return_value = (
+            self.account
+        )
         self.container = ApplicationContainer()
         self.container.core.account_service.override(
             providers.Object(self.mock_account_service),
@@ -666,10 +671,6 @@ class TestUploadImageView(TestCase):
         mock_account_repository.get_by_id.return_value = self.account
         self.container.finance_account.account_repository.override(
             providers.Object(mock_account_repository),
-        )
-
-        from hasta_la_vista_money.receipts.services.receipt_creator import (
-            ReceiptCreatorService,
         )
 
         self.container.receipts.receipt_creator_service.override(
