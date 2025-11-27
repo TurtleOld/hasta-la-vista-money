@@ -19,11 +19,11 @@ class IncomeRepository:
 
     def get_by_user(self, user: User) -> QuerySet[Income]:
         """Получить все incomes пользователя."""
-        return Income.objects.for_user(user)
+        return Income.objects.for_user(user)  # type: ignore[attr-defined]
 
     def get_by_user_with_related(self, user: User) -> QuerySet[Income]:
         """Получить все incomes пользователя с select_related."""
-        return Income.objects.for_user(user).select_related(
+        return Income.objects.for_user(user).select_related(  # type: ignore[attr-defined]
             'user',
             'category',
             'account',
@@ -36,7 +36,7 @@ class IncomeRepository:
         end_date: date,
     ) -> QuerySet[Income]:
         """Получить incomes пользователя за период."""
-        return Income.objects.for_user(user).for_period(start_date, end_date)
+        return Income.objects.for_user(user).for_period(start_date, end_date)  # type: ignore[attr-defined]
 
     def filter_by_user_and_date_range(
         self,
@@ -57,7 +57,7 @@ class IncomeRepository:
         category: IncomeCategory,
     ) -> QuerySet[Income]:
         """Получить incomes пользователя по категории."""
-        return Income.objects.for_user(user).for_category(category)
+        return Income.objects.for_user(user).for_category(category)  # type: ignore[attr-defined]
 
     def get_by_account(
         self,
@@ -65,7 +65,7 @@ class IncomeRepository:
         account_id: int,
     ) -> QuerySet[Income]:
         """Получить incomes пользователя по счёту."""
-        return Income.objects.for_user(user).filter(account_id=account_id)
+        return Income.objects.for_user(user).filter(account_id=account_id)  # type: ignore[attr-defined]
 
     def create_income(self, **kwargs: object) -> Income:
         """Создать новый income."""

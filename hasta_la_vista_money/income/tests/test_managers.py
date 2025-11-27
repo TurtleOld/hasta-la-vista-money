@@ -68,14 +68,14 @@ class IncomeQuerySetTest(TestCase):
 
     def test_for_user(self) -> None:
         """Тест фильтрации по пользователю."""
-        incomes = Income.objects.for_user(self.user1)
+        incomes = Income.objects.for_user(self.user1)  # type: ignore[attr-defined]
         self.assertEqual(incomes.count(), 2)
         for income in incomes:
             self.assertEqual(income.user, self.user1)
 
     def test_for_period(self) -> None:
         """Тест фильтрации по периоду."""
-        incomes = Income.objects.for_user(self.user1).for_period(
+        incomes = Income.objects.for_user(self.user1).for_period(  # type: ignore[attr-defined]
             self.yesterday.date(),
             self.today.date(),
         )
@@ -86,22 +86,22 @@ class IncomeQuerySetTest(TestCase):
 
     def test_for_category(self) -> None:
         """Тест фильтрации по категории с подкатегориями."""
-        incomes = Income.objects.for_category(self.category1)
+        incomes = Income.objects.for_category(self.category1)  # type: ignore[attr-defined]
         self.assertEqual(incomes.count(), 2)
 
     def test_total_amount(self) -> None:
         """Тест расчёта общей суммы."""
-        total = Income.objects.for_user(self.user1).total_amount()
+        total = Income.objects.for_user(self.user1).total_amount()  # type: ignore[attr-defined]
         self.assertEqual(total, Decimal('1500.00'))
 
     def test_total_amount_empty(self) -> None:
         """Тест расчёта общей суммы для пустого queryset."""
-        total = Income.objects.filter(amount__lt=0).total_amount()
+        total = Income.objects.filter(amount__lt=0).total_amount()  # type: ignore[attr-defined]
         self.assertEqual(total, 0)
 
     def test_by_month(self) -> None:
         """Тест группировки по месяцам."""
-        by_month = Income.objects.for_user(self.user1).by_month()
+        by_month = Income.objects.for_user(self.user1).by_month()  # type: ignore[attr-defined]
         self.assertGreater(len(by_month), 0)
         for item in by_month:
             self.assertIn('month', item)
@@ -145,12 +145,12 @@ class IncomeManagerTest(TestCase):
 
     def test_manager_for_user(self) -> None:
         """Тест метода for_user менеджера."""
-        incomes = Income.objects.for_user(self.user)
+        incomes = Income.objects.for_user(self.user)  # type: ignore[attr-defined]
         self.assertEqual(incomes.count(), 2)
 
     def test_manager_for_period(self) -> None:
         """Тест метода for_period менеджера."""
-        incomes = Income.objects.for_period(
+        incomes = Income.objects.for_period(  # type: ignore[attr-defined]
             self.yesterday.date(),
             self.today.date(),
         )
@@ -158,15 +158,15 @@ class IncomeManagerTest(TestCase):
 
     def test_manager_for_category(self) -> None:
         """Тест метода for_category менеджера."""
-        incomes = Income.objects.for_category(self.category)
+        incomes = Income.objects.for_category(self.category)  # type: ignore[attr-defined]
         self.assertEqual(incomes.count(), 2)
 
     def test_manager_total_amount(self) -> None:
         """Тест метода total_amount менеджера."""
-        total = Income.objects.filter(user=self.user).total_amount()
+        total = Income.objects.filter(user=self.user).total_amount()  # type: ignore[attr-defined]
         self.assertEqual(total, Decimal('1500.00'))
 
     def test_manager_by_month(self) -> None:
         """Тест метода by_month менеджера."""
-        by_month = Income.objects.filter(user=self.user).by_month()
+        by_month = Income.objects.filter(user=self.user).by_month()  # type: ignore[attr-defined]
         self.assertGreater(len(by_month), 0)

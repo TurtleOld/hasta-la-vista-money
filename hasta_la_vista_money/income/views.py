@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -86,8 +86,6 @@ class IncomeView(BaseEntityFilterView, BaseView):
     View for displaying user's incomes with filtering and chart data.
     """
 
-    request: RequestWithContainer
-
     model = Income
     filterset_class = IncomeFilter
     template_name = 'income/income.html'
@@ -99,7 +97,8 @@ class IncomeView(BaseEntityFilterView, BaseView):
         and chart data.
         """
         context = super().get_context_data(**kwargs)
-        user = get_object_or_404(User, username=self.request.user)
+        request = cast('RequestWithContainer', self.request)
+        user = get_object_or_404(User, username=request.user)
         depth_limit = 3
 
         categories = (
@@ -177,7 +176,6 @@ class IncomeCreateView(
     IncomeFormQuerysetMixin,
     BaseView,
 ):
-    request: RequestWithContainer
     """
     View for creating a new income record.
     """
@@ -226,18 +224,19 @@ class IncomeCreateView(
             form.add_error(None, _('All fields must be filled.'))
             return self.form_invalid(form)
 
+        request = cast('RequestWithContainer', self.request)
         try:
-            if not isinstance(self.request.user, User):
+            if not isinstance(request.user, User):
                 raise TypeError('User must be authenticated')
-            income_ops = self.request.container.income.income_ops()
+            income_ops = request.container.income.income_ops()
             income_ops.add_income(
-                user=self.request.user,
+                user=request.user,
                 account=account,
                 category=category,
                 amount=amount,
                 when=date,
             )
-            messages.success(self.request, constants.SUCCESS_INCOME_ADDED)
+            messages.success(request, constants.SUCCESS_INCOME_ADDED)
             return HttpResponseRedirect(str(self.success_url))
         except (ValueError, TypeError, PermissionDenied) as e:
             form.add_error(None, str(e))
@@ -264,7 +263,6 @@ class IncomeCopyView(
     """
 
     no_permission_url = reverse_lazy('login')
-    request: RequestWithContainer
 
     def post(
         self,
@@ -297,7 +295,6 @@ class IncomeUpdateView(
     IncomeFormQuerysetMixin,
     BaseView,
 ):
-    request: RequestWithContainer
     """
     View for updating an existing income record.
     """
@@ -325,7 +322,8 @@ class IncomeUpdateView(
         """
         Build context for income update form.
         """
-        user = get_object_or_404(User, username=self.request.user)
+        request = cast('RequestWithContainer', self.request)
+        user = get_object_or_404(User, username=request.user)
         context = super().get_context_data(**kwargs)
 
         income_categories = (
@@ -372,16 +370,17 @@ class IncomeUpdateView(
         try:
             if not isinstance(self.request.user, User):
                 raise TypeError('User must be authenticated')
-            income_ops = self.request.container.income.income_ops()
+            request = cast('RequestWithContainer', self.request)
+            income_ops = request.container.income.income_ops()
             income_ops.update_income(
-                user=self.request.user,
+                user=request.user,
                 income=income,
                 account=account,
                 category=category,
                 amount=amount,
                 when=date,
             )
-            messages.success(self.request, constants.SUCCESS_INCOME_UPDATE)
+            messages.success(request, constants.SUCCESS_INCOME_UPDATE)
             return super().form_valid(form)
         except (ValueError, TypeError, PermissionDenied) as e:
             form.add_error(None, str(e))
@@ -401,7 +400,6 @@ class IncomeDeleteView(
     context_object_name = 'incomes'
     no_permission_url = reverse_lazy('login')
     success_url = reverse_lazy(INCOME_LIST_URL_NAME)
-    request: RequestWithContainer
 
     def post(  # type: ignore[override]
         self,
@@ -645,8 +643,6 @@ class IncomeGetAjaxView(LoginRequiredMixin, View):
     """
     AJAX view for retrieving a single income record by ID.
     """
-
-    request: AuthRequest
 
     def get(
         self,
