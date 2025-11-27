@@ -189,6 +189,8 @@ def _sum_amount_for_period(
     if model == Expense:
         if expense_repository is None:
             expense_repository = container.expense.expense_repository()
+        if expense_repository is None:
+            raise ValueError('expense_repository is None')
         qs = expense_repository.filter_by_user_and_date_range(
             user,
             start_dt,
@@ -197,6 +199,8 @@ def _sum_amount_for_period(
     elif model == Income:
         if income_repository is None:
             income_repository = container.income.income_repository()
+        if income_repository is None:
+            raise ValueError('income_repository is None')
         qs = income_repository.filter_by_user_and_date_range(
             user,
             start_dt,
@@ -221,6 +225,8 @@ def _top_categories_qs(
     if model == Expense:
         if expense_repository is None:
             expense_repository = container.expense.expense_repository()
+        if expense_repository is None:
+            raise ValueError('expense_repository is None')
         return expense_repository.get_top_categories(
             user,
             year_start_dt,
@@ -229,6 +235,8 @@ def _top_categories_qs(
     if model == Income:
         if income_repository is None:
             income_repository = container.income.income_repository()
+        if income_repository is None:
+            raise ValueError('income_repository is None')
         return income_repository.get_top_categories(
             user,
             year_start_dt,
@@ -259,6 +267,10 @@ def _build_chart(
     if income_repository is None:
         income_repository = container.income.income_repository()
 
+    if expense_repository is None:
+        raise ValueError('expense_repository is None')
+    if income_repository is None:
+        raise ValueError('income_repository is None')
     exp_ds = expense_repository.get_aggregated_by_date(user)
     inc_ds = income_repository.get_aggregated_by_date(user)
 
@@ -499,7 +511,9 @@ def _calculate_grace_period_end(
             card,
             purchase_start_date,
         )
-        return schedule['grace_end_date'] if schedule else purchase_end
+        if schedule and 'grace_end_date' in schedule:
+            return schedule['grace_end_date']
+        return purchase_end
     return purchase_end
 
 
@@ -574,7 +588,7 @@ def _build_single_card_month(
             card,
             purchase_start,
         )
-        if schedule:
+        if schedule and 'final_debt' in schedule:
             final_debt = float(schedule['final_debt'])
 
     return month_data, final_debt

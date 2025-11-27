@@ -20,9 +20,8 @@ class UserLoginForm(AuthenticationForm):
     """Form for user authentication using username or email."""
 
     username: CharField
-    password: CharField
 
-    username = CharField(
+    username = CharField(  # type: ignore[misc]
         max_length=constants.TWO_HUNDRED_FIFTY,
         label=_('Имя пользователя или Email'),
         widget=forms.TextInput(
@@ -34,7 +33,7 @@ class UserLoginForm(AuthenticationForm):
             'required': _('Пожалуйста, введите имя пользователя или email.'),
         },
     )
-    password = CharField(
+    password = CharField(  # type: ignore[misc]
         label=_('Пароль'),
         strip=False,
         widget=PasswordInput(

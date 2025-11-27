@@ -93,7 +93,7 @@ class Transaction(TypedDict):
 
 
 class AuthRequest(RequestWithContainer):
-    user: User
+    user: User  # type: ignore[misc]
 
 
 class IndexView(TemplateView):
@@ -115,7 +115,7 @@ class ListUsers(
     template_name = 'users/profile.html'
     context_object_name = 'users'
     no_permission_url = reverse_lazy('login')
-    request: AuthRequest
+    request: AuthRequest  # type: ignore[misc]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
@@ -194,9 +194,9 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
             self.request.headers.get('x-requested-with') == 'XMLHttpRequest'
         )
 
-        if result['success']:
-            self.jwt_access_token = result['access']
-            self.jwt_refresh_token = result['refresh']
+        if result.get('success'):
+            self.jwt_access_token = result.get('access', '')
+            self.jwt_refresh_token = result.get('refresh', '')
             if is_ajax:
                 response: HttpResponse = JsonResponse(
                     {
@@ -299,7 +299,7 @@ class UpdateUserView(
     template_name = 'users/profile.html'
     form_class = UpdateUserForm
     success_message = constants.SUCCESS_MESSAGE_CHANGED_PROFILE
-    request: AuthRequest
+    request: AuthRequest  # type: ignore[misc]
 
     def get_form(self, form_class: Any = None) -> UpdateUserForm:
         form = super().get_form(form_class)
@@ -387,7 +387,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
     """Представление для детальной статистики пользователя"""
 
     template_name = 'users/statistics.html'
-    request: RequestWithContainer
+    request: RequestWithContainer  # type: ignore[misc]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
