@@ -225,12 +225,12 @@ def budget_charts(user: User) -> BudgetChartsDict:
     months = [d.date for d in list_dates]
 
     expense_categories = list(
-        user.category_expense_users.filter(parent_category=None).order_by(
+        user.category_expense_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined]
             'name',
         ),
     )
     income_categories = list(
-        user.category_income_users.filter(parent_category=None).order_by(
+        user.category_income_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined]
             'name',
         ),
     )

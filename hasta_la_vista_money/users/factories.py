@@ -22,7 +22,7 @@ class Factory(Protocol[T_co]):
 
 
 class UserFactory(_factory.django.DjangoModelFactory[UserModel]):
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = UserModel
 
     username = factory.Sequence(lambda n: f'user{n}')

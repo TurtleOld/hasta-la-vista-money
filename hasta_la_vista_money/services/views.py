@@ -148,7 +148,7 @@ def collect_info_receipt(user: User) -> Any:
     :return: QuerySet с данными о чеках
     """
     return (
-        user.receipt_users.annotate(
+        user.receipt_users.annotate(  # type: ignore[attr-defined]
             month=TruncMonth('receipt_date'),
         )
         .values(
