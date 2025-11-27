@@ -27,10 +27,10 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django.views.generic.edit import UpdateView
-from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.views import BaseEntityFilterView
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductFormSet,
@@ -59,17 +59,10 @@ class BaseView:
         return reverse_lazy('receipts:list')
 
 
-class ReceiptView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[ReceiptForm],
-    FilterView,
-    BaseView,
-):
-    paginate_by: int = constants.PAGINATE_BY_DEFAULT
+class ReceiptView(BaseEntityFilterView, BaseView):
     model = Receipt
     filterset_class: type[ReceiptFilter] = ReceiptFilter
     template_name: str = 'receipts/receipts.html'
-    no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
     request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Receipt]:
@@ -727,6 +720,13 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
                         constants.ERROR_PROCESSING_RECEIPT,
                     )
                 return super().form_invalid(form)
+
+            if result.receipt:
+                account_service = self.request.container.core.account_service()
+                account_service.apply_receipt_spend(
+                    account,
+                    result.receipt.total_sum,
+                )
 
             messages.success(
                 self.request,

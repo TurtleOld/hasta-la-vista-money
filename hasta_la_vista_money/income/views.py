@@ -22,10 +22,10 @@ from django.views import View
 from django.views.generic import DeleteView, UpdateView
 from django.views.generic.edit import CreateView
 from django.views.generic.list import ListView
-from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.views import BaseEntityFilterView
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.filters import IncomeFilter
@@ -77,22 +77,15 @@ class IncomeCategoryBaseView(BaseView):
     model = IncomeCategory
 
 
-class IncomeView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[IncomeForm],
-    FilterView,
-    BaseView,
-):
+class IncomeView(BaseEntityFilterView, BaseView):
     """
     View for displaying user's incomes with filtering and chart data.
     """
 
-    paginate_by = constants.PAGINATE_BY_DEFAULT
     model = Income
     filterset_class = IncomeFilter
     template_name = 'income/income.html'
     context_object_name = 'incomes'
-    no_permission_url = reverse_lazy('login')
 
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """
