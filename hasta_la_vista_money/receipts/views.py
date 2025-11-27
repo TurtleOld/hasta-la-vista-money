@@ -721,13 +721,6 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
                     )
                 return super().form_invalid(form)
 
-            if result.receipt:
-                account_service = self.request.container.core.account_service()
-                account_service.apply_receipt_spend(
-                    account,
-                    result.receipt.total_sum,
-                )
-
             messages.success(
                 self.request,
                 'Чек успешно загружен и обработан!',
