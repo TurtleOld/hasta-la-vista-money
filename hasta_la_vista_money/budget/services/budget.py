@@ -727,10 +727,10 @@ def get_categories(
         error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
     if type_ == 'expense':
-        return user.category_expense_users.filter(
+        return user.category_expense_users.filter(  # type: ignore[attr-defined]
             parent_category=None,
         ).order_by('name')
-    return user.category_income_users.filter(parent_category=None).order_by(
+    return user.category_income_users.filter(parent_category=None).order_by(  # type: ignore[attr-defined]
         'name',
     )
 

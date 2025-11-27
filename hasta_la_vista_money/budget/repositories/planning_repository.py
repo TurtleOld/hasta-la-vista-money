@@ -19,19 +19,19 @@ class PlanningRepository:
 
     def get_by_user(self, user: User) -> QuerySet[Planning]:
         """Получить все plannings пользователя."""
-        return Planning.objects.for_user(user)
+        return Planning.objects.for_user(user)  # type: ignore[attr-defined]
 
     def get_by_user_with_related(self, user: User) -> QuerySet[Planning]:
         """Получить все plannings пользователя с select_related."""
-        return Planning.objects.for_user(user).with_related()
+        return Planning.objects.for_user(user).with_related()  # type: ignore[attr-defined]
 
     def get_expenses_by_user(self, user: User) -> QuerySet[Planning]:
         """Получить все expense plannings пользователя."""
-        return Planning.objects.for_user(user).expenses()
+        return Planning.objects.for_user(user).expenses()  # type: ignore[attr-defined]
 
     def get_incomes_by_user(self, user: User) -> QuerySet[Planning]:
         """Получить все income plannings пользователя."""
-        return Planning.objects.for_user(user).incomes()
+        return Planning.objects.for_user(user).incomes()  # type: ignore[attr-defined]
 
     def get_by_period(
         self,
@@ -40,7 +40,7 @@ class PlanningRepository:
         end: date,
     ) -> QuerySet[Planning]:
         """Получить plannings пользователя за период."""
-        return Planning.objects.for_user(user).for_period(start, end)
+        return Planning.objects.for_user(user).for_period(start, end)  # type: ignore[attr-defined]
 
     def get_or_create_planning(
         self,

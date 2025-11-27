@@ -115,15 +115,15 @@ class BudgetContextMixin:
     for budget views.
     """
 
-    request: RequestWithContainer
-
     def get_budget_context(
         self,
     ) -> tuple[User, list[date], list[ExpenseCategory], list[IncomeCategory]]:
-        user = get_object_or_404(User, username=self.request.user)
-        date_list_repository = (
-            self.request.container.budget.date_list_repository()
-        )
+        request_obj = getattr(self, 'request', None)
+        if request_obj is None:
+            raise AttributeError('request attribute is required')
+        request = cast('RequestWithContainer', request_obj)
+        user = get_object_or_404(User, username=request.user)
+        date_list_repository = request.container.budget.date_list_repository()
         list_dates = date_list_repository.get_by_user_ordered(user)
         months = [d.date for d in list_dates]
         expense_categories = cast(
@@ -145,7 +145,6 @@ class BudgetView(
 ):
     model = Planning
     template_name = 'budget.html'
-    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
@@ -156,7 +155,8 @@ class BudgetView(
         user, months, expense_categories, income_categories = (
             self.get_budget_context()
         )
-        budget_service = self.request.container.budget.budget_service()
+        request = cast('RequestWithContainer', self.request)
+        budget_service = request.container.budget.budget_service()
         context.update(
             budget_service.aggregate_budget_data(
                 user=user,
@@ -175,7 +175,7 @@ def generate_date_list_view(
     if request.method == 'POST':
         user = request.user
         queryset_user = get_object_or_404(User, username=user)
-        last_date_obj = queryset_user.budget_date_lists.last()
+        last_date_obj = queryset_user.budget_date_lists.last()  # type: ignore[attr-defined]
         if last_date_obj:
             queryset_last_date = timezone.make_aware(
                 datetime.combine(last_date_obj.date, datetime.min.time()),
@@ -185,10 +185,10 @@ def generate_date_list_view(
         type_ = request.POST.get('type')
         generate_date_list(queryset_last_date, queryset_user, type_)
         if type_ == 'income':
-            return redirect(reverse_lazy('budget:income_table'))
-        return redirect(reverse_lazy('budget:expense_table'))
+            return redirect(str(reverse_lazy('budget:income_table')))
+        return redirect(str(reverse_lazy('budget:expense_table')))
 
-    return redirect(reverse_lazy('budget:expense_table'))
+    return redirect(str(reverse_lazy('budget:expense_table')))
 
 
 def change_planning(request: RequestWithContainer) -> JsonResponse:
@@ -255,7 +255,6 @@ class ExpenseTableView(
 ):
     model = Planning
     template_name = 'expense_table.html'
-    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
@@ -264,7 +263,8 @@ class ExpenseTableView(
         """
         context = super().get_context_data(**kwargs)
         user, months, expense_categories, _ = self.get_budget_context()
-        budget_service = self.request.container.budget.budget_service()
+        request = cast('RequestWithContainer', self.request)
+        budget_service = request.container.budget.budget_service()
         context.update(
             budget_service.aggregate_expense_table(
                 user=user,
@@ -283,7 +283,6 @@ class IncomeTableView(
 ):
     model = Planning
     template_name = 'income_table.html'
-    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """
@@ -292,7 +291,8 @@ class IncomeTableView(
         """
         context = super().get_context_data(**kwargs)
         user, months, _, income_categories = self.get_budget_context()
-        budget_service = self.request.container.budget.budget_service()
+        request = cast('RequestWithContainer', self.request)
+        budget_service = request.container.budget.budget_service()
         context.update(
             budget_service.aggregate_income_table(
                 user=user,
@@ -347,8 +347,9 @@ class ExpenseBudgetAPIView(APIView):
         Returns aggregated expense data for API response.
         """
         user = request.user
+        request_with_container = cast('RequestWithContainer', request)
         date_list_repository = (
-            self.request.container.budget.date_list_repository()
+            request_with_container.container.budget.date_list_repository()
         )
         list_dates = date_list_repository.get_by_user_ordered(user)
         months = [d.date.replace(day=1) for d in list_dates]
@@ -356,7 +357,9 @@ class ExpenseBudgetAPIView(APIView):
             'list[ExpenseCategory]',
             list(get_categories(user, 'expense')),
         )
-        budget_service = self.request.container.budget.budget_service()
+        budget_service = (
+            request_with_container.container.budget.budget_service()
+        )
         data = budget_service.aggregate_expense_api(
             user=user,
             months=months,
@@ -403,8 +406,9 @@ class IncomeBudgetAPIView(APIView):
         Returns aggregated income data for API response.
         """
         user = request.user
+        request_with_container = cast('RequestWithContainer', request)
         date_list_repository = (
-            self.request.container.budget.date_list_repository()
+            request_with_container.container.budget.date_list_repository()
         )
         list_dates = date_list_repository.get_by_user_ordered(user)
         months = [d.date.replace(day=1) for d in list_dates]
@@ -412,7 +416,9 @@ class IncomeBudgetAPIView(APIView):
             'list[IncomeCategory]',
             list(get_categories(user, 'income')),
         )
-        budget_service = self.request.container.budget.budget_service()
+        budget_service = (
+            request_with_container.container.budget.budget_service()
+        )
         data = budget_service.aggregate_income_api(
             user=user,
             months=months,
