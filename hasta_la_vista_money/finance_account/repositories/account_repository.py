@@ -26,11 +26,11 @@ class AccountRepository:
 
     def get_by_user(self, user: User) -> QuerySet[Account]:
         """Получить все accounts пользователя."""
-        return Account.objects.by_user(user)
+        return Account.objects.by_user(user)  # type: ignore[attr-defined]
 
     def get_by_user_with_related(self, user: User) -> QuerySet[Account]:
         """Получить все accounts пользователя с select_related('user')."""
-        return Account.objects.by_user_with_related(user)
+        return Account.objects.by_user_with_related(user)  # type: ignore[attr-defined]
 
     def get_by_user_and_group(
         self,
@@ -81,19 +81,19 @@ class AccountRepository:
 
     def get_credit_accounts(self) -> QuerySet[Account]:
         """Получить только кредитные счета и кредитные карты."""
-        return Account.objects.credit()
+        return Account.objects.credit()  # type: ignore[attr-defined]
 
     def get_debit_accounts(self) -> QuerySet[Account]:
         """Получить только дебетовые счета, дебетовые карты и наличные."""
-        return Account.objects.debit()
+        return Account.objects.debit()  # type: ignore[attr-defined]
 
     def get_by_currency(self, currency: str) -> QuerySet[Account]:
         """Получить accounts по валюте."""
-        return Account.objects.by_currency(currency)
+        return Account.objects.by_currency(currency)  # type: ignore[attr-defined]
 
     def get_by_type(self, type_account: str) -> QuerySet[Account]:
         """Получить accounts по типу."""
-        return Account.objects.by_type(type_account)
+        return Account.objects.by_type(type_account)  # type: ignore[attr-defined]
 
     def create_account(self, **kwargs: object) -> Account:
         """Создать новый account."""

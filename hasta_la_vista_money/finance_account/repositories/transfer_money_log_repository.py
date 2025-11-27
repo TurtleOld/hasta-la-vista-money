@@ -49,7 +49,7 @@ class TransferMoneyLogRepository:
         end: date,
     ) -> QuerySet[TransferMoneyLog]:
         """Получить logs пользователя за период."""
-        return TransferMoneyLog.objects.by_user(user).by_date_range(start, end)
+        return TransferMoneyLog.objects.by_user(user).by_date_range(start, end)  # type: ignore[attr-defined]
 
     def create_log(self, **kwargs: object) -> TransferMoneyLog:
         """Создать новый log."""

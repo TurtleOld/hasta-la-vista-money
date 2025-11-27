@@ -726,7 +726,7 @@ class AccountService:
         except Group.DoesNotExist:
             return []
         else:
-            return list(group.user_set.all())
+            return list(group.user_set.all())  # type: ignore[attr-defined]
 
     def get_accounts_for_user_or_group(
         self,

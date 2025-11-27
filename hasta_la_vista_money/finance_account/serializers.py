@@ -18,7 +18,7 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
     including essential account information like name, balance, and currency.
     """
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Account
         fields: ClassVar[list[str]] = [
             'id',
