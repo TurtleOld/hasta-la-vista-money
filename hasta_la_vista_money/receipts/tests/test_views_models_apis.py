@@ -660,6 +660,7 @@ class TestUploadImageView(TestCase):
         self.container.core.account_service.override(
             providers.Object(self.mock_account_service),
         )
+        CoreMiddleware.container = self.container
 
         mock_account_repository = MagicMock()
         mock_account_repository.get_by_id.return_value = self.account
@@ -704,6 +705,7 @@ class TestUploadImageView(TestCase):
         self.container.finance_account.account_repository.reset_override()
         self.container.receipts.receipt_creator_service.reset_override()
         self.middleware_patcher.stop()
+        CoreMiddleware.container = ApplicationContainer()
 
     def test_upload_image_view_get(self) -> None:
         self.client.force_login(self.user)
