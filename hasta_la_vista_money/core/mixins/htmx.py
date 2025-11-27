@@ -23,9 +23,10 @@ class HTMXMixin:
         return request.headers.get('HX-Request') == 'true'
 
     def get_template_names(self) -> list[str]:
+        request = getattr(self, 'request', None)
         if (
-            hasattr(self, 'request')
-            and self.is_htmx(self.request)
+            request is not None
+            and self.is_htmx(request)
             and self.htmx_template_name
         ):
             return [self.htmx_template_name]
@@ -39,9 +40,10 @@ class HTMXMixin:
         context: dict[str, Any],
         **response_kwargs: Any,
     ) -> HttpResponse:
+        request = getattr(self, 'request', None)
         if (
-            hasattr(self, 'request')
-            and self.is_htmx(self.request)
+            request is not None
+            and self.is_htmx(request)
             and hasattr(super(), 'render_to_response')
         ):
             mixin_self = cast('TemplateResponseMixinProtocol', self)
