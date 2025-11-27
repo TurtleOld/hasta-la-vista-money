@@ -139,7 +139,6 @@ class AccountView(
         page_context = page_context_service.build_account_list_context(
             user,
             accounts,
-            group_id,
         )
 
         context.update(page_context)

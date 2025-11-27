@@ -1,6 +1,6 @@
 """Service for building page context for account views."""
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
@@ -12,16 +12,24 @@ from hasta_la_vista_money.finance_account.forms import (
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 
+if TYPE_CHECKING:
+    from core.protocols.services import AccountServiceProtocol
+    from hasta_la_vista_money.finance_account.repositories import (
+        AccountRepository,
+        TransferMoneyLogRepository,
+    )
+    from hasta_la_vista_money.finance_account.services import TransferService
+
 
 class AccountPageContextService:
     """Service for building context data for account list page."""
 
     def __init__(
         self,
-        account_repository: Any,
-        transfer_money_log_repository: Any,
-        account_service: Any,
-        transfer_service: Any,
+        account_repository: 'AccountRepository',
+        transfer_money_log_repository: 'TransferMoneyLogRepository',
+        account_service: 'AccountServiceProtocol',
+        transfer_service: 'TransferService',
     ) -> None:
         """Initialize service with required repositories and services.
 
@@ -65,12 +73,9 @@ class AccountPageContextService:
         Returns:
             QuerySet of accounts.
         """
-        return cast(
-            'QuerySet[Account]',
-            self.account_service.get_accounts_for_user_or_group(
-                user,
-                group_id,
-            ),
+        return self.account_service.get_accounts_for_user_or_group(
+            user,
+            group_id,
         )
 
     def build_account_list_context(
@@ -83,7 +88,6 @@ class AccountPageContextService:
         Args:
             user: User instance with prefetched groups.
             accounts: QuerySet of accounts to display.
-            group_id: Optional group ID for filtering.
 
         Returns:
             Dictionary with all context data for the page.

@@ -1,7 +1,7 @@
 import json
 from datetime import timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 from unittest.mock import MagicMock, Mock, patch
 
 from dependency_injector import providers
@@ -17,6 +17,7 @@ from config.containers import ApplicationContainer
 from config.middleware import CoreMiddleware
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.types import RequestWithContainer  # noqa: TC001
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductForm,
@@ -654,15 +655,55 @@ class TestUploadImageView(TestCase):
         self.user = UserType.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.mock_account_service = MagicMock(spec=AccountServiceProtocol)
+        self.mock_account_service.apply_receipt_spend.return_value = self.account  # noqa: E501
         self.container = ApplicationContainer()
         self.container.core.account_service.override(
             providers.Object(self.mock_account_service),
         )
-        CoreMiddleware.container = self.container
+
+        mock_account_repository = MagicMock()
+        mock_account_repository.get_by_id.return_value = self.account
+        self.container.finance_account.account_repository.override(
+            providers.Object(mock_account_repository),
+        )
+
+        from hasta_la_vista_money.receipts.services.receipt_creator import (
+            ReceiptCreatorService,
+        )
+
+        self.container.receipts.receipt_creator_service.override(
+            providers.Factory(
+                ReceiptCreatorService,
+                account_service=providers.Object(self.mock_account_service),
+                account_repository=providers.Object(mock_account_repository),
+                product_repository=self.container.receipts.product_repository,
+                receipt_repository=self.container.receipts.receipt_repository,
+                seller_repository=self.container.receipts.seller_repository,
+            ),
+        )
+
+        original_call = CoreMiddleware.__call__
+
+        def patched_call(
+            self_instance: CoreMiddleware,
+            request: Any,
+        ) -> Any:
+            request_with_container = cast('RequestWithContainer', request)
+            request_with_container.container = self.container
+            return original_call(self_instance, request_with_container)
+
+        self.middleware_patcher = patch.object(
+            CoreMiddleware,
+            '__call__',
+            patched_call,
+        )
+        self.middleware_patcher.start()
 
     def tearDown(self) -> None:
         self.container.core.account_service.reset_override()
-        CoreMiddleware.container = ApplicationContainer()
+        self.container.finance_account.account_repository.reset_override()
+        self.container.receipts.receipt_creator_service.reset_override()
+        self.middleware_patcher.stop()
 
     def test_upload_image_view_get(self) -> None:
         self.client.force_login(self.user)
@@ -680,6 +721,11 @@ class TestUploadImageView(TestCase):
         self,
         mock_analyze: Mock,
     ) -> None:
+        Receipt.objects.filter(
+            user=self.user,
+            number_receipt=12345,
+        ).delete()
+
         mock_analyze.return_value = json.dumps(
             {
                 'name_seller': 'Тестовый продавец',

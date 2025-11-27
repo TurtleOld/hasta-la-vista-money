@@ -10,13 +10,12 @@ if TYPE_CHECKING:
 
 
 class CoreMiddleware:
-    container: ApplicationContainer = ApplicationContainer()
-
     def __init__(
         self,
         get_response: Callable[[HttpRequest], HttpResponse],
     ) -> None:
         self.get_response = get_response
+        self.container = ApplicationContainer()
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         request_with_container = cast('RequestWithContainer', request)

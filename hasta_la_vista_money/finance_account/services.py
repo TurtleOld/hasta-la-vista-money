@@ -3,7 +3,7 @@
 from calendar import monthrange
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 from dateutil.relativedelta import relativedelta
 from django.contrib.auth.models import Group
@@ -31,6 +31,15 @@ from hasta_la_vista_money.finance_account.validators import (
 )
 from hasta_la_vista_money.users.models import User
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.expense.repositories import ExpenseRepository
+    from hasta_la_vista_money.finance_account.repositories import (
+        AccountRepository,
+        TransferMoneyLogRepository,
+    )
+    from hasta_la_vista_money.income.repositories import IncomeRepository
+    from hasta_la_vista_money.receipts.repositories import ReceiptRepository
+
 
 class GracePeriodInfoDict(TypedDict, total=False):
     """Информация о льготном периоде кредитной карты."""
@@ -53,6 +62,16 @@ class PaymentScheduleItemDict(TypedDict):
     amount: Decimal
 
 
+class PaymentScheduleStatementDict(TypedDict):
+    """Элемент графика платежей по выпискам."""
+
+    statement_date: datetime
+    payment_due_date: datetime
+    remaining_debt: Decimal
+    min_payment: Decimal
+    statement_number: int
+
+
 class RaiffeisenbankScheduleDict(TypedDict, total=False):
     """График платежей для Raiffeisenbank."""
 
@@ -70,7 +89,7 @@ class TransferService:
 
     def __init__(
         self,
-        transfer_money_log_repository: Any,
+        transfer_money_log_repository: 'TransferMoneyLogRepository',
     ) -> None:
         self.transfer_money_log_repository = transfer_money_log_repository
 
@@ -90,16 +109,13 @@ class TransferService:
         validate_account_balance(from_account, amount)
 
         if from_account.transfer_money(to_account, amount):
-            return cast(
-                'TransferMoneyLog',
-                self.transfer_money_log_repository.create_log(
-                    user=user,
-                    from_account=from_account,
-                    to_account=to_account,
-                    amount=amount,
-                    exchange_date=exchange_date,
-                    notes=notes or '',
-                ),
+            return self.transfer_money_log_repository.create_log(
+                user=user,
+                from_account=from_account,
+                to_account=to_account,
+                amount=amount,
+                exchange_date=exchange_date,
+                notes=notes or '',
             )
 
         error_msg = 'Transfer failed - insufficient funds or invalid accounts'
@@ -111,11 +127,11 @@ class AccountService:
 
     def __init__(
         self,
-        account_repository: Any,
-        transfer_money_log_repository: Any,
-        expense_repository: Any,
-        income_repository: Any,
-        receipt_repository: Any,
+        account_repository: 'AccountRepository',
+        transfer_money_log_repository: 'TransferMoneyLogRepository',
+        expense_repository: 'ExpenseRepository',
+        income_repository: 'IncomeRepository',
+        receipt_repository: 'ReceiptRepository',
     ) -> None:
         self.account_repository = account_repository
         self.transfer_money_log_repository = transfer_money_log_repository
@@ -129,16 +145,13 @@ class AccountService:
 
     def get_account_by_id(self, account_id: int, user: User) -> Account | None:
         """Get a specific account by ID for a user."""
-        return cast(
-            'Account | None',
-            self.account_repository.get_by_id_and_user(account_id, user),
-        )
+        return self.account_repository.get_by_id_and_user(account_id, user)
 
     def get_credit_card_debt(
         self,
         account: Account,
-        start_date: Any | None = None,
-        end_date: Any | None = None,
+        start_date: date | datetime | None = None,
+        end_date: date | datetime | None = None,
     ) -> Decimal | None:
         """Calculate credit card debt for a given period."""
         if account.type_account not in (
@@ -152,24 +165,18 @@ class AccountService:
         receipt_qs = self.receipt_repository.filter(account=account)
 
         if start_date and end_date:
-            if isinstance(start_date, date) and not isinstance(
-                start_date,
-                datetime,
-            ):
+            if isinstance(start_date, datetime):
+                start_date_dt = start_date
+            elif isinstance(start_date, date):
                 start_date_dt = timezone.make_aware(
                     datetime.combine(start_date, time.min),
                 )
-            else:
-                start_date_dt = start_date
-            if isinstance(end_date, date) and not isinstance(
-                end_date,
-                datetime,
-            ):
+            if isinstance(end_date, datetime):
+                end_date_dt = end_date
+            elif isinstance(end_date, date):
                 end_date_dt = timezone.make_aware(
                     datetime.combine(end_date, time.max),
                 )
-            else:
-                end_date_dt = end_date
 
             expense_qs = expense_qs.filter(
                 date__range=(start_date_dt, end_date_dt),
@@ -324,7 +331,7 @@ class AccountService:
 
     def _calculate_purchase_period(
         self,
-        purchase_month: Any,
+        purchase_month: date | datetime,
     ) -> tuple[datetime, datetime]:
         """Calculate purchase period start and end dates."""
         purchase_start = timezone.make_aware(
@@ -466,7 +473,7 @@ class AccountService:
     def calculate_grace_period_info(
         self,
         account: Account,
-        purchase_month: Any,
+        purchase_month: date | datetime,
     ) -> GracePeriodInfoDict:
         """Calculate grace period information for a credit card."""
         if account.type_account not in (
@@ -530,13 +537,11 @@ class AccountService:
 
     def _calculate_purchase_period_for_raiffeisenbank(
         self,
-        purchase_month: Any,
+        purchase_month: date | datetime,
     ) -> tuple[datetime, datetime]:
         """Calculate purchase period for Raiffeisenbank."""
         if isinstance(purchase_month, datetime):
             purchase_start_date = purchase_month.date().replace(day=1)
-        elif isinstance(purchase_month, date):
-            purchase_start_date = purchase_month.replace(day=1)
         else:
             purchase_start_date = purchase_month.replace(day=1)
 
@@ -585,9 +590,9 @@ class AccountService:
         self,
         statement_dates: list[datetime],
         initial_debt: Decimal,
-    ) -> tuple[list[dict[str, Any]], Decimal]:
+    ) -> tuple[list[PaymentScheduleStatementDict], Decimal]:
         """Calculate payment schedule for each statement."""
-        payments_schedule = []
+        payments_schedule: list[PaymentScheduleStatementDict] = []
         remaining_debt = initial_debt
 
         for i, statement_date in enumerate(statement_dates):
@@ -599,13 +604,16 @@ class AccountService:
             )
 
             payments_schedule.append(
-                {
-                    'statement_date': statement_date,
-                    'payment_due_date': payment_due_date,
-                    'remaining_debt': remaining_debt,
-                    'min_payment': min_payment,
-                    'statement_number': i + 1,
-                },
+                cast(
+                    'PaymentScheduleStatementDict',
+                    {
+                        'statement_date': statement_date,
+                        'payment_due_date': payment_due_date,
+                        'remaining_debt': remaining_debt,
+                        'min_payment': min_payment,
+                        'statement_number': i + 1,
+                    },
+                ),
             )
 
             remaining_debt = remaining_debt - min_payment
@@ -624,7 +632,7 @@ class AccountService:
     def calculate_raiffeisenbank_payment_schedule(
         self,
         account: Account,
-        purchase_month: Any,
+        purchase_month: date | datetime,
     ) -> RaiffeisenbankScheduleDict:
         """Calculate payment schedule for Raiffeisenbank credit card."""
         if not self._validate_raiffeisenbank_account(account):
@@ -735,12 +743,9 @@ class AccountService:
         Returns:
             QuerySet of accounts for user or group
         """
-        return cast(
-            'QuerySet[Account, Account]',
-            self.account_repository.get_by_user_and_group(user, group_id),
-        )
+        return self.account_repository.get_by_user_and_group(user, group_id)
 
-    def get_sum_all_accounts(self, accounts: Any) -> Decimal:
+    def get_sum_all_accounts(self, accounts: QuerySet[Account]) -> Decimal:
         """Calculate total balance for a queryset of accounts."""
         total = sum(acc.balance for acc in accounts)
         return Decimal(str(total))
@@ -749,7 +754,7 @@ class AccountService:
         self,
         user: User,
         limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
-    ) -> Any:
+    ) -> QuerySet[TransferMoneyLog]:
         """Get recent transfer logs for a user."""
         return self.transfer_money_log_repository.get_by_user_ordered(
             user,
