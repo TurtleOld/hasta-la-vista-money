@@ -155,8 +155,8 @@ class LoginUserServiceTest(TestCase):
         result: LoginResult = login_user(request, form, 'Success!')
 
         self.assertTrue(result.get('success', False))
-        self.assertIsNone(result.get('access'))
-        self.assertIsNone(result.get('refresh'))
+        self.assertEqual(result.get('access'), '')
+        self.assertEqual(result.get('refresh'), '')
 
     @patch('hasta_la_vista_money.users.services.auth.RefreshToken')
     def test_login_user_jwt_token_type_error(
@@ -177,8 +177,8 @@ class LoginUserServiceTest(TestCase):
         result: LoginResult = login_user(request, form, 'Success!')
 
         self.assertTrue(result.get('success', False))
-        self.assertIsNone(result.get('access'))
-        self.assertIsNone(result.get('refresh'))
+        self.assertEqual(result.get('access'), '')
+        self.assertEqual(result.get('refresh'), '')
 
     @patch('hasta_la_vista_money.users.services.auth.RefreshToken')
     def test_login_user_jwt_token_attribute_error(
@@ -201,8 +201,8 @@ class LoginUserServiceTest(TestCase):
         result: LoginResult = login_user(request, form, 'Success!')
 
         self.assertTrue(result.get('success', False))
-        self.assertIsNone(result.get('access'))
-        self.assertIsNone(result.get('refresh'))
+        self.assertEqual(result.get('access'), '')
+        self.assertEqual(result.get('refresh'), '')
 
     def test_login_user_empty_form_data(self) -> None:
         request: HttpRequest = self.get_request()
