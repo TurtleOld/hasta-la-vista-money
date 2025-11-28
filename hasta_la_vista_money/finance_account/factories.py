@@ -13,7 +13,7 @@ factory = cast('Any', _factory)
 
 
 class AccountFactory(_factory.django.DjangoModelFactory[Account]):
-    class Meta:  # type: ignore[misc]
+    class Meta:
         model = Account
 
     user = factory.SubFactory(UserFactory)
@@ -25,7 +25,7 @@ class AccountFactory(_factory.django.DjangoModelFactory[Account]):
 class TransferMoneyLogFactory(
     _factory.django.DjangoModelFactory[TransferMoneyLog],
 ):
-    class Meta:  # type: ignore[misc]
+    class Meta:
         model = TransferMoneyLog
 
     user = factory.SubFactory(UserFactory)

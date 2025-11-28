@@ -46,7 +46,7 @@ def collect_info_income(user: User) -> list[IncomeInfoDict]:
     Returns:
         List of dictionaries containing income records with related data.
     """
-    queryset = user.income_users.select_related('user').values(  # type: ignore[attr-defined]
+    queryset = user.income_users.select_related('user').values(
         'id',
         'date',
         'account__name_account',
@@ -68,7 +68,7 @@ def collect_info_expense(user: User) -> list[ExpenseInfoDict]:
     Returns:
         List of dictionaries containing expense records with related data.
     """
-    queryset = user.expense_users.select_related('user').values(  # type: ignore[attr-defined]
+    queryset = user.expense_users.select_related('user').values(
         'id',
         'date',
         'account__name_account',

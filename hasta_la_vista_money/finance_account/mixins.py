@@ -4,7 +4,7 @@ This module provides reusable mixin classes that add functionality to views,
 including group-based account filtering and user-specific data access.
 """
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db.models import QuerySet
 
@@ -21,6 +21,8 @@ class GroupAccountMixin:
     Enables views to filter accounts by user groups, allowing for shared
     account access and group-based financial management.
     """
+
+    request: Any = None
 
     def get_group_id(self) -> str | None:
         """Extract group_id from request parameters.
