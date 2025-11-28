@@ -37,10 +37,10 @@ class GetUserNotificationsServiceTest(TestCase):
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = user
+        self.user: UserType = user
 
     def test_get_user_notifications(self) -> None:
-        notifications: list[NotificationDict] = get_user_notifications(  # type: ignore[reportArgumentType]
+        notifications: list[NotificationDict] = get_user_notifications(
             self.user,
         )
         self.assertIsInstance(notifications, list)

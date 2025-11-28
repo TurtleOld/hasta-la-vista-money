@@ -1,12 +1,15 @@
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
-from django.forms import ValidationError
+from django.forms import ModelChoiceField, ValidationError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.models import Account
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
@@ -675,7 +678,10 @@ class TestAccountServices(TestCase):
             self.group_id,
         )
         self.assertIsNotNone(self.group)
-        group_users = list(self.group.user_set.all())  # type: ignore[attr-defined]
+        if self.group is None:
+            msg = 'self.group should not be None'
+            raise ValueError(msg)
+        group_users = list(self.group.user_set.all())
         self.assertTrue(all(acc.user in group_users for acc in accounts))
 
     def test_get_sum_all_accounts(self) -> None:
@@ -956,7 +962,14 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             account_repository=self.account_repository,
         )
 
-        self.assertEqual(form.fields['from_account'].queryset.count(), 2)  # type: ignore[attr-defined]
+        from_account_field = cast(
+            'ModelChoiceField[Account]',
+            form.fields['from_account'],
+        )
+        if from_account_field.queryset is None:
+            msg = 'queryset should not be None'
+            raise ValueError(msg)
+        self.assertEqual(from_account_field.queryset.count(), 2)
 
         self.assertIn('amount', form.fields)
         self.assertIn('notes', form.fields)

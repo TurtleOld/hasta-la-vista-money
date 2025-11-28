@@ -410,7 +410,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
         self.assertEqual(header1, 'Bearer realm="api"')
 
         drf_request = Request(self.factory.get('/'))
-        header2 = self.auth.authenticate_header(drf_request)  # type: ignore[reportCallIssue]
+        header2 = self.auth.authenticate_header(drf_request)
         self.assertEqual(header2, 'Bearer realm="api"')
 
     def test_authenticate_with_cookie_encoding_issues(self) -> None:
@@ -460,7 +460,7 @@ class CookieUtilityFunctionsTestCase(TestCase):
         request = Request(self.factory.get('/'))
         request.COOKIES[self.auth_cookie_name] = 'test_token'
 
-        result = get_token_from_cookie(request)  # type: ignore[reportCallIssue]
+        result = get_token_from_cookie(request)
         self.assertEqual(result, 'test_token')
 
     def test_get_refresh_token_from_cookie_with_django_request(self) -> None:
@@ -476,7 +476,7 @@ class CookieUtilityFunctionsTestCase(TestCase):
         request = Request(self.factory.get('/'))
         request.COOKIES[self.refresh_cookie_name] = 'test_refresh_token'
 
-        result = get_refresh_token_from_cookie(request)  # type: ignore[reportCallIssue]
+        result = get_refresh_token_from_cookie(request)
         self.assertEqual(result, 'test_refresh_token')
 
     def test_clear_auth_cookies_with_nonexistent_cookies(self) -> None:

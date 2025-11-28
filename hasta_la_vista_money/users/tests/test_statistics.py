@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -37,10 +37,10 @@ class GetUserStatisticsServiceTest(TestCase):
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = cast('User', user)
+        self.user: UserType = user
 
     def test_get_user_statistics(self) -> None:
-        stats: UserStatistics = get_user_statistics(self.user)  # type: ignore[arg-type]
+        stats: UserStatistics = get_user_statistics(self.user)
         self.assertIn('total_balance', stats)
         self.assertIn('accounts_count', stats)
         self.assertIn('current_month_expenses', stats)

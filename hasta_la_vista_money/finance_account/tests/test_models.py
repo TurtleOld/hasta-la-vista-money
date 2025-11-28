@@ -352,8 +352,8 @@ class TestAccountManagers(TestCase):
 
     def test_by_user_manager(self) -> None:
         """Test by_user manager method."""
-        user1_accounts = Account.objects.by_user(self.user1)  # type: ignore[attr-defined]
-        user2_accounts = Account.objects.by_user(self.user2)  # type: ignore[attr-defined]
+        user1_accounts = Account.objects.by_user(self.user1)
+        user2_accounts = Account.objects.by_user(self.user2)
 
         self.assertIn(self.account1, user1_accounts)
         self.assertNotIn(self.account2, user1_accounts)
@@ -367,5 +367,5 @@ class TestAccountManagers(TestCase):
             password='testpass123',
         )
 
-        user3_accounts = Account.objects.by_user(user3)  # type: ignore[attr-defined]
+        user3_accounts = Account.objects.by_user(user3)
         self.assertEqual(user3_accounts.count(), 0)

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -38,11 +38,11 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = cast('User', user)
+        self.user: UserType = user
 
     def test_get_user_detailed_statistics(self) -> None:
         container = ApplicationContainer()
-        stats: UserDetailedStatisticsDict = get_user_detailed_statistics(  # type: ignore[reportArgumentType]
+        stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
             self.user,
             container=container,
         )

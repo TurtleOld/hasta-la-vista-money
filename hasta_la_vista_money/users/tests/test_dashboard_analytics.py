@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -110,11 +110,11 @@ class GetPeriodComparisonTest(TestCase):
             msg = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = cast('User', user)
+        self.user: UserType = user
 
     def test_get_period_comparison_month(self) -> None:
         """Тест сравнения периодов для месяца."""
-        result = get_period_comparison(self.user, 'month')  # type: ignore[arg-type]
+        result = get_period_comparison(self.user, 'month')
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
@@ -125,14 +125,14 @@ class GetPeriodComparisonTest(TestCase):
 
     def test_get_period_comparison_quarter(self) -> None:
         """Тест сравнения периодов для квартала."""
-        result = get_period_comparison(self.user, 'quarter')  # type: ignore[arg-type]
+        result = get_period_comparison(self.user, 'quarter')
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
 
     def test_get_period_comparison_year(self) -> None:
         """Тест сравнения периодов для года."""
-        result = get_period_comparison(self.user, 'year')  # type: ignore[arg-type]
+        result = get_period_comparison(self.user, 'year')
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
@@ -156,7 +156,7 @@ class GetDrillDownDataTest(TestCase):
             msg = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = cast('User', user)
+        self.user: UserType = user
 
     def test_get_drill_down_data_expense(self) -> None:
         """Тест получения drill-down данных для расходов."""
@@ -164,7 +164,7 @@ class GetDrillDownDataTest(TestCase):
         if category is None:
             self.skipTest('No expense category found in fixtures')
 
-        result = get_drill_down_data(self.user, str(category.pk), 'expense')  # type: ignore[arg-type]
+        result = get_drill_down_data(self.user, str(category.pk), 'expense')
 
         self.assertIn('data', result)
         self.assertIsInstance(result['data'], list)
@@ -175,7 +175,7 @@ class GetDrillDownDataTest(TestCase):
         if category is None:
             self.skipTest('No income category found in fixtures')
 
-        result = get_drill_down_data(self.user, str(category.pk), 'income')  # type: ignore[arg-type]
+        result = get_drill_down_data(self.user, str(category.pk), 'income')
 
         self.assertIn('data', result)
         self.assertIsInstance(result['data'], list)
@@ -184,7 +184,7 @@ class GetDrillDownDataTest(TestCase):
         """Тест с несуществующей категорией."""
         invalid_category_id = 99999
 
-        result = get_drill_down_data(  # type: ignore[reportArgumentType]
+        result = get_drill_down_data(
             self.user,
             str(invalid_category_id),
             'expense',

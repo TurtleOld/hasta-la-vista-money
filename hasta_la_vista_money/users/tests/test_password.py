@@ -32,7 +32,7 @@ class SetUserPasswordServiceTest(TestCase):
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = user
+        self.user: UserType = user
         self.factory: RequestFactory = RequestFactory()
 
     def get_request(self) -> HttpRequest:

@@ -39,7 +39,7 @@ class LoginUserServiceTest(TestCase):
             error_msg: str = 'No user found in fixtures'
             raise ValueError(error_msg)
         self.assertIsInstance(user, User)
-        self.user: User = user
+        self.user: UserType = user
         self.user.set_password('testpassword')
         self.user.save()
 

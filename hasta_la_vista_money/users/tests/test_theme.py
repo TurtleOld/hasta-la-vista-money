@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -16,7 +16,7 @@ User = get_user_model()
 class SetUserThemeServiceTest(TestCase):
     """Tests for set_user_theme service function."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']  # type: ignore[misc]
+    fixtures = ['users.yaml']
 
     def setUp(self) -> None:
         user = User.objects.first()
@@ -24,22 +24,22 @@ class SetUserThemeServiceTest(TestCase):
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = cast('User', user)
+        self.user: UserType = user
 
     def test_set_user_theme_light(self) -> None:
-        result: bool = set_user_theme(self.user, 'light')  # type: ignore[arg-type]
+        result: bool = set_user_theme(self.user, 'light')
         self.user.refresh_from_db()
         self.assertTrue(result)
-        self.assertEqual(self.user.theme, 'light')  # type: ignore[attr-defined]
+        self.assertEqual(self.user.theme, 'light')
 
     def test_set_user_theme_dark(self) -> None:
-        result: bool = set_user_theme(self.user, 'dark')  # type: ignore[arg-type]
+        result: bool = set_user_theme(self.user, 'dark')
         self.user.refresh_from_db()
         self.assertTrue(result)
-        self.assertEqual(self.user.theme, 'dark')  # type: ignore[attr-defined]
+        self.assertEqual(self.user.theme, 'dark')
 
     def test_set_user_theme_invalid(self) -> None:
-        result: bool = set_user_theme(self.user, 'invalid_theme')  # type: ignore[arg-type]
+        result: bool = set_user_theme(self.user, 'invalid_theme')
         self.user.refresh_from_db()
         self.assertTrue(result)
-        self.assertEqual(self.user.theme, 'light')  # type: ignore[attr-defined]
+        self.assertEqual(self.user.theme, 'light')

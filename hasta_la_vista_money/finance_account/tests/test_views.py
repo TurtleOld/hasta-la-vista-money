@@ -135,6 +135,9 @@ class TestAccountCreateView(TestCase):
 
         account = Account.objects.filter(user=self.user).first()
         self.assertIsNotNone(account)
+        if account is None:
+            msg = 'account should not be None'
+            raise ValueError(msg)
         self.assertEqual(account.name_account, 'Test Account')
 
     def test_account_create_view_post_invalid(self) -> None:

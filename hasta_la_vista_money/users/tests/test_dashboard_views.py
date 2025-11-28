@@ -39,7 +39,7 @@ class DashboardViewTest(TestCase):
             msg = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = user
+        self.user: UserType = user
         self.client.force_login(self.user)
 
     def test_dashboard_view_requires_login(self) -> None:
@@ -79,7 +79,7 @@ class DashboardDataViewTest(TestCase):
             msg = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = user
+        self.user: UserType = user
         self.client.force_login(self.user)
 
     def test_dashboard_data_view_requires_login(self) -> None:
@@ -166,7 +166,7 @@ class DashboardWidgetConfigViewTest(TestCase):
             msg = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = user
+        self.user: UserType = user
         self.client.force_login(self.user)
 
     def test_create_widget(self) -> None:
@@ -256,7 +256,7 @@ class DashboardAnalyticsEndpointsTest(TestCase):
             msg = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
-        self.user: User = user
+        self.user: UserType = user
         self.client.force_login(self.user)
         self.factory = RequestFactory()
 

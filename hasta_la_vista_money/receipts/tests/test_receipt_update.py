@@ -18,7 +18,7 @@ class ReceiptUpdateViewTest(TestCase):
 
     def setUp(self) -> None:
         """Настройка тестовых данных."""
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
             password='testpass123',
@@ -296,7 +296,7 @@ class ReceiptUpdateViewTest(TestCase):
 
     def test_receipt_update_unauthorized_user(self) -> None:
         """Тест попытки обновления чека неавторизованным пользователем."""
-        other_user = User.objects.create_user(  # type: ignore[attr-defined]
+        other_user = User.objects.create_user(
             username='otheruser',
             email='other@example.com',
             password='otherpass123',
@@ -398,10 +398,16 @@ class ReceiptUpdateViewTest(TestCase):
 
         product1 = products.filter(product_name='Товар 1').first()
         self.assertIsNotNone(product1)
+        if product1 is None:
+            msg = 'product1 should not be None'
+            raise ValueError(msg)
         self.assertEqual(product1.quantity, Decimal('0.70'))
         self.assertEqual(product1.amount, Decimal('70.00'))
 
         product2 = products.filter(product_name='Товар 2').first()
         self.assertIsNotNone(product2)
+        if product2 is None:
+            msg = 'product2 should not be None'
+            raise ValueError(msg)
         self.assertEqual(product2.quantity, Decimal('0.70'))
         self.assertEqual(product2.amount, Decimal('105.00'))

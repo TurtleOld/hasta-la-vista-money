@@ -1,5 +1,7 @@
 """Tests for finance account mixins."""
 
+from typing import TYPE_CHECKING, cast
+
 from django.contrib.auth.models import Group
 from django.test import RequestFactory, TestCase
 
@@ -9,6 +11,9 @@ from hasta_la_vista_money.finance_account.tests.helpers import (
     setup_container_for_request,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
 
 
 class TestGroupAccountMixin(TestCase):
@@ -55,9 +60,9 @@ class TestGroupAccountMixin(TestCase):
         """Test get_accounts method for user without groups."""
         mixin = GroupAccountMixin()
         request = self.factory.get('/')
-        request.user = self.user3  # type: ignore[attr-defined]
+        request.user = self.user3
         setup_container_for_request(request)
-        mixin.request = request  # type: ignore[assignment]
+        mixin.request = cast('RequestWithContainer', request)
 
         accounts = mixin.get_accounts(self.user3)
 
@@ -70,9 +75,9 @@ class TestGroupAccountMixin(TestCase):
         """Test get_accounts method for user with groups."""
         mixin = GroupAccountMixin()
         request = self.factory.get('/')
-        request.user = self.user1  # type: ignore[attr-defined]
+        request.user = self.user1
         setup_container_for_request(request)
-        mixin.request = request  # type: ignore[assignment]
+        mixin.request = cast('RequestWithContainer', request)
 
         accounts = mixin.get_accounts(self.user1)
 
@@ -95,9 +100,9 @@ class TestGroupAccountMixin(TestCase):
 
         mixin = GroupAccountMixin()
         request = self.factory.get('/')
-        request.user = self.user1  # type: ignore[attr-defined]
+        request.user = self.user1
         setup_container_for_request(request)
-        mixin.request = request  # type: ignore[assignment]
+        mixin.request = cast('RequestWithContainer', request)
 
         accounts = mixin.get_accounts(self.user1)
 
@@ -114,9 +119,9 @@ class TestGroupAccountMixin(TestCase):
 
         mixin = GroupAccountMixin()
         request = self.factory.get('/')
-        request.user = self.user1  # type: ignore[attr-defined]
+        request.user = self.user1
         setup_container_for_request(request)
-        mixin.request = request  # type: ignore[assignment]
+        mixin.request = cast('RequestWithContainer', request)
 
         accounts = mixin.get_accounts(self.user1)
 
@@ -133,9 +138,9 @@ class TestGroupAccountMixin(TestCase):
 
         mixin = GroupAccountMixin()
         request = self.factory.get('/')
-        request.user = user4  # type: ignore[attr-defined]
+        request.user = user4
         setup_container_for_request(request)
-        mixin.request = request  # type: ignore[assignment]
+        mixin.request = cast('RequestWithContainer', request)
 
         accounts = mixin.get_accounts(user4)
 
@@ -151,9 +156,9 @@ class TestGroupAccountMixin(TestCase):
 
         mixin = GroupAccountMixin()
         request = self.factory.get('/')
-        request.user = self.user1  # type: ignore[attr-defined]
+        request.user = self.user1
         setup_container_for_request(request)
-        mixin.request = request  # type: ignore[assignment]
+        mixin.request = cast('RequestWithContainer', request)
 
         accounts = mixin.get_accounts(self.user1)
 
@@ -173,9 +178,9 @@ class TestGroupAccountMixin(TestCase):
 
         mixin = GroupAccountMixin()
         request = self.factory.get('/')
-        request.user = self.user1  # type: ignore[attr-defined]
+        request.user = self.user1
         setup_container_for_request(request)
-        mixin.request = request  # type: ignore[assignment]
+        mixin.request = cast('RequestWithContainer', request)
 
         accounts = mixin.get_accounts(self.user1)
 
