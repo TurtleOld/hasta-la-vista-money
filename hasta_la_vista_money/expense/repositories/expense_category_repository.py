@@ -12,7 +12,7 @@ class ExpenseCategoryRepository:
     def get_by_user(self, user: User) -> QuerySet[ExpenseCategory]:
         """Получить все категории пользователя."""
         return (
-            user.category_expense_users.select_related('user')  # type: ignore[attr-defined]
+            user.category_expense_users.select_related('user')
             .order_by('parent_category__name', 'name')
             .all()
         )

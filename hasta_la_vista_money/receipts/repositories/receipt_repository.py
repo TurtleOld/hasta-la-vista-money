@@ -20,22 +20,22 @@ class ReceiptRepository:
 
     def get_by_user(self, user: User) -> QuerySet[Receipt]:
         """Получить все receipts пользователя."""
-        return Receipt.objects.for_user(user)  # type: ignore[attr-defined]
+        return Receipt.objects.for_user(user)
 
     def get_by_users(self, users: list[User]) -> QuerySet[Receipt]:
         """Получить все receipts для списка пользователей."""
-        return Receipt.objects.for_users(users)  # type: ignore[attr-defined]
+        return Receipt.objects.for_users(users)
 
     def get_by_user_with_related(self, user: User) -> QuerySet[Receipt]:
         """Получить все receipts пользователя с select_related."""
-        return Receipt.objects.for_user(user).with_related()  # type: ignore[attr-defined]
+        return Receipt.objects.for_user(user).with_related()
 
     def get_by_users_with_related(
         self,
         users: list[User],
     ) -> QuerySet[Receipt]:
         """Получить все receipts для списка пользователей с select_related."""
-        return Receipt.objects.for_users(users).with_related()  # type: ignore[attr-defined]
+        return Receipt.objects.for_users(users).with_related()
 
     def get_by_user_and_number(
         self,
@@ -43,7 +43,7 @@ class ReceiptRepository:
         number_receipt: int | None,
     ) -> QuerySet[Receipt]:
         """Получить receipts пользователя по номеру чека."""
-        return Receipt.objects.for_user_and_number(user, number_receipt)  # type: ignore[attr-defined]
+        return Receipt.objects.for_user_and_number(user, number_receipt)
 
     def add_product_to_receipt(
         self,

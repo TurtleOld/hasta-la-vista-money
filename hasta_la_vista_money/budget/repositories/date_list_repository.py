@@ -17,15 +17,15 @@ class DateListRepository:
 
     def get_by_user(self, user: User) -> QuerySet[DateList]:
         """Получить все date_lists пользователя."""
-        return DateList.objects.for_user(user)  # type: ignore[attr-defined]
+        return DateList.objects.for_user(user)
 
     def get_by_user_ordered(self, user: User) -> QuerySet[DateList]:
         """Получить все date_lists пользователя, отсортированные по дате."""
-        return DateList.objects.for_user(user).order_by('date')  # type: ignore[attr-defined]
+        return DateList.objects.for_user(user).order_by('date')
 
     def get_by_date(self, target_date: date) -> QuerySet[DateList]:
         """Получить date_lists по дате."""
-        return DateList.objects.for_date(target_date)  # type: ignore[attr-defined]
+        return DateList.objects.for_date(target_date)
 
     def get_by_user_and_date(
         self,
@@ -33,11 +33,11 @@ class DateListRepository:
         target_date: date,
     ) -> QuerySet[DateList]:
         """Получить date_lists пользователя по дате."""
-        return DateList.objects.for_user(user).for_date(target_date)  # type: ignore[attr-defined]
+        return DateList.objects.for_user(user).for_date(target_date)
 
     def get_latest_by_user(self, user: User) -> DateList | None:
         """Получить последний date_list пользователя."""
-        return DateList.objects.for_user(user).order_by('-date').first()  # type: ignore[attr-defined]
+        return DateList.objects.for_user(user).order_by('-date').first()
 
     def create_date_list(self, **kwargs: object) -> DateList:
         """Создать новый date_list."""
