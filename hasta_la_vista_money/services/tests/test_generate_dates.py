@@ -1,7 +1,6 @@
-from datetime import date, datetime
-from typing import ClassVar
+from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING, ClassVar
 
-from django.db.models import QuerySet
 from django.test import TestCase
 from django.utils import timezone
 
@@ -14,9 +13,12 @@ from hasta_la_vista_money.services.generate_dates import (
 )
 from hasta_la_vista_money.users.models import User
 
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
 
 class DateListGeneratorTest(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'expense_cat.yaml',
         'income_cat.yaml',
@@ -32,7 +34,9 @@ class DateListGeneratorTest(TestCase):
 
     def test_actual_date_from_datetime(self) -> None:
         generator = DateListGenerator(user=self.user, type_=None)
-        test_datetime = datetime(2025, 1, 15, 12, 0, 0)
+        test_datetime = timezone.make_aware(
+            datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
+        )
         actual = generator._actual_date(test_datetime)
         self.assertEqual(actual, date(2025, 1, 15))
 
@@ -45,13 +49,15 @@ class DateListGeneratorTest(TestCase):
     def test_actual_date_from_queryset(self) -> None:
         generator = DateListGenerator(user=self.user, type_=None)
         DateList.objects.create(user=self.user, date=date(2025, 1, 15))
-        queryset: QuerySet[DateList] = DateList.objects.filter(user=self.user)
+        queryset: 'QuerySet[DateList]' = DateList.objects.filter(user=self.user)
         actual = generator._actual_date(queryset)
         self.assertEqual(actual, date(2025, 1, 15))
 
     def test_actual_date_from_empty_queryset(self) -> None:
         generator = DateListGenerator(user=self.user, type_=None)
-        queryset: QuerySet[DateList] = DateList.objects.filter(user=self.user, date__year=3000)
+        queryset: QuerySet[DateList] = DateList.objects.filter(
+            user=self.user, date__year=3000
+        )
         with self.assertRaises(ValueError):
             generator._actual_date(queryset)
 
@@ -133,7 +139,9 @@ class DateListGeneratorTest(TestCase):
 
     def test_run_with_datetime(self) -> None:
         generator = DateListGenerator(user=self.user, type_=None)
-        test_datetime = datetime(2025, 1, 15, 12, 0, 0)
+        test_datetime = timezone.make_aware(
+            datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
+        )
         generator.run(test_datetime)
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)
@@ -141,14 +149,14 @@ class DateListGeneratorTest(TestCase):
     def test_run_with_queryset(self) -> None:
         generator = DateListGenerator(user=self.user, type_=None)
         DateList.objects.create(user=self.user, date=date(2025, 1, 1))
-        queryset: QuerySet[DateList] = DateList.objects.filter(user=self.user)
+        queryset: 'QuerySet[DateList]' = DateList.objects.filter(user=self.user)
         generator.run(queryset)
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)
 
 
 class GenerateDateListTest(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
     ]
 
@@ -156,20 +164,24 @@ class GenerateDateListTest(TestCase):
         self.user = User.objects.get(pk=1)
 
     def test_generate_date_list_with_datetime(self) -> None:
-        test_datetime = datetime(2025, 1, 15, 12, 0, 0)
+        test_datetime = timezone.make_aware(
+            datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
+        )
         generate_date_list(test_datetime, self.user, None)
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)
 
     def test_generate_date_list_with_queryset(self) -> None:
         DateList.objects.create(user=self.user, date=date(2025, 1, 1))
-        queryset: QuerySet[DateList] = DateList.objects.filter(user=self.user)
+        queryset: 'QuerySet[DateList]' = DateList.objects.filter(user=self.user)
         generate_date_list(queryset, self.user, 'expense')
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)
 
     def test_generate_date_list_with_type(self) -> None:
-        test_datetime = datetime(2025, 1, 15, 12, 0, 0)
+        test_datetime = timezone.make_aware(
+            datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
+        )
         generate_date_list(test_datetime, self.user, 'income')
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)

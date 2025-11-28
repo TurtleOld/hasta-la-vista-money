@@ -1,19 +1,20 @@
+from datetime import date
+from decimal import Decimal
 from typing import ClassVar
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory, TestCase
-from django.urls import reverse
 
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+from hasta_la_vista_money.expense.models import ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.income.models import Income, IncomeCategory
-from hasta_la_vista_money.reports.views import ReportView, ReportsAnalyticMixin
+from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.reports.views import ReportsAnalyticMixin, ReportView
 from hasta_la_vista_money.users.models import User
 
 
 class ReportViewTest(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
@@ -110,7 +111,6 @@ class ReportViewTest(TestCase):
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
-            from datetime import date
             months = [date(2025, 1, 1)]
             result = view._get_expense_data(self.user, [category], months)
             self.assertIsInstance(result, dict)
@@ -127,7 +127,6 @@ class ReportViewTest(TestCase):
         view = ReportView()
         category = IncomeCategory.objects.filter(user=self.user).first()
         if category:
-            from datetime import date
             months = [date(2025, 1, 1)]
             result = view._get_income_data(self.user, [category], months)
             self.assertIsInstance(result, dict)
@@ -144,10 +143,10 @@ class ReportViewTest(TestCase):
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
-            from datetime import date
-            from decimal import Decimal
             months = [date(2025, 1, 1)]
-            fact_map = {category.pk: {months[0]: Decimal('100.00')}}
+            fact_map: dict[int, dict[date, Decimal | int]] = {
+                category.pk: {months[0]: Decimal('100.00')}
+            }
             totals = view._calculate_totals([category], months, fact_map)
             self.assertIsInstance(totals, list)
             self.assertEqual(len(totals), 1)
@@ -156,11 +155,13 @@ class ReportViewTest(TestCase):
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
-            from datetime import date
-            from decimal import Decimal
             months = [date(2025, 1, 1)]
-            fact_map = {category.pk: {months[0]: Decimal('100.00')}}
-            totals = view._calculate_category_totals([category], months, fact_map)
+            fact_map: dict[int, dict[date, Decimal | int]] = {
+                category.pk: {months[0]: Decimal('100.00')}
+            }
+            totals = view._calculate_category_totals(
+                [category], months, fact_map
+            )
             self.assertIsInstance(totals, dict)
             self.assertIn(category.pk, totals)
 
@@ -168,11 +169,13 @@ class ReportViewTest(TestCase):
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
-            from datetime import date
-            from decimal import Decimal
             months = [date(2025, 1, 1)]
-            fact_map = {category.pk: {months[0]: Decimal('100.00')}}
-            labels, values = view._calculate_pie_data([category], months, fact_map)
+            fact_map: dict[int, dict[date, Decimal | int]] = {
+                category.pk: {months[0]: Decimal('100.00')}
+            }
+            labels, values = view._calculate_pie_data(
+                [category], months, fact_map
+            )
             self.assertIsInstance(labels, list)
             self.assertIsInstance(values, list)
 
@@ -205,4 +208,3 @@ class ReportsAnalyticMixinTest(TestCase):
         context = mixin.get_context_report()
         self.assertIsInstance(context, dict)
         self.assertEqual(len(context), 0)
-

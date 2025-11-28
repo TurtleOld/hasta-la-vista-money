@@ -4,9 +4,7 @@ from typing import ClassVar
 from django.test import TestCase
 
 from hasta_la_vista_money.budget.models import DateList
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.reports.services.aggregation import (
     budget_charts,
     collect_datasets,
@@ -57,7 +55,7 @@ class AggregationPureFunctionsTests(TestCase):
 
 
 class CollectDatasetsTest(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
@@ -75,7 +73,7 @@ class CollectDatasetsTest(TestCase):
 
 
 class PieExpenseCategoryTest(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
@@ -91,7 +89,7 @@ class PieExpenseCategoryTest(TestCase):
 
 
 class BudgetChartsTest(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
         'expense_cat.yaml',
