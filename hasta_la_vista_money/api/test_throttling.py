@@ -38,6 +38,9 @@ class LoginRateThrottleTestCase(TestCase):
         cache_key = throttle.get_cache_key(request, None)  # type: ignore[arg-type]
 
         self.assertIsNotNone(cache_key)
+        if cache_key is None:
+            msg = 'cache_key should not be None'
+            raise ValueError(msg)
         self.assertIn('login', cache_key)
         self.assertIn(str(self.user.pk), cache_key)
 
@@ -55,6 +58,9 @@ class LoginRateThrottleTestCase(TestCase):
             cache_key = throttle.get_cache_key(request, None)  # type: ignore[arg-type]
 
             self.assertIsNotNone(cache_key)
+            if cache_key is None:
+                msg = 'cache_key should not be None'
+                raise ValueError(msg)
             self.assertIn('login', cache_key)
             self.assertIn('anonymous_ident', cache_key)
 
@@ -77,6 +83,9 @@ class LoginRateThrottleTestCase(TestCase):
         self.assertFalse(allowed3)
         wait_time = throttle.wait()
         self.assertIsNotNone(wait_time)
+        if wait_time is None:
+            msg = 'wait_time should not be None'
+            raise ValueError(msg)
         self.assertGreater(wait_time, 0)
 
         throttle.cache.delete(cache_key)
@@ -124,6 +133,9 @@ class AnonLoginRateThrottleTestCase(TestCase):
             cache_key = throttle.get_cache_key(request, None)  # type: ignore[arg-type]
 
             self.assertIsNotNone(cache_key)
+            if cache_key is None:
+                msg = 'cache_key should not be None'
+                raise ValueError(msg)
             self.assertIn('anon', cache_key)
             self.assertIn('anonymous_ident', cache_key)
 
@@ -141,6 +153,9 @@ class AnonLoginRateThrottleTestCase(TestCase):
             cache_key = throttle.get_cache_key(request, None)  # type: ignore[arg-type]
 
             self.assertIsNotNone(cache_key)
+            if cache_key is None:
+                msg = 'cache_key should not be None'
+                raise ValueError(msg)
             self.assertIn('anon', cache_key)
             self.assertIn('unauthenticated_ident', cache_key)
 
@@ -168,6 +183,9 @@ class AnonLoginRateThrottleTestCase(TestCase):
             self.assertFalse(allowed3)
             wait_time = throttle.wait()
             self.assertIsNotNone(wait_time)
+            if wait_time is None:
+                msg = 'wait_time should not be None'
+                raise ValueError(msg)
             self.assertGreater(wait_time, 0)
 
             throttle.cache.delete(cache_key)

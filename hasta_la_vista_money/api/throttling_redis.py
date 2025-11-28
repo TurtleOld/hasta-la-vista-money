@@ -66,12 +66,12 @@ class RedisLoginRateThrottle(SimpleRateThrottle):
         if request.user.is_authenticated:
             user_pk = request.user.pk
             if user_pk is None:
-                return None
+                return None  # type: ignore[unreachable]
             ident: int | str = user_pk
         else:
             ident_value = self.get_ident(request)  # type: ignore[arg-type]
             if ident_value is None:
-                return None
+                return None  # type: ignore[unreachable]
             ident = ident_value
 
         return self.cache_format % {
