@@ -175,7 +175,7 @@ def generate_date_list_view(
     if request.method == 'POST':
         user = request.user
         queryset_user = get_object_or_404(User, username=user)
-        last_date_obj = queryset_user.budget_date_lists.last()  # type: ignore[attr-defined]
+        last_date_obj = queryset_user.budget_date_lists.last()
         if last_date_obj:
             queryset_last_date = timezone.make_aware(
                 datetime.combine(last_date_obj.date, datetime.min.time()),

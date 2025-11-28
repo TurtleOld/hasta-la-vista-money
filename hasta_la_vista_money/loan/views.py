@@ -37,14 +37,14 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
         loan_form = LoanForm()
         payment_make_loan_form = PaymentMakeLoanForm(user=user)
         loan = (
-            user.loan_users.select_related('account')  # type: ignore[attr-defined]
+            user.loan_users.select_related('account')
             .prefetch_related('payment_schedule_loans')
             .all()
         )
-        result_calculate = user.payment_schedule_users.select_related(  # type: ignore[attr-defined]
+        result_calculate = user.payment_schedule_users.select_related(
             'loan',
         ).all()
-        payment_make_loan = user.payment_make_loan_users.select_related(  # type: ignore[attr-defined]
+        payment_make_loan = user.payment_make_loan_users.select_related(
             'account',
             'loan',
         ).all()

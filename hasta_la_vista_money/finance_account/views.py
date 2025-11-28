@@ -65,7 +65,10 @@ class AccountBaseView(BaseView):
         if request_obj is None:
             raise AttributeError('request attribute is required')
         request = cast('WSGIRequestWithContainer', request_obj)
-        return Account.objects.by_user(request.user)  # type: ignore[attr-defined]
+        if not isinstance(request.user, User):
+            msg = 'User must be authenticated'
+            raise TypeError(msg)
+        return Account.objects.by_user(request.user)
 
 
 class AccountView(

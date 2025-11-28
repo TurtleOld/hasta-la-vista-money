@@ -87,7 +87,7 @@ class ExpenseView(BaseEntityFilterView, ExpenseBaseView):
     expense_service: ExpenseServiceProtocol
 
     @property
-    def template_name(self) -> str:  # type: ignore[misc]
+    def template_name(self) -> str:  # type: ignore[override]
         return constants.EXPENSE_TEMPLATE
 
     def get_context_data(
@@ -482,7 +482,7 @@ class ExpenseCategoryDeleteView(
     LoginRequiredMixin,
     DeleteView[ExpenseCategory, Any],
 ):
-    request: RequestWithContainer  # type: ignore[assignment]
+    request: RequestWithContainer
     """View for deleting an expense category."""
 
     model = ExpenseCategory

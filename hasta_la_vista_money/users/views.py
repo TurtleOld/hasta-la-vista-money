@@ -93,7 +93,7 @@ class Transaction(TypedDict):
 
 
 class AuthRequest(RequestWithContainer):
-    user: User  # type: ignore[misc]
+    user: User
 
 
 class IndexView(TemplateView):
@@ -115,7 +115,7 @@ class ListUsers(
     template_name = 'users/profile.html'
     context_object_name = 'users'
     no_permission_url = reverse_lazy('login')
-    request: AuthRequest  # type: ignore[misc]
+    request: AuthRequest
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
@@ -299,7 +299,7 @@ class UpdateUserView(
     template_name = 'users/profile.html'
     form_class = UpdateUserForm
     success_message = constants.SUCCESS_MESSAGE_CHANGED_PROFILE
-    request: AuthRequest  # type: ignore[misc]
+    request: AuthRequest
 
     def get_form(self, form_class: Any = None) -> UpdateUserForm:
         form = super().get_form(form_class)
@@ -387,7 +387,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
     """Представление для детальной статистики пользователя"""
 
     template_name = 'users/statistics.html'
-    request: RequestWithContainer  # type: ignore[misc]
+    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)

@@ -59,8 +59,8 @@ class BaseView:
 
 class ReceiptView(BaseEntityFilterView, BaseView):
     model = Receipt
-    filterset_class: type[ReceiptFilter] = ReceiptFilter  # type: ignore[misc]
-    template_name: str = 'receipts/receipts.html'  # type: ignore[misc]
+    filterset_class: type[ReceiptFilter] = ReceiptFilter
+    template_name: str = 'receipts/receipts.html'
 
     def get_queryset(self) -> QuerySet[Receipt]:
         request = cast('RequestWithContainer', self.request)
@@ -204,7 +204,7 @@ class SellerCreateView(
     BaseView,
 ):
     model = Seller
-    form_class: type[SellerForm] = SellerForm  # type: ignore[misc]
+    form_class: type[SellerForm] = SellerForm
 
     def post(
         self,
@@ -261,11 +261,11 @@ class ReceiptCreateView(
             'ModelChoiceField[Account]',
             form.fields['account'],
         )
-        account_field.queryset = Account.objects.by_user_with_related(  # type: ignore[attr-defined]
+        account_field.queryset = Account.objects.by_user_with_related(
             current_user,
         )
         seller_field = cast('ModelChoiceField[Seller]', form.fields['seller'])
-        seller_field.queryset = Seller.objects.for_user(current_user)  # type: ignore[attr-defined]
+        seller_field.queryset = Seller.objects.for_user(current_user)
         return form
 
     @staticmethod
@@ -369,9 +369,9 @@ class ReceiptUpdateView(
     BaseView,
 ):
     model = Receipt
-    form_class: type[ReceiptForm] = ReceiptForm  # type: ignore[misc]
-    template_name: str = 'receipts/receipt_update.html'  # type: ignore[misc]
-    success_message: str = str(constants.SUCCESS_MESSAGE_UPDATE_RECEIPT)  # type: ignore[misc]
+    form_class: type[ReceiptForm] = ReceiptForm
+    template_name: str = 'receipts/receipt_update.html'
+    success_message: str = str(constants.SUCCESS_MESSAGE_UPDATE_RECEIPT)
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         try:
@@ -683,8 +683,8 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
 
 
 class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
-    template_name = 'receipts/upload_image.html'  # type: ignore[misc]
-    form_class: type[UploadImageForm] = UploadImageForm  # type: ignore[misc]
+    template_name = 'receipts/upload_image.html'
+    form_class: type[UploadImageForm] = UploadImageForm
     success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))  # type: ignore[misc]
 
     def get_form_kwargs(self) -> dict[str, Any]:
