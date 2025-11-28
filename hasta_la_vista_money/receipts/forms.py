@@ -226,9 +226,11 @@ _ProductFormSet = formset_factory(
 )
 
 if TYPE_CHECKING:
-    ProductFormSet: type[BaseFormSetType[ProductForm]]
+    ProductFormSetType = type[BaseFormSetType[ProductForm]]
 else:
-    ProductFormSet = _ProductFormSet
+    ProductFormSetType = type(_ProductFormSet)
+
+ProductFormSet = _ProductFormSet
 
 
 class ReceiptForm(ModelForm[Receipt]):
@@ -296,7 +298,7 @@ class ReceiptForm(ModelForm[Receipt]):
             'total_sum',
         ]
 
-    products = ProductFormSet()
+    products: Any = _ProductFormSet()
 
 
 def validate_image_jpg_png(value: UploadedFile) -> None:

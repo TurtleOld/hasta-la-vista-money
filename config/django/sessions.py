@@ -12,6 +12,6 @@ SESSION_COOKIE_HTTPONLY = config(
 )
 SESSION_COOKIE_NAME = config('SESSION_COOKIE_NAME', default='sessionid')
 SESSION_COOKIE_SAMESITE = config('SESSION_COOKIE_SAMESITE', default='Lax')
-SESSION_COOKIE_SECURE = config(
-    'SESSION_COOKIE_SECURE', default='true'
+SESSION_COOKIE_SECURE = str(
+    config('SESSION_COOKIE_SECURE', default='true')
 ).lower() in {'true', '1', 't'}

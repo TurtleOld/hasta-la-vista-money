@@ -8,7 +8,7 @@ Includes comprehensive validation, user-specific account filtering, and proper
 error handling for financial operations.
 """
 
-from typing import Any
+from typing import Any, cast
 
 from django.core.exceptions import ValidationError
 from django.forms import (
@@ -295,13 +295,16 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
 
         cleaned_data = self.cleaned_data
 
-        return self.transfer_service.transfer_money(
-            from_account=cleaned_data['from_account'],
-            to_account=cleaned_data['to_account'],
-            amount=cleaned_data['amount'],
-            user=cleaned_data['from_account'].user,
-            exchange_date=cleaned_data.get('exchange_date'),
-            notes=cleaned_data.get('notes'),
+        return cast(
+            'TransferMoneyLog',
+            self.transfer_service.transfer_money(
+                from_account=cleaned_data['from_account'],
+                to_account=cleaned_data['to_account'],
+                amount=cleaned_data['amount'],
+                user=cleaned_data['from_account'].user,
+                exchange_date=cleaned_data.get('exchange_date'),
+                notes=cleaned_data.get('notes'),
+            ),
         )
 
     class Meta:

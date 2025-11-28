@@ -20,7 +20,6 @@ class UserLoginForm(AuthenticationForm):
     """Form for user authentication using username or email."""
 
     username: CharField
-    password: CharField
 
     username = CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,

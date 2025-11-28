@@ -225,9 +225,10 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
         response = self.client.get('/')
 
         if response.status_code == constants.REDIRECTS:
-            assert isinstance(response, HttpResponseRedirect)
+            self.assertIsInstance(response, HttpResponseRedirect)
+            redirect_response = cast('HttpResponseRedirect', response)
             self.assertNotEqual(
-                response.url,
+                redirect_response.url,
                 reverse('users:registration'),
                 msg='Не должно быть редиректа на регистрацию '
                 'при наличии суперпользователя',
@@ -263,8 +264,8 @@ class CheckAdminMiddlewareIntegrationTest(TestCase):
                     HttpResponseRedirect,
                     msg='Response should be HttpResponseRedirect',
                 )
-                assert isinstance(response, HttpResponseRedirect)
+                redirect_response = cast('HttpResponseRedirect', response)
                 self.assertEqual(
-                    response.url,
+                    redirect_response.url,
                     reverse('users:registration'),
                 )

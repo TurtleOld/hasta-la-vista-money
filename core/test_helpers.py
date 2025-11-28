@@ -10,13 +10,12 @@ from config.containers import ApplicationContainer
 from core.protocols.services import AccountServiceProtocol
 
 if TYPE_CHECKING:
-    from typing import Protocol
-
-    class RequestWithContainer(Protocol):
-        container: ApplicationContainer
+    from hasta_la_vista_money.core.types import RequestWithContainer
 
 
-def setup_container_for_request(request: HttpRequest) -> ApplicationContainer:
+def setup_container_for_request(
+    request: HttpRequest,
+) -> ApplicationContainer:
     """Устанавливает контейнер DI на request для тестов.
 
     Args:
@@ -25,12 +24,12 @@ def setup_container_for_request(request: HttpRequest) -> ApplicationContainer:
     Returns:
         ApplicationContainer: Созданный или существующий контейнер.
     """
-    if not hasattr(request, 'container'):
+    request_with_container = cast('RequestWithContainer', request)
+    if not hasattr(request_with_container, 'container'):
         container = ApplicationContainer()
-        request.container = container
+        request_with_container.container = container
         return container
-    result = request.container
-    return cast('ApplicationContainer', result)
+    return request_with_container.container
 
 
 def create_test_container_with_mock_account_service(

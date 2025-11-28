@@ -135,7 +135,9 @@ class TestAccountCreateView(TestCase):
 
         account = Account.objects.filter(user=self.user).first()
         self.assertIsNotNone(account)
-        assert account is not None
+        if account is None:
+            msg = 'account should not be None'
+            raise ValueError(msg)
         self.assertEqual(account.name_account, 'Test Account')
 
     def test_account_create_view_post_invalid(self) -> None:
@@ -341,7 +343,7 @@ class TestAjaxAccountsByGroupView(TestCase):
         request.user = self.user
         setup_container_for_request(request)
 
-        response = await view.get(request)
+        response = await view.get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     async def test_ajax_accounts_by_group_get_with_group_id(self) -> None:
@@ -351,7 +353,7 @@ class TestAjaxAccountsByGroupView(TestCase):
         request.user = self.user
         setup_container_for_request(request)
 
-        response = await view.get(request)
+        response = await view.get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     async def test_ajax_accounts_by_group_get_exception(self) -> None:
@@ -361,5 +363,5 @@ class TestAjaxAccountsByGroupView(TestCase):
         request.user = self.user
         setup_container_for_request(request)
 
-        response = await view.get(request)
+        response = await view.get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, 500)

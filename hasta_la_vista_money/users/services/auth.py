@@ -13,8 +13,8 @@ class LoginResult(TypedDict, total=False):
     """Результат попытки входа пользователя."""
 
     user: User
-    access: str | None
-    refresh: str | None
+    access: str
+    refresh: str
     success: bool
 
 
@@ -32,15 +32,15 @@ def login_user(
         password=password,
         backend='django.contrib.auth.backends.ModelBackend',
     )
-    if user is not None:
+    if user is not None and isinstance(user, User):
         login(request, user)
         try:
             tokens = RefreshToken.for_user(user)
             jwt_access_token = str(tokens.access_token)
             jwt_refresh_token = str(tokens)
         except (ValueError, TypeError, AttributeError):
-            jwt_access_token = None
-            jwt_refresh_token = None
+            jwt_access_token = ''
+            jwt_refresh_token = ''
 
         messages.success(request, success_message)
         return {

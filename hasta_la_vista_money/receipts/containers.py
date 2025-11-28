@@ -42,11 +42,8 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     receipt_import_service: providers.Factory[ReceiptImportServiceProtocol] = (
         providers.Factory(
             ReceiptImportService,
-            account_service=core.account_service,
-            account_repository=finance_account.account_repository,
             receipt_repository=receipt_repository,
-            product_repository=product_repository,
-            seller_repository=seller_repository,
+            receipt_creator_service=receipt_creator_service,
         )
     )
     receipt_updater_service: providers.Factory[

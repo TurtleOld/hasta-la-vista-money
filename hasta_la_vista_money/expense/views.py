@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.http import (
-    HttpRequest,
     HttpResponse,
     HttpResponseForbidden,
     HttpResponseRedirect,
@@ -16,11 +15,16 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView
 from django.views.generic.list import ListView
-from django_filters.views import FilterView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.types import RequestWithContainer
+from hasta_la_vista_money.core.views import (
+    BaseEntityCreateView,
+    BaseEntityFilterView,
+    BaseEntityUpdateView,
+)
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.expense.filters import ExpenseFilter
 from hasta_la_vista_money.expense.forms import AddCategoryForm, AddExpenseForm
@@ -74,20 +78,17 @@ class ExpenseCategoryBaseView(BaseView):
         return str(reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL))
 
 
-class ExpenseView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    FilterView,
-):
+class ExpenseView(BaseEntityFilterView, ExpenseBaseView):
     """Main expense list view with filtering and pagination."""
 
     model = Expense
-    template_name = constants.EXPENSE_TEMPLATE
-    paginate_by = constants.PAGINATE_BY_DEFAULT
     context_object_name = 'expense'
     filterset_class = ExpenseFilter
-    no_permission_url = reverse_lazy('login')
     expense_service: ExpenseServiceProtocol
+
+    @property
+    def template_name(self) -> str:  # type: ignore[override]
+        return constants.EXPENSE_TEMPLATE
 
     def get_context_data(
         self,
@@ -102,16 +103,15 @@ class ExpenseView(
         """
         context: dict[str, Any] = super().get_context_data(**kwargs)
         user = get_object_or_404(User, username=self.request.user)
+        request = cast('RequestWithContainer', self.request)
 
-        expense_service = self.request.container.expense.expense_service(
+        expense_service = request.container.expense.expense_service(
             user=user,
             request=self.request,
         )
-        receipt_service = (
-            self.request.container.expense.receipt_expense_service(
-                user=user,
-                request=self.request,
-            )
+        receipt_service = request.container.expense.receipt_expense_service(
+            user=user,
+            request=request,
         )
 
         expense_queryset = Expense.objects.select_related(
@@ -120,9 +120,9 @@ class ExpenseView(
             'account',
         )
         expense_filter: ExpenseFilter = ExpenseFilter(
-            self.request.GET,
+            request.GET,
             queryset=expense_queryset,
-            user=self.request.user,
+            user=request.user,
         )
         expenses = expense_filter.qs
 
@@ -156,7 +156,7 @@ class ExpenseView(
                 'flattened_categories': flattened_categories,
                 'total_amount_page': total_amount_page,
                 'total_amount_period': total_amount_period,
-                'request': self.request,
+                'request': request,
             },
         )
 
@@ -175,7 +175,7 @@ class ExpenseCopyView(
 
     def post(
         self,
-        request: HttpRequest,
+        request: RequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
@@ -196,7 +196,11 @@ class ExpenseCopyView(
             new_expense = expense_service.copy_expense(int(expense_id))
             messages.success(request, _('Расход успешно скопирован.'))
             return redirect(
-                reverse_lazy('expense:change', kwargs={'pk': new_expense.pk}),
+                str(
+                    reverse_lazy(
+                        'expense:change', kwargs={'pk': new_expense.pk}
+                    )
+                ),
             )
         except (ValueError, TypeError) as e:
             messages.error(
@@ -208,18 +212,13 @@ class ExpenseCopyView(
             return redirect(constants.EXPENSE_LIST_URL)
 
 
-class ExpenseCreateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    CreateView[Expense, AddExpenseForm],
-):
+class ExpenseCreateView(BaseEntityCreateView[Expense, AddExpenseForm]):
     """View for creating a new expense."""
 
     model = Expense
     template_name = 'expense/add_expense.html'
     form_class = AddExpenseForm
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
-    no_permission_url = reverse_lazy('login')
 
     def get_form_kwargs(
         self,
@@ -229,9 +228,10 @@ class ExpenseCreateView(
         if not isinstance(self.request.user, User):
             error_msg = 'User must be authenticated'
             raise TypeError(error_msg)
-        expense_service = self.request.container.expense.expense_service(
-            user=self.request.user,
-            request=self.request,
+        request = cast('RequestWithContainer', self.request)
+        expense_service = request.container.expense.expense_service(
+            user=request.user,
+            request=request,
         )
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
@@ -251,9 +251,10 @@ class ExpenseCreateView(
         if not isinstance(self.request.user, User):
             error_msg = 'User must be authenticated'
             raise TypeError(error_msg)
-        expense_service = self.request.container.expense.expense_service(
-            user=self.request.user,
-            request=self.request,
+        request = cast('RequestWithContainer', self.request)
+        expense_service = request.container.expense.expense_service(
+            user=request.user,
+            request=request,
         )
 
         try:
@@ -275,18 +276,13 @@ class ExpenseCreateView(
         )
 
 
-class ExpenseUpdateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    UpdateView[Expense, AddExpenseForm],
-):
+class ExpenseUpdateView(BaseEntityUpdateView[Expense, AddExpenseForm]):
     """View for updating an existing expense."""
 
     model = Expense
     template_name = 'expense/change_expense.html'
     form_class = AddExpenseForm
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
-    no_permission_url = reverse_lazy('login')
 
     def get_object(self, queryset: Any = None) -> Expense:
         """Get the expense object to update."""
@@ -303,9 +299,10 @@ class ExpenseUpdateView(
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = self.request.container.expense.expense_service(
-            user=self.request.user,
-            request=self.request,
+        request = cast('RequestWithContainer', self.request)
+        expense_service = request.container.expense.expense_service(
+            user=request.user,
+            request=request,
         )
         kwargs.update(expense_service.get_form_querysets())
         return kwargs
@@ -323,9 +320,10 @@ class ExpenseUpdateView(
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = self.request.container.expense.expense_service(
-            user=self.request.user,
-            request=self.request,
+        request = cast('RequestWithContainer', self.request)
+        expense_service = request.container.expense.expense_service(
+            user=request.user,
+            request=request,
         )
 
         try:
@@ -362,9 +360,10 @@ class ExpenseDeleteView(
         """Handle valid form submission for deletion."""
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        expense_service = self.request.container.expense.expense_service(
-            user=self.request.user,
-            request=self.request,
+        request = cast('RequestWithContainer', self.request)
+        expense_service = request.container.expense.expense_service(
+            user=request.user,
+            request=request,
         )
 
         try:
@@ -391,12 +390,11 @@ class ExpenseCategoryView(LoginRequiredMixin, ListView[ExpenseCategory]):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Get context data for category list."""
-        user = get_object_or_404(User, username=self.request.user)
-        category_service = (
-            self.request.container.expense.expense_category_service(
-                user=user,
-                request=self.request,
-            )
+        request = cast('RequestWithContainer', self.request)
+        user = get_object_or_404(User, username=request.user)
+        category_service = request.container.expense.expense_category_service(
+            user=user,
+            request=request,
         )
 
         expense_categories = category_service.get_categories()
@@ -430,11 +428,10 @@ class ExpenseCategoryCreateView(
         kwargs = super().get_form_kwargs()
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        category_service = (
-            self.request.container.expense.expense_category_service(
-                user=self.request.user,
-                request=self.request,
-            )
+        request = cast('RequestWithContainer', self.request)
+        category_service = request.container.expense.expense_category_service(
+            user=request.user,
+            request=request,
         )
         kwargs['category_queryset'] = category_service.get_categories_queryset()
         return kwargs
@@ -446,11 +443,10 @@ class ExpenseCategoryCreateView(
         """Handle valid form submission."""
         if not isinstance(self.request.user, User):
             raise TypeError(constants.USER_MUST_BE_AUTHENTICATED)
-        category_service = (
-            self.request.container.expense.expense_category_service(
-                user=self.request.user,
-                request=self.request,
-            )
+        request = cast('RequestWithContainer', self.request)
+        category_service = request.container.expense.expense_category_service(
+            user=request.user,
+            request=request,
         )
 
         try:
@@ -486,6 +482,7 @@ class ExpenseCategoryDeleteView(
     LoginRequiredMixin,
     DeleteView[ExpenseCategory, Any],
 ):
+    request: RequestWithContainer
     """View for deleting an expense category."""
 
     model = ExpenseCategory
@@ -500,7 +497,7 @@ class ExpenseGroupAjaxView(LoginRequiredMixin, View):
 
     def get(
         self,
-        request: HttpRequest,
+        request: RequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
@@ -534,7 +531,7 @@ class ExpenseDataAjaxView(LoginRequiredMixin, View):
 
     def get(
         self,
-        request: HttpRequest,
+        request: RequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> JsonResponse:

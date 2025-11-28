@@ -36,6 +36,7 @@ class GetUserStatisticsServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
 
     def test_get_user_statistics(self) -> None:

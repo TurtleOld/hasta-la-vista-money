@@ -33,6 +33,7 @@ from hasta_la_vista_money.authentication.authentication import (
     clear_auth_cookies,
     set_auth_cookies,
 )
+from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.custom_mixin import CustomSuccessURLUserMixin
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import (
@@ -91,7 +92,7 @@ class Transaction(TypedDict):
     account: str
 
 
-class AuthRequest(HttpRequest):
+class AuthRequest(RequestWithContainer):
     user: User
 
 
@@ -193,9 +194,9 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
             self.request.headers.get('x-requested-with') == 'XMLHttpRequest'
         )
 
-        if result['success']:
-            self.jwt_access_token = result['access']
-            self.jwt_refresh_token = result['refresh']
+        if result.get('success'):
+            self.jwt_access_token = result.get('access', '')
+            self.jwt_refresh_token = result.get('refresh', '')
             if is_ajax:
                 response: HttpResponse = JsonResponse(
                     {
@@ -386,6 +387,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
     """Представление для детальной статистики пользователя"""
 
     template_name = 'users/statistics.html'
+    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
@@ -393,8 +395,9 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
         if isinstance(user, User):
             context.update(
                 get_user_detailed_statistics(
-                    user, container=self.request.container
-                ).items()
+                    user,
+                    container=self.request.container,
+                ).items(),
             )
         return context
 
@@ -505,7 +508,7 @@ class DeleteUserFromGroupView(
         )
 
 
-def groups_for_user_ajax(request: HttpRequest) -> JsonResponse:
+def groups_for_user_ajax(request: RequestWithContainer) -> JsonResponse:
     user_id = request.GET.get('user_id')
     groups = []
     if user_id:
@@ -517,7 +520,7 @@ def groups_for_user_ajax(request: HttpRequest) -> JsonResponse:
     return JsonResponse({'groups': groups})
 
 
-def groups_not_for_user_ajax(request: HttpRequest) -> JsonResponse:
+def groups_not_for_user_ajax(request: RequestWithContainer) -> JsonResponse:
     user_id = request.GET.get('user_id')
     groups = []
     if user_id:
@@ -723,7 +726,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
     def get(
         self,
-        request: HttpRequest,
+        request: RequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> JsonResponse:
