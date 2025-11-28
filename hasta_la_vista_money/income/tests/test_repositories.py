@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import ClassVar
 
@@ -75,7 +75,7 @@ class IncomeRepositoryTest(TestCase):
                 user=self.user,
                 account=self.account,
                 category=self.category,
-                date=timezone.make_aware(datetime(2025, 6, 15, tzinfo=UTC)),
+                date=timezone.make_aware(datetime(2025, 6, 15)),
                 amount=Decimal('1000.00'),
             )
             result = self.repository.get_by_period(
@@ -85,17 +85,13 @@ class IncomeRepositoryTest(TestCase):
 
     def test_filter_by_user_and_date_range(self) -> None:
         if self.category:
-            start_datetime = timezone.make_aware(
-                datetime(2025, 1, 1, tzinfo=UTC)
-            )
-            end_datetime = timezone.make_aware(
-                datetime(2025, 12, 31, tzinfo=UTC)
-            )
+            start_datetime = timezone.make_aware(datetime(2025, 1, 1))
+            end_datetime = timezone.make_aware(datetime(2025, 12, 31))
             Income.objects.create(
                 user=self.user,
                 account=self.account,
                 category=self.category,
-                date=timezone.make_aware(datetime(2025, 6, 15, tzinfo=UTC)),
+                date=timezone.make_aware(datetime(2025, 6, 15)),
                 amount=Decimal('1000.00'),
             )
             result = self.repository.filter_by_user_and_date_range(
@@ -199,12 +195,12 @@ class IncomeRepositoryTest(TestCase):
 
     def test_get_top_categories(self) -> None:
         if self.category:
-            year_start = timezone.make_aware(datetime(2025, 1, 1, tzinfo=UTC))
+            year_start = timezone.make_aware(datetime(2025, 1, 1))
             Income.objects.create(
                 user=self.user,
                 account=self.account,
                 category=self.category,
-                date=timezone.make_aware(datetime(2025, 6, 15, tzinfo=UTC)),
+                date=timezone.make_aware(datetime(2025, 6, 15)),
                 amount=Decimal('1000.00'),
             )
             result = self.repository.get_top_categories(
@@ -219,7 +215,7 @@ class IncomeRepositoryTest(TestCase):
                 user=self.user,
                 account=self.account,
                 category=self.category,
-                date=timezone.make_aware(datetime(2025, 6, 15, tzinfo=UTC)),
+                date=timezone.make_aware(datetime(2025, 6, 15)),
                 amount=Decimal('1000.00'),
             )
             result = self.repository.filter_by_user_category_and_month(

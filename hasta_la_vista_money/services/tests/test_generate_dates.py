@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, ClassVar
 
 from django.test import TestCase
@@ -34,9 +34,7 @@ class DateListGeneratorTest(TestCase):
 
     def test_actual_date_from_datetime(self) -> None:
         generator = DateListGenerator(user=self.user, type_=None)
-        test_datetime = timezone.make_aware(
-            datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
-        )
+        test_datetime = timezone.make_aware(datetime(2025, 1, 15, 12, 0, 0))
         actual = generator._actual_date(test_datetime)
         self.assertEqual(actual, date(2025, 1, 15))
 
@@ -139,9 +137,7 @@ class DateListGeneratorTest(TestCase):
 
     def test_run_with_datetime(self) -> None:
         generator = DateListGenerator(user=self.user, type_=None)
-        test_datetime = timezone.make_aware(
-            datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
-        )
+        test_datetime = timezone.make_aware(datetime(2025, 1, 15, 12, 0, 0))
         generator.run(test_datetime)
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)
@@ -164,9 +160,7 @@ class GenerateDateListTest(TestCase):
         self.user = User.objects.get(pk=1)
 
     def test_generate_date_list_with_datetime(self) -> None:
-        test_datetime = timezone.make_aware(
-            datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
-        )
+        test_datetime = timezone.make_aware(datetime(2025, 1, 15, 12, 0, 0))
         generate_date_list(test_datetime, self.user, None)
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)
@@ -179,9 +173,7 @@ class GenerateDateListTest(TestCase):
         self.assertGreater(count, 0)
 
     def test_generate_date_list_with_type(self) -> None:
-        test_datetime = timezone.make_aware(
-            datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
-        )
+        test_datetime = timezone.make_aware(datetime(2025, 1, 15, 12, 0, 0))
         generate_date_list(test_datetime, self.user, 'income')
         count = DateList.objects.filter(user=self.user).count()
         self.assertGreater(count, 0)
