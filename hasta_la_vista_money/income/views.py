@@ -19,14 +19,12 @@ from django.urls import reverse_lazy
 from django.utils import formats
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import DeleteView, UpdateView
+from django.views.generic import DeleteView
 from django.views.generic.edit import CreateView
 from django.views.generic.list import ListView
-from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
 from core.views import (
-    BaseEntityCreateView,
     BaseEntityFilterView,
     BaseEntityUpdateView,
 )
