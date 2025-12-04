@@ -97,7 +97,7 @@ class ReceiptCreatorService:
             return receipt_date
         if isinstance(receipt_date, str):
             try:
-                return datetime.fromisoformat(receipt_date.replace('Z', '+00:00'))
+                return datetime.fromisoformat(receipt_date)
             except (ValueError, AttributeError):
                 return datetime.now(UTC)
         return datetime.now(UTC)
@@ -121,7 +121,9 @@ class ReceiptCreatorService:
                         'retail_place_address',
                         'Нет данных',
                     ),
-                    'retail_place': seller_data.get('retail_place', 'Нет данных'),
+                    'retail_place': seller_data.get(
+                        'retail_place', 'Нет данных'
+                    ),
                 },
             )
         name_seller = data.get('name_seller', '')
@@ -147,7 +149,7 @@ class ReceiptCreatorService:
         """Create products from JSON data."""
         products_data = []
         items = data.get('items') or data.get('product', [])
-        
+
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -160,7 +162,7 @@ class ReceiptCreatorService:
                 'amount': decimal.Decimal(str(item.get('amount', 0))),
             }
             products_data.append(Product(**product_data))
-        
+
         return self.product_repository.bulk_create_products(products_data)
 
     @transaction.atomic
@@ -172,7 +174,7 @@ class ReceiptCreatorService:
         data: dict[str, Any],
     ) -> Receipt:
         """Create receipt from JSON data.
-        
+
         Args:
             user: User creating the receipt
             account: Account to charge
@@ -187,26 +189,26 @@ class ReceiptCreatorService:
                 - operation_type: int
                 - nds10: decimal value (optional)
                 - nds20: decimal value (optional)
-        
+
         Returns:
             Created Receipt instance
         """
         account_balance = self.account_repository.get_by_id(account.pk)
-        
+
         if account_balance.user != user:
             raise ValueError('Account does not belong to user')
-        
+
         total_sum_value = data.get('total_sum')
         if total_sum_value is None:
             raise ValueError('total_sum is required')
-        
+
         total_sum = decimal.Decimal(str(total_sum_value))
         self.account_service.apply_receipt_spend(account_balance, total_sum)
-        
+
         seller = self._create_or_get_seller(data, user)
-        
+
         receipt_date = self._parse_receipt_date(data.get('receipt_date'))
-        
+
         receipt = self.receipt_repository.create_receipt(
             user=user,
             account=account,
@@ -223,9 +225,9 @@ class ReceiptCreatorService:
             else None,
             manual=False,
         )
-        
+
         products = self._create_products_from_json(data, user)
         if products:
             receipt.product.set(products)
-        
+
         return receipt

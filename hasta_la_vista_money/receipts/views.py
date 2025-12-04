@@ -1,4 +1,3 @@
-import decimal
 import json
 import re
 from datetime import datetime
@@ -26,8 +25,6 @@ from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
-from django.views.generic.edit import UpdateView
-from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
 from core.views import (
@@ -44,7 +41,7 @@ from hasta_la_vista_money.receipts.forms import (
     SellerForm,
     UploadImageForm,
 )
-from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.models import Receipt, Seller
 from hasta_la_vista_money.receipts.services import (
     analyze_image_with_ai,
     paginator_custom_view,
@@ -777,7 +774,7 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         receipt_creator_service = (
             self.request.container.receipts.receipt_creator_service()
         )
-        receipt = receipt_creator_service.create_receipt_from_json(
+        receipt_creator_service.create_receipt_from_json(
             user=user,
             account=account,
             data=decode_json_receipt,
