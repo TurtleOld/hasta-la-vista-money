@@ -15,6 +15,7 @@ from hasta_la_vista_money.custom_mixin import (
     CategoryChoicesMixin,
     FormQuerysetsMixin,
 )
+from hasta_la_vista_money.finance_account.base_forms import FormValidationMixin
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
@@ -22,6 +23,7 @@ from hasta_la_vista_money.income.models import Income, IncomeCategory
 class IncomeForm(
     CategoryChoicesConfigurerMixin,
     FormQuerysetsMixin,
+    FormValidationMixin,
     ModelForm[Income],
 ):
     """Модельная форма отображения доходов на сайте."""

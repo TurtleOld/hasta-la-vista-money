@@ -25,6 +25,11 @@ from django.views.generic.list import ListView
 from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
+from core.views import (
+    BaseEntityCreateView,
+    BaseEntityFilterView,
+    BaseEntityUpdateView,
+)
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.models import Account
@@ -77,22 +82,15 @@ class IncomeCategoryBaseView(BaseView):
     model = IncomeCategory
 
 
-class IncomeView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[IncomeForm],
-    FilterView,
-    BaseView,
-):
+class IncomeView(BaseEntityFilterView, BaseView):
     """
     View for displaying user's incomes with filtering and chart data.
     """
 
-    paginate_by = constants.PAGINATE_BY_DEFAULT
     model = Income
     filterset_class = IncomeFilter
     template_name = 'income/income.html'
     context_object_name = 'incomes'
-    no_permission_url = reverse_lazy('login')
 
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """
@@ -295,10 +293,8 @@ class IncomeCopyView(
 
 
 class IncomeUpdateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[IncomeForm],
+    BaseEntityUpdateView[Income, IncomeForm],
     IncomeFormQuerysetMixin,
-    UpdateView[Income, IncomeForm],
     BaseView,
 ):
     """
@@ -308,7 +304,6 @@ class IncomeUpdateView(
     model = Income
     template_name = 'income/change_income.html'
     form_class = IncomeForm
-    no_permission_url = reverse_lazy('login')
     success_url = reverse_lazy(INCOME_LIST_URL_NAME)
     depth_limit = 3
 
