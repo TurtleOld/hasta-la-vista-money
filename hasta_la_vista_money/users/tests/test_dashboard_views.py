@@ -144,8 +144,10 @@ class DashboardDataViewTest(TestCase):
         request.user = self.user
         setup_container_for_request(request)
         logger = logging.getLogger('hasta_la_vista_money.users.views')
-        with patch('hasta_la_vista_money.users.views.cache.delete'), \
-             patch.object(logger, 'exception'):
+        with (
+            patch('hasta_la_vista_money.users.views.cache.delete'),
+            patch.object(logger, 'exception'),
+        ):
             response = DashboardDataView().get(request)
         self.assertEqual(response.status_code, 500)
         payload = json.loads(response.content.decode())
