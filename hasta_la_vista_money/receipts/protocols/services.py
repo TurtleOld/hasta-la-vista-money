@@ -23,7 +23,7 @@ class ReceiptCreatorServiceProtocol(Protocol):
         product_formset: BaseFormSet[Any],
         seller: Seller,
     ) -> Receipt | None: ...
-    
+
     def create_receipt_from_json(
         self,
         *,
