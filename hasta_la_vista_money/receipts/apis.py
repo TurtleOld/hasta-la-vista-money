@@ -296,70 +296,14 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         user: User,
         account: Account,
     ) -> Receipt:
-        seller_data: dict[str, Any] = request_data.get('seller') or {}
-        seller_data['user'] = user
-
-        total_sum_value = request_data.get('total_sum')
-        if total_sum_value is None:
-            raise ValueError('total_sum is required')
-        account.balance -= decimal.Decimal(str(total_sum_value))
-        account.save()
-
-        seller = Seller.objects.create(**seller_data)
-
-        receipt_date = request_data.get('receipt_date')
-        if isinstance(receipt_date, str):
-            receipt_date = datetime.fromisoformat(receipt_date)
-        elif receipt_date is None:
-            receipt_date = datetime.now(UTC)
-
-        receipt = Receipt.objects.create(
+        receipt_creator_service = (
+            self.request.container.receipts.receipt_creator_service()
+        )
+        return receipt_creator_service.create_receipt_from_json(
             user=user,
             account=account,
-            receipt_date=receipt_date,
-            seller=seller,
-            total_sum=decimal.Decimal(str(total_sum_value)),
-            number_receipt=request_data.get('number_receipt'),
-            operation_type=request_data.get('operation_type'),
-            nds10=decimal.Decimal(str(request_data.get('nds10')))
-            if request_data.get('nds10')
-            else None,
-            nds20=decimal.Decimal(str(request_data.get('nds20')))
-            if request_data.get('nds20')
-            else None,
+            data=request_data,
         )
-
-        products = request_data.get('product')
-        if products:
-            self._create_products(products, user, receipt)
-        return receipt
-
-    def _create_products(
-        self,
-        products_data: list[dict[str, Any]],
-        user: User,
-        receipt: Receipt,
-    ) -> None:
-        products_objects = []
-        for product_data in products_data:
-            product_data_copy = product_data.copy()
-            product_data_copy.pop('receipt', None)
-            product_data_copy['user'] = user
-
-            self._process_product_data(product_data_copy)
-            products_objects.append(Product(**product_data_copy))
-
-        products = Product.objects.bulk_create(products_objects)
-        receipt.product.set(products)
-
-    def _process_product_data(self, product_data: dict[str, Any]) -> None:
-        decimal_fields = ['price', 'quantity', 'amount']
-        for field in decimal_fields:
-            if field in product_data:
-                product_data[field] = decimal.Decimal(str(product_data[field]))
-
-        if 'category' in product_data and product_data['category'] is None:
-            product_data['category'] = ''
 
 
 @extend_schema(

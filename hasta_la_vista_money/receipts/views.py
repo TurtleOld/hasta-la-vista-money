@@ -30,6 +30,11 @@ from django.views.generic.edit import UpdateView
 from django_filters.views import FilterView
 from django_stubs_ext import StrOrPromise
 
+from core.views import (
+    BaseEntityCreateView,
+    BaseEntityFilterView,
+    BaseEntityUpdateView,
+)
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
@@ -59,17 +64,10 @@ class BaseView:
         return reverse_lazy('receipts:list')
 
 
-class ReceiptView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[ReceiptForm],
-    FilterView,
-    BaseView,
-):
-    paginate_by: int = constants.PAGINATE_BY_DEFAULT
+class ReceiptView(BaseEntityFilterView, BaseView):
     model = Receipt
     filterset_class: type[ReceiptFilter] = ReceiptFilter
     template_name: str = 'receipts/receipts.html'
-    no_permission_url: ClassVar[str] = cast('str', reverse_lazy('login'))
     request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Receipt]:
@@ -234,9 +232,7 @@ class SellerCreateView(
 
 
 class ReceiptCreateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[ReceiptForm],
-    CreateView[Receipt, ReceiptForm],
+    BaseEntityCreateView[Receipt, ReceiptForm],
     BaseView,
 ):
     model = Receipt
@@ -366,9 +362,7 @@ class ReceiptCreateView(
 
 
 class ReceiptUpdateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[ReceiptForm],
-    UpdateView[Receipt, ReceiptForm],
+    BaseEntityUpdateView[Receipt, ReceiptForm],
     BaseView,
 ):
     model = Receipt
@@ -780,21 +774,13 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
             )
             return super().form_invalid(self.get_form())
 
-        seller = self._create_or_update_seller(decode_json_receipt, user)
-        products = self._create_products(decode_json_receipt, user)
-        receipt = self._create_receipt(
-            decode_json_receipt,
-            user,
-            account,
-            seller,
+        receipt_creator_service = (
+            self.request.container.receipts.receipt_creator_service()
         )
-
-        if products:
-            receipt.product.set(products)
-
-        self._update_account_balance(
-            account,
-            decode_json_receipt['total_sum'],
+        receipt = receipt_creator_service.create_receipt_from_json(
+            user=user,
+            account=account,
+            data=decode_json_receipt,
         )
 
         messages.success(
@@ -802,85 +788,6 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
             'Чек успешно загружен и обработан!',
         )
         return super().form_valid(self.get_form())
-
-    def _create_or_update_seller(
-        self,
-        decode_json_receipt: dict[str, Any],
-        user: User,
-    ) -> Seller:
-        """Create or update seller from receipt data."""
-        seller_repository = self.request.container.receipts.seller_repository()
-        return seller_repository.update_or_create_seller(
-            user=user,
-            name_seller=decode_json_receipt.get('name_seller', ''),
-            defaults={
-                'retail_place_address': decode_json_receipt.get(
-                    'retail_place_address',
-                    'Нет данных',
-                ),
-                'retail_place': decode_json_receipt.get(
-                    'retail_place',
-                    'Нет данных',
-                ),
-            },
-        )
-
-    def _create_products(
-        self,
-        decode_json_receipt: dict[str, Any],
-        user: User,
-    ) -> list[Product]:
-        """Create products from receipt data."""
-        products_data = [
-            Product(
-                user=user,
-                product_name=item['product_name'],
-                category=item['category'],
-                price=item['price'],
-                quantity=item['quantity'],
-                amount=item['amount'],
-            )
-            for item in decode_json_receipt.get('items', [])
-        ]
-        product_repository = (
-            self.request.container.receipts.product_repository()
-        )
-        return product_repository.bulk_create_products(products_data)
-
-    def _create_receipt(
-        self,
-        decode_json_receipt: dict[str, Any],
-        user: User,
-        account: Account,
-        seller: Seller,
-    ) -> Receipt:
-        """Create receipt from processed data."""
-        receipt_repository = (
-            self.request.container.receipts.receipt_repository()
-        )
-        return receipt_repository.create_receipt(
-            user=user,
-            account=account,
-            number_receipt=decode_json_receipt['number_receipt'],
-            receipt_date=self._parse_receipt_date(
-                decode_json_receipt['receipt_date'],
-            ),
-            nds10=decode_json_receipt.get('nds10', 0),
-            nds20=decode_json_receipt.get('nds20', 0),
-            operation_type=decode_json_receipt.get('operation_type', 0),
-            total_sum=decode_json_receipt['total_sum'],
-            seller=seller,
-        )
-
-    def _update_account_balance(
-        self,
-        account: Account,
-        total_sum: Decimal,
-    ) -> None:
-        """Update account balance after receipt creation."""
-        account_balance = get_object_or_404(Account, pk=account.pk)
-        account_balance.balance -= decimal.Decimal(total_sum)
-        account_balance.save()
 
     def check_exist_receipt(
         self,
