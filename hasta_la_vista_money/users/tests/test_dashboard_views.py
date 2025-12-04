@@ -1,6 +1,7 @@
 """Тесты для views дашборда."""
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
@@ -142,7 +143,9 @@ class DashboardDataViewTest(TestCase):
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = self.user
         setup_container_for_request(request)
-        with patch('hasta_la_vista_money.users.views.cache.delete'):
+        logger = logging.getLogger('hasta_la_vista_money.users.views')
+        with patch('hasta_la_vista_money.users.views.cache.delete'), \
+             patch.object(logger, 'exception'):
             response = DashboardDataView().get(request)
         self.assertEqual(response.status_code, 500)
         payload = json.loads(response.content.decode())
