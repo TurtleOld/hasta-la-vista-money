@@ -20,6 +20,11 @@ from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.views import FilterView
 
+from core.views import (
+    BaseEntityCreateView,
+    BaseEntityFilterView,
+    BaseEntityUpdateView,
+)
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.expense.filters import ExpenseFilter
@@ -74,19 +79,13 @@ class ExpenseCategoryBaseView(BaseView):
         return str(reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL))
 
 
-class ExpenseView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    FilterView,
-):
+class ExpenseView(BaseEntityFilterView):
     """Main expense list view with filtering and pagination."""
 
     model = Expense
     template_name = constants.EXPENSE_TEMPLATE
-    paginate_by = constants.PAGINATE_BY_DEFAULT
     context_object_name = 'expense'
     filterset_class = ExpenseFilter
-    no_permission_url = reverse_lazy('login')
     expense_service: ExpenseServiceProtocol
 
     def get_context_data(
@@ -208,18 +207,13 @@ class ExpenseCopyView(
             return redirect(constants.EXPENSE_LIST_URL)
 
 
-class ExpenseCreateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    CreateView[Expense, AddExpenseForm],
-):
+class ExpenseCreateView(BaseEntityCreateView[Expense, AddExpenseForm]):
     """View for creating a new expense."""
 
     model = Expense
     template_name = 'expense/add_expense.html'
     form_class = AddExpenseForm
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
-    no_permission_url = reverse_lazy('login')
 
     def get_form_kwargs(
         self,
@@ -275,18 +269,13 @@ class ExpenseCreateView(
         )
 
 
-class ExpenseUpdateView(
-    LoginRequiredMixin,
-    SuccessMessageMixin[AddExpenseForm],
-    UpdateView[Expense, AddExpenseForm],
-):
+class ExpenseUpdateView(BaseEntityUpdateView[Expense, AddExpenseForm]):
     """View for updating an existing expense."""
 
     model = Expense
     template_name = 'expense/change_expense.html'
     form_class = AddExpenseForm
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
-    no_permission_url = reverse_lazy('login')
 
     def get_object(self, queryset: Any = None) -> Expense:
         """Get the expense object to update."""

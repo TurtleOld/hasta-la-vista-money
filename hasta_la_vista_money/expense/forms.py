@@ -18,10 +18,11 @@ from hasta_la_vista_money.custom_mixin import (
     FormQuerysetsMixin,
 )
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+from hasta_la_vista_money.finance_account.base_forms import FormValidationMixin
 from hasta_la_vista_money.finance_account.models import Account
 
 
-class AddExpenseForm(FormQuerysetsMixin, ModelForm[Expense]):
+class AddExpenseForm(FormQuerysetsMixin, FormValidationMixin, ModelForm[Expense]):
     category = ModelChoiceField(
         queryset=ExpenseCategory.objects.none(),
         label=_('Категория расхода'),
