@@ -2,7 +2,6 @@ from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, ClassVar
 
 from django.test import TestCase
-from django.utils import timezone
 
 from hasta_la_vista_money.budget.models import DateList, Planning
 from hasta_la_vista_money.expense.models import ExpenseCategory
