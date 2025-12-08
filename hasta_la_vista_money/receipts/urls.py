@@ -6,6 +6,7 @@ from hasta_la_vista_money.receipts.apis import (
     ReceiptCreateAPIView,
     ReceiptDeleteAPIView,
     ReceiptListAPIView,
+    ReceiptsByGroupAPIView,
     SellerAutocompleteAPIView,
     SellerCreateAPIView,
     SellerDetailAPIView,
@@ -18,7 +19,6 @@ from hasta_la_vista_money.receipts.views import (
     ReceiptView,
     SellerCreateView,
     UploadImageView,
-    ajax_receipts_by_group,
 )
 
 app_name = 'receipts'
@@ -84,7 +84,7 @@ urlpatterns = [
     ),
     path(
         'ajax/receipts_by_group/',
-        ajax_receipts_by_group,
+        ReceiptsByGroupAPIView.as_view(),
         name='ajax_receipts_by_group',
     ),
 ]
