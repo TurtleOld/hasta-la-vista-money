@@ -508,28 +508,6 @@ class DeleteUserFromGroupView(
         )
 
 
-def groups_for_user_ajax(request: RequestWithContainer) -> JsonResponse:
-    user_id = request.GET.get('user_id')
-    groups = []
-    if user_id:
-        try:
-            user = User.objects.get(pk=user_id)
-            groups = get_user_groups(user)
-        except User.DoesNotExist:
-            pass
-    return JsonResponse({'groups': groups})
-
-
-def groups_not_for_user_ajax(request: RequestWithContainer) -> JsonResponse:
-    user_id = request.GET.get('user_id')
-    groups = []
-    if user_id:
-        try:
-            user = User.objects.get(pk=user_id)
-            groups = get_groups_not_for_user(user)
-        except User.DoesNotExist:
-            pass
-    return JsonResponse({'groups': groups})
 
 
 class SwitchThemeView(LoginRequiredMixin, View):

@@ -10,6 +10,7 @@ from django.db.models import Count, ProtectedError, QuerySet, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
 
+from hasta_la_vista_money.core.mixins.base import FormErrorHandlingMixin
 from hasta_la_vista_money.core.types import RequestWithContainer
 
 if TYPE_CHECKING:
@@ -24,6 +25,7 @@ from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.mixins import EntityListViewMixin, UserAuthMixin
 from hasta_la_vista_money.core.views import (
     BaseEntityCreateView,
     BaseEntityFilterView,
@@ -57,13 +59,13 @@ class BaseView:
         return reverse_lazy('receipts:list')
 
 
-class ReceiptView(BaseEntityFilterView, BaseView):
+class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
     model = Receipt
     filterset_class: type[ReceiptFilter] = ReceiptFilter
     template_name: str = 'receipts/receipts.html'
 
     def get_queryset(self) -> QuerySet[Receipt]:
-        request = cast('RequestWithContainer', self.request)
+        request = self.get_request_with_container()
         receipt_repository = request.container.receipts.receipt_repository()
         group_id = request.GET.get('group_id') or 'my'
         account_service = request.container.core.account_service()
@@ -87,7 +89,7 @@ class ReceiptView(BaseEntityFilterView, BaseView):
         object_list: Any = None,
         **kwargs: object,
     ) -> dict[str, object]:
-        request = cast('RequestWithContainer', self.request)
+        request = self.get_request_with_container()
         user = get_object_or_404(
             User.objects.prefetch_related('groups'),
             username=request.user,
@@ -124,10 +126,9 @@ class ReceiptView(BaseEntityFilterView, BaseView):
             account_queryset = account_repository.filter(pk__in=[])
 
         seller_form = SellerForm()
-        receipt_filter = ReceiptFilter(
-            request.GET,
-            queryset=receipt_queryset,
-            user=request.user,
+        receipt_filter = self.get_filtered_queryset(
+            ReceiptFilter,
+            receipt_queryset,
         )
         receipt_form = ReceiptForm()
         account_field = cast(
@@ -143,8 +144,9 @@ class ReceiptView(BaseEntityFilterView, BaseView):
 
         product_formset = ProductFormSet()
 
-        total_sum_receipts: dict[str, Any] = receipt_filter.qs.aggregate(
-            total=Sum('total_sum'),
+        total_sum_receipts = self.calculate_total_amount(
+            receipt_filter.qs,
+            amount_field='total_sum',
         )
         total_receipts: QuerySet[Receipt] = receipt_filter.qs
 
@@ -202,6 +204,7 @@ class SellerCreateView(
     SuccessMessageMixin[SellerForm],
     CreateView[Seller, SellerForm],
     BaseView,
+    UserAuthMixin,
 ):
     model = Seller
     form_class: type[SellerForm] = SellerForm
@@ -213,8 +216,6 @@ class SellerCreateView(
         seller_form = SellerForm(request.POST)
         if seller_form.is_valid():
             seller = seller_form.save(commit=False)
-            if not isinstance(request.user, User):
-                raise TypeError('User must be authenticated')
             seller.user = request.user
             seller.save()
             messages.success(
@@ -233,6 +234,7 @@ class SellerCreateView(
 class ReceiptCreateView(
     BaseEntityCreateView[Receipt, ReceiptForm],
     BaseView,
+    UserAuthMixin,
 ):
     model = Receipt
     form_class = ReceiptForm
@@ -254,8 +256,6 @@ class ReceiptCreateView(
         form = super().get_form(form_class)
         if self.request is None:
             raise ValueError('Request is not set')
-        if not isinstance(self.request.user, User):
-            raise TypeError('User must be authenticated')
         current_user = self.request.user
         account_field = cast(
             'ModelChoiceField[Account]',
@@ -367,6 +367,7 @@ class ReceiptCreateView(
 class ReceiptUpdateView(
     BaseEntityUpdateView[Receipt, ReceiptForm],
     BaseView,
+    UserAuthMixin,
 ):
     model = Receipt
     form_class: type[ReceiptForm] = ReceiptForm
@@ -375,8 +376,6 @@ class ReceiptUpdateView(
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
         try:
-            if not isinstance(self.request.user, User):
-                raise TypeError('User must be authenticated')
             request = cast('RequestWithContainer', self.request)
             receipt_repository = request.container.receipts.receipt_repository()
             receipt = receipt_repository.get_by_id(self.kwargs['pk'])
@@ -387,10 +386,7 @@ class ReceiptUpdateView(
             raise
         return cast('Receipt', receipt)
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        context: dict[str, Any] = super().get_context_data(**kwargs)
-        receipt_form = self.get_form()
-
+    def _setup_form_querysets(self, form: ReceiptForm) -> None:
         request = cast('RequestWithContainer', self.request)
         current_user = cast('User', request.user)
         account_repository = (
@@ -399,16 +395,21 @@ class ReceiptUpdateView(
         seller_repository = request.container.receipts.seller_repository()
         account_field = cast(
             'ModelChoiceField[Account]',
-            receipt_form.fields['account'],
+            form.fields['account'],
         )
         account_field.queryset = account_repository.get_by_user_with_related(
             current_user,
         )
         seller_field = cast(
             'ModelChoiceField[Seller]',
-            receipt_form.fields['seller'],
+            form.fields['seller'],
         )
         seller_field.queryset = seller_repository.get_by_user(current_user)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context: dict[str, Any] = super().get_context_data(**kwargs)
+        receipt_form = self.get_form()
+        self._setup_form_querysets(receipt_form)
 
         context['receipt_form'] = receipt_form
 
@@ -430,44 +431,16 @@ class ReceiptUpdateView(
         form_class: type[ReceiptForm] | None = None,
     ) -> ReceiptForm:
         form = super().get_form(form_class)
-        if not isinstance(self.request.user, User):
-            raise TypeError('User must be authenticated')
-        request = cast('RequestWithContainer', self.request)
-        current_user = request.user
-        account_repository = (
-            request.container.finance_account.account_repository()
-        )
-        seller_repository = request.container.receipts.seller_repository()
-        account_field = cast(
-            'ModelChoiceField[Account]',
-            form.fields['account'],
-        )
-        account_field.queryset = account_repository.get_by_user_with_related(
-            current_user,
-        )
-        seller_field = cast('ModelChoiceField[Seller]', form.fields['seller'])
-        seller_field.queryset = seller_repository.get_by_user(current_user)
+        self._setup_form_querysets(form)
         return form
 
     def form_valid(self, form: ReceiptForm) -> HttpResponse:  # type: ignore[override]
         receipt = self.get_object()
         product_formset = ProductFormSet(self.request.POST)
         request = cast('RequestWithContainer', self.request)
-
         current_user = cast('User', request.user)
-        account_repository = (
-            request.container.finance_account.account_repository()
-        )
-        seller_repository = request.container.receipts.seller_repository()
-        account_field = cast(
-            'ModelChoiceField[Account]',
-            form.fields['account'],
-        )
-        account_field.queryset = account_repository.get_by_user_with_related(
-            current_user,
-        )
-        seller_field = cast('ModelChoiceField[Seller]', form.fields['seller'])
-        seller_field.queryset = seller_repository.get_by_user(current_user)
+
+        self._setup_form_querysets(form)
 
         if form.is_valid() and product_formset.is_valid():
             receipt_updater_service = (
@@ -557,13 +530,12 @@ class ReceiptDeleteView(
     LoginRequiredMixin,
     DeleteView[Receipt, Any],
     BaseView,
+    UserAuthMixin,
 ):
     model = Receipt
     success_url = reverse_lazy('receipts:list')
 
     def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
-        if not isinstance(self.request.user, User):
-            raise TypeError('User must be authenticated')
         request = cast('RequestWithContainer', self.request)
         receipt_repository = request.container.receipts.receipt_repository()
         receipt = (
@@ -682,7 +654,11 @@ class ProductByMonthView(LoginRequiredMixin, ListView[Receipt]):
         return context
 
 
-class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
+class UploadImageView(
+    LoginRequiredMixin,
+    FormView[UploadImageForm],
+    FormErrorHandlingMixin,
+):
     template_name = 'receipts/upload_image.html'
     form_class: type[UploadImageForm] = UploadImageForm
     success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))  # type: ignore[misc]
@@ -714,18 +690,23 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
 
             if not result.success:
                 if result.error == 'invalid_file':
-                    messages.error(request, constants.INVALID_FILE_FORMAT)
+                    return self.handle_form_error_with_message(
+                        form,
+                        ValueError(constants.INVALID_FILE_FORMAT),
+                        constants.INVALID_FILE_FORMAT,
+                    )
                 elif result.error == 'exists':
-                    messages.error(
-                        request,
-                        gettext_lazy(constants.RECEIPT_ALREADY_EXISTS),
+                    return self.handle_form_error_with_message(
+                        form,
+                        ValueError(constants.RECEIPT_ALREADY_EXISTS),
+                        str(gettext_lazy(constants.RECEIPT_ALREADY_EXISTS)),
                     )
                 else:
-                    messages.error(
-                        request,
+                    return self.handle_form_error_with_message(
+                        form,
+                        ValueError(constants.ERROR_PROCESSING_RECEIPT),
                         constants.ERROR_PROCESSING_RECEIPT,
                     )
-                return super().form_invalid(form)
 
             messages.success(
                 request,
@@ -734,18 +715,18 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
             return super().form_valid(form)
         except ValueError as e:
             logger.exception('Error processing receipt', error=e)
-            messages.error(
-                self.request,
+            return self.handle_form_error_with_message(
+                form,
+                e,
                 constants.INVALID_FILE_FORMAT,
             )
-            return super().form_invalid(form)
         except Exception as e:
             logger.exception('Error processing receipt', error=e)
-            messages.error(
-                self.request,
+            return self.handle_form_error_with_message(
+                form,
+                e,
                 constants.ERROR_PROCESSING_RECEIPT,
             )
-            return super().form_invalid(form)
 
     def _get_uploaded_file(self) -> Any:
         """Extract uploaded file from request."""
@@ -755,37 +736,3 @@ class UploadImageView(LoginRequiredMixin, FormView[UploadImageForm]):
         return uploaded_file
 
 
-@require_GET
-def ajax_receipts_by_group(request: RequestWithContainer) -> HttpResponse:
-    receipt_repository = request.container.receipts.receipt_repository()
-    group_id = request.GET.get('group_id') or 'my'
-    if not isinstance(request.user, User):
-        receipt_queryset = receipt_repository.filter(pk__in=[])
-        user_groups = Group.objects.none()
-    else:
-        user = User.objects.prefetch_related('groups').get(
-            pk=request.user.pk,
-        )
-        account_service = request.container.core.account_service()
-        users_in_group = account_service.get_users_for_group(user, group_id)
-
-        if users_in_group:
-            receipt_queryset = receipt_repository.get_by_users(users_in_group)
-        else:
-            receipt_queryset = receipt_repository.filter(pk__in=[])
-
-        user_groups = user.groups.all()
-
-    receipts = (
-        receipt_queryset.select_related('seller', 'user')
-        .prefetch_related('product')
-        .order_by('-receipt_date')[: constants.RECENT_RECEIPTS_LIMIT]
-    )
-    return render(
-        request,
-        'receipts/receipts_block.html',
-        {
-            'receipts': receipts,
-            'user_groups': user_groups,
-        },
-    )
