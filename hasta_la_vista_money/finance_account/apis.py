@@ -5,15 +5,25 @@ financial accounts,
 with proper authentication and user-specific data filtering.
 """
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+)
+from rest_framework import status
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
 
+from hasta_la_vista_money.core.mixins import FormErrorHandlingMixin, UserAuthMixin
+from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
 
@@ -50,3 +60,55 @@ class AccountListCreateAPIView(ListCreateAPIView[Account]):
             return Account.objects.none()
         user = cast('User', self.request.user)
         return Account.objects.filter(user=user)
+
+
+@extend_schema(
+    tags=['finance_account'],
+    summary='Получить счета по группе',
+    description='Получить список счетов для указанной группы пользователей',
+    parameters=[
+        OpenApiParameter(
+            name='group_id',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='ID группы (по умолчанию "my")',
+            required=False,
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            description='Список счетов',
+            response={
+                'type': 'object',
+                'properties': {
+                    'accounts': {
+                        'type': 'array',
+                        'items': {'$ref': '#/components/schemas/Account'},
+                    },
+                },
+            },
+        ),
+    },
+)
+class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
+    """API view для получения счетов по группе."""
+
+    schema = AutoSchema()
+    permission_classes = (IsAuthenticated,)
+
+    def get(
+        self,
+        request: Request,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Response:
+        """Получить счета по группе."""
+        request_with_container = cast('RequestWithContainer', request)
+        group_id = request.query_params.get('group_id')
+        user = cast('User', request.user)
+
+        account_service = request_with_container.container.core.account_service()
+        accounts = account_service.get_accounts_for_user_or_group(user, group_id)
+
+        serializer = AccountSerializer(accounts, many=True)
+        return Response({'accounts': serializer.data}, status=status.HTTP_200_OK)
