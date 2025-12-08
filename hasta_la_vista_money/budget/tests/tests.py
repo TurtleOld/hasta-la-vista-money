@@ -80,39 +80,44 @@ class BudgetViewsTest(TestCase):
             self.assertIn('chart_plan_execution_expense', chart_data)
 
     def test_generate_date_list_view(self) -> None:
-        response = self.client.post(reverse('budget:generate_date'))
-        self.assertEqual(response.status_code, constants.REDIRECTS)
+        response = self.client.post(
+            reverse('budget:generate_date'),
+            {'type': 'expense'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertIn('success', response.json())
+        self.assertIn('redirect_url', response.json())
 
     def test_save_planning_post(self) -> None:
+        from hasta_la_vista_money.expense.models import ExpenseCategory
+
+        category = ExpenseCategory.objects.create(
+            user=self.user,
+            name='Test Category',
+        )
         response = self.client.post(
             reverse('budget:save_planning'),
             {
-                'category_id': 1,
-                'date': self.date,
+                'category_id': category.id,
+                'month': self.date.isoformat(),
                 'type': 'expense',
                 'amount': 123,
             },
+            content_type='application/json',
         )
-        self.assertIn(
-            response.status_code,
-            [
-                constants.SUCCESS_CODE,
-                constants.REDIRECTS,
-                constants.SERVER_ERROR,
-            ],
-        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertIn('success', response.json())
+        self.assertIn('amount', response.json())
 
     def test_change_planning_post(self) -> None:
         response = self.client.post(
             reverse('budget:change_planning'),
-            {
-                'category_id': 1,
-                'date': self.date,
-                'type': 'expense',
-                'amount': 123,
-            },
+            {'planning': 100},
+            content_type='application/json',
         )
-        self.assertIn(response.status_code, [200, 302, 400])
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertIn('planning_value', response.json())
 
     def test_budget_view_no_dates(self) -> None:
         self.client.logout()
