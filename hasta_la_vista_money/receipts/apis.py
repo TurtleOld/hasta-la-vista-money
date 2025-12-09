@@ -1,7 +1,6 @@
 import decimal
 import json
-from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
@@ -19,22 +18,22 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.core.mixins import FormErrorHandlingMixin, UserAuthMixin
-from hasta_la_vista_money.core.types import RequestWithContainer
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.core.mixins import (
+    FormErrorHandlingMixin,
+    UserAuthMixin,
+)
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
+    from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.mappers.receipt_api_mapper import (
+    ReceiptAPIDataMapper,
+)
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
     ImageDataSerializer,
     ReceiptSerializer,
     SellerSerializer,
-)
-from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.receipts.mappers.receipt_api_mapper import (
-    ReceiptAPIDataMapper,
-)
-from hasta_la_vista_money.receipts.services.receipt_creator import (
-    ReceiptCreateData,
-    SellerCreateData,
 )
 from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
     ReceiptAPIValidator,
@@ -289,7 +288,6 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         )
 
 
-
 @extend_schema(
     tags=['receipts'],
     summary='Получить чеки по группе',
@@ -360,7 +358,9 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             users_in_group = account_service.get_users_for_group(user, group_id)
 
             if users_in_group:
-                receipt_queryset = receipt_repository.get_by_users(users_in_group)
+                receipt_queryset = receipt_repository.get_by_users(
+                    users_in_group
+                )
             else:
                 receipt_queryset = receipt_repository.filter(pk__in=[])
 

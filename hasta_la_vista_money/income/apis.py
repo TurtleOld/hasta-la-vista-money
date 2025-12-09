@@ -1,6 +1,6 @@
 """DRF API views for income app."""
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
@@ -15,10 +15,15 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from hasta_la_vista_money.core.mixins import FormErrorHandlingMixin, UserAuthMixin
-from hasta_la_vista_money.core.types import RequestWithContainer
+from hasta_la_vista_money.core.mixins import (
+    FormErrorHandlingMixin,
+    UserAuthMixin,
+)
 from hasta_la_vista_money.income.models import Income
-from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
+    from hasta_la_vista_money.users.models import User
 
 
 @extend_schema(
@@ -66,7 +71,9 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         group_id = request.query_params.get('group_id')
         user = cast('User', request.user)
 
-        account_service = request_with_container.container.core.account_service()
+        account_service = (
+            request_with_container.container.core.account_service()
+        )
         users_in_group = account_service.get_users_for_group(user, group_id)
 
         if users_in_group:
@@ -147,7 +154,9 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         group_id = request.query_params.get('group_id', 'my')
         user = cast('User', request.user)
 
-        account_service = request_with_container.container.core.account_service()
+        account_service = (
+            request_with_container.container.core.account_service()
+        )
         users_in_group = account_service.get_users_for_group(user, group_id)
 
         if users_in_group:
@@ -227,4 +236,3 @@ class IncomeRetrieveAPIView(RetrieveAPIView[Income], UserAuthMixin):
             'user_id': income.user.pk,
         }
         return Response(data, status=status.HTTP_200_OK)
-

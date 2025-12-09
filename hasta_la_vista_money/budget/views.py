@@ -1,14 +1,10 @@
-import json
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
-from typing import Any, TypedDict, cast, overload
+from typing import TYPE_CHECKING, Any, TypedDict, cast, overload
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum
-from django.http import HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
-from django.utils import timezone
+from django.shortcuts import get_object_or_404
 from django.views.generic import ListView
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -23,12 +19,13 @@ from hasta_la_vista_money.budget.repositories import (
 from hasta_la_vista_money.budget.services.budget import (
     get_categories,
 )
-from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.expense.models import ExpenseCategory
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.expense.repositories import ExpenseRepository
 from hasta_la_vista_money.income.models import IncomeCategory
 from hasta_la_vista_money.income.repositories import IncomeRepository
-from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.users.models import User
 
 
@@ -166,8 +163,6 @@ class BudgetView(
             ),
         )
         return context
-
-
 
 
 class ExpenseTableView(

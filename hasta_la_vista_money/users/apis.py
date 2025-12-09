@@ -14,8 +14,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from hasta_la_vista_money.core.mixins import FormErrorHandlingMixin, UserAuthMixin
-from hasta_la_vista_money.core.types import RequestWithContainer
+from hasta_la_vista_money.core.mixins import (
+    FormErrorHandlingMixin,
+    UserAuthMixin,
+)
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import (
     get_groups_not_for_user,
@@ -26,7 +28,9 @@ from hasta_la_vista_money.users.services.groups import (
 @extend_schema(
     tags=['users'],
     summary='Получить группы пользователя',
-    description='Получить список всех групп, в которых состоит указанный пользователь',
+    description=(
+        'Получить список всех групп, в которых состоит указанный пользователь'
+    ),
     parameters=[
         OpenApiParameter(
             name='user_id',
@@ -65,7 +69,6 @@ class UserGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Получить группы пользователя."""
-        request_with_container = cast('RequestWithContainer', request)
         user_id = request.query_params.get('user_id')
 
         if user_id:
@@ -85,7 +88,9 @@ class UserGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 @extend_schema(
     tags=['users'],
     summary='Получить доступные группы',
-    description='Получить список групп, в которых не состоит указанный пользователь',
+    description=(
+        'Получить список групп, в которых не состоит указанный пользователь'
+    ),
     parameters=[
         OpenApiParameter(
             name='user_id',
@@ -124,7 +129,6 @@ class AvailableGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Получить доступные группы."""
-        request_with_container = cast('RequestWithContainer', request)
         user_id = request.query_params.get('user_id')
 
         if user_id:
@@ -134,9 +138,7 @@ class AvailableGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             except (User.DoesNotExist, ValueError):
                 groups = []
         else:
-            # Если user_id не указан, возвращаем доступные группы для текущего пользователя
             user = cast('User', request.user)
             groups = get_groups_not_for_user(user)
 
         return Response({'groups': groups}, status=status.HTTP_200_OK)
-

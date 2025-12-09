@@ -22,9 +22,14 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from hasta_la_vista_money.core.mixins import FormErrorHandlingMixin, UserAuthMixin
-from hasta_la_vista_money.core.types import RequestWithContainer
+from hasta_la_vista_money.core.mixins import (
+    FormErrorHandlingMixin,
+    UserAuthMixin,
+)
 from hasta_la_vista_money.finance_account.models import Account
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
 
 if TYPE_CHECKING:
@@ -107,8 +112,14 @@ class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         group_id = request.query_params.get('group_id')
         user = cast('User', request.user)
 
-        account_service = request_with_container.container.core.account_service()
-        accounts = account_service.get_accounts_for_user_or_group(user, group_id)
+        account_service = (
+            request_with_container.container.core.account_service()
+        )
+        accounts = account_service.get_accounts_for_user_or_group(
+            user, group_id
+        )
 
         serializer = AccountSerializer(accounts, many=True)
-        return Response({'accounts': serializer.data}, status=status.HTTP_200_OK)
+        return Response(
+            {'accounts': serializer.data}, status=status.HTTP_200_OK
+        )

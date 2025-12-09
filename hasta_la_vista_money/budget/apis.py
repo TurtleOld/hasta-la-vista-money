@@ -1,13 +1,15 @@
 """DRF API views for budget app."""
 
-import json
 from datetime import date
+from datetime import datetime as dt
 from decimal import Decimal
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
+from django.shortcuts import get_object_or_404
+from django.urls import reverse_lazy
+from django.utils import timezone
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
-    OpenApiParameter,
     OpenApiResponse,
     extend_schema,
 )
@@ -17,14 +19,15 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from hasta_la_vista_money.budget.repositories import PlanningRepository
-from hasta_la_vista_money.core.mixins import FormErrorHandlingMixin, UserAuthMixin
-from hasta_la_vista_money.core.types import RequestWithContainer
+from hasta_la_vista_money.core.mixins import (
+    FormErrorHandlingMixin,
+    UserAuthMixin,
+)
 from hasta_la_vista_money.expense.models import ExpenseCategory
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.income.models import IncomeCategory
-from django.shortcuts import get_object_or_404
-from django.urls import reverse_lazy
-from django.utils import timezone
 from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.users.models import User
 
@@ -69,13 +72,11 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         **kwargs: Any,
     ) -> Response:
         """Генерировать список дат."""
-        request_with_container = cast('RequestWithContainer', request)
         user = cast('User', request.user)
         queryset_user = get_object_or_404(User, username=user)
 
         last_date_obj = queryset_user.budget_date_lists.last()
         if last_date_obj:
-            from datetime import datetime as dt
             queryset_last_date = timezone.make_aware(
                 dt.combine(last_date_obj.date, dt.min.time()),
             )
@@ -205,7 +206,7 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
         try:
             month = date.fromisoformat(request.data['month'])
-        except (ValueError, KeyError) as e:
+        except (ValueError, KeyError):
             return self.handle_ajax_error(
                 ValueError('Invalid month format'),
                 status_code=400,
@@ -217,7 +218,9 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             amount = Decimal(0)
 
         type_ = request.data.get('type')
-        planning_repository = request_with_container.container.budget.planning_repository()
+        planning_repository = (
+            request_with_container.container.budget.planning_repository()
+        )
 
         if type_ == 'expense':
             expense_category = get_object_or_404(
@@ -252,4 +255,3 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             {'success': True, 'amount': str(plan.amount)},
             status=status.HTTP_200_OK,
         )
-

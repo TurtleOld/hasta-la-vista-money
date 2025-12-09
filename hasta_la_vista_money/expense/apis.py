@@ -1,6 +1,6 @@
 """DRF API views for expense app."""
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
@@ -14,9 +14,13 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from hasta_la_vista_money.core.mixins import FormErrorHandlingMixin, UserAuthMixin
-from hasta_la_vista_money.core.types import RequestWithContainer
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.core.mixins import (
+    FormErrorHandlingMixin,
+    UserAuthMixin,
+)
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
 
 
 @extend_schema(
@@ -53,9 +57,11 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         request_with_container = cast('RequestWithContainer', request)
         group_id = request.query_params.get('group_id')
 
-        expense_service = request_with_container.container.expense.expense_service(
-            user=request.user,
-            request=request_with_container,
+        expense_service = (
+            request_with_container.container.expense.expense_service(
+                user=request.user,
+                request=request_with_container,
+            )
         )
 
         try:
@@ -72,8 +78,12 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
                     else '',
                     'account': getattr(expense, 'account', {}).get('name', '')
                     if isinstance(getattr(expense, 'account', None), dict)
-                    else getattr(getattr(expense, 'account', None), 'name_account', '')
-                    if hasattr(getattr(expense, 'account', None), 'name_account')
+                    else getattr(
+                        getattr(expense, 'account', None), 'name_account', ''
+                    )
+                    if hasattr(
+                        getattr(expense, 'account', None), 'name_account'
+                    )
                     else '',
                     'date': getattr(expense, 'date', '').strftime('%d.%m.%Y')
                     if hasattr(getattr(expense, 'date', None), 'strftime')
@@ -81,7 +91,9 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
                 }
                 for expense in all_expenses
             ]
-            return Response({'expenses': expense_data}, status=status.HTTP_200_OK)
+            return Response(
+                {'expenses': expense_data}, status=status.HTTP_200_OK
+            )
         except (ValueError, TypeError) as e:
             return self.handle_ajax_error(e, status_code=500)
 
@@ -131,9 +143,11 @@ class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         request_with_container = cast('RequestWithContainer', request)
         group_id = request.query_params.get('group_id')
 
-        expense_service = request_with_container.container.expense.expense_service(
-            user=request.user,
-            request=request_with_container,
+        expense_service = (
+            request_with_container.container.expense.expense_service(
+                user=request.user,
+                request=request_with_container,
+            )
         )
 
         try:
@@ -141,4 +155,3 @@ class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             return Response({'data': all_data}, status=status.HTTP_200_OK)
         except (ValueError, TypeError) as e:
             return self.handle_ajax_error(e, status_code=500)
-
