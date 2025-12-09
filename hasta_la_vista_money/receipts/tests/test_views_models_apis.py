@@ -665,7 +665,6 @@ class TestUploadImageView(TestCase):
         self.container.core.account_service.override(
             providers.Object(self.mock_account_service),
         )
-        CoreMiddleware.container = self.container
 
         mock_account_repository = MagicMock()
         mock_account_repository.get_by_id.return_value = self.account
@@ -684,15 +683,29 @@ class TestUploadImageView(TestCase):
             ),
         )
 
-        original_call = CoreMiddleware.__call__
+        original_init = CoreMiddleware.__init__
+
+        def patched_init(
+            self_instance: CoreMiddleware,
+            get_response: Any,
+        ) -> None:
+            original_init(self_instance, get_response)
+            self_instance.container = self.container
 
         def patched_call(
             self_instance: CoreMiddleware,
             request: Any,
         ) -> Any:
             request_with_container = cast('RequestWithContainer', request)
-            request_with_container.container = self.container
-            return original_call(self_instance, request_with_container)
+            request_with_container.container = self_instance.container
+            return self_instance.get_response(request_with_container)
+
+        self.middleware_init_patcher = patch.object(
+            CoreMiddleware,
+            '__init__',
+            patched_init,
+        )
+        self.middleware_init_patcher.start()
 
         self.middleware_patcher = patch.object(
             CoreMiddleware,
@@ -706,7 +719,7 @@ class TestUploadImageView(TestCase):
         self.container.finance_account.account_repository.reset_override()
         self.container.receipts.receipt_creator_service.reset_override()
         self.middleware_patcher.stop()
-        CoreMiddleware.container = ApplicationContainer()
+        self.middleware_init_patcher.stop()
 
     def test_upload_image_view_get(self) -> None:
         self.client.force_login(self.user)
