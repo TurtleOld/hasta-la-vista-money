@@ -8,13 +8,15 @@ from django.forms import BaseForm
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
+from django_stubs_ext import StrOrPromise
 
-from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
     from django_filters import FilterSet
+
+    from hasta_la_vista_money.core.types import RequestWithContainer
 
 
 class EntityListViewMixin:
@@ -40,7 +42,7 @@ class EntityListViewMixin:
         """
         return get_object_or_404(User, username=self.request.user)
 
-    def get_request_with_container(self) -> RequestWithContainer:
+    def get_request_with_container(self) -> 'RequestWithContainer':
         """Получить request с контейнером dependency injection.
 
         Returns:
@@ -63,7 +65,7 @@ class EntityListViewMixin:
             FilterSet: Применённый фильтр
         """
         request = self.get_request_with_container()
-        return filterset_class(  # type: ignore[call-arg,misc]
+        return filterset_class(
             self.request.GET,
             queryset=base_queryset,
             user=request.user,
@@ -195,7 +197,7 @@ class FormErrorHandlingMixin:
         self,
         form: BaseForm,
         error: Exception,
-        error_message_template: str,
+        error_message_template: StrOrPromise,
         **kwargs: Any,
     ) -> HttpResponse:
         """Обработать ошибку формы с сообщением через messages framework.
@@ -301,4 +303,3 @@ class FormErrorHandlingMixin:
                 error_message_template,
             )
         return self.handle_form_error_with_field_error(form, error)
-
