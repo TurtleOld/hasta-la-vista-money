@@ -397,11 +397,17 @@ class ReceiptUpdateViewTest(TestCase):
         self.assertEqual(len(products), 2)
 
         product1 = products.filter(product_name='Товар 1').first()
-        assert product1 is not None
+        self.assertIsNotNone(product1)
+        if product1 is None:
+            msg = 'product1 should not be None'
+            raise ValueError(msg)
         self.assertEqual(product1.quantity, Decimal('0.70'))
         self.assertEqual(product1.amount, Decimal('70.00'))
 
         product2 = products.filter(product_name='Товар 2').first()
-        assert product2 is not None
+        self.assertIsNotNone(product2)
+        if product2 is None:
+            msg = 'product2 should not be None'
+            raise ValueError(msg)
         self.assertEqual(product2.quantity, Decimal('0.70'))
         self.assertEqual(product2.amount, Decimal('105.00'))

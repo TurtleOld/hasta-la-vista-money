@@ -1,4 +1,4 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from django.contrib import messages
@@ -13,6 +13,9 @@ from django.views.generic import CreateView, DeleteView, ListView
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.loan.models import (
     Loan,
     PaymentMakeLoan,
@@ -29,7 +32,8 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
     no_permission_url = reverse_lazy('login')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        user = get_object_or_404(User, username=self.request.user)
+        request = cast('RequestWithContainer', self.request)
+        user = get_object_or_404(User, username=request.user)
         loan_form = LoanForm()
         payment_make_loan_form = PaymentMakeLoanForm(user=user)
         loan = (
@@ -119,14 +123,20 @@ class LoanCreateView(
             form.add_error(None, 'Все поля должны быть заполнены')
             return self.form_invalid(form)
 
-        if not isinstance(self.request.user, User):
+        request = cast('RequestWithContainer', self.request)
+        if not isinstance(request.user, User):
             raise TypeError('User must be authenticated')
 
-        assert type_loan is not None
-        assert date is not None
-        assert loan_amount is not None
-        assert annual_interest_rate is not None
-        assert period_loan is not None
+        if type_loan is None:
+            raise ValueError('type_loan is None')
+        if date is None:
+            raise ValueError('date is None')
+        if loan_amount is None:
+            raise ValueError('loan_amount is None')
+        if annual_interest_rate is None:
+            raise ValueError('annual_interest_rate is None')
+        if period_loan is None:
+            raise ValueError('period_loan is None')
 
         form.save()
         loan = Loan.objects.filter(
@@ -139,18 +149,18 @@ class LoanCreateView(
             return self.form_invalid(form)
 
         loan_calculation_service = (
-            self.request.container.loan.loan_calculation_service()
+            request.container.loan.loan_calculation_service()
         )
         loan_calculation_service.run(
             type_loan=str(type_loan),
-            user_id=self.request.user.pk,
+            user_id=request.user.pk,
             loan=loan,
             start_date=date,
             loan_amount=float(loan_amount),
             annual_interest_rate=float(annual_interest_rate),
             period_loan=int(period_loan),
         )
-        return redirect(self.success_url)
+        return redirect(str(self.success_url))
 
 
 class LoanDeleteView(

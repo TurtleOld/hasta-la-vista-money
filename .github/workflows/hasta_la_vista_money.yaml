@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v6.0.1
       - uses: actions/setup-python@v6.1.0
         with:
-          python-version: '3.14.0'
+          python-version: '3.14.2'
 
       - name: Setup uv and Handle Its Cache
         uses: hynek/setup-cached-uv@2a4a9b893253e16cf11e6def5f774336af2f80bc
@@ -46,7 +46,7 @@ jobs:
           version: "0.9.7"
 
       - name: Install ruff
-        uses: astral-sh/ruff-action@5960f93ec0c391757a009b5d6b93f23d37ae6d74
+        uses: astral-sh/ruff-action@7b97a6d66e71ca0b699416729b17f5d76c6cb073
         with:
           version: "0.12.8"
       - run: ruff check --fix

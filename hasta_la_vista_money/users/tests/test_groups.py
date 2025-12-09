@@ -43,6 +43,7 @@ class GroupsServiceTest(TestCase):
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
         self.group: Group = Group.objects.create(name='TestGroup')
 
