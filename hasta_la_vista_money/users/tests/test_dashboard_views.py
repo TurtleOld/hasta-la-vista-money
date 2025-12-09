@@ -39,6 +39,7 @@ class DashboardViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
         self.client.force_login(self.user)
 
@@ -78,6 +79,7 @@ class DashboardDataViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
         self.client.force_login(self.user)
 
@@ -129,7 +131,7 @@ class DashboardDataViewTest(TestCase):
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = AnonymousUser()
         setup_container_for_request(request)
-        response = DashboardDataView().get(request)
+        response = DashboardDataView().get(request)  # type: ignore[arg-type]
         payload = json.loads(response.content.decode())
         self.assertEqual(response.status_code, 401)
         self.assertEqual(payload, {'error': 'User not authenticated'})
@@ -143,12 +145,8 @@ class DashboardDataViewTest(TestCase):
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = self.user
         setup_container_for_request(request)
-        logger = logging.getLogger('hasta_la_vista_money.users.views')
-        with (
-            patch('hasta_la_vista_money.users.views.cache.delete'),
-            patch.object(logger, 'exception'),
-        ):
-            response = DashboardDataView().get(request)
+        with patch('hasta_la_vista_money.users.views.cache.delete'):
+            response = DashboardDataView().get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, 500)
         payload = json.loads(response.content.decode())
         self.assertIn('error', payload)
@@ -168,6 +166,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
         self.client.force_login(self.user)
 
@@ -257,6 +256,7 @@ class DashboardAnalyticsEndpointsTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
         self.client.force_login(self.user)
         self.factory = RequestFactory()

@@ -109,6 +109,7 @@ class GetPeriodComparisonTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
 
     def test_get_period_comparison_month(self) -> None:
@@ -154,6 +155,7 @@ class GetDrillDownDataTest(TestCase):
         if user is None:
             msg = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
 
     def test_get_drill_down_data_expense(self) -> None:

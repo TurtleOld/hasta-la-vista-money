@@ -7,6 +7,10 @@ from django.forms import BaseFormSet
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import Receipt, Seller
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    ReceiptCreateData,
+    SellerCreateData,
+)
 from hasta_la_vista_money.receipts.services.receipt_import import (
     ReceiptImportResult,
 )
@@ -24,12 +28,15 @@ class ReceiptCreatorServiceProtocol(Protocol):
         seller: Seller,
     ) -> Receipt | None: ...
 
-    def create_receipt_from_json(
+    def create_receipt_with_products(
         self,
         *,
         user: User,
         account: Account,
-        data: dict[str, Any],
+        receipt_data: ReceiptCreateData,
+        seller_data: SellerCreateData,
+        products_data: list[dict[str, Any]] | None = None,
+        manual: bool = False,
     ) -> Receipt: ...
 
 

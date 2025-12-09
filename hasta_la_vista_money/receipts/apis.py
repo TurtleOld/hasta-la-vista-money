@@ -1,6 +1,6 @@
 import decimal
 import json
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
@@ -18,12 +18,25 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.core.mixins import (
+    FormErrorHandlingMixin,
+    UserAuthMixin,
+)
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
+    from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.mappers.receipt_api_mapper import (
+    ReceiptAPIDataMapper,
+)
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.receipts.serializers import (
     ImageDataSerializer,
     ReceiptSerializer,
     SellerSerializer,
+)
+from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
+    ReceiptAPIValidator,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -172,18 +185,46 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize view with validator and mapper."""
+        super().__init__(*args, **kwargs)
+        self.validator: ReceiptAPIValidator | None = None
+        self.mapper: ReceiptAPIDataMapper | None = None
+
+    def _get_validator(self) -> ReceiptAPIValidator:
+        """Get or create validator instance."""
+        if self.validator is None:
+            request_with_container = cast('RequestWithContainer', self.request)
+            receipt_repository = (
+                request_with_container.container.receipts.receipt_repository()
+            )
+            self.validator = ReceiptAPIValidator(
+                receipt_repository=receipt_repository,
+            )
+        return self.validator
+
+    def _get_mapper(self) -> ReceiptAPIDataMapper:
+        """Get or create mapper instance."""
+        if self.mapper is None:
+            self.mapper = ReceiptAPIDataMapper()
+        return self.mapper
+
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return self._process_request(request)
 
     def _process_request(self, request: Request) -> Response:
+        """Process incoming request."""
         try:
             request_data = json.loads(request.body)
         except json.JSONDecodeError:
             return self._error_response('Invalid JSON data')
 
-        validation_error = self._validate_request_data(request_data)
-        if validation_error:
-            return validation_error
+        validator = self._get_validator()
+        validation_result = validator.validate_json_data(request_data)
+        if not validation_result.is_valid:
+            return self._error_response(
+                validation_result.error or 'Validation failed',
+            )
 
         try:
             return self._handle_receipt_creation(request_data)
@@ -191,26 +232,50 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
             return self._error_response(str(error))
 
     def _handle_receipt_creation(
-        self, request_data: dict[str, Any]
+        self,
+        request_data: dict[str, Any],
     ) -> Response:
-        if self._check_existing_receipt(request_data):
+        """Handle receipt creation using validator and mapper."""
+        validator = self._get_validator()
+        mapper = self._get_mapper()
+
+        # Validate user and account
+        user_id = request_data.get('user')
+        account_id = request_data.get('finance_account')
+        validation_result = validator.validate_user_and_account(
+            user_id,
+            account_id,
+        )
+        if not validation_result.is_valid:
+            return self._error_response(
+                validation_result.error or 'User or account validation failed',
+            )
+
+        user = cast('User', validation_result.user)
+        account = cast('Account', validation_result.account)
+        if user is None or account is None:
+            return self._error_response('User or account not found')
+
+        # Check if receipt already exists
+        if validator.check_receipt_exists(request_data, user):
             return self._error_response('Такой чек уже был добавлен ранее')
 
-        user, account = self._get_user_and_account(request_data)
-        if isinstance(user, Response) or user is None:
-            return (
-                user
-                if isinstance(user, Response)
-                else self._error_response('User not found')
-            )
-        if isinstance(account, Response) or account is None:
-            return (
-                account
-                if isinstance(account, Response)
-                else self._error_response('Account not found')
-            )
+        # Map data and create receipt
+        receipt_data = mapper.map_request_to_receipt_data(request_data)
+        seller_data = mapper.map_request_to_seller_data(request_data)
+        products_data = request_data.get('product', [])
 
-        receipt = self._create_receipt(request_data, user, account)
+        request_with_container = cast('RequestWithContainer', self.request)
+        receipt_creator_service = (
+            request_with_container.container.receipts.receipt_creator_service()
+        )
+        receipt = receipt_creator_service.create_receipt_with_products(
+            user=user,
+            account=account,
+            receipt_data=receipt_data,
+            seller_data=seller_data,
+            products_data=products_data,
+        )
         return Response(
             ReceiptSerializer(receipt).data,
             status=status.HTTP_201_CREATED,
@@ -222,86 +287,102 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    def _validate_request_data(
-        self, request_data: dict[str, Any]
-    ) -> Response | None:
-        required_fields = [
-            'user',
-            'finance_account',
-            'receipt_date',
-            'total_sum',
-            'seller',
-            'product',
-        ]
-        if not all(request_data.get(field) for field in required_fields):
-            return self._error_response('Missing required data')
-        return None
 
-    def _check_existing_receipt(self, request_data: dict[str, Any]) -> bool:
-        receipt_date = request_data.get('receipt_date')
-        total_sum = request_data.get('total_sum')
-        if receipt_date is None or total_sum is None:
-            return False
-        return bool(
-            Receipt.objects.filter(
-                receipt_date=receipt_date,
-                total_sum=total_sum,
-            ).first(),
+@extend_schema(
+    tags=['receipts'],
+    summary='Получить чеки по группе',
+    description='Получить список чеков для указанной группы пользователей',
+    parameters=[
+        OpenApiParameter(
+            name='group_id',
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description='ID группы (по умолчанию "my")',
+            required=False,
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            description='Список чеков',
+            response={
+                'type': 'object',
+                'properties': {
+                    'receipts': {
+                        'type': 'array',
+                        'items': {'$ref': '#/components/schemas/Receipt'},
+                    },
+                    'user_groups': {
+                        'type': 'array',
+                        'items': {
+                            'type': 'object',
+                            'properties': {
+                                'id': {'type': 'integer'},
+                                'name': {'type': 'string'},
+                            },
+                        },
+                    },
+                },
+            },
+        ),
+    },
+)
+class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
+    """API view для получения чеков по группе."""
+
+    schema = AutoSchema()
+    permission_classes = (IsAuthenticated,)
+
+    def get(
+        self,
+        request: Request,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Response:
+        """Получить чеки по группе."""
+        request_with_container = cast('RequestWithContainer', request)
+        receipt_repository = (
+            request_with_container.container.receipts.receipt_repository()
+        )
+        group_id = request.query_params.get('group_id') or 'my'
+
+        if not isinstance(request.user, User):
+            receipt_queryset = receipt_repository.filter(pk__in=[])
+            user_groups = []
+        else:
+            user = User.objects.prefetch_related('groups').get(
+                pk=request.user.pk,
+            )
+            account_service = (
+                request_with_container.container.core.account_service()
+            )
+            users_in_group = account_service.get_users_for_group(user, group_id)
+
+            if users_in_group:
+                receipt_queryset = receipt_repository.get_by_users(
+                    users_in_group
+                )
+            else:
+                receipt_queryset = receipt_repository.filter(pk__in=[])
+
+            user_groups = [
+                {'id': group.pk, 'name': group.name}
+                for group in user.groups.all()
+            ]
+
+        receipts = (
+            receipt_queryset.select_related('seller', 'user')
+            .prefetch_related('product')
+            .order_by('-receipt_date')[: constants.RECENT_RECEIPTS_LIMIT]
         )
 
-    def _get_user_and_account(
-        self,
-        request_data: dict[str, Any],
-    ) -> tuple[User | Response | None, Account | Response | None]:
-        user_id = request_data.get('user')
-        account_id = request_data.get('finance_account')
+        serializer = ReceiptSerializer(receipts, many=True)
 
-        if user_id is None:
-            return (
-                self._error_response('User ID is required'),
-                None,
-            )
-
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return (
-                self._error_response(f'User with id {user_id} does not exist'),
-                None,
-            )
-
-        if account_id is None:
-            return (
-                None,
-                self._error_response('Account ID is required'),
-            )
-
-        try:
-            account = Account.objects.get(id=account_id, user=user)
-        except Account.DoesNotExist:
-            return (
-                None,
-                self._error_response(
-                    f'Account with id {account_id} does not exist '
-                    f'or does not belong to user {user_id}',
-                ),
-            )
-
-        return user, account
-
-    def _create_receipt(
-        self,
-        request_data: dict[str, Any],
-        user: User,
-        account: Account,
-    ) -> Receipt:
-        receipt_creator_service = (
-            self.request.container.receipts.receipt_creator_service()
-        )
-        return receipt_creator_service.create_receipt_from_json(
-            user=user,
-            account=account,
-            data=request_data,
+        return Response(
+            {
+                'receipts': serializer.data,
+                'user_groups': user_groups,
+            },
+            status=status.HTTP_200_OK,
         )
 
 

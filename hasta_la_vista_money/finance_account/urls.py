@@ -7,7 +7,10 @@ and API endpoints.
 
 from django.urls import path
 
-from hasta_la_vista_money.finance_account.apis import AccountListCreateAPIView
+from hasta_la_vista_money.finance_account.apis import (
+    AccountListCreateAPIView,
+    AccountsByGroupAPIView,
+)
 from hasta_la_vista_money.finance_account.views import (
     AccountCreateView,
     AccountView,
@@ -53,5 +56,10 @@ urlpatterns = [
         'ajax/accounts_by_group/',
         AjaxAccountsByGroupView.as_view(),
         name='ajax_accounts_by_group',
+    ),
+    path(
+        'api/by-group/',
+        AccountsByGroupAPIView.as_view(),
+        name='api_by_group',
     ),
 ]

@@ -1,6 +1,7 @@
 """Django репозиторий для Receipt модели."""
 
 from datetime import datetime
+from typing import Any
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
@@ -65,7 +66,7 @@ class ReceiptRepository:
         account: Account,
         start_date: datetime,
         end_date: datetime,
-    ) -> QuerySet[Receipt]:
+    ) -> QuerySet[Receipt, dict[str, Any]]:
         """Фильтровать receipts по счету и периоду."""
         return (
             Receipt.objects.filter(

@@ -24,7 +24,9 @@ class IncomeRepository:
     def get_by_user_with_related(self, user: User) -> QuerySet[Income]:
         """Получить все incomes пользователя с select_related."""
         return Income.objects.for_user(user).select_related(
-            'user', 'category', 'account'
+            'user',
+            'category',
+            'account',
         )
 
     def get_by_period(
@@ -91,7 +93,7 @@ class IncomeRepository:
     def get_aggregated_by_date(
         self,
         user: User,
-    ) -> QuerySet[dict[str, Any]]:
+    ) -> QuerySet[Income, dict[str, Any]]:
         """Получить агрегированные incomes по датам."""
         return (
             Income.objects.filter(user=user)
@@ -105,7 +107,7 @@ class IncomeRepository:
         user: User,
         year_start: datetime,
         limit: int = 10,
-    ) -> QuerySet[dict[str, Any]]:
+    ) -> QuerySet[Income, dict[str, Any]]:
         """Получить топ категорий доходов."""
         return (
             Income.objects.filter(user=user, date__gte=year_start)

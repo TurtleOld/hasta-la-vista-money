@@ -37,6 +37,8 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
     def collect_datasets(cls, request: HttpRequest) -> tuple[Any, Any]:
         if isinstance(request.user, AnonymousUser):
             raise TypeError('User must be authenticated')
+        if not isinstance(request.user, User):
+            raise TypeError('User must be authenticated')
         return collect_datasets(request.user)
 
     @classmethod
@@ -81,6 +83,8 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
     def pie_expense_category(cls, request: HttpRequest) -> list[dict[str, Any]]:
         if isinstance(request.user, AnonymousUser):
             raise TypeError('User must be authenticated')
+        if not isinstance(request.user, User):
+            raise TypeError('User must be authenticated')
         charts = pie_expense_category_service(request.user)
         charts_data = []
         for ch in charts:
@@ -102,9 +106,12 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         budget_chart_data = self.prepare_budget_charts(request)
+        template_name = self.template_name
+        if template_name is None:
+            raise ValueError('template_name must be set')
         return render(
             request,
-            self.template_name,
+            template_name,
             budget_chart_data,
         )
 
