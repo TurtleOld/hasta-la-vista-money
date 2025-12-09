@@ -17,4 +17,3 @@ urlpatterns = [
         name='available_groups',
     ),
 ]
-

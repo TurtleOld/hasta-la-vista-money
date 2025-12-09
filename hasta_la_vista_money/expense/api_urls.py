@@ -13,4 +13,3 @@ urlpatterns = [
     path('by-group/', ExpenseByGroupAPIView.as_view(), name='by_group'),
     path('data/', ExpenseDataAPIView.as_view(), name='data'),
 ]
-

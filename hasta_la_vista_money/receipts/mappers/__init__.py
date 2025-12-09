@@ -5,4 +5,3 @@ from hasta_la_vista_money.receipts.mappers.receipt_api_mapper import (
 )
 
 __all__ = ['ReceiptAPIDataMapper']
-

@@ -5,4 +5,3 @@ from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
 )
 
 __all__ = ['ReceiptAPIValidator']
-

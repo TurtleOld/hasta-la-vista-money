@@ -15,4 +15,3 @@ urlpatterns = [
     path('data/', IncomeDataAPIView.as_view(), name='data'),
     path('<int:pk>/', IncomeRetrieveAPIView.as_view(), name='retrieve'),
 ]
-
