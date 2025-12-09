@@ -7,6 +7,7 @@ from django.urls import resolve, reverse
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.apps import BudgetConfig
 from hasta_la_vista_money.budget.models import DateList, Planning
+from hasta_la_vista_money.expense.models import ExpenseCategory
 
 User = get_user_model()
 
@@ -90,8 +91,6 @@ class BudgetViewsTest(TestCase):
         self.assertIn('redirect_url', response.json())
 
     def test_save_planning_post(self) -> None:
-        from hasta_la_vista_money.expense.models import ExpenseCategory
-
         category = ExpenseCategory.objects.create(
             user=self.user,
             name='Test Category',

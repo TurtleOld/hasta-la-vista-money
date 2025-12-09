@@ -70,7 +70,7 @@ class ReceiptAPIDataMapper:
         """
         if isinstance(raw_date, str):
             try:
-                return datetime.fromisoformat(raw_date.replace('Z', '+00:00'))
+                return datetime.fromisoformat(raw_date)
             except (ValueError, AttributeError):
                 # Fallback to current time if parsing fails
                 return datetime.now(ZoneInfo('UTC'))
@@ -105,4 +105,3 @@ class ReceiptAPIDataMapper:
         if value is None:
             return None
         return self.get_decimal(value)
-

@@ -5,13 +5,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from django.db.models import QuerySet
-
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.finance_account.models import Account
     from core.repositories.protocols import ReceiptRepositoryProtocol
 
 
@@ -110,8 +108,6 @@ class ReceiptAPIValidator:
             )
 
         try:
-            from hasta_la_vista_money.finance_account.models import Account
-
             account = Account.objects.get(id=account_id, user=user)
         except Account.DoesNotExist:
             return ValidationResult(
@@ -151,10 +147,7 @@ class ReceiptAPIValidator:
         # Parse receipt_date if it's a string
         if isinstance(receipt_date, str):
             try:
-                from datetime import datetime
-                receipt_date = datetime.fromisoformat(
-                    receipt_date.replace('Z', '+00:00'),
-                )
+                receipt_date = datetime.fromisoformat(receipt_date)
             except (ValueError, AttributeError):
                 return False
 
@@ -171,4 +164,3 @@ class ReceiptAPIValidator:
             receipt_date=receipt_date,
             total_sum=total_sum,
         ).exists()
-
