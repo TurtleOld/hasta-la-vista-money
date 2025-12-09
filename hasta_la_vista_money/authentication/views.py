@@ -54,9 +54,7 @@ class SessionTokenObtainView(APIView):
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:
-            if not isinstance(request.user, User):
-                self._validate_user(request.user)
-                raise TypeError(_('Пользователь не авторизован'))
+            self._validate_user(request.user)
             user = request.user
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)

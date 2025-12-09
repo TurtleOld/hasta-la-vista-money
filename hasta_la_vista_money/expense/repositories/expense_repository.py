@@ -82,7 +82,7 @@ class ExpenseRepository:
         account: Account,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
-    ) -> QuerySet[Expense]:
+    ) -> QuerySet[Expense, dict[str, Any]]:
         """Фильтровать expenses пользователя по счету и периоду."""
         qs = Expense.objects.filter(user=user, account=account)
         if start_date:
@@ -98,7 +98,7 @@ class ExpenseRepository:
     def get_aggregated_by_date(
         self,
         user: User,
-    ) -> QuerySet[dict[str, Any]]:
+    ) -> QuerySet[Expense, dict[str, Any]]:
         """Получить агрегированные expenses по датам."""
         return (
             Expense.objects.filter(user=user)
@@ -112,7 +112,7 @@ class ExpenseRepository:
         user: User,
         year_start: datetime,
         limit: int = 10,
-    ) -> QuerySet[dict[str, Any]]:
+    ) -> QuerySet[Expense, dict[str, Any]]:
         """Получить топ категорий расходов."""
         return (
             Expense.objects.filter(user=user, date__gte=year_start)

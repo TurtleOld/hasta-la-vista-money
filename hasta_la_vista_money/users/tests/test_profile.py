@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -17,13 +17,14 @@ User = get_user_model()
 class UpdateUserProfileServiceTest(TestCase):
     """Tests for update_user_profile service function."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']  # type: ignore[misc]
+    fixtures = ['users.yaml']
 
     def setUp(self) -> None:
         user = User.objects.first()
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
+        self.assertIsInstance(user, User)
         self.user: UserType = user
 
     def test_update_user_profile(self) -> None:

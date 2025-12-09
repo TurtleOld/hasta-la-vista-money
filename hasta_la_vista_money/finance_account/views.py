@@ -5,7 +5,7 @@ listing, creation, editing, deletion, and money transfer operations. Includes
 comprehensive error handling, user authentication, and AJAX support.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from asgiref.sync import sync_to_async
@@ -13,7 +13,6 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
-from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import QuerySet
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.template.loader import render_to_string
@@ -30,6 +29,7 @@ from django.views.generic import (
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.core.types import WSGIRequestWithContainer
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
@@ -39,7 +39,7 @@ from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import (
     Account,
 )
-from hasta_la_vista_money.users.views import AuthRequest
+from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
 
@@ -59,11 +59,16 @@ class BaseView:
 class AccountBaseView(BaseView):
     """Base view class for account-related operations."""
 
-    request: AuthRequest
-
     def get_queryset(self) -> QuerySet[Account]:
         """Get the queryset of accounts for the current user."""
-        return Account.objects.by_user(self.request.user)
+        request_obj = getattr(self, 'request', None)
+        if request_obj is None:
+            raise AttributeError('request attribute is required')
+        request = cast('WSGIRequestWithContainer', request_obj)
+        if not isinstance(request.user, User):
+            msg = 'User must be authenticated'
+            raise TypeError(msg)
+        return Account.objects.by_user(request.user)
 
 
 class AccountView(
@@ -85,7 +90,6 @@ class AccountView(
 
     context_object_name = 'finance_account'
     template_name = 'finance_account/account.html'
-    request: AuthRequest
 
     def get_queryset(self) -> QuerySet[Account]:
         """Get the queryset of accounts for the current user or group.
@@ -93,11 +97,15 @@ class AccountView(
         Uses GroupAccountMixin to get group_id and account_service
         to filter accounts by user or group.
         """
-        account_service = self.request.container.core.account_service()
+        request = cast('WSGIRequestWithContainer', self.request)
+        account_service = request.container.core.account_service()
         group_id = self.get_group_id()
-        return account_service.get_accounts_for_user_or_group(
-            self.request.user,
-            group_id,
+        return cast(
+            'QuerySet[Account, Account]',
+            account_service.get_accounts_for_user_or_group(
+                request.user,
+                group_id,
+            ),
         )
 
     def get_context_data(
@@ -121,11 +129,12 @@ class AccountView(
             **kwargs,
         )
 
-        container = self.request.container.finance_account
+        request = cast('WSGIRequestWithContainer', self.request)
+        container = request.container.finance_account
         page_context_service = container.account_page_context_service()
 
         user = page_context_service.get_user_with_groups(
-            self.request.user.pk,
+            request.user.pk,
         )
         group_id = self.get_group_id()
         accounts = page_context_service.get_accounts_for_user_or_group(
@@ -136,7 +145,6 @@ class AccountView(
         page_context = page_context_service.build_account_list_context(
             user,
             accounts,
-            group_id,
         )
 
         context.update(page_context)
@@ -159,7 +167,6 @@ class AccountCreateView(
     template_name = 'finance_account/add_account.html'
     no_permission_url = reverse_lazy('login')
     success_message = constants.SUCCESS_MESSAGE_ADDED_ACCOUNT
-    request: AuthRequest
 
     def get_context_data(
         self,
@@ -202,19 +209,22 @@ class AccountCreateView(
         Returns:
             HttpResponseRedirect: Redirect response after processing the form.
         """
+        request = cast('WSGIRequestWithContainer', self.request)
         try:
             account = form.save(commit=False)
-            account.user = self.request.user
+            if not isinstance(request.user, User):
+                raise TypeError('User must be authenticated')
+            account.user = request.user
             account.save()
-            messages.success(self.request, self.success_message)
+            messages.success(request, self.success_message)
             return HttpResponseRedirect(self.get_success_url())
         except Exception:
             logger.exception(
                 'Ошибка при создании счета',
-                user_id=getattr(self.request.user, 'id', None),
+                user_id=getattr(request.user, 'id', None),
             )
             messages.error(
-                self.request,
+                request,
                 _('Не удалось создать счет. Пожалуйста, попробуйте позже.'),
             )
             return HttpResponseRedirect(self.get_success_url())
@@ -237,7 +247,6 @@ class ChangeAccountView(
     form_class = AddAccountForm
     template_name = 'finance_account/change_account.html'
     success_message = constants.SUCCESS_MESSAGE_CHANGED_ACCOUNT
-    request: AuthRequest
 
     def get_context_data(
         self,
@@ -263,12 +272,13 @@ class ChangeAccountView(
             form = form_class(**self.get_form_kwargs())
             context['add_account_form'] = form
         except Exception:
+            request = cast('WSGIRequestWithContainer', self.request)
             logger.exception(
                 'Ошибка при формировании контекста изменения счета',
-                user_id=getattr(self.request.user, 'id', None),
+                user_id=getattr(request.user, 'id', None),
             )
             messages.error(
-                self.request,
+                request,
                 _(
                     'Произошла ошибка при загрузке формы изменения счета. '
                     'Пожалуйста, попробуйте позже.',
@@ -298,17 +308,17 @@ class TransferMoneyAccountView(
     form_class = TransferMoneyAccountForm
     success_message = constants.SUCCESS_MESSAGE_TRANSFER_MONEY
     template_name = 'finance_account/transfer_money.html'
-    request: AuthRequest
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get form kwargs including user for account filtering."""
+        request = cast('WSGIRequestWithContainer', self.request)
         kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
+        kwargs['user'] = request.user
         kwargs['transfer_service'] = (
-            self.request.container.finance_account.transfer_service()
+            request.container.finance_account.transfer_service()
         )
         kwargs['account_repository'] = (
-            self.request.container.finance_account.account_repository()
+            request.container.finance_account.account_repository()
         )
         return kwargs
 
@@ -325,20 +335,21 @@ class TransferMoneyAccountView(
         Returns:
             HttpResponseRedirect: Redirect to account list with success message.
         """
+        request = cast('WSGIRequestWithContainer', self.request)
         try:
             form.save()
-            messages.success(self.request, self.success_message)
+            messages.success(request, self.success_message)
             return HttpResponseRedirect(reverse('finance_account:list'))
         except ValidationError as e:
-            messages.error(self.request, str(e))
+            messages.error(request, str(e))
             return self.form_invalid(form)  # type: ignore[return-value]
         except Exception:
             logger.exception(
                 'Ошибка при переводе средств между счетами',
-                user_id=getattr(self.request.user, 'id', None),
+                user_id=getattr(request.user, 'id', None),
             )
             messages.error(
-                self.request,
+                request,
                 _(
                     'Произошла ошибка при переводе средств. '
                     'Пожалуйста, попробуйте позже.',
@@ -376,7 +387,7 @@ class AjaxAccountsByGroupView(View):
 
     async def get(
         self,
-        request: WSGIRequest,
+        request: WSGIRequestWithContainer,
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:

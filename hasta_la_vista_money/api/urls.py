@@ -10,6 +10,18 @@ urlpatterns = [
         ),
     ),
     path(
+        'users/',
+        include('hasta_la_vista_money.users.api_urls', namespace='users'),
+    ),
+    path(
+        'expense/',
+        include('hasta_la_vista_money.expense.api_urls', namespace='expense'),
+    ),
+    path(
+        'income/',
+        include('hasta_la_vista_money.income.api_urls', namespace='income'),
+    ),
+    path(
         'finaccount/',
         include(
             'hasta_la_vista_money.finance_account.urls',

@@ -21,7 +21,9 @@ class CoreContainer(containers.DeclarativeContainer):
         api_key=config.openai.api_key,
     )
 
-    account_service = providers.Dependency(instance_of=AccountServiceProtocol)
+    account_service: providers.Dependency[AccountServiceProtocol] = (
+        providers.Dependency(instance_of=AccountServiceProtocol)
+    )
 
 
 class ApplicationContainer(containers.DeclarativeContainer):
