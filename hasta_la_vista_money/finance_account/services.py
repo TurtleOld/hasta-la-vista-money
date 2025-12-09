@@ -542,8 +542,11 @@ class AccountService:
         """Calculate purchase period for Raiffeisenbank."""
         if isinstance(purchase_month, datetime):
             purchase_start_date = purchase_month.date().replace(day=1)
-        else:
+        elif isinstance(purchase_month, date):
             purchase_start_date = purchase_month.replace(day=1)
+        else:
+            msg = f'Expected date or datetime, got {type(purchase_month)}'
+            raise TypeError(msg)
 
         purchase_start = timezone.make_aware(
             datetime.combine(purchase_start_date, time.min),
