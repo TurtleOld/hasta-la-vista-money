@@ -22,7 +22,7 @@ class CoreContainer(containers.DeclarativeContainer):
     )
 
     account_service: providers.Dependency[AccountServiceProtocol] = (
-        providers.Dependency()
+        providers.Dependency(instance_of=AccountServiceProtocol)
     )
 
 
