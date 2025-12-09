@@ -1,31 +1,26 @@
-import decimal
 import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from decimal import Decimal
+from typing import Any
 
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from core.protocols.services import AccountServiceProtocol
-from core.repositories.protocols import (
-    ProductRepositoryProtocol,
-    ReceiptRepositoryProtocol,
-    SellerRepositoryProtocol,
-)
+from core.repositories.protocols import ReceiptRepositoryProtocol
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts import services as receipts_services
-from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    ReceiptCreateData,
+    ReceiptCreatorService,
+    SellerCreateData,
+)
 from hasta_la_vista_money.users.models import User
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
-        AccountRepository,
-    )
 
 
 @dataclass
@@ -38,17 +33,11 @@ class ReceiptImportResult:
 class ReceiptImportService:
     def __init__(
         self,
-        account_service: AccountServiceProtocol,
-        account_repository: 'AccountRepository',
         receipt_repository: ReceiptRepositoryProtocol,
-        product_repository: ProductRepositoryProtocol,
-        seller_repository: SellerRepositoryProtocol,
+        receipt_creator_service: ReceiptCreatorService,
     ) -> None:
-        self.account_service = account_service
-        self.account_repository = account_repository
         self.receipt_repository = receipt_repository
-        self.product_repository = product_repository
-        self.seller_repository = seller_repository
+        self.receipt_creator_service = receipt_creator_service
 
     def _clean_json_response(self, text: str) -> str:
         match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
@@ -97,74 +86,13 @@ class ReceiptImportService:
             number_receipt=number_receipt,
         )
 
-    def _create_or_update_seller(
-        self,
-        data: dict[str, Any],
-        user: User,
-    ) -> Seller:
-        name_seller = data.get('name_seller')
-        if not name_seller or not isinstance(name_seller, str):
-            name_seller = 'Неизвестный продавец'
-        return self.seller_repository.update_or_create_seller(
-            user=user,
-            name_seller=name_seller,
-            defaults={
-                'retail_place_address': data.get(
-                    'retail_place_address',
-                    'Нет данных',
-                ),
-                'retail_place': data.get('retail_place', 'Нет данных'),
-            },
-        )
+    def _to_decimal(self, value: Any) -> Decimal:
+        return Decimal(str(value))
 
-    def _create_products(
-        self,
-        data: dict[str, Any],
-        user: User,
-    ) -> list[Product]:
-        products_data = [
-            Product(
-                user=user,
-                product_name=item['product_name'],
-                category=item.get('category'),
-                price=item['price'],
-                quantity=item['quantity'],
-                amount=item['amount'],
-            )
-            for item in data.get('items', [])
-        ]
-        return self.product_repository.bulk_create_products(products_data)
-
-    def _create_receipt(
-        self,
-        data: dict[str, Any],
-        user: User,
-        account: Account,
-        seller: Seller,
-    ) -> Receipt:
-        receipt_data = {
-            'user': user,
-            'account': account,
-            'number_receipt': data['number_receipt'],
-            'receipt_date': self._parse_receipt_date(data['receipt_date']),
-            'nds10': data.get('nds10', 0),
-            'nds20': data.get('nds20', 0),
-            'operation_type': data.get('operation_type', 0),
-            'total_sum': data['total_sum'],
-            'seller': seller,
-        }
-        return self.receipt_repository.create_receipt(**receipt_data)
-
-    def _update_account_balance(
-        self,
-        account: Account,
-        total_sum: decimal.Decimal | str | float,
-    ) -> None:
-        account_balance = self.account_repository.get_by_id(account.pk)
-        self.account_service.apply_receipt_spend(
-            account_balance,
-            decimal.Decimal(total_sum),
-        )
+    def _to_optional_decimal(self, value: Any) -> Decimal | None:
+        if value is None:
+            return None
+        return self._to_decimal(value)
 
     @transaction.atomic
     def process_uploaded_image(
@@ -193,21 +121,25 @@ class ReceiptImportService:
         ).exists():
             return ReceiptImportResult(success=False, error='exists')
 
-        seller = self._create_or_update_seller(data, user)
-        products = self._create_products(data, user)
-        receipt = self._create_receipt(
-            data,
-            user,
-            account,
-            seller,
-        )
-
-        if products:
-            receipt.product.set(products)
-
-        self._update_account_balance(
-            account,
-            decimal.Decimal(data['total_sum']),
+        receipt = self.receipt_creator_service.create_receipt_with_products(
+            user=user,
+            account=account,
+            receipt_data=ReceiptCreateData(
+                receipt_date=self._parse_receipt_date(data['receipt_date']),
+                total_sum=self._to_decimal(data['total_sum']),
+                number_receipt=data.get('number_receipt'),
+                nds10=self._to_optional_decimal(data.get('nds10')),
+                nds20=self._to_optional_decimal(data.get('nds20')),
+                operation_type=data.get('operation_type', 0),
+            ),
+            seller_data=SellerCreateData(
+                name_seller=str(
+                    data.get('name_seller', 'Неизвестный продавец')
+                ),
+                retail_place_address=data.get('retail_place_address'),
+                retail_place=data.get('retail_place'),
+            ),
+            products_data=data.get('items', []),
         )
 
         return ReceiptImportResult(success=True, error=None, receipt=receipt)

@@ -86,7 +86,7 @@ class BudgetServicesTestCase(TestCase):
         """Test aggregate_budget_data raises error on missing data."""
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
-                None,  # type: ignore[arg-type]
+                None,
                 self.months,
                 self.expense_categories,
                 self.income_categories,
@@ -94,7 +94,7 @@ class BudgetServicesTestCase(TestCase):
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
                 self.user,
-                None,  # type: ignore[arg-type]
+                None,
                 self.expense_categories,
                 self.income_categories,
             )
@@ -102,7 +102,7 @@ class BudgetServicesTestCase(TestCase):
             self.budget_service.aggregate_budget_data(
                 self.user,
                 self.months,
-                None,  # type: ignore[arg-type]
+                None,
                 self.income_categories,
             )
         with self.assertRaises(BudgetDataError):
@@ -110,7 +110,7 @@ class BudgetServicesTestCase(TestCase):
                 self.user,
                 self.months,
                 self.expense_categories,
-                None,  # type: ignore[arg-type]
+                None,
             )
 
     def test_aggregate_budget_data_empty_months(self) -> None:
@@ -128,7 +128,7 @@ class BudgetServicesTestCase(TestCase):
             self.assertEqual(row['plan'], [])
             self.assertEqual(row['diff'], [])
             self.assertEqual(row['percent'], [])
-        for row in data['income_data']:  # type: ignore[assignment]
+        for row in data['income_data']:
             self.assertEqual(row['fact'], [])
             self.assertEqual(row['plan'], [])
             self.assertEqual(row['diff'], [])
@@ -164,19 +164,19 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.expense_categories,
-            )  # type: ignore[arg-type]
+            )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_table(
                 self.user,
                 None,
                 self.expense_categories,
-            )  # type: ignore[arg-type]
+            )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_table(
                 self.user,
                 self.months,
                 None,
-            )  # type: ignore[arg-type]
+            )
 
     def test_aggregate_expense_table_empty_months(self) -> None:
         data = self.budget_service.aggregate_expense_table(
@@ -218,19 +218,19 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.income_categories,
-            )  # type: ignore[arg-type]
+            )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_table(
                 self.user,
                 None,
                 self.income_categories,
-            )  # type: ignore[arg-type]
+            )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_table(
                 self.user,
                 self.months,
                 None,
-            )  # type: ignore[arg-type]
+            )
 
     def test_aggregate_income_table_empty_months(self) -> None:
         data = self.budget_service.aggregate_income_table(
@@ -271,19 +271,19 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.expense_categories,
-            )  # type: ignore[arg-type]
+            )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_api(
                 self.user,
                 None,
                 self.expense_categories,
-            )  # type: ignore[arg-type]
+            )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_api(
                 self.user,
                 self.months,
                 None,
-            )  # type: ignore[arg-type]
+            )
 
     def test_aggregate_expense_api_empty_months(self) -> None:
         data = self.budget_service.aggregate_expense_api(
@@ -295,7 +295,7 @@ class BudgetServicesTestCase(TestCase):
         for row in data['data']:
             self.assertTrue(
                 all(
-                    row[f] == []  # type: ignore[literal-required]
+                    row[f] == []
                     for f in ['fact_' + str(m) for m in data['months']]
                 ),
             )
@@ -326,19 +326,19 @@ class BudgetServicesTestCase(TestCase):
                 None,
                 self.months,
                 self.income_categories,
-            )  # type: ignore[arg-type]
+            )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_api(
                 self.user,
                 None,
                 self.income_categories,
-            )  # type: ignore[arg-type]
+            )
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_api(
                 self.user,
                 self.months,
                 None,
-            )  # type: ignore[arg-type]
+            )
 
     def test_aggregate_income_api_empty_months(self) -> None:
         data = self.budget_service.aggregate_income_api(
@@ -350,7 +350,7 @@ class BudgetServicesTestCase(TestCase):
         for row in data['data']:
             self.assertTrue(
                 all(
-                    row[f] == []  # type: ignore[literal-required]
+                    row[f] == []
                     for f in ['fact_' + str(m) for m in data['months']]
                 ),
             )
