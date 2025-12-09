@@ -66,8 +66,6 @@ from hasta_la_vista_money.users.services.export import get_user_export_data
 from hasta_la_vista_money.users.services.groups import (
     create_group,
     delete_group,
-    get_groups_not_for_user,
-    get_user_groups,
     remove_user_from_group,
 )
 from hasta_la_vista_money.users.services.notifications import (
@@ -506,8 +504,6 @@ class DeleteUserFromGroupView(
                 kwargs={'pk': self.request.user.pk or 0},
             ),
         )
-
-
 
 
 class SwitchThemeView(LoginRequiredMixin, View):

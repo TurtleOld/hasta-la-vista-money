@@ -102,7 +102,7 @@ class IncomeView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         and chart data.
         """
         context = super().get_context_data(**kwargs)
-        request = self.get_request_with_container()
+        self.get_request_with_container()
         user = self.get_current_user()
         depth_limit = 3
 

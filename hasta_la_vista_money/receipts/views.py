@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import Group
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, ProtectedError, QuerySet, Sum, Window
 from django.db.models.expressions import F
@@ -16,11 +15,10 @@ from hasta_la_vista_money.core.types import RequestWithContainer
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_GET
 from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django_stubs_ext import StrOrPromise
 
@@ -689,24 +687,28 @@ class UploadImageView(
             )
 
             if not result.success:
-                if result.error == 'invalid_file':
-                    return self.handle_form_error_with_message(
-                        form,
+                error_messages = {
+                    'invalid_file': (
                         ValueError(constants.INVALID_FILE_FORMAT),
                         constants.INVALID_FILE_FORMAT,
-                    )
-                elif result.error == 'exists':
-                    return self.handle_form_error_with_message(
-                        form,
+                    ),
+                    'exists': (
                         ValueError(constants.RECEIPT_ALREADY_EXISTS),
                         str(gettext_lazy(constants.RECEIPT_ALREADY_EXISTS)),
-                    )
-                else:
-                    return self.handle_form_error_with_message(
-                        form,
+                    ),
+                }
+                error_tuple = error_messages.get(
+                    result.error,
+                    (
                         ValueError(constants.ERROR_PROCESSING_RECEIPT),
                         constants.ERROR_PROCESSING_RECEIPT,
-                    )
+                    ),
+                )
+                return self.handle_form_error_with_message(
+                    form,
+                    error_tuple[0],
+                    error_tuple[1],
+                )
 
             messages.success(
                 request,
@@ -734,5 +736,3 @@ class UploadImageView(
         if isinstance(uploaded_file, list):
             uploaded_file = uploaded_file[0]
         return uploaded_file
-
-
