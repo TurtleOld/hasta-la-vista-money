@@ -46,7 +46,7 @@ jobs:
           version: "0.9.7"
 
       - name: Install ruff
-        uses: astral-sh/ruff-action@7b97a6d66e71ca0b699416729b17f5d76c6cb073
+        uses: astral-sh/ruff-action@c03f3350689d35a9c75ae49625b05bed0dc7cfd2
         with:
           version: "0.12.8"
       - run: ruff check --fix
