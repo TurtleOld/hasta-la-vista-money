@@ -7,7 +7,6 @@ function getGroupId() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-
     // Получаем текущий user id из data-атрибута таблицы
     const table = document.getElementById('income-table');
     const currentUserId = table ? parseInt(table.dataset.currentUserId) : null;
@@ -24,8 +23,90 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Показываем skeleton loader до загрузки данных
     const skeleton = document.getElementById('income-skeleton');
+    const mobileCardsContainer = document.getElementById('income-mobile-cards');
     if (skeleton) {
         skeleton.style.display = '';
+    }
+
+    // Функция для форматирования суммы
+    function formatMoney(amount) {
+        return parseFloat(amount).toLocaleString('ru-RU', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    // Функция для генерации мобильных карточек
+    function renderMobileCards(data) {
+        if (!mobileCardsContainer) {
+            return;
+        }
+
+        mobileCardsContainer.innerHTML = '';
+
+        if (!data || data.length === 0) {
+            mobileCardsContainer.innerHTML = '<div class="text-center text-muted py-4">Нет данных для отображения. Добавьте первый доход!</div>';
+            return;
+        }
+
+        data.forEach(function (item) {
+            const card = document.createElement('div');
+            card.className = 'mobile-card';
+
+            const isOwner = item.user_id === currentUserId;
+            let actionsHtml = '';
+
+            if (isOwner) {
+                const csrfToken = getCookie('csrftoken') || '';
+                actionsHtml = `
+                    <a href="/income/change/${item.id}/" class="btn btn-sm btn-outline-success me-1" title="Редактировать">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <form method="post" action="/income/${item.id}/copy/" class="d-inline me-1">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Копировать">
+                            <i class="bi bi-files"></i>
+                        </button>
+                    </form>
+                    <form method="post" action="/income/delete/${item.id}/" class="d-inline">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот доход?');">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                `;
+            } else {
+                actionsHtml = '<span class="text-muted">Только просмотр</span>';
+            }
+
+            card.innerHTML = `
+                <div class="mobile-card-header fw-bold text-success mb-2">${item.category_name || 'Без категории'}</div>
+                <div class="mobile-card-body">
+                    <div class="mobile-card-row d-flex justify-content-between align-items-center mb-2">
+                        <span class="label text-muted">Сумма:</span>
+                        <span class="value fw-bold text-success">${formatMoney(item.amount)} ₽</span>
+                    </div>
+                    <div class="mobile-card-row d-flex justify-content-between align-items-center mb-2">
+                        <span class="label text-muted">Счет:</span>
+                        <span class="value text-primary">${item.account_name || 'Не указан'}</span>
+                    </div>
+                    <div class="mobile-card-row d-flex justify-content-between align-items-center mb-2">
+                        <span class="label text-muted">Дата:</span>
+                        <span class="value text-secondary">${item.date || 'Не указана'}</span>
+                    </div>
+                    <div class="mobile-card-row d-flex justify-content-between align-items-center mb-2">
+                        <span class="label text-muted">Пользователь:</span>
+                        <span class="value text-muted">${item.user_name || 'Не указан'}</span>
+                    </div>
+                    <div class="mobile-card-row d-flex justify-content-between align-items-center">
+                        <span class="label text-muted">Действия:</span>
+                        <span class="value">${actionsHtml}</span>
+                    </div>
+                </div>
+            `;
+
+            mobileCardsContainer.appendChild(card);
+        });
     }
 
     // Создание Tabulator таблицы
@@ -40,7 +121,10 @@ document.addEventListener('DOMContentLoaded', function () {
         ajaxResponse: function(url, params, response) {
             if (table) table.classList.remove('d-none');
             if (skeleton) skeleton.style.display = 'none';
-            return response.data || response;
+            const data = response.data || response;
+            // Генерируем мобильные карточки
+            renderMobileCards(data);
+            return data;
         },
         placeholder: 'Нет данных для отображения. Добавьте первый доход!',
         columns: [
@@ -87,9 +171,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     const isOwner = data.user_id === currentUserId;
                     let buttons = '';
                     if (isOwner) {
-                        buttons += `<button class="btn btn-sm btn-outline-success me-1 edit-income-btn" data-id="${data.id}" title="Редактировать"><i class="bi bi-pencil"></i></button>`;
-                        buttons += `<button class="btn btn-sm btn-outline-primary me-1 copy-income-btn" data-id="${data.id}" title="Копировать"><i class="bi bi-files"></i></button>`;
-                        buttons += `<button class="btn btn-sm btn-outline-danger delete-income-btn" data-id="${data.id}" title="Удалить"><i class="bi bi-trash"></i></button>`;
+                        const csrfToken = getCookie('csrftoken') || '';
+                        buttons += `<a href="/income/change/${data.id}/" class="btn btn-sm btn-outline-success me-1" title="Редактировать"><i class="bi bi-pencil"></i></a>`;
+                        buttons += `<form method="post" action="/income/${data.id}/copy/" class="d-inline me-1"><input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}"><button type="submit" class="btn btn-sm btn-outline-primary" title="Копировать"><i class="bi bi-files"></i></button></form>`;
+                        buttons += `<form method="post" action="/income/delete/${data.id}/" class="d-inline"><input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}"><button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот доход?');"><i class="bi bi-trash"></i></button></form>`;
                     } else {
                         buttons += `<span class="text-muted">Только просмотр</span>`;
                     }
@@ -137,6 +222,13 @@ document.addEventListener('DOMContentLoaded', function () {
         tableBuilt: function() {
             if (table) table.classList.remove('d-none');
             if (skeleton) skeleton.style.display = 'none';
+            // Генерируем мобильные карточки при первой загрузке
+            const data = window.incomeTabulator.getData();
+            renderMobileCards(data);
+        },
+        dataLoaded: function (data) {
+            // Обновляем мобильные карточки при загрузке данных
+            renderMobileCards(data);
         }
     });
 
@@ -153,6 +245,12 @@ document.addEventListener('DOMContentLoaded', function () {
             window.incomeTabulator.setData('/income/ajax/income_data/', { group_id: getGroupId() });
         });
     }
+
+    // Обновляем мобильные карточки при изменении данных
+    window.incomeTabulator.on('dataChanged', function () {
+        const data = window.incomeTabulator.getData();
+        renderMobileCards(data);
+    });
 
     // Показать/скрыть фильтр групп
     const toggleBtn = document.getElementById('toggle-group-filter');
@@ -237,108 +335,3 @@ function showNotification(message, type = 'info') {
     }, 5000);
 }
 
-// Функции редактирования
-function editIncome(id) { // eslint-disable-line
-    const modal = new bootstrap.Modal(document.getElementById('add-income'));
-    loadIncomeData(id);
-    modal.show();
-}
-
-function copyIncome(id) { // eslint-disable-line
-    fetch(`/income/${id}/copy/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken')
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.incomeTabulator.setData('/income/ajax/income_data/', { group_id: getGroupId() });
-            showNotification('Доход скопирован', 'success');
-        } else {
-            showNotification('Ошибка копирования', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showNotification('Ошибка копирования', 'error');
-    });
-}
-
-function deleteIncome(id) { // eslint-disable-line
-    if (confirm('Вы уверены, что хотите удалить этот доход?')) {
-        fetch(`/income/delete/${id}/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                window.incomeTabulator.setData('/income/ajax/income_data/', { group_id: getGroupId() });
-                showNotification('Доход удален', 'success');
-            } else {
-                showNotification('Ошибка удаления', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showNotification('Ошибка удаления', 'error');
-        });
-    }
-}
-
-function loadIncomeData(id) {
-    fetch(`/income/get/${id}/`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const income = data.income;
-                const form = document.getElementById('income-form');
-
-                // Заполнить форму данными
-                form.querySelector('[name="category"]').value = income.category_id;
-                form.querySelector('[name="account"]').value = income.account_id;
-                form.querySelector('[name="amount"]').value = income.amount;
-                form.querySelector('[name="date"]').value = income.date;
-
-                // Изменить action формы на редактирование
-                form.action = `/income/change/${id}/`;
-
-                // Изменить заголовок модального окна
-                const modalTitle = document.querySelector('#add-income .modal-title');
-                if (modalTitle) {
-                    modalTitle.textContent = 'Редактировать доход';
-                }
-            } else {
-                showNotification('Ошибка загрузки данных', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showNotification('Ошибка загрузки данных', 'error');
-        });
-}
-
-// Делегирование событий для кнопок действий (CSP-safe)
-document.addEventListener('click', function(e) {
-    const editBtn = e.target.closest('.edit-income-btn');
-    if (editBtn) {
-        const id = editBtn.dataset.id;
-        editIncome(id);
-        return;
-    }
-    const copyBtn = e.target.closest('.copy-income-btn');
-    if (copyBtn) {
-        const id = copyBtn.dataset.id;
-        copyIncome(id);
-        return;
-    }
-    const deleteBtn = e.target.closest('.delete-income-btn');
-    if (deleteBtn) {
-        const id = deleteBtn.dataset.id;
-        deleteIncome(id);
-    }
-});
