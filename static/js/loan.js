@@ -15,16 +15,9 @@ class LoanManager {
      * Инициализация обработчиков событий
      */
     initializeEventListeners() {
-        // Форма добавления кредита
         this.setupLoanForm();
-
-        // Модальные окна
         this.setupModals();
-
-        // Фильтры и поиск
         this.setupFilters();
-
-        // Экспорт данных
         this.setupExport();
     }
 
@@ -34,7 +27,6 @@ class LoanManager {
     setupLoanForm() {
         const form = document.querySelector('.needs-validation');
         if (form) {
-            // Валидация формы
             form.addEventListener('submit', (event) => {
                 if (!form.checkValidity()) {
                     event.preventDefault();
@@ -43,7 +35,6 @@ class LoanManager {
                 form.classList.add('was-validated');
             });
 
-            // Предварительный расчет
             this.setupCalculationPreview();
         }
     }
@@ -86,7 +77,6 @@ class LoanManager {
      */
     calculateLoan(amount, monthlyRate, months, type) {
         if (type === 'Annuity') {
-            // Аннуитетный платеж
             const monthlyPaymentRaw = amount * (monthlyRate * Math.pow(1 + monthlyRate, months)) /
                                  (Math.pow(1 + monthlyRate, months) - 1);
             let totalPayment = 0;
@@ -102,7 +92,6 @@ class LoanManager {
                 type: 'annuity'
             };
         } else {
-            // Дифференцированный платеж
             const principalPayment = amount / months;
             let totalInterest = 0;
             let totalPayment = 0;
@@ -195,14 +184,12 @@ class LoanManager {
      * Настройка модальных окон
      */
     setupModals() {
-        // Улучшенные модальные окна
         document.querySelectorAll('[data-bs-toggle="modal"]').forEach(button => {
             button.addEventListener('click', () => {
                 const target = button.getAttribute('data-bs-target');
                 const modal = document.querySelector(target);
 
                 if (modal) {
-                    // Добавить анимацию загрузки
                     const modalBody = modal.querySelector('.modal-body');
                     if (modalBody && !modalBody.querySelector('.loan-loading')) {
                         const loadingDiv = document.createElement('div');
@@ -220,10 +207,8 @@ class LoanManager {
             });
         });
 
-        // Обработка закрытия модальных окон
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('hidden.bs.modal', () => {
-                // Очистить загрузочные состояния
                 const loadingElements = modal.querySelectorAll('.loan-loading');
                 loadingElements.forEach(el => el.remove());
             });
@@ -234,7 +219,6 @@ class LoanManager {
      * Настройка фильтров
      */
     setupFilters() {
-        // Фильтр по статусу
         const statusFilter = document.getElementById('status-filter');
         if (statusFilter) {
             statusFilter.addEventListener('change', (e) => {
@@ -242,7 +226,6 @@ class LoanManager {
             });
         }
 
-        // Поиск по номеру кредита
         const searchInput = document.getElementById('loan-search');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
@@ -250,7 +233,6 @@ class LoanManager {
             });
         }
 
-        // Сортировка
         const sortSelect = document.getElementById('sort-loans');
         if (sortSelect) {
             sortSelect.addEventListener('change', (e) => {
@@ -311,7 +293,6 @@ class LoanManager {
             }
         });
 
-        // Пересортировать элементы
         cards.forEach(card => container.appendChild(card));
     }
 
@@ -344,7 +325,6 @@ class LoanManager {
             loans.push(loan);
         });
 
-        // Создать CSV
         const csv = this.convertToCSV(loans);
         this.downloadCSV(csv, 'loans_export.csv');
     }
@@ -397,10 +377,7 @@ class LoanManager {
      * Инициализация графиков
      */
     initializeCharts() {
-        // График платежей
         this.setupPaymentChart();
-
-        // График прогресса погашения
         this.setupProgressChart();
     }
 
@@ -412,7 +389,6 @@ class LoanManager {
         if (chartCanvas && typeof Chart !== 'undefined') {
             const ctx = chartCanvas.getContext('2d');
 
-            // Получить данные из таблицы
             const table = document.querySelector('.schedule-table');
             if (table) {
                 const rows = table.querySelectorAll('tbody tr');
@@ -487,7 +463,6 @@ class LoanManager {
         if (progressCanvas && typeof Chart !== 'undefined') {
             const ctx = progressCanvas.getContext('2d');
 
-            // Получить данные о погашении
             const totalPayments = document.querySelectorAll('.schedule-table tbody tr').length;
             const paidPayments = document.querySelectorAll('.schedule-table tbody tr.paid').length;
             const remainingPayments = totalPayments - paidPayments;
@@ -526,10 +501,7 @@ class LoanManager {
         notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
         notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
 
-        // Безопасно добавить сообщение
         notification.appendChild(document.createTextNode(message));
-
-        // Создать кнопку закрытия
         const closeButton = document.createElement('button');
         closeButton.type = 'button';
         closeButton.className = 'btn-close';
@@ -538,7 +510,6 @@ class LoanManager {
 
         document.body.appendChild(notification);
 
-        // Автоматически скрыть через 5 секунд
         setTimeout(() => {
             if (notification.parentNode) {
                 notification.remove();
@@ -547,10 +518,8 @@ class LoanManager {
     }
 }
 
-// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     new LoanManager();
 });
 
-// Экспорт для использования в других модулях
 window.LoanManager = LoanManager;
