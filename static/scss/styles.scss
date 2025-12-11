@@ -432,7 +432,7 @@ table {
     animation: fadeInUp 0.3s ease-out;
     will-change: transform, opacity;
     
-        @media (prefers-reduced-motion: reduce) {
+    @media (prefers-reduced-motion: reduce) {
             .receipt-card {
                 animation: none;
     
@@ -450,14 +450,17 @@ table {
                 &[loading="lazy"] {
                     content-visibility: auto;
                 }
-                                                }
-                                                .preview-image {
-                                                    max-width: 100%;
-                                                    height: auto;
-                                                    object-fit: contain;
-                                                }
-                        
-                                                @media (max-width: 767.98px) {
+                        }
+
+                                .preview-image {
+                                    max-width: 100%;
+                                    height: auto;
+                                    object-fit: contain;
+                                }
+                }
+                }
+        
+@media (max-width: 767.98px) {
     .receipt-info-grid {
         grid-template-columns: 1fr;
         gap: 0.5rem;
@@ -492,104 +495,110 @@ table {
             font-size: 1.5rem;
         }
     }
-.modal {
-    .modal-dialog {
-        margin: 0;
-        max-width: 100%;
-        height: 100%;
+
+                .modal {
+                    .modal-dialog {
+                        margin: 0;
+                        max-width: 100%;
+                        height: 100%;
+                    }
+
+                                .modal-content {
+                                    height: 100%;
+                                    border-radius: 0;
+                                    border: none;
+                                    display: flex;
+                                    flex-direction: column;
+                                }
+
+                                .modal-header {
+                                    border-radius: 0;
+                                    flex-shrink: 0;
+                                }
+
+                                .modal-body {
+                                    flex: 1;
+                                    overflow-y: auto;
+                                    -webkit-overflow-scrolling: touch;
+                                }
+
+                                .modal-footer {
+                                    flex-shrink: 0;
+                                    border-radius: 0;
+                                }
+                                }
+
+                .form-control,
+                .form-select {
+                    font-size: 16px;
+                    min-height: 44px;
+                    padding: 0.625rem 0.75rem;
+                    touch-action: manipulation;
+                }
+
+                .form-label {
+                    font-size: 0.9rem;
+                    margin-bottom: 0.5rem;
+                    font-weight: 500;
+                }
+
+                .form-check-input {
+                    width: 1.25rem;
+                    height: 1.25rem;
+                    min-width: 44px;
+                    min-height: 44px;
+                    margin-top: 0.125rem;
+                }
+
+                .form-check-label {
+                    padding-left: 0.5rem;
+                    font-size: 0.9rem;
+                }
+
+                .btn {
+                    min-height: 44px;
+                    min-width: 44px;
+                    padding: 0.625rem 1rem;
+                    font-size: 0.95rem;
+                    touch-action: manipulation;
+                }
+
+                .btn-sm {
+                    min-height: 38px;
+                    min-width: 38px;
+                    padding: 0.5rem 0.75rem;
+                    font-size: 0.875rem;
+                }
+
+                .input-group {
+        .form-control,
+            .form-select {
+                min-height: 44px;
+            }
+
+                                .btn {
+                                    min-height: 44px;
+                                }
+                                }
+
+                .invalid-feedback,
+                .valid-feedback {
+                    font-size: 0.85rem;
+                    margin-top: 0.375rem;
+                }
+
+                .form-text {
+                    font-size: 0.8rem;
+                    margin-top: 0.375rem;
+                }
+}
+}
+
+@media (max-width: 767.98px) {
+    .mobile-menu-toggle .icon {
+        font-size: 1.5rem;
     }
-
-    .modal-content {
-        height: 100%;
-        border-radius: 0;
-        border: none;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .modal-header {
-        border-radius: 0;
-        flex-shrink: 0;
-    }
-
-    .modal-body {
-        flex: 1;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .modal-footer {
-        flex-shrink: 0;
-        border-radius: 0;
-    }
 }
-
-.form-control,
-.form-select {
-    font-size: 16px;
-    min-height: 44px;
-    padding: 0.625rem 0.75rem;
-    touch-action: manipulation;
-}
-
-.form-label {
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-}
-
-.form-check-input {
-    width: 1.25rem;
-    height: 1.25rem;
-    min-width: 44px;
-    min-height: 44px;
-    margin-top: 0.125rem;
-}
-
-.form-check-label {
-    padding-left: 0.5rem;
-    font-size: 0.9rem;
-}
-
-.btn {
-    min-height: 44px;
-    min-width: 44px;
-    padding: 0.625rem 1rem;
-    font-size: 0.95rem;
-    touch-action: manipulation;
-}
-
-.btn-sm {
-    min-height: 38px;
-    min-width: 38px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
-}
-
-.input-group {
-
-    .form-control,
-    .form-select {
-        min-height: 44px;
-    }
-
-    .btn {
-        min-height: 44px;
-    }
-}
-
-.invalid-feedback,
-.valid-feedback {
-    font-size: 0.85rem;
-    margin-top: 0.375rem;
-}
-
-.form-text {
-    font-size: 0.8rem;
-    margin-top: 0.375rem;
-}
-}
-
 .btn-receipt-action {
     border-radius: 8px;
     font-weight: 500;
@@ -914,11 +923,8 @@ table {
         display: flex;
         align-items: center;
         justify-content: center;
-    }
-
-    .icon {
-        font-size: 1.5rem;
-    }
+    
+}
 }
 
 .mobile-menu {
@@ -946,11 +952,30 @@ table {
         visibility: hidden;
         pointer-events: none;
 
+        &::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: -1;
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+                transition: opacity 0.3s ease, visibility 0.3s ease;
+            }
         &:not(.show) {
             transform: translateX(-100%) !important;
             display: none;
             visibility: hidden;
             pointer-events: none;
+&::before {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
         }
 
         &.show {
@@ -958,6 +983,11 @@ table {
             transform: translateX(0) !important;
             visibility: visible;
             pointer-events: auto;
+&::before {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
         }
     }
 
@@ -1030,44 +1060,6 @@ table {
     }
 }
 
-.mobile-menu-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1039;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-    display: none;
-    pointer-events: none;
-
-    @media (prefers-reduced-motion: reduce) {
-        transition: none;
-    }
-
-    @media (max-width: 767.98px) {
-        display: none;
-        opacity: 0;
-        visibility: hidden;
-
-        &:not(.show) {
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-            display: none;
-        }
-
-        &.show {
-            display: block;
-            opacity: 1;
-            visibility: visible;
-            pointer-events: auto;
-        }
-    }
-}
 @media (max-width: 767.98px) {
     .nav-text {
         display: none;
@@ -1123,19 +1115,20 @@ table {
         width: 100%;
         text-align: left;
     }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @media (orientation: landscape) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    .header {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        padding: 0.25rem 0;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    .navbar {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        padding: 0.375rem 0.75rem;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    .logo {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        font-size: 1rem;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
+
+                @media (orientation: landscape) {
+                    .header {
+                        padding: 0.25rem 0;
+                    }
+        
+                    .navbar {
+                        padding: 0.375rem 0.75rem;
+                    }
+        
+                    .logo {
+                        font-size: 1rem;
+                    }
+                }
 }
 .account-foreign {
     background-color: #e3f0ff !important;
@@ -1321,10 +1314,10 @@ div.dtsp-searchPane .dtsp-paneInputButton {
 }
 .tabulator-row:hover {
     background-color: #f8f9fa;
-    }
+}
 
-    .table-foreign {
-        background-color: #fff3cd !important;
+.table-foreign {
+    background-color: #fff3cd !important;
 }
 .tabulator-cell {
     padding: 0.5rem;
@@ -1332,8 +1325,7 @@ div.dtsp-searchPane .dtsp-paneInputButton {
 }
 .tabulator-footer {
     background-color: #f8f9fa;
-        border-top: 1px solid #dee2e6;
-    }
+    border-top: 1px solid #dee2e6;
 
     .tabulator-paginator {
         background-color: #f8f9fa;
@@ -1351,6 +1343,7 @@ div.dtsp-searchPane .dtsp-paneInputButton {
     .tabulator-page[data-page="active"] {
         background-color: #0d6efd;
         color: white;
+    }
 }
 body.theme-fade {
     transition: background-color 0.4s, color 0.4s;
@@ -1550,7 +1543,4 @@ body.theme-fade {
   font-weight: bold;
   display: block;
   text-align: left;
-}
-}
-}
 }

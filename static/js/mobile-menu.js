@@ -3,21 +3,18 @@
 
     const mobileMenuToggle = document.getElementById('mobileMenuToggle');
     const mobileMenu = document.getElementById('mobileMenu');
-    const mobileMenuBackdrop = document.getElementById('mobileMenuBackdrop');
     const mobileMenuClose = document.getElementById('mobileMenuClose');
     const body = document.body;
 
-    if (!mobileMenuToggle || !mobileMenu || !mobileMenuBackdrop) {
+    if (!mobileMenuToggle || !mobileMenu) {
         return;
     }
 
     mobileMenu.classList.remove('show');
-    mobileMenuBackdrop.classList.remove('show');
     body.style.overflow = '';
 
     function openMenu() {
         mobileMenu.classList.add('show');
-        mobileMenuBackdrop.classList.add('show');
         body.style.overflow = 'hidden';
         
         const icon = mobileMenuToggle.querySelector('.icon');
@@ -30,7 +27,6 @@
 
     function closeMenu() {
         mobileMenu.classList.remove('show');
-        mobileMenuBackdrop.classList.remove('show');
         body.style.overflow = '';
         
         const icon = mobileMenuToggle.querySelector('.icon');
@@ -63,10 +59,14 @@
         });
     }
 
-    mobileMenuBackdrop.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        closeMenu();
+    // Обработчик клика на backdrop (псевдоэлемент ::before)
+    // Закрываем меню при клике на сам .mobile-menu, но не на его дочерние элементы
+    mobileMenu.addEventListener('click', function(e) {
+        if (e.target === mobileMenu) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeMenu();
+        }
     });
 
     const mobileMenuLinks = mobileMenu.querySelectorAll('.nav-link');
