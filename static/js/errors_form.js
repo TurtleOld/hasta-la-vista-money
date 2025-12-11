@@ -43,7 +43,7 @@ $(document).ready(function() {
                     }
                 }
             },
-            error: function(xhr) {
+            error: function (xhr) {
                 const errorMessage = 'Произошла ошибка при отправке запроса. Пожалуйста, повторите попытку позже или измените запрос.';
                 $('#error-message').text(errorMessage);
                 $('.ajax-modal').modal('hide');
