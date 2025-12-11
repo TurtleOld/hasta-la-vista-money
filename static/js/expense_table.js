@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    // Функция для форматирования суммы
     function formatMoney(amount) {
         return parseFloat(amount).toLocaleString('ru-RU', {
             minimumFractionDigits: 2,
@@ -24,7 +23,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Функция для безопасного создания элемента с текстом
     function createTextElement(tag, text, className) {
         const element = document.createElement(tag);
         if (className) {
@@ -34,7 +32,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return element;
     }
 
-    // Функция для создания строки карточки
     function createCardRow(labelText, valueText, valueClass) {
         const row = document.createElement('div');
         row.className = 'mobile-card-row d-flex justify-content-between align-items-center mb-2';
@@ -47,7 +44,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return row;
     }
 
-    // Функция для создания кнопок действий
     function createActionButtons(item, isOwner, isReceipt) {
         const valueDiv = document.createElement('span');
         valueDiv.className = 'value';
@@ -58,7 +54,6 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (isOwner) {
             const csrfToken = getCookie('csrftoken') || '';
 
-            // Кнопка редактирования
             const editLink = document.createElement('a');
             editLink.href = '/expense/change/' + item.id + '/';
             editLink.className = 'btn btn-sm btn-outline-success me-1';
@@ -68,7 +63,6 @@ document.addEventListener('DOMContentLoaded', function () {
             editLink.appendChild(editIcon);
             valueDiv.appendChild(editLink);
 
-            // Форма копирования
             const copyForm = document.createElement('form');
             copyForm.method = 'post';
             copyForm.action = '/expense/' + item.id + '/copy/';
@@ -88,7 +82,6 @@ document.addEventListener('DOMContentLoaded', function () {
             copyForm.appendChild(copyBtn);
             valueDiv.appendChild(copyForm);
 
-            // Форма удаления
             const deleteForm = document.createElement('form');
             deleteForm.method = 'post';
             deleteForm.action = '/expense/delete/' + item.id + '/';
@@ -118,7 +111,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return valueDiv;
     }
 
-    // Функция для генерации мобильных карточек
     function renderMobileCards(data) {
         if (!mobileCardsContainer) {
             return;
@@ -173,7 +165,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (table) table.classList.remove('d-none');
             if (skeleton) skeleton.style.display = 'none';
             const data = response.data || response;
-            // Генерируем мобильные карточки
             renderMobileCards(data);
             return data;
         },
@@ -219,7 +210,6 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         rowFormatter: function(row) {
             const el = row.getElement();
-            // Мягкие полосы только для чётных строк
             if (row.getPosition(true) % 2 === 0) {
                 el.classList.add('tabulator-alt-row');
             } else {
@@ -229,17 +219,14 @@ document.addEventListener('DOMContentLoaded', function () {
         tableBuilt: function() {
             if (table) table.classList.remove('d-none');
             if (skeleton) skeleton.style.display = 'none';
-            // Генерируем мобильные карточки при первой загрузке
             const data = window.expenseTabulator.getData();
             renderMobileCards(data);
         },
         dataLoaded: function (data) {
-            // Обновляем мобильные карточки при загрузке данных
             renderMobileCards(data);
         }
     });
 
-    // Переключение групп
     const groupSelect = document.getElementById('expense-group-select');
     if (groupSelect) {
         groupSelect.addEventListener('change', function() {
@@ -247,13 +234,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Обновляем мобильные карточки при изменении данных
     window.expenseTabulator.on('dataChanged', function () {
         const data = window.expenseTabulator.getData();
         renderMobileCards(data);
     });
 
-    // Обработчик для кнопки фильтра групп
     const toggleBtn = document.getElementById('toggle-group-filter');
     const filterBlock = document.getElementById('expense-group-filter-block');
     if (toggleBtn && filterBlock) {
@@ -263,7 +248,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
-// Функция для получения CSRF-токена из cookie
 function getCookie(name) {
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
         return null;

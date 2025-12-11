@@ -1,13 +1,11 @@
 /* global Tabulator, bootstrap */
 
-// Функция получения ID группы (глобальная)
 function getGroupId() {
     const groupSelect = document.getElementById('income-group-select');
     return groupSelect ? groupSelect.value : 'my';
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    // Получаем текущий user id из data-атрибута таблицы
     const table = document.getElementById('income-table');
     const currentUserId = table ? parseInt(table.dataset.currentUserId) : null;
 
@@ -16,19 +14,16 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    // Добавляем CSS класс для стилизации
     if (table) {
         table.classList.add('income-table');
     }
 
-    // Показываем skeleton loader до загрузки данных
     const skeleton = document.getElementById('income-skeleton');
     const mobileCardsContainer = document.getElementById('income-mobile-cards');
     if (skeleton) {
         skeleton.style.display = '';
     }
 
-    // Функция для форматирования суммы
     function formatMoney(amount) {
         return parseFloat(amount).toLocaleString('ru-RU', {
             minimumFractionDigits: 2,
@@ -36,7 +31,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Функция для безопасного создания элемента с текстом
     function createTextElement(tag, text, className) {
         const element = document.createElement(tag);
         if (className) {
@@ -46,7 +40,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return element;
     }
 
-    // Функция для создания строки карточки
     function createCardRow(labelText, valueText, valueClass) {
         const row = document.createElement('div');
         row.className = 'mobile-card-row d-flex justify-content-between align-items-center mb-2';
@@ -59,7 +52,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return row;
     }
 
-    // Функция для создания кнопок действий
     function createActionButtons(item, isOwner) {
         const valueDiv = document.createElement('span');
         valueDiv.className = 'value';
@@ -67,7 +59,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isOwner) {
             const csrfToken = getCookie('csrftoken') || '';
 
-            // Кнопка редактирования
             const editLink = document.createElement('a');
             editLink.href = '/income/change/' + item.id + '/';
             editLink.className = 'btn btn-sm btn-outline-success me-1';
@@ -77,7 +68,6 @@ document.addEventListener('DOMContentLoaded', function () {
             editLink.appendChild(editIcon);
             valueDiv.appendChild(editLink);
 
-            // Форма копирования
             const copyForm = document.createElement('form');
             copyForm.method = 'post';
             copyForm.action = '/income/' + item.id + '/copy/';
@@ -97,7 +87,6 @@ document.addEventListener('DOMContentLoaded', function () {
             copyForm.appendChild(copyBtn);
             valueDiv.appendChild(copyForm);
 
-            // Форма удаления
             const deleteForm = document.createElement('form');
             deleteForm.method = 'post';
             deleteForm.action = '/income/delete/' + item.id + '/';
@@ -127,7 +116,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return valueDiv;
     }
 
-    // Функция для генерации мобильных карточек
     function renderMobileCards(data) {
         if (!mobileCardsContainer) {
             return;
@@ -172,7 +160,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Создание Tabulator таблицы
     window.incomeTabulator = new Tabulator("#income-table", {
         theme: 'bootstrap5',
         ajaxURL: '/income/ajax/income_data/',
@@ -185,7 +172,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (table) table.classList.remove('d-none');
             if (skeleton) skeleton.style.display = 'none';
             const data = response.data || response;
-            // Генерируем мобильные карточки
             renderMobileCards(data);
             return data;
         },
@@ -285,23 +271,19 @@ document.addEventListener('DOMContentLoaded', function () {
         tableBuilt: function() {
             if (table) table.classList.remove('d-none');
             if (skeleton) skeleton.style.display = 'none';
-            // Генерируем мобильные карточки при первой загрузке
             const data = window.incomeTabulator.getData();
             renderMobileCards(data);
         },
         dataLoaded: function (data) {
-            // Обновляем мобильные карточки при загрузке данных
             renderMobileCards(data);
         }
     });
 
-    // Убираем d-none сразу после инициализации (на всякий случай)
     const tableElem = document.getElementById('income-table');
     if (tableElem) {
         tableElem.classList.remove('d-none');
     }
 
-    // Обработчик изменения группы
     const groupSelect = document.getElementById('income-group-select');
     if (groupSelect) {
         groupSelect.addEventListener('change', function() {
@@ -309,13 +291,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Обновляем мобильные карточки при изменении данных
     window.incomeTabulator.on('dataChanged', function () {
         const data = window.incomeTabulator.getData();
         renderMobileCards(data);
     });
 
-    // Показать/скрыть фильтр групп
     const toggleBtn = document.getElementById('toggle-group-filter');
     const filterBlock = document.getElementById('income-group-filter-block');
     if (toggleBtn && filterBlock) {
@@ -324,17 +304,14 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Обработчик для кнопки добавления нового дохода
     const addIncomeBtn = document.querySelector('[data-bs-target="#add-income"]');
     if (addIncomeBtn) {
         addIncomeBtn.addEventListener('click', function() {
-            // Сбросить форму
             const form = document.getElementById('income-form');
             if (form) {
                 form.reset();
                 form.action = '/income/create/';
             }
-            // Изменить заголовок модального окна
             const modalTitle = document.querySelector('#add-income .modal-title');
             if (modalTitle) {
                 modalTitle.textContent = 'Добавить доход';
@@ -342,7 +319,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Если произошла ошибка загрузки — скрыть skeleton
     window.incomeTabulator.on("dataLoadError", function(){
         if (skeleton) {
             skeleton.style.display = 'none';
@@ -350,9 +326,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-// Вспомогательные функции
 function getCookie(name) {
-    // Разрешаем только буквы, цифры, дефис и подчёркивание
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
         return null;
     }
