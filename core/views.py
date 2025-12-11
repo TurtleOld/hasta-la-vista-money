@@ -82,5 +82,3 @@ class BaseEntityUpdateView[ModelType, FormType](
         """Get context data for the view."""
         context: dict[str, Any] = super().get_context_data(**kwargs)
         return context
-
-

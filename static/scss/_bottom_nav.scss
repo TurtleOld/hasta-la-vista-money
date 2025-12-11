@@ -1,3 +1,5 @@
+@import 'bootstrap/mixins/breakpoints';
+
 .bottom-nav {
     display: none !important;
     position: fixed;
@@ -9,11 +11,17 @@
     padding: 0.5rem 0;
     z-index: 1030;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    will-change: transform;
+    transition: transform 0.3s ease;
 
-    @media (max-width: 767px) {
+    @media (prefers-reduced-motion: reduce) {
+        transition: none;
+    }
+
+    @include media-breakpoint-down(sm) {
         display: flex !important;
         justify-content: space-around;
-        align-items: center;
+        align-items: center; 
     }
 
     &-item {
@@ -23,12 +31,23 @@
         padding: 0.5rem;
         color: var(--bs-secondary-color);
         text-decoration: none;
-        transition: all 0.2s;
+        transition: all 0.2s ease;
         min-width: 60px;
+        min-height: 44px;
         position: relative;
+        touch-action: manipulation;
+        will-change: color, transform;
+
+        @media (prefers-reduced-motion: reduce) {
+            transition: none;
+        }
 
         &:hover, &.active {
             color: #198754;
+        }
+
+        &:active {
+            transform: scale(0.95);
         }
 
         &.active::before {
@@ -52,6 +71,19 @@
             font-size: 0.7rem;
             font-weight: 500;
         }
+        
+        @include media-breakpoint-down(xs) {
+            min-width: 50px;
+            padding: 0.375rem;
+            
+            .icon {
+                font-size: 1.25rem;
+            }
+            
+            .label {
+                font-size: 0.65rem;
+            }
+        }
     }
 
     &-fab {
@@ -59,6 +91,8 @@
         top: -20px;
         width: 56px;
         height: 56px;
+        min-width: 44px;
+        min-height: 44px;
         background: linear-gradient(135deg, #198754, #20c997);
         border-radius: 50%;
         display: flex;
@@ -69,7 +103,13 @@
         box-shadow: 0 4px 12px rgba(25, 135, 84, 0.4);
         border: none;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.2s ease;
+        touch-action: manipulation;
+        will-change: transform, box-shadow;
+
+        @media (prefers-reduced-motion: reduce) {
+            transition: none;
+        }
 
         &:active {
             transform: scale(0.95);
@@ -96,16 +136,29 @@
                 box-shadow: 0 6px 16px rgba(25, 135, 84, 0.5);
             }
         }
+        
+        @include media-breakpoint-down(xs) {
+            width: 48px;
+            height: 48px;
+            font-size: 1.25rem;
+            top: -15px;
+        }
     }
 }
 
-@media (max-width: 767px) {
+@include media-breakpoint-down(sm) {
     body {
         padding-bottom: 70px;
     }
 
     .container, .container-fluid {
         padding-bottom: 1rem;
+    }
+    
+    @media (orientation: landscape) {
+        body {
+            padding-bottom: 60px;
+        }
     }
 }
 

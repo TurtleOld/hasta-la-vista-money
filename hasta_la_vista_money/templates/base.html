@@ -19,7 +19,7 @@
         <link nonce="{{request.csp_nonce}}" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet" integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA==" crossorigin="anonymous">
         <link nonce="{{request.csp_nonce}}" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
         {% compress css %}
-        <link rel="stylesheet" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
+        <link rel="stylesheet" href="{% static 'css/styles.min.css' %}">
         {% endcompress %}
     {% endblock %}
 </head>
@@ -49,6 +49,7 @@
 
     {% if user.is_authenticated %}
         {% include '_bottom_nav.html' %}
+        {% include '_mobile_menu.html' %}
     {% endif %}
 
     <script nonce="{{request.csp_nonce}}" src="https://unpkg.com/htmx.org@2.0.4"></script>
@@ -56,37 +57,38 @@
     <script nonce="{{request.csp_nonce}}" type="text/javascript" src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 
     {% compress js %}
-    <script src="{% static 'js/jquery-3.7.1.min.js' %}?v={% word_hash %}"></script>
-    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}?v={% word_hash %}"></script>
-    <script src="{% static 'js/notifications.js' %}?v={% word_hash %}"></script>
-    <script src="{% static 'js/script.js' %}?v={% word_hash %}"></script>
-    <script src="{% static 'js/errors_form.js' %}?v={% word_hash %}"></script>
-    <script src="{% static 'js/account_group_filter.js' %}?v={% word_hash %}"></script>
+    <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
+    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'js/notifications.js' %}"></script>
+    <script src="{% static 'js/script.js' %}"></script>
+    <script src="{% static 'js/errors_form.js' %}"></script>
+    <script src="{% static 'js/account_group_filter.js' %}"></script>
     {% if 'receipts' in request.path %}
-        <script src="{% static 'js/tokens.js' %}?v={% word_hash %}"></script>
-        <script src="{% static 'js/receipt_group_filter.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/tokens.js' %}"></script>
+        <script src="{% static 'js/receipt_group_filter.js' %}"></script>
         {% if 'update' in request.path %}
-            <script src="{% static 'js/receipt_update.js' %}?v={% word_hash %}"></script>
+            <script src="{% static 'js/receipt_update.js' %}"></script>
         {% endif %}
     {% endif %}
     {% if 'budget' in request.path %}
-        <script src="{% static 'js/budget.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/budget.js' %}"></script>
     {% endif %}
     {% if 'users' in request.path %}
-        <script src="{% static 'js/theme.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/theme.js' %}"></script>
     {% endif %}
     {% if 'income' in request.path and not 'budget' in request.path%}
-        <script src="{% static 'js/income_table.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/income_table.js' %}"></script>
     {% endif %}
     {% if 'expense' in request.path and not 'budget' in request.path%}
-        <script src="{% static 'js/expense_table.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/expense_table.js' %}"></script>
     {% endif %}
     {% if 'loan' in request.path %}
-        <script src="{% static 'js/loan.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/loan.js' %}"></script>
     {% endif %}
     {% if user.is_authenticated %}
-        <script src="{% static 'js/bottom-nav.js' %}?v={% word_hash %}"></script>
-        <script src="{% static 'js/upload.js' %}?v={% word_hash %}"></script>
+        <script src="{% static 'js/bottom-nav.js' %}"></script>
+        <script src="{% static 'js/mobile-menu.js' %}"></script>
+        <script src="{% static 'js/upload.js' %}"></script>
     {% endif %}
     {% endcompress %}
     {% block extra_js %}

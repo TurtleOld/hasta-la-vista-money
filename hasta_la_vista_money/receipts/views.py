@@ -703,7 +703,7 @@ class UploadImageView(
                         ValueError(constants.ERROR_PROCESSING_RECEIPT),
                         constants.ERROR_PROCESSING_RECEIPT,
                     ),
-                    )
+                )
                 return self.handle_form_error_with_message(
                     form,
                     error_tuple[0],
