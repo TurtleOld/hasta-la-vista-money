@@ -8,7 +8,6 @@ $(document).ready(function() {
             data: form.serialize(),  // Сериализация данных формы
             success: function(response) {
                 if (response.success) {
-                    // Обработка успешного ответа
                     location.reload()
                     form[0].reset()
                 } else {
@@ -44,8 +43,7 @@ $(document).ready(function() {
                     }
                 }
             },
-            error: function(xhr) {
-                // Обработка ошибки запроса
+            error: function (xhr) {
                 const errorMessage = 'Произошла ошибка при отправке запроса. Пожалуйста, повторите попытку позже или измените запрос.';
                 $('#error-message').text(errorMessage);
                 $('.ajax-modal').modal('hide');

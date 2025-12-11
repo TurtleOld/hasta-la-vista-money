@@ -58,7 +58,6 @@ async function handleNoTokens() {
             return true;
         }
     } catch (e) {
-        // Ignore errors
     }
     return false;
 }
@@ -80,7 +79,6 @@ async function handleInvalidToken() {
             return true;
         }
     } catch (e) {
-        // Ignore errors
     }
     return false;
 }
@@ -100,7 +98,6 @@ async function handleExpiringToken(secondsLeft) {
             return true;
         }
     } catch (e) {
-        // Ignore errors
     }
 
     return await checkDjangoSession();
@@ -211,11 +208,9 @@ async function refreshTokensIfNeeded() {
             });
 
             if (response.ok) {
-                // Токены успешно получены
                 return true;
             }
         } catch (e) {
-            // Игнорируем ошибки
         }
         return false;
     }
@@ -233,7 +228,6 @@ async function refreshTokensIfNeeded() {
                 return true;
             }
         } catch (e) {
-            // Игнорируем ошибки
         }
         return false;
     }
@@ -253,7 +247,6 @@ async function refreshTokensIfNeeded() {
                 return true;
             }
         } catch (e) {
-            // Игнорируем ошибки
         }
         return false;
     }

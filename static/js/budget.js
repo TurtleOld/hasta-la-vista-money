@@ -1,12 +1,10 @@
 /* global Tabulator */
 document.addEventListener('DOMContentLoaded', function () {
     function safeRedirect(url) {
-        // Validate URL format before redirect
         if (/^\/[a-zA-Z0-9/_\-.]*$/.test(url)) {
             const safeUrl = encodeURI(url);
             window.location.href = safeUrl;  // eslint-disable-line
         } else {
-            // Default to login page if URL is not safe
             const loginUrl = encodeURI('/login/');
             window.location.href = loginUrl;  // eslint-disable-line
         }
@@ -20,15 +18,12 @@ document.addEventListener('DOMContentLoaded', function () {
         { id: 'expense-budget-table', type: 'expense', api: API.expense },
         { id: 'income-budget-table', type: 'income', api: API.income }
     ];
-    // ====== JWT ======
     function getJWT() {
-        // Get token from cookie
         const m = document.cookie.match(/(?:^|; )access_token=([^;]*)/);
         if (m) return decodeURIComponent(m[1]);
         return '';
     }
     function refreshToken() {
-        // Get refresh token from cookie
         const m = document.cookie.match(/(?:^|; )refresh_token=([^;]*)/);
         const refresh = m ? decodeURIComponent(m[1]) : null;
 
@@ -45,7 +40,6 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(data => {
                 if (data.success) {
-                    // Tokens are now in HttpOnly cookies, no need to store in localStorage
                     return getJWT();
                 }
                 throw new Error('No access token in refresh response');
@@ -118,16 +112,13 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.appendChild(alert);
         setTimeout(() => { if (alert.parentNode) alert.remove(); }, 4000);
     }
-    // ====== MAIN TABLE INIT ======
     TABLES.forEach(({ id, type, api }) => {
         const container = document.getElementById(id);
         if (!container) return;
-        // Loader
         const loader = document.createElement('div');
         loader.className = 'skeleton-loader';
         loader.style.height = '300px';
         container.appendChild(loader);
-        // Fetch data
         if (!isSafeApiUrl(api)) {
             loader.remove();
             showNotification('Ошибка: небезопасный API URL', 'error');
@@ -146,7 +137,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 const months = data.months;
                 const rows = data.data;
-                // --- ГОРИЗОНТАЛЬНОЕ ПРЕДСТАВЛЕНИЕ ---
                 const columns = [
                     {
                         title: 'Категория',
@@ -175,7 +165,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                     input.addEventListener("change", function (e) {
                                         const value = Number(e.target.value);
                                         success(value);
-                                        // --- Сохранение на сервер ---
                                         const field = cell.getField();
                                         const row = cell.getRow().getData();
                                         const category_id = row.category_id;
@@ -199,7 +188,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                                 console.log('[EDITOR] save response:', data);
                                                 if (data.success) {
                                                     showNotification('План успешно сохранён', 'success');
-                                                    // --- Автообновление Δ и % ---
                                                     const fact = row[`fact_${month}`];
                                                     const plan = value;
         const diff = fact - plan;
@@ -257,7 +245,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         ]
                     }))
                 ];
-                // Prepare Tabulator data
                 const tabData = rows.map(row => {
                     const obj = { category: row.category, category_id: row.category_id };
                     months.forEach(m => {
@@ -268,7 +255,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                     return obj;
                 });
-                // --- END ГОРИЗОНТАЛЬНОЕ ПРЕДСТАВЛЕНИЕ ---
                 new Tabulator(container, {
                     data: tabData,
                     columns: columns,

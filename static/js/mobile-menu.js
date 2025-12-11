@@ -59,8 +59,6 @@
         });
     }
 
-    // Обработчик клика на backdrop (псевдоэлемент ::before)
-    // Закрываем меню при клике на сам .mobile-menu, но не на его дочерние элементы
     mobileMenu.addEventListener('click', function(e) {
         if (e.target === mobileMenu) {
             e.preventDefault();

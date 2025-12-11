@@ -326,7 +326,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (valid) {
                 window.tokens.scheduleAccessTokenRefresh();
             } else {
-                // Если JWT токены невалидны, но Django сессия валидна, попробуем обновить токены
                 window.tokens.refreshTokensIfNeeded().then(refreshed => {
                     if (refreshed) {
                         window.tokens.scheduleAccessTokenRefresh();
@@ -470,7 +469,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (refreshResp.ok) {
                     return ultraSafeFetch(path, options);
                 } else {
-                    // Проверяем Django сессию перед редиректом
                     try {
                         const sessionResponse = await fetch(window.location.pathname, {
                             method: 'GET',
@@ -479,27 +477,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
 
                         if (sessionResponse.ok) {
-                            // Django сессия валидна, но JWT токены истекли
-                            // Попробуем обновить токены
                             const refreshed = await window.tokens.refreshTokensIfNeeded();
                             if (refreshed) {
-                                // Токены обновлены, повторим запрос
                                 return ultraSafeFetch(path, options);
                             } else {
-                                // Не удалось обновить токены, но Django сессия валидна
-                                // Возвращаем ошибку 401, но не перенаправляем
                                 return response;
                             }
                         }
 
                         if (sessionResponse.status === 302) {
-                            // Django сессия тоже истекла
                             window.toast.warning('Ваша сессия истекла. Пожалуйста, войдите снова.');
                             window.location.replace(window.LOGIN_URL);
                             return response;
                         }
                     } catch (e) {
-                        // В случае ошибки сети, предполагаем что сессия валидна
                         return response;
                     }
 

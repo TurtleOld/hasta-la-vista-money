@@ -117,11 +117,6 @@ class DashboardManager {
 
     async _safeFetch(relativePath, urlParams = null, fetchOptions = {}) {
         const validatedUrl = this._buildURL(relativePath, urlParams);
-        // Security: URL is validated by _buildURL which ensures:
-        // - Only same-origin requests
-        // - Only HTTP/HTTPS protocols
-        // - Path starts with /users/dashboard/
-        // - No protocol injection or double slashes
         return window.fetch(validatedUrl, fetchOptions);
     }
 

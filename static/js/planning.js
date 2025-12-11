@@ -5,12 +5,10 @@ $(document).ready(function () {
     let timeoutId;
 
     planningElements.on("input", function () {
-        // If there is a previous timeout, clear it
         if (timeoutId) {
             clearTimeout(timeoutId);
         }
 
-        // Set a new timeout
         timeoutId = setTimeout(() => {
             const planningCell = $(this);
             const newPlanningValue = planningCell.text();
