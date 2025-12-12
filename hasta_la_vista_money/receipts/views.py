@@ -214,7 +214,7 @@ class SellerCreateView(
         seller_form = SellerForm(request.POST)
         if seller_form.is_valid():
             seller = seller_form.save(commit=False)
-            seller.user = request.user
+            seller.user = cast('User', request.user)
             seller.save()
             messages.success(
                 self.request,
@@ -254,7 +254,7 @@ class ReceiptCreateView(
         form = super().get_form(form_class)
         if self.request is None:
             raise ValueError('Request is not set')
-        current_user = self.request.user
+        current_user = cast('User', self.request.user)
         account_field = cast(
             'ModelChoiceField[Account]',
             form.fields['account'],
@@ -707,7 +707,7 @@ class UploadImageView(
                 return self.handle_form_error_with_message(
                     form,
                     error_tuple[0],
-                    error_tuple[1],
+                    cast(StrOrPromise, error_tuple[1]),
                 )
 
             messages.success(
