@@ -1,3 +1,9 @@
+"""Protocols for receipt service interfaces.
+
+This module defines Protocol interfaces for receipt-related services,
+enabling dependency injection and type checking.
+"""
+
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
@@ -19,6 +25,12 @@ from hasta_la_vista_money.users.models import User
 
 @runtime_checkable
 class ReceiptCreatorServiceProtocol(Protocol):
+    """Protocol for receipt creation service interface.
+
+    Defines the contract for creating receipts, both manually
+    and from imported data.
+    """
+
     def create_manual_receipt(
         self,
         *,
@@ -42,6 +54,12 @@ class ReceiptCreatorServiceProtocol(Protocol):
 
 @runtime_checkable
 class ReceiptUpdaterServiceProtocol(Protocol):
+    """Protocol for receipt update service interface.
+
+    Defines the contract for updating existing receipts
+    with new data.
+    """
+
     def update_receipt(
         self,
         *,
@@ -54,6 +72,12 @@ class ReceiptUpdaterServiceProtocol(Protocol):
 
 @runtime_checkable
 class ReceiptImportServiceProtocol(Protocol):
+    """Protocol for receipt import service interface.
+
+    Defines the contract for importing receipts from uploaded images
+    or other sources.
+    """
+
     def process_uploaded_image(
         self,
         *,

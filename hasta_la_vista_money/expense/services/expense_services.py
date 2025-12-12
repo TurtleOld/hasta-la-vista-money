@@ -1,3 +1,9 @@
+"""Service layer for expense-related business logic.
+
+This module provides services for managing expenses, expense categories,
+and receipt expenses, including CRUD operations and data aggregation.
+"""
+
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
@@ -34,7 +40,21 @@ if TYPE_CHECKING:
 
 
 class ExpenseService:
-    """Service class for expense-related operations."""
+    """Service for managing expense operations.
+
+    Handles creation, updating, deletion, and retrieval of expenses,
+    including integration with account balance management and receipt expenses.
+
+    Attributes:
+        user: The user associated with this service instance.
+        request: HTTP request object.
+        account_service: Service for account operations.
+        account_repository: Repository for account data access.
+        expense_repository: Repository for expense data access.
+        expense_category_repository: Repository for category data access.
+        receipt_repository: Repository for receipt data access.
+        receipt_expense_service: Service for receipt expense operations.
+    """
 
     def __init__(
         self,
@@ -84,14 +104,24 @@ class ExpenseService:
         )
 
     def get_form_querysets(self) -> dict[str, Any]:
-        """Get form querysets for expense forms."""
+        """Get form querysets for expense forms.
+
+        Returns:
+            dict[str, Any]: Dictionary containing category_queryset and
+                account_queryset for form initialization.
+        """
         return {
             'category_queryset': self.get_categories_queryset(),
             'account_queryset': self.account_repository.get_by_user(self.user),
         }
 
     def get_expense_form(self) -> AddExpenseForm:
-        """Get expense form with user-specific querysets."""
+        """Get expense form with user-specific querysets.
+
+        Returns:
+            AddExpenseForm: Initialized expense form with user's categories
+                and accounts.
+        """
         return AddExpenseForm(
             category_queryset=self.get_categories_queryset(),
             account_queryset=self.account_repository.get_by_user(self.user),
@@ -101,7 +131,17 @@ class ExpenseService:
         self,
         form: AddExpenseForm,
     ) -> Expense:
-        """Create a new expense."""
+        """Create a new expense.
+
+        Args:
+            form: Validated expense form with expense data.
+
+        Returns:
+            Expense: The created expense instance.
+
+        Note:
+            Automatically updates the account balance when expense is created.
+        """
         expense_data = form.cleaned_data
         expense = self.expense_repository.create_expense(
             user=self.user,
@@ -124,7 +164,20 @@ class ExpenseService:
         expense: Expense,
         form: AddExpenseForm,
     ) -> None:
-        """Update an existing expense."""
+        """Update an existing expense.
+
+        Args:
+            expense: The expense instance to update.
+            form: Validated expense form with updated data.
+
+        Raises:
+            ValueError: If the user doesn't have permission to update
+                the expense or if account validation fails.
+
+        Note:
+            Automatically reconciles account balances if the account
+            or amount changes.
+        """
         expense_updated: Expense = get_queryset_type_income_expenses(
             expense.pk,
             Expense,
@@ -158,7 +211,18 @@ class ExpenseService:
         self,
         expense: Expense,
     ) -> None:
-        """Delete an expense and restore account balance."""
+        """Delete an expense and restore account balance.
+
+        Args:
+            expense: The expense instance to delete.
+
+        Raises:
+            ValueError: If the user doesn't have permission to delete
+                the expense.
+
+        Note:
+            Automatically refunds the expense amount to the account balance.
+        """
         account = expense.account
         amount = expense.amount
         account_balance = self.account_repository.get_by_id(account.pk)
@@ -175,7 +239,17 @@ class ExpenseService:
         self,
         expense_id: int,
     ) -> Expense:
-        """Copy an existing expense."""
+        """Copy an existing expense.
+
+        Args:
+            expense_id: ID of the expense to copy.
+
+        Returns:
+            Expense: The newly created expense copy.
+
+        Note:
+            Automatically updates the account balance for the copied expense.
+        """
         new_expense = get_new_type_operation(Expense, expense_id, self.request)
         valid_expense = self.expense_repository.get_by_id(new_expense.pk)
 
@@ -188,7 +262,16 @@ class ExpenseService:
         return valid_expense
 
     def get_expenses_by_group(self, group_id: str | None) -> list[Any]:
-        """Get expenses filtered by group."""
+        """Get expenses filtered by group.
+
+        Args:
+            group_id: ID of the user group to filter by. If None or 'my',
+                returns expenses for the current user only.
+
+        Returns:
+            list[Any]: List of expenses and receipt expenses for the
+                specified group, ordered by date descending.
+        """
         expenses = self.expense_repository.filter(id__isnull=True)
         receipt_expense_list = []
         user = User.objects.prefetch_related('groups').get(pk=self.user.pk)
@@ -216,7 +299,17 @@ class ExpenseService:
         return list(expenses) + receipt_expense_list
 
     def get_expense_data(self, group_id: str | None) -> list[dict[str, Any]]:
-        """Get expense data as dictionary for AJAX responses."""
+        """Get expense data as dictionary for AJAX responses.
+
+        Args:
+            group_id: ID of the user group to filter by. If None or 'my',
+                returns expenses for the current user only.
+
+        Returns:
+            list[dict[str, Any]]: List of expense dictionaries with
+                id, date, amount, category_name, account_name, user_name,
+                user_id, is_receipt, receipt_id, and actions fields.
+        """
         expenses = self.expense_repository.filter(id__isnull=True)
         receipt_expense_list = []
         user = User.objects.prefetch_related('groups').get(pk=self.user.pk)
@@ -251,7 +344,7 @@ class ExpenseService:
                 'user_id': expense.user.pk,
                 'is_receipt': False,
                 'receipt_id': None,
-                'actions': '',  # Will be generated on frontend
+                'actions': '',
             }
             for expense in expenses
         ]
@@ -260,7 +353,15 @@ class ExpenseService:
 
 
 class ExpenseCategoryService:
-    """Service class for expense category operations."""
+    """Service for managing expense category operations.
+
+    Handles creation and retrieval of expense categories for users.
+
+    Attributes:
+        user: The user associated with this service instance.
+        request: HTTP request object.
+        expense_category_repository: Repository for category data access.
+    """
 
     def __init__(
         self,
@@ -273,7 +374,13 @@ class ExpenseCategoryService:
         self.expense_category_repository = expense_category_repository
 
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
-        """Get expense categories for the user."""
+        """Get expense categories for the user.
+
+        Returns:
+            Iterable[dict[str, str | int | None]]: Iterable of category
+                dictionaries with id, name, parent_category, and
+                parent_category__name.
+        """
         qs = (
             self.user.category_expense_users.select_related('parent_category')
             .values(
@@ -295,7 +402,14 @@ class ExpenseCategoryService:
         )
 
     def create_category(self, form: AddCategoryForm) -> ExpenseCategory:
-        """Create a new expense category."""
+        """Create a new expense category.
+
+        Args:
+            form: Validated category form with category data.
+
+        Returns:
+            ExpenseCategory: The created category instance.
+        """
         category = form.save(commit=False)
         category.user = self.user
         return self.expense_category_repository.create_category(
@@ -306,7 +420,17 @@ class ExpenseCategoryService:
 
 
 class ReceiptExpenseService:
-    """Service class for receipt expense operations."""
+    """Service for managing receipt expense operations.
+
+    Handles aggregation and retrieval of expenses derived from receipts,
+    including monthly summaries and user group filtering.
+
+    Attributes:
+        user: The user associated with this service instance.
+        request: HTTP request object.
+        expense_category_repository: Repository for category data access.
+        receipt_repository: Repository for receipt data access.
+    """
 
     def __init__(
         self,
@@ -321,7 +445,13 @@ class ReceiptExpenseService:
         self.receipt_repository = receipt_repository
 
     def get_receipt_expenses(self) -> list[Any]:
-        """Get receipt expenses for the user."""
+        """Get receipt expenses for the user.
+
+        Returns:
+            list[Any]: List of ReceiptExpense named tuples aggregated by
+                month and account, ordered by year and month descending.
+                Returns empty list if receipt category doesn't exist.
+        """
         receipt_category = self.expense_category_repository.filter(
             user=self.user,
             name=RECEIPT_CATEGORY_NAME,
@@ -381,7 +511,16 @@ class ReceiptExpenseService:
         self,
         users: list[User],
     ) -> list[dict[str, Any]]:
-        """Get receipt expenses for multiple users."""
+        """Get receipt expenses for multiple users.
+
+        Args:
+            users: List of User instances to filter receipts by.
+
+        Returns:
+            list[dict[str, Any]]: List of receipt expense dictionaries
+                aggregated by month, year, account, and user, ordered by
+                year and month descending.
+        """
         receipt_expenses = (
             self.receipt_repository.filter(
                 user__in=users,
@@ -436,7 +575,16 @@ class ReceiptExpenseService:
         self,
         users: list[User],
     ) -> list[dict[str, Any]]:
-        """Get receipt data as dictionary for AJAX responses."""
+        """Get receipt data as dictionary for AJAX responses.
+
+        Args:
+            users: List of User instances to filter receipts by.
+
+        Returns:
+            list[dict[str, Any]]: List of receipt dictionaries with
+                id, date, amount, category_name, account_name, user_name,
+                user_id, is_receipt, receipt_id, and actions fields.
+        """
         receipts = self.receipt_repository.filter(
             user__in=users,
             operation_type=RECEIPT_OPERATION_PURCHASE,
@@ -454,7 +602,7 @@ class ReceiptExpenseService:
                 'user_id': receipt.user.pk,
                 'is_receipt': True,
                 'receipt_id': receipt.pk,
-                'actions': '',  # No buttons for receipts
+                'actions': '',
             }
             for receipt in receipts
         ]
