@@ -1,3 +1,9 @@
+"""Django models for income management.
+
+This module contains models for incomes and income categories,
+including relationships with users, accounts, and hierarchical categories.
+"""
+
 from typing import ClassVar
 
 from django.db import models
@@ -39,6 +45,11 @@ class IncomeCategory(models.Model):
         unique_together = ('user', 'name')
 
     def __str__(self) -> str:
+        """Return string representation of the category.
+
+        Returns:
+            str: The category name.
+        """
         return str(self.name)
 
 
@@ -87,4 +98,9 @@ class Income(models.Model):
         ]
 
     def __str__(self) -> str:
+        """Return string representation of the income.
+
+        Returns:
+            str: The category name of the income.
+        """
         return str(self.category)
