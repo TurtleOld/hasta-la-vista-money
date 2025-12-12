@@ -25,6 +25,40 @@ document.addEventListener('DOMContentLoaded', function () {
         window.history.pushState({}, '', newUrl);
     }
 
+    function sanitizeElement(element, dangerousTags, dangerousAttributes, javascriptProtocol) {
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+            return;
+        }
+
+        const tagName = element.tagName.toLowerCase();
+        if (dangerousTags.includes(tagName)) {
+            element.remove();
+            return;
+        }
+
+        const attributes = Array.from(element.attributes);
+        for (const attr of attributes) {
+            const attrName = attr.name.toLowerCase();
+            const attrValue = attr.value;
+
+            if (dangerousAttributes.test(attrName)) {
+                element.removeAttribute(attrName);
+                continue;
+            }
+
+            if (attrName === 'href' || attrName === 'src' || attrName === 'action') {
+                if (javascriptProtocol.test(attrValue)) {
+                    element.removeAttribute(attrName);
+                }
+            }
+        }
+
+        const children = Array.from(element.children);
+        for (const child of children) {
+            sanitizeElement(child, dangerousTags, dangerousAttributes, javascriptProtocol);
+        }
+    }
+
     function loadReceiptsBlock(groupId) {
         if (isLoading) {
             pendingRequest = groupId;
@@ -73,7 +107,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 return response.text();
             })
             .then(html => {
-                if (!html || typeof html !== 'string') {
+                if (!html || typeof html !== 'string' || html.length === 0) {
+                    return;
+                }
+
+                if (html.length > 1000000) {
+                    console.error('HTML content too large');
                     return;
                 }
 
@@ -81,6 +120,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!block) {
                     return;
                 }
+
+                const dangerousTags = ['script', 'iframe', 'object', 'embed', 'link', 'style'];
+                const dangerousAttributes = /^on\w+/i;
+                const javascriptProtocol = /^\s*javascript:/i;
 
                 try {
                     const parser = new DOMParser();
@@ -97,45 +140,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         return;
                     }
 
-                    const dangerousTags = ['script', 'iframe', 'object', 'embed', 'link', 'style'];
-                    const dangerousAttributes = /^on\w+/i;
-                    const javascriptProtocol = /^\s*javascript:/i;
-
-                    function sanitizeElement(element) {
-                        if (!element || element.nodeType !== Node.ELEMENT_NODE) {
-                            return;
-                        }
-
-                        const tagName = element.tagName.toLowerCase();
-                        if (dangerousTags.includes(tagName)) {
-                            element.remove();
-                            return;
-                        }
-
-                        const attributes = Array.from(element.attributes);
-                        for (const attr of attributes) {
-                            const attrName = attr.name.toLowerCase();
-                            const attrValue = attr.value;
-
-                            if (dangerousAttributes.test(attrName)) {
-                                element.removeAttribute(attrName);
-                                continue;
-                            }
-
-                            if (attrName === 'href' || attrName === 'src' || attrName === 'action') {
-                                if (javascriptProtocol.test(attrValue)) {
-                                    element.removeAttribute(attrName);
-                                }
-                            }
-                        }
-
-                        const children = Array.from(element.children);
-                        for (const child of children) {
-                            sanitizeElement(child);
-                        }
-                    }
-
-                    sanitizeElement(newContent);
+                    sanitizeElement(newContent, dangerousTags, dangerousAttributes, javascriptProtocol);
                     block.replaceWith(newContent);
                 } catch (error) {
                     console.error('Error parsing HTML:', error);
