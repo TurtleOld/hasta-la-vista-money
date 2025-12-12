@@ -7,10 +7,8 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.http import (
     HttpResponse,
     HttpResponseRedirect,
-    JsonResponse,
 )
 from django.shortcuts import get_object_or_404, redirect
-from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -483,5 +481,3 @@ class ExpenseCategoryDeleteView(
     success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
     success_message = str(constants.SUCCESS_CATEGORY_EXPENSE_DELETED)
     error_message = str(constants.ACCESS_DENIED_DELETE_EXPENSE_CATEGORY)
-
-

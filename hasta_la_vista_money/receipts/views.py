@@ -707,7 +707,7 @@ class UploadImageView(
                 return self.handle_form_error_with_message(
                     form,
                     error_tuple[0],
-                    cast(StrOrPromise, error_tuple[1]),
+                    cast('StrOrPromise', error_tuple[1]),
                 )
 
             messages.success(

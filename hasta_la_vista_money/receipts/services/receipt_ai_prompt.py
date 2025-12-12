@@ -8,9 +8,8 @@
 
 import base64
 import importlib
-import logging
 from collections.abc import Sequence
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import structlog
 from decouple import config
@@ -20,10 +19,6 @@ from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
 from django.http import HttpRequest
 from openai import OpenAI as OpenAIDefault
-from openai.types.chat import (
-    ChatCompletionSystemMessageParam,
-    ChatCompletionUserMessageParam,
-)
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -33,15 +28,19 @@ from tenacity import (
 
 from hasta_la_vista_money import constants
 
+if TYPE_CHECKING:
+    from openai.types.chat import (
+        ChatCompletionSystemMessageParam,
+        ChatCompletionUserMessageParam,
+    )
+
 T = TypeVar('T')
 
 logger = structlog.get_logger(__name__)
 
 
-class RateLimitExceeded(Exception):
+class RateLimitExceededError(Exception):
     """Исключение при превышении лимита запросов к внешнему API."""
-
-    pass
 
 
 def check_openai_rate_limit(user_id: int | None = None) -> None:
@@ -52,7 +51,7 @@ def check_openai_rate_limit(user_id: int | None = None) -> None:
                  общий лимит.
 
     Raises:
-        RateLimitExceeded: Если лимит превышен.
+        RateLimitExceededError: Если лимит превышен.
     """
     if user_id is not None:
         cache_key = f'openai_rate_limit_user_{user_id}'
@@ -74,9 +73,8 @@ def check_openai_rate_limit(user_id: int | None = None) -> None:
                 'window': window,
             },
         )
-        raise RateLimitExceeded(
-            f'Превышен лимит запросов к OpenAI API: {count}/{limit} за {window} секунд'
-        )
+        error_msg = f'Превышен лимит запросов к OpenAI API: {count}/{limit} за {window} секунд'
+        raise RateLimitExceededError(error_msg)
 
     cache.set(cache_key, count + 1, window)
 
@@ -118,7 +116,7 @@ def analyze_image_with_ai(
     Raises:
         RuntimeError: При ошибках анализа изображения
         TypeError: Если ответ AI не содержит контента
-        RateLimitExceeded: Если превышен лимит запросов
+        RateLimitExceededError: Если превышен лимит запросов
     """
     check_openai_rate_limit(user_id)
     try:
@@ -158,7 +156,7 @@ def analyze_image_with_ai(
             ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam
         ] = [
             cast(
-                ChatCompletionSystemMessageParam,
+                'ChatCompletionSystemMessageParam',
                 {
                     'role': 'system',
                     'content': (
@@ -172,7 +170,7 @@ def analyze_image_with_ai(
                 },
             ),
             cast(
-                ChatCompletionUserMessageParam,
+                'ChatCompletionUserMessageParam',
                 {
                     'role': 'user',
                     'content': [
@@ -266,7 +264,6 @@ def analyze_image_with_ai(
         if not content:
             logger.error('OpenAI API response content is None')
             raise TypeError('AI response content is None')
-
         logger.info(
             'OpenAI API request completed successfully',
             extra={
@@ -274,8 +271,6 @@ def analyze_image_with_ai(
                 'response_length': len(content),
             },
         )
-
-        return content
 
     except (ConnectionError, TimeoutError) as e:
         logger.warning(
@@ -289,29 +284,29 @@ def analyze_image_with_ai(
         )
         raise
     except (ValueError, KeyError, TypeError) as e:
-        logger.error(
+        logger.exception(
             'OpenAI API data processing error',
             extra={
                 'error': str(e),
                 'error_type': type(e).__name__,
                 'model': model,
             },
-            exc_info=True,
         )
         error_msg = f'Ошибка при анализе изображения: {e!s}'
         raise RuntimeError(error_msg) from e
     except Exception as e:
-        logger.error(
+        logger.exception(
             'OpenAI API unexpected error',
             extra={
                 'error': str(e),
                 'error_type': type(e).__name__,
                 'model': model,
             },
-            exc_info=True,
         )
         error_msg = f'Неожиданная ошибка при анализе изображения: {e!s}'
         raise RuntimeError(error_msg) from e
+    else:
+        return content
 
 
 def paginator_custom_view(

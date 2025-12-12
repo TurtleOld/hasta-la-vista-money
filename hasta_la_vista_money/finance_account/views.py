@@ -5,20 +5,17 @@ listing, creation, editing, deletion, and money transfer operations. Includes
 comprehensive error handling, user authentication, and AJAX support.
 """
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
-from asgiref.sync import sync_to_async
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.template.loader import render_to_string
+from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -29,7 +26,9 @@ from django.views.generic import (
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.core.types import WSGIRequestWithContainer
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import WSGIRequestWithContainer
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
@@ -375,5 +374,3 @@ class DeleteAccountView(
     success_url = reverse_lazy('finance_account:list')
     success_message = constants.SUCCESS_MESSAGE_DELETE_ACCOUNT[:]
     error_message = constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT[:]
-
-

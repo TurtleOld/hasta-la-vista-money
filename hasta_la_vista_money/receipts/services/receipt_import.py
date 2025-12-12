@@ -5,12 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.receipts.services.receipt_ai_prompt import (
-        analyze_image_with_ai,
-    )
+from typing import Any
 
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
@@ -27,6 +22,8 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
+
+MIN_FUNCTION_PARAMS_COUNT = 2
 
 
 @dataclass
@@ -120,7 +117,7 @@ class ReceiptImportService:
 
             sig = inspect.signature(func)
             params = list(sig.parameters.keys())
-            if len(params) >= 2 and 'user_id' in params:
+            if len(params) >= MIN_FUNCTION_PARAMS_COUNT and 'user_id' in params:
                 raw = func(uploaded_file, user_id=user.pk)  # type: ignore[call-arg]
             else:
                 raw = func(uploaded_file)  # type: ignore[call-arg]

@@ -13,7 +13,6 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404
-from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils import formats
 from django.utils.translation import gettext_lazy as _
@@ -43,7 +42,6 @@ from hasta_la_vista_money.income.mixins import IncomeFormQuerysetMixin
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.views import AuthRequest
 
 INCOME_LIST_URL_NAME = 'income:list'
 
@@ -551,5 +549,3 @@ class IncomeCategoryDeleteView(
     success_message = str(constants.SUCCESS_CATEGORY_INCOME_DELETED)
     error_message = str(constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY)
     success_url = reverse_lazy('income:category_list')
-
-
