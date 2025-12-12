@@ -81,7 +81,7 @@ class ReceiptImportServiceTests(TestCase):
             ],
         }
 
-        def fake_analyze(_):
+        def fake_analyze(_, user_id=None):  # noqa: ARG001
             return json.dumps(data)
 
         old_fn = receipts_services.analyze_image_with_ai

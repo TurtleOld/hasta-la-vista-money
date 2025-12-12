@@ -9,6 +9,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext import StrOrPromise
+from rest_framework.request import Request as DRFRequest
 
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
@@ -65,7 +66,7 @@ class EntityListViewMixin:
             FilterSet: Применённый фильтр
         """
         request = self.get_request_with_container()
-        return filterset_class(
+        return filterset_class(  # type: ignore[call-arg]
             self.request.GET,
             queryset=base_queryset,
             user=request.user,
@@ -142,14 +143,12 @@ class UserAuthMixin:
     повторять проверку isinstance(request.user, User) в каждом методе view.
     """
 
-    request: HttpRequest
-
     def dispatch(
         self,
-        request: HttpRequest,
+        request: HttpRequest | DRFRequest,
         *args: Any,
         **kwargs: Any,
-    ) -> HttpResponse:
+    ) -> Any:
         """Переопределяет dispatch для проверки типа пользователя.
 
         Args:
@@ -158,17 +157,14 @@ class UserAuthMixin:
             **kwargs: Дополнительные именованные аргументы
 
         Returns:
-            HttpResponse: Ответ view
+            HttpResponse или Response: Ответ view
 
         Raises:
             TypeError: Если request.user не является экземпляром User
         """
         if not isinstance(request.user, User):
             raise TypeError('User must be authenticated')
-        return cast(
-            'HttpResponse',
-            super().dispatch(request, *args, **kwargs),  # type: ignore[misc]
-        )
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
 
     def get_authenticated_user(self) -> User:
         """Получить аутентифицированного пользователя с проверкой типа.
@@ -179,9 +175,10 @@ class UserAuthMixin:
         Raises:
             TypeError: Если request.user не является экземпляром User
         """
-        if not isinstance(self.request.user, User):
+        request = self.request
+        if not isinstance(request.user, User):
             raise TypeError('User must be authenticated')
-        return self.request.user
+        return request.user
 
 
 class FormErrorHandlingMixin:
@@ -190,8 +187,6 @@ class FormErrorHandlingMixin:
     Предоставляет общие методы для обработки ошибок при работе с формами,
     устраняя дублирование кода обработки исключений.
     """
-
-    request: HttpRequest
 
     def handle_form_error_with_message(
         self,
@@ -215,7 +210,9 @@ class FormErrorHandlingMixin:
             error=str(error),
             **kwargs,
         )
-        messages.error(self.request, _(error_message))
+        request = self.request
+        if isinstance(request, HttpRequest):
+            messages.error(request, _(error_message))
         return cast(
             'HttpResponse',
             self.form_invalid(form),  # type: ignore[attr-defined]

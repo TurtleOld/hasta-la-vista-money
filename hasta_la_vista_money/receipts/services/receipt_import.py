@@ -1,3 +1,4 @@
+import inspect
 import json
 import re
 from collections.abc import Callable
@@ -21,6 +22,8 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
     SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
+
+MIN_FUNCTION_PARAMS_COUNT = 2
 
 
 @dataclass
@@ -101,13 +104,23 @@ class ReceiptImportService:
         user: User,
         account: Account,
         uploaded_file: UploadedFile,
-        analyze_func: Callable[[UploadedFile], str] | None = None,
+        analyze_func: (
+            Callable[[UploadedFile], str]
+            | Callable[[UploadedFile, int | None], str]
+            | None
+        ) = None,
     ) -> ReceiptImportResult:
         try:
             func = analyze_func
             if func is None:
                 func = receipts_services.analyze_image_with_ai
-            raw = func(uploaded_file)
+
+            sig = inspect.signature(func)
+            params = list(sig.parameters.keys())
+            if len(params) >= MIN_FUNCTION_PARAMS_COUNT and 'user_id' in params:
+                raw = func(uploaded_file, user_id=user.pk)  # type: ignore[call-arg]
+            else:
+                raw = func(uploaded_file)  # type: ignore[call-arg]
             if raw and 'json' in raw:
                 raw = self._clean_json_response(raw)
             data = json.loads(raw)

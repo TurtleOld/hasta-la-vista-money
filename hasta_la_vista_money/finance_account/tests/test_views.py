@@ -18,7 +18,6 @@ from hasta_la_vista_money.finance_account.tests.helpers import (
 from hasta_la_vista_money.finance_account.views import (
     AccountCreateView,
     AccountView,
-    AjaxAccountsByGroupView,
     ChangeAccountView,
     DeleteAccountView,
     TransferMoneyAccountView,
@@ -329,7 +328,11 @@ class TestDeleteAccountView(TestCase):
 
 
 class TestAjaxAccountsByGroupView(TestCase):
-    """Test cases for AjaxAccountsByGroupView."""
+    """Test cases for AjaxAccountsByGroupView.
+
+    NOTE: AjaxAccountsByGroupView has been removed and replaced with
+    AccountsByGroupAPIView. These tests should be updated to test the API view.
+    """
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -337,31 +340,19 @@ class TestAjaxAccountsByGroupView(TestCase):
         self.factory = RequestFactory()
 
     async def test_ajax_accounts_by_group_get(self) -> None:
-        """Test GET request to AjaxAccountsByGroupView."""
-        view = AjaxAccountsByGroupView()
-        request = self.factory.get('/?group_id=my')
-        request.user = self.user
-        setup_container_for_request(request)
+        """Test GET request to AjaxAccountsByGroupView.
 
-        response = await view.get(request)  # type: ignore[arg-type]
-        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        NOTE: View removed - test disabled.
+        """
 
     async def test_ajax_accounts_by_group_get_with_group_id(self) -> None:
-        """Test GET request with specific group_id."""
-        view = AjaxAccountsByGroupView()
-        request = self.factory.get('/?group_id=1')
-        request.user = self.user
-        setup_container_for_request(request)
+        """Test GET request with specific group_id.
 
-        response = await view.get(request)  # type: ignore[arg-type]
-        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        NOTE: View removed - test disabled.
+        """
 
     async def test_ajax_accounts_by_group_get_exception(self) -> None:
-        """Test GET request handling exceptions."""
-        view = AjaxAccountsByGroupView()
-        request = self.factory.get('/?group_id=invalid')
-        request.user = self.user
-        setup_container_for_request(request)
+        """Test GET request handling exceptions.
 
-        response = await view.get(request)  # type: ignore[arg-type]
-        self.assertEqual(response.status_code, 500)
+        NOTE: View removed - test disabled.
+        """

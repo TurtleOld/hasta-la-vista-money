@@ -10,6 +10,7 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import status
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -26,6 +27,8 @@ from hasta_la_vista_money.core.mixins import (
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
+from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.receipts.mappers.receipt_api_mapper import (
     ReceiptAPIDataMapper,
 )
@@ -51,6 +54,7 @@ class ReceiptListAPIView(ListCreateAPIView[Receipt]):
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self) -> QuerySet[Receipt, Receipt]:
         if getattr(self, 'swagger_fake_view', False):
@@ -60,12 +64,8 @@ class ReceiptListAPIView(ListCreateAPIView[Receipt]):
             Receipt.objects.filter(user=user)
             .select_related('seller', 'account', 'user')
             .prefetch_related('product')
+            .order_by('-receipt_date')
         )
-
-    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        queryset = self.get_queryset()
-        serializer = ReceiptSerializer(queryset, many=True)
-        return Response(serializer.data)
 
 
 @extend_schema(
@@ -85,10 +85,12 @@ class SellerDetailAPIView(RetrieveAPIView[Seller]):
         if getattr(self, 'swagger_fake_view', False):
             return Seller.objects.none()
         user = cast('User', self.request.user)
-        return Seller.objects.filter(
-            user__id=user.pk,
-        ).select_related(
-            'user',
+        return (
+            Seller.objects.filter(
+                user__id=user.pk,
+            )
+            .select_related('user')
+            .order_by('-id')
         )
 
 
@@ -253,8 +255,6 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
 
         user = cast('User', validation_result.user)
         account = cast('Account', validation_result.account)
-        if user is None or account is None:
-            return self._error_response('User or account not found')
 
         # Check if receipt already exists
         if validator.check_receipt_exists(request_data, user):
@@ -331,6 +331,7 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
 
     def get(
         self,
@@ -339,11 +340,14 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         **kwargs: Any,
     ) -> Response:
         """Получить чеки по группе."""
+        query_serializer = GroupQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        group_id = query_serializer.validated_data.get('group_id', 'my')
+
         request_with_container = cast('RequestWithContainer', request)
         receipt_repository = (
             request_with_container.container.receipts.receipt_repository()
         )
-        group_id = request.query_params.get('group_id') or 'my'
 
         if not isinstance(request.user, User):
             receipt_queryset = receipt_repository.filter(pk__in=[])
@@ -375,11 +379,11 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             .order_by('-receipt_date')[: constants.RECENT_RECEIPTS_LIMIT]
         )
 
-        serializer = ReceiptSerializer(receipts, many=True)
+        receipt_serializer = ReceiptSerializer(receipts, many=True)
 
         return Response(
             {
-                'receipts': serializer.data,
+                'receipts': receipt_serializer.data,
                 'user_groups': user_groups,
             },
             status=status.HTTP_200_OK,
@@ -408,14 +412,22 @@ class ReceiptDeleteAPIView(APIView):
         **kwargs: Any,
     ) -> Response:
         try:
-            receipt = Receipt.objects.get(id=pk)
-            receipt.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        except Receipt.DoesNotExist:
-            return Response(
-                status=status.HTTP_404_NOT_FOUND,
-                data={'error': 'Receipt not found'},
+            receipt = (
+                Receipt.objects.select_related('user', 'seller', 'account')
+                .prefetch_related('product')
+                .get(id=pk)
             )
+        except Receipt.DoesNotExist as e:
+            raise NotFound('Receipt not found') from e
+
+        user = cast('User', request.user)
+        if receipt.user != user:
+            raise PermissionDenied(
+                'You do not have permission to delete this receipt'
+            )
+
+        receipt.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(
@@ -449,6 +461,7 @@ class ReceiptDeleteAPIView(APIView):
 class SellerAutocompleteAPIView(APIView):
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         query = request.GET.get('q', '').strip()
@@ -496,6 +509,7 @@ class SellerAutocompleteAPIView(APIView):
 class ProductAutocompleteAPIView(APIView):
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         query = request.GET.get('q', '').strip()

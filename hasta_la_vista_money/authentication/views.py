@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from django.contrib.auth.models import AnonymousUser
 from django.utils.translation import gettext_lazy as _
@@ -55,7 +55,7 @@ class SessionTokenObtainView(APIView):
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:
             self._validate_user(request.user)
-            user = request.user
+            user = cast('User', request.user)
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)

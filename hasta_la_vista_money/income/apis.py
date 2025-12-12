@@ -13,8 +13,11 @@ from rest_framework.generics import RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
+from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -59,6 +62,8 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+    pagination_class = StandardResultsSetPagination
 
     def get(
         self,
@@ -67,8 +72,11 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         **kwargs: Any,
     ) -> Response:
         """Получить доходы по группе."""
+        serializer = GroupQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        group_id = serializer.validated_data.get('group_id')
+
         request_with_container = cast('RequestWithContainer', request)
-        group_id = request.query_params.get('group_id')
         user = cast('User', request.user)
 
         account_service = (
@@ -77,12 +85,16 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         users_in_group = account_service.get_users_for_group(user, group_id)
 
         if users_in_group:
-            incomes = Income.objects.filter(
-                user__in=users_in_group,
-            ).select_related(
-                'user',
-                'category',
-                'account',
+            incomes = (
+                Income.objects.filter(
+                    user__in=users_in_group,
+                )
+                .select_related(
+                    'user',
+                    'category',
+                    'account',
+                )
+                .order_by('-date')
             )
         else:
             incomes = Income.objects.none()
@@ -100,7 +112,11 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             for income in incomes
         ]
 
-        return Response({'incomes': income_data}, status=status.HTTP_200_OK)
+        paginator = self.pagination_class()
+        paginated_data: list[dict[str, object]] | None = (
+            paginator.paginate_queryset(income_data, request)  # type: ignore[arg-type]
+        )
+        return paginator.get_paginated_response(paginated_data)
 
 
 @extend_schema(
@@ -142,6 +158,8 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+    pagination_class = StandardResultsSetPagination
 
     def get(
         self,
@@ -150,8 +168,11 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         **kwargs: Any,
     ) -> Response:
         """Получить данные доходов."""
+        serializer = GroupQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        group_id = serializer.validated_data.get('group_id', 'my')
+
         request_with_container = cast('RequestWithContainer', request)
-        group_id = request.query_params.get('group_id', 'my')
         user = cast('User', request.user)
 
         account_service = (
@@ -167,7 +188,7 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
                     'account',
                     'user',
                 )
-                .all()
+                .order_by('-date')
             )
         else:
             incomes = Income.objects.none()
@@ -185,7 +206,11 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             for income in incomes
         ]
 
-        return Response(data, status=status.HTTP_200_OK)
+        paginator = self.pagination_class()
+        paginated_data: list[dict[str, object]] | None = (
+            paginator.paginate_queryset(data, request)  # type: ignore[arg-type]
+        )
+        return paginator.get_paginated_response(paginated_data)
 
 
 @extend_schema(
@@ -216,6 +241,7 @@ class IncomeRetrieveAPIView(RetrieveAPIView[Income], UserAuthMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
     queryset = Income.objects.select_related('category', 'account', 'user')
 
     def retrieve(

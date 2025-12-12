@@ -14,7 +14,6 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     extend_schema,
 )
-from rest_framework import status
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -22,6 +21,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
+from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -58,13 +59,14 @@ class AccountListCreateAPIView(ListCreateAPIView[Account]):
     serializer_class = AccountSerializer
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self) -> QuerySet[Account, Account]:
         """Return queryset filtered by the current user."""
         if getattr(self, 'swagger_fake_view', False):
             return Account.objects.none()
         user = cast('User', self.request.user)
-        return Account.objects.filter(user=user)
+        return Account.objects.filter(user=user).order_by('-id')
 
 
 @extend_schema(
@@ -100,6 +102,8 @@ class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+    pagination_class = StandardResultsSetPagination
 
     def get(
         self,
@@ -108,8 +112,11 @@ class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         **kwargs: Any,
     ) -> Response:
         """Получить счета по группе."""
+        serializer = GroupQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        group_id = serializer.validated_data.get('group_id')
+
         request_with_container = cast('RequestWithContainer', request)
-        group_id = request.query_params.get('group_id')
         user = cast('User', request.user)
 
         account_service = (
@@ -119,7 +126,13 @@ class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             user, group_id
         )
 
-        serializer = AccountSerializer(accounts, many=True)
-        return Response(
-            {'accounts': serializer.data}, status=status.HTTP_200_OK
+        if hasattr(accounts, 'select_related'):
+            accounts = accounts.select_related('user').order_by('-id')
+
+        account_serializer = AccountSerializer(accounts, many=True)
+        paginator = self.pagination_class()
+        paginated_data: Any = paginator.paginate_queryset(
+            account_serializer.data,
+            request,  # type: ignore[arg-type]
         )
+        return paginator.get_paginated_response(paginated_data)

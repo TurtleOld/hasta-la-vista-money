@@ -481,7 +481,10 @@ class TestReceiptAPIs(APITestCase):
         url = reverse_lazy('receipts:api_list')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIsInstance(response.json(), list)
+        data = response.json()
+        self.assertIn('results', data)
+        self.assertIn('count', data)
+        self.assertIsInstance(data['results'], list)
 
     def test_receipt_list_api_unauthorized(self) -> None:
         self.client.force_authenticate(user=None)

@@ -157,14 +157,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.expenseTabulator = new Tabulator('#expense-table', {
         theme: 'bootstrap5',
-        ajaxURL: '/expense/ajax/expense_data/',
+        ajaxURL: '/api/expense/data/',
         ajaxParams: function() {
             return { group_id: getGroupId() };
         },
         ajaxResponse: function(url, params, response) {
             if (table) table.classList.remove('d-none');
             if (skeleton) skeleton.style.display = 'none';
-            const data = response.data || response;
+            const data = response.results || response.data || response;
             renderMobileCards(data);
             return data;
         },
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const groupSelect = document.getElementById('expense-group-select');
     if (groupSelect) {
         groupSelect.addEventListener('change', function() {
-            window.expenseTabulator.setData('/expense/ajax/expense_data/', { group_id: getGroupId() });
+            window.expenseTabulator.setData('/api/expense/data/', { group_id: getGroupId() });
         });
     }
 

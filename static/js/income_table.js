@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.incomeTabulator = new Tabulator("#income-table", {
         theme: 'bootstrap5',
-        ajaxURL: '/income/ajax/income_data/',
+        ajaxURL: '/api/income/data/',
         ajaxParams: function() {
             return {
                 group_id: getGroupId()
@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ajaxResponse: function(url, params, response) {
             if (table) table.classList.remove('d-none');
             if (skeleton) skeleton.style.display = 'none';
-            const data = response.data || response;
+            const data = response.results || response.data || response;
             renderMobileCards(data);
             return data;
         },
@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const groupSelect = document.getElementById('income-group-select');
     if (groupSelect) {
         groupSelect.addEventListener('change', function() {
-            window.incomeTabulator.setData('/income/ajax/income_data/', { group_id: getGroupId() });
+            window.incomeTabulator.setData('/api/income/data/', { group_id: getGroupId() });
         });
     }
 

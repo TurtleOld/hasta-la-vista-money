@@ -5,20 +5,17 @@ listing, creation, editing, deletion, and money transfer operations. Includes
 comprehensive error handling, user authentication, and AJAX support.
 """
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
-from asgiref.sync import sync_to_async
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.template.loader import render_to_string
+from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -29,7 +26,9 @@ from django.views.generic import (
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.core.types import WSGIRequestWithContainer
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import WSGIRequestWithContainer
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
@@ -375,58 +374,3 @@ class DeleteAccountView(
     success_url = reverse_lazy('finance_account:list')
     success_message = constants.SUCCESS_MESSAGE_DELETE_ACCOUNT[:]
     error_message = constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT[:]
-
-
-class AjaxAccountsByGroupView(View):
-    """
-    Returns rendered HTML for accounts filtered by group via AJAX.
-
-    Handles asynchronous requests for account cards, with error
-    logging and user-friendly error messages.
-    """
-
-    async def get(
-        self,
-        request: WSGIRequestWithContainer,
-        *args: Any,
-        **kwargs: Any,
-    ) -> HttpResponse:
-        """
-        Handle GET request for accounts by group via AJAX.
-
-        Args:
-            request (WSGIRequest): The HTTP request object.
-
-        Returns:
-            HttpResponse: Rendered HTML or JSON error response.
-        """
-        group_id = request.GET.get('group_id')
-        user = request.user
-        try:
-            account_service = request.container.core.account_service()
-            accounts = await sync_to_async(
-                account_service.get_accounts_for_user_or_group,
-            )(user, group_id)
-            html = await sync_to_async(render_to_string)(
-                'finance_account/_account_cards_block.html',
-                {'accounts': accounts, 'request': request},
-            )
-            return HttpResponse(html)
-        except Exception:
-            logger.exception(
-                'Ошибка при получении счетов по группе',
-                group_id=group_id,
-                user_id=getattr(user, 'id', None),
-            )
-            return JsonResponse(
-                {
-                    'success': False,
-                    'error': str(
-                        _(
-                            'Произошла ошибка при получении счетов. '
-                            'Пожалуйста, попробуйте позже.',
-                        ),
-                    ),
-                },
-                status=500,
-            )

@@ -8,12 +8,15 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     extend_schema,
 )
-from rest_framework import status
+from rest_framework.exceptions import APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
+from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -46,6 +49,8 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+    pagination_class = StandardResultsSetPagination
 
     def get(
         self,
@@ -54,8 +59,11 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         **kwargs: Any,
     ) -> Response:
         """Получить расходы по группе."""
+        serializer = GroupQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        group_id = serializer.validated_data.get('group_id')
+
         request_with_container = cast('RequestWithContainer', request)
-        group_id = request.query_params.get('group_id')
 
         expense_service = (
             request_with_container.container.expense.expense_service(
@@ -66,7 +74,6 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
         try:
             all_expenses = expense_service.get_expenses_by_group(group_id)
-            # Возвращаем данные в формате JSON вместо HTML
             expense_data = [
                 {
                     'id': expense.pk,
@@ -85,17 +92,30 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
                         getattr(expense, 'account', None), 'name_account'
                     )
                     else '',
-                    'date': getattr(expense, 'date', '').strftime('%d.%m.%Y')
-                    if hasattr(getattr(expense, 'date', None), 'strftime')
-                    else str(getattr(expense, 'date', '')),
+                    'date': (
+                        expense_date.strftime('%d.%m.%Y')
+                        if (expense_date := getattr(expense, 'date', None))
+                        is not None
+                        and hasattr(expense_date, 'strftime')
+                        else str(getattr(expense, 'date', ''))
+                    ),
                 }
                 for expense in all_expenses
             ]
-            return Response(
-                {'expenses': expense_data}, status=status.HTTP_200_OK
+
+            paginator = self.pagination_class()
+            paginated_data: list[dict[str, Any]] | None = (
+                paginator.paginate_queryset(
+                    expense_data,
+                    request,  # type: ignore[arg-type]
+                )
             )
+            return paginator.get_paginated_response(paginated_data)
         except (ValueError, TypeError) as e:
-            return self.handle_ajax_error(e, status_code=500)
+            raise APIException(
+                detail=f'Ошибка обработки данных: {e!s}',
+                code='processing_error',
+            ) from e
 
 
 @extend_schema(
@@ -132,6 +152,8 @@ class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+    pagination_class = StandardResultsSetPagination
 
     def get(
         self,
@@ -140,8 +162,11 @@ class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         **kwargs: Any,
     ) -> Response:
         """Получить данные расходов."""
+        serializer = GroupQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        group_id = serializer.validated_data.get('group_id')
+
         request_with_container = cast('RequestWithContainer', request)
-        group_id = request.query_params.get('group_id')
 
         expense_service = (
             request_with_container.container.expense.expense_service(
@@ -152,6 +177,11 @@ class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
         try:
             all_data = expense_service.get_expense_data(group_id)
-            return Response({'data': all_data}, status=status.HTTP_200_OK)
+            paginator = self.pagination_class()
+            paginated_data = paginator.paginate_queryset(all_data, request)
+            return paginator.get_paginated_response(paginated_data)
         except (ValueError, TypeError) as e:
-            return self.handle_ajax_error(e, status_code=500)
+            raise APIException(
+                detail=f'Ошибка обработки данных: {e!s}',
+                code='processing_error',
+            ) from e

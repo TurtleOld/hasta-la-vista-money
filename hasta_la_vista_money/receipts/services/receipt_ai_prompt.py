@@ -9,18 +9,74 @@
 import base64
 import importlib
 from collections.abc import Sequence
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
+import structlog
 from decouple import config
+from django.core.cache import cache
 from django.core.files.uploadedfile import UploadedFile
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
 from django.http import HttpRequest
 from openai import OpenAI as OpenAIDefault
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from hasta_la_vista_money import constants
 
+if TYPE_CHECKING:
+    from openai.types.chat import (
+        ChatCompletionSystemMessageParam,
+        ChatCompletionUserMessageParam,
+    )
+
 T = TypeVar('T')
+
+logger = structlog.get_logger(__name__)
+
+
+class RateLimitExceededError(Exception):
+    """Исключение при превышении лимита запросов к внешнему API."""
+
+
+def check_openai_rate_limit(user_id: int | None = None) -> None:
+    """Проверить лимит запросов к OpenAI API.
+
+    Args:
+        user_id: ID пользователя для rate limiting. Если None, используется
+                 общий лимит.
+
+    Raises:
+        RateLimitExceededError: Если лимит превышен.
+    """
+    if user_id is not None:
+        cache_key = f'openai_rate_limit_user_{user_id}'
+        limit = config('OPENAI_RATE_LIMIT_PER_USER', default=10, cast=int)
+    else:
+        cache_key = 'openai_rate_limit_global'
+        limit = config('OPENAI_RATE_LIMIT_GLOBAL', default=100, cast=int)
+
+    window = config('OPENAI_RATE_LIMIT_WINDOW', default=60, cast=int)
+
+    count = cache.get(cache_key, 0)
+    if count >= limit:
+        logger.warning(
+            'OpenAI API rate limit exceeded',
+            extra={
+                'user_id': user_id,
+                'count': count,
+                'limit': limit,
+                'window': window,
+            },
+        )
+        error_msg = f'Превышен лимит запросов к OpenAI API: {count}/{limit} за {window} секунд'
+        raise RateLimitExceededError(error_msg)
+
+    cache.set(cache_key, count + 1, window)
 
 
 def image_to_base64(uploaded_file: UploadedFile) -> str:
@@ -34,8 +90,35 @@ def image_to_base64(uploaded_file: UploadedFile) -> str:
     return f'data:image/jpeg;base64,{encoded_str}'
 
 
-def analyze_image_with_ai(image_base64: UploadedFile) -> str:
-    # Allow tests to patch `hasta_la_vista_money.receipts.services.OpenAI`.
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+    reraise=True,
+)
+def analyze_image_with_ai(
+    image_base64: UploadedFile,
+    user_id: int | None = None,
+) -> str:
+    """Извлечь данные чека из изображения с помощью AI.
+
+    Использует OpenAI API для анализа изображения чека и извлечения
+    структурированных данных. Включает retry логику для обработки
+    временных сбоев сети и rate limiting.
+
+    Args:
+        image_base64: Загруженный файл изображения чека
+        user_id: Опциональный ID пользователя для rate limiting
+
+    Returns:
+        Строка с JSON данными чека
+
+    Raises:
+        RuntimeError: При ошибках анализа изображения
+        TypeError: Если ответ AI не содержит контента
+        RateLimitExceededError: Если превышен лимит запросов
+    """
+    check_openai_rate_limit(user_id)
     try:
         services_mod = importlib.import_module(
             'hasta_la_vista_money.receipts.services'
@@ -43,21 +126,37 @@ def analyze_image_with_ai(image_base64: UploadedFile) -> str:
         openai_cls = getattr(services_mod, 'OpenAI', OpenAIDefault)
     except ModuleNotFoundError:  # pragma: no cover
         openai_cls = OpenAIDefault
+
     base_url = str(
         config('API_BASE_URL', default='https://models.github.ai/inference')
     )
     token = str(config('API_KEY', default=''))
     model = str(config('API_MODEL', default='openai/gpt-4o'))
+    timeout = config('OPENAI_TIMEOUT', default=30.0, cast=float)
+
+    image_size = image_base64.size if hasattr(image_base64, 'size') else 0
+    logger.info(
+        'OpenAI API request started',
+        extra={
+            'model': model,
+            'base_url': base_url,
+            'image_size': image_size,
+            'timeout': timeout,
+        },
+    )
 
     try:
         client = openai_cls(
             base_url=base_url,
             api_key=token,
+            timeout=timeout,
         )
-        response = client.chat.completions.create(
-            model=model,
-            temperature=constants.AI_TEMPERATURE,
-            messages=[
+
+        messages: list[
+            ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam
+        ] = [
+            cast(
+                'ChatCompletionSystemMessageParam',
                 {
                     'role': 'system',
                     'content': (
@@ -69,6 +168,9 @@ def analyze_image_with_ai(image_base64: UploadedFile) -> str:
                         'как отдельный элемент.'
                     ),
                 },
+            ),
+            cast(
+                'ChatCompletionUserMessageParam',
                 {
                     'role': 'user',
                     'content': [
@@ -149,19 +251,59 @@ def analyze_image_with_ai(image_base64: UploadedFile) -> str:
                         },
                     ],
                 },
-            ],
+            ),
+        ]
+
+        response = client.chat.completions.create(
+            model=model,
+            temperature=constants.AI_TEMPERATURE,
+            messages=messages,
         )
+
         content = response.choices[0].message.content
         if not content:
+            logger.error('OpenAI API response content is None')
             raise TypeError('AI response content is None')
-    except (
-        ConnectionError,
-        TimeoutError,
-        ValueError,
-        KeyError,
-        Exception,
-    ) as e:
+        logger.info(
+            'OpenAI API request completed successfully',
+            extra={
+                'model': model,
+                'response_length': len(content),
+            },
+        )
+
+    except (ConnectionError, TimeoutError) as e:
+        logger.warning(
+            'OpenAI API connection/timeout error',
+            extra={
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'model': model,
+            },
+            exc_info=True,
+        )
+        raise
+    except (ValueError, KeyError, TypeError) as e:
+        logger.exception(
+            'OpenAI API data processing error',
+            extra={
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'model': model,
+            },
+        )
         error_msg = f'Ошибка при анализе изображения: {e!s}'
+        raise RuntimeError(error_msg) from e
+    except Exception as e:
+        logger.exception(
+            'OpenAI API unexpected error',
+            extra={
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'model': model,
+            },
+        )
+        error_msg = f'Неожиданная ошибка при анализе изображения: {e!s}'
         raise RuntimeError(error_msg) from e
     else:
         return content
