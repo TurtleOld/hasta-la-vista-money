@@ -45,7 +45,10 @@ if TYPE_CHECKING:
     },
 )
 class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для получения расходов по группе."""
+    """API view for retrieving expenses by group.
+
+    Provides an endpoint to get a list of expenses filtered by user group.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -58,7 +61,19 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Получить расходы по группе."""
+        """Get expenses by group.
+
+        Args:
+            request: HTTP request with group_id query parameter.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Paginated list of expenses in JSON format.
+
+        Raises:
+            APIException: When data processing error occurs.
+        """
         serializer = GroupQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         group_id = serializer.validated_data.get('group_id')
@@ -107,7 +122,7 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             paginated_data: list[dict[str, Any]] | None = (
                 paginator.paginate_queryset(
                     expense_data,
-                    request,  # type: ignore[arg-type]
+                    request,
                 )
             )
             return paginator.get_paginated_response(paginated_data)
@@ -148,7 +163,11 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     },
 )
 class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для получения данных расходов."""
+    """API view for retrieving expense data.
+
+    Provides an endpoint to get expense data in JSON format
+    for display in frontend tables.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -161,7 +180,19 @@ class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Получить данные расходов."""
+        """Get expense data.
+
+        Args:
+            request: HTTP request with group_id query parameter.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Paginated list of expense data in JSON format.
+
+        Raises:
+            APIException: When data processing error occurs.
+        """
         serializer = GroupQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         group_id = serializer.validated_data.get('group_id')

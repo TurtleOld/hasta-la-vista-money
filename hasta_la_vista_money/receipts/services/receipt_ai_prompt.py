@@ -1,9 +1,9 @@
 """AI prompt and utilities for extracting receipt data from images.
 
-Публичные функции:
-- image_to_base64: кодирование файла-изображения в data URL
-- analyze_image_with_ai: извлечение данных чека из изображения
-- paginator_custom_view: утилита пагинации
+This module provides functions for:
+- image_to_base64: encoding image file to data URL
+- analyze_image_with_ai: extracting receipt data from image
+- paginator_custom_view: pagination utility
 """
 
 import base64
@@ -40,18 +40,17 @@ logger = structlog.get_logger(__name__)
 
 
 class RateLimitExceededError(Exception):
-    """Исключение при превышении лимита запросов к внешнему API."""
+    """Exception raised when external API rate limit is exceeded."""
 
 
 def check_openai_rate_limit(user_id: int | None = None) -> None:
-    """Проверить лимит запросов к OpenAI API.
+    """Check OpenAI API rate limit.
 
     Args:
-        user_id: ID пользователя для rate limiting. Если None, используется
-                 общий лимит.
+        user_id: User ID for rate limiting. If None, uses global limit.
 
     Raises:
-        RateLimitExceededError: Если лимит превышен.
+        RateLimitExceededError: If rate limit is exceeded.
     """
     if user_id is not None:
         cache_key = f'openai_rate_limit_user_{user_id}'
@@ -80,6 +79,14 @@ def check_openai_rate_limit(user_id: int | None = None) -> None:
 
 
 def image_to_base64(uploaded_file: UploadedFile) -> str:
+    """Encode uploaded image file to base64 data URL.
+
+    Args:
+        uploaded_file: Uploaded image file to encode.
+
+    Returns:
+        str: Data URL string with base64-encoded image.
+    """
     file_bytes = uploaded_file.read()
     encoded_str = base64.b64encode(file_bytes).decode('utf-8')
     encoded_str = (
@@ -100,23 +107,23 @@ def analyze_image_with_ai(
     image_base64: UploadedFile,
     user_id: int | None = None,
 ) -> str:
-    """Извлечь данные чека из изображения с помощью AI.
+    """Extract receipt data from image using AI.
 
-    Использует OpenAI API для анализа изображения чека и извлечения
-    структурированных данных. Включает retry логику для обработки
-    временных сбоев сети и rate limiting.
+    Uses OpenAI API to analyze receipt image and extract structured data.
+    Includes retry logic for handling temporary network failures and
+    rate limiting.
 
     Args:
-        image_base64: Загруженный файл изображения чека
-        user_id: Опциональный ID пользователя для rate limiting
+        image_base64: Uploaded receipt image file.
+        user_id: Optional user ID for rate limiting.
 
     Returns:
-        Строка с JSON данными чека
+        str: JSON string with receipt data.
 
     Raises:
-        RuntimeError: При ошибках анализа изображения
-        TypeError: Если ответ AI не содержит контента
-        RateLimitExceededError: Если превышен лимит запросов
+        RuntimeError: When image analysis errors occur.
+        TypeError: If AI response doesn't contain content.
+        RateLimitExceededError: If rate limit is exceeded.
     """
     check_openai_rate_limit(user_id)
     try:
@@ -292,7 +299,7 @@ def analyze_image_with_ai(
                 'model': model,
             },
         )
-        error_msg = f'Ошибка при анализе изображения: {e!s}'
+        error_msg = f'Error analyzing image: {e!s}'
         raise RuntimeError(error_msg) from e
     except Exception as e:
         logger.exception(
@@ -303,7 +310,7 @@ def analyze_image_with_ai(
                 'model': model,
             },
         )
-        error_msg = f'Неожиданная ошибка при анализе изображения: {e!s}'
+        error_msg = f'Unexpected error analyzing image: {e!s}'
         raise RuntimeError(error_msg) from e
     else:
         return content
@@ -315,6 +322,17 @@ def paginator_custom_view(
     paginate_by: int,
     page_name: str,
 ) -> Page[Sequence[Any]]:
+    """Paginate queryset or list with custom page parameter name.
+
+    Args:
+        request: HTTP request object with GET parameters.
+        queryset: QuerySet or list to paginate.
+        paginate_by: Number of items per page.
+        page_name: Name of the GET parameter for page number.
+
+    Returns:
+        Page: Paginated page object with items.
+    """
     paginator = Paginator(queryset, paginate_by)
     num_page = request.GET.get(page_name)
     return paginator.get_page(num_page)

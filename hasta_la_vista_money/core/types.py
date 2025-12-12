@@ -1,4 +1,8 @@
-"""Типизация для расширенных типов Django."""
+"""Type definitions for extended Django types.
+
+This module provides type definitions for Django request objects
+with dependency injection container support.
+"""
 
 from typing import TYPE_CHECKING
 
@@ -10,12 +14,26 @@ if TYPE_CHECKING:
 
 
 class RequestWithContainer(HttpRequest):
-    """HttpRequest с добавленным атрибутом container."""
+    """HttpRequest with added container attribute.
+
+    Extends Django's HttpRequest to include a dependency injection
+    container for accessing services.
+
+    Attributes:
+        container: ApplicationContainer instance for dependency injection.
+    """
 
     container: 'ApplicationContainer'
 
 
 class WSGIRequestWithContainer(WSGIRequest):
-    """WSGIRequest с добавленным атрибутом container."""
+    """WSGIRequest with added container attribute.
+
+    Extends Django's WSGIRequest to include a dependency injection
+    container for accessing services.
+
+    Attributes:
+        container: ApplicationContainer instance for dependency injection.
+    """
 
     container: 'ApplicationContainer'

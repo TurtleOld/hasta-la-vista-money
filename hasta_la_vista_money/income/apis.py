@@ -58,7 +58,10 @@ if TYPE_CHECKING:
     },
 )
 class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для получения доходов по группе."""
+    """API view for retrieving incomes by group.
+
+    Provides an endpoint to get a list of incomes filtered by user group.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -71,7 +74,16 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Получить доходы по группе."""
+        """Get incomes by group.
+
+        Args:
+            request: HTTP request with group_id query parameter.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Paginated list of incomes in JSON format.
+        """
         serializer = GroupQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         group_id = serializer.validated_data.get('group_id')
@@ -154,7 +166,11 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     },
 )
 class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для получения данных доходов."""
+    """API view for retrieving income data.
+
+    Provides an endpoint to get income data in JSON format
+    for display in frontend tables.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -167,7 +183,16 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Получить данные доходов."""
+        """Get income data.
+
+        Args:
+            request: HTTP request with group_id query parameter.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Paginated list of income data in JSON format.
+        """
         serializer = GroupQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         group_id = serializer.validated_data.get('group_id', 'my')
@@ -208,7 +233,7 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
         paginator = self.pagination_class()
         paginated_data: list[dict[str, object]] | None = (
-            paginator.paginate_queryset(data, request)  # type: ignore[arg-type]
+            paginator.paginate_queryset(data, request)
         )
         return paginator.get_paginated_response(paginated_data)
 
@@ -237,7 +262,10 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     },
 )
 class IncomeRetrieveAPIView(RetrieveAPIView[Income], UserAuthMixin):
-    """API view для получения конкретного дохода."""
+    """API view for retrieving a specific income.
+
+    Provides an endpoint to get detailed information about a specific income.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -250,7 +278,19 @@ class IncomeRetrieveAPIView(RetrieveAPIView[Income], UserAuthMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Получить доход по ID."""
+        """Get income by ID.
+
+        Args:
+            request: HTTP request object.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: JSON response with income data.
+
+        Raises:
+            Http404: When income is not found.
+        """
         income = self.get_object()
         data = {
             'id': income.pk,

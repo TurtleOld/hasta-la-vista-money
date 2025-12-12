@@ -73,18 +73,18 @@ urlpatterns = [
         name='upload',
     ),
     path(
-        'api/seller-autocomplete/',
+        'seller-autocomplete/',
         SellerAutocompleteAPIView.as_view(),
         name='seller_autocomplete_api',
     ),
     path(
-        'api/product-autocomplete/',
+        'product-autocomplete/',
         ProductAutocompleteAPIView.as_view(),
         name='product_autocomplete_api',
     ),
     path(
-        'ajax/receipts_by_group/',
+        'by-group/',
         ReceiptsByGroupAPIView.as_view(),
-        name='ajax_receipts_by_group',
+        name='by_group',
     ),
 ]

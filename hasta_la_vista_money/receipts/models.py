@@ -1,3 +1,9 @@
+"""Django models for receipt management.
+
+This module contains models for receipts, sellers, and products,
+including relationships with users and accounts.
+"""
+
 from collections.abc import Iterable
 from datetime import datetime
 from typing import ClassVar
@@ -20,26 +26,73 @@ OPERATION_TYPES = (
 
 
 class SellerManager(models.Manager['Seller']):
+    """Custom manager for Seller model with user filtering methods."""
+
     def get_queryset(self) -> 'SellerQuerySet':
         return SellerQuerySet(self.model, using=self._db)
 
     def for_user(self, user: User) -> 'SellerQuerySet':
+        """Get sellers for a specific user.
+
+        Args:
+            user: User instance to filter by.
+
+        Returns:
+            SellerQuerySet: QuerySet filtered by user.
+        """
         return self.get_queryset().for_user(user)
 
     def for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
+        """Get sellers for multiple users.
+
+        Args:
+            users: Iterable of User instances to filter by.
+
+        Returns:
+            SellerQuerySet: QuerySet filtered by users.
+        """
         return self.get_queryset().for_users(users)
 
     def unique_by_name_for_users(
         self,
         users: Iterable[User],
     ) -> 'SellerQuerySet':
+        """Get unique sellers by name for multiple users.
+
+        Args:
+            users: Iterable of User instances to filter by.
+
+        Returns:
+            SellerQuerySet: QuerySet with unique sellers by name.
+        """
         return self.get_queryset().unique_by_name_for_users(users)
 
     def unique_by_name_for_user(self, user: User) -> 'SellerQuerySet':
+        """Get unique sellers by name for a specific user.
+
+        Args:
+            user: User instance to filter by.
+
+        Returns:
+            SellerQuerySet: QuerySet with unique sellers by name.
+        """
         return self.get_queryset().unique_by_name_for_user(user)
 
 
 class Seller(models.Model):
+    """Model representing a seller or retail place.
+
+    Stores information about sellers from receipts, including
+    name, address, and retail place details.
+
+    Attributes:
+        user: Foreign key to the User who owns this seller.
+        name_seller: Name of the seller/retail place.
+        retail_place_address: Address of the retail place.
+        retail_place: Name of the retail place.
+        created_at: Timestamp when the seller was created.
+    """
+
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -66,22 +119,56 @@ class Seller(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return string representation of the seller.
+
+        Returns:
+            str: The seller name.
+        """
         return str(self.name_seller)
 
     objects = SellerManager()
 
 
 class SellerQuerySet(models.QuerySet[Seller]):
+    """Custom QuerySet for Seller model with filtering methods."""
+
     def for_user(self, user: User) -> 'SellerQuerySet':
+        """Filter sellers by user.
+
+        Args:
+            user: User instance to filter by.
+
+        Returns:
+            SellerQuerySet: Filtered QuerySet.
+        """
         return self.filter(user=user)
 
     def for_users(self, users: Iterable[User]) -> 'SellerQuerySet':
+        """Filter sellers by multiple users.
+
+        Args:
+            users: Iterable of User instances to filter by.
+
+        Returns:
+            SellerQuerySet: Filtered QuerySet.
+        """
         return self.filter(user__in=users)
 
     def unique_by_name_for_users(
         self,
         users: Iterable[User],
     ) -> 'SellerQuerySet':
+        """Get unique sellers by name for multiple users.
+
+        Returns sellers with the minimum ID for each unique name
+        among the specified users.
+
+        Args:
+            users: Iterable of User instances to filter by.
+
+        Returns:
+            SellerQuerySet: QuerySet with unique sellers by name.
+        """
         seller_ids = (
             self.for_users(users)
             .values('name_seller')
@@ -91,6 +178,17 @@ class SellerQuerySet(models.QuerySet[Seller]):
         return self.filter(pk__in=seller_ids).select_related('user')
 
     def unique_by_name_for_user(self, user: User) -> 'SellerQuerySet':
+        """Get unique sellers by name for a specific user.
+
+        Returns sellers with the minimum ID for each unique name
+        for the specified user.
+
+        Args:
+            user: User instance to filter by.
+
+        Returns:
+            SellerQuerySet: QuerySet with unique sellers by name.
+        """
         seller_ids = (
             self.for_user(user)
             .values('name_seller')
@@ -101,6 +199,23 @@ class SellerQuerySet(models.QuerySet[Seller]):
 
 
 class Product(models.Model):
+    """Model representing a product from a receipt.
+
+    Stores information about individual products purchased,
+    including name, price, quantity, and tax information.
+
+    Attributes:
+        user: Foreign key to the User who owns this product.
+        product_name: Name of the product.
+        category: Product category.
+        price: Price per unit of the product.
+        quantity: Quantity purchased.
+        amount: Total amount for this product.
+        nds_type: VAT type code.
+        nds_sum: VAT amount.
+        created_at: Timestamp when the product was created.
+    """
+
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -134,11 +249,24 @@ class Product(models.Model):
     )
 
     def __str__(self) -> str:
+        """Return string representation of the product.
+
+        Returns:
+            str: The product name.
+        """
         return self.product_name
 
 
 class ReceiptQuerySet(models.QuerySet['Receipt']):
+    """Custom QuerySet for Receipt model with filtering methods."""
+
     def with_related(self) -> 'ReceiptQuerySet':
+        """Optimize queries by joining related objects.
+
+        Returns:
+            ReceiptQuerySet: QuerySet with select_related and prefetch_related
+                optimizations applied.
+        """
         return self.select_related(
             'user',
             'account',
@@ -146,9 +274,25 @@ class ReceiptQuerySet(models.QuerySet['Receipt']):
         ).prefetch_related('product')
 
     def for_user(self, user: User) -> 'ReceiptQuerySet':
+        """Filter receipts by user.
+
+        Args:
+            user: User instance to filter by.
+
+        Returns:
+            ReceiptQuerySet: Filtered QuerySet.
+        """
         return self.filter(user=user)
 
     def for_users(self, users: Iterable[User]) -> 'ReceiptQuerySet':
+        """Filter receipts by multiple users.
+
+        Args:
+            users: Iterable of User instances to filter by.
+
+        Returns:
+            ReceiptQuerySet: Filtered QuerySet.
+        """
         return self.filter(user__in=users)
 
     def for_user_and_number(
@@ -156,20 +300,57 @@ class ReceiptQuerySet(models.QuerySet['Receipt']):
         user: User,
         number_receipt: int | None,
     ) -> 'ReceiptQuerySet':
+        """Filter receipts by user and receipt number.
+
+        Args:
+            user: User instance to filter by.
+            number_receipt: Receipt number to filter by.
+
+        Returns:
+            ReceiptQuerySet: Filtered QuerySet.
+        """
         return self.for_user(user).filter(number_receipt=number_receipt)
 
 
 class ReceiptManager(models.Manager['Receipt']):
+    """Custom manager for Receipt model with filtering methods."""
+
     def get_queryset(self) -> 'ReceiptQuerySet':
+        """Get QuerySet for Receipt model.
+
+        Returns:
+            ReceiptQuerySet: Custom QuerySet instance.
+        """
         return ReceiptQuerySet(self.model, using=self._db)
 
     def with_related(self) -> 'ReceiptQuerySet':
+        """Get QuerySet with related objects optimized.
+
+        Returns:
+            ReceiptQuerySet: QuerySet with select_related and prefetch_related.
+        """
         return self.get_queryset().with_related()
 
     def for_user(self, user: User) -> 'ReceiptQuerySet':
+        """Get receipts for a specific user.
+
+        Args:
+            user: User instance to filter by.
+
+        Returns:
+            ReceiptQuerySet: Filtered QuerySet.
+        """
         return self.get_queryset().filter(user=user)
 
     def for_users(self, users: Iterable[User]) -> 'ReceiptQuerySet':
+        """Get receipts for multiple users.
+
+        Args:
+            users: Iterable of User instances to filter by.
+
+        Returns:
+            ReceiptQuerySet: Filtered QuerySet.
+        """
         return self.get_queryset().filter(user__in=users)
 
     def for_user_and_number(
@@ -177,6 +358,15 @@ class ReceiptManager(models.Manager['Receipt']):
         user: User,
         number_receipt: int | None,
     ) -> 'ReceiptQuerySet':
+        """Get receipts for a user by receipt number.
+
+        Args:
+            user: User instance to filter by.
+            number_receipt: Receipt number to filter by.
+
+        Returns:
+            ReceiptQuerySet: Filtered QuerySet.
+        """
         return self.get_queryset().filter(
             user=user,
             number_receipt=number_receipt,
@@ -184,6 +374,26 @@ class ReceiptManager(models.Manager['Receipt']):
 
 
 class Receipt(models.Model):
+    """Model representing a receipt from a purchase.
+
+    Stores information about receipts including date, seller, products,
+    totals, VAT information, and operation type.
+
+    Attributes:
+        receipt_date: Date and time of the receipt.
+        number_receipt: Fiscal document number.
+        nds10: VAT amount at 10% rate.
+        nds20: VAT amount at 20% rate.
+        operation_type: Type of operation (purchase, return, etc.).
+        total_sum: Total sum of the receipt.
+        manual: Whether receipt was entered manually.
+        created_at: Timestamp when the receipt was created.
+        seller: Foreign key to the Seller.
+        user: Foreign key to the User who owns this receipt.
+        account: Foreign key to the Account used for this receipt.
+        product: Many-to-many relationship with Product.
+    """
+
     receipt_date = models.DateTimeField()
     number_receipt = models.IntegerField(default=None, null=True)
     nds10 = models.DecimalField(
@@ -246,9 +456,19 @@ class Receipt(models.Model):
         ]
 
     def datetime(self) -> datetime:
+        """Get receipt date as datetime.
+
+        Returns:
+            datetime: Receipt date and time.
+        """
         return self.receipt_date
 
     objects = ReceiptManager()
 
     def get_absolute_url(self) -> str:
+        """Get absolute URL for receipt update.
+
+        Returns:
+            str: URL for updating this receipt.
+        """
         return str(reverse_lazy('receipts:update', args=[self.pk]))

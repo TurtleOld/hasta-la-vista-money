@@ -1,4 +1,8 @@
-"""Django репозиторий для Receipt модели."""
+"""Django repository for Receipt model.
+
+This module provides data access layer for Receipt model,
+including filtering, aggregation, and CRUD operations.
+"""
 
 from datetime import datetime
 from typing import Any
@@ -12,29 +16,73 @@ from hasta_la_vista_money.users.models import User
 
 
 class ReceiptRepository:
-    """Репозиторий для работы с Receipt моделью."""
+    """Repository for Receipt model operations.
+
+    Provides methods for accessing and manipulating receipt data,
+    including filtering by user, date ranges, and account.
+    """
 
     def get_by_id(self, receipt_id: int) -> Receipt:
-        """Получить receipt по ID."""
+        """Get receipt by ID.
+
+        Args:
+            receipt_id: ID of the receipt to retrieve.
+
+        Returns:
+            Receipt: Receipt instance.
+
+        Raises:
+            Receipt.DoesNotExist: If receipt with given ID doesn't exist.
+        """
         return Receipt.objects.get(pk=receipt_id)
 
     def get_by_user(self, user: User) -> QuerySet[Receipt]:
-        """Получить все receipts пользователя."""
+        """Get all receipts for a user.
+
+        Args:
+            user: User instance to filter by.
+
+        Returns:
+            QuerySet[Receipt]: QuerySet of user's receipts.
+        """
         return Receipt.objects.for_user(user)
 
     def get_by_users(self, users: list[User]) -> QuerySet[Receipt]:
-        """Получить все receipts для списка пользователей."""
+        """Get all receipts for a list of users.
+
+        Args:
+            users: List of User instances to filter by.
+
+        Returns:
+            QuerySet[Receipt]: QuerySet of receipts for specified users.
+        """
         return Receipt.objects.for_users(users)
 
     def get_by_user_with_related(self, user: User) -> QuerySet[Receipt]:
-        """Получить все receipts пользователя с select_related."""
+        """Get all receipts for a user with related objects optimized.
+
+        Args:
+            user: User instance to filter by.
+
+        Returns:
+            QuerySet[Receipt]: QuerySet with select_related and prefetch_related
+                optimizations applied.
+        """
         return Receipt.objects.for_user(user).with_related()
 
     def get_by_users_with_related(
         self,
         users: list[User],
     ) -> QuerySet[Receipt]:
-        """Получить все receipts для списка пользователей с select_related."""
+        """Get all receipts for users with related objects optimized.
+
+        Args:
+            users: List of User instances to filter by.
+
+        Returns:
+            QuerySet[Receipt]: QuerySet with select_related and prefetch_related
+                optimizations applied.
+        """
         return Receipt.objects.for_users(users).with_related()
 
     def get_by_user_and_number(
@@ -42,7 +90,15 @@ class ReceiptRepository:
         user: User,
         number_receipt: int | None,
     ) -> QuerySet[Receipt]:
-        """Получить receipts пользователя по номеру чека."""
+        """Get receipts by user and receipt number.
+
+        Args:
+            user: User instance to filter by.
+            number_receipt: Receipt number to filter by.
+
+        Returns:
+            QuerySet[Receipt]: Filtered QuerySet.
+        """
         return Receipt.objects.for_user_and_number(user, number_receipt)
 
     def add_product_to_receipt(
@@ -50,15 +106,35 @@ class ReceiptRepository:
         receipt: Receipt,
         product: 'Product',
     ) -> None:
-        """Добавить продукт к receipt."""
+        """Add product to receipt.
+
+        Args:
+            receipt: Receipt instance to add product to.
+            product: Product instance to add.
+        """
         receipt.product.add(product)
 
     def create_receipt(self, **kwargs: object) -> Receipt:
-        """Создать новый receipt."""
+        """Create a new receipt.
+
+        Args:
+            **kwargs: Receipt field values (user, account, seller,
+                receipt_date, total_sum, etc.).
+
+        Returns:
+            Receipt: Created receipt instance.
+        """
         return Receipt.objects.create(**kwargs)
 
     def filter(self, **kwargs: object) -> QuerySet[Receipt]:
-        """Фильтровать receipts."""
+        """Filter receipts by given criteria.
+
+        Args:
+            **kwargs: Filter criteria (field=value pairs).
+
+        Returns:
+            QuerySet[Receipt]: Filtered QuerySet.
+        """
         return Receipt.objects.filter(**kwargs)
 
     def filter_by_account_and_date_range(
@@ -67,7 +143,19 @@ class ReceiptRepository:
         start_date: datetime,
         end_date: datetime,
     ) -> QuerySet[Receipt, dict[str, Any]]:
-        """Фильтровать receipts по счету и периоду."""
+        """Filter receipts by account and date range.
+
+        Returns aggregated data grouped by month and operation type.
+
+        Args:
+            account: Account instance to filter by.
+            start_date: Start of date range (inclusive).
+            end_date: End of date range (inclusive).
+
+        Returns:
+            QuerySet[Receipt, dict[str, Any]]: Aggregated QuerySet with
+                month, operation_type, and total fields.
+        """
         return (
             Receipt.objects.filter(
                 account=account,

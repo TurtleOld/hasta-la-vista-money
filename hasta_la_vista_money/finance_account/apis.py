@@ -62,7 +62,12 @@ class AccountListCreateAPIView(ListCreateAPIView[Account]):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self) -> QuerySet[Account, Account]:
-        """Return queryset filtered by the current user."""
+        """Return queryset filtered by the current user.
+
+        Returns:
+            QuerySet[Account, Account]: QuerySet of accounts belonging to
+                the authenticated user, ordered by ID descending.
+        """
         if getattr(self, 'swagger_fake_view', False):
             return Account.objects.none()
         user = cast('User', self.request.user)
@@ -98,7 +103,10 @@ class AccountListCreateAPIView(ListCreateAPIView[Account]):
     },
 )
 class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для получения счетов по группе."""
+    """API view for retrieving accounts by group.
+
+    Provides an endpoint to get a list of accounts filtered by user group.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -111,7 +119,16 @@ class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Получить счета по группе."""
+        """Get accounts by group.
+
+        Args:
+            request: HTTP request with group_id query parameter.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Paginated list of accounts in JSON format.
+        """
         serializer = GroupQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         group_id = serializer.validated_data.get('group_id')

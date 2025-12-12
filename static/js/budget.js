@@ -11,8 +11,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const API = {
-        expense: '/api/budget/api/expenses/',
-        income: '/api/budget/api/incomes/'
+        expense: '/api/budget/expenses/',
+        income: '/api/budget/incomes/'
     };
     const TABLES = [
         { id: 'expense-budget-table', type: 'expense', api: API.expense },
@@ -49,8 +49,8 @@ document.addEventListener('DOMContentLoaded', function () {
         return typeof url === 'string' && /^\/[a-zA-Z0-9/_\-.]*$/.test(url);
     }
     const ALLOWED_API_PATHS = [
-        '/api/budget/api/expenses/',
-        '/api/budget/api/incomes/',
+        '/api/budget/expenses/',
+        '/api/budget/incomes/',
         '/budget/save-planning/',
     ];
     function isWhitelistedUrl(url) {
@@ -58,11 +58,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function safeFetchExpenses(options, retry = true) {
-        return performSafeFetch('/api/budget/api/expenses/', options, retry);
+        return performSafeFetch('/api/budget/expenses/', options, retry);
     }
 
     function safeFetchIncomes(options, retry = true) {
-        return performSafeFetch('/api/budget/api/incomes/', options, retry);
+        return performSafeFetch('/api/budget/incomes/', options, retry);
     }
 
     function safeFetchSavePlanning(options, retry = true) {
@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotification('Ошибка: небезопасный API URL', 'error');
             return;
         }
-        (api === '/api/budget/api/expenses/' ? safeFetchExpenses() : safeFetchIncomes())
+        (api === '/api/budget/expenses/' ? safeFetchExpenses() : safeFetchIncomes())
             .then(resp => {
                 if (!resp.ok) throw new Error('API error');
                 return resp.json();

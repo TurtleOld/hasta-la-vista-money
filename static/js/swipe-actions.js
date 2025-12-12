@@ -5,36 +5,87 @@ class SwipeActions {
             threshold: 80,
             deleteCallback: null,
             editCallback: null,
+            debounceDelay: 16,
+            resizeDebounceDelay: 150,
             ...options
         };
         this.activeItem = null;
+        this.isMobile = false;
+        this.resizeTimeout = null;
+        this.touchMoveTimeout = null;
         this.init();
     }
 
-    init() {
-        if (window.matchMedia('(max-width: 767px)').matches) {
-            this.attachListeners();
-        }
+    debounce(func, delay) {
+        let timeoutId;
+        return (...args) => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
 
-        window.addEventListener('resize', () => {
-            if (window.matchMedia('(max-width: 767px)').matches) {
-                this.attachListeners();
-            } else {
-                this.detachListeners();
+    throttle(func, delay) {
+        let lastCall = 0;
+        return (...args) => {
+            const now = Date.now();
+            if (now - lastCall >= delay) {
+                lastCall = now;
+                func.apply(this, args);
             }
-        });
+        };
+    }
+
+    init() {
+        this.checkViewport();
+        this.handleResize = this.debounce(this.onResize.bind(this), this.options.resizeDebounceDelay);
+        window.addEventListener('resize', this.handleResize, { passive: true });
+        
+        if ('orientationchange' in window) {
+            window.addEventListener('orientationchange', this.handleResize, { passive: true });
+        }
+    }
+
+    checkViewport() {
+        const wasMobile = this.isMobile;
+        this.isMobile = window.matchMedia('(max-width: 767px)').matches;
+        
+        if (this.isMobile && !wasMobile) {
+            this.attachListeners();
+        } else if (!this.isMobile && wasMobile) {
+            this.detachListeners();
+            if (this.activeItem) {
+                this.resetItem(this.activeItem);
+                this.activeItem = null;
+            }
+        }
+    }
+
+    onResize() {
+        this.checkViewport();
     }
 
     attachListeners() {
-        document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: true });
-        document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
-        document.addEventListener('touchend', this.handleTouchEnd.bind(this));
+        if (this.listenersAttached) return;
+        
+        this.boundTouchStart = this.handleTouchStart.bind(this);
+        this.boundTouchMove = this.throttle(this.handleTouchMove.bind(this), this.options.debounceDelay);
+        this.boundTouchEnd = this.handleTouchEnd.bind(this);
+        
+        document.addEventListener('touchstart', this.boundTouchStart, { passive: true });
+        document.addEventListener('touchmove', this.boundTouchMove, { passive: false });
+        document.addEventListener('touchend', this.boundTouchEnd, { passive: true });
+        
+        this.listenersAttached = true;
     }
 
     detachListeners() {
-        document.removeEventListener('touchstart', this.handleTouchStart.bind(this));
-        document.removeEventListener('touchmove', this.handleTouchMove.bind(this));
-        document.removeEventListener('touchend', this.handleTouchEnd.bind(this));
+        if (!this.listenersAttached) return;
+        
+        document.removeEventListener('touchstart', this.boundTouchStart);
+        document.removeEventListener('touchmove', this.boundTouchMove);
+        document.removeEventListener('touchend', this.boundTouchEnd);
+        
+        this.listenersAttached = false;
     }
 
     handleTouchStart(e) {
@@ -78,11 +129,17 @@ class SwipeActions {
     }
 
     handleTouchEnd() {
+        if (this.touchMoveTimeout) {
+            clearTimeout(this.touchMoveTimeout);
+            this.touchMoveTimeout = null;
+        }
+
         if (!this.activeItem || !this.isSwiping) {
             if (this.activeItem) {
                 this.activeItem.classList.remove('swiping');
             }
             this.activeItem = null;
+            this.isSwiping = false;
             return;
         }
 
@@ -178,6 +235,26 @@ class SwipeActions {
 
         this.resetItem(item);
         this.activeItem = null;
+    }
+
+    destroy() {
+        this.detachListeners();
+        if (this.handleResize) {
+            window.removeEventListener('resize', this.handleResize);
+            if ('orientationchange' in window) {
+                window.removeEventListener('orientationchange', this.handleResize);
+            }
+        }
+        if (this.activeItem) {
+            this.resetItem(this.activeItem);
+            this.activeItem = null;
+        }
+        if (this.resizeTimeout) {
+            clearTimeout(this.resizeTimeout);
+        }
+        if (this.touchMoveTimeout) {
+            clearTimeout(this.touchMoveTimeout);
+        }
     }
 }
 

@@ -1,3 +1,9 @@
+"""DRF API views for receipts app.
+
+This module provides REST API endpoints for managing receipts,
+including creation, listing, deletion, and autocomplete functionality.
+"""
+
 import decimal
 import json
 from typing import TYPE_CHECKING, Any, cast
@@ -50,6 +56,13 @@ from hasta_la_vista_money.users.models import User
     description='Получить список всех чеков текущего пользователя',
 )
 class ReceiptListAPIView(ListCreateAPIView[Receipt]):
+    """API view for listing and creating receipts.
+
+    Provides endpoints for:
+    - GET: List all receipts belonging to the authenticated user
+    - POST: Create a new receipt
+    """
+
     schema = AutoSchema()
     serializer_class = ReceiptSerializer
     permission_classes = (IsAuthenticated,)
@@ -57,6 +70,12 @@ class ReceiptListAPIView(ListCreateAPIView[Receipt]):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self) -> QuerySet[Receipt, Receipt]:
+        """Return queryset filtered by the current user.
+
+        Returns:
+            QuerySet[Receipt, Receipt]: QuerySet of receipts belonging to
+                the authenticated user, ordered by receipt_date descending.
+        """
         if getattr(self, 'swagger_fake_view', False):
             return Receipt.objects.none()
         user = cast('User', self.request.user)
@@ -74,6 +93,11 @@ class ReceiptListAPIView(ListCreateAPIView[Receipt]):
     description='Получить детальную информацию о продавце по ID',
 )
 class SellerDetailAPIView(RetrieveAPIView[Seller]):
+    """API view for retrieving seller details.
+
+    Provides an endpoint to get detailed information about a seller by ID.
+    """
+
     schema = AutoSchema()
     queryset = Seller.objects.all()
     serializer_class = SellerSerializer
@@ -82,6 +106,12 @@ class SellerDetailAPIView(RetrieveAPIView[Seller]):
     lookup_field = 'id'
 
     def get_queryset(self) -> QuerySet[Seller, Seller]:
+        """Return queryset filtered by the current user.
+
+        Returns:
+            QuerySet[Seller, Seller]: QuerySet of sellers belonging to
+                the authenticated user, ordered by ID descending.
+        """
         if getattr(self, 'swagger_fake_view', False):
             return Seller.objects.none()
         user = cast('User', self.request.user)
@@ -114,11 +144,28 @@ class SellerDetailAPIView(RetrieveAPIView[Seller]):
     },
 )
 class DataUrlAPIView(APIView):
+    """API view for processing receipt image data URL.
+
+    Provides an endpoint to receive receipt image in data URL format
+    for processing.
+    """
+
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Process receipt image data URL.
+
+        Args:
+            request: HTTP request with data_url in request body.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: JSON response with message and data_url on success,
+                or error details on validation failure.
+        """
         serializer = ImageDataSerializer(data=request.data)
 
         if serializer.is_valid():
@@ -158,11 +205,27 @@ class DataUrlAPIView(APIView):
     },
 )
 class SellerCreateAPIView(APIView):
+    """API view for creating sellers.
+
+    Provides an endpoint to create a new seller for the current user.
+    """
+
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Create a new seller.
+
+        Args:
+            request: HTTP request with seller data in request body.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: JSON response with created seller data on success,
+                or validation errors on failure.
+        """
         serializer = SellerSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(user=request.user)
@@ -181,6 +244,12 @@ class SellerCreateAPIView(APIView):
     },
 )
 class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
+    """API view for creating receipts.
+
+    Provides an endpoint to create a new receipt with products and seller.
+    Includes validation and data mapping logic.
+    """
+
     schema = AutoSchema()
     queryset = Receipt.objects.none()
     serializer_class = ReceiptSerializer
@@ -188,13 +257,22 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
     throttle_classes = (UserRateThrottle,)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize view with validator and mapper."""
+        """Initialize view with validator and mapper.
+
+        Args:
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
         super().__init__(*args, **kwargs)
         self.validator: ReceiptAPIValidator | None = None
         self.mapper: ReceiptAPIDataMapper | None = None
 
     def _get_validator(self) -> ReceiptAPIValidator:
-        """Get or create validator instance."""
+        """Get or create validator instance.
+
+        Returns:
+            ReceiptAPIValidator: Validator instance for receipt data.
+        """
         if self.validator is None:
             request_with_container = cast('RequestWithContainer', self.request)
             receipt_repository = (
@@ -206,16 +284,38 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         return self.validator
 
     def _get_mapper(self) -> ReceiptAPIDataMapper:
-        """Get or create mapper instance."""
+        """Get or create mapper instance.
+
+        Returns:
+            ReceiptAPIDataMapper: Mapper instance for receipt data.
+        """
         if self.mapper is None:
             self.mapper = ReceiptAPIDataMapper()
         return self.mapper
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Create a new receipt.
+
+        Args:
+            request: HTTP request with receipt data in JSON format.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: JSON response with created receipt data on success,
+                or error message on failure.
+        """
         return self._process_request(request)
 
     def _process_request(self, request: Request) -> Response:
-        """Process incoming request."""
+        """Process incoming request.
+
+        Args:
+            request: HTTP request object.
+
+        Returns:
+            Response: JSON response with receipt data or error message.
+        """
         try:
             request_data = json.loads(request.body)
         except json.JSONDecodeError:
@@ -237,7 +337,19 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         self,
         request_data: dict[str, Any],
     ) -> Response:
-        """Handle receipt creation using validator and mapper."""
+        """Handle receipt creation using validator and mapper.
+
+        Args:
+            request_data: Dictionary with receipt data.
+
+        Returns:
+            Response: JSON response with created receipt data.
+
+        Raises:
+            ValueError: When validation fails or receipt already exists.
+            TypeError: When data type conversion fails.
+            decimal.InvalidOperation: When decimal operation fails.
+        """
         validator = self._get_validator()
         mapper = self._get_mapper()
 
@@ -282,6 +394,14 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         )
 
     def _error_response(self, message: str) -> Response:
+        """Create error response.
+
+        Args:
+            message: Error message.
+
+        Returns:
+            Response: JSON response with error message and 400 status.
+        """
         return Response(
             message,
             status=status.HTTP_400_BAD_REQUEST,
@@ -327,11 +447,15 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
     },
 )
 class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для получения чеков по группе."""
+    """API view for retrieving receipts by group.
+
+    Provides an endpoint to get a list of receipts filtered by user group.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
+    pagination_class = StandardResultsSetPagination
 
     def get(
         self,
@@ -339,7 +463,17 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Получить чеки по группе."""
+        """Get receipts by group.
+
+        Args:
+            request: HTTP request with group_id query parameter.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Paginated list of receipts in JSON format with
+                user groups information.
+        """
         query_serializer = GroupQuerySerializer(data=request.query_params)
         query_serializer.is_valid(raise_exception=True)
         group_id = query_serializer.validated_data.get('group_id', 'my')
@@ -376,18 +510,34 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         receipts = (
             receipt_queryset.select_related('seller', 'user')
             .prefetch_related('product')
-            .order_by('-receipt_date')[: constants.RECENT_RECEIPTS_LIMIT]
+            .order_by('-receipt_date')
         )
 
-        receipt_serializer = ReceiptSerializer(receipts, many=True)
-
-        return Response(
-            {
-                'receipts': receipt_serializer.data,
-                'user_groups': user_groups,
-            },
-            status=status.HTTP_200_OK,
+        paginator = self.pagination_class()
+        paginated_receipts: QuerySet[Receipt, Receipt] | None = (
+            paginator.paginate_queryset(receipts, request)  # type: ignore[arg-type]
         )
+
+        if paginated_receipts is None:
+            receipt_serializer = ReceiptSerializer(receipts, many=True)
+            return Response(
+                {
+                    'receipts': receipt_serializer.data,
+                    'user_groups': user_groups,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        receipt_serializer = ReceiptSerializer(paginated_receipts, many=True)
+        paginated_response = paginator.get_paginated_response(
+            receipt_serializer.data
+        )
+
+        paginated_data = paginated_response.data
+        if isinstance(paginated_data, dict):
+            paginated_data['user_groups'] = user_groups
+
+        return Response(paginated_data, status=status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -400,6 +550,11 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     },
 )
 class ReceiptDeleteAPIView(APIView):
+    """API view for deleting receipts.
+
+    Provides an endpoint to delete a receipt by its ID.
+    """
+
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
@@ -411,6 +566,21 @@ class ReceiptDeleteAPIView(APIView):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
+        """Delete receipt by ID.
+
+        Args:
+            request: HTTP request object.
+            pk: Receipt ID to delete.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: Empty response with 204 status on success.
+
+        Raises:
+            NotFound: When receipt is not found.
+            PermissionDenied: When user doesn't have permission to delete.
+        """
         try:
             receipt = (
                 Receipt.objects.select_related('user', 'seller', 'account')
@@ -459,6 +629,11 @@ class ReceiptDeleteAPIView(APIView):
     },
 )
 class SellerAutocompleteAPIView(APIView):
+    """API view for seller autocomplete.
+
+    Provides an endpoint to search sellers by name for autocomplete.
+    """
+
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
@@ -507,11 +682,27 @@ class SellerAutocompleteAPIView(APIView):
     },
 )
 class ProductAutocompleteAPIView(APIView):
+    """API view for product autocomplete.
+
+    Provides an endpoint to search products by name for autocomplete.
+    """
+
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Get product autocomplete suggestions.
+
+        Args:
+            request: HTTP request with optional 'q' query parameter.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: JSON response with list of product names matching
+                the search query.
+        """
         query = request.GET.get('q', '').strip()
         user = cast('User', request.user)
         products: QuerySet[Product, Product] = Product.objects.filter(

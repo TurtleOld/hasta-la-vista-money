@@ -52,8 +52,8 @@ urlpatterns = [
         name='api_list',
     ),
     path(
-        'api/by-group/',
+        'by-group/',
         AccountsByGroupAPIView.as_view(),
-        name='api_by_group',
+        name='by_group',
     ),
 ]
