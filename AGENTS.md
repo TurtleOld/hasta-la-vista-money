@@ -564,7 +564,3 @@ path('api/v1/my-feature/', MyFeatureAPIView.as_view(), name='my_feature'),
 ```
 
 ---
-
-**Последнее обновление:** 2025-01-27  
-**Версия проекта:** 1.8.0
-

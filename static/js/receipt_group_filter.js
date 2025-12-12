@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function loadReceiptsBlock(groupId) {
         const params = new URLSearchParams(window.location.search);
         params.set('group_id', groupId);
-        fetch('/receipts/ajax/receipts_by_group/?' + params.toString(), {
+        fetch('/api/receipts/by-group/?' + params.toString(), {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
             },
@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (sessionResponse.ok) {
                             return window.tokens.refreshTokensIfNeeded().then(refreshed => {
                                 if (refreshed) {
-                                    return fetch('/receipts/ajax/receipts_by_group/?' + params.toString(), {
+                                    return fetch('/api/receipts/by-group/?' + params.toString(), {
                                         headers: {
                                             'X-Requested-With': 'XMLHttpRequest',
                                         },

@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             try {
-                const response = await fetchWithAuth(`/receipts/api/product-autocomplete/?q=${encodeURIComponent(query)}`);
+                const response = await fetchWithAuth(`/api/receipts/product-autocomplete/?q=${encodeURIComponent(query)}`);
                 if (!response.ok) return;
                 const data = await response.json();
                 results = data.results || [];
@@ -417,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const allowedPaths = [
-            '/receipts/api/product-autocomplete/',
+            '/api/receipts/product-autocomplete/',
             '/authentication/token/refresh/',
             '/authentication/token/session/',
             '/users/login/'
@@ -429,8 +429,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const safeFetch = (url, opts) => {
-            if (url === '/receipts/api/product-autocomplete/') {
-                return fetch('/receipts/api/product-autocomplete/', opts);
+            if (url === '/api/receipts/product-autocomplete/') {
+                return fetch('/api/receipts/product-autocomplete/', opts);
             } else if (url === '/authentication/token/refresh/') {
                 return fetch('/authentication/token/refresh/', opts);
             } else if (url === '/authentication/token/session/') {

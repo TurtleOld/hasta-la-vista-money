@@ -113,7 +113,7 @@ function renderAccountGroupBlock(data) {
 function loadAccountsBlock(groupId) {
     const params = new URLSearchParams(window.location.search);
     params.set('group_id', groupId);
-    fetch('/api/finaccount/api/by-group/?' + params.toString(), {
+    fetch('/api/finaccount/by-group/?' + params.toString(), {
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
     })
         .then(response => response.json())
