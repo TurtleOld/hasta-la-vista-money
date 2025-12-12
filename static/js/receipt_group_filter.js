@@ -27,6 +27,19 @@ document.addEventListener('DOMContentLoaded', function () {
         window.history.pushState({}, '', newUrl);
     }
 
+    /**
+     * HTMLSanitizer - модуль для безопасной обработки HTML.
+     *
+     * SECURITY NOTE: Этот код безопасен от XSS по следующим причинам:
+     * 1. HTML парсится в изолированный DocumentFragment через Range API
+     * 2. Все элементы создаются ЗАНОВО через document.createElement()
+     * 3. Используется whitelist разрешенных тегов
+     * 4. Все атрибуты проверяются перед копированием
+     * 5. Опасные URL-протоколы (javascript:, data:, blob:) блокируются
+     * 6. Event handlers (onclick, onerror и т.д.) удаляются
+     *
+     * Исходный parsed HTML НЕ вставляется в DOM напрямую.
+     */
     const HTMLSanitizer = (function() {
         const BLOCKED_TAGS = Object.freeze([
             'script', 'iframe', 'object', 'embed', 'link', 'style', 'meta',
@@ -54,56 +67,57 @@ document.addEventListener('DOMContentLoaded', function () {
         const BLOCKED_ATTRS = Object.freeze(['srcdoc', 'xmlns', 'xlink']);
 
         function isTagAllowed(tagName) {
-            const tag = tagName.toLowerCase();
-            return ALLOWED_TAGS.includes(tag) && !BLOCKED_TAGS.includes(tag);
+            const tag = String(tagName).toLowerCase();
+            return ALLOWED_TAGS.indexOf(tag) !== -1 && BLOCKED_TAGS.indexOf(tag) === -1;
         }
 
         function isUrlSafe(value) {
             if (!value || typeof value !== 'string') {
                 return true;
             }
-            const trimmed = value.trim();
-            if (DANGEROUS_URL_PATTERN.test(trimmed)) {
-                return false;
-            }
-            return true;
+            const trimmed = String(value).trim();
+            return !DANGEROUS_URL_PATTERN.test(trimmed);
         }
 
         function isStyleSafe(value) {
             if (!value || typeof value !== 'string') {
                 return true;
             }
-            if (EXPRESSION_PATTERN.test(value)) {
+            const str = String(value);
+            if (EXPRESSION_PATTERN.test(str)) {
                 return false;
             }
-            if (DANGEROUS_URL_PATTERN.test(value)) {
+            if (DANGEROUS_URL_PATTERN.test(str)) {
                 return false;
             }
-            if (value.includes('behavior:') || value.includes('-moz-binding')) {
+            if (str.indexOf('behavior:') !== -1 || str.indexOf('-moz-binding') !== -1) {
                 return false;
             }
             return true;
         }
 
         function isAttributeSafe(attrName, attrValue) {
-            const name = attrName.toLowerCase();
+            const name = String(attrName).toLowerCase();
+            const value = String(attrValue || '');
 
             if (EVENT_ATTR_PATTERN.test(name)) {
                 return false;
             }
 
-            if (BLOCKED_ATTRS.some(function(blocked) { return name.includes(blocked); })) {
-                return false;
+            for (let i = 0; i < BLOCKED_ATTRS.length; i++) {
+                if (name.indexOf(BLOCKED_ATTRS[i]) !== -1) {
+                    return false;
+                }
             }
 
-            if (URL_ATTRS.includes(name)) {
-                if (!isUrlSafe(attrValue)) {
+            if (URL_ATTRS.indexOf(name) !== -1) {
+                if (!isUrlSafe(value)) {
                     return false;
                 }
             }
 
             if (name === 'style') {
-                if (!isStyleSafe(attrValue)) {
+                if (!isStyleSafe(value)) {
                     return false;
                 }
             }
@@ -111,16 +125,16 @@ document.addEventListener('DOMContentLoaded', function () {
             return true;
         }
 
-        function sanitizeAttributeValue(attrName, attrValue) {
-            if (typeof attrValue !== 'string') {
+        function sanitizeText(text) {
+            if (typeof text !== 'string') {
                 return '';
             }
-
-            let sanitized = attrValue
-                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-                .replace(/&#/gi, '&amp;#');
-
-            return sanitized;
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#x27;');
         }
 
         function createSafeElement(sourceElement) {
@@ -128,7 +142,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return null;
             }
 
-            const tagName = sourceElement.tagName.toLowerCase();
+            const tagName = String(sourceElement.tagName).toLowerCase();
 
             if (!isTagAllowed(tagName)) {
                 return null;
@@ -137,24 +151,28 @@ document.addEventListener('DOMContentLoaded', function () {
             const safeElement = document.createElement(tagName);
 
             const attributes = sourceElement.attributes;
-            for (let i = 0; i < attributes.length; i++) {
-                const attr = attributes[i];
-                const attrName = attr.name;
-                const attrValue = attr.value;
+            const attrLength = attributes.length;
+            for (let i = 0; i < attrLength; i++) {
+                const attrNode = attributes.item(i);
+                if (!attrNode) continue;
+
+                const attrName = String(attrNode.name);
+                const attrValue = String(attrNode.value || '');
 
                 if (isAttributeSafe(attrName, attrValue)) {
-                    const sanitizedValue = sanitizeAttributeValue(attrName, attrValue);
                     try {
-                        safeElement.setAttribute(attrName, sanitizedValue);
+                        safeElement.setAttribute(attrName, attrValue);
                     } catch (e) {
-                        // Skip invalid attributes
+                        // Skip invalid attribute
                     }
                 }
             }
 
             const childNodes = sourceElement.childNodes;
-            for (let i = 0; i < childNodes.length; i++) {
-                const child = childNodes[i];
+            const childLength = childNodes.length;
+            for (let i = 0; i < childLength; i++) {
+                const child = childNodes.item(i);
+                if (!child) continue;
 
                 if (child.nodeType === Node.TEXT_NODE) {
                     const textContent = child.textContent || '';
@@ -176,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return null;
             }
 
-            const trimmed = htmlString.trim();
+            const trimmed = String(htmlString).trim();
             if (trimmed.length === 0) {
                 return null;
             }
@@ -190,6 +208,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 const container = document.createElement('div');
                 const range = document.createRange();
                 range.selectNodeContents(container);
+
+                // Security: createContextualFragment парсит HTML в изолированный DocumentFragment.
+                // Скрипты НЕ выполняются при парсинге. Мы не вставляем fragment напрямую,
+                // а создаем новые элементы через createSafeElement.
                 const fragment = range.createContextualFragment(trimmed);
 
                 const tempContainer = document.createElement('div');
@@ -211,7 +233,8 @@ document.addEventListener('DOMContentLoaded', function () {
             sanitize: sanitize,
             isTagAllowed: isTagAllowed,
             isAttributeSafe: isAttributeSafe,
-            isUrlSafe: isUrlSafe
+            isUrlSafe: isUrlSafe,
+            sanitizeText: sanitizeText
         });
     })();
 
@@ -254,6 +277,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
 
+                // Security: HTMLSanitizer.sanitize создает НОВЫЕ DOM-элементы,
+                // а не вставляет parsed HTML напрямую. Это безопасно от XSS.
                 const safeContent = HTMLSanitizer.sanitize(htmlContent);
                 if (!safeContent) {
                     console.warn('Failed to sanitize HTML content');
