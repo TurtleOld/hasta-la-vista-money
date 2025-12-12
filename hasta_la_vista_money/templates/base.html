@@ -63,34 +63,72 @@
     <script src="{% static 'js/script.js' %}"></script>
     <script src="{% static 'js/errors_form.js' %}"></script>
     <script src="{% static 'js/account_group_filter.js' %}"></script>
-    {% if 'receipts' in request.path %}
-        <script src="{% static 'js/tokens.js' %}"></script>
-        <script src="{% static 'js/receipt_group_filter.js' %}"></script>
-        {% if 'update' in request.path %}
-            <script src="{% static 'js/receipt_update.js' %}"></script>
-        {% endif %}
-    {% endif %}
-    {% if 'budget' in request.path %}
-        <script src="{% static 'js/budget.js' %}"></script>
-    {% endif %}
-    {% if 'users' in request.path %}
-        <script src="{% static 'js/theme.js' %}"></script>
-    {% endif %}
-    {% if 'income' in request.path and not 'budget' in request.path%}
-        <script src="{% static 'js/income_table.js' %}"></script>
-    {% endif %}
-    {% if 'expense' in request.path and not 'budget' in request.path%}
-        <script src="{% static 'js/expense_table.js' %}"></script>
-    {% endif %}
-    {% if 'loan' in request.path %}
-        <script src="{% static 'js/loan.js' %}"></script>
-    {% endif %}
+    <script src="{% static 'js/lazy-loader.js' %}"></script>
     {% if user.is_authenticated %}
         <script src="{% static 'js/bottom-nav.js' %}"></script>
         <script src="{% static 'js/mobile-menu.js' %}"></script>
         <script src="{% static 'js/upload.js' %}"></script>
     {% endif %}
     {% endcompress %}
+    <script nonce="{{request.csp_nonce}}">
+        (function() {
+            if (typeof window.LazyLoader === 'undefined') {
+                console.warn('LazyLoader not available, falling back to immediate loading');
+                return;
+            }
+
+            const currentPath = '{{ request.path|escapejs }}';
+            const cspNonce = '{{ request.csp_nonce|escapejs }}';
+
+            function loadScript(src) {
+                return window.LazyLoader.loadScript(src, {
+                    nonce: cspNonce
+                });
+            }
+
+            if (currentPath.indexOf('receipts') !== -1) {
+                loadScript('{% static "js/tokens.js" %}').then(function() {
+                    return loadScript('{% static "js/receipt_group_filter.js" %}');
+                }).then(function() {
+                    if (currentPath.indexOf('update') !== -1) {
+                        return loadScript('{% static "js/receipt_update.js" %}');
+                    }
+                }).catch(function(error) {
+                    console.error('Error loading receipt scripts:', error);
+                });
+            }
+
+            if (currentPath.indexOf('budget') !== -1) {
+                loadScript('{% static "js/budget.js" %}').catch(function(error) {
+                    console.error('Error loading budget script:', error);
+                });
+            }
+
+            if (currentPath.indexOf('users') !== -1) {
+                loadScript('{% static "js/theme.js" %}').catch(function(error) {
+                    console.error('Error loading theme script:', error);
+                });
+            }
+
+            if (currentPath.indexOf('income') !== -1 && currentPath.indexOf('budget') === -1) {
+                loadScript('{% static "js/income_table.js" %}').catch(function(error) {
+                    console.error('Error loading income_table script:', error);
+                });
+            }
+
+            if (currentPath.indexOf('expense') !== -1 && currentPath.indexOf('budget') === -1) {
+                loadScript('{% static "js/expense_table.js" %}').catch(function(error) {
+                    console.error('Error loading expense_table script:', error);
+                });
+            }
+
+            if (currentPath.indexOf('loan') !== -1) {
+                loadScript('{% static "js/loan.js" %}').catch(function(error) {
+                    console.error('Error loading loan script:', error);
+                });
+            }
+        })();
+    </script>
     {% block extra_js %}
     {% endblock %}
     <script nonce="{{request.csp_nonce}}">

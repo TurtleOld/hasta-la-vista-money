@@ -2,6 +2,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const groupSelect = document.getElementById('receipt-group-select');
     if (!groupSelect) return;
 
+    let isLoading = false;
+    let pendingRequest = null;
+
+    function debounce(func, delay) {
+        let timeoutId;
+        return function(...args) {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+
     function getGroupIdFromQuery() {
         const params = new URLSearchParams(window.location.search);
         return params.get('group_id') || 'my';
@@ -15,6 +26,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function loadReceiptsBlock(groupId) {
+        if (isLoading) {
+            pendingRequest = groupId;
+            return;
+        }
+
+        isLoading = true;
         const params = new URLSearchParams(window.location.search);
         params.set('group_id', groupId);
         fetch('/api/receipts/by-group/?' + params.toString(), {
@@ -60,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const block = document.querySelector('#receipts-block');
                     if (block) {
                         const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');  // eslint-disable-line
+                        const doc = parser.parseFromString(html, 'text/html');
                         const newContent = doc.body.firstElementChild;
                         if (newContent) {
                             block.replaceWith(newContent);
@@ -74,8 +91,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     console.error('Error loading receipts:', error);
                 }
+            })
+            .finally(() => {
+                isLoading = false;
+                if (pendingRequest) {
+                    const nextGroupId = pendingRequest;
+                    pendingRequest = null;
+                    loadReceiptsBlock(nextGroupId);
+                }
             });
     }
+
+    const debouncedLoadReceipts = debounce(loadReceiptsBlock, 300);
 
     const currentGroupId = getGroupIdFromQuery();
     if (groupSelect.value !== currentGroupId) {
@@ -85,7 +112,7 @@ document.addEventListener('DOMContentLoaded', function () {
     groupSelect.addEventListener('change', function () {
         const selectedGroup = this.value;
         updateGroupIdInUrl(selectedGroup);
-        loadReceiptsBlock(selectedGroup);
+        debouncedLoadReceipts(selectedGroup);
     });
 
 });
