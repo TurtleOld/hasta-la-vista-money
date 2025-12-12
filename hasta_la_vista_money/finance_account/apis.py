@@ -14,7 +14,6 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     extend_schema,
 )
-from rest_framework import status
 from rest_framework.generics import ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -133,6 +132,7 @@ class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         account_serializer = AccountSerializer(accounts, many=True)
         paginator = self.pagination_class()
         paginated_data: Any = paginator.paginate_queryset(
-            account_serializer.data, request  # type: ignore[arg-type]
+            account_serializer.data,
+            request,  # type: ignore[arg-type]
         )
         return paginator.get_paginated_response(paginated_data)

@@ -1,6 +1,6 @@
 """Common mixins for views across the application."""
 
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.db.models import QuerySet, Sum
@@ -145,7 +145,7 @@ class UserAuthMixin:
 
     def dispatch(
         self,
-        request: Union[HttpRequest, DRFRequest],
+        request: HttpRequest | DRFRequest,
         *args: Any,
         **kwargs: Any,
     ) -> Any:
@@ -175,7 +175,7 @@ class UserAuthMixin:
         Raises:
             TypeError: Если request.user не является экземпляром User
         """
-        request = getattr(self, 'request')
+        request = self.request
         if not isinstance(request.user, User):
             raise TypeError('User must be authenticated')
         return request.user
@@ -210,7 +210,7 @@ class FormErrorHandlingMixin:
             error=str(error),
             **kwargs,
         )
-        request = getattr(self, 'request')
+        request = self.request
         if isinstance(request, HttpRequest):
             messages.error(request, _(error_message))
         return cast(

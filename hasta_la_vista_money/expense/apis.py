@@ -8,7 +8,6 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     extend_schema,
 )
-from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -107,15 +106,16 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             paginator = self.pagination_class()
             paginated_data: list[dict[str, Any]] | None = (
                 paginator.paginate_queryset(
-                    expense_data, request  # type: ignore[arg-type]
+                    expense_data,
+                    request,  # type: ignore[arg-type]
                 )
             )
             return paginator.get_paginated_response(paginated_data)
         except (ValueError, TypeError) as e:
             raise APIException(
-                detail=f'Ошибка обработки данных: {str(e)}',
+                detail=f'Ошибка обработки данных: {e!s}',
                 code='processing_error',
-            )
+            ) from e
 
 
 @extend_schema(
@@ -182,6 +182,6 @@ class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             return paginator.get_paginated_response(paginated_data)
         except (ValueError, TypeError) as e:
             raise APIException(
-                detail=f'Ошибка обработки данных: {str(e)}',
+                detail=f'Ошибка обработки данных: {e!s}',
                 code='processing_error',
-            )
+            ) from e

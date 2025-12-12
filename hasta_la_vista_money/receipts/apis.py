@@ -27,6 +27,8 @@ from hasta_la_vista_money.core.mixins import (
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
+from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.receipts.mappers.receipt_api_mapper import (
     ReceiptAPIDataMapper,
 )
@@ -36,8 +38,6 @@ from hasta_la_vista_money.receipts.serializers import (
     ReceiptSerializer,
     SellerSerializer,
 )
-from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
-from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
     ReceiptAPIValidator,
 )
@@ -85,9 +85,13 @@ class SellerDetailAPIView(RetrieveAPIView[Seller]):
         if getattr(self, 'swagger_fake_view', False):
             return Seller.objects.none()
         user = cast('User', self.request.user)
-        return Seller.objects.filter(
-            user__id=user.pk,
-        ).select_related('user').order_by('-id')
+        return (
+            Seller.objects.filter(
+                user__id=user.pk,
+            )
+            .select_related('user')
+            .order_by('-id')
+        )
 
 
 @extend_schema(
@@ -413,12 +417,14 @@ class ReceiptDeleteAPIView(APIView):
                 .prefetch_related('product')
                 .get(id=pk)
             )
-        except Receipt.DoesNotExist:
-            raise NotFound('Receipt not found')
+        except Receipt.DoesNotExist as e:
+            raise NotFound('Receipt not found') from e
 
         user = cast('User', request.user)
         if receipt.user != user:
-            raise PermissionDenied('You do not have permission to delete this receipt')
+            raise PermissionDenied(
+                'You do not have permission to delete this receipt'
+            )
 
         receipt.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

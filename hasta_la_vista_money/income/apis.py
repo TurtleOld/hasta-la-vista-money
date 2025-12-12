@@ -85,13 +85,17 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         users_in_group = account_service.get_users_for_group(user, group_id)
 
         if users_in_group:
-            incomes = Income.objects.filter(
-                user__in=users_in_group,
-            ).select_related(
-                'user',
-                'category',
-                'account',
-            ).order_by('-date')
+            incomes = (
+                Income.objects.filter(
+                    user__in=users_in_group,
+                )
+                .select_related(
+                    'user',
+                    'category',
+                    'account',
+                )
+                .order_by('-date')
+            )
         else:
             incomes = Income.objects.none()
 

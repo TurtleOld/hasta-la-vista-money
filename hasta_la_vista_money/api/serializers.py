@@ -8,7 +8,9 @@ from rest_framework import serializers
 class GroupQuerySerializer(serializers.Serializer[Any]):
     """Serializer для валидации query параметра group_id."""
 
-    group_id = serializers.CharField(required=False, default='my', allow_blank=True)
+    group_id = serializers.CharField(
+        required=False, default='my', allow_blank=True
+    )
 
 
 class BudgetTypeSerializer(serializers.Serializer[Any]):

@@ -14,7 +14,7 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import status
-from rest_framework.exceptions import APIException, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -151,9 +151,9 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             )
         except (ValueError, TypeError) as e:
             raise ValidationError(
-                detail=f'Ошибка парсинга данных: {str(e)}',
+                detail=f'Ошибка парсинга данных: {e!s}',
                 code='parse_error',
-            )
+            ) from e
 
 
 @extend_schema(
