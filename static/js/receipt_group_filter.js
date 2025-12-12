@@ -82,18 +82,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
 
-                const dangerousPatterns = [
-                    /<script[\s\S]*?>[\s\S]*?<\/script>/gi,
-                    /javascript:/gi,
-                    /on\w+\s*=/gi
-                ];
-
-                const hasDangerousContent = dangerousPatterns.some(pattern => pattern.test(html));
-                if (hasDangerousContent) {
-                    console.error('Potentially dangerous HTML content detected');
-                    return;
-                }
-
                 try {
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(html, 'text/html');
@@ -105,9 +93,50 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
 
                     const newContent = doc.body.firstElementChild;
-                    if (newContent && newContent.nodeType === Node.ELEMENT_NODE) {
-                        block.replaceWith(newContent);
+                    if (!newContent || newContent.nodeType !== Node.ELEMENT_NODE) {
+                        return;
                     }
+
+                    const dangerousTags = ['script', 'iframe', 'object', 'embed', 'link', 'style'];
+                    const dangerousAttributes = /^on\w+/i;
+                    const javascriptProtocol = /^\s*javascript:/i;
+
+                    function sanitizeElement(element) {
+                        if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+                            return;
+                        }
+
+                        const tagName = element.tagName.toLowerCase();
+                        if (dangerousTags.includes(tagName)) {
+                            element.remove();
+                            return;
+                        }
+
+                        const attributes = Array.from(element.attributes);
+                        for (const attr of attributes) {
+                            const attrName = attr.name.toLowerCase();
+                            const attrValue = attr.value;
+
+                            if (dangerousAttributes.test(attrName)) {
+                                element.removeAttribute(attrName);
+                                continue;
+                            }
+
+                            if (attrName === 'href' || attrName === 'src' || attrName === 'action') {
+                                if (javascriptProtocol.test(attrValue)) {
+                                    element.removeAttribute(attrName);
+                                }
+                            }
+                        }
+
+                        const children = Array.from(element.children);
+                        for (const child of children) {
+                            sanitizeElement(child);
+                        }
+                    }
+
+                    sanitizeElement(newContent);
+                    block.replaceWith(newContent);
                 } catch (error) {
                     console.error('Error parsing HTML:', error);
                 }
