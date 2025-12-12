@@ -9,14 +9,16 @@ from typing import Any, TypeVar
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import Model
+from django.forms import BaseModelForm
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, UpdateView
 from django_filters.views import FilterView
 
 from hasta_la_vista_money import constants
 
-ModelType = TypeVar('ModelType')
-FormType = TypeVar('FormType')
+ModelType = TypeVar('ModelType', bound=Model)
+FormType = TypeVar('FormType', bound=BaseModelForm[Any])
 
 
 class BaseEntityFilterView(
@@ -45,7 +47,7 @@ class BaseEntityFilterView(
 class BaseEntityCreateView[ModelType, FormType](
     LoginRequiredMixin,
     SuccessMessageMixin[Any],
-    CreateView[ModelType, FormType],
+    CreateView[ModelType, FormType],  # type: ignore[type-var]
 ):
     """Base class for entity creation views.
 
@@ -66,7 +68,7 @@ class BaseEntityCreateView[ModelType, FormType](
 class BaseEntityUpdateView[ModelType, FormType](
     LoginRequiredMixin,
     SuccessMessageMixin[Any],
-    UpdateView[ModelType, FormType],
+    UpdateView[ModelType, FormType],  # type: ignore[type-var]
 ):
     """Base class for entity update views.
 

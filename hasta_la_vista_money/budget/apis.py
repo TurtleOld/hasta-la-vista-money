@@ -14,11 +14,14 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import status
+from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from hasta_la_vista_money.api.serializers import BudgetTypeSerializer
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -64,6 +67,7 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
 
     def post(
         self,
@@ -72,6 +76,10 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         **kwargs: Any,
     ) -> Response:
         """Генерировать список дат."""
+        serializer = BudgetTypeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        type_ = serializer.validated_data['type']
+
         user = cast('User', request.user)
         queryset_user = get_object_or_404(User, username=user)
 
@@ -82,8 +90,6 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             )
         else:
             queryset_last_date = timezone.now().replace(day=1)
-
-        type_ = request.data.get('type')
         generate_date_list(queryset_last_date, queryset_user, type_)
 
         if type_ == 'income':
@@ -128,6 +134,7 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
 
     def post(
         self,
@@ -143,7 +150,10 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
                 status=status.HTTP_200_OK,
             )
         except (ValueError, TypeError) as e:
-            return self.handle_ajax_error(e, status_code=400)
+            raise ValidationError(
+                detail=f'Ошибка парсинга данных: {str(e)}',
+                code='parse_error',
+            )
 
 
 @extend_schema(
@@ -193,6 +203,7 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
 
     def post(
         self,
@@ -206,11 +217,11 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
         try:
             month = date.fromisoformat(request.data['month'])
-        except (ValueError, KeyError):
-            return self.handle_ajax_error(
-                ValueError('Invalid month format'),
-                status_code=400,
-            )
+        except (ValueError, KeyError) as e:
+            raise ValidationError(
+                detail='Invalid month format. Expected ISO format (YYYY-MM-DD)',
+                code='invalid_month_format',
+            ) from e
 
         try:
             amount = Decimal(str(request.data['amount']))

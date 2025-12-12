@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from hasta_la_vista_money.core.mixins import (
@@ -66,6 +67,7 @@ class UserGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Получить группы пользователя."""
@@ -126,6 +128,7 @@ class AvailableGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Получить доступные группы."""

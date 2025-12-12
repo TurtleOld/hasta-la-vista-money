@@ -6,9 +6,7 @@ from hasta_la_vista_money.expense.views import (
     ExpenseCategoryView,
     ExpenseCopyView,
     ExpenseCreateView,
-    ExpenseDataAjaxView,
     ExpenseDeleteView,
-    ExpenseGroupAjaxView,
     ExpenseUpdateView,
     ExpenseView,
 )
@@ -38,15 +36,5 @@ urlpatterns = [
         '<int:pk>/copy/',
         ExpenseCopyView.as_view(),
         name='expense_copy',
-    ),
-    path(
-        'ajax/expense_by_group/',
-        ExpenseGroupAjaxView.as_view(),
-        name='ajax_expense_by_group',
-    ),
-    path(
-        'ajax/expense_data/',
-        ExpenseDataAjaxView.as_view(),
-        name='expense_data',
     ),
 ]

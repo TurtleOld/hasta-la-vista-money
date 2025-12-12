@@ -14,7 +14,6 @@ from hasta_la_vista_money.finance_account.apis import (
 from hasta_la_vista_money.finance_account.views import (
     AccountCreateView,
     AccountView,
-    AjaxAccountsByGroupView,
     ChangeAccountView,
     DeleteAccountView,
     TransferMoneyAccountView,
@@ -51,11 +50,6 @@ urlpatterns = [
         'list/',
         AccountListCreateAPIView.as_view(),
         name='api_list',
-    ),
-    path(
-        'ajax/accounts_by_group/',
-        AjaxAccountsByGroupView.as_view(),
-        name='ajax_accounts_by_group',
     ),
     path(
         'api/by-group/',
