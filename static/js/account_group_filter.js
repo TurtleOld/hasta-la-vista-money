@@ -113,20 +113,20 @@ function renderAccountGroupBlock(data) {
 function loadAccountsBlock(groupId) {
     const params = new URLSearchParams(window.location.search);
     params.set('group_id', groupId);
-    fetch('/finance_account/ajax/accounts_by_group/?' + params.toString(), {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    fetch('/api/finaccount/api/by-group/?' + params.toString(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
     })
-        .then(response => response.text())
-        .then(html => {
-            const block = document.querySelector('#account-cards-block');
-            if (block) {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');  // eslint-disable-line
-                const newContent = doc.body.firstElementChild;
-                if (newContent) {
-                    block.replaceWith(newContent);
-                }
-            }
+        .then(response => response.json())
+        .then(data => {
+            const accounts = data.results || data.accounts || [];
+            const accountData = {
+                accounts: accounts,
+                user_groups: data.user_groups || []
+            };
+            renderAccountGroupBlock(accountData);
+        })
+        .catch(error => {
+            console.error('Error loading account cards:', error);
         });
 }
 

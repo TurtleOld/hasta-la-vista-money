@@ -37,7 +37,10 @@ class TestAccountAPI(TestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
+        data = response.json()
+        self.assertIn('results', data)
+        self.assertIn('count', data)
+        self.assertIsInstance(data['results'], list)
 
     def test_account_api_list_unauthenticated(self) -> None:
         """Test account API list endpoint for unauthenticated user."""
@@ -134,8 +137,10 @@ class TestAccountAPI(TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]['name_account'], 'Test Account')
+        self.assertIn('results', data)
+        results = data['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['name_account'], 'Test Account')
 
     def test_account_api_multiple_accounts(self) -> None:
         """Test account API with multiple accounts."""
@@ -152,7 +157,9 @@ class TestAccountAPI(TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(len(data), 2)
+        self.assertIn('results', data)
+        results = data['results']
+        self.assertEqual(len(results), 2)
 
     def test_account_api_content_type(self) -> None:
         """Test account API content type."""
