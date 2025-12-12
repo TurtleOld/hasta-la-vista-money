@@ -344,18 +344,15 @@ class TestAjaxAccountsByGroupView(TestCase):
 
         NOTE: View removed - test disabled.
         """
-        pass
 
     async def test_ajax_accounts_by_group_get_with_group_id(self) -> None:
         """Test GET request with specific group_id.
 
         NOTE: View removed - test disabled.
         """
-        pass
 
     async def test_ajax_accounts_by_group_get_exception(self) -> None:
         """Test GET request handling exceptions.
 
         NOTE: View removed - test disabled.
         """
-        pass
