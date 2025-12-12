@@ -10,6 +10,7 @@ from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from hasta_la_vista_money.budget.models import Planning
@@ -259,6 +260,7 @@ class PlanningExpenseDict(TypedDict):
 class ExpenseBudgetAPIView(APIView):
     schema = AutoSchema()
     permission_classes = [IsAuthenticated]
+    throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Any, *args: Any, **kwargs: Any) -> Response:
         """
@@ -318,6 +320,7 @@ class ExpenseBudgetAPIView(APIView):
 class IncomeBudgetAPIView(APIView):
     schema = AutoSchema()
     permission_classes = [IsAuthenticated]
+    throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Any, *args: Any, **kwargs: Any) -> Response:
         """

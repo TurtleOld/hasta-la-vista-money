@@ -34,12 +34,12 @@ urlpatterns = [
         name='save_planning',
     ),
     path(
-        'api/expenses/',
+        'expenses/',
         ExpenseBudgetAPIView.as_view(),
         name='api_expense_budget',
     ),
     path(
-        'api/incomes/',
+        'incomes/',
         IncomeBudgetAPIView.as_view(),
         name='api_income_budget',
     ),
