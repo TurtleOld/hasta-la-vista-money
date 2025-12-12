@@ -21,33 +21,33 @@ if TYPE_CHECKING:
 
 
 class EntityListViewMixin:
-    """Mixin для общих операций в списках сущностей (Expense, Income, Receipt).
+    """Mixin for common operations in entity lists (Expense, Income, Receipt).
 
-    Предоставляет общие методы для:
-    - Получения текущего пользователя
-    - Работы с фильтрами
-    - Вычисления totals
-    - Работы с категориями
+    Provides common methods for:
+    - Getting current user
+    - Working with filters
+    - Calculating totals
+    - Working with categories
     """
 
     request: HttpRequest
 
     def get_current_user(self) -> User:
-        """Получить текущего пользователя из request.
+        """Get current user from request.
 
         Returns:
-            User: Текущий аутентифицированный пользователь
+            User: Current authenticated user.
 
         Raises:
-            Http404: Если пользователь не найден
+            Http404: If user is not found.
         """
         return get_object_or_404(User, username=self.request.user)
 
     def get_request_with_container(self) -> 'RequestWithContainer':
-        """Получить request с контейнером dependency injection.
+        """Get request with dependency injection container.
 
         Returns:
-            RequestWithContainer: Request с контейнером
+            RequestWithContainer: Request with container.
         """
         return cast('RequestWithContainer', self.request)
 
@@ -56,17 +56,17 @@ class EntityListViewMixin:
         filterset_class: type['FilterSet'],
         base_queryset: QuerySet[Any],
     ) -> 'FilterSet':
-        """Создать и применить фильтр к queryset.
+        """Create and apply filter to queryset.
 
         Args:
-            filterset_class: Класс фильтра
-            base_queryset: Базовый queryset для фильтрации
+            filterset_class: Filter class.
+            base_queryset: Base queryset for filtering.
 
         Returns:
-            FilterSet: Применённый фильтр
+            FilterSet: Applied filter.
         """
         request = self.get_request_with_container()
-        return filterset_class(  # type: ignore[call-arg]
+        return filterset_class(
             self.request.GET,
             queryset=base_queryset,
             user=request.user,
@@ -77,14 +77,14 @@ class EntityListViewMixin:
         queryset: QuerySet[Any],
         amount_field: str = 'amount',
     ) -> dict[str, Any]:
-        """Вычислить общую сумму из queryset.
+        """Calculate total amount from queryset.
 
         Args:
-            queryset: QuerySet для вычисления суммы
-            amount_field: Название поля с суммой
+            queryset: QuerySet for calculating sum.
+            amount_field: Name of the amount field.
 
         Returns:
-            dict: Словарь с ключом 'total' и значением суммы
+            dict: Dictionary with 'total' key and sum value.
         """
         return queryset.aggregate(total=Sum(amount_field))
 
@@ -93,14 +93,14 @@ class EntityListViewMixin:
         queryset: QuerySet[Any],
         amount_field: str = 'amount',
     ) -> float:
-        """Получить значение общей суммы из queryset.
+        """Get total amount value from queryset.
 
         Args:
-            queryset: QuerySet для вычисления суммы
-            amount_field: Название поля с суммой
+            queryset: QuerySet for calculating sum.
+            amount_field: Name of the amount field.
 
         Returns:
-            float: Общая сумма или 0 если None
+            float: Total amount or 0 if None.
         """
         result = self.calculate_total_amount(queryset, amount_field)
         return float(result.get('total') or 0)
@@ -111,15 +111,15 @@ class EntityListViewMixin:
         category_type: str,
         depth: int = 3,
     ) -> list[dict[str, Any]]:
-        """Получить плоское дерево категорий с кешированием.
+        """Get flattened category tree with caching.
 
         Args:
-            categories: Список или QuerySet категорий
-            category_type: Тип категорий ('expense' или 'income')
-            depth: Глубина дерева категорий
+            categories: List or QuerySet of categories.
+            category_type: Type of categories ('expense' or 'income').
+            depth: Depth of category tree.
 
         Returns:
-            list: Список категорий в виде дерева
+            list: List of categories as a tree.
         """
         user = self.get_current_user()
         categories_list = (
@@ -136,11 +136,11 @@ class EntityListViewMixin:
 
 
 class UserAuthMixin:
-    """Mixin для автоматической проверки типа пользователя.
+    """Mixin for automatic user type checking.
 
-    Автоматически проверяет, что request.user является экземпляром User,
-    и выбрасывает TypeError если это не так. Это устраняет необходимость
-    повторять проверку isinstance(request.user, User) в каждом методе view.
+    Automatically checks that request.user is an instance of User,
+    and raises TypeError if not. This eliminates the need to repeat
+    isinstance(request.user, User) check in every view method.
     """
 
     def dispatch(
@@ -149,31 +149,31 @@ class UserAuthMixin:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        """Переопределяет dispatch для проверки типа пользователя.
+        """Override dispatch to check user type.
 
         Args:
-            request: HTTP запрос
-            *args: Дополнительные позиционные аргументы
-            **kwargs: Дополнительные именованные аргументы
+            request: HTTP request.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
 
         Returns:
-            HttpResponse или Response: Ответ view
+            HttpResponse or Response: View response.
 
         Raises:
-            TypeError: Если request.user не является экземпляром User
+            TypeError: If request.user is not an instance of User.
         """
         if not isinstance(request.user, User):
             raise TypeError('User must be authenticated')
         return super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
 
     def get_authenticated_user(self) -> User:
-        """Получить аутентифицированного пользователя с проверкой типа.
+        """Get authenticated user with type checking.
 
         Returns:
-            User: Аутентифицированный пользователь
+            User: Authenticated user.
 
         Raises:
-            TypeError: Если request.user не является экземпляром User
+            TypeError: If request.user is not an instance of User.
         """
         request = self.request
         if not isinstance(request.user, User):
@@ -182,10 +182,10 @@ class UserAuthMixin:
 
 
 class FormErrorHandlingMixin:
-    """Mixin для обработки ошибок форм.
+    """Mixin for form error handling.
 
-    Предоставляет общие методы для обработки ошибок при работе с формами,
-    устраняя дублирование кода обработки исключений.
+    Provides common methods for handling errors when working with forms,
+    eliminating code duplication for exception handling.
     """
 
     def handle_form_error_with_message(
@@ -195,16 +195,16 @@ class FormErrorHandlingMixin:
         error_message_template: StrOrPromise,
         **kwargs: Any,
     ) -> HttpResponse:
-        """Обработать ошибку формы с сообщением через messages framework.
+        """Handle form error with message via messages framework.
 
         Args:
-            form: Форма с ошибкой
-            error: Исключение, которое произошло
-            error_message_template: Шаблон сообщения об ошибке
-            **kwargs: Дополнительные именованные аргументы для форматирования
+            form: Form with error.
+            error: Exception that occurred.
+            error_message_template: Error message template.
+            **kwargs: Additional keyword arguments for formatting.
 
         Returns:
-            HttpResponse: Ответ с невалидной формой
+            HttpResponse: Response with invalid form.
         """
         error_message = error_message_template.format(
             error=str(error),
@@ -224,15 +224,15 @@ class FormErrorHandlingMixin:
         error: Exception,
         field: str | None = None,
     ) -> HttpResponse:
-        """Обработать ошибку формы, добавив её в поле формы.
+        """Handle form error by adding it to form field.
 
         Args:
-            form: Форма с ошибкой
-            error: Исключение, которое произошло
-            field: Имя поля для ошибки (None для общей ошибки формы)
+            form: Form with error.
+            error: Exception that occurred.
+            field: Field name for error (None for general form error).
 
         Returns:
-            HttpResponse: Ответ с невалидной формой
+            HttpResponse: Response with invalid form.
         """
         form.add_error(field, str(error))
         return cast(
@@ -245,14 +245,14 @@ class FormErrorHandlingMixin:
         error: Exception,
         status_code: int = 500,
     ) -> JsonResponse:
-        """Обработать ошибку для AJAX запроса.
+        """Handle error for AJAX request.
 
         Args:
-            error: Исключение, которое произошло
-            status_code: HTTP статус код для ответа
+            error: Exception that occurred.
+            status_code: HTTP status code for response.
 
         Returns:
-            JsonResponse: JSON ответ с ошибкой
+            JsonResponse: JSON response with error.
         """
         return JsonResponse({'error': str(error)}, status=status_code)
 
@@ -260,13 +260,13 @@ class FormErrorHandlingMixin:
         self,
         error: Exception,
     ) -> JsonResponse:
-        """Обработать ошибку для AJAX запроса с флагом success.
+        """Handle error for AJAX request with success flag.
 
         Args:
-            error: Исключение, которое произошло
+            error: Exception that occurred.
 
         Returns:
-            JsonResponse: JSON ответ с флагом success=False и ошибкой
+            JsonResponse: JSON response with success=False flag and error.
         """
         return JsonResponse({'success': False, 'error': str(error)})
 
@@ -277,19 +277,18 @@ class FormErrorHandlingMixin:
         error_message_template: str | None = None,
         use_field_error: bool = False,
     ) -> HttpResponse:
-        """Обработать ошибку сервиса при работе с формой.
+        """Handle service error when working with form.
 
-        Универсальный метод для обработки ValueError, TypeError,
-        PermissionDenied.
+        Universal method for handling ValueError, TypeError, PermissionDenied.
 
         Args:
-            form: Форма с ошибкой
-            error: Исключение (ValueError, TypeError, PermissionDenied)
-            error_message_template: Шаблон сообщения об ошибке
-            use_field_error: Если True, использовать form.add_error
+            form: Form with error.
+            error: Exception (ValueError, TypeError, PermissionDenied).
+            error_message_template: Error message template.
+            use_field_error: If True, use form.add_error.
 
         Returns:
-            HttpResponse: Ответ с невалидной формой
+            HttpResponse: Response with invalid form.
         """
         if use_field_error:
             return self.handle_form_error_with_field_error(form, error)

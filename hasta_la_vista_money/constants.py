@@ -1,9 +1,15 @@
+"""Application-wide constants.
+
+This module defines all constants used throughout the application,
+including configuration values, field names, and user-facing messages.
+"""
+
 from typing import Final
 
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-# Константы для парсинга json чека
+# Constants for receipt JSON parsing
 NAME_SELLER: Final = 'user'
 RETAIL_PLACE_ADDRESS: Final = 'retailPlaceAddress'
 RETAIL_PLACE: Final = 'retailPlace'
