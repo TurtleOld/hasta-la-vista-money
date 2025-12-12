@@ -25,7 +25,61 @@ document.addEventListener('DOMContentLoaded', function () {
         window.history.pushState({}, '', newUrl);
     }
 
-    function safeParseHTML(htmlContent) {
+    const DANGEROUS_TAGS = ['script', 'iframe', 'object', 'embed', 'link', 'style', 'meta', 'base'];
+    const DANGEROUS_ATTR_PATTERN = /^on\w+/i;
+    const JAVASCRIPT_PROTOCOL = /^\s*javascript:/i;
+    const SAFE_URL_ATTRS = ['href', 'src', 'action', 'formaction', 'xlink:href'];
+
+    function isAttributeSafe(attrName, attrValue) {
+        const name = attrName.toLowerCase();
+
+        if (DANGEROUS_ATTR_PATTERN.test(name)) {
+            return false;
+        }
+
+        if (SAFE_URL_ATTRS.includes(name)) {
+            if (JAVASCRIPT_PROTOCOL.test(attrValue)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function createCleanElement(sourceElement) {
+        if (!sourceElement || sourceElement.nodeType !== Node.ELEMENT_NODE) {
+            return null;
+        }
+
+        const tagName = sourceElement.tagName.toLowerCase();
+        if (DANGEROUS_TAGS.includes(tagName)) {
+            return null;
+        }
+
+        const cleanElement = document.createElement(tagName);
+
+        const attributes = Array.from(sourceElement.attributes);
+        for (const attr of attributes) {
+            if (isAttributeSafe(attr.name, attr.value)) {
+                cleanElement.setAttribute(attr.name, attr.value);
+            }
+        }
+
+        for (const childNode of sourceElement.childNodes) {
+            if (childNode.nodeType === Node.TEXT_NODE) {
+                cleanElement.appendChild(document.createTextNode(childNode.textContent || ''));
+            } else if (childNode.nodeType === Node.ELEMENT_NODE) {
+                const cleanChild = createCleanElement(childNode);
+                if (cleanChild) {
+                    cleanElement.appendChild(cleanChild);
+                }
+            }
+        }
+
+        return cleanElement;
+    }
+
+    function createSafeContentFromHTML(htmlContent) {
         if (!htmlContent || typeof htmlContent !== 'string' || htmlContent.length === 0) {
             return null;
         }
@@ -36,53 +90,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlContent, 'text/html');
-            
-            const parseError = doc.querySelector('parsererror');
-            if (parseError) {
-                console.error('HTML parsing error:', parseError.textContent);
+            const template = document.createElement('template');
+            template.innerHTML = htmlContent;
+
+            const sourceElement = template.content.firstElementChild;
+            if (!sourceElement) {
                 return null;
             }
 
-            return doc;
+            return createCleanElement(sourceElement);
         } catch (error) {
-            console.error('Error parsing HTML:', error);
+            console.error('Error creating safe content:', error);
             return null;
-        }
-    }
-
-    function sanitizeElement(element, dangerousTags, dangerousAttributes, javascriptProtocol) {
-        if (!element || element.nodeType !== Node.ELEMENT_NODE) {
-            return;
-        }
-
-        const tagName = element.tagName.toLowerCase();
-        if (dangerousTags.includes(tagName)) {
-            element.remove();
-            return;
-        }
-
-        const attributes = Array.from(element.attributes);
-        for (const attr of attributes) {
-            const attrName = attr.name.toLowerCase();
-            const attrValue = attr.value;
-
-            if (dangerousAttributes.test(attrName)) {
-                element.removeAttribute(attrName);
-                continue;
-            }
-
-            if (attrName === 'href' || attrName === 'src' || attrName === 'action') {
-                if (javascriptProtocol.test(attrValue)) {
-                    element.removeAttribute(attrName);
-                }
-            }
-        }
-
-        const children = Array.from(element.children);
-        for (const child of children) {
-            sanitizeElement(child, dangerousTags, dangerousAttributes, javascriptProtocol);
         }
     }
 
@@ -139,22 +158,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
 
-                const doc = safeParseHTML(html);
-                if (!doc) {
+                const safeContent = createSafeContentFromHTML(html);
+                if (!safeContent) {
                     return;
                 }
 
-                const newContent = doc.body.firstElementChild;
-                if (!newContent || newContent.nodeType !== Node.ELEMENT_NODE) {
-                    return;
-                }
-
-                const dangerousTags = ['script', 'iframe', 'object', 'embed', 'link', 'style'];
-                const dangerousAttributes = /^on\w+/i;
-                const javascriptProtocol = /^\s*javascript:/i;
-
-                sanitizeElement(newContent, dangerousTags, dangerousAttributes, javascriptProtocol);
-                block.replaceWith(newContent);
+                block.replaceWith(safeContent);
             })
             .catch(error => {
                 if (error.message === 'JWT tokens expired but Django session is valid') {
