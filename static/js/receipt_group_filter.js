@@ -73,16 +73,43 @@ document.addEventListener('DOMContentLoaded', function () {
                 return response.text();
             })
             .then(html => {
-                if (html) {
-                    const block = document.querySelector('#receipts-block');
-                    if (block) {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');
-                        const newContent = doc.body.firstElementChild;
-                        if (newContent) {
-                            block.replaceWith(newContent);
-                        }
+                if (!html || typeof html !== 'string') {
+                    return;
+                }
+
+                const block = document.querySelector('#receipts-block');
+                if (!block) {
+                    return;
+                }
+
+                const dangerousPatterns = [
+                    /<script[\s\S]*?>[\s\S]*?<\/script>/gi,
+                    /javascript:/gi,
+                    /on\w+\s*=/gi
+                ];
+
+                const hasDangerousContent = dangerousPatterns.some(pattern => pattern.test(html));
+                if (hasDangerousContent) {
+                    console.error('Potentially dangerous HTML content detected');
+                    return;
+                }
+
+                try {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    const parseError = doc.querySelector('parsererror');
+                    if (parseError) {
+                        console.error('HTML parsing error:', parseError.textContent);
+                        return;
                     }
+
+                    const newContent = doc.body.firstElementChild;
+                    if (newContent && newContent.nodeType === Node.ELEMENT_NODE) {
+                        block.replaceWith(newContent);
+                    }
+                } catch (error) {
+                    console.error('Error parsing HTML:', error);
                 }
             })
             .catch(error => {
