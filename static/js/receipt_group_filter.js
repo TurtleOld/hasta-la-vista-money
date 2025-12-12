@@ -25,6 +25,33 @@ document.addEventListener('DOMContentLoaded', function () {
         window.history.pushState({}, '', newUrl);
     }
 
+    function safeParseHTML(htmlContent) {
+        if (!htmlContent || typeof htmlContent !== 'string' || htmlContent.length === 0) {
+            return null;
+        }
+
+        if (htmlContent.length > 1000000) {
+            console.error('HTML content too large');
+            return null;
+        }
+
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlContent, 'text/html');
+            
+            const parseError = doc.querySelector('parsererror');
+            if (parseError) {
+                console.error('HTML parsing error:', parseError.textContent);
+                return null;
+            }
+
+            return doc;
+        } catch (error) {
+            console.error('Error parsing HTML:', error);
+            return null;
+        }
+    }
+
     function sanitizeElement(element, dangerousTags, dangerousAttributes, javascriptProtocol) {
         if (!element || element.nodeType !== Node.ELEMENT_NODE) {
             return;
@@ -107,17 +134,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 return response.text();
             })
             .then(html => {
-                if (!html || typeof html !== 'string' || html.length === 0) {
-                    return;
-                }
-
-                if (html.length > 1000000) {
-                    console.error('HTML content too large');
-                    return;
-                }
-
                 const block = document.querySelector('#receipts-block');
                 if (!block) {
+                    return;
+                }
+
+                const doc = safeParseHTML(html);
+                if (!doc) {
+                    return;
+                }
+
+                const newContent = doc.body.firstElementChild;
+                if (!newContent || newContent.nodeType !== Node.ELEMENT_NODE) {
                     return;
                 }
 
@@ -125,26 +153,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 const dangerousAttributes = /^on\w+/i;
                 const javascriptProtocol = /^\s*javascript:/i;
 
-                try {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    
-                    const parseError = doc.querySelector('parsererror');
-                    if (parseError) {
-                        console.error('HTML parsing error:', parseError.textContent);
-                        return;
-                    }
-
-                    const newContent = doc.body.firstElementChild;
-                    if (!newContent || newContent.nodeType !== Node.ELEMENT_NODE) {
-                        return;
-                    }
-
-                    sanitizeElement(newContent, dangerousTags, dangerousAttributes, javascriptProtocol);
-                    block.replaceWith(newContent);
-                } catch (error) {
-                    console.error('Error parsing HTML:', error);
-                }
+                sanitizeElement(newContent, dangerousTags, dangerousAttributes, javascriptProtocol);
+                block.replaceWith(newContent);
             })
             .catch(error => {
                 if (error.message === 'JWT tokens expired but Django session is valid') {
