@@ -63,7 +63,11 @@ from hasta_la_vista_money.users.models import User
     },
 )
 class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для генерации списка дат."""
+    """API view for generating date list.
+
+    Provides an endpoint to generate a list of dates for budgeting
+    based on the user's last date.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -75,7 +79,16 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Генерировать список дат."""
+        """Generate date list.
+
+        Args:
+            request: HTTP request with budget type data (expense/income).
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: JSON response with success flag and redirect_url.
+        """
         serializer = BudgetTypeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         type_ = serializer.validated_data['type']
@@ -130,7 +143,11 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     },
 )
 class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для изменения сумм планирования."""
+    """API view for changing planning amounts.
+
+    Provides a temporary endpoint for changing planning values
+    (used for intermediate operations).
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -142,7 +159,19 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Изменить планирование."""
+        """Change planning.
+
+        Args:
+            request: HTTP request with planning data.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: JSON response with planning_value.
+
+        Raises:
+            ValidationError: When data parsing error occurs.
+        """
         try:
             planning_value = request.data.get('planning')
             return Response(
@@ -151,7 +180,7 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             )
         except (ValueError, TypeError) as e:
             raise ValidationError(
-                detail=f'Ошибка парсинга данных: {e!s}',
+                detail=f'Data parsing error: {e!s}',
                 code='parse_error',
             ) from e
 
@@ -199,7 +228,11 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     },
 )
 class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для сохранения планирования."""
+    """API view for saving planning.
+
+    Provides an endpoint to save a plan by category, month,
+    and type (expense/income).
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
@@ -211,7 +244,20 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         *args: Any,
         **kwargs: Any,
     ) -> Response:
-        """Сохранить планирование."""
+        """Save planning.
+
+        Args:
+            request: HTTP request with planning data (month, amount,
+                type, category_id).
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response: JSON response with success flag and saved amount.
+
+        Raises:
+            ValidationError: When request data format is invalid.
+        """
         request_with_container = cast('RequestWithContainer', request)
         user = cast('User', request.user)
 

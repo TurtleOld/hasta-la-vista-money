@@ -6,10 +6,10 @@ from hasta_la_vista_money import constants
 
 
 class StandardResultsSetPagination(PageNumberPagination):
-    """Стандартная пагинация для API endpoints.
+    """Standard pagination for API endpoints.
 
-    Использует настраиваемый размер страницы с возможностью
-    изменения через query параметр.
+    Uses configurable page size with the ability to change it
+    via query parameter.
     """
 
     page_size = constants.PAGINATE_BY_DEFAULT

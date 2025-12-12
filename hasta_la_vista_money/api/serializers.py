@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 
 class GroupQuerySerializer(serializers.Serializer[Any]):
-    """Serializer для валидации query параметра group_id."""
+    """Serializer for validating group_id query parameter."""
 
     group_id = serializers.CharField(
         required=False, default='my', allow_blank=True
@@ -14,7 +14,7 @@ class GroupQuerySerializer(serializers.Serializer[Any]):
 
 
 class BudgetTypeSerializer(serializers.Serializer[Any]):
-    """Serializer для валидации типа бюджета."""
+    """Serializer for validating budget type."""
 
     type = serializers.ChoiceField(
         choices=['expense', 'income'],
