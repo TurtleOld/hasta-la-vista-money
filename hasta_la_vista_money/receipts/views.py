@@ -14,7 +14,7 @@ from hasta_la_vista_money.core.types import RequestWithContainer
 
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
-from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
@@ -207,26 +207,18 @@ class SellerCreateView(
     model = Seller
     form_class: type[SellerForm] = SellerForm
 
-    def post(
-        self,
-        request: HttpRequest,
-    ) -> JsonResponse:
-        seller_form = SellerForm(request.POST)
-        if seller_form.is_valid():
-            seller = seller_form.save(commit=False)
-            seller.user = cast('User', request.user)
-            seller.save()
-            messages.success(
-                self.request,
-                constants.SUCCESS_MESSAGE_CREATE_SELLER,
-            )
-            response_data: dict[str, Any] = {'success': True}
-        else:
-            response_data = {
-                'success': False,
-                'errors': seller_form.errors,
-            }
-        return JsonResponse(response_data)
+    def form_valid(self, form: SellerForm) -> HttpResponse:
+        seller = form.save(commit=False)
+        seller.user = cast('User', self.request.user)
+        seller.save()
+        messages.success(
+            self.request,
+            constants.SUCCESS_MESSAGE_CREATE_SELLER,
+        )
+        return super().form_valid(form)
+
+    def get_success_url(self) -> str:
+        return str(reverse_lazy('receipts:list'))
 
 
 class ReceiptCreateView(

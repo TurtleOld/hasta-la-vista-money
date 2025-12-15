@@ -134,6 +134,10 @@
             }
 
             if (currentPath.indexOf('receipts') !== -1) {
+                loadScript('{% static "js/receipt_filter.js" %}').catch(function(error) {
+                    console.error('Error loading receipt_filter script:', error);
+                });
+                
                 loadScript('{% static "js/tokens.js" %}').then(function() {
                     return loadScript('{% static "js/receipt_group_filter.js" %}');
                 }).then(function() {
