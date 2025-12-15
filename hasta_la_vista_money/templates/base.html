@@ -28,9 +28,32 @@
         </div>
         {% if messages %}
             {% for message in messages %}
-                <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full">
-                    <div class="alert shadow-lg rounded-lg {% if message.tags == 'error' or message.tags == 'danger' %}alert-error{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}">
-                        <span>{{ message }}</span>
+                <div class="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4 [animation:fadeInUp_0.3s_ease-out,fadeOutSlideUp_0.4s_ease-in_4s_forwards]">
+                    <div class="flex items-start gap-3 rounded-xl border-l-4 p-4 shadow-lg backdrop-blur-sm {% if message.tags == 'error' or message.tags == 'danger' %}bg-red-50 border-red-500 dark:bg-red-900/20 dark:border-red-400{% elif message.tags == 'success' %}bg-green-50 border-green-500 dark:bg-green-900/20 dark:border-green-400{% elif message.tags == 'warning' %}bg-orange-50 border-orange-500 dark:bg-orange-900/20 dark:border-orange-400{% else %}bg-blue-50 border-blue-500 dark:bg-blue-900/20 dark:border-blue-400{% endif %}">
+                        <div class="flex-shrink-0">
+                            {% if message.tags == 'error' or message.tags == 'danger' %}
+                                <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            {% elif message.tags == 'success' %}
+                                <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            {% elif message.tags == 'warning' %}
+                                <svg class="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            {% else %}
+                                <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            {% endif %}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium {% if message.tags == 'error' or message.tags == 'danger' %}text-red-800 dark:text-red-200{% elif message.tags == 'success' %}text-green-800 dark:text-green-200{% elif message.tags == 'warning' %}text-orange-800 dark:text-orange-200{% else %}text-blue-800 dark:text-blue-200{% endif %}">
+                                {{ message }}
+                            </p>
+                        </div>
                     </div>
                 </div>
             {% endfor %}
@@ -38,9 +61,32 @@
     {% else %}
         {% if messages %}
             {% for message in messages %}
-                <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full">
-                    <div class="alert shadow-lg rounded-lg {% if message.tags == 'error' or message.tags == 'danger' %}alert-error{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}">
-                        <span>{{ message }}</span>
+                <div class="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4 [animation:fadeInUp_0.3s_ease-out,fadeOutSlideUp_0.4s_ease-in_4s_forwards]">
+                    <div class="flex items-start gap-3 rounded-xl border-l-4 p-4 shadow-lg backdrop-blur-sm {% if message.tags == 'error' or message.tags == 'danger' %}bg-red-50 border-red-500 dark:bg-red-900/20 dark:border-red-400{% elif message.tags == 'success' %}bg-green-50 border-green-500 dark:bg-green-900/20 dark:border-green-400{% elif message.tags == 'warning' %}bg-orange-50 border-orange-500 dark:bg-orange-900/20 dark:border-orange-400{% else %}bg-blue-50 border-blue-500 dark:bg-blue-900/20 dark:border-blue-400{% endif %}">
+                        <div class="flex-shrink-0">
+                            {% if message.tags == 'error' or message.tags == 'danger' %}
+                                <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            {% elif message.tags == 'success' %}
+                                <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            {% elif message.tags == 'warning' %}
+                                <svg class="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            {% else %}
+                                <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            {% endif %}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium {% if message.tags == 'error' or message.tags == 'danger' %}text-red-800 dark:text-red-200{% elif message.tags == 'success' %}text-green-800 dark:text-green-200{% elif message.tags == 'warning' %}text-orange-800 dark:text-orange-200{% else %}text-blue-800 dark:text-blue-200{% endif %}">
+                                {{ message }}
+                            </p>
+                        </div>
                     </div>
                 </div>
             {% endfor %}
