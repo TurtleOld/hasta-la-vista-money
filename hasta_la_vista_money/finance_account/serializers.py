@@ -62,10 +62,9 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
 
     def get_is_foreign(self, obj: Account) -> bool:
         """Check if account belongs to another user."""
-        request = self.context.get('request')
-        if request and hasattr(request, 'user'):
-            return obj.user != request.user
-        return False
+        request: Any = self.context.get('request')
+        user: Any = getattr(request, 'user', None)
+        return bool(user and obj.user_id != getattr(user, 'id', None))
 
     def create(self, validated_data: dict[str, Any]) -> Account:
         """Override create to set user from request."""
