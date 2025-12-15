@@ -62,7 +62,7 @@ THIRD_PARTY_APPS = [
     'corsheaders',
     'csp',
     'crispy_forms',
-    'crispy_bootstrap5',
+    'crispy_tailwind',
     'django_filters',
     'locale',
     'rest_framework',
@@ -124,7 +124,7 @@ else:
 
 if DEBUG:
     MIDDLEWARE += [
-        "django_browser_reload.middleware.BrowserReloadMiddleware",
+        'django_browser_reload.middleware.BrowserReloadMiddleware',
     ]
 
 ROOT_URLCONF = 'config.urls'
@@ -429,8 +429,8 @@ ROSETTA_WSGI_AUTO_RELOAD = True
 ROSETTA_UWSGI_AUTO_RELOAD = True
 
 # Crispy Forms
-CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
-CRISPY_TEMPLATE_PACK = 'bootstrap5'
+CRISPY_ALLOWED_TEMPLATE_PACKS = 'tailwind'
+CRISPY_TEMPLATE_PACK = 'tailwind'
 
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {
