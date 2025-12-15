@@ -37,10 +37,15 @@ class TestAccountSerializer(TestCase):
             'balance',
             'currency',
             'type_account',
+            'type_account_display',
             'bank',
             'limit_credit',
             'payment_due_date',
             'grace_period_days',
+            'user_username',
+            'url',
+            'delete_url',
+            'is_foreign',
         }
 
         self.assertEqual(set(data.keys()), expected_fields)
