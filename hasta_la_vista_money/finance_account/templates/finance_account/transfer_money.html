@@ -4,47 +4,60 @@
 {% load comma %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header d-flex flex-row align-items-center justify-content-between">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-arrow-left-right me-2"></i>
-                        {% translate 'Перевести средства' %}
-                    </h5>
-                    <a href="{% url 'finance_account:list' %}" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-arrow-left me-1"></i>
-                        {% translate 'Назад к счетам' %}
-                    </a>
-                </div>
-                <div class="card-body">
-                    <form method="post" action="{% url 'finance_account:transfer_money' %}">
-                        {% csrf_token %}
-                        {% if form %}
-                        {% for field in form %}
-                        <div class="form-group{% if field.errors %} has-error{% endif %} mb-3">
-                            {{ field | as_crispy_field }}
-                            {% if field.errors %}
-                            {% for error in field.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                            {% endif %}
+<div class="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-8 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden backdrop-blur-sm">
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 px-6 py-5 flex flex-row items-center justify-between">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2.5">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                    </svg>
+                    <span>{% translate 'Перевести средства' %}</span>
+                </h2>
+                <a href="{% url 'finance_account:list' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-sm font-medium rounded-lg transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/50">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>{% translate 'Назад к счетам' %}</span>
+                </a>
+            </div>
+            <div class="p-6 sm:p-8">
+                <form method="post" action="{% url 'finance_account:transfer_money' %}" class="space-y-5 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
+                    {% csrf_token %}
+                    {% if form %}
+                    {% for field in form %}
+                    <div class="space-y-1.5{% if field.errors %} has-error{% endif %}">
+                        {{ field | as_crispy_field }}
+                        {% if field.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="flex flex-col gap-0.5">
+                                {% for error in field.errors %}
+                                <span>{{ error }}</span>
+                                {% endfor %}
+                            </div>
                         </div>
-                        {% endfor %}
                         {% endif %}
-                        <div class="d-flex justify-content-between">
-                            <a href="{% url 'finance_account:list' %}" class="btn btn-secondary">
-                                <i class="bi bi-x-circle me-1"></i>
-                                {% translate 'Отмена' %}
-                            </a>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-arrow-right-circle me-1"></i>
-                                {% translate 'Перевести' %}
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <a href="{% url 'finance_account:list' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span>{% translate 'Отмена' %}</span>
+                        </a>
+                        <button type="submit" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                            </svg>
+                            <span>{% translate 'Перевести' %}</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

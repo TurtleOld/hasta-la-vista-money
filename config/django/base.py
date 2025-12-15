@@ -62,7 +62,7 @@ THIRD_PARTY_APPS = [
     'corsheaders',
     'csp',
     'crispy_forms',
-    'crispy_bootstrap5',
+    'crispy_tailwind',
     'django_filters',
     'locale',
     'rest_framework',
@@ -70,6 +70,8 @@ THIRD_PARTY_APPS = [
     'drf_spectacular',
     'rosetta',
     'django_structlog',
+    'tailwind',
+    'theme',
 ]
 
 
@@ -78,6 +80,7 @@ if not DEBUG:
 
 if DEBUG:
     THIRD_PARTY_APPS.append('django_extensions')
+    THIRD_PARTY_APPS.append('django_browser_reload')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -117,6 +120,11 @@ else:
         mw
         for mw in MIDDLEWARE
         if mw != 'hasta_la_vista_money.users.middleware.CheckAdminMiddleware'
+    ]
+
+if DEBUG:
+    MIDDLEWARE += [
+        'django_browser_reload.middleware.BrowserReloadMiddleware',
     ]
 
 ROOT_URLCONF = 'config.urls'
@@ -421,8 +429,8 @@ ROSETTA_WSGI_AUTO_RELOAD = True
 ROSETTA_UWSGI_AUTO_RELOAD = True
 
 # Crispy Forms
-CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
-CRISPY_TEMPLATE_PACK = 'bootstrap5'
+CRISPY_ALLOWED_TEMPLATE_PACKS = 'tailwind'
+CRISPY_TEMPLATE_PACK = 'tailwind'
 
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {
@@ -577,3 +585,8 @@ STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
+
+# Tailwind settings
+TAILWIND_APP_NAME = 'theme'
+NPM_BIN_PATH = config('NPM_BIN_PATH', default='npm')
+TAILWIND_CSS_PATH = 'css/styles.min.css'

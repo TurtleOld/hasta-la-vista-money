@@ -146,7 +146,11 @@ class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         if hasattr(accounts, 'select_related'):
             accounts = accounts.select_related('user').order_by('-id')
 
-        account_serializer = AccountSerializer(accounts, many=True)
+        account_serializer = AccountSerializer(
+            accounts,
+            many=True,
+            context={'request': request},
+        )
         paginator = self.pagination_class()
         paginated_data: Any = paginator.paginate_queryset(
             account_serializer.data,

@@ -7,7 +7,7 @@
 
 
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" {% if user.is_authenticated and user.theme == 'dark' %}class="dark" data-bs-theme="dark"{% else %}data-bs-theme="light"{% endif %}>
 <head>
     {% block head %}
         <title>{% block title %}{% endblock %} - Hasta La Vista, Money!</title>
@@ -16,30 +16,31 @@
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
         <link nonce="{{request.csp_nonce}}" rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-        <link nonce="{{request.csp_nonce}}" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet" integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA==" crossorigin="anonymous">
-        <link nonce="{{request.csp_nonce}}" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
-        {% compress css %}
-        <link rel="stylesheet" href="{% static 'css/styles.min.css' %}">
-        {% endcompress %}
+        <link nonce="{{request.csp_nonce}}" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css" rel="stylesheet">
+        <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
     {% endblock %}
 </head>
-<body data-bs-theme="{% if user.is_authenticated %}{{ user.theme|default:'light' }}{% else %}light{% endif %}">
+<body class="bg-white dark:bg-gray-800" {% if user.is_authenticated %}data-bs-theme="{{ user.theme|default:'light' }}"{% else %}data-bs-theme="light"{% endif %}>
     {% if user.is_authenticated %}
         <div class="header">
             {% include 'header.html' %}
         </div>
         {% if messages %}
             {% for message in messages %}
-                <div class="alert container position-absolute start-50 translate-middle mt-5 text-center z-3 {% if message.tags %}{{ message.tags }}{% endif %}">
-                    <span{% if message.tags %} class="{{ message.tags }} p-2 "{% endif %}>{{ message }}</span>
+                <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full">
+                    <div class="alert shadow-lg rounded-lg {% if message.tags == 'error' or message.tags == 'danger' %}alert-error{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}">
+                        <span>{{ message }}</span>
+                    </div>
                 </div>
             {% endfor %}
         {% endif %}
     {% else %}
         {% if messages %}
             {% for message in messages %}
-                <div class="alert container position-absolute start-50 translate-middle text-center z-3 {% if message.tags %}{{ message.tags }}{% endif %}">
-                    <span{% if message.tags %} class="{{ message.tags }} p-2 "{% endif %}>{{ message }}</span>
+                <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full">
+                    <div class="alert shadow-lg rounded-lg {% if message.tags == 'error' or message.tags == 'danger' %}alert-error{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}">
+                        <span>{{ message }}</span>
+                    </div>
                 </div>
             {% endfor %}
         {% endif %}
@@ -58,13 +59,13 @@
 
     {% compress js %}
     <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
-    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     <script src="{% static 'js/notifications.js' %}"></script>
     <script src="{% static 'js/script.js' %}"></script>
     <script src="{% static 'js/errors_form.js' %}"></script>
     <script src="{% static 'js/account_group_filter.js' %}"></script>
     <script src="{% static 'js/lazy-loader.js' %}"></script>
     {% if user.is_authenticated %}
+        <script src="{% static 'js/header.js' %}"></script>
         <script src="{% static 'js/bottom-nav.js' %}"></script>
         <script src="{% static 'js/mobile-menu.js' %}"></script>
         <script src="{% static 'js/upload.js' %}"></script>

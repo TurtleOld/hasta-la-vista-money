@@ -1,113 +1,144 @@
 function renderAccountGroupBlock(data) {
     const block = document.getElementById('account-cards-block');
-    if (!block || !Array.isArray(data.accounts)) return;
+    if (!block) return;
+    
     block.innerHTML = '';
-    const selectorRow = document.createElement('div');
-    selectorRow.className = 'd-flex justify-content-between align-items-center mb-2 px-2 pt-2';
-    const title = document.createElement('div');
-    title.className = 'fw-bold';
-    title.textContent = 'Счета';
-    selectorRow.appendChild(title);
-    const selectWrap = document.createElement('div');
-    selectWrap.className = 'ms-auto';
-    const label = document.createElement('label');
-    label.setAttribute('for', 'account-group-select');
-    label.className = 'form-label mb-0';
-    label.textContent = 'Группа счетов:';
-    selectWrap.appendChild(label);
-    const select = document.createElement('select');
-    select.id = 'account-group-select';
-    select.className = 'form-select form-select-sm';
-    const optMy = document.createElement('option');
-    optMy.value = 'my';
-    optMy.textContent = 'Мои';
-    select.appendChild(optMy);
-    if (Array.isArray(data.user_groups)) {
-        data.user_groups.forEach(group => {
-            const opt = document.createElement('option');
-            opt.value = group.id;
-            opt.textContent = group.name;
-            select.appendChild(opt);
-        });
-    }
-    const url = new URL(window.location.href);
-    const groupId = url.searchParams.get('group_id') || 'my';
-    select.value = groupId;
-    select.onchange = null;
-    select.addEventListener('change', function () {
-        const selectedGroup = this.value;
-        const params = new URLSearchParams(window.location.search);
-        params.set('group_id', selectedGroup);
-        const newUrl = window.location.pathname + '?' + params.toString();
-        window.history.pushState({}, '', newUrl);
-        loadAccountsBlock(selectedGroup);
-    });
-    selectWrap.appendChild(select);
-    selectorRow.appendChild(selectWrap);
-    block.appendChild(selectorRow);
-    if (data.accounts.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'text-center text-muted py-3';
-        empty.textContent = 'Счета ещё не созданы!';
-        block.appendChild(empty);
-    } else {
-        data.accounts.forEach(account => {
-            const card = document.createElement('div');
-            card.className = 'card mb-2 shadow-sm' + (account.is_foreign ? ' account-foreign' : '');
-            const cardBody = document.createElement('div');
-            cardBody.className = 'card-body d-flex justify-content-between align-items-center';
-            const left = document.createElement('div');
-            const name = document.createElement('div');
-            name.className = 'fw-semibold';
-            name.textContent = account.name_account;
-            left.appendChild(name);
-            const type = document.createElement('div');
-            type.className = 'type-account text-muted small';
-            type.textContent = account.type_account;
-            left.appendChild(type);
-            const balanceRow = document.createElement('div');
-            balanceRow.className = 'mt-1';
-            const balance = document.createElement('span');
-            balance.className = 'fw-bold';
-            balance.textContent = account.balance;
-            balanceRow.appendChild(balance);
-            const currency = document.createElement('span');
-            currency.className = 'text-muted';
-            currency.textContent = ' ' + account.currency;
-            balanceRow.appendChild(currency);
-            left.appendChild(balanceRow);
-            if (account.is_foreign) {
-                const owner = document.createElement('div');
-                owner.className = 'account-owner-label';
-                owner.textContent = 'Владелец: ' + account.owner;
-                left.appendChild(owner);
+    block.className = 'space-y-3';
+    
+    function toSafeSameOriginPath(url, fallbackUrl) {
+        if (typeof url !== 'string') return fallbackUrl;
+        const trimmedUrl = url.trim();
+        if (!trimmedUrl) return fallbackUrl;
+        if (trimmedUrl.startsWith('#')) return trimmedUrl;
+        try {
+            const parsed = new URL(trimmedUrl, window.location.origin);
+            if (parsed.origin !== window.location.origin) return fallbackUrl;
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                return fallbackUrl;
             }
-            const right = document.createElement('div');
-            right.className = 'd-flex flex-column align-items-end gap-1';
-            const link = document.createElement('a');
-            link.href = account.url;
-            link.className = 'change-object-button btn btn-outline-primary border-0 btn-sm mb-1';
-            link.title = 'Изменить';
-            link.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-fill" viewBox="0 0 16 16"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"></path></svg>`;
-            right.appendChild(link);
-            const form = document.createElement('form');
-            form.className = 'm-0';
-            form.method = 'post';
-            form.action = `/finance_account/delete/${account.id}`;
-            const btn = document.createElement('button');
-            btn.className = 'remove-object-button btn btn-outline-danger border-0 btn-sm';
-            btn.type = 'submit';
-            btn.name = 'delete_account_button';
-            btn.title = 'Удалить счёт';
-            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6zm3 .5a.5.5 0 0 1 .5-.5.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1H14a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>';
-            form.appendChild(btn);
-            right.appendChild(form);
-            cardBody.appendChild(left);
-            cardBody.appendChild(right);
-            card.appendChild(cardBody);
-            block.appendChild(card);
-        });
+            return parsed.pathname + parsed.search + parsed.hash;
+        } catch {
+            return fallbackUrl;
+        }
     }
+
+    function toOwnerText(account) {
+        const owner = account?.owner ?? account?.user_username ?? '';
+        if (typeof owner !== 'string') return '';
+        return owner;
+    }
+
+    if (!Array.isArray(data.accounts) || data.accounts.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'text-center py-12 px-4';
+        const icon = document.createElement('div');
+        icon.className = 'inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4';
+        icon.innerHTML = '<svg class="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>';
+        empty.appendChild(icon);
+        const text1 = document.createElement('p');
+        text1.className = 'text-gray-500 dark:text-gray-400 text-lg font-medium';
+        text1.textContent = 'Счета ещё не созданы!';
+        empty.appendChild(text1);
+        const text2 = document.createElement('p');
+        text2.className = 'text-gray-400 dark:text-gray-500 text-sm mt-1';
+        text2.textContent = 'Начните с добавления первого счёта';
+        empty.appendChild(text2);
+        block.appendChild(empty);
+        return;
+    }
+    
+    data.accounts.forEach(account => {
+        const card = document.createElement('div');
+        const isForeign = account.is_foreign || false;
+        card.className = 'group bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-xl border border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden' + (isForeign ? ' account-foreign border-l-4 border-l-blue-500' : '');
+        
+        const cardBody = document.createElement('div');
+        cardBody.className = 'p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4';
+        
+        const left = document.createElement('div');
+        left.className = 'flex-1 min-w-0';
+        
+        const nameRow = document.createElement('div');
+        nameRow.className = 'flex items-center gap-2.5 mb-2';
+        
+        const name = document.createElement('h3');
+        name.className = 'font-semibold text-lg text-gray-900 dark:text-white truncate';
+        name.textContent = account.name_account;
+        nameRow.appendChild(name);
+        
+        if (isForeign) {
+            const ownerBadge = document.createElement('span');
+            ownerBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full';
+            const ownerIcon = document.createElement('span');
+            ownerIcon.className = 'inline-flex';
+            ownerIcon.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>';
+            const ownerText = document.createElement('span');
+            ownerText.textContent = 'Владелец: ' + toOwnerText(account);
+            ownerBadge.appendChild(ownerIcon);
+            ownerBadge.appendChild(ownerText);
+            nameRow.appendChild(ownerBadge);
+        }
+        
+        left.appendChild(nameRow);
+        
+        const type = document.createElement('div');
+        type.className = 'text-sm text-gray-500 dark:text-gray-400 mb-2.5';
+        type.textContent = account.type_account_display || account.type_account;
+        left.appendChild(type);
+        
+        const balanceRow = document.createElement('div');
+        balanceRow.className = 'flex items-baseline gap-2';
+        const balance = document.createElement('span');
+        balance.className = 'text-2xl font-bold text-gray-900 dark:text-white';
+        balance.textContent = account.balance;
+        balanceRow.appendChild(balance);
+        const currency = document.createElement('span');
+        currency.className = 'text-sm text-gray-500 dark:text-gray-400 font-medium';
+        currency.textContent = account.currency;
+        balanceRow.appendChild(currency);
+        left.appendChild(balanceRow);
+        
+        const right = document.createElement('div');
+        right.className = 'flex items-center gap-2 flex-shrink-0';
+        
+        const link = document.createElement('a');
+        const rawHref = account?.url ?? account?.get_absolute_url ?? '#';
+        link.href = toSafeSameOriginPath(rawHref, '#');
+        link.className = 'change-object-button inline-flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800';
+        link.title = 'Редактировать';
+        link.innerHTML = '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>';
+        right.appendChild(link);
+        
+        const form = document.createElement('form');
+        form.className = 'm-0';
+        form.method = 'post';
+        const fallbackDeleteUrl = `/finance_account/delete/${encodeURIComponent(String(account?.id ?? ''))}/`;
+        const rawDeleteUrl = account?.delete_url ?? fallbackDeleteUrl;
+        form.action = toSafeSameOriginPath(rawDeleteUrl, fallbackDeleteUrl);
+        
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = csrfToken.value;
+            form.appendChild(csrfInput);
+        }
+        
+        const btn = document.createElement('button');
+        btn.className = 'remove-object-button inline-flex items-center justify-center w-10 h-10 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800';
+        btn.type = 'submit';
+        btn.name = 'delete_account_button';
+        btn.title = 'Удалить счёт';
+        btn.innerHTML = '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>';
+        form.appendChild(btn);
+        right.appendChild(form);
+        
+        cardBody.appendChild(left);
+        cardBody.appendChild(right);
+        card.appendChild(cardBody);
+        block.appendChild(card);
+    });
 }
 
 function loadAccountsBlock(groupId) {
