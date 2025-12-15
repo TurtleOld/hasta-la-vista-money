@@ -29,7 +29,14 @@ class EnvironmentValidator:
             ic('DATABASE_URL is not set, set it to a valid database URL')
 
         debug_mode = config('DEBUG', default=False, cast=bool)
-        if not debug_mode and not config(
+        allowed_hosts = config('ALLOWED_HOSTS', cast=str, default='')
+        is_local_dev = (
+            'localhost' in allowed_hosts.lower()
+            or '127.0.0.1' in allowed_hosts
+            or not allowed_hosts
+        )
+        
+        if not debug_mode and not is_local_dev and not config(
             'REDIS_LOCATION',
             cast=str,
             default='',

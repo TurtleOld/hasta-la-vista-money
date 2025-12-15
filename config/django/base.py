@@ -169,20 +169,56 @@ if DEBUG:
         },
     }
 else:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': config('REDIS_LOCATION', cast=str),
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                'CONNECTION_POOL_KWARGS': {'max_connections': 50},
-                'SOCKET_CONNECT_TIMEOUT': 5,
-                'SOCKET_TIMEOUT': 5,
+    redis_location = config('REDIS_LOCATION', cast=str, default='')
+    allowed_hosts_str = str(config('ALLOWED_HOSTS', default=''))
+    is_local_dev = (
+        'localhost' in allowed_hosts_str.lower()
+        or '127.0.0.1' in allowed_hosts_str
+        or not allowed_hosts_str
+    )
+    
+    if redis_location:
+        CACHES = {
+            'default': {
+                'BACKEND': 'django_redis.cache.RedisCache',
+                'LOCATION': redis_location,
+                'OPTIONS': {
+                    'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                    'CONNECTION_POOL_KWARGS': {'max_connections': 50},
+                    'SOCKET_CONNECT_TIMEOUT': 5,
+                    'SOCKET_TIMEOUT': 5,
+                },
+                'KEY_PREFIX': 'hlvm',
+                'TIMEOUT': 300,
             },
-            'KEY_PREFIX': 'hlvm',
-            'TIMEOUT': 300,
-        },
-    }
+        }
+    elif is_local_dev:
+        CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': 'unique-snowflake',
+                'TIMEOUT': 300,
+                'OPTIONS': {
+                    'MAX_ENTRIES': 1000,
+                },
+            },
+        }
+    else:
+        import warnings
+        warnings.warn(
+            'REDIS_LOCATION is not set for production. Using LocMemCache as fallback.',
+            UserWarning,
+        )
+        CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': 'unique-snowflake',
+                'TIMEOUT': 300,
+                'OPTIONS': {
+                    'MAX_ENTRIES': 1000,
+                },
+            },
+        }
 
 # Session backend configuration
 if not DEBUG:
