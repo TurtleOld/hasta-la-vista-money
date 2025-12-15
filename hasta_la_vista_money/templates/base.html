@@ -20,8 +20,9 @@
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
     {% endblock %}
 </head>
-<body class="bg-white dark:bg-gray-800" {% if user.is_authenticated %}data-bs-theme="{{ user.theme|default:'light' }}"{% else %}data-bs-theme="light"{% endif %}>
+<body class="bg-white dark:bg-gray-800 {% if user.is_authenticated %}pb-20 md:pb-0{% endif %}" {% if user.is_authenticated %}data-bs-theme="{{ user.theme|default:'light' }}"{% else %}data-bs-theme="light"{% endif %}>
     {% if user.is_authenticated %}
+        <input type="checkbox" id="mobileMenuState" class="peer hidden" autocomplete="off">
         <div class="header">
             {% include 'header.html' %}
         </div>
@@ -67,7 +68,6 @@
     {% if user.is_authenticated %}
         <script src="{% static 'js/header.js' %}"></script>
         <script src="{% static 'js/bottom-nav.js' %}"></script>
-        <script src="{% static 'js/mobile-menu.js' %}"></script>
         <script src="{% static 'js/upload.js' %}"></script>
     {% endif %}
     {% endcompress %}

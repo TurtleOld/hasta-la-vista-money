@@ -1,26 +1,28 @@
 {% load i18n %}
-<nav class="bottom-nav">
-    <a href="{% url 'finance_account:list' %}" class="bottom-nav-item {% if 'finance_account' in request.path %}active{% endif %}">
-        <i class="bi bi-wallet2 icon"></i>
-        <span class="label">{% translate 'Счета' %}</span>
-    </a>
+<nav class="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white/95 backdrop-blur dark:border-gray-700 dark:bg-gray-900/90 md:hidden">
+    <div class="mx-auto flex max-w-screen-sm items-center justify-around px-2 py-2">
+        <a href="{% url 'finance_account:list' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if 'finance_account' in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">
+            <i class="bi bi-wallet2 text-xl leading-none"></i>
+            <span class="leading-none">{% translate 'Счета' %}</span>
+        </a>
 
-    <a href="{% url 'income:list' %}" class="bottom-nav-item {% if 'income' in request.path and 'budget' not in request.path %}active{% endif %}">
-        <i class="bi bi-arrow-up-circle icon"></i>
-        <span class="label">{% translate 'Доходы' %}</span>
-    </a>
+        <a href="{% url 'income:list' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if 'income' in request.path and 'budget' not in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">
+            <i class="bi bi-arrow-up-circle text-xl leading-none"></i>
+            <span class="leading-none">{% translate 'Доходы' %}</span>
+        </a>
 
-    <a href="{% url 'expense:create' %}" class="bottom-nav-fab" id="bottom-nav-fab" data-income-url="{% url 'income:create' %}" data-expense-url="{% url 'expense:create' %}">
-        <i class="bi bi-plus-lg" id="fab-icon"></i>
-    </a>
+        <a href="{% url 'expense:create' %}" class="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-emerald-400 text-white shadow-lg shadow-emerald-600/30 ring-1 ring-white/20 active:scale-95" id="bottom-nav-fab" data-income-url="{% url 'income:create' %}" data-expense-url="{% url 'expense:create' %}">
+            <i class="bi bi-plus-lg text-xl" id="fab-icon"></i>
+        </a>
 
-    <a href="{% url 'expense:list' %}" class="bottom-nav-item {% if 'expense' in request.path and 'budget' not in request.path %}active{% endif %}">
-        <i class="bi bi-arrow-down-circle icon"></i>
-        <span class="label">{% translate 'Расходы' %}</span>
-    </a>
+        <a href="{% url 'expense:list' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if 'expense' in request.path and 'budget' not in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">
+            <i class="bi bi-arrow-down-circle text-xl leading-none"></i>
+            <span class="leading-none">{% translate 'Расходы' %}</span>
+        </a>
 
-    <a href="{% url 'receipts:list' %}" class="bottom-nav-item {% if 'receipts' in request.path %}active{% endif %}">
-        <i class="bi bi-receipt icon"></i>
-        <span class="label">{% translate 'Чеки' %}</span>
-    </a>
+        <a href="{% url 'receipts:list' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if 'receipts' in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">
+            <i class="bi bi-receipt text-xl leading-none"></i>
+            <span class="leading-none">{% translate 'Чеки' %}</span>
+        </a>
+    </div>
 </nav>
