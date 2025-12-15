@@ -5,6 +5,29 @@ function renderAccountGroupBlock(data) {
     block.innerHTML = '';
     block.className = 'space-y-3';
     
+    function toSafeSameOriginPath(url, fallbackUrl) {
+        if (typeof url !== 'string') return fallbackUrl;
+        const trimmedUrl = url.trim();
+        if (!trimmedUrl) return fallbackUrl;
+        if (trimmedUrl.startsWith('#')) return trimmedUrl;
+        try {
+            const parsed = new URL(trimmedUrl, window.location.origin);
+            if (parsed.origin !== window.location.origin) return fallbackUrl;
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                return fallbackUrl;
+            }
+            return parsed.pathname + parsed.search + parsed.hash;
+        } catch {
+            return fallbackUrl;
+        }
+    }
+
+    function toOwnerText(account) {
+        const owner = account?.owner ?? account?.user_username ?? '';
+        if (typeof owner !== 'string') return '';
+        return owner;
+    }
+
     if (!Array.isArray(data.accounts) || data.accounts.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'text-center py-12 px-4';
@@ -46,7 +69,13 @@ function renderAccountGroupBlock(data) {
         if (isForeign) {
             const ownerBadge = document.createElement('span');
             ownerBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full';
-            ownerBadge.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg><span>Владелец: ' + (account.owner || account.user_username || '') + '</span>';
+            const ownerIcon = document.createElement('span');
+            ownerIcon.className = 'inline-flex';
+            ownerIcon.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>';
+            const ownerText = document.createElement('span');
+            ownerText.textContent = 'Владелец: ' + toOwnerText(account);
+            ownerBadge.appendChild(ownerIcon);
+            ownerBadge.appendChild(ownerText);
             nameRow.appendChild(ownerBadge);
         }
         
@@ -73,7 +102,8 @@ function renderAccountGroupBlock(data) {
         right.className = 'flex items-center gap-2 flex-shrink-0';
         
         const link = document.createElement('a');
-        link.href = account.url || account.get_absolute_url || '#';
+        const rawHref = account?.url ?? account?.get_absolute_url ?? '#';
+        link.href = toSafeSameOriginPath(rawHref, '#');
         link.className = 'change-object-button inline-flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800';
         link.title = 'Редактировать';
         link.innerHTML = '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>';
@@ -82,7 +112,9 @@ function renderAccountGroupBlock(data) {
         const form = document.createElement('form');
         form.className = 'm-0';
         form.method = 'post';
-        form.action = account.delete_url || `/finance_account/delete/${account.id}/`;
+        const fallbackDeleteUrl = `/finance_account/delete/${encodeURIComponent(String(account?.id ?? ''))}/`;
+        const rawDeleteUrl = account?.delete_url ?? fallbackDeleteUrl;
+        form.action = toSafeSameOriginPath(rawDeleteUrl, fallbackDeleteUrl);
         
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
         if (csrfToken) {
