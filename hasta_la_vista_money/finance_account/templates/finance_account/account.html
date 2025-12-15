@@ -6,94 +6,101 @@
 {% block title %}
     {% translate 'Управляй финансами семьи грамотно!' %}{% endblock %}
 {% block content %}
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2><i class="bi bi-wallet2"></i> {% translate 'Мои счета' %}</h2>
-                    <div class="d-flex gap-2">
-                        <a href="{% url 'users:statistics' %}" class="btn btn-outline-success">
-                            <i class="bi bi-graph-up"></i> {% translate 'Детальная статистика' %}
-                        </a>
-                        <a href="{% url 'finance_account:create' %}"
-                            class="btn btn-outline-primary">
-                            <svg xmlns="http://www.w3.org/2000/svg"
-                                width="16" height="16"
-                                fill="currentColor"
-                                class="bi bi-plus-lg"
-                                viewBox="0 0 16 16">
-                                <path fill-rule="evenodd"
-                                    d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z"></path>
+    <div class="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-6 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="mb-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                        <div class="p-2 bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 rounded-xl">
+                            <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
                             </svg>
-                            {% translate 'Добавить счет' %}
-                        </a>
-
-                        <a href="{% url 'finance_account:transfer_money' %}"
-                            class="btn btn-outline-info">
-                            <svg xmlns="http://www.w3.org/2000/svg"
-                                width="16" height="16"
-                                fill="currentColor"
-                                class="bi bi-arrow-left-right"
-                                viewBox="0 0 16 16">
-                                <path fill-rule="evenodd"
-                                    d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z"></path>
+                        </div>
+                        <span>{% translate 'Мои счета' %}</span>
+                    </h1>
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <a href="{% url 'users:statistics' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 font-medium rounded-xl border border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                             </svg>
-                            {% translate 'Перевести средства' %}
+                            <span>{% translate 'Детальная статистика' %}</span>
+                        </a>
+                        <a href="{% url 'finance_account:create' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            <span>{% translate 'Добавить счет' %}</span>
+                        </a>
+                        <a href="{% url 'finance_account:transfer_money' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-xl border border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                            </svg>
+                            <span>{% translate 'Перевести средства' %}</span>
                         </a>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="row">
-            <div class="col-xl-8">
-                <div class="d-flex justify-content-between align-items-center mb-2 px-2 pt-2">
-                    <div class="fw-bold">{% translate 'Счета' %}</div>
-                    <div class="ms-auto">
-                        <label for="account-group-select" class="form-label mb-0">Группа счетов:</label>
-                        <select id="account-group-select" class="form-select form-select-sm">
-                            <option value="my" {% if request.GET.group_id == 'my' or not request.GET.group_id %}selected{% endif %}>Мои</option>
-                            {% for group in user_groups %}
-                                <option value="{{ group.id }}" {% if request.GET.group_id == group.id|stringformat:"s" %}selected{% endif %}>{{ group.name }}</option>
-                            {% endfor %}
-                        </select>
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <div class="xl:col-span-2 space-y-4">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-2 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <div class="font-semibold text-gray-900 dark:text-white">{% translate 'Счета' %}</div>
+                        <div class="flex items-center gap-2.5">
+                            <label for="account-group-select" class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Группа счетов:</label>
+                            <select id="account-group-select" class="px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                                <option value="my" {% if request.GET.group_id == 'my' or not request.GET.group_id %}selected{% endif %}>Мои</option>
+                                {% for group in user_groups %}
+                                    <option value="{{ group.id }}" {% if request.GET.group_id == group.id|stringformat:"s" %}selected{% endif %}>{{ group.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div id="account-cards-block">
+                        {% include 'finance_account/_account_cards_block.html' %}
                     </div>
                 </div>
-                <div id="account-cards-block">
-                    {% include 'finance_account/_account_cards_block.html' %}
-                </div>
-            </div>
-            <div class="col-xl-4">
-                <div class="card shadow-sm mb-3">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-info-circle"></i> {% translate 'Информация' %}</h5>
+                <div class="xl:col-span-1 space-y-4">
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span>{% translate 'Информация' %}</span>
+                            </h3>
+                        </div>
+                        <div class="p-5 space-y-4">
+                            <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                {% translate 'Здесь вы можете управлять своими счетами, переводить средства между ними и просматривать балансы.' %}
+                            </p>
+                            <div class="h-px bg-gray-200 dark:bg-gray-700"></div>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                {% translate 'Для просмотра детальной статистики по доходам, расходам, чекам и переводам перейдите в раздел' %}
+                                <a href="{% url 'users:statistics' %}" class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium underline decoration-2 underline-offset-2 transition-colors duration-200">{% translate 'Детальная статистика' %}</a>.
+                            </p>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <p class="text-muted">
-                            {% translate 'Здесь вы можете управлять своими счетами, переводить средства между ними и просматривать балансы.' %}
-                        </p>
-                        <hr>
-                        <p class="text-muted">
-                            {% translate 'Для просмотра детальной статистики по доходам, расходам, чекам и переводам перейдите в раздел' %}
-                            <a href="{% url 'users:statistics' %}" class="text-decoration-none">{% translate 'Детальная статистика' %}</a>.
-                        </p>
-                    </div>
-                </div>
-                <div class="card shadow-sm">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-people"></i> {% translate 'Сумма всех счетов вашей группы' %}</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="fs-4 fw-bold">
-                            {{ sum_all_accounts_in_group|comma }} ₽
-                        </p>
-                        <p class="text-muted mb-0">
-                            {% if user_groups %}
-                                {% translate 'Это сумма всех счетов всех пользователей вашей группы.' %}
-                            {% else %}
-                                {% translate 'Вы не состоите ни в одной группе. Отображается сумма только ваших счетов.' %}
-                            {% endif %}
-                        </p>
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                                <span>{% translate 'Сумма всех счетов вашей группы' %}</span>
+                            </h3>
+                        </div>
+                        <div class="p-5">
+                            <p class="text-3xl font-bold text-green-600 dark:text-green-400 mb-3">
+                                {{ sum_all_accounts_in_group|comma }} ₽
+                            </p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                {% if user_groups %}
+                                    {% translate 'Это сумма всех счетов всех пользователей вашей группы.' %}
+                                {% else %}
+                                    {% translate 'Вы не состоите ни в одной группе. Отображается сумма только ваших счетов.' %}
+                                {% endif %}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

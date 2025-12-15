@@ -2,55 +2,75 @@
 {% load comma %}
 {% load dict_get %}
 
-<div class="card card-total-balance shadow-lg border-0 rounded-4 bg-light position-relative overflow-hidden">
-    <div class="card-body text-center py-4">
-        <div class="mb-2">
-            <span class="emoji-large">💰</span>
+<div class="card-total-balance relative bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 dark:from-green-900/30 dark:via-emerald-900/30 dark:to-green-900/20 rounded-2xl shadow-xl border border-green-200/50 dark:border-green-800/50 overflow-hidden backdrop-blur-sm">
+    <div class="absolute inset-0 bg-gradient-to-br from-green-400/10 to-emerald-400/10 dark:from-green-500/5 dark:to-emerald-500/5"></div>
+    <div class="relative p-6 sm:p-8 text-center">
+        <div class="mb-4">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-800/50 dark:to-emerald-800/50 mb-3">
+                <span class="text-3xl">💰</span>
+            </div>
         </div>
-        <h5 class="card-title mb-3">{% translate 'Сумма всех счетов' %}</h5>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-5">{% translate 'Сумма всех счетов' %}</h3>
         {% if is_multi_currency %}
-            {% for cur, val in sum_all_accounts.items %}
-                <div class="fs-2 fw-bold mb-1 text-success">
-                    {{ val|comma }} <span class="text-muted">{{ cur }}</span>
-                </div>
-                {% with delta_data=sum_all_accounts_delta|dict_get:cur %}
-                    {% if delta_data %}
-                        {% with delta=delta_data.delta percent=delta_data.percent %}
-                            {% if delta != 0 and delta %}
-                                <div class="mb-2">
-                                    {% if delta > 0 %}
-                                        <span class="text-success">▲ +{{ delta|comma }} ({{ percent }}%)</span>
-                                    {% elif delta < 0 %}
-                                        <span class="text-danger">▼ {{ delta|comma }} ({{ percent }}%)</span>
+            <div class="space-y-4">
+                {% for cur, val in sum_all_accounts.items %}
+                    <div class="space-y-2">
+                        <div class="text-3xl sm:text-4xl font-bold text-green-600 dark:text-green-400">
+                            {{ val|comma }} <span class="text-xl sm:text-2xl text-gray-600 dark:text-gray-400">{{ cur }}</span>
+                        </div>
+                        {% with delta_data=sum_all_accounts_delta|dict_get:cur %}
+                            {% if delta_data %}
+                                {% with delta=delta_data.delta percent=delta_data.percent %}
+                                    {% if delta != 0 and delta %}
+                                        <div class="flex items-center justify-center gap-1.5 text-sm font-medium">
+                                            {% if delta > 0 %}
+                                                <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                                                </svg>
+                                                <span class="text-green-600 dark:text-green-400">+{{ delta|comma }} ({{ percent }}%)</span>
+                                            {% elif delta < 0 %}
+                                                <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+                                                </svg>
+                                                <span class="text-red-600 dark:text-red-400">{{ delta|comma }} ({{ percent }}%)</span>
+                                            {% endif %}
+                                        </div>
                                     {% endif %}
-                                </div>
+                                {% endwith %}
                             {% endif %}
                         {% endwith %}
-                    {% endif %}
-                {% endwith %}
-            {% endfor %}
-        {% elif sum_all_accounts %}
-            <div class="fs-2 fw-bold mb-1 text-success">
-                {{ sum_all_accounts|comma }}<span class="text-muted">{{ currencies.0 }}</span>
+                    </div>
+                {% endfor %}
             </div>
-            {% if sum_all_accounts_delta %}
-                {% with delta=sum_all_accounts_delta.delta percent=sum_all_accounts_delta.percent %}
-                    {% if delta != 0 and delta %}
-                        <div class="mb-2">
-                            {% if delta > 0 %}
-                                <span class="text-success">▲ +{{ delta|comma }} ({{ percent }}%)</span>
-                            {% elif delta < 0 %}
-                                <span class="text-danger">▼ {{ delta|comma }} ({{ percent }}%)</span>
-                            {% endif %}
-                        </div>
-                    {% endif %}
-                {% endwith %}
-            {% endif %}
+        {% elif sum_all_accounts %}
+            <div class="space-y-2">
+                <div class="text-3xl sm:text-4xl font-bold text-green-600 dark:text-green-400">
+                    {{ sum_all_accounts|comma }}<span class="text-xl sm:text-2xl text-gray-600 dark:text-gray-400">{{ currencies.0 }}</span>
+                </div>
+                {% if sum_all_accounts_delta %}
+                    {% with delta=sum_all_accounts_delta.delta percent=sum_all_accounts_delta.percent %}
+                        {% if delta != 0 and delta %}
+                            <div class="flex items-center justify-center gap-1.5 text-sm font-medium">
+                                {% if delta > 0 %}
+                                    <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                                    </svg>
+                                    <span class="text-green-600 dark:text-green-400">+{{ delta|comma }} ({{ percent }}%)</span>
+                                {% elif delta < 0 %}
+                                    <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+                                    </svg>
+                                    <span class="text-red-600 dark:text-red-400">{{ delta|comma }} ({{ percent }}%)</span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+                {% endif %}
+            </div>
         {% else %}
-            <div class="fs-2 fw-bold mb-1 text-success">
+            <div class="text-2xl font-bold text-gray-500 dark:text-gray-400">
                 {% translate 'Нет данных для отображения' %}
             </div>
         {% endif %}
     </div>
 </div>
-<!-- /.card -->
