@@ -81,6 +81,20 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
+        self.assertEqual(accounts.count(), 1)
+        self.assertIn(self.account1, accounts)
+        self.assertNotIn(self.account2, accounts)
+        self.assertNotIn(self.account3, accounts)
+
+    def test_get_accounts_with_group_id(self) -> None:
+        mixin = GroupAccountMixin()
+        request = self.factory.get(f'/?group_id={self.group.id}')
+        request.user = self.user1
+        setup_container_for_request(request)
+        mixin.request = cast('RequestWithContainer', request)
+
+        accounts = mixin.get_accounts(self.user1)
+
         self.assertEqual(accounts.count(), 2)
         self.assertIn(self.account1, accounts)
         self.assertIn(self.account2, accounts)
@@ -106,11 +120,11 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 4)
+        self.assertEqual(accounts.count(), 1)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
-        self.assertIn(self.account3, accounts)
-        self.assertIn(self.account4, accounts)
+        self.assertNotIn(self.account2, accounts)
+        self.assertNotIn(self.account3, accounts)
+        self.assertNotIn(self.account4, accounts)
 
     def test_get_accounts_empty_groups(self) -> None:
         """Test get_accounts method for user with empty groups."""
@@ -125,9 +139,9 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 2)
+        self.assertEqual(accounts.count(), 1)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        self.assertNotIn(self.account2, accounts)
 
     def test_get_accounts_no_accounts(self) -> None:
         """Test get_accounts method for user with no accounts."""
@@ -162,9 +176,9 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 3)
+        self.assertEqual(accounts.count(), 2)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        self.assertNotIn(self.account2, accounts)
         self.assertIn(account_usd, accounts)
 
     def test_get_accounts_account_types(self) -> None:
@@ -184,7 +198,7 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 3)
+        self.assertEqual(accounts.count(), 2)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        self.assertNotIn(self.account2, accounts)
         self.assertIn(credit_account, accounts)
