@@ -46,18 +46,18 @@
                         </button>
                         <ul class="absolute left-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm hidden z-50 overflow-hidden" id="financeDropdownMenu">
                             <li>
-                                <a class="group flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 dark:hover:from-green-900/30 dark:hover:to-emerald-900/30 transition-all duration-200 {% if request.path == '/income/' %}bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 text-green-600 dark:text-green-400{% endif %}"
+                                <a class="group flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-xl transition-all duration-200 {% if request.path == '/income/' %}bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 text-green-600 dark:text-green-400{% endif %} hover:!bg-gradient-to-r hover:!from-green-50 hover:!to-emerald-50 dark:hover:!from-green-900/30 dark:hover:!to-emerald-900/30"
                                    href="{% url 'income:list' %}">
-                                    <svg class="w-4 h-4 flex-shrink-0 text-green-500" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <svg class="w-4 h-4 flex-shrink-0 text-green-500 transition-colors duration-200" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
                                     </svg>
                                     <span>{% translate 'Доходы' %}</span>
                                 </a>
                             </li>
                             <li>
-                                <a class="group flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gradient-to-r hover:from-red-50 hover:to-rose-50 dark:hover:from-red-900/30 dark:hover:to-rose-900/30 transition-all duration-200 {% if request.path == '/expense/' %}bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 text-red-600 dark:text-red-400{% endif %}"
+                                <a class="group flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-xl transition-all duration-200 {% if request.path == '/expense/' %}bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 text-red-600 dark:text-red-400{% endif %} hover:!bg-gradient-to-r hover:!from-red-50 hover:!to-rose-50 dark:hover:!from-red-900/30 dark:hover:!to-rose-900/30"
                                    href="{% url 'expense:list' %}">
-                                    <svg class="w-4 h-4 flex-shrink-0 text-red-500" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <svg class="w-4 h-4 flex-shrink-0 text-red-500 transition-colors duration-200" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
                                     </svg>
                                     <span>{% translate 'Расходы' %}</span>
@@ -131,8 +131,8 @@
                         </button>
                         <ul class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm hidden z-50 overflow-hidden" id="userDropdownMenu">
                             <li>
-                                <a class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 dark:hover:from-gray-700 dark:hover:to-gray-800 transition-all duration-200 group/item" href="{% url 'users:profile' user.id %}">
-                            <svg class="w-4 h-4 flex-shrink-0 text-gray-500 group-hover/item:text-green-600 dark:group-hover/item:text-green-400 transition-colors" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <a class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-xl transition-all duration-200 hover:!bg-gradient-to-r hover:!from-gray-50 hover:!to-gray-100 dark:hover:!from-gray-700 dark:hover:!to-gray-800 group/item" href="{% url 'users:profile' user.id %}">
+                            <svg class="w-4 h-4 flex-shrink-0 text-gray-500 transition-colors duration-200" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                     </svg>
                                     <span>{% translate 'Профиль' %}</span>
@@ -142,8 +142,8 @@
                             <li>
                                 <form action="{% url 'logout' %}" method="post" class="inline w-full">
                                     {% csrf_token %}
-                                    <button class="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-gradient-to-r hover:from-red-50 hover:to-rose-50 dark:hover:from-red-900/30 dark:hover:to-rose-900/30 transition-all duration-200 group/item" type="submit">
-                                        <svg class="w-4 h-4 flex-shrink-0 group-hover/item:scale-110 transition-transform" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <button class="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 rounded-xl transition-all duration-200 hover:!bg-gradient-to-r hover:!from-red-50 hover:!to-rose-50 dark:hover:!from-red-900/30 dark:hover:!to-rose-900/30 group/item" type="submit">
+                                        <svg class="w-4 h-4 flex-shrink-0 group-hover/item:scale-110 transition-transform duration-200" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                                         </svg>
                                         <span>{% translate 'Выход' %}</span>

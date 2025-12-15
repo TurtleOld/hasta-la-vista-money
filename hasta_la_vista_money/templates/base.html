@@ -17,8 +17,6 @@
         <link nonce="{{request.csp_nonce}}" rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
         <link nonce="{{request.csp_nonce}}" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css" rel="stylesheet">
-        
-        <link nonce="{{request.csp_nonce}}" rel="preload" href="{% static 'css/styles.min.css' %}" as="style">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
     {% endblock %}
 </head>
