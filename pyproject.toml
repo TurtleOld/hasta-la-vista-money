@@ -45,6 +45,7 @@ dependencies = [
     "dependency-injector>=4.48.2",
     "tenacity>=9.0.0",
     "django-tailwind>=4.4.2",
+    "crispy-tailwind>=1.0.3",
 ]
 
 [project.optional-dependencies]
