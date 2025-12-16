@@ -1,350 +1,232 @@
-class ReceiptUploader {
-    constructor(dropZoneId, options = {}) {
-        this.dropZone = document.getElementById(dropZoneId);
-        if (!this.dropZone) return;
-
-        this.options = {
-            maxFiles: 5,
-            maxSize: 5 * 1024 * 1024,
-            allowedTypes: ['image/jpeg', 'image/jpg', 'image/png'],
-            uploadUrl: '/receipts/upload/',
-            ...options
-        };
-
-        this.files = [];
-        this.fileToPreviewId = new Map();
-        this.init();
-    }
-
-    init() {
-        this.createPreviewContainer();
-        this.attachEvents();
-    }
-
-    createPreviewContainer() {
-        if (!document.getElementById('preview-container')) {
-            const container = document.createElement('div');
-            container.id = 'preview-container';
-            container.className = 'preview-container';
-            this.dropZone.parentNode.insertBefore(container, this.dropZone.nextSibling);
-        }
-    }
-
-    attachEvents() {
-        this.dropZone.addEventListener('click', () => {
-            const input = document.getElementById('file-input');
-            if (input) input.click();
-        });
-
-        this.dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            this.dropZone.classList.add('dragover');
-        });
-
-        this.dropZone.addEventListener('dragleave', () => {
-            this.dropZone.classList.remove('dragover');
-        });
-
-        this.dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            this.dropZone.classList.remove('dragover');
-            const files = Array.from(e.dataTransfer.files);
-            this.handleFiles(files);
-        });
-
-        const fileInput = document.getElementById('file-input');
-        if (fileInput) {
-            fileInput.addEventListener('change', (e) => {
-                const files = Array.from(e.target.files);
-                this.handleFiles(files);
-            });
-        }
-
-        document.addEventListener('paste', (e) => {
-            const items = e.clipboardData.items;
-            for (const item of items) {
-                if (item.type.indexOf('image') !== -1) {
-                    const file = item.getAsFile();
-                    this.handleFiles([file]);
-                    break;
-                }
-            }
-        });
-    }
-
-    handleFiles(files) {
-        for (const file of files) {
-            if (this.files.length >= this.options.maxFiles) {
-                window.toast.warning(`Максимум ${this.options.maxFiles} файлов за раз`);
-                break;
-            }
-
-            if (!this.validateFile(file)) {
-                continue;
-            }
-
-            this.files.push(file);
-            this.createPreview(file);
-        }
-    }
-
-    validateFile(file) {
-        if (!this.options.allowedTypes.includes(file.type)) {
-            window.toast.error(`Неподдерживаемый формат: ${file.name}`);
-            return false;
-        }
-
-        if (file.size > this.options.maxSize) {
-            window.toast.error(`Файл слишком большой: ${file.name} (максимум ${this.formatSize(this.options.maxSize)})`);
-            return false;
-        }
-
-        return true;
-    }
-
-    createPreview(file) {
-        const container = document.getElementById('preview-container');
-        const previewId = `preview-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-
-        const previewCard = document.createElement('div');
-        previewCard.className = 'preview-card';
-        previewCard.id = previewId;
-
-        const imageWrapper = document.createElement('div');
-        imageWrapper.className = 'preview-image-wrapper';
-
-        const img = document.createElement('img');
-        img.className = 'preview-image';
-        img.setAttribute('alt', file.name || '');
-
-        imageWrapper.appendChild(img);
-
-        const previewInfo = document.createElement('div');
-        previewInfo.className = 'preview-info';
-
-        const filenameDiv = document.createElement('div');
-        filenameDiv.className = 'preview-filename';
-        filenameDiv.textContent = file.name || '';
-
-        const sizeDiv = document.createElement('div');
-        sizeDiv.className = 'preview-size';
-        sizeDiv.textContent = this.formatSize(file.size);
-
-        const previewProgress = document.createElement('div');
-        previewProgress.className = 'preview-progress';
-
-        const progress = document.createElement('div');
-        progress.className = 'progress';
-
-        const progressBar = document.createElement('div');
-        progressBar.className = 'progress-bar';
-        progressBar.setAttribute('role', 'progressbar');
-        progressBar.style.width = '0%';
-
-        progress.appendChild(progressBar);
-
-        const statusDiv = document.createElement('div');
-        statusDiv.className = 'preview-status';
-        statusDiv.textContent = 'Ожидание...';
-
-        previewProgress.appendChild(progress);
-        previewProgress.appendChild(statusDiv);
-
-        previewInfo.appendChild(filenameDiv);
-        previewInfo.appendChild(sizeDiv);
-        previewInfo.appendChild(previewProgress);
-
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'preview-remove';
-        removeBtn.setAttribute('type', 'button');
-        removeBtn.setAttribute('aria-label', 'Удалить');
-
-        const closeIcon = document.createElement('i');
-        closeIcon.className = 'bi bi-x';
-        removeBtn.appendChild(closeIcon);
-
-        previewCard.appendChild(imageWrapper);
-        previewCard.appendChild(previewInfo);
-        previewCard.appendChild(removeBtn);
-
-        container.appendChild(previewCard);
-
-        this.fileToPreviewId.set(file, previewId);
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-
-        removeBtn.addEventListener('click', () => {
-            this.removeFile(file, previewId);
-        });
-    }
-
-    removeFile(file, previewId) {
-        const index = this.files.indexOf(file);
-        if (index > -1) {
-            this.files.splice(index, 1);
-        }
-
-        this.fileToPreviewId.delete(file);
-
-        const previewCard = document.getElementById(previewId);
-        if (previewCard) {
-            previewCard.remove();
-        }
-    }
-
-    uploadFile(file, previewId) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const csrfToken = this.getCookie('csrftoken');
-        if (csrfToken) {
-            formData.append('csrfmiddlewaretoken', csrfToken);
-        }
-
-        const xhr = new XMLHttpRequest();
-
-        xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) {
-                const percent = Math.round((e.loaded / e.total) * 100);
-                this.updateProgress(previewId, percent);
-            }
-        });
-
-        xhr.addEventListener('load', () => {
-            if (xhr.status === 200) {
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    if (response.success) {
-                        this.updateStatus(previewId, 'Загружено', 'success');
-                        window.toast.success(`Файл ${file.name} успешно загружен`);
-                        setTimeout(() => {
-                            this.removeFile(file, previewId);
-                        }, 2000);
-                    } else {
-                        this.updateStatus(previewId, 'Ошибка', 'error');
-                        window.toast.error(response.error || 'Ошибка загрузки');
-                    }
-                } catch {
-                    this.updateStatus(previewId, 'Ошибка', 'error');
-                    window.toast.error('Ошибка обработки ответа');
-                }
-            } else {
-                this.updateStatus(previewId, 'Ошибка', 'error');
-                window.toast.error(`Ошибка загрузки: ${xhr.status}`);
-            }
-        });
-
-        xhr.addEventListener('error', () => {
-            this.updateStatus(previewId, 'Ошибка', 'error');
-            window.toast.error('Ошибка сети');
-        });
-
-        xhr.open('POST', this.options.uploadUrl);
-        xhr.send(formData);
-    }
-
-    uploadAll() {
-        if (this.files.length === 0) {
-            window.toast.warning('Выберите файлы для загрузки');
-            return;
-        }
-
-        this.files.forEach((file, index) => {
-            const previewId = this.fileToPreviewId.get(file);
-            if (previewId) {
-                setTimeout(() => {
-                    this.uploadFile(file, previewId);
-                }, index * 300);
-            }
-        });
-    }
-
-    updateProgress(previewId, percent) {
-        const card = document.getElementById(previewId);
-        if (!card) return;
-
-        const progressBar = card.querySelector('.progress-bar');
-        const status = card.querySelector('.preview-status');
-
-        if (progressBar) {
-            progressBar.style.width = `${percent}%`;
-        }
-
-        if (status) {
-            status.textContent = `Загрузка... ${percent}%`;
-        }
-    }
-
-    updateStatus(previewId, message, type) {
-        const card = document.getElementById(previewId);
-        if (!card) return;
-
-        const status = card.querySelector('.preview-status');
-        const progressBar = card.querySelector('.progress-bar');
-
-        if (status) {
-            status.textContent = message;
-            status.className = `preview-status status-${type}`;
-        }
-
-        if (progressBar) {
-            progressBar.className = `progress-bar bg-${type === 'success' ? 'success' : 'danger'}`;
-            progressBar.style.width = '100%';
-        }
-    }
-
-    formatSize(bytes) {
+(function () {
+    function formatSize(bytes) {
         const numBytes = Number(bytes);
-        if (!Number.isFinite(numBytes) || numBytes < 0) {
-            return '0 Б';
-        }
-        if (numBytes === 0) {
+        if (!Number.isFinite(numBytes) || numBytes <= 0) {
             return '0 Б';
         }
 
         const k = 1024;
-        const sizeUnits = new Map([
-            [0, 'Б'],
-            [1, 'КБ'],
-            [2, 'МБ'],
-            [3, 'ГБ']
-        ]);
-
-        const i = Math.floor(Math.log(numBytes) / Math.log(k));
-        const safeIndex = Math.max(0, Math.min(i, 3));
-        const unit = sizeUnits.get(safeIndex);
-
-        if (!unit) {
-            return '0 Б';
-        }
-
-        const value = Math.round(numBytes / (k ** safeIndex) * 100) / 100;
-        return value + ' ' + unit;
+        const units = ['Б', 'КБ', 'МБ', 'ГБ'];
+        const i = Math.min(Math.floor(Math.log(numBytes) / Math.log(k)), units.length - 1);
+        const value = Math.round((numBytes / (k ** i)) * 100) / 100;
+        return String(value) + ' ' + units[i];
     }
 
-    getCookie(name) {
-        if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-            return null;
+    function fileLooksLikeImage(file) {
+        if (!file) {
+            return false;
         }
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (const cookieRaw of cookies) {
-                const cookie = cookieRaw.trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+
+        if (file.type === 'image/jpeg' || file.type === 'image/png') {
+            return true;
+        }
+
+        const name = (file.name || '').toLowerCase();
+        return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
+    }
+
+    function initReceiptImageUpload() {
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('file-input');
+        const preview = document.getElementById('preview');
+        const previewImage = document.getElementById('preview-image');
+        const previewFilename = document.getElementById('preview-filename');
+        const previewFilesize = document.getElementById('preview-filesize');
+        const removePreview = document.getElementById('remove-preview');
+        const submitBtn = document.getElementById('submitBtn');
+        const form = document.getElementById('uploadForm');
+        const loadingIcon = document.getElementById('loadingIcon');
+        const errorBox = document.getElementById('upload-error');
+
+        if (!uploadZone || !fileInput || !submitBtn || !form) {
+            return;
+        }
+
+        const maxSize = 5 * 1024 * 1024;
+        let objectUrl = null;
+
+        const dragActiveClasses = [
+            'border-blue-400',
+            'dark:border-blue-500',
+            'bg-blue-50',
+            'dark:bg-blue-900/20'
+        ];
+
+        const errorClasses = [
+            'border-red-400',
+            'dark:border-red-500',
+            'bg-red-50',
+            'dark:bg-red-900/20'
+        ];
+
+        function setZoneClasses(state) {
+            uploadZone.classList.remove(...dragActiveClasses);
+            uploadZone.classList.remove(...errorClasses);
+            if (state === 'drag') {
+                uploadZone.classList.add(...dragActiveClasses);
+            }
+            if (state === 'error') {
+                uploadZone.classList.add(...errorClasses);
+            }
+        }
+
+        function setError(message) {
+            setZoneClasses('error');
+            if (errorBox) {
+                errorBox.textContent = message;
+                errorBox.classList.remove('hidden');
+            }
+        }
+
+        function clearError() {
+            setZoneClasses(null);
+            if (errorBox) {
+                errorBox.textContent = '';
+                errorBox.classList.add('hidden');
+            }
+        }
+
+        function setLoading(isLoading) {
+            if (!loadingIcon) {
+                return;
+            }
+            if (isLoading) {
+                loadingIcon.classList.remove('hidden');
+            } else {
+                loadingIcon.classList.add('hidden');
+            }
+        }
+
+        function revokeObjectUrl() {
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+                objectUrl = null;
+            }
+        }
+
+        function setPreview(file) {
+            if (!preview || !previewImage) {
+                return;
+            }
+
+            revokeObjectUrl();
+            objectUrl = URL.createObjectURL(file);
+            previewImage.src = objectUrl;
+            preview.classList.remove('hidden');
+
+            if (previewFilename) {
+                previewFilename.textContent = file.name || '';
+            }
+            if (previewFilesize) {
+                previewFilesize.textContent = formatSize(file.size);
+            }
+        }
+
+        function resetPreview() {
+            revokeObjectUrl();
+
+            if (preview) {
+                preview.classList.add('hidden');
+            }
+            if (previewImage) {
+                previewImage.removeAttribute('src');
+            }
+            if (previewFilename) {
+                previewFilename.textContent = '';
+            }
+            if (previewFilesize) {
+                previewFilesize.textContent = '';
+            }
+
+            fileInput.value = '';
+            submitBtn.disabled = true;
+            setLoading(false);
+            clearError();
+        }
+
+        function setFile(file) {
+            clearError();
+
+            if (!fileLooksLikeImage(file)) {
+                resetPreview();
+                setError('Разрешены только файлы форматов: JPG, JPEG или PNG');
+                return;
+            }
+
+            if (file.size > maxSize) {
+                resetPreview();
+                setError('Размер файла не должен превышать 5 МБ');
+                return;
+            }
+
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+
+            setPreview(file);
+            submitBtn.disabled = false;
+            setZoneClasses(null);
+        }
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            setZoneClasses('drag');
+        });
+
+        uploadZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            setZoneClasses(null);
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            setZoneClasses(null);
+            const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+            if (files.length > 0) {
+                setFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target && e.target.files ? Array.from(e.target.files) : [];
+            if (files.length > 0) {
+                setFile(files[0]);
+            } else {
+                resetPreview();
+            }
+        });
+
+        document.addEventListener('paste', (e) => {
+            const items = e.clipboardData && e.clipboardData.items ? Array.from(e.clipboardData.items) : [];
+            for (const item of items) {
+                if (item && item.type && item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        setFile(file);
+                    }
                     break;
                 }
             }
-        }
-        return cookieValue;
-    }
-}
+        });
 
-if (typeof window !== 'undefined') {
-    window.ReceiptUploader = ReceiptUploader;
-}
+        if (removePreview) {
+            removePreview.addEventListener('click', () => {
+                resetPreview();
+            });
+        }
+
+        form.addEventListener('submit', (e) => {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                e.preventDefault();
+                setError('Пожалуйста, выберите изображение для загрузки');
+                return;
+            }
+            submitBtn.disabled = true;
+            setLoading(true);
+        });
+    }
+
+    if (typeof document !== 'undefined') {
+        document.addEventListener('DOMContentLoaded', initReceiptImageUpload);
+    }
+})();
