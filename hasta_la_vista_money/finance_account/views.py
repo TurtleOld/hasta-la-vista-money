@@ -290,6 +290,18 @@ class ChangeAccountView(
         else:
             return context
 
+    def form_valid(self, form: AddAccountForm) -> HttpResponseRedirect:
+        """
+        Save the updated account and handle success or error feedback.
+
+        Args:
+            form (AddAccountForm): The validated account edit form.
+
+        Returns:
+            HttpResponseRedirect: Redirect response after processing the form.
+        """
+        return super().form_valid(form)
+
 
 class TransferMoneyAccountView(
     LoginRequiredMixin,
