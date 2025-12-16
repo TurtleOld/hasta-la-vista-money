@@ -19,17 +19,17 @@
             <div class="p-6 md:p-8">
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                     <div class="flex-1">
-                        <h4 class="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                        <h4 class="text-2xl font-heading font-bold text-white mb-4 flex items-center gap-2">
                             <i class="bi bi-receipt"></i>
                             {% translate 'Мои чеки' %}
                         </h4>
                         <div class="flex flex-wrap gap-6">
                             <div class="flex flex-col">
-                                <div class="text-3xl font-bold text-white mb-1">{{ total_receipts.count }}</div>
+                                <div class="text-3xl font-mono font-bold text-white mb-1">{{ total_receipts.count }}</div>
                                 <div class="text-sm text-white/80">{% translate 'Количество чеков' %}</div>
                             </div>
                             <div class="flex flex-col">
-                                <div class="text-3xl font-bold text-white mb-1">
+                                <div class="text-3xl font-mono font-bold text-white mb-1">
                                     {% if total_sum_receipts.total is not None %}
                                     {{ total_sum_receipts.total | comma }}
                                     {% else %}
@@ -88,7 +88,7 @@
     </div>
 
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <h4 class="text-xl font-bold text-gray-900 dark:text-white">Чеки</h4>
+        <h4 class="text-xl font-heading font-bold text-gray-900 dark:text-white">Чеки</h4>
         <div class="flex items-center gap-2">
             <label for="receipt-group-select" class="text-sm font-medium text-gray-700 dark:text-gray-300">Группа чеков:</label>
             <select id="receipt-group-select"
