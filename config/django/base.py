@@ -350,6 +350,10 @@ CSP_CDN_URLS = [
     'https://htmx.org',
     'https://cdn.datatables.net',
     'https://cdnjs.cloudflare.com',
+    'https://fonts.googleapis.com',
+]
+CSP_FONT_URLS = [
+    'https://fonts.gstatic.com',
 ]
 additional_script_src = list(
     filter(None, str(config('URL_CSP_SCRIPT_SRC', default='')).split(',')),
@@ -390,6 +394,7 @@ CONTENT_SECURITY_POLICY = {
             NONCE,
             BASE_URL,
             *CSP_CDN_URLS,
+            *CSP_FONT_URLS,
             *additional_script_src,
         ],
         'frame-ancestors': [
