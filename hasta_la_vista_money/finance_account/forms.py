@@ -82,6 +82,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         label=_('Дата платежа'),
         help_text=_('Введите дату платежа'),
         required=False,
+        input_formats=[constants.HTML5_DATE_INPUT_FORMAT],
     )
 
     grace_period_days = IntegerField(
@@ -186,8 +187,9 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         even if commit=True, to avoid IntegrityError on required user field.
         """
         instance: Account = super().save(commit=False)
-        if commit and self.request_user is not None:
-            instance.user = self.request_user
+        if commit:
+            if self.request_user is not None:
+                instance.user = self.request_user
             instance.save()
         return instance
 
