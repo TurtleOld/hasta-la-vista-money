@@ -15,6 +15,7 @@ from django.forms import (
 )
 from django.utils.translation import gettext_lazy as _
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
 from hasta_la_vista_money.users.models import User
@@ -24,11 +25,13 @@ class LoanForm(ModelForm[Loan]):
     date = DateTimeField(
         label=_('Дата'),
         widget=DateTimeInput(
+            format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={
-                'type': 'date',
+                'type': 'datetime-local',
                 'class': 'form-control',
             },
         ),
+        input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         help_text=_('Укажите дату начала кредита'),
     )
 
@@ -62,11 +65,7 @@ class LoanForm(ModelForm[Loan]):
             'annual_interest_rate',
             'period_loan',
         ]
-        widgets: ClassVar[dict[str, Any]] = {
-            'date': DateTimeInput(
-                attrs={'type': 'datetime-local', 'class': 'form-control'},
-            ),
-        }
+        widgets: ClassVar[dict[str, Any]] = {}
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
@@ -100,11 +99,13 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
     date = DateTimeField(
         label=_('Дата платежа'),
         widget=DateTimeInput(
+            format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={
                 'type': 'datetime-local',
                 'class': 'form-control',
             },
         ),
+        input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         help_text=_('Укажите дату платежа'),
     )
 
@@ -158,8 +159,4 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
             'loan',
             'amount',
         ]
-        widgets: ClassVar[dict[str, Any]] = {
-            'date': DateTimeInput(
-                attrs={'type': 'datetime-local', 'class': 'form-control'},
-            ),
-        }
+        widgets: ClassVar[dict[str, Any]] = {}
