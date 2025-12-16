@@ -15,6 +15,7 @@ from hasta_la_vista_money.custom_mixin import (
     CategoryChoicesMixin,
     FormQuerysetsMixin,
 )
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
@@ -39,11 +40,13 @@ class IncomeForm(
     date = DateTimeField(
         label=_('Дата'),
         widget=DateTimeInput(
+            format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={
                 'type': 'datetime-local',
                 'class': 'form-control',
             },
         ),
+        input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         help_text=_('Укажите дату и время получения дохода'),
     )
     amount = DecimalField(
