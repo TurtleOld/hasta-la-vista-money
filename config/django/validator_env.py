@@ -36,8 +36,7 @@ class EnvironmentValidator:
             if host.strip()
         ]
         normalized_hosts = [
-            host.lower().split(':', 1)[0]
-            for host in allowed_hosts
+            host.lower().split(':', 1)[0] for host in allowed_hosts
         ]
         is_local_dev = any(
             host in {'localhost', '127.0.0.1'} for host in normalized_hosts

@@ -20,6 +20,7 @@ from config.settings.debug_toolbar.setup import DebugToolbarSetup
 
 django_stubs_ext.monkeypatch()
 
+
 def _is_testing() -> bool:
     return bool(os.environ.get('PYTEST_CURRENT_TEST')) or any(
         arg == 'test' for arg in sys.argv
@@ -182,13 +183,10 @@ else:
     redis_location = config('REDIS_LOCATION', cast=str, default='')
     allowed_hosts_str = str(config('ALLOWED_HOSTS', default=''))
     allowed_hosts_list = [
-        host.strip()
-        for host in allowed_hosts_str.split(',')
-        if host.strip()
+        host.strip() for host in allowed_hosts_str.split(',') if host.strip()
     ]
     normalized_hosts = [
-        host.lower().split(':', 1)[0]
-        for host in allowed_hosts_list
+        host.lower().split(':', 1)[0] for host in allowed_hosts_list
     ]
     is_local_dev = any(
         host in {'localhost', '127.0.0.1'} for host in normalized_hosts
