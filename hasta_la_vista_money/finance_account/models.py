@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import ClassVar, Any
+from typing import ClassVar
 
 from django.db import models
 from django.urls import reverse
@@ -190,7 +190,6 @@ class Account(TimeStampedModel):
     )
 
     objects = AccountManager.from_queryset(AccountQuerySet)()
-
 
     class Meta(TimeStampedModel.Meta):
         db_table = 'account'

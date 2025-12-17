@@ -99,6 +99,9 @@ class DateFieldMixin:
                     'class': 'form-control credit-only-field',
                 },
             )
+            self.fields['payment_due_date'].input_formats = [  # type: ignore[attr-defined]
+                constants.HTML5_DATE_INPUT_FORMAT,
+            ]
 
         if 'exchange_date' in self.fields:  # type: ignore[attr-defined]
             self.fields['exchange_date'].widget = DateTimeInput(  # type: ignore[attr-defined]
@@ -107,6 +110,9 @@ class DateFieldMixin:
                     'type': 'datetime-local',
                     'class': 'form-control',
                 },
+            )
+            self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS,
             )
 
 
@@ -184,6 +190,9 @@ class BaseTransferForm(BootstrapFormMixin, ModelForm[TransferMoneyLog]):
                     'type': 'datetime-local',
                     'class': 'form-control',
                 },
+            )
+            self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS,
             )
 
         if 'amount' not in self.fields:

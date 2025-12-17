@@ -3,6 +3,8 @@
 from decimal import Decimal
 
 from django.test import TestCase
+from django.test.client import RequestFactory
+from rest_framework import serializers as drf_serializers
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
@@ -14,6 +16,7 @@ class TestAccountSerializer(TestCase):
 
     def setUp(self) -> None:
         """Set up test data."""
+        self.request_factory = RequestFactory()
         self.user = User.objects.create_user(
             username='testuser',
             password='testpass123',
@@ -60,6 +63,39 @@ class TestAccountSerializer(TestCase):
         self.assertEqual(data['balance'], '1000.50')
         self.assertEqual(data['currency'], 'RUB')
         self.assertEqual(data['type_account'], 'Debit')
+
+    def test_is_foreign_requires_request_context_or_defaults_safe(self) -> None:
+        serializer_without_context = AccountSerializer(self.account)
+        self.assertFalse(serializer_without_context.data['is_foreign'])
+
+        request = self.request_factory.get('/api/v1/finance-account/')
+        request.user = self.user
+        serializer_with_context = AccountSerializer(
+            self.account,
+            context={'request': request},
+        )
+        self.assertFalse(serializer_with_context.data['is_foreign'])
+
+        unauth_request = self.request_factory.get('/api/v1/finance-account/')
+        setattr(unauth_request, 'user', None)
+        serializer_with_unauth_context = AccountSerializer(
+            self.account,
+            context={'request': unauth_request},
+        )
+        self.assertFalse(serializer_with_unauth_context.data['is_foreign'])
+
+    def test_create_requires_request_context(self) -> None:
+        data = {
+            'name_account': 'New Account',
+            'balance': '10.00',
+            'currency': 'RUB',
+            'type_account': 'Debit',
+        }
+        serializer = AccountSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        with self.assertRaises(drf_serializers.ValidationError):
+            serializer.save()
 
     def test_account_serializer_with_credit_account(self) -> None:
         """Test AccountSerializer with credit account."""
