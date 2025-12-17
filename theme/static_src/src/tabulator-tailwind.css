@@ -1,0 +1,541 @@
+@reference 'tailwindcss';
+
+@layer components {
+  .tabulator {
+    @apply w-full border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden;
+    @apply bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100;
+    @apply shadow-sm;
+    @apply text-sm;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .tabulator table {
+    table-layout: auto;
+    width: 100%;
+  }
+
+  .tabulator .tabulator-table {
+    table-layout: auto;
+    width: 100%;
+  }
+
+  @media (max-width: 991px) {
+    .tabulator {
+      min-width: 100%;
+      @apply text-xs;
+    }
+
+    .tabulator .tabulator-cell {
+      @apply px-1.5 py-1.5;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tabulator .tabulator-header .tabulator-col {
+      @apply px-1.5 py-1.5;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .tabulator {
+      @apply hidden;
+    }
+  }
+
+  .tabulator .tabulator-header {
+    @apply bg-gray-50/80 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-700;
+    @apply sticky top-0 z-10;
+  }
+
+  .tabulator .tabulator-header .tabulator-col {
+    @apply bg-gray-50/80 dark:bg-gray-900/60;
+    @apply px-3 py-2;
+    @apply border-r border-gray-200 dark:border-gray-700;
+    @apply relative;
+    @apply overflow-hidden;
+    @apply min-w-0;
+    @apply box-border;
+    @apply max-w-full;
+  }
+
+  .tabulator .tabulator-header .tabulator-col > * {
+    @apply max-w-full;
+    @apply box-border;
+  }
+
+  .tabulator .tabulator-header .tabulator-col {
+    overflow-x: hidden !important;
+  }
+
+  .tabulator .tabulator-header .tabulator-col * {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .tabulator .tabulator-col-title {
+    @apply bg-transparent text-gray-700 dark:text-gray-200;
+    @apply font-semibold text-xs uppercase tracking-wide;
+    @apply block;
+    @apply mr-2;
+    @apply flex-shrink-0;
+  }
+
+  .tabulator .tabulator-col-title-holder {
+    @apply flex flex-row items-center;
+    @apply w-auto;
+    @apply gap-2;
+  }
+
+  .tabulator .tabulator-row {
+    @apply border-b border-gray-200 dark:border-gray-700;
+    @apply bg-white dark:bg-gray-800;
+    @apply hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors;
+  }
+
+  .tabulator .tabulator-table .tabulator-row {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+  }
+
+  .tabulator .tabulator-table .tabulator-row .tabulator-cell {
+    display: block !important;
+    flex: 0 0 auto !important;
+  }
+
+  .tabulator .tabulator-table .tabulator-row .tabulator-col-resize-handle {
+    flex: 0 0 auto !important;
+  }
+
+  .tabulator .tabulator-row.tabulator-selected {
+    @apply bg-gray-100 dark:bg-gray-700;
+  }
+
+  .tabulator .tabulator-row.tabulator-alt-row {
+    @apply bg-green-50/30 dark:bg-green-900/10;
+  }
+
+  .table-foreign {
+    @apply bg-yellow-50 dark:bg-yellow-900/20;
+  }
+
+  .tabulator .tabulator-cell {
+    @apply px-3 py-2 align-middle;
+    @apply text-gray-900 dark:text-gray-100;
+    @apply border-gray-200 dark:border-gray-700;
+    @apply border-r border-gray-200 dark:border-gray-700;
+    @apply overflow-hidden;
+    @apply whitespace-normal;
+    @apply max-w-full;
+    @apply box-border;
+  }
+
+  .tabulator .tabulator-row .tabulator-cell:last-child {
+    @apply border-r-0;
+  }
+
+  .tabulator .tabulator-header .tabulator-col:last-child {
+    @apply border-r-0;
+  }
+
+  .tabulator .tabulator-footer {
+    @apply bg-gray-50/80 dark:bg-gray-900/60 border-t border-gray-200 dark:border-gray-700;
+  }
+
+  .tabulator .tabulator-paginator {
+    @apply bg-gray-50 dark:bg-gray-900;
+  }
+
+  .tabulator .tabulator-pagination {
+    @apply bg-transparent text-gray-900 dark:text-gray-100;
+  }
+
+  .tabulator .tabulator-page {
+    @apply inline-flex items-center justify-center;
+    @apply px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg;
+    @apply bg-white/80 dark:bg-gray-800/80 text-gray-700 dark:text-gray-200;
+    @apply hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors;
+    @apply text-xs font-medium;
+  }
+
+  .tabulator .tabulator-page.active,
+  .tabulator .tabulator-page[data-page='active'] {
+    @apply bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500;
+  }
+
+  .tabulator .tabulator-page:disabled,
+  .tabulator .tabulator-page[disabled] {
+    @apply opacity-40 cursor-not-allowed;
+  }
+
+  .tabulator .tabulator-footer select,
+  .tabulator .tabulator-footer option {
+    @apply bg-white/90 dark:bg-gray-800/90 border border-gray-300 dark:border-gray-600 rounded-lg;
+    @apply text-gray-900 dark:text-gray-100 text-xs;
+  }
+
+  .tabulator .tabulator-header input,
+  .tabulator .tabulator-header select {
+    @apply w-full bg-white/95 dark:bg-gray-800/90 border border-gray-300 dark:border-gray-600 rounded-lg;
+    @apply text-gray-900 dark:text-gray-100 text-xs;
+    @apply px-2 py-1 h-8;
+    @apply focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500;
+    @apply mt-1;
+    @apply box-border;
+    @apply max-w-full;
+    @apply min-w-0;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .tabulator .tabulator-header input::placeholder {
+    @apply text-gray-400 dark:text-gray-500;
+  }
+
+  .tabulator .tabulator-header-filter {
+    @apply flex-1;
+    @apply min-w-0;
+    @apply max-w-full;
+    @apply box-border;
+    width: auto !important;
+    max-width: 100% !important;
+    overflow: hidden;
+  }
+
+  .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+  .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select {
+    width: auto !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    flex: 1 1 auto;
+  }
+
+  .tabulator .tabulator-header .tabulator-col .tabulator-header-filter {
+    overflow: hidden !important;
+    width: auto !important;
+    max-width: 100% !important;
+    flex: 1 1 auto;
+  }
+
+  .tabulator .tabulator-col-title-holder {
+    @apply relative;
+    @apply flex flex-row items-center;
+    @apply w-auto;
+    @apply min-w-0;
+    @apply overflow-hidden;
+    @apply gap-2;
+  }
+
+  .tabulator .tabulator-col-sorter {
+    @apply absolute right-2 top-1/2;
+    @apply -translate-y-1/2;
+    @apply flex-shrink-0;
+  }
+
+  .tabulator .tabulator-header .tabulator-col-content {
+    @apply flex flex-row items-center;
+    @apply w-full;
+    @apply min-w-0;
+    @apply max-w-full;
+    @apply overflow-hidden;
+    @apply box-border;
+    @apply gap-2;
+  }
+
+  .tabulator .tabulator-header .tabulator-col-content > * {
+    @apply max-w-full;
+    @apply box-border;
+  }
+
+  .tabulator .tabulator-cell .inline-flex {
+    @apply flex-wrap;
+    @apply gap-1;
+  }
+
+  .tabulator .tabulator-col-sorter .tabulator-arrow {
+    @apply opacity-70;
+    border-top-color: rgb(107 114 128);
+    border-bottom-color: rgb(107 114 128);
+  }
+
+  .dark .tabulator .tabulator-col-sorter .tabulator-arrow {
+    border-top-color: rgb(156 163 175);
+    border-bottom-color: rgb(156 163 175);
+  }
+
+  .tabulator .tabulator-footer {
+    @apply px-3 py-2;
+    @apply text-xs;
+  }
+
+  .tabulator .tabulator-footer .tabulator-page-size {
+    @apply ml-2;
+  }
+
+  .tabulator .tabulator-footer .tabulator-paginator {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+
+  .tabulator .tabulator-footer .tabulator-page-counter {
+    @apply text-gray-500 dark:text-gray-400;
+  }
+
+  .tabulator .tabulator-footer .tabulator-page-size label {
+    @apply text-gray-600 dark:text-gray-300 font-medium;
+  }
+
+  .tabulator .tabulator-footer .tabulator-page-size select {
+    @apply h-8 px-2;
+    @apply focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500;
+  }
+
+  .tabulator .tabulator-placeholder {
+    @apply text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800;
+    @apply py-8;
+    @apply flex items-center justify-center;
+  }
+
+  .tabulator .tabulator-placeholder span {
+    @apply inline-block text-sm font-medium;
+  }
+
+  .tabulator-col-group {
+    @apply border-l-2 border-gray-400 dark:border-gray-600;
+  }
+
+  .tabulator-col-group-cols .tabulator-col:last-child {
+    @apply border-r-2 border-gray-400 dark:border-gray-600;
+  }
+
+  .tabulator-scroll-wrapper,
+  .tabulator-scroll-container {
+    @apply overflow-x-auto w-full;
+  }
+
+  .tabulator-col-content {
+    @apply text-center;
+  }
+
+  .tabulator-footer .tabulator-calcs-holder .tabulator-row {
+    @apply bg-gray-50 dark:bg-gray-900;
+  }
+
+  .tabulator-footer .tabulator-calcs-holder .tabulator-row .tabulator-cell[tabulator-field='category']::before {
+    content: 'Итог';
+    @apply text-gray-900 dark:text-gray-100 font-bold block text-left;
+  }
+
+  .tabulator .tabulator-header .tabulator-col-content {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .tabulator .tabulator-header .tabulator-col {
+    display: inline-block !important;
+  }
+
+  .tabulator .tabulator-header .tabulator-col-content .tabulator-col-title-holder {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+
+  .tabulator .tabulator-header .tabulator-col-content .tabulator-col-title {
+    margin: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  .tabulator .tabulator-header .tabulator-col > .tabulator-header-filter,
+  .tabulator .tabulator-header .tabulator-col-content .tabulator-header-filter {
+    margin-top: 0 !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .tabulator .tabulator-header .tabulator-col > .tabulator-header-filter input,
+  .tabulator .tabulator-header .tabulator-col > .tabulator-header-filter select,
+  .tabulator .tabulator-header .tabulator-col-content .tabulator-header-filter input,
+  .tabulator .tabulator-header .tabulator-col-content .tabulator-header-filter select {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+  }
+
+  .mobile-cards {
+    @apply hidden;
+  }
+
+  @media (max-width: 767px) {
+    .mobile-cards {
+      @apply block;
+    }
+  }
+
+  .mobile-card {
+    @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700;
+    @apply rounded-lg p-4 mb-4 shadow-sm;
+    @apply transition-all duration-200;
+    @apply active:scale-[0.98];
+  }
+
+  .mobile-card-header {
+    @apply font-semibold text-lg mb-3;
+    @apply text-green-600 dark:text-green-400;
+    @apply flex justify-between items-center flex-wrap gap-2;
+  }
+
+  .mobile-card-body {
+    @apply grid gap-2;
+  }
+
+  .mobile-card-row {
+    @apply flex justify-between items-center;
+    @apply py-1 flex-wrap gap-1;
+  }
+
+  .mobile-card-row .label {
+    @apply text-gray-500 dark:text-gray-400 text-sm font-medium;
+    @apply flex-shrink-0;
+  }
+
+  .mobile-card-row .value {
+    @apply font-medium text-right text-sm;
+    @apply break-words;
+  }
+
+  .mobile-card-actions {
+    @apply mt-4 pt-4 border-t border-gray-200 dark:border-gray-700;
+    @apply flex gap-2 justify-end flex-wrap;
+  }
+
+  .mobile-card-actions .btn {
+    @apply flex-1 max-w-[120px] min-h-[44px] min-w-[44px];
+    touch-action: manipulation;
+  }
+
+  @media (max-width: 575px) {
+    .mobile-card {
+      @apply p-3.5 mb-3.5 rounded-md;
+    }
+
+    .mobile-card-header {
+      @apply text-base mb-2.5;
+    }
+
+    .mobile-card-body {
+      @apply gap-1.5;
+    }
+
+    .mobile-card-row {
+      @apply py-0.5;
+    }
+
+    .mobile-card-row .label {
+      @apply text-xs;
+    }
+
+    .mobile-card-row .value {
+      @apply text-sm;
+    }
+
+    .mobile-card-actions {
+      @apply mt-3.5 pt-3.5 gap-1.5;
+    }
+
+    .mobile-card-actions .btn {
+      @apply max-w-full text-sm;
+    }
+  }
+
+  @media (min-width: 576px) and (max-width: 991px) {
+    .mobile-card {
+      @apply p-[0.9375rem];
+    }
+
+    .mobile-card-header {
+      @apply text-[1.05rem];
+    }
+
+    .mobile-card-actions .btn {
+      @apply max-w-[140px];
+    }
+  }
+
+  .skeleton-table {
+    @apply w-full;
+  }
+
+  .skeleton-row {
+    @apply flex gap-4 mb-3;
+  }
+
+  .skeleton-cell {
+    @apply flex-1 h-8 rounded bg-gray-200 dark:bg-gray-700;
+    @apply animate-pulse;
+  }
+
+  .skeleton-header {
+    @apply flex gap-4 mb-6;
+  }
+
+  .skeleton-header .skeleton-cell {
+    @apply flex-1 h-10 rounded;
+    background: linear-gradient(90deg, rgb(240 253 244) 25%, rgb(220 252 231) 50%, rgb(240 253 244) 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+  }
+
+  [data-bs-theme='dark'] .skeleton-header .skeleton-cell {
+    background: linear-gradient(90deg, rgb(20 83 45 / 0.2) 25%, rgb(22 101 52 / 0.3) 50%, rgb(20 83 45 / 0.2) 75%);
+    background-size: 200% 100%;
+  }
+
+  .skeleton-body .skeleton-row {
+    @apply flex gap-4 mb-4;
+  }
+
+  .skeleton-body .skeleton-cell {
+    @apply flex-1 h-8 rounded;
+    background: linear-gradient(90deg, rgb(243 244 246) 25%, rgb(229 231 235) 50%, rgb(243 244 246) 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+  }
+
+  [data-bs-theme='dark'] .skeleton-body .skeleton-cell {
+    background: linear-gradient(90deg, rgb(31 41 55) 25%, rgb(55 65 81) 50%, rgb(31 41 55) 75%);
+    background-size: 200% 100%;
+  }
+
+  #income-skeleton,
+  #expense-skeleton {
+    @apply p-8;
+  }
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

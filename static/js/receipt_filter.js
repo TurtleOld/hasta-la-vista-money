@@ -11,15 +11,7 @@
         }
         
         function updateIcon(isExpanded) {
-            if (isExpanded) {
-                toggleIcon.classList.remove('bi-chevron-down');
-                toggleIcon.classList.add('bi-chevron-up');
-                toggleIcon.classList.add('rotate-180');
-            } else {
-                toggleIcon.classList.remove('bi-chevron-up');
-                toggleIcon.classList.remove('rotate-180');
-                toggleIcon.classList.add('bi-chevron-down');
-            }
+            toggleIcon.classList.toggle('rotate-180', Boolean(isExpanded));
         }
         
         function toggleCollapse() {

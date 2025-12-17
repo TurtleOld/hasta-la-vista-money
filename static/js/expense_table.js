@@ -1,18 +1,299 @@
 /* global Tabulator */
-document.addEventListener('DOMContentLoaded', function () {
+function initExpensePage() {
+    function escapeHtml(text) {
+        if (text == null) {
+            return '';
+        }
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return String(text).replace(/[&<>"']/g, function (m) { return map[m]; });
+    }
+
+    function sanitizeId(id) {
+        if (id == null) {
+            return '';
+        }
+        const idStr = String(id);
+        if (!/^\d+$/.test(idStr)) {
+            console.warn('Invalid ID format:', idStr);
+            return '';
+        }
+        return idStr;
+    }
+
     function getGroupId() {
         const groupSelect = document.getElementById('expense-group-select');
         return groupSelect ? groupSelect.value : 'my';
     }
 
     const table = document.getElementById('expense-table');
-    const currentUserId = table ? parseInt(table.dataset.currentUserId) : null;
+    if (!table) {
+        console.error('Элемент #expense-table не найден в DOM');
+        return;
+    }
+
+    const currentUserId = parseInt(table.dataset.currentUserId) || null;
     const skeleton = document.getElementById('expense-skeleton');
     const mobileCardsContainer = document.getElementById('expense-mobile-cards');
-    if (skeleton) skeleton.style.display = '';
+    if (skeleton) {
+        skeleton.style.display = '';
+        skeleton.classList.remove('hidden');
+    }
+
+    function getIconSvg(type) {
+        if (type === 'edit') {
+            return '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
+        }
+        if (type === 'copy') {
+            return '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>';
+        }
+        if (type === 'delete') {
+            return '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m-4 0h14"></path></svg>';
+        }
+        return '';
+    }
+
+    function getActionBaseClass() {
+        return [
+            'inline-flex items-center justify-center gap-1',
+            'rounded-md border px-2 py-1',
+            'text-xs font-medium',
+            'transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-green-500/30',
+            'focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-offset-gray-900'
+        ].join(' ');
+    }
+
+    function getActionVariantClass(type) {
+        if (type === 'edit') {
+            return 'border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-900/20';
+        }
+        if (type === 'copy') {
+            return 'border-sky-600 text-sky-700 hover:bg-sky-50 dark:border-sky-400 dark:text-sky-300 dark:hover:bg-sky-900/20';
+        }
+        if (type === 'delete') {
+            return 'border-red-600 text-red-700 hover:bg-red-50 dark:border-red-400 dark:text-red-300 dark:hover:bg-red-900/20';
+        }
+        return 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700/30';
+    }
+
+    function createEmptyPlaceholder() {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'hlvm-empty flex flex-col items-center justify-center gap-3 py-10 text-center';
+        wrapper.innerHTML =
+            '<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">' +
+            '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 1.343-3 3 0 1.657 1.343 3 3 3 1.657 0 3-1.343 3-3 0-1.657-1.343-3-3-3Zm8 4a8 8 0 11-16 0 8 8 0 0116 0Z"></path>' +
+            '</svg>' +
+            '</div>' +
+            '<div class="space-y-1">' +
+            '<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">Нет данных</div>' +
+            '<div class="text-sm text-gray-500 dark:text-gray-400">Добавьте первый расход, чтобы увидеть таблицу</div>' +
+            '</div>' +
+            '<a href="/expense/create/" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900">' +
+            'Добавить расход' +
+            '</a>';
+        return wrapper;
+    }
+
+    function localizeTabulatorFooter() {
+        const pageSize = table.querySelector('.tabulator-page-size');
+        if (pageSize) {
+            const label = pageSize.querySelector('label');
+            if (label && label.textContent && label.textContent.toLowerCase().includes('page size')) {
+                label.textContent = 'Размер:';
+            }
+        }
+
+        const counter = table.querySelector('.tabulator-page-counter');
+        if (counter && counter.textContent) {
+            const text = counter.textContent;
+
+            const rangeMatch = text.match(/Showing\s+(\d+)\s+to\s+(\d+)\s+of\s+(\d+)\s+rows/i);
+            if (rangeMatch) {
+                const from = rangeMatch[1];
+                const to = rangeMatch[2];
+                const total = rangeMatch[3];
+                counter.textContent = `Показано: ${from}–${to} из ${total}`;
+                return;
+            }
+
+            const rowsMatch = text.match(/Showing\s+(\d+)\s+rows/i);
+            if (rowsMatch) {
+                const totalOnly = rowsMatch[1];
+                counter.textContent = `Показано: ${totalOnly}`;
+            }
+        }
+    }
+
+    function fixTabulatorInlineStyles() {
+        if (!table) {
+            return;
+        }
+
+        const headerCols = table.querySelectorAll('.tabulator-header .tabulator-col');
+        headerCols.forEach(function (col) {
+            col.style.setProperty('max-width', '100%', 'important');
+            col.style.setProperty('box-sizing', 'border-box', 'important');
+            col.style.setProperty('overflow', 'visible', 'important');
+            col.style.removeProperty('display');
+            col.style.removeProperty('flex-direction');
+            col.style.removeProperty('flex-wrap');
+            col.style.removeProperty('align-items');
+            col.style.removeProperty('gap');
+
+            const filterInputs = col.querySelectorAll('.tabulator-header-filter input, .tabulator-header-filter select');
+            filterInputs.forEach(function (input) {
+                input.style.setProperty('width', 'auto', 'important');
+                input.style.setProperty('max-width', '100%', 'important');
+                input.style.setProperty('box-sizing', 'border-box', 'important');
+                input.style.setProperty('flex', '1 1 auto', 'important');
+                input.style.setProperty('margin', '0', 'important');
+            });
+
+            const filterContainer = col.querySelector('.tabulator-header-filter');
+            if (filterContainer) {
+                filterContainer.style.setProperty('width', 'auto', 'important');
+                filterContainer.style.setProperty('max-width', '100%', 'important');
+                filterContainer.style.setProperty('box-sizing', 'border-box', 'important');
+                filterContainer.style.setProperty('overflow', 'visible', 'important');
+                filterContainer.style.setProperty('flex', '1 1 auto', 'important');
+                filterContainer.style.setProperty('margin-top', '0', 'important');
+            }
+
+            const colContent = col.querySelector('.tabulator-col-content');
+            if (colContent) {
+                colContent.style.setProperty('display', 'flex', 'important');
+                colContent.style.setProperty('flex-direction', 'row', 'important');
+                colContent.style.setProperty('flex-wrap', 'nowrap', 'important');
+                colContent.style.setProperty('align-items', 'center', 'important');
+                colContent.style.setProperty('gap', '0.5rem', 'important');
+                colContent.style.setProperty('flex', '1 1 auto', 'important');
+                colContent.style.setProperty('overflow', 'visible', 'important');
+                colContent.style.setProperty('width', '100%', 'important');
+            }
+
+            const titleHolder = col.querySelector('.tabulator-col-title-holder');
+            if (titleHolder) {
+                titleHolder.style.setProperty('display', 'flex', 'important');
+                titleHolder.style.setProperty('flex-direction', 'row', 'important');
+                titleHolder.style.setProperty('flex-wrap', 'nowrap', 'important');
+                titleHolder.style.setProperty('align-items', 'center', 'important');
+                titleHolder.style.setProperty('gap', '0.5rem', 'important');
+            }
+        });
+
+        const headerRows = table.querySelectorAll('.tabulator-headers');
+        headerRows.forEach(function (row) {
+            row.style.setProperty('height', 'auto', 'important');
+        });
+
+        const cells = table.querySelectorAll('.tabulator-cell');
+        cells.forEach(function (cell) {
+            cell.style.setProperty('max-width', '100%', 'important');
+            cell.style.setProperty('box-sizing', 'border-box', 'important');
+            cell.style.setProperty('overflow', 'hidden', 'important');
+        });
+
+        const rows = table.querySelectorAll('.tabulator-table .tabulator-row');
+        rows.forEach(function (row) {
+            row.style.setProperty('display', 'flex', 'important');
+            row.style.setProperty('flex-direction', 'row', 'important');
+            row.style.setProperty('flex-wrap', 'nowrap', 'important');
+            row.style.setProperty('align-items', 'stretch', 'important');
+        });
+    }
+
+    function setupTabulatorStyleObserver() {
+        if (!table) {
+            return;
+        }
+
+        const observer = new MutationObserver(function (mutations) {
+            let shouldFix = false;
+            mutations.forEach(function (mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                    const target = mutation.target;
+                    if (target.classList && (
+                        target.classList.contains('tabulator-col') ||
+                        target.classList.contains('tabulator-headers') ||
+                        target.classList.contains('tabulator-header-filter') ||
+                        target.closest('.tabulator-header')
+                    )) {
+                        shouldFix = true;
+                    }
+                }
+            });
+
+            if (shouldFix) {
+                setTimeout(function () {
+                    fixTabulatorInlineStyles();
+                }, 10);
+            }
+        });
+
+        observer.observe(table, {
+            attributes: true,
+            attributeFilter: ['style'],
+            subtree: true,
+            childList: true
+        });
+
+        return observer;
+    }
 
     if (typeof Tabulator === 'undefined') {
-        console.error('Tabulator не загружен');
+        function ensureTabulatorLoaded(onReady) {
+            if (typeof window.Tabulator !== 'undefined') {
+                onReady();
+                return;
+            }
+
+            const sources = [
+                'https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
+                'https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
+            ];
+
+            function tryLoad(srcIndex) {
+                if (srcIndex >= sources.length) {
+                    console.error('Tabulator не загружен (все источники недоступны)');
+                    if (skeleton) {
+                        skeleton.style.display = 'none';
+                        skeleton.classList.add('hidden');
+                    }
+                    table.classList.remove('invisible', 'hidden', 'd-none');
+                    table.classList.add('visible');
+                    return;
+                }
+
+                const src = sources[srcIndex];
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = true;
+                script.onload = function () {
+                    if (typeof window.Tabulator !== 'undefined') {
+                        onReady();
+                    } else {
+                        tryLoad(srcIndex + 1);
+                    }
+                };
+                script.onerror = function () {
+                    tryLoad(srcIndex + 1);
+                };
+                document.head.appendChild(script);
+            }
+
+            tryLoad(0);
+        }
+
+        ensureTabulatorLoaded(function () {
+            location.reload();
+        });
         return;
     }
 
@@ -34,9 +315,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function createCardRow(labelText, valueText, valueClass) {
         const row = document.createElement('div');
-        row.className = 'mobile-card-row d-flex justify-content-between align-items-center mb-2';
+        row.className = 'mobile-card-row flex justify-between items-center mb-2';
 
-        const label = createTextElement('span', labelText, 'label text-muted');
+        const label = createTextElement('span', labelText, 'label text-gray-500 dark:text-gray-400');
         const value = createTextElement('span', valueText, valueClass ? 'value ' + valueClass : 'value');
 
         row.appendChild(label);
@@ -46,65 +327,67 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function createActionButtons(item, isOwner, isReceipt) {
         const valueDiv = document.createElement('span');
-        valueDiv.className = 'value';
+        valueDiv.className = 'value inline-flex items-center gap-1.5';
 
         if (isReceipt) {
-            const badge = createTextElement('span', 'Чек', 'badge bg-info');
+            const badge = createTextElement('span', 'Чек', 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300');
             valueDiv.appendChild(badge);
         } else if (isOwner) {
             const csrfToken = getCookie('csrftoken') || '';
 
+            const sanitizedId = sanitizeId(item.id);
+            if (!sanitizedId) {
+                return valueDiv;
+            }
+
             const editLink = document.createElement('a');
-            editLink.href = '/expense/change/' + item.id + '/';
-            editLink.className = 'btn btn-sm btn-outline-success me-1';
+            editLink.href = '/expense/change/' + sanitizedId + '/';
+            editLink.className = getActionBaseClass() + ' ' + getActionVariantClass('edit');
             editLink.title = 'Редактировать';
-            const editIcon = document.createElement('i');
-            editIcon.className = 'bi bi-pencil';
-            editLink.appendChild(editIcon);
+            editLink.setAttribute('aria-label', 'Редактировать');
+            editLink.innerHTML = getIconSvg('edit');
             valueDiv.appendChild(editLink);
 
             const copyForm = document.createElement('form');
             copyForm.method = 'post';
-            copyForm.action = '/expense/' + item.id + '/copy/';
-            copyForm.className = 'd-inline me-1';
+            copyForm.action = '/expense/' + sanitizedId + '/copy/';
+            copyForm.className = 'inline-flex';
             const copyCsrf = document.createElement('input');
             copyCsrf.type = 'hidden';
             copyCsrf.name = 'csrfmiddlewaretoken';
-            copyCsrf.value = csrfToken;
+            copyCsrf.value = escapeHtml(csrfToken);
             const copyBtn = document.createElement('button');
             copyBtn.type = 'submit';
-            copyBtn.className = 'btn btn-sm btn-outline-primary';
+            copyBtn.className = getActionBaseClass() + ' ' + getActionVariantClass('copy');
             copyBtn.title = 'Копировать';
-            const copyIcon = document.createElement('i');
-            copyIcon.className = 'bi bi-files';
-            copyBtn.appendChild(copyIcon);
+            copyBtn.setAttribute('aria-label', 'Копировать');
+            copyBtn.innerHTML = getIconSvg('copy');
             copyForm.appendChild(copyCsrf);
             copyForm.appendChild(copyBtn);
             valueDiv.appendChild(copyForm);
 
             const deleteForm = document.createElement('form');
             deleteForm.method = 'post';
-            deleteForm.action = '/expense/delete/' + item.id + '/';
-            deleteForm.className = 'd-inline';
+            deleteForm.action = '/expense/delete/' + sanitizedId + '/';
+            deleteForm.className = 'inline-flex';
             const deleteCsrf = document.createElement('input');
             deleteCsrf.type = 'hidden';
             deleteCsrf.name = 'csrfmiddlewaretoken';
-            deleteCsrf.value = csrfToken;
+            deleteCsrf.value = escapeHtml(csrfToken);
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'submit';
-            deleteBtn.className = 'btn btn-sm btn-outline-danger';
+            deleteBtn.className = getActionBaseClass() + ' ' + getActionVariantClass('delete');
             deleteBtn.title = 'Удалить';
-            deleteBtn.onclick = function() {
+            deleteBtn.setAttribute('aria-label', 'Удалить');
+            deleteBtn.onclick = function () {
                 return confirm('Вы уверены, что хотите удалить этот расход?');
             };
-            const deleteIcon = document.createElement('i');
-            deleteIcon.className = 'bi bi-trash';
-            deleteBtn.appendChild(deleteIcon);
+            deleteBtn.innerHTML = getIconSvg('delete');
             deleteForm.appendChild(deleteCsrf);
             deleteForm.appendChild(deleteBtn);
             valueDiv.appendChild(deleteForm);
         } else {
-            const viewOnly = createTextElement('span', 'Только просмотр', 'text-muted');
+            const viewOnly = createTextElement('span', 'Только просмотр', 'text-gray-500 dark:text-gray-400');
             valueDiv.appendChild(viewOnly);
         }
 
@@ -121,7 +404,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (!data || data.length === 0) {
-            const emptyDiv = createTextElement('div', 'Нет данных для отображения. Добавьте первый расход!', 'text-center text-muted py-4');
+            const emptyDiv = createTextElement('div', 'Нет данных для отображения. Добавьте первый расход!', 'text-center text-gray-500 dark:text-gray-400 py-4');
             mobileCardsContainer.appendChild(emptyDiv);
             return;
         }
@@ -130,20 +413,20 @@ document.addEventListener('DOMContentLoaded', function () {
             const card = document.createElement('div');
             card.className = 'mobile-card';
 
-            const header = createTextElement('div', item.category_name || 'Без категории', 'mobile-card-header fw-bold text-success mb-2');
+            const header = createTextElement('div', item.category_name || 'Без категории', 'mobile-card-header font-bold text-green-600 dark:text-green-400 mb-2');
             card.appendChild(header);
 
             const body = document.createElement('div');
             body.className = 'mobile-card-body';
 
-            body.appendChild(createCardRow('Сумма:', formatMoney(item.amount) + ' ₽', 'fw-bold text-success'));
-            body.appendChild(createCardRow('Счет:', item.account_name || 'Не указан', 'text-primary'));
-            body.appendChild(createCardRow('Дата:', item.date || 'Не указана', 'text-secondary'));
-            body.appendChild(createCardRow('Пользователь:', item.user_name || 'Не указан', 'text-muted'));
+            body.appendChild(createCardRow('Сумма:', formatMoney(item.amount) + ' ₽', 'font-bold text-green-600 dark:text-green-400'));
+            body.appendChild(createCardRow('Счет:', item.account_name || 'Не указан', 'text-blue-600 dark:text-blue-400'));
+            body.appendChild(createCardRow('Дата:', item.date || 'Не указана', 'text-gray-600 dark:text-gray-300'));
+            body.appendChild(createCardRow('Пользователь:', item.user_name || 'Не указан', 'text-gray-500 dark:text-gray-400'));
 
             const actionsRow = document.createElement('div');
-            actionsRow.className = 'mobile-card-row d-flex justify-content-between align-items-center';
-            const actionsLabel = createTextElement('span', 'Действия:', 'label text-muted');
+            actionsRow.className = 'mobile-card-row flex justify-between items-center';
+            const actionsLabel = createTextElement('span', 'Действия:', 'label text-gray-500 dark:text-gray-400');
             const isOwner = item.user_id === currentUserId;
             const actionsValue = createActionButtons(item, isOwner, item.is_receipt);
             actionsRow.appendChild(actionsLabel);
@@ -155,77 +438,147 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    window.expenseTabulator = new Tabulator('#expense-table', {
-        theme: 'bootstrap5',
-        ajaxURL: '/api/expense/data/',
-        ajaxParams: function() {
-            return { group_id: getGroupId() };
-        },
-        ajaxResponse: function(url, params, response) {
-            if (table) table.classList.remove('d-none');
-            if (skeleton) skeleton.style.display = 'none';
-            const data = response.results || response.data || response;
-            renderMobileCards(data);
-            return data;
-        },
-        placeholder: 'Нет данных для отображения. Добавьте первый расход!',
-        columns: [
-            { title: 'Категория', field: 'category_name', headerFilter: 'input', cssClass: 'text-success' },
-            { title: 'Счет', field: 'account_name', headerFilter: 'input', cssClass: 'text-primary' },
-            { title: 'Сумма', field: 'amount', formatter: 'money', formatterParams: { decimal: ",", thousand: " ", precision: 2 }, hozAlign: 'right', headerFilter: 'number', cssClass: 'fw-bold text-success' },
-            { title: 'Дата', field: 'date', headerFilter: 'input', cssClass: 'text-secondary' },
-            { title: 'Пользователь', field: 'user_name', cssClass: 'text-muted' },
+    function initExpenseTable() {
+        try {
+            console.log('Инициализация Tabulator для expense, элемент найден:', !!table);
+            window.expenseTabulator = new Tabulator('#expense-table', {
+                ajaxURL: '/api/expense/data/',
+                ajaxParams: function () {
+                    return { group_id: getGroupId() };
+                },
+                ajaxResponse: function (url, params, response) {
+                    console.log('AJAX ответ получен для expense:', { url, params, response });
+                    table.classList.remove('invisible', 'hidden', 'd-none');
+                    table.classList.add('visible');
+                    if (skeleton) {
+                        skeleton.style.display = 'none';
+                        skeleton.classList.add('hidden');
+                    }
+                    const data = response.results || response.data || response;
+                    console.log('Данные для отображения expense:', data);
+                    renderMobileCards(data);
+                    return data;
+                },
+                ajaxError: function (error) {
+                    console.error('Ошибка загрузки данных expense:', error);
+                    if (skeleton) {
+                        skeleton.style.display = 'none';
+                        skeleton.classList.add('hidden');
+                    }
+                    table.classList.remove('invisible', 'hidden', 'd-none');
+                    table.classList.add('visible');
+                },
+                placeholder: createEmptyPlaceholder(),
+                columns: [
+                    { title: 'Категория', field: 'category_name', headerFilter: 'input', headerFilterParams: { elementAttributes: { name: 'category_name', id: 'expense-filter-category_name' } }, cssClass: 'text-green-600 dark:text-green-400' },
+                    { title: 'Счет', field: 'account_name', headerFilter: 'input', headerFilterParams: { elementAttributes: { name: 'account_name', id: 'expense-filter-account_name' } }, cssClass: 'text-blue-600 dark:text-blue-400' },
+                    { title: 'Сумма', field: 'amount', formatter: 'money', formatterParams: { decimal: ',', thousand: ' ', precision: 2 }, hozAlign: 'right', headerFilter: 'number', headerFilterParams: { elementAttributes: { name: 'amount', id: 'expense-filter-amount' } }, cssClass: 'font-bold text-green-600 dark:text-green-400' },
+                    { title: 'Дата', field: 'date', headerFilter: 'input', headerFilterParams: { elementAttributes: { name: 'date', id: 'expense-filter-date' } }, cssClass: 'text-gray-600 dark:text-gray-300' },
+                    { title: 'Пользователь', field: 'user_name', cssClass: 'text-gray-500 dark:text-gray-400' },
             { title: 'Действия',
-                formatter: function(cell) {
+                formatter: function (cell) {
                     const data = cell.getRow().getData();
                     const isOwner = data.user_id === currentUserId;
                     if (data.is_receipt) {
-                        return `<span class="badge bg-info">Чек</span>`;
+                        return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300">Чек</span>`;
                     }
                     let buttons = '';
                     if (isOwner) {
+                        const sanitizedId = sanitizeId(data.id);
+                        if (!sanitizedId) {
+                            return '<span class="text-gray-500 dark:text-gray-400">Ошибка ID</span>';
+                        }
                         const csrfToken = getCookie('csrftoken') || '';
-                        buttons += `<a href="/expense/change/${data.id}/" class="btn btn-sm btn-outline-success me-1" title="Редактировать"><i class="bi bi-pencil"></i></a>`;
-                        buttons += `<form method="post" action="/expense/${data.id}/copy/" class="d-inline me-1"><input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}"><button type="submit" class="btn btn-sm btn-outline-primary" title="Копировать"><i class="bi bi-files"></i></button></form>`;
-                        buttons += `<form method="post" action="/expense/delete/${data.id}/" class="d-inline"><input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}"><button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот расход?');"><i class="bi bi-trash"></i></button></form>`;
+                        const escapedToken = escapeHtml(csrfToken);
+                        const base = getActionBaseClass();
+                        buttons += `<span class="inline-flex items-center gap-1.5">`;
+                        buttons += `<a href="/expense/change/${sanitizedId}/" class="${base} ${getActionVariantClass('edit')}" title="Редактировать" aria-label="Редактировать">${getIconSvg('edit')}</a>`;
+                        buttons += `<form method="post" action="/expense/${sanitizedId}/copy/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${getActionVariantClass('copy')}" title="Копировать" aria-label="Копировать">${getIconSvg('copy')}</button></form>`;
+                        buttons += `<form method="post" action="/expense/${sanitizedId}/delete/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${getActionVariantClass('delete')}" title="Удалить" aria-label="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот расход?');">${getIconSvg('delete')}</button></form>`;
+                        buttons += `</span>`;
                     } else {
-                        buttons += `<span class="text-muted">Только просмотр</span>`;
+                        buttons += `<span class="text-gray-500 dark:text-gray-400">Только просмотр</span>`;
                     }
                     return buttons;
                 },
                 headerSort: false, hozAlign: 'center', cssClass: 'text-center'
             }
-        ],
-        layout: 'fitColumns',
-        pagination: true,
-        paginationSize: 25,
-        locale: 'ru-ru',
-        langs: {
-            'ru-ru': {
-                pagination: {
-                    first: 'Первая', last: 'Последняя', prev: 'Предыдущая', next: 'Следующая'
+                ],
+                layout: 'fitColumns',
+                pagination: true,
+                paginationSize: 25,
+                paginationSizeSelector: [10, 25, 50, 100],
+                paginationCounter: 'rows',
+                locale: 'ru-ru',
+                langs: {
+                    'ru-ru': {
+                        pagination: {
+                            first: '«',
+                            first_title: 'Первая страница',
+                            last: '»',
+                            last_title: 'Последняя страница',
+                            prev: '‹',
+                            prev_title: 'Предыдущая страница',
+                            next: '›',
+                            next_title: 'Следующая страница'
+                        },
+                        headerFilters: { default: 'фильтр столбца' }
+                    }
                 },
-                headerFilters: { default: 'фильтр столбца' }
+                rowFormatter: function (row) {
+                    const el = row.getElement();
+                    if (row.getPosition(true) % 2 === 0) {
+                        el.classList.add('tabulator-alt-row');
+                    } else {
+                        el.classList.remove('tabulator-alt-row');
+                    }
+                },
+                tableBuilt: function () {
+                    console.log('Таблица expense построена');
+                    table.classList.remove('invisible', 'hidden', 'd-none');
+                    table.classList.add('visible');
+                    if (skeleton) {
+                        skeleton.style.display = 'none';
+                        skeleton.classList.add('hidden');
+                    }
+                    setTimeout(function () {
+                        fixTabulatorInlineStyles();
+                        setupTabulatorStyleObserver();
+                    }, 100);
+                    setTimeout(function () {
+                        fixTabulatorInlineStyles();
+                    }, 300);
+                    setTimeout(function () {
+                        fixTabulatorInlineStyles();
+                    }, 500);
+                    localizeTabulatorFooter();
+                    const data = window.expenseTabulator.getData();
+                    renderMobileCards(data);
+                },
+                dataLoaded: function (data) {
+                    setTimeout(function () {
+                        fixTabulatorInlineStyles();
+                    }, 50);
+                    setTimeout(function () {
+                        fixTabulatorInlineStyles();
+                    }, 200);
+                    renderMobileCards(data);
+                    localizeTabulatorFooter();
+                }
+            });
+        } catch (error) {
+            console.error('Ошибка инициализации Tabulator для expense:', error);
+            if (skeleton) {
+                skeleton.style.display = 'none';
+                skeleton.classList.add('hidden');
             }
-        },
-        rowFormatter: function(row) {
-            const el = row.getElement();
-            if (row.getPosition(true) % 2 === 0) {
-                el.classList.add('tabulator-alt-row');
-            } else {
-                el.classList.remove('tabulator-alt-row');
-            }
-        },
-        tableBuilt: function() {
-            if (table) table.classList.remove('d-none');
-            if (skeleton) skeleton.style.display = 'none';
-            const data = window.expenseTabulator.getData();
-            renderMobileCards(data);
-        },
-        dataLoaded: function (data) {
-            renderMobileCards(data);
+            table.classList.remove('invisible', 'hidden', 'd-none');
+            table.classList.add('visible');
+            return;
         }
-    });
+    }
+
+    initExpenseTable();
 
     const groupSelect = document.getElementById('expense-group-select');
     if (groupSelect) {
@@ -235,18 +588,40 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     window.expenseTabulator.on('dataChanged', function () {
+        setTimeout(function () {
+            fixTabulatorInlineStyles();
+        }, 50);
+        setTimeout(function () {
+            fixTabulatorInlineStyles();
+        }, 200);
         const data = window.expenseTabulator.getData();
         renderMobileCards(data);
+    });
+
+    window.expenseTabulator.on('columnResized', function () {
+        setTimeout(function () {
+            fixTabulatorInlineStyles();
+        }, 50);
+        setTimeout(function () {
+            fixTabulatorInlineStyles();
+        }, 200);
     });
 
     const toggleBtn = document.getElementById('toggle-group-filter');
     const filterBlock = document.getElementById('expense-group-filter-block');
     if (toggleBtn && filterBlock) {
         toggleBtn.addEventListener('click', function() {
+            filterBlock.classList.toggle('hidden');
             filterBlock.classList.toggle('d-none');
         });
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initExpensePage);
+} else {
+    initExpensePage();
+}
 
 function getCookie(name) {
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
