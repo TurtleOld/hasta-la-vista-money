@@ -1,3 +1,4 @@
+import os
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -9,6 +10,7 @@ import sentry_sdk
 import structlog
 from csp.constants import NONCE, SELF
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 from sentry_sdk.integrations.django import DjangoIntegration
 
 import hasta_la_vista_money.api.schema  # noqa: F401
@@ -18,11 +20,19 @@ from config.settings.debug_toolbar.setup import DebugToolbarSetup
 
 django_stubs_ext.monkeypatch()
 
+def _is_testing() -> bool:
+    return bool(os.environ.get('PYTEST_CURRENT_TEST')) or any(
+        arg == 'test' for arg in sys.argv
+    )
+
+
+IS_TESTING = _is_testing()
+
 # Security settings
 if (
     'collectstatic' not in sys.argv
     and 'migrate' not in sys.argv
-    and 'test' not in sys.argv
+    and not IS_TESTING
     and not EnvironmentValidator().validate()
 ):
     env_error = 'Environment variables are not valid'
@@ -113,7 +123,7 @@ MIDDLEWARE = [
 ]
 
 
-if 'test' not in sys.argv:
+if not IS_TESTING:
     MIDDLEWARE.append('axes.middleware.AxesMiddleware')
 else:
     MIDDLEWARE = [
@@ -171,12 +181,20 @@ if DEBUG:
 else:
     redis_location = config('REDIS_LOCATION', cast=str, default='')
     allowed_hosts_str = str(config('ALLOWED_HOSTS', default=''))
-    is_local_dev = (
-        'localhost' in allowed_hosts_str.lower()
-        or '127.0.0.1' in allowed_hosts_str
-        or not allowed_hosts_str
+    allowed_hosts_list = [
+        host.strip()
+        for host in allowed_hosts_str.split(',')
+        if host.strip()
+    ]
+    normalized_hosts = [
+        host.lower().split(':', 1)[0]
+        for host in allowed_hosts_list
+    ]
+    is_local_dev = any(
+        host in {'localhost', '127.0.0.1'} for host in normalized_hosts
     )
-    
+    is_testing = IS_TESTING
+
     if redis_location:
         CACHES = {
             'default': {
@@ -192,7 +210,7 @@ else:
                 'TIMEOUT': 300,
             },
         }
-    elif is_local_dev:
+    elif is_local_dev or is_testing:
         CACHES = {
             'default': {
                 'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -204,21 +222,9 @@ else:
             },
         }
     else:
-        import warnings
-        warnings.warn(
-            'REDIS_LOCATION is not set for production. Using LocMemCache as fallback.',
-            UserWarning,
+        raise ImproperlyConfigured(
+            'REDIS_LOCATION is required when DEBUG=False'
         )
-        CACHES = {
-            'default': {
-                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-                'LOCATION': 'unique-snowflake',
-                'TIMEOUT': 300,
-                'OPTIONS': {
-                    'MAX_ENTRIES': 1000,
-                },
-            },
-        }
 
 # Session backend configuration
 if not DEBUG:
@@ -226,7 +232,7 @@ if not DEBUG:
     SESSION_CACHE_ALIAS = 'default'
 
 # Database
-if 'test' in sys.argv and not config(
+if IS_TESTING and not config(
     'USE_DB_FOR_TESTS',
     default=False,
     cast=bool,
@@ -302,7 +308,7 @@ AXES_COOLOFF_TIME = 1
 AXES_LOCKOUT_TEMPLATE = None
 AXES_VERBOSE = False
 AXES_ENABLE_ADMIN = False
-if 'test' in sys.argv:
+if IS_TESTING:
     AXES_ENABLED = False
 if not DEBUG:
     AXES_CACHE = 'default'

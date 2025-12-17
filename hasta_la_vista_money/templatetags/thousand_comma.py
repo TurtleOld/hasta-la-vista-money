@@ -18,9 +18,6 @@ def comma(number: Any) -> str:
         if number is None or number == '':
             return '—'
         decimal_value = decimal.Decimal(str(number))
-        formatted = f'{decimal_value:,.2f}'.replace(',', ' ')
-        if '.00' in formatted:
-            formatted = formatted.replace('.00', '')
-        return formatted
+        return f'{decimal_value:,.2f}'.replace(',', ' ')
     except (decimal.InvalidOperation, ValueError, TypeError):
         return '—'

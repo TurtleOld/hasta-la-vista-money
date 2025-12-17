@@ -18,8 +18,6 @@
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.googleapis.com">
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link nonce="{{request.csp_nonce}}" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Gloria+Hallelujah&display=swap" rel="stylesheet">
-        <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-        <link nonce="{{request.csp_nonce}}" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css" rel="stylesheet">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
     {% endblock %}
 </head>
@@ -137,15 +135,15 @@
             }
 
             if (currentPath.indexOf('receipts') !== -1) {
-                loadScript('{% static "js/receipt_filter.js" %}').catch(function(error) {
+                loadScript('{% static "js/receipt_filter.js" %}?v={% word_hash %}').catch(function(error) {
                     console.error('Error loading receipt_filter script:', error);
                 });
                 
-                loadScript('{% static "js/tokens.js" %}').then(function() {
-                    return loadScript('{% static "js/receipt_group_filter.js" %}');
+                loadScript('{% static "js/tokens.js" %}?v={% word_hash %}').then(function() {
+                    return loadScript('{% static "js/receipt_group_filter.js" %}?v={% word_hash %}');
                 }).then(function() {
                     if (currentPath.indexOf('update') !== -1) {
-                        return loadScript('{% static "js/receipt_update.js" %}');
+                        return loadScript('{% static "js/receipt_update.js" %}?v={% word_hash %}');
                     }
                 }).catch(function(error) {
                     console.error('Error loading receipt scripts:', error);
@@ -153,31 +151,35 @@
             }
 
             if (currentPath.indexOf('budget') !== -1) {
-                loadScript('{% static "js/budget.js" %}').catch(function(error) {
+                loadScript('{% static "js/budget.js" %}?v={% word_hash %}').catch(function(error) {
                     console.error('Error loading budget script:', error);
                 });
             }
 
             if (currentPath.indexOf('users') !== -1) {
-                loadScript('{% static "js/theme.js" %}').catch(function(error) {
+                loadScript('{% static "js/theme.js" %}?v={% word_hash %}').catch(function(error) {
                     console.error('Error loading theme script:', error);
                 });
             }
 
-            if (currentPath.indexOf('income') !== -1 && currentPath.indexOf('budget') === -1) {
-                loadScript('{% static "js/income_table.js" %}').catch(function(error) {
+            const isIncomePage = currentPath.indexOf('income') !== -1;
+            const isExpensePage = currentPath.indexOf('expense') !== -1;
+            const isBudgetPage = currentPath.indexOf('budget') !== -1;
+
+            if (isIncomePage && !isBudgetPage) {
+                loadScript('{% static "js/income_table.js" %}?v={% word_hash %}').catch(function(error) {
                     console.error('Error loading income_table script:', error);
                 });
             }
 
-            if (currentPath.indexOf('expense') !== -1 && currentPath.indexOf('budget') === -1) {
-                loadScript('{% static "js/expense_table.js" %}').catch(function(error) {
+            if (isExpensePage && !isBudgetPage) {
+                loadScript('{% static "js/expense_table.js" %}?v={% word_hash %}').catch(function(error) {
                     console.error('Error loading expense_table script:', error);
                 });
             }
 
             if (currentPath.indexOf('loan') !== -1) {
-                loadScript('{% static "js/loan.js" %}').catch(function(error) {
+                loadScript('{% static "js/loan.js" %}?v={% word_hash %}').catch(function(error) {
                     console.error('Error loading loan script:', error);
                 });
             }
