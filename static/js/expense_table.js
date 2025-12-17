@@ -323,6 +323,7 @@ function initExpensePage() {
             'https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
             'https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
         ];
+        const allowedSources = new Set(sources);
 
         function tryLoad(srcIndex) {
             if (srcIndex >= sources.length) {
@@ -346,13 +347,19 @@ function initExpensePage() {
                 return;
             }
             const srcValue = sourceArray[srcIndex];
-            if (typeof srcValue !== 'string' || !/^https?:\/\//.test(srcValue)) {
+            if (typeof srcValue !== 'string' || !allowedSources.has(srcValue)) {
                 tryLoad(srcIndex + 1);
                 return;
             }
             const script = document.createElement('script');
-            const validatedSrc = String(srcValue);
-            script.setAttribute('src', validatedSrc);
+            let validatedSrc;
+            try {
+                validatedSrc = new URL(srcValue).toString();
+            } catch (error) {
+                tryLoad(srcIndex + 1);
+                return;
+            }
+            script.src = validatedSrc;
             script.setAttribute('async', 'true');
             script.onload = function () {
                 if (typeof window.Tabulator !== 'undefined') {

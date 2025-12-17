@@ -118,7 +118,9 @@
             }
 
             revokeObjectUrl();
-            objectUrl = URL.createObjectURL(file);
+            const safeMime = (file.type && file.type.startsWith('image/')) ? file.type : 'image/jpeg';
+            const safeBlob = new Blob([file], { type: safeMime });
+            objectUrl = URL.createObjectURL(safeBlob);
             previewImage.src = objectUrl;
             preview.classList.remove('hidden');
 
