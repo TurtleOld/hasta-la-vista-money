@@ -89,19 +89,42 @@ function initIncomePage() {
     function createEmptyPlaceholder() {
         const wrapper = document.createElement('div');
         wrapper.className = 'hlvm-empty flex flex-col items-center justify-center gap-3 py-10 text-center';
-        wrapper.innerHTML =
-            '<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">' +
-            '<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 3 3 5-6"></path>' +
-            '</svg>' +
-            '</div>' +
-            '<div class="space-y-1">' +
-            '<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">Нет данных</div>' +
-            '<div class="text-sm text-gray-500 dark:text-gray-400">Добавьте первый доход, чтобы увидеть таблицу</div>' +
-            '</div>' +
-            '<a href="/income/create/" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900">' +
-            'Добавить доход' +
-            '</a>';
+
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
+        const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        iconSvg.setAttribute('class', 'h-6 w-6');
+        iconSvg.setAttribute('fill', 'none');
+        iconSvg.setAttribute('stroke', 'currentColor');
+        iconSvg.setAttribute('viewBox', '0 0 24 24');
+        const iconPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        iconPath.setAttribute('stroke-linecap', 'round');
+        iconPath.setAttribute('stroke-linejoin', 'round');
+        iconPath.setAttribute('stroke-width', '2');
+        iconPath.setAttribute('d', 'M3 3v18h18M7 14l3-3 3 3 5-6');
+        iconSvg.appendChild(iconPath);
+        iconDiv.appendChild(iconSvg);
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'space-y-1';
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'text-sm font-semibold text-gray-900 dark:text-gray-100';
+        titleDiv.textContent = 'Нет данных';
+        const descDiv = document.createElement('div');
+        descDiv.className = 'text-sm text-gray-500 dark:text-gray-400';
+        descDiv.textContent = 'Добавьте первый доход, чтобы увидеть таблицу';
+        textDiv.appendChild(titleDiv);
+        textDiv.appendChild(descDiv);
+
+        const link = document.createElement('a');
+        link.href = '/income/create/';
+        link.className = 'inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900';
+        link.textContent = 'Добавить доход';
+
+        wrapper.appendChild(iconDiv);
+        wrapper.appendChild(textDiv);
+        wrapper.appendChild(link);
+
         return wrapper;
     }
 
@@ -339,7 +362,11 @@ function initIncomePage() {
             editLink.className = getActionBaseClass() + ' ' + getActionVariantClass('edit');
             editLink.title = 'Редактировать';
             editLink.setAttribute('aria-label', 'Редактировать');
-            editLink.innerHTML = getIconSvg('edit');
+            const editIconContainer = document.createElement('div');
+            editIconContainer.innerHTML = getIconSvg('edit');
+            while (editIconContainer.firstChild) {
+                editLink.appendChild(editIconContainer.firstChild);
+            }
             valueDiv.appendChild(editLink);
 
             const copyForm = document.createElement('form');
@@ -355,7 +382,11 @@ function initIncomePage() {
             copyBtn.className = getActionBaseClass() + ' ' + getActionVariantClass('copy');
             copyBtn.title = 'Копировать';
             copyBtn.setAttribute('aria-label', 'Копировать');
-            copyBtn.innerHTML = getIconSvg('copy');
+            const copyIconContainer = document.createElement('div');
+            copyIconContainer.innerHTML = getIconSvg('copy');
+            while (copyIconContainer.firstChild) {
+                copyBtn.appendChild(copyIconContainer.firstChild);
+            }
             copyForm.appendChild(copyCsrf);
             copyForm.appendChild(copyBtn);
             valueDiv.appendChild(copyForm);
@@ -376,7 +407,11 @@ function initIncomePage() {
             deleteBtn.onclick = function () {
                 return confirm('Вы уверены, что хотите удалить этот доход?');
             };
-            deleteBtn.innerHTML = getIconSvg('delete');
+            const deleteIconContainer = document.createElement('div');
+            deleteIconContainer.innerHTML = getIconSvg('delete');
+            while (deleteIconContainer.firstChild) {
+                deleteBtn.appendChild(deleteIconContainer.firstChild);
+            }
             deleteForm.appendChild(deleteCsrf);
             deleteForm.appendChild(deleteBtn);
             valueDiv.appendChild(deleteForm);
@@ -519,11 +554,18 @@ function initIncomePage() {
                         }
                         const csrfToken = getCookie('csrftoken') || '';
                         const escapedToken = escapeHtml(csrfToken);
+                        const escapedConfirm = escapeHtml('Вы уверены, что хотите удалить этот доход?').replace(/"/g, '&quot;');
                         const base = getActionBaseClass();
+                        const editClass = getActionVariantClass('edit');
+                        const copyClass = getActionVariantClass('copy');
+                        const deleteClass = getActionVariantClass('delete');
+                        const editIcon = getIconSvg('edit');
+                        const copyIcon = getIconSvg('copy');
+                        const deleteIcon = getIconSvg('delete');
                         buttons += `<span class="inline-flex items-center gap-1.5">`;
-                        buttons += `<a href="/income/change/${sanitizedId}/" class="${base} ${getActionVariantClass('edit')}" title="Редактировать" aria-label="Редактировать">${getIconSvg('edit')}</a>`;
-                        buttons += `<form method="post" action="/income/${sanitizedId}/copy/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${getActionVariantClass('copy')}" title="Копировать" aria-label="Копировать">${getIconSvg('copy')}</button></form>`;
-                        buttons += `<form method="post" action="/income/${sanitizedId}/delete/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${getActionVariantClass('delete')}" title="Удалить" aria-label="Удалить" onclick="return confirm('Вы уверены, что хотите удалить этот доход?');">${getIconSvg('delete')}</button></form>`;
+                        buttons += `<a href="/income/change/${sanitizedId}/" class="${base} ${editClass}" title="Редактировать" aria-label="Редактировать">${editIcon}</a>`;
+                        buttons += `<form method="post" action="/income/${sanitizedId}/copy/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${copyClass}" title="Копировать" aria-label="Копировать">${copyIcon}</button></form>`;
+                        buttons += `<form method="post" action="/income/${sanitizedId}/delete/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${deleteClass}" title="Удалить" aria-label="Удалить" onclick="return confirm(&quot;${escapedConfirm}&quot;);">${deleteIcon}</button></form>`;
                         buttons += `</span>`;
                     } else {
                         buttons += `<span class="text-gray-500 dark:text-gray-400">Только просмотр</span>`;
