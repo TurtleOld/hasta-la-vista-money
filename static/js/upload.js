@@ -9,7 +9,9 @@
         const units = ['Б', 'КБ', 'МБ', 'ГБ'];
         const i = Math.min(Math.floor(Math.log(numBytes) / Math.log(k)), units.length - 1);
         const value = Math.round((numBytes / (k ** i)) * 100) / 100;
-        return String(value) + ' ' + units[i];
+        const unitIndex = Math.max(0, Math.min(i, units.length - 1));
+        const unit = units[unitIndex] || 'Б';
+        return String(value) + ' ' + unit;
     }
 
     function fileLooksLikeImage(file) {

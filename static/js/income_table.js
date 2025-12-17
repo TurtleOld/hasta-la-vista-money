@@ -340,13 +340,17 @@ function initIncomePage() {
                 return;
             }
 
-            const src = sources[srcIndex];
-            if (typeof src !== 'string' || !/^https?:\/\//.test(src)) {
+            if (srcIndex < 0 || srcIndex >= sources.length) {
+                tryLoad(srcIndex + 1);
+                return;
+            }
+            const srcValue = sources[srcIndex];
+            if (typeof srcValue !== 'string' || !/^https?:\/\//.test(srcValue)) {
                 tryLoad(srcIndex + 1);
                 return;
             }
             const script = document.createElement('script');
-            script.setAttribute('src', src);
+            script.setAttribute('src', srcValue);
             script.setAttribute('async', 'true');
             script.onload = function () {
                 if (typeof window.Tabulator !== 'undefined') {
