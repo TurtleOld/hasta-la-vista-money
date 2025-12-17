@@ -10,12 +10,12 @@ from django.forms import (
 )
 from django.utils.translation import gettext_lazy as _
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.custom_mixin import (
     CategoryChoicesConfigurerMixin,
     CategoryChoicesMixin,
     FormQuerysetsMixin,
 )
-from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 
