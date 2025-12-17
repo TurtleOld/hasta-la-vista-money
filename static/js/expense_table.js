@@ -4,14 +4,25 @@ function initExpensePage() {
         if (text == null) {
             return '';
         }
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return String(text).replace(/[&<>"']/g, function (m) { return map[m]; });
+        const textStr = String(text);
+        let result = '';
+        for (let i = 0; i < textStr.length; i++) {
+            const char = textStr.charAt(i);
+            if (char === '&') {
+                result += '&amp;';
+            } else if (char === '<') {
+                result += '&lt;';
+            } else if (char === '>') {
+                result += '&gt;';
+            } else if (char === '"') {
+                result += '&quot;';
+            } else if (char === "'") {
+                result += '&#039;';
+            } else {
+                result += char;
+            }
+        }
+        return result;
     }
 
     function sanitizeId(id) {
@@ -45,7 +56,39 @@ function initExpensePage() {
         skeleton.classList.remove('hidden');
     }
 
-    function getIconSvg(type) {
+    function createIconSvg(type) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'h-4 w-4');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('viewBox', '0 0 24 24');
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+        if (type === 'edit') {
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('d', 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z');
+        } else if (type === 'copy') {
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('d', 'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z');
+        } else if (type === 'delete') {
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('d', 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m-4 0h14');
+        } else {
+            return null;
+        }
+
+        svg.appendChild(path);
+        return svg;
+    }
+
+    function getIconSvgHtml(type) {
         if (type === 'edit') {
             return '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
         }
@@ -270,50 +313,54 @@ function initExpensePage() {
         return observer;
     }
 
-    if (typeof Tabulator === 'undefined') {
-        function ensureTabulatorLoaded(onReady) {
-            if (typeof window.Tabulator !== 'undefined') {
-                onReady();
+    function ensureTabulatorLoaded(onReady) {
+        if (typeof window.Tabulator !== 'undefined') {
+            onReady();
+            return;
+        }
+
+        const sources = [
+            'https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
+            'https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
+        ];
+
+        function tryLoad(srcIndex) {
+            if (srcIndex >= sources.length) {
+                console.error('Tabulator не загружен (все источники недоступны)');
+                if (skeleton) {
+                    skeleton.style.display = 'none';
+                    skeleton.classList.add('hidden');
+                }
+                table.classList.remove('invisible', 'hidden', 'd-none');
+                table.classList.add('visible');
                 return;
             }
 
-            const sources = [
-                'https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
-                'https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
-            ];
-
-            function tryLoad(srcIndex) {
-                if (srcIndex >= sources.length) {
-                    console.error('Tabulator не загружен (все источники недоступны)');
-                    if (skeleton) {
-                        skeleton.style.display = 'none';
-                        skeleton.classList.add('hidden');
-                    }
-                    table.classList.remove('invisible', 'hidden', 'd-none');
-                    table.classList.add('visible');
-                    return;
-                }
-
-                const src = sources[srcIndex];
-                const script = document.createElement('script');
-                script.src = src;
-                script.async = true;
-                script.onload = function () {
-                    if (typeof window.Tabulator !== 'undefined') {
-                        onReady();
-                    } else {
-                        tryLoad(srcIndex + 1);
-                    }
-                };
-                script.onerror = function () {
-                    tryLoad(srcIndex + 1);
-                };
-                document.head.appendChild(script);
+            const src = sources[srcIndex];
+            if (typeof src !== 'string' || !/^https?:\/\//.test(src)) {
+                tryLoad(srcIndex + 1);
+                return;
             }
-
-            tryLoad(0);
+            const script = document.createElement('script');
+            script.setAttribute('src', src);
+            script.setAttribute('async', 'true');
+            script.onload = function () {
+                if (typeof window.Tabulator !== 'undefined') {
+                    onReady();
+                } else {
+                    tryLoad(srcIndex + 1);
+                }
+            };
+            script.onerror = function () {
+                tryLoad(srcIndex + 1);
+            };
+            document.head.appendChild(script);
         }
 
+        tryLoad(0);
+    }
+
+    if (typeof Tabulator === 'undefined') {
         ensureTabulatorLoaded(function () {
             location.reload();
         });
@@ -368,10 +415,9 @@ function initExpensePage() {
             editLink.className = getActionBaseClass() + ' ' + getActionVariantClass('edit');
             editLink.title = 'Редактировать';
             editLink.setAttribute('aria-label', 'Редактировать');
-            const editIconContainer = document.createElement('div');
-            editIconContainer.innerHTML = getIconSvg('edit');
-            while (editIconContainer.firstChild) {
-                editLink.appendChild(editIconContainer.firstChild);
+            const editIcon = createIconSvg('edit');
+            if (editIcon) {
+                editLink.appendChild(editIcon);
             }
             valueDiv.appendChild(editLink);
 
@@ -388,10 +434,9 @@ function initExpensePage() {
             copyBtn.className = getActionBaseClass() + ' ' + getActionVariantClass('copy');
             copyBtn.title = 'Копировать';
             copyBtn.setAttribute('aria-label', 'Копировать');
-            const copyIconContainer = document.createElement('div');
-            copyIconContainer.innerHTML = getIconSvg('copy');
-            while (copyIconContainer.firstChild) {
-                copyBtn.appendChild(copyIconContainer.firstChild);
+            const copyIcon = createIconSvg('copy');
+            if (copyIcon) {
+                copyBtn.appendChild(copyIcon);
             }
             copyForm.appendChild(copyCsrf);
             copyForm.appendChild(copyBtn);
@@ -413,10 +458,9 @@ function initExpensePage() {
             deleteBtn.onclick = function () {
                 return confirm('Вы уверены, что хотите удалить этот расход?');
             };
-            const deleteIconContainer = document.createElement('div');
-            deleteIconContainer.innerHTML = getIconSvg('delete');
-            while (deleteIconContainer.firstChild) {
-                deleteBtn.appendChild(deleteIconContainer.firstChild);
+            const deleteIcon = createIconSvg('delete');
+            if (deleteIcon) {
+                deleteBtn.appendChild(deleteIcon);
             }
             deleteForm.appendChild(deleteCsrf);
             deleteForm.appendChild(deleteBtn);
@@ -530,9 +574,9 @@ function initExpensePage() {
                         const editClass = getActionVariantClass('edit');
                         const copyClass = getActionVariantClass('copy');
                         const deleteClass = getActionVariantClass('delete');
-                        const editIcon = getIconSvg('edit');
-                        const copyIcon = getIconSvg('copy');
-                        const deleteIcon = getIconSvg('delete');
+                        const editIcon = getIconSvgHtml('edit');
+                        const copyIcon = getIconSvgHtml('copy');
+                        const deleteIcon = getIconSvgHtml('delete');
                         buttons += `<span class="inline-flex items-center gap-1.5">`;
                         buttons += `<a href="/expense/change/${sanitizedId}/" class="${base} ${editClass}" title="Редактировать" aria-label="Редактировать">${editIcon}</a>`;
                         buttons += `<form method="post" action="/expense/${sanitizedId}/copy/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${copyClass}" title="Копировать" aria-label="Копировать">${copyIcon}</button></form>`;
