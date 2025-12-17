@@ -10,7 +10,13 @@
         const i = Math.min(Math.floor(Math.log(numBytes) / Math.log(k)), units.length - 1);
         const value = Math.round((numBytes / (k ** i)) * 100) / 100;
         const unitIndex = Math.max(0, Math.min(i, units.length - 1));
-        const unit = units[unitIndex] || 'Б';
+        let unit = 'Б';
+        if (unitIndex >= 0 && unitIndex < units.length && Array.isArray(units)) {
+            const unitValue = units[unitIndex];
+            if (typeof unitValue === 'string') {
+                unit = unitValue;
+            }
+        }
         return String(value) + ' ' + unit;
     }
 

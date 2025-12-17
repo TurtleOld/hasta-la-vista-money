@@ -340,13 +340,19 @@ function initExpensePage() {
                 tryLoad(srcIndex + 1);
                 return;
             }
-            const srcValue = sources[srcIndex];
+            const sourceArray = sources;
+            if (!Array.isArray(sourceArray)) {
+                tryLoad(srcIndex + 1);
+                return;
+            }
+            const srcValue = sourceArray[srcIndex];
             if (typeof srcValue !== 'string' || !/^https?:\/\//.test(srcValue)) {
                 tryLoad(srcIndex + 1);
                 return;
             }
             const script = document.createElement('script');
-            script.setAttribute('src', srcValue);
+            const validatedSrc = String(srcValue);
+            script.setAttribute('src', validatedSrc);
             script.setAttribute('async', 'true');
             script.onload = function () {
                 if (typeof window.Tabulator !== 'undefined') {
