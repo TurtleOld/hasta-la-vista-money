@@ -7,9 +7,8 @@ from hasta_la_vista_money.budget.apis import (
 )
 from hasta_la_vista_money.budget.views import (
     BudgetView,
-    ExpenseBudgetAPIView,
     ExpenseTableView,
-    IncomeBudgetAPIView,
+    GenerateDateView,
     IncomeTableView,
 )
 
@@ -20,7 +19,7 @@ urlpatterns = [
     path('incomes/', IncomeTableView.as_view(), name='income_table'),
     path(
         'generate-date/',
-        GenerateDatesAPIView.as_view(),
+        GenerateDateView.as_view(),
         name='generate_date',
     ),
     path(
@@ -32,15 +31,5 @@ urlpatterns = [
         'save-planning/',
         SavePlanningAPIView.as_view(),
         name='save_planning',
-    ),
-    path(
-        'expenses/',
-        ExpenseBudgetAPIView.as_view(),
-        name='api_expense_budget',
-    ),
-    path(
-        'incomes/',
-        IncomeBudgetAPIView.as_view(),
-        name='api_income_budget',
     ),
 ]

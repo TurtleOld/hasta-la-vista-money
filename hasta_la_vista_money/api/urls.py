@@ -38,7 +38,7 @@ urlpatterns = [
     path(
         'budget/',
         include(
-            'hasta_la_vista_money.budget.urls',
+            'hasta_la_vista_money.budget.api_urls',
             namespace='budget',
         ),
     ),
