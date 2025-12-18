@@ -58,7 +58,7 @@
                 resolve();
             };
 
-            script.onerror = (error) => {
+            script.onerror = () => {
                 loadingScripts.delete(src);
                 reject(new Error(`Failed to load script: ${src}`));
             };

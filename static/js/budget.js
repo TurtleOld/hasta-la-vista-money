@@ -30,9 +30,15 @@ window.BUDGET_SCRIPT_EXECUTED = false;
     }
 
     function getCookie(name) {
-        const escaped = String(name).replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-        const match = document.cookie.match(new RegExp('(?:^|; )' + escaped + '=([^;]*)'));
-        return match ? decodeURIComponent(match[1]) : '';
+        const cookieName = String(name);
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.startsWith(cookieName + '=')) {
+                return decodeURIComponent(cookie.substring(cookieName.length + 1));
+            }
+        }
+        return '';
     }
 
     function getCsrfToken() {
@@ -94,6 +100,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
             return Promise.reject(new Error('URL не разрешён'));
         }
 
+        const safeUrl = url;
         const opts = options ? { ...options } : {};
         opts.headers = opts.headers ? { ...opts.headers } : {};
         opts.credentials = 'include';
@@ -105,13 +112,13 @@ window.BUDGET_SCRIPT_EXECUTED = false;
             opts.headers['Authorization'] = 'Bearer ' + jwt;
         }
 
-        return fetch(url, opts).then(resp => {
+        return fetch(safeUrl, opts).then(resp => {
             if (resp.status === 401 && shouldRetry) {
                 return refreshToken().then(newAccess => {
                     if (newAccess) {
                         opts.headers['Authorization'] = 'Bearer ' + newAccess;
                     }
-                    return fetch(url, opts);
+                    return fetch(safeUrl, opts);
                 });
             }
             return resp;
@@ -410,12 +417,18 @@ window.BUDGET_SCRIPT_EXECUTED = false;
     }
 
     function initMatrixTable(container, type, apiUrl) {
+        if (!isSafeUrl(apiUrl) || !isWhitelistedUrl(apiUrl)) {
+            container.innerHTML = '<div class="text-sm text-red-600 dark:text-red-400">Неверный URL API</div>';
+            return;
+        }
+
         const loader = document.createElement('div');
         loader.className = 'text-sm text-gray-600 dark:text-gray-300';
         loader.textContent = 'Загрузка...';
         container.appendChild(loader);
 
-        safeFetchJson(apiUrl).then(data => {
+        const safeApiUrl = apiUrl;
+        safeFetchJson(safeApiUrl).then(data => {
             container.innerHTML = '';
 
             const parsed = parseApiData(data);
@@ -429,7 +442,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
 
             const tableHost = document.createElement('div');
 
-            const toolbar = buildToolbar(container, parsed.months, count => {
+            buildToolbar(container, parsed.months, count => {
                 const inner = ensureScrollableTableContainer(tableHost);
                 const visibleMonths = parsed.months.slice(-count);
                 buildTable(inner, type, visibleMonths, parsed.rows);

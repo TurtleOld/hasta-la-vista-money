@@ -194,3 +194,55 @@
     justify-content: center;
     border-radius: 9999px;
 }
+
+.needs-validation input[type="number"],
+.needs-validation input[type="text"],
+.needs-validation input[type="datetime-local"],
+.needs-validation select,
+.ajax-form input[type="number"],
+.ajax-form input[type="text"],
+.ajax-form input[type="datetime-local"],
+.ajax-form select {
+  background-color: white !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db !important;
+}
+
+.dark .needs-validation input[type="number"],
+.dark .needs-validation input[type="text"],
+.dark .needs-validation input[type="datetime-local"],
+.dark .needs-validation select,
+.dark .ajax-form input[type="number"],
+.dark .ajax-form input[type="text"],
+.dark .ajax-form input[type="datetime-local"],
+.dark .ajax-form select {
+  background-color: #1f2937 !important;
+  color: #f3f4f6 !important;
+  border-color: #4b5563 !important;
+}
+
+.needs-validation input[type="number"]:focus,
+.needs-validation input[type="text"]:focus,
+.needs-validation input[type="datetime-local"]:focus,
+.needs-validation select:focus,
+.ajax-form input[type="number"]:focus,
+.ajax-form input[type="text"]:focus,
+.ajax-form input[type="datetime-local"]:focus,
+.ajax-form select:focus {
+  background-color: white !important;
+  color: #111827 !important;
+  border-color: #10b981 !important;
+}
+
+.dark .needs-validation input[type="number"]:focus,
+.dark .needs-validation input[type="text"]:focus,
+.dark .needs-validation input[type="datetime-local"]:focus,
+.dark .needs-validation select:focus,
+.dark .ajax-form input[type="number"]:focus,
+.dark .ajax-form input[type="text"]:focus,
+.dark .ajax-form input[type="datetime-local"]:focus,
+.dark .ajax-form select:focus {
+  background-color: #1f2937 !important;
+  color: #f3f4f6 !important;
+  border-color: #34d399 !important;
+}
