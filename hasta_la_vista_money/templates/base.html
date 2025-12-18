@@ -154,9 +154,17 @@
             }
 
             if (currentPath.indexOf('budget') !== -1) {
-                loadScript('{% static "js/budget.js" %}?v={% word_hash %}').catch(function(error) {
-                    console.error('[BASE] Error loading budget script:', error);
-                });
+                function loadBudgetScript() {
+                    loadScript('{% static "js/budget.js" %}?v={% word_hash %}').catch(function(error) {
+                        console.error('[BASE] Error loading budget script:', error);
+                    });
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', loadBudgetScript);
+                } else {
+                    loadBudgetScript();
+                }
             }
 
             if (currentPath.indexOf('users') !== -1) {
