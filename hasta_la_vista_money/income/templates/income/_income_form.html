@@ -1,29 +1,54 @@
 {% load crispy_forms_tags %}
 {% load i18n %}
-<form method="POST" action="{{ action_url }}">
+<form method="POST" action="{{ action_url }}" class="space-y-6 text-black dark:text-white dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
     {% csrf_token %}
     {% if form %}
         {% for field in form %}
-            <div class="mb-3">
+            <div class="space-y-1.5">
                 {{ field|as_crispy_field }}
                 {% if field.errors %}
-                    <div class="invalid-feedback d-block">
-                        {% for error in field.errors %}
-                            {{ error }}
-                        {% endfor %}
+                    <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
+                        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <div class="flex flex-col gap-0.5">
+                            {% for error in field.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
                     </div>
                 {% endif %}
             </div>
         {% endfor %}
     {% endif %}
-    <div class="d-flex gap-2 mt-4">
-        <button type="submit" class="btn btn-success">
-            <i class="bi bi-plus-circle me-2"></i>
-            {{ submit_label|default:_('Добавить доход') }}
+
+    {% if form.non_field_errors %}
+        <div class="rounded-xl bg-red-50 p-4 dark:bg-red-900/20">
+            <div class="flex">
+                <svg class="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <div class="ml-3">
+                    {% for error in form.non_field_errors %}
+                        <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ error }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="flex flex-wrap items-center gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-medium rounded-xl shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            <span>{{ submit_label|default:_('Добавить доход') }}</span>
         </button>
-        <a href="{{ cancel_url }}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-2"></i>
-            {{ cancel_label|default:_('Отмена') }}
+        <a href="{{ cancel_url }}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
+            <span>{{ cancel_label|default:_('Отмена') }}</span>
         </a>
     </div>
 </form>

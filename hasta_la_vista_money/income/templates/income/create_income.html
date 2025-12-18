@@ -1,25 +1,28 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 {% load i18n %}
-{% url 'income:list' as income_list_url %}
 
 {% block title %}{% translate 'Добавить новый доход' %}{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow">
-                <div class="card-header bg-success text-white">
-                    <h5 class="card-title mb-0 d-flex align-items-center gap-2">
-                        <i class="bi bi-graph-up-arrow"></i>
-                        {% translate 'Добавить новый доход' %}
-                    </h5>
-                </div>
-                <div class="card-body p-4">
-                    {% include 'income/_income_form.html' with form=form action_url=action_url|default:request.path cancel_url=income_list_url submit_label=_('Добавить доход') cancel_label=_('Отмена') %}
-                </div>
+<div class="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50 px-4 py-12 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 sm:px-6 lg:px-8">
+    <div class="w-full max-w-2xl space-y-8">
+        <div class="text-center">
+            <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-600 to-emerald-600 shadow-lg">
+                <svg class="h-12 w-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                </svg>
             </div>
+            <h1 class="text-3xl font-bold tracking-tight text-black dark:text-white">
+                {% translate 'Добавить новый доход' %}
+            </h1>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {% translate 'Заполните форму для добавления нового дохода' %}
+            </p>
+        </div>
+
+        <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800 dark:shadow-gray-900/50">
+            {% include 'income/_income_form.html' with form=form action_url=action_url|default:request.path cancel_url=cancel_url submit_label=_('Добавить доход') cancel_label=_('Отмена') %}
         </div>
     </div>
 </div>
