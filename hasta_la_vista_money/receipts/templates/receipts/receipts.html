@@ -9,81 +9,41 @@
 {% block title %}{% translate 'Список чеков' %}{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="w-full">
     {% include 'receipts/filter.html' %}
-    {% include 'receipts/modals/add_receipt.html' %}
-    {% include 'receipts/modals/add_seller.html' %}
 </div>
 
-<div class="container">
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card shadow-sm border-0 bg-gradient-primary">
-                <div class="card-body p-4">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <h4 class="mb-3 text-white">
-                                <i class="bi bi-receipt me-2"></i>
-                                {% translate 'Мои чеки' %}
-                            </h4>
-                            <div class="d-flex flex-wrap gap-3">
-                                <div class="stat-item">
-                                    <div class="stat-number text-white">{{ total_receipts.count }}</div>
-                                    <div class="stat-label text-white-50">{% translate 'Количество чеков' %}</div>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="mb-6">
+        <div class="bg-gradient-to-br from-green-600 to-teal-500 rounded-2xl shadow-lg overflow-hidden">
+            <div class="p-6 md:p-8">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                    <div class="flex-1">
+                        <h4 class="text-2xl font-heading font-bold text-white mb-4 flex items-center gap-2">
+                            <i class="bi bi-receipt"></i>
+                            {% translate 'Мои чеки' %}
+                        </h4>
+                        <div class="flex flex-wrap gap-6">
+                            <div class="flex flex-col">
+                                <div class="text-3xl font-mono font-bold text-white mb-1">{{ total_receipts.count }}</div>
+                                <div class="text-sm text-white/80">{% translate 'Количество чеков' %}</div>
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="text-3xl font-mono font-bold text-white mb-1">
+                                    {% if total_sum_receipts.total is not None %}
+                                    {{ total_sum_receipts.total | comma }}
+                                    {% else %}
+                                    0
+                                    {% endif %}
                                 </div>
-                                <div class="stat-item">
-                                    <div class="stat-number text-white">
-                                        {% if total_sum_receipts.total is not None %}
-                                        {{ total_sum_receipts.total | comma }}
-                                        {% else %}
-                                        0
-                                        {% endif %}
-                                    </div>
-                                    <div class="stat-label text-white-50">{% translate 'Общая сумма' %}</div>
-                                </div>
+                                <div class="text-sm text-white/80">{% translate 'Общая сумма' %}</div>
                             </div>
                         </div>
-                        <div class="col-md-6 text-md-end">
-                            <a href="{% url 'users:statistics' %}" class="btn btn-light btn-lg">
-                                <i class="bi bi-graph-up me-2"></i>
-                                {% translate 'Детальная статистика' %}
-                            </a>
-                        </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Action Buttons Section -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card shadow-sm border-0">
-                <div class="card-body p-3">
-                    <div class="d-flex flex-wrap gap-2 justify-content-center">
-                        <a class="btn btn-outline-success btn-sm"
-                           href="{% url 'receipts:products' %}">
-                            <i class="bi bi-star me-1"></i>
-                            {% translate 'Часто покупаемые товары' %}
-                        </a>
-                        <button type="button"
-                                class="btn btn-outline-primary btn-sm"
-                                data-bs-toggle="modal"
-                                data-bs-target="#add-seller">
-                            <i class="bi bi-plus-lg me-1"></i>
-                            {% translate 'Добавить продавца' %}
-                        </button>
-                        <button type="button"
-                                class="btn btn-success btn-sm add-receipt-button"
-                                data-bs-toggle="modal"
-                                data-bs-target="#add-receipt">
-                            <i class="bi bi-plus-lg me-1"></i>
-                            {% translate 'Добавить чек' %}
-                        </button>
-                        <a class="btn btn-outline-info btn-sm"
-                           href="{% url 'receipts:upload' %}">
-                            <i class="bi bi-camera me-1"></i>
-                            {% translate 'Обработать изображение' %}
+                    <div class="flex-shrink-0">
+                        <a href="{% url 'users:statistics' %}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-600 font-semibold rounded-xl hover:bg-gray-50 transition-colors duration-200 shadow-md hover:shadow-lg">
+                            <i class="bi bi-graph-up"></i>
+                            {% translate 'Детальная статистика' %}
                         </a>
                     </div>
                 </div>
@@ -91,13 +51,49 @@
         </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-2 mt-3">
-        <h4 class="fw-bold mb-0">Чеки</h4>
-        <div class="d-flex align-items-center gap-2">
-            <label for="receipt-group-select" class="form-label mb-0">Группа чеков:</label>
+    <div class="mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex flex-wrap gap-3 justify-center">
+                <a class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/30 transition-all duration-200 shadow-sm hover:shadow-md"
+                   href="{% url 'receipts:products' %}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                    </svg>
+                    {% translate 'Часто покупаемые товары' %}
+                </a>
+                <a href="{% url 'receipts:create_seller' %}"
+                   class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200 shadow-sm hover:shadow-md">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    {% translate 'Добавить продавца' %}
+                </a>
+                <a href="{% url 'receipts:create' %}"
+                   class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    {% translate 'Добавить чек' %}
+                </a>
+                <a class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-all duration-200 shadow-sm hover:shadow-md"
+                   href="{% url 'receipts:upload' %}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    {% translate 'Обработать изображение' %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <h4 class="text-xl font-heading font-bold text-gray-900 dark:text-white">Чеки</h4>
+        <div class="flex items-center gap-2">
+            <label for="receipt-group-select" class="text-sm font-medium text-gray-700 dark:text-gray-300">Группа чеков:</label>
             <select id="receipt-group-select"
                     name="group_id"
-                    class="form-select form-select-sm d-inline-block w-auto">
+                    class="inline-block px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500">
                 <option value="my" {% if not request.GET.group_id or request.GET.group_id == 'my' %}selected{% endif %}>Мои</option>
                 {% for group in user_groups %}
                     <option value="{{ group.id }}" {% if request.GET.group_id == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>

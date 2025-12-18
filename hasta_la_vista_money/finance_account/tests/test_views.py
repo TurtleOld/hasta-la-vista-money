@@ -261,7 +261,9 @@ class TestTransferMoneyAccountView(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
             'amount': amount,
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
 
@@ -285,7 +287,9 @@ class TestTransferMoneyAccountView(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
             'amount': amount,
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
 

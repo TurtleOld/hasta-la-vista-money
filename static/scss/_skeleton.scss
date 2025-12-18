@@ -38,21 +38,6 @@
     border-radius: 8px;
 }
 
-.skeleton-table {
-    width: 100%;
-
-    .skeleton-row {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 0.75rem;
-
-        .skeleton-cell {
-            flex: 1;
-            height: 2rem;
-            border-radius: 4px;
-        }
-    }
-}
 
 .skeleton-form {
     .skeleton-input {
@@ -75,55 +60,6 @@
     border-radius: 6px;
 }
 
-#income-skeleton,
-#expense-skeleton {
-    padding: 2rem;
-
-    .skeleton-header {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-
-        .skeleton-cell {
-            flex: 1;
-            height: 2.5rem;
-            background: linear-gradient(90deg, #eafaf1 25%, #d1f5e0 50%, #eafaf1 75%);
-            background-size: 200% 100%;
-            animation: loading 1.5s infinite;
-        }
-    }
-
-    .skeleton-body {
-        .skeleton-row {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
-
-            .skeleton-cell {
-                flex: 1;
-                height: 2rem;
-                background: linear-gradient(90deg, #f8f9fa 25%, #e9ecef 50%, #f8f9fa 75%);
-                background-size: 200% 100%;
-                animation: loading 1.5s infinite;
-            }
-        }
-    }
-}
-
-[data-bs-theme='dark'] {
-    #income-skeleton,
-    #expense-skeleton {
-        .skeleton-header .skeleton-cell {
-            background: linear-gradient(90deg, #2d4a3e 25%, #1e3329 50%, #2d4a3e 75%);
-            background-size: 200% 100%;
-        }
-
-        .skeleton-body .skeleton-row .skeleton-cell {
-            background: linear-gradient(90deg, #2d3238 25%, #3a3f47 50%, #2d3238 75%);
-            background-size: 200% 100%;
-        }
-    }
-}
 
 .skeleton-account-card {
     height: 180px;

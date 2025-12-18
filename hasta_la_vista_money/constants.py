@@ -186,6 +186,12 @@ WEBHOOKS_TELEGRAM: Final = 'This page for Webhooks Telegram!'
 # Параметры дат
 TODAY = timezone.now().date()
 CURRENT_YEAR = timezone.now().year
+HTML5_DATE_INPUT_FORMAT: Final = '%Y-%m-%d'
+HTML5_DATETIME_LOCAL_INPUT_FORMAT: Final = '%Y-%m-%dT%H:%M'
+HTML5_DATETIME_LOCAL_INPUT_FORMATS: Final[tuple[str, ...]] = (
+    '%Y-%m-%dT%H:%M',
+    '%Y-%m-%dT%H:%M:%S',
+)
 
 # Константы для тестов кредитов
 TEST_LOAN_AMOUNT_SMALL: Final = 1000

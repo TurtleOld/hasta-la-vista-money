@@ -10,7 +10,7 @@
         <div class="max-w-7xl mx-auto">
             <div class="mb-6">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                    <h1 class="font-heading text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
                         <div class="p-2 bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 rounded-xl">
                             <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
@@ -44,7 +44,7 @@
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div class="xl:col-span-2 space-y-4">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-2 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                        <div class="font-semibold text-gray-900 dark:text-white">{% translate 'Счета' %}</div>
+                        <div class="font-heading font-semibold text-gray-900 dark:text-white">{% translate 'Счета' %}</div>
                         <div class="flex items-center gap-2.5">
                             <label for="account-group-select" class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Группа счетов:</label>
                             <select id="account-group-select" class="px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
@@ -62,7 +62,7 @@
                 <div class="xl:col-span-1 space-y-4">
                     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
                         <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            <h3 class="font-heading text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                 <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
@@ -82,7 +82,7 @@
                     </div>
                     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
                         <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            <h3 class="font-heading text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                 <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
                                 </svg>
@@ -90,7 +90,7 @@
                             </h3>
                         </div>
                         <div class="p-5">
-                            <p class="text-3xl font-bold text-green-600 dark:text-green-400 mb-3">
+                            <p class="font-mono text-3xl font-bold text-green-600 dark:text-green-400 mb-3">
                                 {{ sum_all_accounts_in_group|comma }} ₽
                             </p>
                             <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">

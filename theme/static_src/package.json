@@ -7,7 +7,7 @@
     "build": "npm run build:clean && npm run build:tailwind",
     "build:clean": "rimraf ../../static/css/styles.min.css",
     "build:tailwind": "cross-env NODE_ENV=production postcss ./src/styles.css -o ../../static/css/styles.min.css --minify",
-    "dev": "cross-env NODE_ENV=development postcss ./src/styles.css -o ../../static/css/styles.min.css --watch"
+    "dev": "cross-env NODE_ENV=development CHOKIDAR_USEPOLLING=1 postcss ./src/styles.css -o ../../static/css/styles.min.css --watch"
   },
   "keywords": [],
   "author": "",

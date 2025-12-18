@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
@@ -220,7 +221,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
             'amount': Decimal('100.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(
@@ -237,7 +240,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account1.pk,
             'amount': Decimal('100.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(
@@ -255,7 +260,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
             'amount': Decimal('1500.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(
@@ -273,7 +280,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
             'amount': Decimal('-100.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(
@@ -291,7 +300,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
             'amount': Decimal('0.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(
@@ -334,7 +345,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': other_account.pk,
             'to_account': self.account2.pk,
             'amount': Decimal('100.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(
@@ -351,7 +364,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
             'amount': Decimal('100.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(
@@ -381,7 +396,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
             'amount': Decimal('100.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(
@@ -401,7 +418,9 @@ class TestTransferMoneyAccountForm(TestCase):
             'from_account': self.account1.pk,
             'to_account': self.account1.pk,
             'amount': self.account1.balance + Decimal('1000.00'),
-            'exchange_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
             'notes': 'Test transfer',
         }
         form = TransferMoneyAccountForm(

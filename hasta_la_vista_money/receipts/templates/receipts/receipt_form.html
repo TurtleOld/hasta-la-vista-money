@@ -3,9 +3,8 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% load csp %}
-{% load comma %}
 
-{% block title %}{% translate 'Редактировать чек' %}{% endblock %}
+{% block title %}{% translate 'Добавить чек' %}{% endblock %}
 
 {% block content %}
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -16,9 +15,9 @@
                     <div class="flex-1">
                         <h4 class="text-2xl font-heading font-bold text-white mb-2 flex items-center gap-2">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                             </svg>
-                            {% translate 'Редактировать чек' %}
+                            {% translate 'Добавить чек' %}
                         </h4>
                     </div>
                     <div class="flex-shrink-0">
@@ -38,6 +37,7 @@
         <div class="p-6 md:p-8">
             <form method="post" class="space-y-6 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
                 {% csrf_token %}
+                {{ form.media }}
 
                 <div class="space-y-6">
                     <div>
@@ -48,7 +48,7 @@
                             {% translate 'Информация о чеке' %}
                         </h5>
                         <div class="space-y-4">
-                            {% for field in receipt_form %}
+                            {% for field in form %}
                             <div class="space-y-1.5">
                                 {{ field | as_crispy_field }}
                                 {% if field.errors %}
@@ -120,7 +120,7 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                         </svg>
-                        {% translate 'Сохранить изменения' %}
+                        {% translate 'Добавить чек' %}
                     </button>
                     <a href="{% url 'receipts:list' %}" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
