@@ -10,13 +10,11 @@
         const i = Math.min(Math.floor(Math.log(numBytes) / Math.log(k)), units.length - 1);
         const value = Math.round((numBytes / (k ** i)) * 100) / 100;
         const unitIndex = Math.max(0, Math.min(i, units.length - 1));
-        let unit = 'Б';
-        if (Number.isInteger(unitIndex) && unitIndex >= 0 && unitIndex < units.length) {
-            const unitValue = units[unitIndex];
-            if (typeof unitValue === 'string') {
-                unit = unitValue;
-            }
-        }
+        const safeIndex = (Number.isSafeInteger(unitIndex) && unitIndex >= 0 && unitIndex < units.length)
+            ? unitIndex
+            : 0;
+        const unitValue = units.at(safeIndex);
+        const unit = typeof unitValue === 'string' ? unitValue : 'Б';
         return String(value) + ' ' + unit;
     }
 
