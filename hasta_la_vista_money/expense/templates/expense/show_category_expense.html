@@ -2,25 +2,34 @@
 {% load i18n %}
 {% load crispy_forms_tags %}
 
+{% block title %}{% translate 'Категории расхода' %}{% endblock %}
+
 {% block content %}
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                    <h5 class="card-title">
-                        {% translate 'Категории расхода' %}
-                    </h5>
-                    <a class="btn btn-success btn-sm"
-                       href="{% url 'expense:create_category' %}">
-                       {% translate 'Добавить категорию' %}
-                    </a>
-                </div>
-                <div class="card-body">
-                    {% include "expense/expense_cat_list.html" %}
-                </div>
-            </div>
-            <a class="btn btn-outline-success mt-1" href="{% url 'expense:list' %}">{% translate 'Вернуться назад' %}</a>
+<div class="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-3xl font-bold tracking-tight text-black dark:text-white">
+                {% translate 'Категории расхода' %}
+            </h1>
+            <a href="{% url 'expense:create_category' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-medium rounded-xl shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                <span>{% translate 'Добавить категорию' %}</span>
+            </a>
+        </div>
+
+        <div class="rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800 dark:shadow-gray-900/50">
+            {% include "expense/expense_cat_list.html" %}
+        </div>
+
+        <div class="mt-4">
+            <a href="{% url 'expense:list' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                <span>{% translate 'Вернуться назад' %}</span>
+            </a>
         </div>
     </div>
 </div>
