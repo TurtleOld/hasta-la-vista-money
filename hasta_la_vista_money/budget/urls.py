@@ -2,7 +2,6 @@ from django.urls import path
 
 from hasta_la_vista_money.budget.apis import (
     ChangePlanningAPIView,
-    GenerateDatesAPIView,
     SavePlanningAPIView,
 )
 from hasta_la_vista_money.budget.views import (
