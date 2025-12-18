@@ -319,10 +319,10 @@ function initExpensePage() {
             return;
         }
 
-        const sources = [
+        const sources = Object.freeze([
             'https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
             'https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
-        ];
+        ]);
         const allowedSources = new Set(sources);
 
         function tryLoad(srcIndex) {
@@ -337,24 +337,28 @@ function initExpensePage() {
                 return;
             }
 
-            if (srcIndex < 0 || srcIndex >= sources.length) {
+            if (!Number.isInteger(srcIndex) || srcIndex < 0 || srcIndex >= sources.length) {
                 tryLoad(srcIndex + 1);
                 return;
             }
-            const sourceArray = sources;
-            if (!Array.isArray(sourceArray)) {
-                tryLoad(srcIndex + 1);
-                return;
-            }
-            const srcValue = sourceArray[srcIndex];
-            if (typeof srcValue !== 'string' || !allowedSources.has(srcValue)) {
+            const srcValue = sources.at(srcIndex);
+            if (typeof srcValue !== 'string') {
                 tryLoad(srcIndex + 1);
                 return;
             }
             const script = document.createElement('script');
             let validatedSrc;
             try {
-                validatedSrc = new URL(srcValue).toString();
+                const candidateUrl = new URL(srcValue);
+                if (candidateUrl.protocol !== 'https:') {
+                    tryLoad(srcIndex + 1);
+                    return;
+                }
+                validatedSrc = candidateUrl.toString();
+                if (!allowedSources.has(validatedSrc)) {
+                    tryLoad(srcIndex + 1);
+                    return;
+                }
             } catch (error) {
                 tryLoad(srcIndex + 1);
                 return;

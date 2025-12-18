@@ -6,12 +6,12 @@
         }
 
         const k = 1024;
-        const units = ['Б', 'КБ', 'МБ', 'ГБ'];
+        const units = Object.freeze(['Б', 'КБ', 'МБ', 'ГБ']);
         const i = Math.min(Math.floor(Math.log(numBytes) / Math.log(k)), units.length - 1);
         const value = Math.round((numBytes / (k ** i)) * 100) / 100;
         const unitIndex = Math.max(0, Math.min(i, units.length - 1));
         let unit = 'Б';
-        if (unitIndex >= 0 && unitIndex < units.length && Array.isArray(units)) {
+        if (Number.isInteger(unitIndex) && unitIndex >= 0 && unitIndex < units.length) {
             const unitValue = units[unitIndex];
             if (typeof unitValue === 'string') {
                 unit = unitValue;
