@@ -8,13 +8,26 @@
 {% block title %}{% translate 'Таблица расходов' %}{% endblock %}
 
 {% block content %}
-<div class="container my-4">
-    <h2 class="mb-4 text-center">{% translate 'Таблица расходов' %}</h2>
-    <div class="d-flex justify-content-start mb-2">
-        <a href="{% url 'budget:list' %}" class="btn btn-outline-secondary">← {% translate 'Назад' %}</a>
+{% csrf_token %}
+<div class="container mx-auto px-4 py-6 max-w-7xl">
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h2 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{% translate 'Таблица расходов' %}</h2>
+                <p class="text-gray-600 dark:text-gray-400 text-sm">{% translate 'Детальный анализ планирования расходов по категориям' %}</p>
+            </div>
+            <a href="{% url 'budget:list' %}" class="inline-flex items-center gap-2 px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 shadow-sm hover:shadow-md">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                {% translate 'Назад' %}
+            </a>
+        </div>
     </div>
-    <div class="mb-5">
-        <div id="expense-budget-table"></div>
+    <div class="mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
+            <div id="expense-budget-table"></div>
+        </div>
     </div>
 </div>
 {% endblock %}

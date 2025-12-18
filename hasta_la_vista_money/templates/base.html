@@ -121,7 +121,6 @@
     <script nonce="{{request.csp_nonce}}">
         (function() {
             if (typeof window.LazyLoader === 'undefined') {
-                console.warn('LazyLoader not available, falling back to immediate loading');
                 return;
             }
 
@@ -129,6 +128,10 @@
             const cspNonce = '{{ request.csp_nonce|escapejs }}';
 
             function loadScript(src) {
+                if (typeof window.LazyLoader === 'undefined') {
+                    console.error('[BASE] LazyLoader is not available!');
+                    return Promise.reject(new Error('LazyLoader not available'));
+                }
                 return window.LazyLoader.loadScript(src, {
                     nonce: cspNonce
                 });
@@ -152,7 +155,7 @@
 
             if (currentPath.indexOf('budget') !== -1) {
                 loadScript('{% static "js/budget.js" %}?v={% word_hash %}').catch(function(error) {
-                    console.error('Error loading budget script:', error);
+                    console.error('[BASE] Error loading budget script:', error);
                 });
             }
 
