@@ -1,5 +1,10 @@
 /* global Tabulator */
-document.addEventListener('DOMContentLoaded', function () {
+window.BUDGET_SCRIPT_EXECUTED = false;
+try {
+    (function () {
+        'use strict';
+        window.BUDGET_SCRIPT_EXECUTED = true;
+        function initBudgetTables() {
     function safeRedirect(url) {
         if (/^\/[a-zA-Z0-9/_\-.]*$/.test(url)) {
             const safeUrl = encodeURI(url);
@@ -76,16 +81,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
         options = options || {};
         options.headers = options.headers || {};
-        options.headers['Authorization'] = 'Bearer ' + getJWT();
+        options.credentials = 'include';
+        options.headers['Accept'] = 'application/json';
         options.headers['X-Requested-With'] = 'XMLHttpRequest';
+        const jwt = getJWT();
+        if (jwt) {
+            options.headers['Authorization'] = 'Bearer ' + jwt;
+        }
+        if (options.method && options.method.toUpperCase() === 'POST') {
+            options.headers['Content-Type'] = 'application/json';
+        }
         return fetch(hardcodedUrl, options).then(resp => { // eslint-disable-line
             if (resp.status === 401 && retry) {
                 return refreshToken().then(newAccess => {
                     options.headers['Authorization'] = 'Bearer ' + newAccess;
                     return fetch(hardcodedUrl, options); // eslint-disable-line
+                }).catch(err => {
+                    console.error('[BUDGET] Token refresh failed:', err);
+                    throw err;
                 });
             }
             return resp;
+        }).catch(err => {
+            console.error('[BUDGET] Fetch error:', err);
+            throw err;
         });
     }
 
@@ -112,9 +131,269 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.appendChild(alert);
         setTimeout(() => { if (alert.parentNode) alert.remove(); }, 4000);
     }
+
+            function fixBudgetTableStyles(tableElement) {
+                if (!tableElement) {
+                    return;
+                }
+
+                function applyHorizontalStyles(element) {
+                    if (!element) return;
+                    element.style.setProperty('writing-mode', 'horizontal-tb', 'important');
+                    element.style.setProperty('text-orientation', 'mixed', 'important');
+                    element.style.setProperty('transform', 'none', 'important');
+                    element.style.setProperty('transform-origin', 'center', 'important');
+                    element.style.setProperty('direction', 'ltr', 'important');
+                }
+
+                const allHeaderElements = tableElement.querySelectorAll(
+                    '.tabulator-header .tabulator-col, ' +
+                    '.tabulator-col-group, ' +
+                    '.tabulator-header .tabulator-col-content, ' +
+                    '.tabulator-header .tabulator-col-title-holder, ' +
+                    '.tabulator-header .tabulator-col-title, ' +
+                    '.tabulator-headers .tabulator-col, ' +
+                    '.tabulator-headers .tabulator-col-group, ' +
+                    '.tabulator-headers .tabulator-col-content, ' +
+                    '.tabulator-headers .tabulator-col-title-holder, ' +
+                    '.tabulator-headers .tabulator-col-title'
+                );
+
+                allHeaderElements.forEach(function (element) {
+                    applyHorizontalStyles(element);
+                    if (element.classList.contains('tabulator-col') || element.classList.contains('tabulator-col-group')) {
+                        element.style.setProperty('display', 'table-cell', 'important');
+                        element.style.setProperty('vertical-align', 'middle', 'important');
+                    }
+                    element.style.setProperty('white-space', 'normal', 'important');
+                });
+
+                const headerCols = tableElement.querySelectorAll('.tabulator-header .tabulator-col, .tabulator-col-group');
+                headerCols.forEach(function (col) {
+                    applyHorizontalStyles(col);
+                    col.style.setProperty('max-width', '100%', 'important');
+                    col.style.setProperty('box-sizing', 'border-box', 'important');
+                    col.style.setProperty('overflow', 'visible', 'important');
+                    col.style.setProperty('display', 'table-cell', 'important');
+                    col.style.setProperty('vertical-align', 'middle', 'important');
+                    col.style.setProperty('text-align', 'center', 'important');
+
+                    const colContent = col.querySelector('.tabulator-col-content');
+                    if (colContent) {
+                        applyHorizontalStyles(colContent);
+                        colContent.style.setProperty('display', 'flex', 'important');
+                        colContent.style.setProperty('flex-direction', 'row', 'important');
+                        colContent.style.setProperty('flex-wrap', 'nowrap', 'important');
+                        colContent.style.setProperty('align-items', 'center', 'important');
+                        colContent.style.setProperty('justify-content', 'center', 'important');
+                        colContent.style.setProperty('gap', '0.5rem', 'important');
+                        colContent.style.setProperty('overflow', 'visible', 'important');
+                        colContent.style.setProperty('width', '100%', 'important');
+                    }
+
+                    const titleHolder = col.querySelector('.tabulator-col-title-holder');
+                    if (titleHolder) {
+                        applyHorizontalStyles(titleHolder);
+                        titleHolder.style.setProperty('display', 'flex', 'important');
+                        titleHolder.style.setProperty('flex-direction', 'row', 'important');
+                        titleHolder.style.setProperty('flex-wrap', 'nowrap', 'important');
+                        titleHolder.style.setProperty('align-items', 'center', 'important');
+                        titleHolder.style.setProperty('justify-content', 'center', 'important');
+                        titleHolder.style.setProperty('gap', '0.5rem', 'important');
+                    }
+
+                    const titles = col.querySelectorAll('.tabulator-col-title');
+                    titles.forEach(function (title) {
+                        applyHorizontalStyles(title);
+                        title.style.setProperty('display', 'inline-block', 'important');
+                        title.style.setProperty('white-space', 'nowrap', 'important');
+                        title.style.setProperty('text-align', 'center', 'important');
+                        title.style.setProperty('line-height', 'normal', 'important');
+                    });
+
+                    const filterInputs = col.querySelectorAll('.tabulator-header-filter input, .tabulator-header-filter select');
+                    filterInputs.forEach(function (input) {
+                        input.style.setProperty('width', 'auto', 'important');
+                        input.style.setProperty('max-width', '100%', 'important');
+                        input.style.setProperty('box-sizing', 'border-box', 'important');
+                        input.style.setProperty('flex', '1 1 auto', 'important');
+                        input.style.setProperty('margin', '0', 'important');
+                    });
+
+                    const filterContainer = col.querySelector('.tabulator-header-filter');
+                    if (filterContainer) {
+                        filterContainer.style.setProperty('width', 'auto', 'important');
+                        filterContainer.style.setProperty('max-width', '100%', 'important');
+                        filterContainer.style.setProperty('box-sizing', 'border-box', 'important');
+                        filterContainer.style.setProperty('overflow', 'visible', 'important');
+                        filterContainer.style.setProperty('flex', '1 1 auto', 'important');
+                        filterContainer.style.setProperty('margin-top', '0', 'important');
+                    }
+                });
+
+                const categoryCol = tableElement.querySelector('.budget-category-col, .tabulator-col[tabulator-field="category"]');
+                if (categoryCol) {
+                    applyHorizontalStyles(categoryCol);
+                    categoryCol.style.setProperty('text-align', 'left', 'important');
+                    const categoryContent = categoryCol.querySelector('.tabulator-col-content');
+                    if (categoryContent) {
+                        categoryContent.style.setProperty('justify-content', 'flex-start', 'important');
+                    }
+                }
+
+                const colGroups = tableElement.querySelectorAll('.tabulator-col-group');
+                colGroups.forEach(function (group) {
+                    applyHorizontalStyles(group);
+                    group.style.setProperty('display', 'table-cell', 'important');
+                    group.style.setProperty('vertical-align', 'middle', 'important');
+                    group.style.setProperty('text-align', 'center', 'important');
+                    group.style.setProperty('white-space', 'normal', 'important');
+
+                    const allGroupElements = group.querySelectorAll('*');
+                    allGroupElements.forEach(function (elem) {
+                        applyHorizontalStyles(elem);
+                    });
+
+                    const groupContent = group.querySelector('.tabulator-col-content');
+                    if (groupContent) {
+                        applyHorizontalStyles(groupContent);
+                        groupContent.style.setProperty('display', 'flex', 'important');
+                        groupContent.style.setProperty('flex-direction', 'row', 'important');
+                        groupContent.style.setProperty('align-items', 'center', 'important');
+                        groupContent.style.setProperty('justify-content', 'center', 'important');
+                        groupContent.style.setProperty('width', '100%', 'important');
+                    }
+
+                    const groupTitleHolder = group.querySelector('.tabulator-col-title-holder');
+                    if (groupTitleHolder) {
+                        applyHorizontalStyles(groupTitleHolder);
+                        groupTitleHolder.style.setProperty('display', 'flex', 'important');
+                        groupTitleHolder.style.setProperty('flex-direction', 'row', 'important');
+                        groupTitleHolder.style.setProperty('align-items', 'center', 'important');
+                        groupTitleHolder.style.setProperty('justify-content', 'center', 'important');
+                    }
+
+                    const groupTitles = group.querySelectorAll('.tabulator-col-title');
+                    groupTitles.forEach(function (groupTitle) {
+                        applyHorizontalStyles(groupTitle);
+                        groupTitle.style.setProperty('white-space', 'nowrap', 'important');
+                        groupTitle.style.setProperty('text-align', 'center', 'important');
+                        groupTitle.style.setProperty('display', 'inline-block', 'important');
+                        groupTitle.style.setProperty('line-height', 'normal', 'important');
+                    });
+                });
+
+                const headerRows = tableElement.querySelectorAll('.tabulator-headers');
+                headerRows.forEach(function (row) {
+                    row.style.setProperty('height', 'auto', 'important');
+                    row.style.setProperty('display', 'table-row', 'important');
+                    applyHorizontalStyles(row);
+
+                    const rowElements = row.querySelectorAll('*');
+                    rowElements.forEach(function (elem) {
+                        applyHorizontalStyles(elem);
+                    });
+                });
+
+                const header = tableElement.querySelector('.tabulator-header');
+                if (header) {
+                    header.style.setProperty('display', 'table-header-group', 'important');
+                    applyHorizontalStyles(header);
+
+                    const headerElements = header.querySelectorAll('*');
+                    headerElements.forEach(function (elem) {
+                        if (elem.classList && (
+                            elem.classList.contains('tabulator-col') ||
+                            elem.classList.contains('tabulator-col-group') ||
+                            elem.classList.contains('tabulator-col-content') ||
+                            elem.classList.contains('tabulator-col-title-holder') ||
+                            elem.classList.contains('tabulator-col-title')
+                        )) {
+                            applyHorizontalStyles(elem);
+                        }
+                    });
+                }
+
+                const cells = tableElement.querySelectorAll('.tabulator-cell');
+                cells.forEach(function (cell) {
+                    applyHorizontalStyles(cell);
+                    cell.style.setProperty('max-width', '100%', 'important');
+                    cell.style.setProperty('box-sizing', 'border-box', 'important');
+                    cell.style.setProperty('overflow', 'hidden', 'important');
+                    cell.style.setProperty('display', 'table-cell', 'important');
+                    cell.style.setProperty('vertical-align', 'middle', 'important');
+                });
+
+                const rows = tableElement.querySelectorAll('.tabulator-table .tabulator-row');
+                rows.forEach(function (row) {
+                    row.style.setProperty('display', 'table-row', 'important');
+                });
+
+                const table = tableElement.querySelector('.tabulator-table');
+                if (table) {
+                    table.style.setProperty('display', 'table', 'important');
+                    table.style.setProperty('width', '100%', 'important');
+                    table.style.setProperty('table-layout', 'auto', 'important');
+                }
+            }
+
+            function setupBudgetTableStyleObserver(tableElement) {
+                if (!tableElement) {
+                    return null;
+                }
+
+                const observer = new MutationObserver(function (mutations) {
+                    let shouldFix = false;
+                    mutations.forEach(function (mutation) {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                            const target = mutation.target;
+                            if (target && target.classList && (
+                                target.classList.contains('tabulator-col') ||
+                                target.classList.contains('tabulator-col-group') ||
+                                target.classList.contains('tabulator-headers') ||
+                                target.classList.contains('tabulator-header-filter') ||
+                                target.closest('.tabulator-header')
+                            )) {
+                                shouldFix = true;
+                            }
+                        }
+                        if (mutation.type === 'childList') {
+                            const addedNodes = Array.from(mutation.addedNodes);
+                            if (addedNodes.some(function (node) {
+                                return node.nodeType === 1 && (
+                                    node.classList && (
+                                        node.classList.contains('tabulator-col') ||
+                                        node.classList.contains('tabulator-col-group') ||
+                                        node.classList.contains('tabulator-headers')
+                                    ) || node.closest('.tabulator-header')
+                                );
+                            })) {
+                                shouldFix = true;
+                            }
+                        }
+                    });
+
+                    if (shouldFix) {
+                        setTimeout(function () {
+                            fixBudgetTableStyles(tableElement);
+                        }, 10);
+                    }
+                });
+
+                observer.observe(tableElement, {
+                    attributes: true,
+                    attributeFilter: ['style', 'class'],
+                    subtree: true,
+                    childList: true
+                });
+
+                return observer;
+            }
     TABLES.forEach(({ id, type, api }) => {
         const container = document.getElementById(id);
-        if (!container) return;
+        if (!container) {
+            return;
+        }
         const loader = document.createElement('div');
         loader.className = 'skeleton-loader';
         loader.style.height = '300px';
@@ -125,27 +404,71 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         (api === '/api/budget/expenses/' ? safeFetchExpenses() : safeFetchIncomes())
-            .then(resp => {
-                if (!resp.ok) throw new Error('API error');
+            .then(async resp => {
+                const contentType = resp.headers.get('Content-Type') || '';
+
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    console.error('[BUDGET] API error response:', text.substring(0, 500));
+                    throw new Error(`API error: ${resp.status} - ${text.substring(0, 200)}`);
+                }
+
+                if (!contentType.includes('application/json')) {
+                    const text = await resp.text();
+                    console.error('[BUDGET] API returned non-JSON. Content-Type:', contentType);
+                    console.error('[BUDGET] Response preview:', text.substring(0, 500));
+                    throw new Error(`API returned ${contentType} instead of JSON. Status: ${resp.status}. Response starts with: ${text.substring(0, 100)}`);
+                }
+
                 return resp.json();
             })
             .then(data => {
-                loader.remove();
+                if (!data || typeof data !== 'object') {
+                    if (loader && loader.parentNode) {
+                        loader.remove();
+                    }
+                    console.error('[BUDGET] Invalid data format:', data);
+                    showNotification('Ошибка загрузки данных: неверный формат', 'error');
+                    return;
+                }
                 if (!Array.isArray(data.data) || !Array.isArray(data.months)) {
-                    showNotification('Ошибка загрузки данных', 'error');
+                    console.error('[BUDGET] Missing data or months arrays:', {
+                        hasData: Array.isArray(data.data),
+                        hasMonths: Array.isArray(data.months),
+                        dataKeys: Object.keys(data),
+                        data: data
+                    });
+                    showNotification('Ошибка загрузки данных: отсутствуют данные или месяцы', 'error');
                     return;
                 }
                 const months = data.months;
                 const rows = data.data;
+                if (rows.length === 0) {
+                    if (loader && loader.parentNode) {
+                        loader.remove();
+                    }
+                    showNotification('Нет данных для отображения. Добавьте категории расходов/доходов и месяцы.', 'info');
+                    return;
+                }
+                if (months.length === 0) {
+                    if (loader && loader.parentNode) {
+                        loader.remove();
+                    }
+                    showNotification('Нет месяцев для отображения. Нажмите "Добавить ещё месяцы" на странице бюджета.', 'info');
+                    return;
+                }
                 const columns = [
                     {
                         title: 'Категория',
                         field: 'category',
                         headerFilter: 'input',
-                        frozen: true,
-                        cssClass: 'fw-bold text-start',
+                        cssClass: 'fw-bold text-start budget-category-col',
                         width: 200,
-                        headerSort: true
+                        minWidth: 150,
+                        headerSort: true,
+                        hozAlign: 'left',
+                        formatter: 'plaintext',
+                        headerHozAlign: 'left'
                     },
                     ...months.map(m => ({
                         title: new Date(m).toLocaleString('ru-RU', { month: 'short', year: 'numeric' }),
@@ -158,7 +481,6 @@ document.addEventListener('DOMContentLoaded', function () {
                             {
                                 title: 'План', field: `plan_${m}`, hozAlign: 'right', cssClass: 'plan-cell',
                                 editor: function (cell, onRendered, success, cancel, editorParams) {
-                                    console.log('[EDITOR] cell edit start', cell.getField(), cell.getValue());
                                     var input = document.createElement("input");
                                     input.type = "number";
                                     input.value = cell.getValue();
@@ -185,7 +507,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                         })
                                             .then(resp => resp.json())
                                             .then(data => {
-                                                console.log('[EDITOR] save response:', data);
                                                 if (data.success) {
                                                     showNotification('План успешно сохранён', 'success');
                                                     const fact = row[`fact_${month}`];
@@ -255,16 +576,36 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                     return obj;
                 });
-                new Tabulator(container, {
-                    data: tabData,
-                    columns: columns,
-                    layout: 'fitDataTable',
-                    responsiveLayout: false,
-                    placeholder: 'Нет данных для отображения',
-                    movableColumns: true,
-                    resizableRows: false,
-                    height: 'auto',
-                    locale: 'ru-ru',
+                if (!container || !container.parentNode || !document.body.contains(container)) {
+                    showNotification('Ошибка: контейнер таблицы недоступен', 'error');
+                    return;
+                }
+                if (!Array.isArray(tabData)) {
+                    if (loader && loader.parentNode) {
+                        loader.remove();
+                    }
+                    showNotification('Ошибка: неверный формат данных', 'error');
+                    return;
+                }
+                let tabulatorInstance;
+                try {
+                    if (!container || !container.parentNode || !document.body.contains(container)) {
+                        if (loader && loader.parentNode) {
+                            loader.remove();
+                        }
+                        showNotification('Ошибка: контейнер таблицы недоступен', 'error');
+                        return;
+                    }
+                    tabulatorInstance = new Tabulator(container, {
+                        data: tabData,
+                        columns: columns,
+                        layout: 'fitColumns',
+                        responsiveLayout: false,
+                        placeholder: 'Нет данных для отображения',
+                        movableColumns: false,
+                        resizableRows: false,
+                        resizableColumns: true,
+                        locale: 'ru-ru',
                     langs: {
                         'ru-ru': {
                             columns: { category: 'Категория' },
@@ -282,16 +623,36 @@ document.addEventListener('DOMContentLoaded', function () {
                         columnCalcs: true
                     },
                     autoColumns: false,
-                    tooltips: true,
+                        tooltips: false,
+                        renderStart: function () {
+                            if (loader && loader.parentNode) {
+                                loader.remove();
+                            }
+                        },
+                        tableBuilt: function () {
+                            if (loader && loader.parentNode) {
+                                loader.remove();
+                            }
+                            setTimeout(function () {
+                                fixBudgetTableStyles(container);
+                            }, 10);
+                            setTimeout(function () {
+                                fixBudgetTableStyles(container);
+                            }, 50);
+                            setTimeout(function () {
+                                fixBudgetTableStyles(container);
+                            }, 200);
+                            setTimeout(function () {
+                                fixBudgetTableStyles(container);
+                            }, 500);
+                        },
                     cellEdited: function (cell) {
                         const field = cell.getField();
-                        console.log('[cellEdited] field:', field);
                         if (!field.startsWith('plan_')) return;
                         const value = cell.getValue();
                         const row = cell.getRow().getData();
                         const category_id = row.category_id;
                         const month = field.replace('plan_', '');
-                        console.log('[cellEdited] value:', value, 'category_id:', category_id, 'month:', month, 'type:', type);
                         safeFetchSavePlanning({
                             method: 'POST',
                             headers: {
@@ -303,12 +664,11 @@ document.addEventListener('DOMContentLoaded', function () {
                                 category_id,
                                 month,
                                 amount: value,
-                                type: type // 'expense' или 'income'
+                                type: type
                             })
                         })
                             .then(resp => resp.json())
                             .then(data => {
-                                console.log('[cellEdited] response:', data);
                                 if (data.success) {
                                     showNotification('План успешно сохранён', 'success');
                                 } else {
@@ -317,22 +677,96 @@ document.addEventListener('DOMContentLoaded', function () {
                                 }
                             })
                             .catch((err) => {
-                                console.log('[cellEdited] fetch error:', err);
                                 showNotification('Ошибка соединения с сервером', 'error');
                                 cell.setValue(cell.getOldValue(), true);
                             });
                     }
                 });
+                    tabulatorInstance.on('dataChanged', function () {
+                        setTimeout(function () {
+                            fixBudgetTableStyles(container);
+                        }, 10);
+                        setTimeout(function () {
+                            fixBudgetTableStyles(container);
+                        }, 50);
+                        setTimeout(function () {
+                            fixBudgetTableStyles(container);
+                        }, 200);
+                    });
+                    tabulatorInstance.on('columnResized', function () {
+                        setTimeout(function () {
+                            fixBudgetTableStyles(container);
+                        }, 10);
+                        setTimeout(function () {
+                            fixBudgetTableStyles(container);
+                        }, 50);
+                    });
+                    tabulatorInstance.on('tableBuilt', function () {
+                        setTimeout(function () {
+                            fixBudgetTableStyles(container);
+                        }, 10);
+                        setTimeout(function () {
+                            fixBudgetTableStyles(container);
+                        }, 50);
+                        setTimeout(function () {
+                            fixBudgetTableStyles(container);
+                        }, 200);
+                    });
+
+                    setupBudgetTableStyleObserver(container);
+                } catch (tabError) {
+                    console.error('[BUDGET] Error creating Tabulator:', tabError);
+                    console.error('[BUDGET] Error stack:', tabError.stack);
+                    showNotification('Ошибка создания таблицы: ' + tabError.message, 'error');
+                }
             })
             .catch(err => {
+                console.error('[BUDGET] Error loading table data:', err);
+                console.error('[BUDGET] Error stack:', err.stack);
                 loader.remove();
-                showNotification('Ошибка загрузки данных', 'error');
+                const errorMessage = err.message || 'Ошибка загрузки данных';
+                showNotification(errorMessage, 'error');
                 if (err.message === 'Refresh failed' || err.message === 'No refresh token') {
                     safeRedirect('/login/');
                 }
             });
     });
-    document.addEventListener('tabulator-cellEdited', function(e){
-        console.log('[GLOBAL] tabulator-cellEdited', e);
-    });
-});
+        }
+
+        function waitForTabulator(callback, maxAttempts = 50, attempt = 0) {
+            const hasTabulator = typeof Tabulator !== 'undefined';
+            if (hasTabulator) {
+                callback();
+            } else if (attempt < maxAttempts) {
+                setTimeout(() => waitForTabulator(callback, maxAttempts, attempt + 1), 100);
+            } else {
+                console.error('[BUDGET] Tabulator not found after', maxAttempts, 'attempts');
+            }
+        }
+
+        function startInit() {
+            const readyState = document.readyState;
+            const initCallback = () => {
+                if (typeof requestIdleCallback !== 'undefined') {
+                    requestIdleCallback(() => {
+                        waitForTabulator(initBudgetTables);
+                    }, { timeout: 2000 });
+                } else {
+                    setTimeout(() => {
+                        waitForTabulator(initBudgetTables);
+                    }, 0);
+                }
+            };
+            if (readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initCallback);
+            } else {
+                initCallback();
+            }
+        }
+
+        startInit();
+    })();
+} catch (error) {
+    console.error('[BUDGET] Fatal error in script:', error);
+    console.error('[BUDGET] Error stack:', error.stack);
+}

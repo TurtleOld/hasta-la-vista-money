@@ -305,6 +305,28 @@
 
   .tabulator-col-group {
     @apply border-l-2 border-gray-400 dark:border-gray-600;
+    writing-mode: horizontal-tb !important;
+      text-orientation: mixed !important;
+      transform: none !important;
+      direction: ltr !important;
+    }
+    
+    .tabulator-col-group .tabulator-col-title {
+      writing-mode: horizontal-tb !important;
+      text-orientation: mixed !important;
+      transform: none !important;
+      white-space: nowrap !important;
+      display: inline-block !important;
+    }
+    
+    .tabulator-col-group .tabulator-col-content {
+      writing-mode: horizontal-tb !important;
+      text-orientation: mixed !important;
+      transform: none !important;
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: center !important;
   }
 
   .tabulator-col-group-cols .tabulator-col:last-child {
