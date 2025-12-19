@@ -32,8 +32,8 @@ window.BUDGET_SCRIPT_EXECUTED = false;
     function getCookie(name) {
         const cookieName = String(name);
         const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
+        for (const cookieItem of cookies) {
+            const cookie = cookieItem.trim();
             if (cookie.startsWith(cookieName + '=')) {
                 return decodeURIComponent(cookie.substring(cookieName.length + 1));
             }
@@ -99,7 +99,6 @@ window.BUDGET_SCRIPT_EXECUTED = false;
             return Promise.reject(new Error('URL не разрешён'));
         }
 
-        const safeUrl = url;
         const opts = options ? { ...options } : {};
         opts.headers = opts.headers ? { ...opts.headers } : {};
         opts.credentials = 'include';
@@ -111,13 +110,20 @@ window.BUDGET_SCRIPT_EXECUTED = false;
             opts.headers['Authorization'] = 'Bearer ' + jwt;
         }
 
-        return fetch(safeUrl, opts).then(resp => {
+        const performFetch = (targetUrl) => {
+            if (!isSafeUrl(targetUrl) || !isWhitelistedUrl(targetUrl)) {
+                return Promise.reject(new Error('URL не разрешён'));
+            }
+            return fetch(targetUrl, opts);
+        };
+
+        return performFetch(url).then(resp => {
             if (resp.status === 401 && shouldRetry) {
                 return refreshToken().then(newAccess => {
                     if (newAccess) {
                         opts.headers['Authorization'] = 'Bearer ' + newAccess;
                     }
-                    return fetch(safeUrl, opts);
+                    return performFetch(url);
                 });
             }
             return resp;
