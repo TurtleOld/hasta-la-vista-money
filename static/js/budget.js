@@ -99,6 +99,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
             return Promise.reject(new Error('URL не разрешён'));
         }
 
+        const validatedUrl = url;
         const opts = options ? { ...options } : {};
         opts.headers = opts.headers ? { ...opts.headers } : {};
         opts.credentials = 'include';
@@ -110,20 +111,20 @@ window.BUDGET_SCRIPT_EXECUTED = false;
             opts.headers['Authorization'] = 'Bearer ' + jwt;
         }
 
-        const performFetch = (targetUrl) => {
-            if (!isSafeUrl(targetUrl) || !isWhitelistedUrl(targetUrl)) {
+        const makeRequest = () => {
+            if (!isSafeUrl(validatedUrl) || !isWhitelistedUrl(validatedUrl)) {
                 return Promise.reject(new Error('URL не разрешён'));
             }
-            return fetch(targetUrl, opts);
+            return fetch(validatedUrl, opts);
         };
 
-        return performFetch(url).then(resp => {
+        return makeRequest().then(resp => {
             if (resp.status === 401 && shouldRetry) {
                 return refreshToken().then(newAccess => {
                     if (newAccess) {
                         opts.headers['Authorization'] = 'Bearer ' + newAccess;
                     }
-                    return performFetch(url);
+                    return makeRequest();
                 });
             }
             return resp;
