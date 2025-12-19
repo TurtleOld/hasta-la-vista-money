@@ -49,8 +49,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
     function showToast(message, type) {
         const alertClass = type === 'success' ? 'alert-success' : (type === 'error' ? 'alert-danger' : 'alert-info');
         const alert = document.createElement('div');
-        alert.className = 'alert ' + alertClass + ' alert-dismissible fade show position-fixed';
-        alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alert.className = 'alert ' + alertClass + ' alert-dismissible fade show position-fixed budget-toast';
 
         const span = document.createElement('span');
         span.textContent = message;
@@ -170,14 +169,14 @@ window.BUDGET_SCRIPT_EXECUTED = false;
 
     function buildToolbar(container, months, onChange) {
         const wrapper = document.createElement('div');
-        wrapper.className = 'flex flex-wrap items-center justify-between gap-3 mb-4';
+        wrapper.className = 'budget-toolbar-wrapper';
 
         const left = document.createElement('div');
-        left.className = 'text-sm text-gray-600 dark:text-gray-300';
+        left.className = 'budget-toolbar-left';
         left.textContent = 'Период:';
 
         const select = document.createElement('select');
-        select.className = 'ml-2 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100';
+        select.className = 'budget-toolbar-select';
 
         const total = months.length;
         const options = [total, 6, 12, 24];
@@ -194,7 +193,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
         select.value = String(total);
 
         const right = document.createElement('div');
-        right.className = 'text-xs text-gray-500 dark:text-gray-400';
+        right.className = 'budget-toolbar-right';
 
         function updateRight(val) {
             right.textContent = 'Показано месяцев: ' + val + ' из ' + total;
@@ -220,11 +219,10 @@ window.BUDGET_SCRIPT_EXECUTED = false;
     function ensureScrollableTableContainer(host) {
         host.innerHTML = '';
         const scroll = document.createElement('div');
-        scroll.className = 'w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700';
-        scroll.style.maxHeight = 'calc(100vh - 320px)';
+        scroll.className = 'budget-table-scroll-container';
 
         const inner = document.createElement('div');
-        inner.className = 'min-w-max';
+        inner.className = 'budget-table-inner';
         scroll.appendChild(inner);
         host.appendChild(scroll);
         return inner;
@@ -232,7 +230,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
 
     function buildTable(inner, type, months, rows) {
         const table = document.createElement('table');
-        table.className = 'w-full text-sm text-gray-900 dark:text-gray-100 border-separate border-spacing-0';
+        table.className = 'budget-table';
 
         const thead = document.createElement('thead');
         const tr1 = document.createElement('tr');
@@ -241,27 +239,24 @@ window.BUDGET_SCRIPT_EXECUTED = false;
         const thCat = document.createElement('th');
         thCat.rowSpan = 2;
         thCat.textContent = 'Категория';
-        thCat.className = 'sticky left-0 z-20 bg-white dark:bg-gray-800 px-3 py-2 text-left font-semibold border-b border-r border-gray-200 dark:border-gray-700';
-        thCat.style.minWidth = '220px';
+        thCat.className = 'budget-table-header-category';
         tr1.appendChild(thCat);
 
         months.forEach(m => {
             const th = document.createElement('th');
             th.colSpan = 2;
             th.textContent = monthLabel(m);
-            th.className = 'px-3 py-2 text-center font-semibold bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700';
+            th.className = 'budget-table-header-month';
             tr1.appendChild(th);
 
             const thFact = document.createElement('th');
             thFact.textContent = 'Факт';
-            thFact.className = 'px-3 py-2 text-left font-medium bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700';
-            thFact.style.minWidth = '110px';
+            thFact.className = 'budget-table-header-fact';
             tr2.appendChild(thFact);
 
             const thPlan = document.createElement('th');
             thPlan.textContent = 'План';
-            thPlan.className = 'px-3 py-2 text-left font-medium bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700';
-            thPlan.style.minWidth = '110px';
+            thPlan.className = 'budget-table-header-plan';
             tr2.appendChild(thPlan);
         });
 
@@ -281,7 +276,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
 
             const tdCat = document.createElement('td');
             tdCat.textContent = row.category;
-            tdCat.className = 'sticky left-0 z-10 bg-white dark:bg-gray-800 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 font-medium';
+            tdCat.className = 'budget-table-cell-category';
             tr.appendChild(tdCat);
 
             months.forEach(m => {
@@ -294,17 +289,17 @@ window.BUDGET_SCRIPT_EXECUTED = false;
 
                 const tdFact = document.createElement('td');
                 tdFact.textContent = formatNumber(fact);
-                tdFact.className = 'px-3 py-2 border-b border-gray-200 dark:border-gray-700 text-right text-gray-700 dark:text-gray-200';
+                tdFact.className = 'budget-table-cell-fact';
                 tr.appendChild(tdFact);
 
                 const tdPlan = document.createElement('td');
-                tdPlan.className = 'px-3 py-2 border-b border-gray-200 dark:border-gray-700';
+                tdPlan.className = 'budget-table-cell-plan';
 
                 const input = document.createElement('input');
                 input.type = 'number';
                 input.inputMode = 'decimal';
                 input.value = plan ? String(plan) : '';
-                input.className = 'w-24 px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-right';
+                input.className = 'budget-table-input';
 
                 input.addEventListener('change', () => {
                     const raw = input.value;
@@ -362,7 +357,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
 
         const tdTotalLabel = document.createElement('td');
         tdTotalLabel.textContent = 'Итого';
-        tdTotalLabel.className = 'sticky left-0 z-20 bg-white dark:bg-gray-800 px-3 py-2 border-t border-r border-gray-200 dark:border-gray-700 font-semibold';
+        tdTotalLabel.className = 'budget-table-total-label';
         trTotal.appendChild(tdTotalLabel);
 
         months.forEach(m => {
@@ -370,12 +365,12 @@ window.BUDGET_SCRIPT_EXECUTED = false;
 
             const tdTFact = document.createElement('td');
             tdTFact.textContent = formatNumber(t.fact);
-            tdTFact.className = 'px-3 py-2 border-t border-gray-200 dark:border-gray-700 text-right font-semibold';
+            tdTFact.className = 'budget-table-total-cell';
             trTotal.appendChild(tdTFact);
 
             const tdTPlan = document.createElement('td');
             tdTPlan.textContent = formatNumber(t.plan);
-            tdTPlan.className = 'px-3 py-2 border-t border-gray-200 dark:border-gray-700 text-right font-semibold';
+            tdTPlan.className = 'budget-table-total-cell';
             tdTPlan.setAttribute('data-total-plan', m);
             trTotal.appendChild(tdTPlan);
         });
@@ -418,12 +413,12 @@ window.BUDGET_SCRIPT_EXECUTED = false;
 
     function initMatrixTable(container, type, apiUrl) {
         if (!isSafeUrl(apiUrl) || !isWhitelistedUrl(apiUrl)) {
-            container.innerHTML = '<div class="text-sm text-red-600 dark:text-red-400">Неверный URL API</div>';
+            container.innerHTML = '<div class="budget-message-error">Неверный URL API</div>';
             return;
         }
 
         const loader = document.createElement('div');
-        loader.className = 'text-sm text-gray-600 dark:text-gray-300';
+        loader.className = 'budget-message';
         loader.textContent = 'Загрузка...';
         container.appendChild(loader);
 
@@ -434,7 +429,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
             const parsed = parseApiData(data);
             if (!parsed.months.length || !parsed.rows.length) {
                 const empty = document.createElement('div');
-                empty.className = 'text-sm text-gray-600 dark:text-gray-300';
+                empty.className = 'budget-message';
                 empty.textContent = 'Нет данных для отображения';
                 container.appendChild(empty);
                 return;
@@ -455,7 +450,7 @@ window.BUDGET_SCRIPT_EXECUTED = false;
         }).catch(() => {
             container.innerHTML = '';
             const err = document.createElement('div');
-            err.className = 'text-sm text-red-600 dark:text-red-400';
+            err.className = 'budget-message-error';
             err.textContent = 'Ошибка загрузки данных бюджета';
             container.appendChild(err);
         });
