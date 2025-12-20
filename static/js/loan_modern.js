@@ -170,7 +170,10 @@
                                               );
                                           };
 
-                                Object.keys(data.errors).forEach(function(field) {
+                                Object.entries(data.errors).forEach(function(entry) {
+                                    const field = entry[0];
+                                    const errors = entry[1];
+
                                     if (!allowedFieldNames.has(field)) {
                                         return;
                                     }
@@ -183,7 +186,13 @@
                                     if (fieldElement) {
                                         const errorDiv = document.createElement('p');
                                         errorDiv.className = 'mt-1 text-sm text-red-600 dark:text-red-400';
-                                        errorDiv.appendChild(document.createTextNode(String(data.errors[field][0])));
+                                        if (Array.isArray(errors) && errors.length > 0) {
+                                            errorDiv.appendChild(
+                                                document.createTextNode(
+                                                    String(errors[0]),
+                                                ),
+                                            );
+                                        }
                                         fieldElement.parentElement.appendChild(errorDiv);
                                     }
                                 });
