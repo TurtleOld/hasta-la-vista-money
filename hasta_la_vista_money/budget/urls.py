@@ -7,9 +7,7 @@ from hasta_la_vista_money.budget.apis import (
 )
 from hasta_la_vista_money.budget.views import (
     BudgetView,
-    ExpenseBudgetAPIView,
     ExpenseTableView,
-    IncomeBudgetAPIView,
     IncomeTableView,
 )
 
@@ -32,15 +30,5 @@ urlpatterns = [
         'save-planning/',
         SavePlanningAPIView.as_view(),
         name='save_planning',
-    ),
-    path(
-        'expenses/',
-        ExpenseBudgetAPIView.as_view(),
-        name='api_expense_budget',
-    ),
-    path(
-        'incomes/',
-        IncomeBudgetAPIView.as_view(),
-        name='api_income_budget',
     ),
 ]

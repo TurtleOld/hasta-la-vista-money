@@ -1,11 +1,13 @@
 from datetime import date
+from datetime import datetime as dt
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict, cast, overload
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Sum
-from django.shortcuts import get_object_or_404
-from django.views.generic import ListView
+from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
+from django.views.generic import ListView, View
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
 from hasta_la_vista_money.expense.repositories import ExpenseRepository
 from hasta_la_vista_money.income.models import IncomeCategory
 from hasta_la_vista_money.income.repositories import IncomeRepository
+from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.users.models import User
 
 
@@ -220,6 +223,37 @@ class IncomeTableView(
             ),
         )
         return context
+
+
+class GenerateDateView(LoginRequiredMixin, View):
+    """View for generating date list for both expense and income types."""
+
+    def post(self, request: Any, *args: Any, **kwargs: Any) -> Any:
+        """Generate date list for both expense and income types.
+
+        Args:
+            request: HTTP request.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Redirect to budget list page.
+        """
+        user = cast('User', request.user)
+        queryset_user = get_object_or_404(User, username=user)
+
+        last_date_obj = queryset_user.budget_date_lists.last()
+        if last_date_obj:
+            queryset_last_date = timezone.make_aware(
+                dt.combine(last_date_obj.date, dt.min.time()),
+            )
+        else:
+            queryset_last_date = timezone.now().replace(day=1)
+
+        generate_date_list(queryset_last_date, queryset_user, 'expense')
+        generate_date_list(queryset_last_date, queryset_user, 'income')
+
+        return redirect('budget:list')
 
 
 class PlanningExpenseDict(TypedDict):
