@@ -10,328 +10,395 @@
 {% block title %}{% translate 'Кредиты' %}{% endblock %}
 
 {% block content %}
-<div class="loan-dashboard">
-    <div class="container-fluid">
-        <!-- Header Section -->
-        <div class="loan-header">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h1 class="loan-title">{% translate 'Управление кредитами' %}</h1>
-                    <p class="loan-subtitle">{% translate 'Отслеживайте ваши кредиты, платежи и графики погашения' %}</p>
+<div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-8">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mb-8 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 p-8 text-white shadow-xl">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="flex-1">
+                    <h1 class="text-3xl font-bold mb-2">{% translate 'Управление кредитами' %}</h1>
+                    <p class="text-green-50 opacity-90">{% translate 'Отслеживайте ваши кредиты, платежи и графики погашения' %}</p>
                 </div>
-                <div class="col-md-4 text-end">
-                    <a href="{% url 'loan:create' %}" class="btn btn-loan-action btn-payment">
-                        <i class="bi bi-plus-circle me-2"></i>{% translate 'Добавить кредит' %}
+                <div class="flex-shrink-0">
+                    <a href="{% url 'loan:create' %}" class="inline-flex items-center justify-center rounded-lg bg-white px-6 py-3 text-sm font-semibold text-green-600 shadow-md transition-all hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-green-600">
+                        <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        {% translate 'Добавить кредит' %}
                     </a>
                 </div>
             </div>
         </div>
 
-        <!-- Statistics Section -->
         {% if loan %}
-        <div class="loan-stats">
-            <div class="stat-card">
-                <div class="stat-icon total-loans">
-                    <i class="bi bi-credit-card"></i>
+        <div class="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div class="group rounded-2xl bg-white p-6 shadow-lg transition-all hover:scale-105 hover:shadow-xl dark:bg-gray-800">
+                <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-500 text-white shadow-md">
+                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                    </svg>
                 </div>
-                <div class="stat-number">
+                <div class="text-3xl font-bold text-gray-900 dark:text-gray-100">
                     {% if loan %}
                         {{ loan.count }}
                     {% else %}
                         0
                     {% endif %}
                 </div>
-                <div class="stat-label">{% translate 'Активных кредитов' %}</div>
+                <div class="mt-2 text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{% translate 'Активных кредитов' %}</div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-icon total-amount">
-                    <i class="bi bi-currency-dollar"></i>
+            <div class="group rounded-2xl bg-white p-6 shadow-lg transition-all hover:scale-105 hover:shadow-xl dark:bg-gray-800">
+                <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md">
+                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
                 </div>
-                <div class="stat-number">
+                <div class="text-3xl font-bold text-gray-900 dark:text-gray-100">
                     {{ total_loan_amount|comma }} ₽
                 </div>
-                <div class="stat-label">{% translate 'Общая сумма кредитов' %}</div>
+                <div class="mt-2 text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{% translate 'Общая сумма кредитов' %}</div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-icon total-interest">
-                    <i class="bi bi-percent"></i>
+            <div class="group rounded-2xl bg-white p-6 shadow-lg transition-all hover:scale-105 hover:shadow-xl dark:bg-gray-800">
+                <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-pink-500 text-white shadow-md">
+                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
                 </div>
-                <div class="stat-number">
+                <div class="text-3xl font-bold text-gray-900 dark:text-gray-100">
                     {{ total_overpayment|comma }} ₽
                 </div>
-                <div class="stat-label">{% translate 'Общая переплата' %}</div>
+                <div class="mt-2 text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{% translate 'Общая переплата' %}</div>
             </div>
         </div>
         {% endif %}
 
-        <!-- Help Section -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card loan-form-container">
-                    <details class="loan-type-info">
-                        <summary class="btn btn-outline-info btn-sm mb-2">
-                            <i class="bi bi-info-circle me-2"></i>{% translate 'Подсказка по расчетам' %}
-                        </summary>
-                        <div class="mt-3">
-                            <p><strong>{% translate 'Предупреждение:' %}</strong> {% translate 'Поскольку каждый банк производит расчет коэффициента самостоятельно, как следствие, возникают различия в округлении получившихся цифр коэффициента. Данные, предоставленные банком и на этой странице, могут не совпадать!' %}</p>
-                            <p>{% translate 'Сведения, указанные банком, являются приоритетными, на текущей странице - справочной информацией для лучшего понимания по планированию бюджета!' %}</p>
+        <div class="mb-8 rounded-2xl bg-white p-6 shadow-lg dark:bg-gray-800">
+            <details class="group">
+                <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-cyan-500 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300 dark:hover:bg-cyan-900/30">
+                    <div class="flex items-center gap-2">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {% translate 'Подсказка по расчетам' %}
+                    </div>
+                    <svg class="h-5 w-5 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </summary>
+                <div class="mt-4 space-y-4">
+                    <p class="text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Предупреждение:' %}</strong>
+                        {% translate 'Поскольку каждый банк производит расчет коэффициента самостоятельно, как следствие, возникают различия в округлении получившихся цифр коэффициента. Данные, предоставленные банком и на этой странице, могут не совпадать!' %}
+                    </p>
+                    <p class="text-gray-700 dark:text-gray-300">
+                        {% translate 'Сведения, указанные банком, являются приоритетными, на текущей странице - справочной информацией для лучшего понимания по планированию бюджета!' %}
+                    </p>
 
-                            <h6 class="mt-3">{% translate 'Формулы расчета:' %}</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <strong>{% translate 'Ежемесячная ставка:' %}</strong><br>
-                                    <code>Ежемесячная ставка = Ежегодная ставка / 12 месяцев</code>
-                                </div>
-                                <div class="col-md-6">
-                                    <strong>{% translate 'Коэффициент:' %}</strong><br>
-                                    <code>Коэффициент = Ежемесячная ставка * (1 + Ежемесячная ставка) ^ Срок кредита / ((1 + Ежемесячная ставка) ^ Срок кредита - 1)</code>
-                                </div>
+                    <div class="mt-6">
+                        <h6 class="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">{% translate 'Формулы расчета:' %}</h6>
+                        <div class="grid gap-6 md:grid-cols-2">
+                            <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                                <strong class="block mb-2 text-gray-900 dark:text-gray-100">{% translate 'Ежемесячная ставка:' %}</strong>
+                                <code class="block rounded bg-white px-3 py-2 text-sm dark:bg-gray-800 dark:text-gray-200">Ежемесячная ставка = Ежегодная ставка / 12 месяцев</code>
+                            </div>
+                            <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                                <strong class="block mb-2 text-gray-900 dark:text-gray-100">{% translate 'Коэффициент:' %}</strong>
+                                <code class="block rounded bg-white px-3 py-2 text-sm dark:bg-gray-800 dark:text-gray-200">Коэффициент = Ежемесячная ставка * (1 + Ежемесячная ставка) ^ Срок кредита / ((1 + Ежемесячная ставка) ^ Срок кредита - 1)</code>
                             </div>
                         </div>
-                    </details>
+                    </div>
                 </div>
-            </div>
+            </details>
         </div>
 
-        <!-- Loans List -->
         {% if loan %}
-        <div class="row">
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {% for item_loan in loan %}
-            <div class="col-lg-6 col-xl-4 mb-4">
-                <div class="loan-card">
-                    <div class="loan-card-header">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <div class="loan-number">{% translate 'Кредит №' %} {{ item_loan.pk }}</div>
-                                <div class="loan-status">{{ item_loan.get_type_loan_display }}</div>
+            <div class="group overflow-hidden rounded-2xl bg-white shadow-lg transition-all hover:scale-105 hover:shadow-2xl dark:bg-gray-800">
+                <div class="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-5 text-white">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="mb-2 text-xl font-semibold">{% translate 'Кредит №' %} {{ item_loan.pk }}</div>
+                            <div class="inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-medium backdrop-blur-sm">
+                                {{ item_loan.get_type_loan_display }}
                             </div>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="dropdown">
-                                    <i class="bi bi-three-dots-vertical"></i>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#loan-{{ item_loan.pk }}">
-                                        <i class="bi bi-eye me-2"></i>{% translate 'Просмотр' %}
-                                    </a></li>
-                                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#payment-{{ item_loan.pk }}">
-                                        <i class="bi bi-cash me-2"></i>{% translate 'Внести платеж' %}
-                                    </a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <form method="post" action="{{ item_loan.get_absolute_url }}" class="d-inline">
-                                            {% csrf_token %}
-                                            <button class="dropdown-item text-danger" type="submit" name="delete_loan_button">
-                                                <i class="bi bi-trash me-2"></i>{% translate 'Удалить' %}
-                                            </button>
-                                        </form>
-                                    </li>
-                                </ul>
-                            </div>
+                        </div>
+                        <div class="relative" data-dropdown>
+                            <button type="button" class="dropdown-toggle rounded-lg p-2 text-white transition-colors hover:bg-white/20">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                </svg>
+                            </button>
+                            <ul class="dropdown-menu absolute right-0 top-full z-10 mt-2 hidden w-48 rounded-lg bg-white shadow-xl dark:bg-gray-700">
+                                <li>
+                                    <a href="#" class="modal-open flex items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600" data-modal="loan-{{ item_loan.pk }}">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                        </svg>
+                                        {% translate 'Просмотр' %}
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#" class="modal-open flex items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600" data-modal="payment-{{ item_loan.pk }}">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                        </svg>
+                                        {% translate 'Внести платеж' %}
+                                    </a>
+                                </li>
+                                <li><hr class="my-1 border-gray-200 dark:border-gray-600"></li>
+                                <li>
+                                    <form method="post" action="{{ item_loan.get_absolute_url }}" class="inline">
+                                        {% csrf_token %}
+                                        <button type="submit" name="delete_loan_button" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                            </svg>
+                                            {% translate 'Удалить' %}
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-5">
+                    <div class="mb-5 grid grid-cols-3 gap-4">
+                        <div class="rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-700/50">
+                            <div class="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{% translate 'Сумма кредита' %}</div>
+                            <div class="text-lg font-bold text-green-600 dark:text-green-400">{{ item_loan.loan_amount|floatformat:0 }} ₽</div>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-700/50">
+                            <div class="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{% translate 'Ставка' %}</div>
+                            <div class="text-lg font-bold text-amber-600 dark:text-amber-400">{{ item_loan.annual_interest_rate }}%</div>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-700/50">
+                            <div class="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{% translate 'Срок' %}</div>
+                            <div class="text-lg font-bold text-cyan-600 dark:text-cyan-400">{{ item_loan.period_loan }} {% translate 'мес.' %}</div>
                         </div>
                     </div>
 
-                    <div class="loan-card-body">
-                        <div class="loan-info-grid">
-                            <div class="loan-info-item amount">
-                                <div class="info-label">{% translate 'Сумма кредита' %}</div>
-                                <div class="info-value">{{ item_loan.loan_amount|floatformat:0 }} ₽</div>
-                            </div>
-                            <div class="loan-info-item rate">
-                                <div class="info-label">{% translate 'Ставка' %}</div>
-                                <div class="info-value">{{ item_loan.annual_interest_rate }}%</div>
-                            </div>
-                            <div class="loan-info-item period">
-                                <div class="info-label">{% translate 'Срок' %}</div>
-                                <div class="info-value">{{ item_loan.period_loan }} {% translate 'мес.' %}</div>
-                            </div>
+                    <div class="rounded-lg bg-gradient-to-r from-gray-50 to-gray-100 p-4 dark:from-gray-700/50 dark:to-gray-600/50">
+                        <div class="mb-2 flex items-center justify-between">
+                            <span class="text-sm text-gray-600 dark:text-gray-400">{% translate 'Общая сумма к возврату:' %}</span>
+                            <span class="font-bold text-gray-900 dark:text-gray-100">{{ item_loan.calculate_total_amount_loan_with_interest|floatformat:0 }} ₽</span>
                         </div>
-
-                        <div class="loan-summary">
-                            <div class="summary-row">
-                                <span>{% translate 'Общая сумма к возврату:' %}</span>
-                                <span class="fw-bold">{{ item_loan.calculate_total_amount_loan_with_interest|floatformat:0 }} ₽</span>
-                            </div>
-                            <div class="summary-row">
-                                <span>{% translate 'Переплата:' %}</span>
-                                <span class="fw-bold text-danger">{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }} ₽</span>
-                            </div>
+                        <div class="flex items-center justify-between border-t border-gray-200 pt-2 dark:border-gray-600">
+                            <span class="text-sm text-gray-600 dark:text-gray-400">{% translate 'Переплата:' %}</span>
+                            <span class="font-bold text-red-600 dark:text-red-400">{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }} ₽</span>
                         </div>
                     </div>
+                </div>
 
-                    <div class="loan-card-footer">
-                        <div class="action-buttons">
-                            <button class="btn btn-loan-action btn-payment" data-bs-toggle="modal" data-bs-target="#loan-{{ item_loan.pk }}">
-                                <i class="bi bi-eye me-1"></i>{% translate 'График' %}
-                            </button>
-                            <button class="btn btn-loan-action btn-edit" data-bs-toggle="modal" data-bs-target="#payment-{{ item_loan.pk }}">
-                                <i class="bi bi-cash me-1"></i>{% translate 'Платеж' %}
-                            </button>
-                        </div>
+                <div class="border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700/30">
+                    <div class="flex gap-2">
+                        <button type="button" class="modal-open flex-1 rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg" data-modal="loan-{{ item_loan.pk }}">
+                            <svg class="mr-1 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            {% translate 'График' %}
+                        </button>
+                        <button type="button" class="modal-open flex-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg" data-modal="payment-{{ item_loan.pk }}">
+                            <svg class="mr-1 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            {% translate 'Платеж' %}
+                        </button>
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <div class="loan-empty">
-            <div class="empty-icon">
-                <i class="bi bi-credit-card"></i>
+        <div class="flex flex-col items-center justify-center rounded-2xl bg-white py-16 text-center shadow-lg dark:bg-gray-800">
+            <div class="mb-4 text-6xl text-gray-300 dark:text-gray-600">
+                <svg class="mx-auto h-24 w-24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                </svg>
             </div>
-            <div class="empty-title">{% translate 'У вас пока нет кредитов' %}</div>
-            <div class="empty-description">{% translate 'Добавьте свой первый кредит для начала отслеживания' %}</div>
-            <a href="{% url 'loan:create' %}" class="btn btn-loan-action btn-payment">
-                <i class="bi bi-plus-circle me-2"></i>{% translate 'Добавить кредит' %}
+            <div class="mb-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">{% translate 'У вас пока нет кредитов' %}</div>
+            <div class="mb-8 text-gray-500 dark:text-gray-400">{% translate 'Добавьте свой первый кредит для начала отслеживания' %}</div>
+            <a href="{% url 'loan:create' %}" class="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg">
+                <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                {% translate 'Добавить кредит' %}
             </a>
         </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Loan Details Modal -->
 {% for item_loan in loan %}
-<div id="loan-{{ item_loan.pk }}" class="modal fade loan-modal" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-credit-card me-2"></i>{% translate 'Кредит №' %} {{ item_loan.pk }}
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <!-- Loan Summary -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h6 class="card-title text-primary">{% translate 'Основная информация' %}</h6>
-                                <div class="row">
-                                    <div class="col-6">
-                                        <small class="text-muted">{% translate 'Сумма' %}</small>
-                                        <div class="fw-bold">{{ item_loan.loan_amount|floatformat:0 }} ₽</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <small class="text-muted">{% translate 'Ставка' %}</small>
-                                        <div class="fw-bold">{{ item_loan.annual_interest_rate }}%</div>
-                                    </div>
-                                    <div class="col-6 mt-2">
-                                        <small class="text-muted">{% translate 'Срок' %}</small>
-                                        <div class="fw-bold">{{ item_loan.period_loan }} {% translate 'мес.' %}</div>
-                                    </div>
-                                    <div class="col-6 mt-2">
-                                        <small class="text-muted">{% translate 'Тип' %}</small>
-                                        <div class="fw-bold">{{ item_loan.get_type_loan_display }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h6 class="card-title text-success">{% translate 'Финансовая сводка' %}</h6>
-                                <div class="row">
-                                    <div class="col-6">
-                                        <small class="text-muted">{% translate 'К возврату' %}</small>
-                                        <div class="fw-bold text-success">{{ item_loan.calculate_total_amount_loan_with_interest|floatformat:0 }} ₽</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <small class="text-muted">{% translate 'Переплата' %}</small>
-                                        <div class="fw-bold text-danger">{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }} ₽</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Payment Schedule -->
-                <div class="payment-schedule">
-                    <div class="schedule-header">
-                        <h3><i class="bi bi-calendar3 me-2"></i>{% translate 'График платежей' %}</h3>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table schedule-table">
-                            <thead>
-                                <tr>
-                                    <th>{% translate 'Месяц' %}</th>
-                                    <th>{% translate 'Остаток' %}</th>
-                                    <th>{% translate 'Ежемесячный платеж' %}</th>
-                                    <th>{% translate 'Проценты' %}</th>
-                                    <th>{% translate 'Основной долг' %}</th>
-                                    <th>{% translate 'Статус' %}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for payment in result_calculate %}
-                                    {% if payment.loan.id == item_loan.pk %}
-                                    <tr class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}paid{% endif %}{% endfor %}">
-                                        <td>{{ payment.date|date:"d.m.Y" }}</td>
-                                        <td>{{ payment.balance|floatformat:0 }} ₽</td>
-                                        <td>{{ payment.monthly_payment|floatformat:2 }} ₽</td>
-                                        <td>{{ payment.interest|floatformat:0 }} ₽</td>
-                                        <td>{{ payment.principal_payment|floatformat:0 }} ₽</td>
-                                        <td>
-                                            {% for payment_make in payment_make_loan %}
-                                                {% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}
-                                                    <span class="badge bg-success">{% translate 'Оплачен' %}</span>
-                                                {% endif %}
-                                            {% endfor %}
-                                        </td>
-                                    </tr>
-                                    {% endif %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% translate 'Закрыть' %}</button>
-                <button type="button" class="btn btn-loan-action btn-payment" data-bs-toggle="modal" data-bs-target="#payment-{{ item_loan.pk }}" data-bs-dismiss="modal">
-                    <i class="bi bi-cash me-2"></i>{% translate 'Внести платеж' %}
+<div id="loan-{{ item_loan.pk }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div class="relative max-h-[90vh] w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
+        <div class="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-4 text-white">
+            <div class="flex items-center justify-between">
+                <h3 class="flex items-center gap-2 text-xl font-semibold">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                    </svg>
+                    {% translate 'Кредит №' %} {{ item_loan.pk }}
+                </h3>
+                <button type="button" class="modal-close rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
                 </button>
             </div>
+        </div>
+        <div class="max-h-[calc(90vh-120px)] overflow-y-auto p-6">
+            <div class="mb-6 grid gap-6 md:grid-cols-2">
+                <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <h6 class="mb-4 flex items-center gap-2 text-lg font-semibold text-green-600 dark:text-green-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {% translate 'Основная информация' %}
+                    </h6>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Сумма' %}</div>
+                            <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ item_loan.loan_amount|floatformat:0 }} ₽</div>
+                        </div>
+                        <div>
+                            <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Ставка' %}</div>
+                            <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ item_loan.annual_interest_rate }}%</div>
+                        </div>
+                        <div>
+                            <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Срок' %}</div>
+                            <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ item_loan.period_loan }} {% translate 'мес.' %}</div>
+                        </div>
+                        <div>
+                            <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Тип' %}</div>
+                            <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ item_loan.get_type_loan_display }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <h6 class="mb-4 flex items-center gap-2 text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        {% translate 'Финансовая сводка' %}
+                    </h6>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'К возврату' %}</div>
+                            <div class="text-lg font-bold text-green-600 dark:text-green-400">{{ item_loan.calculate_total_amount_loan_with_interest|floatformat:0 }} ₽</div>
+                        </div>
+                        <div>
+                            <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Переплата' %}</div>
+                            <div class="text-lg font-bold text-red-600 dark:text-red-400">{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }} ₽</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div class="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-4 text-center text-white">
+                    <h3 class="flex items-center justify-center gap-2 text-xl font-semibold">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        {% translate 'График платежей' %}
+                    </h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Месяц' %}</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Остаток' %}</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Ежемесячный платеж' %}</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Проценты' %}</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Основной долг' %}</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Статус' %}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+                            {% for payment in result_calculate %}
+                                {% if payment.loan.id == item_loan.pk %}
+                                <tr class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}bg-green-50 dark:bg-green-900/10{% endif %}{% endfor %} transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{{ payment.date|date:"d.m.Y" }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ payment.balance|floatformat:0 }} ₽</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">{{ payment.monthly_payment|floatformat:2 }} ₽</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ payment.interest|floatformat:0 }} ₽</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ payment.principal_payment|floatformat:0 }} ₽</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-sm">
+                                        {% for payment_make in payment_make_loan %}
+                                            {% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}
+                                                <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">{% translate 'Оплачен' %}</span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700/30">
+            <button type="button" class="modal-close rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">{% translate 'Закрыть' %}</button>
+            <button type="button" class="modal-open rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg" data-modal="payment-{{ item_loan.pk }}">
+                <svg class="mr-2 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                {% translate 'Внести платеж' %}
+            </button>
         </div>
     </div>
 </div>
 
-<!-- Payment Modal -->
-<div id="payment-{{ item_loan.pk }}" class="modal fade loan-modal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-cash me-2"></i>{% translate 'Внести платеж по кредиту №' %}{{ item_loan.pk }}
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                {{ payment_make_loan_form.media }}
-                <form class="ajax-form" method="POST" action="{% url 'loan:payment_create' %}">
-                    {% csrf_token %}
-                    {% if payment_make_loan_form %}
-                        {% for field in payment_make_loan_form %}
-                            <div class="form-group {% if field.errors %} has-error{% endif %}">
-                                {{ field|as_crispy_field }}
-                                {% if field.errors %}
-                                    {% for error in field.errors %}
-                                        <p class="help-block text-danger">{{ error }}</p>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% translate 'Отмена' %}</button>
-                <button type="submit" class="btn btn-loan-action btn-payment" form="payment-form-{{ item_loan.pk }}">
-                    <i class="bi bi-check-circle me-2"></i>{% translate 'Добавить платеж' %}
+<div id="payment-{{ item_loan.pk }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div class="relative max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
+        <div class="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-4 text-white">
+            <div class="flex items-center justify-between">
+                <h3 class="flex items-center gap-2 text-xl font-semibold">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                    {% translate 'Внести платеж по кредиту №' %}{{ item_loan.pk }}
+                </h3>
+                <button type="button" class="modal-close rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
                 </button>
             </div>
+        </div>
+        <div class="max-h-[calc(90vh-120px)] overflow-y-auto p-6">
+            {{ payment_make_loan_form.media }}
+            <form id="payment-form-{{ item_loan.pk }}" class="ajax-form space-y-4" method="POST" action="{% url 'loan:payment_create' %}">
+                {% csrf_token %}
+                {% if payment_make_loan_form %}
+                    {% for field in payment_make_loan_form %}
+                        <div class="{% if field.errors %}has-error{% endif %}">
+                            {{ field|as_crispy_field }}
+                            {% if field.errors %}
+                                {% for error in field.errors %}
+                                    <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            </form>
+        </div>
+        <div class="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700/30">
+            <button type="button" class="modal-close rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">{% translate 'Отмена' %}</button>
+            <button type="submit" form="payment-form-{{ item_loan.pk }}" class="rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg">
+                <svg class="mr-2 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {% translate 'Добавить платеж' %}
+            </button>
         </div>
     </div>
 </div>
@@ -339,36 +406,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    // Add loading states to forms
-    document.querySelectorAll('.ajax-form').forEach(function(form) {
-        form.addEventListener('submit', function() {
-            const submitBtn = form.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Загрузка...';
-                submitBtn.disabled = true;
-            }
-        });
-    });
-
-    // Add smooth scrolling to modals
-    document.querySelectorAll('[data-bs-toggle="modal"]').forEach(function(button) {
-        button.addEventListener('click', function() {
-            setTimeout(function() {
-                const modal = document.querySelector('.modal.show');
-                if (modal) {
-                    modal.scrollTop = 0;
-                }
-            }, 300);
-        });
-    });
-});
-</script>
+{% load static %}
+{% load word_hash %}
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/loan_modern.js' %}?v={% word_hash %}"></script>
 {% endblock %}

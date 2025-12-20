@@ -180,9 +180,6 @@ class LoanManager {
         previewElement.appendChild(alertDiv);
     }
 
-    /**
-     * Настройка модальных окон
-     */
     setupModals() {
         document.querySelectorAll('[data-bs-toggle="modal"]').forEach(button => {
             button.addEventListener('click', () => {
