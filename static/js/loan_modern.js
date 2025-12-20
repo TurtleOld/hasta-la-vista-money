@@ -183,7 +183,7 @@
                                     if (fieldElement) {
                                         const errorDiv = document.createElement('p');
                                         errorDiv.className = 'mt-1 text-sm text-red-600 dark:text-red-400';
-                                        errorDiv.textContent = data.errors[field][0];
+                                        errorDiv.appendChild(document.createTextNode(String(data.errors[field][0])));
                                         fieldElement.parentElement.appendChild(errorDiv);
                                     }
                                 });
