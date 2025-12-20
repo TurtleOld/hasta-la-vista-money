@@ -3,6 +3,7 @@
 
 @plugin "daisyui";
 
+@import './tabulator-tailwind.css';
 /**
   * A catch-all path to Django template files, JavaScript, and Python files
   * that contain Tailwind CSS classes and will be scanned by Tailwind to generate the final CSS file.
@@ -10,4 +11,585 @@
   * If your final CSS file is not being updated after code changes, you may want to broaden or narrow
   * the scope of this path.
   */
-@source "../../../**/*.{html,py,js}";
+@source "../../../hasta_la_vista_money/**/*.{html,py,js}";
+@source "../../../config/**/*.{html,py,js}";
+@source "../../../core/**/*.{html,py,js}";
+@source "../../../static/js/**/*.js";
+
+@theme {
+  --font-family-sans: 'Inter', 'Roboto', system-ui, -apple-system, 'Segoe UI',
+    'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;
+  --font-family-heading: 'Montserrat', 'Inter', 'Roboto', system-ui, sans-serif;
+  --font-family-mono: 'IBM Plex Mono', 'SFMono-Regular', Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  --font-family-logo: 'Gloria Hallelujah', cursive;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  --font-size-5xl: 3rem;
+
+  --line-height-tight: 1.25;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+  --line-height-loose: 2;
+
+  --letter-spacing-tighter: -0.05em;
+  --letter-spacing-tight: -0.025em;
+  --letter-spacing-normal: 0em;
+  --letter-spacing-wide: 0.025em;
+  --letter-spacing-wider: 0.05em;
+  --letter-spacing-widest: 0.1em;
+
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
+
+@layer base {
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-relaxed);
+    font-weight: var(--font-weight-normal);
+    letter-spacing: var(--letter-spacing-tight);
+    color: rgb(33 37 41);
+  }
+
+  [data-bs-theme="dark"] body {
+    color: rgb(248 250 252);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-family-heading) !important;
+    font-weight: var(--font-weight-semibold) !important;
+    line-height: var(--line-height-tight) !important;
+    letter-spacing: var(--letter-spacing-tight) !important;
+  }
+
+  h1 {
+    font-size: var(--font-size-4xl);
+    line-height: var(--line-height-tight);
+  }
+
+  h2 {
+    font-size: var(--font-size-3xl);
+    line-height: var(--line-height-snug);
+  }
+
+  h3 {
+    font-size: var(--font-size-2xl);
+    line-height: var(--line-height-snug);
+  }
+
+  h4 {
+    font-size: var(--font-size-xl);
+    line-height: var(--line-height-normal);
+  }
+
+  h5 {
+    font-size: var(--font-size-lg);
+    line-height: var(--line-height-normal);
+  }
+
+  h6 {
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+  }
+
+  p {
+    line-height: var(--line-height-relaxed);
+    margin-bottom: 1em;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-family-mono);
+    font-size: 0.9em;
+    line-height: var(--line-height-normal);
+  }
+
+  .logo {
+    font-family: var(--font-family-logo);
+  }
+
+  table th,
+  th {
+    font-family: var(--font-family-heading) !important;
+    font-weight: var(--font-weight-semibold) !important;
+  }
+
+  table td,
+  td {
+    font-family: var(--font-family-mono) !important;
+    font-size: var(--font-size-sm) !important;
+  }
+
+  .type-account {
+    font-family: var(--font-family-mono) !important;
+  }
+}
+
+@layer utilities {
+  .font-heading {
+    font-family: var(--font-family-heading) !important;
+  }
+
+  .font-logo {
+    font-family: var(--font-family-logo) !important;
+  }
+}
+/* Keyframes for message toast animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeOutSlideUp {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+}
+.circle-badge {
+    width: 1.75rem;
+    height: 1.75rem;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+}
+
+.needs-validation input[type="number"],
+.needs-validation input[type="text"],
+.needs-validation input[type="datetime-local"],
+.needs-validation select,
+.ajax-form input[type="number"],
+.ajax-form input[type="text"],
+.ajax-form input[type="datetime-local"],
+.ajax-form select {
+  background-color: white !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db !important;
+}
+
+.dark .needs-validation input[type="number"],
+.dark .needs-validation input[type="text"],
+.dark .needs-validation input[type="datetime-local"],
+.dark .needs-validation select,
+.dark .ajax-form input[type="number"],
+.dark .ajax-form input[type="text"],
+.dark .ajax-form input[type="datetime-local"],
+.dark .ajax-form select {
+  background-color: #1f2937 !important;
+  color: #f3f4f6 !important;
+  border-color: #4b5563 !important;
+}
+
+.needs-validation input[type="number"]:focus,
+.needs-validation input[type="text"]:focus,
+.needs-validation input[type="datetime-local"]:focus,
+.needs-validation select:focus,
+.ajax-form input[type="number"]:focus,
+.ajax-form input[type="text"]:focus,
+.ajax-form input[type="datetime-local"]:focus,
+.ajax-form select:focus {
+  background-color: white !important;
+  color: #111827 !important;
+  border-color: #10b981 !important;
+}
+
+.dark .needs-validation input[type="number"]:focus,
+.dark .needs-validation input[type="text"]:focus,
+.dark .needs-validation input[type="datetime-local"]:focus,
+.dark .needs-validation select:focus,
+.dark .ajax-form input[type="number"]:focus,
+.dark .ajax-form input[type="text"]:focus,
+.dark .ajax-form input[type="datetime-local"]:focus,
+.dark .ajax-form select:focus {
+  background-color: #1f2937 !important;
+  color: #f3f4f6 !important;
+  border-color: #34d399 !important;
+}
+.budget-toast {
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  min-width: 300px;
+}
+
+.budget-toolbar-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.budget-toolbar-left {
+  font-size: 0.875rem;
+  color: rgb(75 85 99);
+}
+
+[data-bs-theme="dark"] .budget-toolbar-left {
+  color: rgb(209 213 219);
+}
+
+.budget-toolbar-select {
+  margin-left: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(209 213 219);
+  background-color: white;
+  color: rgb(17 24 39);
+}
+
+[data-bs-theme="dark"] .budget-toolbar-select {
+  border-color: rgb(75 85 99);
+  background-color: rgb(31 41 55);
+  color: rgb(243 244 246);
+}
+
+.budget-toolbar-right {
+  font-size: 0.75rem;
+  color: rgb(107 114 128);
+}
+
+[data-bs-theme="dark"] .budget-toolbar-right {
+  color: rgb(156 163 175);
+}
+
+.budget-table-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(229 231 235);
+  max-height: calc(100vh - 320px);
+}
+
+[data-bs-theme="dark"] .budget-table-scroll-container {
+  border-color: rgb(55 65 81);
+}
+
+.budget-table-inner {
+  min-width: max-content;
+}
+
+.budget-table {
+  width: 100%;
+  font-size: 0.875rem;
+  color: rgb(17 24 39);
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+[data-bs-theme="dark"] .budget-table {
+  color: rgb(243 244 246);
+}
+
+.budget-table-header-category {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background-color: white;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 1px solid rgb(229 231 235);
+  border-right: 1px solid rgb(229 231 235);
+  min-width: 220px;
+}
+
+[data-bs-theme="dark"] .budget-table-header-category {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+.budget-table-header-month {
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+  font-weight: 600;
+  background-color: white;
+  border-bottom: 1px solid rgb(229 231 235);
+}
+
+[data-bs-theme="dark"] .budget-table-header-month {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+.budget-table-header-fact,
+.budget-table-header-plan {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 500;
+  background-color: white;
+  border-bottom: 1px solid rgb(229 231 235);
+  min-width: 110px;
+}
+
+[data-bs-theme="dark"] .budget-table-header-fact,
+[data-bs-theme="dark"] .budget-table-header-plan {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+.budget-table-cell-category {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background-color: white;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgb(229 231 235);
+  border-right: 1px solid rgb(229 231 235);
+  font-weight: 500;
+}
+
+[data-bs-theme="dark"] .budget-table-cell-category {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+.budget-table-cell-fact {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgb(229 231 235);
+  text-align: right;
+  color: rgb(55 65 81);
+}
+
+[data-bs-theme="dark"] .budget-table-cell-fact {
+  border-color: rgb(55 65 81);
+  color: rgb(229 231 235);
+}
+
+.budget-table-cell-plan {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgb(229 231 235);
+}
+
+[data-bs-theme="dark"] .budget-table-cell-plan {
+  border-color: rgb(55 65 81);
+}
+
+.budget-table-input {
+  width: 6rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgb(209 213 219);
+  background-color: white;
+  text-align: right;
+}
+
+[data-bs-theme="dark"] .budget-table-input {
+  border-color: rgb(75 85 99);
+  background-color: rgb(17 24 39);
+}
+
+.budget-table-total-label {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background-color: white;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid rgb(229 231 235);
+  border-right: 1px solid rgb(229 231 235);
+  font-weight: 600;
+}
+
+[data-bs-theme="dark"] .budget-table-total-label {
+  background-color: rgb(31 41 55);
+  border-color: rgb(55 65 81);
+}
+
+.budget-table-total-cell {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid rgb(229 231 235);
+  text-align: right;
+  font-weight: 600;
+}
+
+[data-bs-theme="dark"] .budget-table-total-cell {
+  border-color: rgb(55 65 81);
+}
+
+.budget-message {
+  font-size: 0.875rem;
+  color: rgb(75 85 99);
+}
+
+[data-bs-theme="dark"] .budget-message {
+  color: rgb(209 213 219);
+}
+
+.budget-message-error {
+  font-size: 0.875rem;
+  color: rgb(220 38 38);
+}
+
+[data-bs-theme="dark"] .budget-message-error {
+  color: rgb(248 113 113);
+}
+
+.loan-form-input {
+  display: block;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(209 213 219);
+  background-color: white;
+  padding: 0.5rem 0.75rem;
+  padding-right: 2.5rem;
+  font-size: 0.875rem;
+  color: rgb(17 24 39);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.loan-form-input:focus {
+  border-color: rgb(34 197 94);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgb(34 197 94);
+}
+
+[data-bs-theme="dark"] .loan-form-input {
+  border-color: rgb(75 85 99);
+  background-color: rgb(31 41 55);
+  color: rgb(243 244 246);
+}
+
+[data-bs-theme="dark"] .loan-form-input:focus {
+  border-color: rgb(74 222 128);
+  box-shadow: 0 0 0 2px rgb(74 222 128);
+}
+
+.loan-form-datetime {
+  display: block;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(209 213 219);
+  background-color: white;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: rgb(17 24 39);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.loan-form-datetime:focus {
+  border-color: rgb(34 197 94);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgb(34 197 94);
+}
+
+[data-bs-theme="dark"] .loan-form-datetime {
+  border-color: rgb(75 85 99);
+  background-color: rgb(31 41 55);
+  color: rgb(243 244 246);
+}
+
+[data-bs-theme="dark"] .loan-form-datetime:focus {
+  border-color: rgb(74 222 128);
+  box-shadow: 0 0 0 2px rgb(74 222 128);
+}
+
+.loan-form-select {
+  display: block;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(209 213 219);
+  background-color: white;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: rgb(17 24 39);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.loan-form-select:focus {
+  border-color: rgb(34 197 94);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgb(34 197 94);
+}
+
+[data-bs-theme="dark"] .loan-form-select {
+  border-color: rgb(75 85 99);
+  background-color: rgb(31 41 55);
+  color: rgb(243 244 246);
+}
+
+[data-bs-theme="dark"] .loan-form-select:focus {
+  border-color: rgb(74 222 128);
+  box-shadow: 0 0 0 2px rgb(74 222 128);
+}
+
+#payment-options .MathJax,
+#payment-options mjx-container {
+  font-size: 0.875rem !important;
+}
+
+#payment-options mjx-math {
+  font-size: 0.875rem !important;
+}
+
+#payment-options mjx-mstyle {
+  font-size: 0.875rem !important;
+}
+
+@media (max-width: 640px) {
+  #payment-options .MathJax,
+  #payment-options mjx-container {
+    font-size: 0.75rem !important;
+  }
+
+  #payment-options mjx-math {
+    font-size: 0.75rem !important;
+  }
+
+  #payment-options mjx-mstyle {
+    font-size: 0.75rem !important;
+  }
+}
