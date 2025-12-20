@@ -150,8 +150,36 @@
                             });
                             submitBtn.disabled = false;
                             if (data.errors) {
+                                const allowedFieldNames = new Set(
+                                    Array.from(form.elements)
+                                        .map(function(el) {
+                                            return el && el.name ? el.name : '';
+                                        })
+                                        .filter(Boolean),
+                                );
+
+                                const escapeCss =
+                                    typeof CSS !== 'undefined' &&
+                                    CSS &&
+                                    typeof CSS.escape === 'function'
+                                        ? CSS.escape.bind(CSS)
+                                        : function(value) {
+                                              return String(value).replace(
+                                                  /[^a-zA-Z0-9_-]/g,
+                                                  '\\$&',
+                                              );
+                                          };
+
                                 Object.keys(data.errors).forEach(function(field) {
-                                    const fieldElement = form.querySelector('[name=' + field + ']');
+                                    if (!allowedFieldNames.has(field)) {
+                                        return;
+                                    }
+
+                                    const selector =
+                                        '[name="' + escapeCss(field) + '"]';
+                                    const fieldElement = form.querySelector(
+                                        selector,
+                                    );
                                     if (fieldElement) {
                                         const errorDiv = document.createElement('p');
                                         errorDiv.className = 'mt-1 text-sm text-red-600 dark:text-red-400';
