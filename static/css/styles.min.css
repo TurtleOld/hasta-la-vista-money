@@ -1336,7 +1336,6 @@
       outline: 2px solid var(--input-color);
       outline-offset: 2px;
       isolation: isolate;
-      z-index: 1;
     }
     @media (pointer: coarse) {
       @supports (-webkit-touch-callout: none) {
@@ -1664,7 +1663,6 @@
       outline: 2px solid var(--input-color);
       outline-offset: 2px;
       isolation: isolate;
-      z-index: 1;
     }
     .select:has(> select[disabled]), .select:is(:disabled, [disabled]), fieldset:disabled .select {
       cursor: not-allowed;
