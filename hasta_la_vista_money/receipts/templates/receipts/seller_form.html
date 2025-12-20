@@ -37,7 +37,7 @@
         <div class="p-6 md:p-8">
             <form method="post" class="space-y-6 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
                 {% csrf_token %}
-
+                
                 {% if form.non_field_errors %}
                 <div class="rounded-xl bg-red-50 p-4 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                     <div class="flex items-start gap-3">
@@ -92,3 +92,4 @@
     </div>
 </div>
 {% endblock %}
+

@@ -310,7 +310,7 @@
       transform: none !important;
       direction: ltr !important;
     }
-
+    
     .tabulator-col-group .tabulator-col-title {
       writing-mode: horizontal-tb !important;
       text-orientation: mixed !important;
@@ -318,7 +318,7 @@
       white-space: nowrap !important;
       display: inline-block !important;
     }
-
+    
     .tabulator-col-group .tabulator-col-content {
       writing-mode: horizontal-tb !important;
       text-orientation: mixed !important;

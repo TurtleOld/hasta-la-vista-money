@@ -565,31 +565,3 @@
   border-color: rgb(74 222 128);
   box-shadow: 0 0 0 2px rgb(74 222 128);
 }
-
-#payment-options .MathJax,
-#payment-options mjx-container {
-  font-size: 0.875rem !important;
-}
-
-#payment-options mjx-math {
-  font-size: 0.875rem !important;
-}
-
-#payment-options mjx-mstyle {
-  font-size: 0.875rem !important;
-}
-
-@media (max-width: 640px) {
-  #payment-options .MathJax,
-  #payment-options mjx-container {
-    font-size: 0.75rem !important;
-  }
-
-  #payment-options mjx-math {
-    font-size: 0.75rem !important;
-  }
-
-  #payment-options mjx-mstyle {
-    font-size: 0.75rem !important;
-  }
-}

@@ -83,16 +83,16 @@ class LoanForm(ModelForm[Loan]):
         select_classes = 'loan-form-select'
 
         self.fields['type_loan'].widget = Select(
-            attrs={'class': select_classes},
+            attrs={'class': select_classes}
         )
         self.fields['loan_amount'].widget = NumberInput(
-            attrs={'class': input_classes, 'step': '0.01'},
+            attrs={'class': input_classes, 'step': '0.01'}
         )
         self.fields['annual_interest_rate'].widget = NumberInput(
-            attrs={'class': input_classes, 'step': '0.01'},
+            attrs={'class': input_classes, 'step': '0.01'}
         )
         self.fields['period_loan'].widget = NumberInput(
-            attrs={'class': input_classes, 'step': '1'},
+            attrs={'class': input_classes, 'step': '1'}
         )
 
     def save(self, commit: bool = True) -> Loan:
@@ -166,7 +166,7 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
         self.fields['account'].widget.attrs.update({'class': select_classes})
         self.fields['loan'].widget.attrs.update({'class': select_classes})
         self.fields['amount'].widget = NumberInput(
-            attrs={'class': input_classes, 'step': '0.01'},
+            attrs={'class': input_classes, 'step': '0.01'}
         )
 
     def get_account_queryset(self) -> QuerySet[Account]:

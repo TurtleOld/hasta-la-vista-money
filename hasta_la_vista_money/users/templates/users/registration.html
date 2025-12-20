@@ -24,9 +24,9 @@
         <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800 dark:shadow-gray-900/50">
             <form method="post" class="space-y-6 text-black dark:text-white dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
                 {% csrf_token %}
-
+                
                 {{ form | crispy }}
-
+                
                 {% if form.non_field_errors %}
                     <div class="rounded-xl bg-red-50 p-4 dark:bg-red-900/20">
                         <div class="flex">
@@ -49,7 +49,7 @@
                         </svg>
                         {% translate 'Зарегистрироваться' %}
                     </button>
-
+                    
                     <a href="{% url 'login' %}" class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-gray-300 bg-white px-6 py-3 text-base font-semibold text-black transition-all duration-200 hover:border-gray-400 hover:bg-gray-50 active:scale-95 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:border-gray-500 dark:hover:bg-gray-700 sm:w-auto">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>

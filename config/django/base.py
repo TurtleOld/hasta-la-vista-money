@@ -221,7 +221,7 @@ else:
         }
     else:
         raise ImproperlyConfigured(
-            'REDIS_LOCATION is required when DEBUG=False',
+            'REDIS_LOCATION is required when DEBUG=False'
         )
 
 # Session backend configuration

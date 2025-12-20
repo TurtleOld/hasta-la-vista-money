@@ -142,7 +142,7 @@
                 loadScript('{% static "js/receipt_filter.js" %}?v={% word_hash %}').catch(function(error) {
                     console.error('Error loading receipt_filter script:', error);
                 });
-
+                
                 loadScript('{% static "js/tokens.js" %}?v={% word_hash %}').then(function() {
                     return loadScript('{% static "js/receipt_group_filter.js" %}?v={% word_hash %}');
                 }).then(function() {
