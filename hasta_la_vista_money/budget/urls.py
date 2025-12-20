@@ -2,12 +2,12 @@ from django.urls import path
 
 from hasta_la_vista_money.budget.apis import (
     ChangePlanningAPIView,
+    GenerateDatesAPIView,
     SavePlanningAPIView,
 )
 from hasta_la_vista_money.budget.views import (
     BudgetView,
     ExpenseTableView,
-    GenerateDateView,
     IncomeTableView,
 )
 
@@ -18,7 +18,7 @@ urlpatterns = [
     path('incomes/', IncomeTableView.as_view(), name='income_table'),
     path(
         'generate-date/',
-        GenerateDateView.as_view(),
+        GenerateDatesAPIView.as_view(),
         name='generate_date',
     ),
     path(
