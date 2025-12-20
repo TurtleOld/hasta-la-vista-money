@@ -15,7 +15,9 @@
         },
         startup: {
             ready: function() {
-                MathJax.startup.defaultReady();
+                if (typeof window.MathJax !== 'undefined' && window.MathJax.startup && window.MathJax.startup.defaultReady) {
+                    window.MathJax.startup.defaultReady();
+                }
                 function initMathJax() {
                     if (typeof window.renderMathJax === 'function') {
                         window.renderMathJax();
