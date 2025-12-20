@@ -2,6 +2,19 @@
     'use strict';
 
     function setupModals() {
+        function processMathJax(modal) {
+            if (typeof window.MathJax !== 'undefined' && window.MathJax.typesetPromise) {
+                if (window.MathJax.typesetClear) {
+                    window.MathJax.typesetClear([modal]);
+                }
+                window.MathJax.typesetPromise([modal]).catch(function(err) {
+                    console.error('MathJax typeset error:', err);
+                });
+            } else if (typeof window.renderMathJax === 'function') {
+                window.renderMathJax(modal);
+            }
+        }
+
         document.querySelectorAll('.modal-open').forEach(button => {
             button.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -18,22 +31,11 @@
                     document.body.style.overflow = 'hidden';
 
                     if (modalId === 'payment-options') {
-                        function processMathJax() {
-                            if (typeof window.MathJax !== 'undefined' && window.MathJax.typesetPromise) {
-                                if (window.MathJax.typesetClear) {
-                                    window.MathJax.typesetClear([modal]);
-                                }
-                                window.MathJax.typesetPromise([modal]).catch(function(err) {
-                                    console.error('MathJax typeset error:', err);
-                                });
-                            } else if (typeof window.renderMathJax === 'function') {
-                                window.renderMathJax(modal);
-                            }
-                        }
-
                         requestAnimationFrame(function() {
                             requestAnimationFrame(function() {
-                                setTimeout(processMathJax, 100);
+                                setTimeout(function() {
+                                    processMathJax(modal);
+                                }, 100);
                             });
                         });
                     }
@@ -98,9 +100,35 @@
             form.addEventListener('submit', function(e) {
                 const submitBtn = form.querySelector('button[type="submit"]');
                 if (submitBtn) {
-                    const originalHTML = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<svg class="mr-2 inline h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Загрузка...';
+                    const originalNodes = Array.from(submitBtn.childNodes).map(function(node) {
+                        return node.cloneNode(true);
+                    });
+
+                    while (submitBtn.firstChild) {
+                        submitBtn.removeChild(submitBtn.firstChild);
+                    }
                     submitBtn.disabled = true;
+
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.className.baseVal = 'mr-2 inline h-4 w-4 animate-spin';
+                    svg.setAttributeNS(null, 'fill', 'none');
+                    svg.setAttributeNS(null, 'viewBox', '0 0 24 24');
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.className.baseVal = 'opacity-25';
+                    circle.setAttributeNS(null, 'cx', '12');
+                    circle.setAttributeNS(null, 'cy', '12');
+                    circle.setAttributeNS(null, 'r', '10');
+                    circle.setAttributeNS(null, 'stroke', 'currentColor');
+                    circle.setAttributeNS(null, 'stroke-width', '4');
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.className.baseVal = 'opacity-75';
+                    path.setAttributeNS(null, 'fill', 'currentColor');
+                    path.setAttributeNS(null, 'd', 'M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z');
+                    svg.appendChild(circle);
+                    svg.appendChild(path);
+
+                    submitBtn.appendChild(svg);
+                    submitBtn.appendChild(document.createTextNode('Загрузка...'));
 
                     fetch(form.action, {
                         method: 'POST',
@@ -114,7 +142,12 @@
                         if (data.success) {
                             location.reload();
                         } else {
-                            submitBtn.innerHTML = originalHTML;
+                            while (submitBtn.firstChild) {
+                                submitBtn.removeChild(submitBtn.firstChild);
+                            }
+                            originalNodes.forEach(function(node) {
+                                submitBtn.appendChild(node);
+                            });
                             submitBtn.disabled = false;
                             if (data.errors) {
                                 Object.keys(data.errors).forEach(function(field) {
@@ -130,7 +163,12 @@
                         }
                     })
                     .catch(error => {
-                        submitBtn.innerHTML = originalHTML;
+                        while (submitBtn.firstChild) {
+                            submitBtn.removeChild(submitBtn.firstChild);
+                        }
+                        originalNodes.forEach(function(node) {
+                            submitBtn.appendChild(node);
+                        });
                         submitBtn.disabled = false;
                         console.error('Error:', error);
                     });
