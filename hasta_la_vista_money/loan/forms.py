@@ -12,6 +12,8 @@ from django.forms import (
     IntegerField,
     ModelChoiceField,
     ModelForm,
+    NumberInput,
+    Select,
 )
 from django.utils.translation import gettext_lazy as _
 
@@ -28,7 +30,7 @@ class LoanForm(ModelForm[Loan]):
             format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={
                 'type': 'datetime-local',
-                'class': 'form-control',
+                'class': 'loan-form-datetime',
             },
         ),
         input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
@@ -77,6 +79,22 @@ class LoanForm(ModelForm[Loan]):
         self.request_user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
+        input_classes = 'loan-form-input'
+        select_classes = 'loan-form-select'
+
+        self.fields['type_loan'].widget = Select(
+            attrs={'class': select_classes}
+        )
+        self.fields['loan_amount'].widget = NumberInput(
+            attrs={'class': input_classes, 'step': '0.01'}
+        )
+        self.fields['annual_interest_rate'].widget = NumberInput(
+            attrs={'class': input_classes, 'step': '0.01'}
+        )
+        self.fields['period_loan'].widget = NumberInput(
+            attrs={'class': input_classes, 'step': '1'}
+        )
+
     def save(self, commit: bool = True) -> Loan:
         cd = self.cleaned_data
         form = super().save(commit=False)
@@ -102,7 +120,7 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
             format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={
                 'type': 'datetime-local',
-                'class': 'form-control',
+                'class': 'loan-form-datetime',
             },
         ),
         input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
@@ -141,6 +159,15 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
         self.user = user
         self.fields['account'].queryset = self.get_account_queryset()  # type: ignore[attr-defined]
         self.fields['loan'].queryset = Loan.objects.filter(user=user)  # type: ignore[attr-defined]
+
+        input_classes = 'loan-form-input'
+        select_classes = 'loan-form-select'
+
+        self.fields['account'].widget.attrs.update({'class': select_classes})
+        self.fields['loan'].widget.attrs.update({'class': select_classes})
+        self.fields['amount'].widget = NumberInput(
+            attrs={'class': input_classes, 'step': '0.01'}
+        )
 
     def get_account_queryset(self) -> QuerySet[Account]:
         accounts = Account.objects.filter(user=self.user)

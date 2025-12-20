@@ -1,6 +1,6 @@
 [project]
 name = "hastalavistamoney"
-version = "1.8.0"
+version = "1.9.0"
 description = "Home Accounting Project"
 authors = [
     {name = "Alexander Pavlov", email = "dev@pavlovteam.ru"}
@@ -24,7 +24,6 @@ dependencies = [
     "django-debug-toolbar>=5.0.0",
     "sentry-sdk>=2.22.0",
     "django-rosetta>=0.10.0",
-    "crispy-bootstrap5>=2025.4",
     "django-crispy-forms>=2.1",
     "djangorestframework>=3.15.0",
     "django-stubs-ext>=5.1.1",
@@ -43,7 +42,6 @@ dependencies = [
     "pyright>=1.1.407",
     "types-django-filter>=25.2.0.20251010",
     "dependency-injector>=4.48.2",
-    "tenacity>=9.0.0",
     "django-tailwind>=4.4.2",
     "crispy-tailwind>=1.0.3",
 ]
@@ -247,7 +245,7 @@ known_first_party = "hasta_la_vista_money"
 sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
 [tool.bumpversion]
-current_version = "1.8.0"
+current_version = "1.9.0"
 commit = false
 tag = true
 
