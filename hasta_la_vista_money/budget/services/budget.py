@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
@@ -76,42 +77,32 @@ class AggregateIncomeTableDict(TypedDict):
     total_plan_income: list[Decimal]
 
 
-class ExpenseApiDataRowDict(TypedDict):
+class ExpenseApiDataRowDict(TypedDict, total=False):
     """Строка данных расхода для API."""
 
     category: str
     category_id: int
-    months: list[str]
-    fact: list[int]
-    plan: list[int]
-    diff: list[int]
-    percent: list[float | None]
 
 
-class IncomeApiDataRowDict(TypedDict):
+class IncomeApiDataRowDict(TypedDict, total=False):
     """Строка данных дохода для API."""
 
     category: str
     category_id: int
-    months: list[str]
-    fact: list[Decimal]
-    plan: list[Decimal]
-    diff: list[Decimal]
-    percent: list[float | None]
 
 
 class AggregateExpenseApiDict(TypedDict):
     """Данные расходов для API."""
 
     months: list[str]
-    data: list[ExpenseApiDataRowDict]
+    data: list[dict[str, Any]]
 
 
 class AggregateIncomeApiDict(TypedDict):
     """Данные доходов для API."""
 
     months: list[str]
-    data: list[IncomeApiDataRowDict]
+    data: list[dict[str, Any]]
 
 
 class BudgetDataError(Exception):
@@ -189,7 +180,7 @@ class BudgetService:
         for p in plans_exp:
             amount = p['amount']
             expense_plan_map[p['category_expense_id']][p['date']] = int(
-                amount or 0
+                amount or 0,
             )
 
         return expense_plan_map
@@ -264,7 +255,10 @@ class BudgetService:
     ) -> AggregateBudgetDataDict:
         """Aggregate all budget data for context."""
         _validate_budget_inputs(
-            user, months, expense_categories, income_categories
+            user,
+            months,
+            expense_categories,
+            income_categories,
         )
 
         expense_fact_map = self._get_expense_facts(
@@ -1049,36 +1043,29 @@ def _build_income_api_data(
     income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[IncomeCategory],
-) -> list[IncomeApiDataRowDict]:
+) -> list[dict[str, Any]]:
     """Build income API data structure."""
     data = []
 
     for cat in income_categories:
-        fact_list: list[Decimal] = []
-        plan_list: list[Decimal] = []
-        diff_list: list[Decimal] = []
-        percent_list: list[float | None] = []
+        row: dict[str, Any] = {
+            'category': cat.name,
+            'category_id': cat.pk,
+        }
 
         for m in months:
+            month_str = m.isoformat()
             fact = income_fact_map[cat.pk][m]
             plan = income_plan_map[cat.pk][m]
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
-            fact_list.append(fact)
-            plan_list.append(plan)
-            diff_list.append(diff)
-            percent_list.append(float(percent) if percent is not None else None)
-
-        row: IncomeApiDataRowDict = {
-            'category': cat.name,
-            'category_id': cat.pk,
-            'months': [m.isoformat() for m in months],
-            'fact': fact_list,
-            'plan': plan_list,
-            'diff': diff_list,
-            'percent': percent_list,
-        }
+            row[f'fact_{month_str}'] = float(fact)
+            row[f'plan_{month_str}'] = float(plan)
+            row[f'diff_{month_str}'] = float(diff)
+            row[f'percent_{month_str}'] = (
+                float(percent) if percent is not None else None
+            )
 
         data.append(row)
 
@@ -1090,36 +1077,29 @@ def _build_expense_api_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[ExpenseCategory],
-) -> list[ExpenseApiDataRowDict]:
+) -> list[dict[str, Any]]:
     """Build expense API data structure."""
     data = []
 
     for cat in expense_categories:
-        fact_list: list[int] = []
-        plan_list: list[int] = []
-        diff_list: list[int] = []
-        percent_list: list[float | None] = []
+        row: dict[str, Any] = {
+            'category': cat.name,
+            'category_id': cat.pk,
+        }
 
         for m in months:
+            month_str = m.isoformat()
             fact = expense_fact_map[cat.pk][m]
             plan = expense_plan_map[cat.pk][m]
             diff = fact - plan
             percent = (fact / plan * 100) if plan else None
 
-            fact_list.append(fact)
-            plan_list.append(plan)
-            diff_list.append(diff)
-            percent_list.append(float(percent) if percent is not None else None)
-
-        row: ExpenseApiDataRowDict = {
-            'category': cat.name,
-            'category_id': cat.pk,
-            'months': [m.isoformat() for m in months],
-            'fact': fact_list,
-            'plan': plan_list,
-            'diff': diff_list,
-            'percent': percent_list,
-        }
+            row[f'fact_{month_str}'] = fact
+            row[f'plan_{month_str}'] = plan
+            row[f'diff_{month_str}'] = diff
+            row[f'percent_{month_str}'] = (
+                float(percent) if percent is not None else None
+            )
 
         data.append(row)
 

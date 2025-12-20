@@ -2,25 +2,62 @@
 {% load crispy_forms_tags %}
 {% load i18n %}
 
-
 {% block title %}{% translate 'Регистрация нового пользователя' %}{% endblock %}
+
 {% block content %}
-    <title>{{ title }}</title>
-    <div class="container bg-secondary-subtle d-flex min-vh-100 flex-column justify-content-center align-items-center">
-        <h1 class="text-dark">Регистрация нового пользователя</h1>
-        <form method="post" class="text-dark help-text-form">
-            {% csrf_token %}
-            <p class="my-4">
-                {{ form | crispy }}
-            </p>
-            <div class="row align-items-center justify-content-around">
-                <div class="col-xl-3">
-                    <button type="submit" class="btn btn-success">{% translate 'Зарегистрироваться' %}</button>
-                </div>
-	            <div class="col-xl-3">
-		            <a class="btn btn-warning text-light text-nowrap" href="{% url 'login' %}">{% translate 'Вернуться назад' %}</a>
-	            </div>
+<div class="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50 px-4 py-12 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 sm:px-6 lg:px-8">
+    <div class="w-full max-w-md space-y-8">
+        <div class="text-center">
+            <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-600 to-emerald-600 shadow-lg">
+                <svg class="h-12 w-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                </svg>
             </div>
-        </form>
-    </div>
+            <h1 class="text-3xl font-bold tracking-tight text-black dark:text-white">
+                {% translate 'Регистрация нового пользователя' %}
+            </h1>
+            <p class="mt-2 text-sm text-black dark:text-white">
+                {% translate 'Создайте аккаунт для управления личными финансами' %}
+            </p>
+        </div>
+
+        <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800 dark:shadow-gray-900/50">
+            <form method="post" class="space-y-6 text-black dark:text-white dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
+                {% csrf_token %}
+
+                {{ form | crispy }}
+
+                {% if form.non_field_errors %}
+                    <div class="rounded-xl bg-red-50 p-4 dark:bg-red-900/20">
+                        <div class="flex">
+                            <svg class="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                            <div class="ml-3">
+                                {% for error in form.non_field_errors %}
+                                    <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="flex flex-col gap-4 sm:flex-row sm:justify-between">
+                    <button type="submit" class="group relative flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-green-500/30 transition-all duration-200 hover:from-green-700 hover:to-emerald-700 hover:shadow-xl hover:shadow-green-500/40 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 active:scale-95 sm:w-auto">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                        </svg>
+                        {% translate 'Зарегистрироваться' %}
+                    </button>
+
+                    <a href="{% url 'login' %}" class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-gray-300 bg-white px-6 py-3 text-base font-semibold text-black transition-all duration-200 hover:border-gray-400 hover:bg-gray-50 active:scale-95 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:border-gray-500 dark:hover:bg-gray-700 sm:w-auto">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        {% translate 'Вернуться назад' %}
+                    </a>
+                </div>
+            </form>
+        </div>
+</div>
 {% endblock %}

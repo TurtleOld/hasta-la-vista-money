@@ -252,7 +252,9 @@ class ReceiptForm(ModelForm[Receipt]):
     receipt_date = DateTimeField(
         label=_('Дата и время покупки'),
         help_text=_('Указывается дата и время покупки, указанные в чеке.'),
+        input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         widget=DateTimeInput(
+            format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={'type': 'datetime-local', 'class': 'form-control'},
         ),
     )

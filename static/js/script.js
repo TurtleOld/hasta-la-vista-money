@@ -387,12 +387,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    window.setTimeout(function () {
-        $(".alert").fadeTo(400, 0).slideUp(400, function () {
-            $(this).remove();
-        });
-    }, 4000);
-
     function onClickRemoveObject() {
         const removeObjectButton = document.querySelectorAll('.remove-object-button')
         removeObjectButton.forEach((button) => {

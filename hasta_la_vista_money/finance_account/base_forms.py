@@ -93,18 +93,26 @@ class DateFieldMixin:
         """
         if 'payment_due_date' in self.fields:  # type: ignore[attr-defined]
             self.fields['payment_due_date'].widget = DateInput(  # type: ignore[attr-defined]
+                format=constants.HTML5_DATE_INPUT_FORMAT,
                 attrs={
                     'type': 'date',
                     'class': 'form-control credit-only-field',
                 },
             )
+            self.fields['payment_due_date'].input_formats = [  # type: ignore[attr-defined]
+                constants.HTML5_DATE_INPUT_FORMAT,
+            ]
 
         if 'exchange_date' in self.fields:  # type: ignore[attr-defined]
             self.fields['exchange_date'].widget = DateTimeInput(  # type: ignore[attr-defined]
+                format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
                 attrs={
                     'type': 'datetime-local',
                     'class': 'form-control',
                 },
+            )
+            self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS,
             )
 
 
@@ -149,7 +157,9 @@ class FormValidationMixin:
 
 
 class BaseAccountForm(
-    BootstrapFormMixin, CreditFieldsMixin, ModelForm[Account]
+    BootstrapFormMixin,
+    CreditFieldsMixin,
+    ModelForm[Account],
 ):
     """Base form class for account-related forms with common functionality.
 
@@ -174,6 +184,18 @@ class BaseTransferForm(BootstrapFormMixin, ModelForm[TransferMoneyLog]):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+
+        if 'exchange_date' in self.fields:  # type: ignore[attr-defined]
+            self.fields['exchange_date'].widget = DateTimeInput(  # type: ignore[attr-defined]
+                format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+                attrs={
+                    'type': 'datetime-local',
+                    'class': 'form-control',
+                },
+            )
+            self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS,
+            )
 
         if 'amount' not in self.fields:
             self.fields['amount'] = DecimalField(

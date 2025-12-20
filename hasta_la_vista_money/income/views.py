@@ -206,7 +206,13 @@ class IncomeCreateView(
         """
         Build context for income creation form.
         """
-        return super().get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
+        context['cancel_url'] = (
+            str(self.success_url)
+            if self.success_url
+            else reverse_lazy(INCOME_LIST_URL_NAME)
+        )
+        return context
 
     def form_valid(
         self,

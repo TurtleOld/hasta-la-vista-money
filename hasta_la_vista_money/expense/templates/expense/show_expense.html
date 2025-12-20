@@ -8,59 +8,67 @@
 
 {% block title %}{% translate 'Информация о расходах' %}{% endblock %}
 {% block content %}
-    <div class="container">
-        <div class="row">
-            <div class="col-xl-12">
-                <div class="wrapper-table-expense mt-5">
-                    <div class="d-flex justify-content-between align-items-center mb-3 px-2 pt-2">
-                        <div class="fw-bold">{% translate 'Расходы' %}</div>
-                        <div class="ms-auto d-flex align-items-center gap-2">
-                            <button id="toggle-group-filter" class="btn btn-outline-success btn-sm" title="Фильтр по группе" type="button">
-                                <i class="bi bi-funnel"></i>
-                            </button>
-                            <div id="expense-group-filter-block" class="d-none">
-                                <label for="expense-group-select" class="form-label mb-0">{% translate 'Группа:' %}</label>
-                                <select id="expense-group-select" class="form-select form-select-sm d-inline-block w-auto">
-                                    <option value="my">{% translate 'Мои' %}</option>
-                                    {% for group in user.groups.all %}
-                                        <option value="{{ group.id }}">{{ group.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <a type="button" class="btn btn-outline-success ms-2" href="{% url 'expense:create' %}" title="{% translate 'Добавить новую расходную операцию' %}">
-                                <i class="bi bi-graph-down-arrow"></i>
-                            </a>
-                            <a class="btn btn-outline-success" href="{% url 'expense:category_list' %}" title="{% translate 'Добавить категорию' %}">
-                                <i class="bi bi-layout-text-sidebar-reverse"></i>
-                            </a>
-                        </div>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-2xl sm:text-3xl font-heading font-semibold text-gray-900 dark:text-gray-100">
+                    {% translate 'Расходы' %}
+                </h1>
+                <div class="flex items-center gap-2">
+                    <button id="toggle-group-filter" class="inline-flex items-center justify-center rounded-lg border border-green-600 dark:border-green-400 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="{% translate 'Фильтр по группе' %}" type="button">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                        </svg>
+                    </button>
+                    <div id="expense-group-filter-block" class="hidden flex items-center gap-2">
+                        <label for="expense-group-select" class="text-sm font-medium text-gray-700 dark:text-gray-300">{% translate 'Группа:' %}</label>
+                        <select id="expense-group-select" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 focus:outline-none">
+                            <option value="my">{% translate 'Мои' %}</option>
+                            {% for group in user.groups.all %}
+                                <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
-                    <div id="expense-table-block">
-                        <div class="table-responsive">
-                            <div id="expense-skeleton" class="skeleton-table-expense">
-                                <div class="skeleton-row-expense skeleton-header-expense">
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                </div>
+                    <a href="{% url 'expense:create' %}" class="inline-flex items-center justify-center rounded-lg border border-green-600 dark:border-green-400 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="{% translate 'Добавить новую расходную операцию' %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+                        </svg>
+                    </a>
+                    <a href="{% url 'expense:category_list' %}" class="inline-flex items-center justify-center rounded-lg border border-green-600 dark:border-green-400 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="{% translate 'Добавить категорию' %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            <div id="expense-table-block">
+                <div class="overflow-x-auto">
+                    <div class="relative min-h-[400px]">
+                        <div id="expense-skeleton" class="skeleton-table absolute inset-0 z-10">
+                            <div class="skeleton-header">
+                                <div class="skeleton-cell"></div>
+                                <div class="skeleton-cell"></div>
+                                <div class="skeleton-cell"></div>
+                                <div class="skeleton-cell"></div>
+                                <div class="skeleton-cell"></div>
+                                <div class="skeleton-cell"></div>
+                            </div>
+                            <div class="skeleton-body">
                                 {% for i in "12345" %}
-                                <div class="skeleton-row-expense">
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
-                                    <div class="skeleton-cell-expense"></div>
+                                <div class="skeleton-row">
+                                    <div class="skeleton-cell"></div>
+                                    <div class="skeleton-cell"></div>
+                                    <div class="skeleton-cell"></div>
+                                    <div class="skeleton-cell"></div>
+                                    <div class="skeleton-cell"></div>
+                                    <div class="skeleton-cell"></div>
                                 </div>
                                 {% endfor %}
                             </div>
-                            <div id="expense-table" class="expense-table tabulator" data-current-user-id="{{ request.user.id }}"></div>
                         </div>
-                        <div id="expense-mobile-cards" class="mobile-cards"></div>
+                        <div id="expense-table" class="expense-table tabulator relative z-20 invisible" data-current-user-id="{{ request.user.id }}"></div>
                     </div>
+                    <div id="expense-mobile-cards" class="mobile-cards"></div>
                 </div>
             </div>
         </div>

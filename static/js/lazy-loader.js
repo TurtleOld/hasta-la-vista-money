@@ -38,12 +38,18 @@
 
         const promise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
+            const nonceValue = options.nonce && options.nonce.trim() ? options.nonce.trim() : null;
+
+            if (nonceValue) {
+                script.setAttribute('nonce', nonceValue);
+            }
+
             script.src = src;
             script.async = options.async !== false;
             script.defer = options.defer !== false;
 
-            if (options.nonce) {
-                script.nonce = options.nonce;
+            if (nonceValue) {
+                script.nonce = nonceValue;
             }
 
             script.onload = () => {
@@ -58,6 +64,9 @@
             };
 
             const target = options.target || document.head || document.body;
+            if (nonceValue && !script.hasAttribute('nonce')) {
+                script.setAttribute('nonce', nonceValue);
+            }
             target.appendChild(script);
         });
 
@@ -91,7 +100,7 @@
 
     function loadScriptOnPathMatch(pathPattern, scriptSrc, options = {}) {
         const currentPath = window.location.pathname;
-        
+
         if (typeof pathPattern === 'string') {
             if (currentPath.includes(pathPattern)) {
                 return loadScript(scriptSrc, options);
@@ -147,4 +156,3 @@
         module.exports = LazyLoader;
     }
 })();
-

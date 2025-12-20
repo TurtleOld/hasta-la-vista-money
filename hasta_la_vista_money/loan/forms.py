@@ -12,9 +12,12 @@ from django.forms import (
     IntegerField,
     ModelChoiceField,
     ModelForm,
+    NumberInput,
+    Select,
 )
 from django.utils.translation import gettext_lazy as _
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.models import Loan, PaymentMakeLoan
 from hasta_la_vista_money.users.models import User
@@ -24,11 +27,13 @@ class LoanForm(ModelForm[Loan]):
     date = DateTimeField(
         label=_('Дата'),
         widget=DateTimeInput(
+            format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={
-                'type': 'date',
-                'class': 'form-control',
+                'type': 'datetime-local',
+                'class': 'loan-form-datetime',
             },
         ),
+        input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         help_text=_('Укажите дату начала кредита'),
     )
 
@@ -62,11 +67,7 @@ class LoanForm(ModelForm[Loan]):
             'annual_interest_rate',
             'period_loan',
         ]
-        widgets: ClassVar[dict[str, Any]] = {
-            'date': DateTimeInput(
-                attrs={'type': 'datetime-local', 'class': 'form-control'},
-            ),
-        }
+        widgets: ClassVar[dict[str, Any]] = {}
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
@@ -77,6 +78,22 @@ class LoanForm(ModelForm[Loan]):
         """
         self.request_user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+
+        input_classes = 'loan-form-input'
+        select_classes = 'loan-form-select'
+
+        self.fields['type_loan'].widget = Select(
+            attrs={'class': select_classes},
+        )
+        self.fields['loan_amount'].widget = NumberInput(
+            attrs={'class': input_classes, 'step': '0.01'},
+        )
+        self.fields['annual_interest_rate'].widget = NumberInput(
+            attrs={'class': input_classes, 'step': '0.01'},
+        )
+        self.fields['period_loan'].widget = NumberInput(
+            attrs={'class': input_classes, 'step': '1'},
+        )
 
     def save(self, commit: bool = True) -> Loan:
         cd = self.cleaned_data
@@ -100,11 +117,13 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
     date = DateTimeField(
         label=_('Дата платежа'),
         widget=DateTimeInput(
+            format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={
                 'type': 'datetime-local',
-                'class': 'form-control',
+                'class': 'loan-form-datetime',
             },
         ),
+        input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         help_text=_('Укажите дату платежа'),
     )
 
@@ -141,6 +160,15 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
         self.fields['account'].queryset = self.get_account_queryset()  # type: ignore[attr-defined]
         self.fields['loan'].queryset = Loan.objects.filter(user=user)  # type: ignore[attr-defined]
 
+        input_classes = 'loan-form-input'
+        select_classes = 'loan-form-select'
+
+        self.fields['account'].widget.attrs.update({'class': select_classes})
+        self.fields['loan'].widget.attrs.update({'class': select_classes})
+        self.fields['amount'].widget = NumberInput(
+            attrs={'class': input_classes, 'step': '0.01'},
+        )
+
     def get_account_queryset(self) -> QuerySet[Account]:
         accounts = Account.objects.filter(user=self.user)
 
@@ -158,8 +186,4 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
             'loan',
             'amount',
         ]
-        widgets: ClassVar[dict[str, Any]] = {
-            'date': DateTimeInput(
-                attrs={'type': 'datetime-local', 'class': 'form-control'},
-            ),
-        }
+        widgets: ClassVar[dict[str, Any]] = {}

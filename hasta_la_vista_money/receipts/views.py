@@ -207,26 +207,44 @@ class SellerCreateView(
     model = Seller
     form_class: type[SellerForm] = SellerForm
 
-    def post(
-        self,
-        request: HttpRequest,
-    ) -> JsonResponse:
-        seller_form = SellerForm(request.POST)
-        if seller_form.is_valid():
-            seller = seller_form.save(commit=False)
-            seller.user = cast('User', request.user)
-            seller.save()
+    def _wants_json_response(self) -> bool:
+        requested_with = self.request.headers.get('x-requested-with', '')
+        if requested_with.lower() == 'xmlhttprequest':
+            return True
+        hx_request = self.request.headers.get('hx-request', '')
+        return hx_request.lower() == 'true'
+
+    def form_valid(self, form: SellerForm) -> HttpResponse:
+        form.instance.user = cast('User', self.request.user)
+
+        if self._wants_json_response():
+            self.object = form.save()
             messages.success(
                 self.request,
                 constants.SUCCESS_MESSAGE_CREATE_SELLER,
             )
-            response_data: dict[str, Any] = {'success': True}
-        else:
-            response_data = {
-                'success': False,
-                'errors': seller_form.errors,
-            }
-        return JsonResponse(response_data)
+            return JsonResponse({'success': True})
+
+        response = super().form_valid(form)
+        messages.success(
+            self.request,
+            constants.SUCCESS_MESSAGE_CREATE_SELLER,
+        )
+        return response
+
+    def form_invalid(self, form: SellerForm) -> HttpResponse:
+        if self._wants_json_response():
+            return JsonResponse(
+                {
+                    'success': False,
+                    'errors': form.errors,
+                },
+                status=400,
+            )
+        return super().form_invalid(form)
+
+    def get_success_url(self) -> str:
+        return str(reverse_lazy('receipts:list'))
 
 
 class ReceiptCreateView(

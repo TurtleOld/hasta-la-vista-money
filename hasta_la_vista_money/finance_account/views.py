@@ -290,6 +290,40 @@ class ChangeAccountView(
         else:
             return context
 
+    def form_valid(self, form: AddAccountForm) -> HttpResponseRedirect:
+        request = cast('WSGIRequestWithContainer', self.request)
+        try:
+            account = form.save(commit=False)
+            if not isinstance(request.user, User):
+                raise TypeError('User must be authenticated')
+            account.user = request.user
+            account.save()
+            messages.success(request, self.success_message)
+            return HttpResponseRedirect(str(self.get_success_url()))
+        except ValidationError as e:
+            form.add_error(None, str(e))
+            messages.error(request, str(e))
+            return self.form_invalid(form)  # type: ignore[return-value]
+        except Exception:
+            logger.exception(
+                'Ошибка при изменении счета',
+                user_id=getattr(request.user, 'id', None),
+            )
+            form.add_error(
+                None,
+                _('Не удалось изменить счет. Пожалуйста, попробуйте позже.'),
+            )
+            messages.error(
+                request,
+                _('Не удалось изменить счет. Пожалуйста, попробуйте позже.'),
+            )
+            return self.form_invalid(form)  # type: ignore[return-value]
+
+    def form_invalid(self, form: AddAccountForm) -> Any:
+        context = self.get_context_data()
+        context['add_account_form'] = form
+        return self.render_to_response(context)
+
 
 class TransferMoneyAccountView(
     LoginRequiredMixin,

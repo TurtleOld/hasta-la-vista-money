@@ -532,19 +532,6 @@ wheels = [
 ]
 
 [[package]]
-name = "crispy-bootstrap5"
-version = "2025.6"
-source = { registry = "https://pkgs.safetycli.com/repository/pavlovteam/project/hastalavistamoney/pypi/simple/" }
-dependencies = [
-    { name = "django" },
-    { name = "django-crispy-forms" },
-]
-sdist = { url = "https://pkgs.safetycli.com/package/pavlovteam/pypi/packages/97/30/36cc4144b6dff91bb54490a3b474897b7469bcda9517bf9f54681ea91011/crispy_bootstrap5-2025.6.tar.gz", hash = "sha256:f1bde7cac074c650fc82f31777d4a4cfd0df2512c68bc4128f259c75d3daada4", size = 23950, upload-time = "2025-06-08T07:43:35.461Z" }
-wheels = [
-    { url = "https://pkgs.safetycli.com/package/pavlovteam/pypi/packages/d8/d4/8cf1ba773a91fc17bab1fd46b75bbdef780c4cccbbb8230e617980a0362c/crispy_bootstrap5-2025.6-py3-none-any.whl", hash = "sha256:a343aa128b4383f35f00295b94de2b10862f2a4f24eda21fa6ead45234c07050", size = 24794, upload-time = "2025-06-08T07:43:34.206Z" },
-]
-
-[[package]]
 name = "crispy-tailwind"
 version = "1.0.3"
 source = { registry = "https://pkgs.safetycli.com/repository/pavlovteam/project/hastalavistamoney/pypi/simple/" }
@@ -1173,11 +1160,10 @@ wheels = [
 
 [[package]]
 name = "hastalavistamoney"
-version = "1.8.0"
+version = "1.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "channels" },
-    { name = "crispy-bootstrap5" },
     { name = "crispy-tailwind" },
     { name = "dependency-injector" },
     { name = "dj-database-url" },
@@ -1210,7 +1196,6 @@ dependencies = [
     { name = "python-decouple" },
     { name = "pyyaml" },
     { name = "sentry-sdk" },
-    { name = "tenacity" },
     { name = "twisted", extra = ["http2", "tls"] },
     { name = "types-django-filter" },
     { name = "urllib3" },
@@ -1268,7 +1253,6 @@ requires-dist = [
     { name = "bump2version", marker = "extra == 'dev'", specifier = ">=1.0.1" },
     { name = "channels", specifier = ">=4.0.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.3.2" },
-    { name = "crispy-bootstrap5", specifier = ">=2025.4" },
     { name = "crispy-tailwind", specifier = ">=1.0.3" },
     { name = "dependency-injector", specifier = ">=4.48.2" },
     { name = "dj-database-url", specifier = ">=3.0.0" },
@@ -1314,7 +1298,6 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "sentry-sdk", specifier = ">=2.22.0" },
-    { name = "tenacity", specifier = ">=9.0.0" },
     { name = "twisted", extras = ["http2", "tls"], specifier = ">=25.0.0" },
     { name = "types-django-filter", specifier = ">=25.2.0.20251010" },
     { name = "types-python-dateutil", marker = "extra == 'dev'", specifier = ">=2.9.0.20241003" },

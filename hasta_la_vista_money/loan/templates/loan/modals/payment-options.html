@@ -2,136 +2,184 @@
 {% load crispy_forms_tags %}
 {% load comma %}
 
-<div id="payment-options" class="ajax-modal modal fade">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
+<div id="payment-options" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div class="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
+        <div class="bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-4 text-white">
+            <div class="flex items-center justify-between">
+                <h5 class="text-xl font-semibold" id="payment-options-title">
                     {% translate 'Варианты платежей' %}
                 </h5>
-                <button type="button" class="btn-close"
-                        data-bs-dismiss="modal"
-                        aria-label="Close"></button>
+                <button type="button" class="modal-close rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
             </div>
-            <div class="modal-body">
-                <h3>{% translate '1. Аннуитетный платеж' %}</h3>
+        </div>
+        <div class="max-h-[calc(90vh-200px)] overflow-y-auto p-6">
+            <div class="space-y-6">
+                <div>
+                    <h3 class="mb-3 text-xl font-semibold text-gray-900 dark:text-gray-100">{% translate '1. Аннуитетный платеж' %}</h3>
 
-                <p><strong>{% translate 'Определение:' %}</strong><br>
-                {% translate 'Аннуитетный платеж — это способ погашения кредита, при котором заемщик ежемесячно платит фиксированную сумму. Эта сумма включает как часть основного долга, так и начисленные проценты.' %}
-                </p>
+                    <p class="mb-2 text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Определение:' %}</strong><br>
+                        {% translate 'Аннуитетный платеж — это способ погашения кредита, при котором заемщик ежемесячно платит фиксированную сумму. Эта сумма включает как часть основного долга, так и начисленные проценты.' %}
+                    </p>
 
-                <p><strong>{% translate 'Особенности:' %}</strong></p>
-                <ul>
-                    <li>{% translate 'Ежемесячный платеж остается постоянным на протяжении всего срока кредита.' %}</li>
-                    <li>{% translate 'В начале срока большая часть платежа идет на погашение процентов, а меньшая — на погашение основного долга.' %}</li>
-                    <li>{% translate 'По мере выплаты кредита соотношение меняется: проценты уменьшаются, а доля основного долга увеличивается.' %}</li>
-                </ul>
+                    <p class="mb-2 text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Особенности:' %}</strong>
+                    </p>
+                    <ul class="mb-4 ml-6 list-disc space-y-1 text-gray-700 dark:text-gray-300">
+                        <li>{% translate 'Ежемесячный платеж остается постоянным на протяжении всего срока кредита.' %}</li>
+                        <li>{% translate 'В начале срока большая часть платежа идет на погашение процентов, а меньшая — на погашение основного долга.' %}</li>
+                        <li>{% translate 'По мере выплаты кредита соотношение меняется: проценты уменьшаются, а доля основного долга увеличивается.' %}</li>
+                    </ul>
 
-                <p><strong>{% translate 'Формула расчета аннуитетного платежа:' %}</strong><br>
-                \[
-                A = \frac{S \cdot r \cdot (1 + r)^n}{(1 + r)^n - 1}
-                \]<br>
-                {% translate 'Где:' %}
-                <ul>
-                    <li>\( A \) — {% translate 'размер аннуитетного платежа,' %}</li>
-                    <li>\( S \) — {% translate 'сумма кредита,' %}</li>
-                    <li>\( r \) — {% translate 'месячная процентная ставка (годовая ставка делится на 12),' %}</li>
-                    <li>\( n \) — {% translate 'количество месяцев (срок кредита).' %}</li>
-                </ul></p>
+                    <div class="mb-4 rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                        <p class="mb-2 text-gray-700 dark:text-gray-300">
+                            <strong class="text-gray-900 dark:text-gray-100">{% translate 'Формула расчета аннуитетного платежа:' %}</strong><br>
+                            \[
+                            A = \frac{S \cdot r \cdot (1 + r)^n}{(1 + r)^n - 1}
+                            \]<br>
+                            {% translate 'Где:' %}
+                        </p>
+                        <ul class="ml-6 list-disc space-y-1 text-gray-700 dark:text-gray-300">
+                            <li>\( A \) — {% translate 'размер аннуитетного платежа,' %}</li>
+                            <li>\( S \) — {% translate 'сумма кредита,' %}</li>
+                            <li>\( r \) — {% translate 'месячная процентная ставка (годовая ставка делится на 12),' %}</li>
+                            <li>\( n \) — {% translate 'количество месяцев (срок кредита).' %}</li>
+                        </ul>
+                    </div>
 
-                <p><strong>{% translate 'Пример:' %}</strong><br>
-                {% translate 'Если вы взяли кредит на 100 000 рублей под 12% годовых на 12 месяцев, то ежемесячный платеж будет одинаковым, например, 8 885 рублей. В первый месяц большая часть этой суммы пойдет на проценты, а меньшая — на погашение основного долга.' %}
-                </p>
+                    <p class="text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Пример:' %}</strong><br>
+                        {% translate 'Если вы взяли кредит на 100 000 рублей под 12% годовых на 12 месяцев, то ежемесячный платеж будет одинаковым, например, 8 885 рублей. В первый месяц большая часть этой суммы пойдет на проценты, а меньшая — на погашение основного долга.' %}
+                    </p>
+                </div>
 
-                <h3>{% translate '2. Дифференцированный платеж' %}</h3>
+                <div class="border-t border-gray-200 pt-6 dark:border-gray-700">
+                    <h3 class="mb-3 text-xl font-semibold text-gray-900 dark:text-gray-100">{% translate '2. Дифференцированный платеж' %}</h3>
 
-                <p><strong>{% translate 'Определение:' %}</strong><br>
-                {% translate 'Дифференцированный платеж — это способ погашения кредита, при котором заемщик ежемесячно выплачивает фиксированную часть основного долга плюс проценты на остаток задолженности.' %}
-                </p>
+                    <p class="mb-2 text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Определение:' %}</strong><br>
+                        {% translate 'Дифференцированный платеж — это способ погашения кредита, при котором заемщик ежемесячно выплачивает фиксированную часть основного долга плюс проценты на остаток задолженности.' %}
+                    </p>
 
-                <p><strong>{% translate 'Особенности:' %}</strong></p>
-                <ul>
-                    <li>{% translate 'Ежемесячный платеж уменьшается с течением времени, так как проценты начисляются на остаток долга, который постепенно снижается.' %}</li>
-                    <li>{% translate 'Сразу после получения кредита заемщик начинает активно погашать основной долг.' %}</li>
-                    <li>{% translate 'Первоначальные платежи выше, чем при аннуитетной схеме, но общая переплата по кредиту меньше.' %}</li>
-                </ul>
+                    <p class="mb-2 text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Особенности:' %}</strong>
+                    </p>
+                    <ul class="mb-4 ml-6 list-disc space-y-1 text-gray-700 dark:text-gray-300">
+                        <li>{% translate 'Ежемесячный платеж уменьшается с течением времени, так как проценты начисляются на остаток долга, который постепенно снижается.' %}</li>
+                        <li>{% translate 'Сразу после получения кредита заемщик начинает активно погашать основной долг.' %}</li>
+                        <li>{% translate 'Первоначальные платежи выше, чем при аннуитетной схеме, но общая переплата по кредиту меньше.' %}</li>
+                    </ul>
 
-                <p><strong>{% translate 'Формула расчета дифференцированного платежа:' %}</strong></p>
-                <p>{% translate 'Фиксированная часть основного долга:' %}<br>
-                \[
-                D = \frac{S}{n}
-                \]<br>
-                {% translate 'Где:' %}
-                <ul>
-                    <li>\( D \) — {% translate 'ежемесячная сумма основного долга,' %}</li>
-                    <li>\( S \) — {% translate 'сумма кредита,' %}</li>
-                    <li>\( n \) — {% translate 'количество месяцев.' %}</li>
-                </ul></p>
+                    <div class="mb-4 space-y-4 rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                        <p class="text-gray-700 dark:text-gray-300">
+                            <strong class="text-gray-900 dark:text-gray-100">{% translate 'Формула расчета дифференцированного платежа:' %}</strong>
+                        </p>
+                        <p class="text-gray-700 dark:text-gray-300">
+                            {% translate 'Фиксированная часть основного долга:' %}<br>
+                            \[
+                            D = \frac{S}{n}
+                            \]<br>
+                            {% translate 'Где:' %}
+                        </p>
+                        <ul class="ml-6 list-disc space-y-1 text-gray-700 dark:text-gray-300">
+                            <li>\( D \) — {% translate 'ежемесячная сумма основного долга,' %}</li>
+                            <li>\( S \) — {% translate 'сумма кредита,' %}</li>
+                            <li>\( n \) — {% translate 'количество месяцев.' %}</li>
+                        </ul>
+                        <p class="text-gray-700 dark:text-gray-300">
+                            {% translate 'Проценты за текущий месяц:' %}<br>
+                            \[
+                            P = \text{остаток долга} \cdot r
+                            \]<br>
+                            {% translate 'Где:' %}
+                        </p>
+                        <ul class="ml-6 list-disc space-y-1 text-gray-700 dark:text-gray-300">
+                            <li>\( P \) — {% translate 'проценты за месяц,' %}</li>
+                            <li>\( r \) — {% translate 'месячная процентная ставка.' %}</li>
+                        </ul>
+                        <p class="text-gray-700 dark:text-gray-300">
+                            {% translate 'Общий платеж за месяц:' %}<br>
+                            \[
+                            \text{Платеж} = D + P
+                            \]
+                        </p>
+                    </div>
 
-                <p>{% translate 'Проценты за текущий месяц:' %}<br>
-                \[
-                P = \text{остаток долга} \cdot r
-                \]<br>
-                {% translate 'Где:' %}
-                <ul>
-                    <li>\( P \) — {% translate 'проценты за месяц,' %}</li>
-                    <li>\( r \) — {% translate 'месячная процентная ставка.' %}</li>
-                </ul></p>
+                    <p class="text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Пример:' %}</strong><br>
+                        {% translate 'Если вы взяли кредит на 100 000 рублей под 12% годовых на 12 месяцев, то фиксированная часть основного долга составит \( 100\,000 / 12 = 8\,333 \) рубля. В первый месяц проценты будут начислены на всю сумму кредита (\( 100\,000 \cdot 0.01 = 1\,000 \) рублей), и общий платеж составит \( 8\,333 + 1\,000 = 9\,333 \) рубля. Во второй месяц проценты будут начислены на остаток (\( 91\,667 \cdot 0.01 = 917 \) рублей), и платеж уменьшится.' %}
+                    </p>
+                </div>
 
-                <p>{% translate 'Общий платеж за месяц:' %}<br>
-                \[
-                \text{Платеж} = D + P
-                \]</p>
+                <div class="border-t border-gray-200 pt-6 dark:border-gray-700">
+                    <h3 class="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">{% translate 'Сравнение аннуитетного и дифференцированного платежей' %}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse rounded-lg border border-gray-200 dark:border-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700/50">
+                                <tr>
+                                    <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:border-gray-700 dark:text-gray-100">{% translate 'Критерий' %}</th>
+                                    <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:border-gray-700 dark:text-gray-100">{% translate 'Аннуитетный платеж' %}</th>
+                                    <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:border-gray-700 dark:text-gray-100">{% translate 'Дифференцированный платеж' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Размер ежемесячного платежа' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Постоянный' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Уменьшается с каждым месяцем' %}</td>
+                                </tr>
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Переплата по кредиту' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Больше' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Меньше' %}</td>
+                                </tr>
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Начало погашения основного долга' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Меньшая доля в начале' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Большая доля с самого начала' %}</td>
+                                </tr>
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Удобство для заемщика' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Более предсказуемый график платежей' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Требует планирования из-за уменьшения платежей' %}</td>
+                                </tr>
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Общая стоимость кредита' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">{% translate 'Выше' %}</td>
+                                    <td class="border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{% translate 'Ниже' %}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
-                <p><strong>{% translate 'Пример:' %}</strong><br>
-                {% translate 'Если вы взяли кредит на 100 000 рублей под 12% годовых на 12 месяцев, то фиксированная часть основного долга составит \( 100\,000 / 12 = 8\,333 \) рубля. В первый месяц проценты будут начислены на всю сумму кредита (\( 100\,000 \cdot 0.01 = 1\,000 \) рублей), и общий платеж составит \( 8\,333 + 1\,000 = 9\,333 \) рубля. Во второй месяц проценты будут начислены на остаток (\( 91\,667 \cdot 0.01 = 917 \) рублей), и платеж уменьшится.' %}
-                </p>
+                <div class="border-t border-gray-200 pt-6 dark:border-gray-700">
+                    <h3 class="mb-3 text-xl font-semibold text-gray-900 dark:text-gray-100">{% translate 'Какой способ выбрать?' %}</h3>
+                    <p class="mb-2 text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Аннуитетный платеж' %}</strong>
+                        {% translate 'подходит тем, кто ценит стабильность и предсказуемость ежемесячных расходов. Это удобно для длительных кредитов (например, ипотека).' %}
+                    </p>
+                    <p class="text-gray-700 dark:text-gray-300">
+                        <strong class="text-gray-900 dark:text-gray-100">{% translate 'Дифференцированный платеж' %}</strong>
+                        {% translate 'выгоден тем, кто хочет минимизировать переплату по кредиту и готов к более высоким платежам в начале срока. Этот вариант чаще используется для краткосрочных кредитов.' %}
+                    </p>
+                </div>
 
-                <h3>{% translate 'Сравнение аннуитетного и дифференцированного платежей' %}</h3>
-                <table border="1" cellpadding="5" cellspacing="0">
-                    <tr>
-                        <th>{% translate 'Критерий' %}</th>
-                        <th>{% translate 'Аннуитетный платеж' %}</th>
-                        <th>{% translate 'Дифференцированный платеж' %}</th>
-                    </tr>
-                    <tr>
-                        <td>{% translate 'Размер ежемесячного платежа' %}</td>
-                        <td>{% translate 'Постоянный' %}</td>
-                        <td>{% translate 'Уменьшается с каждым месяцем' %}</td>
-                    </tr>
-                    <tr>
-                        <td>{% translate 'Переплата по кредиту' %}</td>
-                        <td>{% translate 'Больше' %}</td>
-                        <td>{% translate 'Меньше' %}</td>
-                    </tr>
-                    <tr>
-                        <td>{% translate 'Начало погашения основного долга' %}</td>
-                        <td>{% translate 'Меньшая доля в начале' %}</td>
-                        <td>{% translate 'Большая доля с самого начала' %}</td>
-                    </tr>
-                    <tr>
-                        <td>{% translate 'Удобство для заемщика' %}</td>
-                        <td>{% translate 'Более предсказуемый график платежей' %}</td>
-                        <td>{% translate 'Требует планирования из-за уменьшения платежей' %}</td>
-                    </tr>
-                    <tr>
-                        <td>{% translate 'Общая стоимость кредита' %}</td>
-                        <td>{% translate 'Выше' %}</td>
-                        <td>{% translate 'Ниже' %}</td>
-                    </tr>
-                </table>
-
-                <h3>{% translate 'Какой способ выбрать?' %}</h3>
-                <p><strong>{% translate 'Аннуитетный платеж' %}</strong> {% translate 'подходит тем, кто ценит стабильность и предсказуемость ежемесячных расходов. Это удобно для длительных кредитов (например, ипотека).' %}</p>
-                <p><strong>{% translate 'Дифференцированный платеж' %}</strong> {% translate 'выгоден тем, кто хочет минимизировать переплату по кредиту и готов к более высоким платежам в начале срока. Этот вариант чаще используется для краткосрочных кредитов.' %}
-                </p>
-
-                <h3>{% translate 'Итог:' %}</h3>
-                <p>
-                    {% translate 'Аннуитетный платеж — это равные ежемесячные выплаты, где большая часть денег в начале идет на проценты.' %}<br>
-                    {% translate 'Дифференцированный платеж — это уменьшающиеся ежемесячные выплаты, где сразу активно гасится основной долг.' %}
-                </p>
+                <div class="rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 p-4 dark:from-green-900/20 dark:to-emerald-900/20">
+                    <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">{% translate 'Итог:' %}</h3>
+                    <p class="text-gray-700 dark:text-gray-300">
+                        {% translate 'Аннуитетный платеж — это равные ежемесячные выплаты, где большая часть денег в начале идет на проценты.' %}<br>
+                        {% translate 'Дифференцированный платеж — это уменьшающиеся ежемесячные выплаты, где сразу активно гасится основной долг.' %}
+                    </p>
+                </div>
             </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700/30">
+            <button type="button" class="modal-close rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">{% translate 'Закрыть' %}</button>
         </div>
     </div>
 </div>

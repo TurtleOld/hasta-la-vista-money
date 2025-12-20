@@ -2,97 +2,105 @@
 {% load comma %}
 {% load i18n %}
 
-<div class="row mt-4 g-4">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
     {% for receipt in receipts %}
-    <div class="col-xl-6 col-lg-6 col-md-12">
-        <div class="receipt-card card shadow-lg border-0 h-100 {% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %}receipt-foreign{% endif %} rounded-4 overflow-hidden">
-            <div class="card-body p-4 d-flex flex-column justify-content-between h-100">
-                <div class="d-flex justify-content-between align-items-start mb-3 gap-3">
-                    <div class="flex-grow-1">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <h5 class="mb-0 text-primary fw-bold">{{ receipt.seller.name_seller }}</h5>
+    <div class="group">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-md hover:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden h-full transition-all duration-300 hover:-translate-y-1 {% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %}ring-2 ring-blue-300 dark:ring-blue-700{% endif %} animate-[fadeInUp_0.3s_ease-out]">
+            <div class="p-6 flex flex-col justify-between h-full">
+                <div class="flex justify-between items-start mb-4 gap-4">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-2 flex-wrap">
+                            <h5 class="text-lg font-heading font-bold text-green-600 dark:text-green-400 mb-0 truncate">{{ receipt.seller.name_seller }}</h5>
                             {% if receipt.operation_type == 2 %}
-                                <span class="badge bg-warning text-dark ms-2"><i class="bi bi-arrow-return-left me-1"></i>{% translate 'Возврат' %}</span>
+                                <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-md">
+                                    <i class="bi bi-arrow-return-left"></i>{% translate 'Возврат' %}
+                                </span>
                             {% endif %}
                         </div>
-                        <div class="text-muted small mb-1">
-                            <i class="bi bi-calendar3 me-1"></i>{{ receipt.receipt_date | date:"d.m.Y H:i" }}
+                        <div class="text-sm text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                            <i class="bi bi-calendar3"></i>{{ receipt.receipt_date | date:"d.m.Y H:i" }}
                         </div>
                         {% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %}
-                            <div class="receipt-owner-label mt-1"><span class="badge bg-light text-dark"><i class="bi bi-person me-1"></i>{% translate 'Владелец:' %} {{ receipt.user.username }}</span></div>
+                            <div class="mt-2">
+                                <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md">
+                                    <i class="bi bi-person"></i>{% translate 'Владелец:' %} {{ receipt.user.username }}
+                                </span>
+                            </div>
                         {% endif %}
                     </div>
-                    <div class="text-end flex-shrink-0">
-                        <div class="fs-3 fw-bold text-success mb-1">{{ receipt.total_sum | comma }}</div>
-                        <div class="text-muted small">₽</div>
+                    <div class="text-right flex-shrink-0">
+                        <div class="flex items-baseline justify-end gap-1">
+                            <span class="text-3xl font-mono font-bold text-green-600 dark:text-green-400">{{ receipt.total_sum | comma }}</span>
+                            <span class="text-lg text-green-600 dark:text-green-400 font-medium">₽</span>
+                        </div>
                     </div>
                 </div>
-                <div class="products-preview mb-3">
-                    <small class="text-muted">{% translate 'Товары:' %}</small>
-                    <div class="product-tags mt-1">
+                <div class="mb-4">
+                    <small class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2 block">{% translate 'Товары:' %}</small>
+                    <div class="flex flex-wrap gap-2">
                         {% for product in receipt.product.all|slice:":3" %}
-                        <span class="badge bg-light text-dark me-1 mb-1">{{ product.product_name|truncatechars:20 }}</span>
+                        <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg shadow-sm">{{ product.product_name|truncatechars:20 }}</span>
                         {% endfor %}
                         {% if receipt.product.all|length > 3 %}
-                        <span class="badge bg-secondary">+{{ receipt.product.all|length|add:"-3" }}</span>
+                        <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm">+{{ receipt.product.all|length|add:"-3" }}</span>
                         {% endif %}
                     </div>
                 </div>
-                <div class="d-flex justify-content-end gap-2 mt-auto">
-                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#receipt-{{ receipt.id }}">
-                        <i class="bi bi-eye me-1"></i>{% translate 'Просмотр' %}
+                <div class="flex justify-end gap-2 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors duration-200" data-bs-toggle="modal" data-bs-target="#receipt-{{ receipt.id }}">
+                        <i class="bi bi-eye"></i>{% translate 'Просмотр' %}
                     </button>
-                    <a href="{% url 'receipts:update' receipt.id %}" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-pencil me-1"></i>{% translate 'Редактировать' %}
+                    <a href="{% url 'receipts:update' receipt.id %}" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors duration-200">
+                        <i class="bi bi-pencil"></i>{% translate 'Редактировать' %}
                     </a>
                     <form class="form-remove-receipt-button m-0" action="{% url 'receipts:delete' receipt.id %}" method="post">
                         {% csrf_token %}
                         <input type="hidden" name="receipt_id" value="{{ receipt.id }}">
-                        <button class="btn btn-outline-danger btn-sm" data-nonce="{{ request.csp_nonce }}" type="submit" name="delete_receipt_button" title="{% translate 'Удалить чек' %}">
-                            <i class="bi bi-trash me-1"></i>{% translate 'Удалить' %}
+                        <button class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors duration-200" data-nonce="{{ request.csp_nonce }}" type="submit" name="delete_receipt_button" title="{% translate 'Удалить чек' %}">
+                            <i class="bi bi-trash"></i>{% translate 'Удалить' %}
                         </button>
                     </form>
                 </div>
             </div>
         </div>
 
-        <!-- Receipt Modal -->
         <div id="receipt-{{ receipt.id }}" class="modal modal-lg fade">
             <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-                <div class="modal-content border-0 shadow">
-                    <div class="modal-header bg-primary text-white">
-                        <div class="d-flex justify-content-between align-items-center w-100">
+                <div class="modal-content border-0 shadow-xl rounded-2xl overflow-hidden">
+                    <div class="bg-gradient-to-r from-green-600 to-teal-500 text-white p-6">
+                        <div class="flex justify-between items-center w-full">
                             <div>
-                                <h5 class="modal-title mb-0">
-                                    <i class="bi bi-receipt me-2"></i>
+                                <h5 class="text-xl font-heading font-bold mb-0 flex items-center gap-2">
+                                    <i class="bi bi-receipt"></i>
                                     {% translate 'Кассовый чек' %}
                                 </h5>
                             </div>
-                            <div class="d-flex align-items-center gap-2">
+                            <div class="flex items-center gap-3">
                                 {% if receipt.operation_type == 1 %}
-                                <span class="badge bg-success">{% translate 'Покупка' %}</span>
+                                <span class="inline-flex items-center px-3 py-1 text-sm font-semibold bg-white/20 backdrop-blur-sm rounded-lg">{% translate 'Покупка' %}</span>
                                 {% elif receipt.operation_type == 2 %}
-                                <span class="badge bg-warning text-dark">{% translate 'Возврат покупки' %}</span>
+                                <span class="inline-flex items-center px-3 py-1 text-sm font-semibold bg-yellow-400 text-yellow-900 rounded-lg">{% translate 'Возврат покупки' %}</span>
                                 {% endif %}
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                <button type="button" class="text-white hover:text-gray-200 transition-colors" data-bs-dismiss="modal" aria-label="Close">
+                                    <i class="bi bi-x-lg text-xl"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
-                    <div class="modal-body p-4">
-                        <!-- Seller Info -->
-                        <div class="seller-info mb-4">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="flex-grow-1">
-                                    <h4 class="text-primary mb-2">{{ receipt.seller.name_seller }}</h4>
+                    <div class="modal-body p-6 bg-white dark:bg-gray-800">
+                        <div class="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between items-start gap-4">
+                                <div class="flex-1">
+                                    <h4 class="text-xl font-heading font-bold text-green-600 dark:text-green-400 mb-3">{{ receipt.seller.name_seller }}</h4>
                                     {% if receipt.seller.retail_place %}
-                                    <p class="text-muted mb-1">
-                                        <i class="bi bi-geo-alt me-1"></i>
+                                    <p class="text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-2">
+                                        <i class="bi bi-geo-alt"></i>
                                         {{ receipt.seller.retail_place }}
                                     </p>
                                     {% endif %}
                                     {% if receipt.seller.retail_place_address %}
-                                    <p class="text-muted mb-0">
-                                        <i class="bi bi-geo-alt-fill me-1"></i>
+                                    <p class="text-gray-600 dark:text-gray-400 mb-0 flex items-center gap-2">
+                                        <i class="bi bi-geo-alt-fill"></i>
                                         {{ receipt.seller.retail_place_address }}
                                     </p>
                                     {% endif %}
@@ -100,51 +108,49 @@
                                 <form class="form-remove-receipt-button m-0" action="{% url 'receipts:delete' receipt.id %}" method="post">
                                     {% csrf_token %}
                                     <input type="hidden" name="receipt_id" value="{{ receipt.id }}">
-                                    <button class="btn btn-outline-danger btn-sm" data-nonce="{{ request.csp_nonce }}" type="submit" name="delete_receipt_button" title="{% translate 'Удалить чек' %}">
-                                        <i class="bi bi-trash me-1"></i>
+                                    <button class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors duration-200" data-nonce="{{ request.csp_nonce }}" type="submit" name="delete_receipt_button" title="{% translate 'Удалить чек' %}">
+                                        <i class="bi bi-trash"></i>
                                         {% translate 'Удалить' %}
                                     </button>
                                 </form>
                             </div>
                         </div>
 
-                        <!-- Products Table -->
-                        <div class="table-responsive">
-                            <table class="table table-hover">
+                        <div class="overflow-x-auto mb-6">
+                            <table class="w-full border-collapse">
                                 <thead>
-                                    <tr>
-                                        <th>{% translate 'Товар' %}</th>
-                                        <th class="text-end">{% translate 'Цена' %}</th>
-                                        <th class="text-center">{% translate 'Кол-во' %}</th>
-                                        <th class="text-end">{% translate 'Сумма' %}</th>
+                                    <tr class="bg-gray-50 dark:bg-gray-700/50">
+                                        <th class="px-4 py-3 text-left text-sm font-heading font-semibold text-gray-700 dark:text-gray-300 border-b-2 border-gray-200 dark:border-gray-600">{% translate 'Товар' %}</th>
+                                        <th class="px-4 py-3 text-right text-sm font-heading font-semibold text-gray-700 dark:text-gray-300 border-b-2 border-gray-200 dark:border-gray-600">{% translate 'Цена' %}</th>
+                                        <th class="px-4 py-3 text-center text-sm font-heading font-semibold text-gray-700 dark:text-gray-300 border-b-2 border-gray-200 dark:border-gray-600">{% translate 'Кол-во' %}</th>
+                                        <th class="px-4 py-3 text-right text-sm font-heading font-semibold text-gray-700 dark:text-gray-300 border-b-2 border-gray-200 dark:border-gray-600">{% translate 'Сумма' %}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for product in receipt.product.all %}
-                                    <tr>
-                                        <td>{{ product.product_name }}</td>
-                                        <td class="text-end">{{ product.price | comma }}</td>
-                                        <td class="text-center">{{ product.quantity }}</td>
-                                        <td class="text-end fw-bold">{{ product.amount | comma }}</td>
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors duration-150">
+                                        <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 border-b border-gray-100 dark:border-gray-800">{{ product.product_name }}</td>
+                                        <td class="px-4 py-3 text-sm font-mono text-gray-900 dark:text-gray-100 text-right border-b border-gray-100 dark:border-gray-800">{{ product.price | comma }}</td>
+                                        <td class="px-4 py-3 text-sm font-mono text-gray-900 dark:text-gray-100 text-center border-b border-gray-100 dark:border-gray-800">{{ product.quantity }}</td>
+                                        <td class="px-4 py-3 text-sm font-mono font-semibold text-gray-900 dark:text-gray-100 text-right border-b border-gray-100 dark:border-gray-800">{{ product.amount | comma }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- Receipt Summary -->
-                        <div class="receipt-summary mt-4">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="summary-item d-flex justify-content-between mb-2">
-                                        <span class="fw-bold">{% translate 'Итоговая сумма:' %}</span>
-                                        <span class="fw-bold text-success fs-5">{{ receipt.total_sum | comma }}</span>
+                        <div class="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-heading font-semibold text-gray-700 dark:text-gray-300">{% translate 'Итоговая сумма:' %}</span>
+                                        <span class="text-2xl font-mono font-bold text-green-600 dark:text-green-400">{{ receipt.total_sum | comma }}</span>
                                     </div>
 
                                     {% if receipt.nds10 or receipt.nds20 %}
-                                    <div class="summary-item d-flex justify-content-between mb-2">
-                                        <span>{% translate 'НДС:' %}</span>
-                                        <span>
+                                    <div class="flex justify-between items-start">
+                                        <span class="text-gray-600 dark:text-gray-400">{% translate 'НДС:' %}</span>
+                                        <span class="text-right font-mono text-gray-900 dark:text-gray-100">
                                             {% if receipt.nds10 %}
                                             <div>{{ receipt.nds10 | comma }} (10%)</div>
                                             {% endif %}
@@ -155,18 +161,14 @@
                                     </div>
                                     {% endif %}
 
-                                    <div class="summary-item d-flex justify-content-between mb-2">
-                                        <span>{% translate 'Списано со счёта:' %}</span>
-                                        <span class="text-primary">{{ receipt.account }}</span>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-gray-600 dark:text-gray-400">{% translate 'Списано со счёта:' %}</span>
+                                        <span class="font-medium text-green-600 dark:text-green-400">{{ receipt.account }}</span>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="receipt-meta">
-                                        <div class="meta-item mb-2">
-                                            <i class="bi bi-calendar-event me-2 text-muted"></i>
-                                            <span>{{ receipt.receipt_date | date:"d.m.Y H:i" }}</span>
-                                        </div>
-                                    </div>
+                                <div class="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                    <i class="bi bi-calendar-event"></i>
+                                    <span>{{ receipt.receipt_date | date:"d.m.Y H:i" }}</span>
                                 </div>
                             </div>
                         </div>
@@ -179,42 +181,40 @@
 </div>
 
 {% if receipts.has_other_pages %}
-<div class="row mt-4">
-    <div class="col-12">
-        <nav aria-label="Receipts pagination">
-            <ul class="pagination justify-content-center">
-                {% if receipts.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if request.GET %}&{% endif %}receipts={{ receipts.previous_page_number }}">
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
-                </li>
-                {% endif %}
+<div class="mt-8">
+    <nav aria-label="Receipts pagination" class="flex justify-center">
+        <ul class="flex items-center gap-2">
+            {% if receipts.has_previous %}
+            <li>
+                <a class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-green-600 hover:text-white hover:border-green-600 transition-colors duration-200" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}{% if request.GET %}&{% endif %}receipts={{ receipts.previous_page_number }}">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
 
-                {% for page_number in receipts.paginator.page_range %}
-                {% if receipts.number == page_number %}
-                <li class="page-item active">
-                    <span class="page-link">{{ page_number }}</span>
-                </li>
-                {% elif page_number >= receipts.number|add:-2 and page_number <= receipts.number|add:2 %}
-                <li class="page-item">
-                    <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}&receipts={{ page_number }}">
-                        {{ page_number }}
-                    </a>
-                </li>
-                {% endif %}
-                {% endfor %}
+            {% for page_number in receipts.paginator.page_range %}
+            {% if receipts.number == page_number %}
+            <li>
+                <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-green-600 text-white font-semibold">{{ page_number }}</span>
+            </li>
+            {% elif page_number >= receipts.number|add:-2 and page_number <= receipts.number|add:2 %}
+            <li>
+                <a class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-green-600 hover:text-white hover:border-green-600 transition-colors duration-200" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}&receipts={{ page_number }}">
+                    {{ page_number }}
+                </a>
+            </li>
+            {% endif %}
+            {% endfor %}
 
-                {% if receipts.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}&receipts={{ receipts.next_page_number }}">
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
-    </div>
+            {% if receipts.has_next %}
+            <li>
+                <a class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-green-600 hover:text-white hover:border-green-600 transition-colors duration-200" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}&{{ key }}={{ value }}{% endif %}{% endfor %}&receipts={{ receipts.next_page_number }}">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
 </div>
 {% endif %}
 </div>
