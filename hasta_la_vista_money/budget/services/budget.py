@@ -180,7 +180,7 @@ class BudgetService:
         for p in plans_exp:
             amount = p['amount']
             expense_plan_map[p['category_expense_id']][p['date']] = int(
-                amount or 0
+                amount or 0,
             )
 
         return expense_plan_map
@@ -255,7 +255,10 @@ class BudgetService:
     ) -> AggregateBudgetDataDict:
         """Aggregate all budget data for context."""
         _validate_budget_inputs(
-            user, months, expense_categories, income_categories
+            user,
+            months,
+            expense_categories,
+            income_categories,
         )
 
         expense_fact_map = self._get_expense_facts(

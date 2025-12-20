@@ -157,7 +157,9 @@ class FormValidationMixin:
 
 
 class BaseAccountForm(
-    BootstrapFormMixin, CreditFieldsMixin, ModelForm[Account]
+    BootstrapFormMixin,
+    CreditFieldsMixin,
+    ModelForm[Account],
 ):
     """Base form class for account-related forms with common functionality.
 

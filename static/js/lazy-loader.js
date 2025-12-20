@@ -100,7 +100,7 @@
 
     function loadScriptOnPathMatch(pathPattern, scriptSrc, options = {}) {
         const currentPath = window.location.pathname;
-        
+
         if (typeof pathPattern === 'string') {
             if (currentPath.includes(pathPattern)) {
                 return loadScript(scriptSrc, options);
@@ -156,4 +156,3 @@
         module.exports = LazyLoader;
     }
 })();
-

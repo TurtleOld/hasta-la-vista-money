@@ -102,7 +102,7 @@
     {% endif %}
 
     <script nonce="{{request.csp_nonce}}" src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
     <script nonce="{{request.csp_nonce}}" type="text/javascript" src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 
     {% compress js %}
@@ -112,6 +112,7 @@
     <script src="{% static 'js/errors_form.js' %}"></script>
     <script src="{% static 'js/account_group_filter.js' %}"></script>
     <script src="{% static 'js/lazy-loader.js' %}"></script>
+    <script src="{% static 'js/mathjax.js' %}"></script>
     {% if user.is_authenticated %}
         <script src="{% static 'js/header.js' %}"></script>
         <script src="{% static 'js/bottom-nav.js' %}"></script>
