@@ -511,11 +511,29 @@ class SwitchThemeView(LoginRequiredMixin, View):
         self,
         request: HttpRequest,
     ) -> JsonResponse:
-        user = User.objects.get(pk=request.user.pk or 0)
-        data = json.loads(request.body)
-        theme = data.get('theme')
-        set_user_theme(user, theme)
-        return JsonResponse({'success': True})
+        try:
+            user = User.objects.get(pk=request.user.pk)
+            data = json.loads(request.body)
+            theme = data.get('theme', 'light')
+
+            if theme not in ['light', 'dark']:
+                return JsonResponse(
+                    {'success': False, 'error': 'Invalid theme'},
+                    status=400,
+                )
+
+            set_user_theme(user, theme)
+            return JsonResponse({'success': True, 'theme': theme})
+        except json.JSONDecodeError:
+            return JsonResponse(
+                {'success': False, 'error': 'Invalid JSON'},
+                status=400,
+            )
+        except User.DoesNotExist:
+            return JsonResponse(
+                {'success': False, 'error': 'User not found'},
+                status=404,
+            )
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
