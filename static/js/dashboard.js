@@ -74,6 +74,30 @@ class DashboardManager {
 
     _clear(node) { if (node) while (node.firstChild) node.removeChild(node.firstChild); }
 
+    _createSVG(paths, attrs = {}) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        if (attrs.class) svg.setAttribute('class', String(attrs.class));
+        svg.setAttribute('fill', String(attrs.fill || 'none'));
+        svg.setAttribute('stroke', String(attrs.stroke || 'currentColor'));
+        svg.setAttribute('viewBox', String(attrs.viewBox || '0 0 24 24'));
+
+        if (attrs.width) svg.setAttribute('width', String(attrs.width));
+        if (attrs.height) svg.setAttribute('height', String(attrs.height));
+
+        if (Array.isArray(paths) && paths.length > 0) {
+            paths.forEach(path => {
+                if (!path || !path.d) return;
+                const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pathEl.setAttribute('stroke-linecap', String(path.strokeLinecap || 'round'));
+                pathEl.setAttribute('stroke-linejoin', String(path.strokeLinejoin || 'round'));
+                pathEl.setAttribute('stroke-width', String(path.strokeWidth || '2'));
+                pathEl.setAttribute('d', String(path.d));
+                svg.appendChild(pathEl);
+            });
+        }
+        return svg;
+    }
+
     _buildURL(relativePath, params) {
         const path = String(relativePath || '');
 
@@ -240,12 +264,15 @@ class DashboardManager {
 
         if (this.widgets.length === 0) {
             const emptyState = this._el('div', { class: 'dashboard-empty-state' });
-            emptyState.innerHTML = `
-                <svg class="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                </svg>
-                <p class="text-lg font-medium text-gray-600 dark:text-gray-400">Добавьте виджеты для отображения данных</p>
-            `;
+            const svg = this._createSVG([{
+                d: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+            }], {
+                class: 'w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500'
+            });
+            const p = this._el('p', { class: 'text-lg font-medium text-gray-600 dark:text-gray-400' });
+            p.textContent = 'Добавьте виджеты для отображения данных';
+            emptyState.appendChild(svg);
+            emptyState.appendChild(p);
             grid.appendChild(emptyState);
             return;
         }
@@ -271,7 +298,11 @@ class DashboardManager {
             type: 'button',
             ariaLabel: 'Настройки'
         });
-        configBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>';
+        const configSvg = this._createSVG([
+            { d: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
+            { d: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z' }
+        ], { class: 'w-5 h-5' });
+        configBtn.appendChild(configSvg);
 
         const removeBtn = this._el('button', {
             class: 'btn-remove-widget text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400',
@@ -279,14 +310,18 @@ class DashboardManager {
             type: 'button',
             ariaLabel: 'Удалить'
         });
-        removeBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+        const removeSvg = this._createSVG([{
+            d: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z'
+        }], { class: 'w-5 h-5' });
+        removeBtn.appendChild(removeSvg);
 
         controls.append(configBtn, removeBtn);
         header.append(title, controls);
 
         const content = this._el('div', { class: 'widget-content', id: `widget-content-${widget.id}` });
         const loadingDiv = this._el('div', { class: 'widget-loading flex items-center justify-center h-full' });
-        loadingDiv.innerHTML = '<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>';
+        const spinner = this._el('div', { class: 'animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400' });
+        loadingDiv.appendChild(spinner);
         content.appendChild(loadingDiv);
 
         const chartContainer = this._el('div', { class: 'widget-chart', id: `chart-${widget.id}` });
@@ -331,12 +366,13 @@ class DashboardManager {
                     contentDiv?.classList.add('error');
                     this._clear(contentDiv);
                     const errorDiv = this._el('div', { class: 'flex flex-col items-center justify-center h-full text-center p-4 text-red-600 dark:text-red-400' });
-                    errorDiv.innerHTML = `
-                        <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                        </svg>
-                        <p class="font-medium">Не удалось отобразить виджет</p>
-                    `;
+                    const errorSvg = this._createSVG([{
+                        d: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+                    }], { class: 'w-12 h-12 mb-2' });
+                    const errorP = this._el('p', { class: 'font-medium' });
+                    errorP.textContent = 'Не удалось отобразить виджет';
+                    errorDiv.appendChild(errorSvg);
+                    errorDiv.appendChild(errorP);
                     contentDiv?.appendChild(errorDiv);
                 }
             } catch (error) {
@@ -344,12 +380,13 @@ class DashboardManager {
                 contentDiv?.classList.add('error');
                 this._clear(contentDiv);
                 const errorDiv = this._el('div', { class: 'flex flex-col items-center justify-center h-full text-center p-4 text-red-600 dark:text-red-400' });
-                errorDiv.innerHTML = `
-                    <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                    </svg>
-                    <p class="font-medium">Ошибка отображения виджета</p>
-                `;
+                const errorSvg = this._createSVG([{
+                    d: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+                }], { class: 'w-12 h-12 mb-2' });
+                const errorP = this._el('p', { class: 'font-medium' });
+                errorP.textContent = 'Ошибка отображения виджета';
+                errorDiv.appendChild(errorSvg);
+                errorDiv.appendChild(errorP);
                 contentDiv?.appendChild(errorDiv);
             }
         });
@@ -510,12 +547,13 @@ class DashboardManager {
 
         if (transactions.length === 0) {
             const emptyDiv = this._el('div', { class: 'text-center text-gray-500 dark:text-gray-400 py-8' });
-            emptyDiv.innerHTML = `
-                <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                </svg>
-                <p class="mt-2 font-medium">Нет последних операций</p>
-            `;
+            const emptySvg = this._createSVG([{
+                d: 'M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4'
+            }], { class: 'w-12 h-12 mx-auto mb-2' });
+            const emptyP = this._el('p', { class: 'mt-2 font-medium' });
+            emptyP.textContent = 'Нет последних операций';
+            emptyDiv.appendChild(emptySvg);
+            emptyDiv.appendChild(emptyP);
             container.appendChild(emptyDiv);
             return null;
         }
@@ -542,36 +580,51 @@ class DashboardManager {
 
         for (const t of transactions) {
             const item = this._el('div', { class: 'py-3 px-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors' });
-            item.innerHTML = `
-                <div class="flex justify-between items-start gap-4">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 mb-1">
-                            ${t.type === 'expense'
-                                ? '<svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>'
-                                : '<svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>'
-                            }
-                            <strong class="text-gray-900 dark:text-white font-medium">${String(t.category ?? '')}</strong>
-                        </div>
-                        <div class="flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400 mt-1">
-                            <span class="flex items-center gap-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
-                                </svg>
-                                ${String(t.account ?? '')}
-                            </span>
-                            <span class="flex items-center gap-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                </svg>
-                                ${formatDate(t.date)}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="text-right flex-shrink-0">
-                        ${amountNode(t.amount, t.type).outerHTML}
-                    </div>
-                </div>
-            `;
+            const itemContent = this._el('div', { class: 'flex justify-between items-start gap-4' });
+
+            const leftDiv = this._el('div', { class: 'flex-1 min-w-0' });
+            const iconRow = this._el('div', { class: 'flex items-center gap-2 mb-1' });
+
+            const typeIcon = t.type === 'expense'
+                ? this._createSVG([{ d: 'M19 14l-7 7m0 0l-7-7m7 7V3' }], { class: 'w-5 h-5 text-red-500 flex-shrink-0' })
+                : this._createSVG([{ d: 'M5 10l7-7m0 0l7 7m-7-7v18' }], { class: 'w-5 h-5 text-green-500 flex-shrink-0' });
+
+            const categoryStrong = this._el('strong', { class: 'text-gray-900 dark:text-white font-medium' });
+            categoryStrong.textContent = String(t.category ?? '');
+
+            iconRow.appendChild(typeIcon);
+            iconRow.appendChild(categoryStrong);
+
+            const infoRow = this._el('div', { class: 'flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400 mt-1' });
+
+            const accountSpan = this._el('span', { class: 'flex items-center gap-1' });
+            const accountSvg = this._createSVG([{
+                d: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'
+            }], { class: 'w-4 h-4' });
+            accountSpan.appendChild(accountSvg);
+            const accountText = document.createTextNode(String(t.account ?? ''));
+            accountSpan.appendChild(accountText);
+
+            const dateSpan = this._el('span', { class: 'flex items-center gap-1' });
+            const dateSvg = this._createSVG([{
+                d: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
+            }], { class: 'w-4 h-4' });
+            dateSpan.appendChild(dateSvg);
+            const dateText = document.createTextNode(formatDate(t.date));
+            dateSpan.appendChild(dateText);
+
+            infoRow.appendChild(accountSpan);
+            infoRow.appendChild(dateSpan);
+
+            leftDiv.appendChild(iconRow);
+            leftDiv.appendChild(infoRow);
+
+            const rightDiv = this._el('div', { class: 'text-right flex-shrink-0' });
+            rightDiv.appendChild(amountNode(t.amount, t.type));
+
+            itemContent.appendChild(leftDiv);
+            itemContent.appendChild(rightDiv);
+            item.appendChild(itemContent);
             list.appendChild(item);
         }
 
@@ -785,19 +838,17 @@ class DashboardManager {
         if (btn) {
             this._clear(btn);
             if (this.editMode) {
-                btn.innerHTML = `
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    Завершить редактирование
-                `;
+                const checkSvg = this._createSVG([{ d: 'M5 13l4 4L19 7' }], { class: 'w-5 h-5' });
+                const checkText = document.createTextNode(' Завершить редактирование');
+                btn.appendChild(checkSvg);
+                btn.appendChild(checkText);
             } else {
-                btn.innerHTML = `
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                    </svg>
-                    Редактировать
-                `;
+                const editSvg = this._createSVG([{
+                    d: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
+                }], { class: 'w-5 h-5' });
+                const editText = document.createTextNode(' Редактировать');
+                btn.appendChild(editSvg);
+                btn.appendChild(editText);
             }
         }
     }
@@ -853,20 +904,30 @@ class DashboardManager {
             class: 'bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-400 p-4 rounded-lg shadow-lg mb-4 flex items-start gap-3',
             role: 'alert'
         });
-        alert.innerHTML = `
-            <svg class="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-            </svg>
-            <div class="flex-1">
-                <p class="text-sm font-medium text-red-800 dark:text-red-200">${String(message)}</p>
-            </div>
-            <button type="button" class="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200" aria-label="Close">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
-        `;
-        const closeBtn = alert.querySelector('button');
+
+        const errorSvg = this._createSVG([{
+            d: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+        }], { class: 'w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0' });
+
+        const messageDiv = this._el('div', { class: 'flex-1' });
+        const messageP = this._el('p', { class: 'text-sm font-medium text-red-800 dark:text-red-200' });
+        messageP.textContent = String(message);
+        messageDiv.appendChild(messageP);
+
+        const closeBtn = this._el('button', {
+            type: 'button',
+            class: 'text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200',
+            ariaLabel: 'Close'
+        });
+        const closeSvg = this._createSVG([{
+            d: 'M6 18L18 6M6 6l12 12'
+        }], { class: 'w-5 h-5' });
+        closeBtn.appendChild(closeSvg);
+
+        alert.appendChild(errorSvg);
+        alert.appendChild(messageDiv);
+        alert.appendChild(closeBtn);
+
         closeBtn.addEventListener('click', () => alert.remove());
         region.prepend(alert);
         const timer = setTimeout(() => alert.remove(), 5000);
