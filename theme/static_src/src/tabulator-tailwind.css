@@ -262,7 +262,7 @@
     border-bottom-color: rgb(107 114 128);
   }
 
-  .dark .tabulator .tabulator-col-sorter .tabulator-arrow {
+  [data-bs-theme='dark'] .tabulator .tabulator-col-sorter .tabulator-arrow {
     border-top-color: rgb(156 163 175);
     border-bottom-color: rgb(156 163 175);
   }
@@ -310,7 +310,7 @@
       transform: none !important;
       direction: ltr !important;
     }
-    
+
     .tabulator-col-group .tabulator-col-title {
       writing-mode: horizontal-tb !important;
       text-orientation: mixed !important;
@@ -318,7 +318,7 @@
       white-space: nowrap !important;
       display: inline-block !important;
     }
-    
+
     .tabulator-col-group .tabulator-col-content {
       writing-mode: horizontal-tb !important;
       text-orientation: mixed !important;
