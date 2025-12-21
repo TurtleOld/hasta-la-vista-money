@@ -1,7 +1,7 @@
 from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
 
@@ -171,28 +171,17 @@ def _fact_map_for_categories(
     last_month = months[-1]
 
     first_month_start = timezone.make_aware(
-        datetime(
-            first_month.year,
-            first_month.month,
-            1,
-            0,
-            0,
-            0,
-            tzinfo=timezone.utc,
+        datetime.combine(
+            date(first_month.year, first_month.month, 1),
+            time.min,
         ),
     )
 
     _, last_day_last = monthrange(last_month.year, last_month.month)
     last_month_end = timezone.make_aware(
-        datetime(
-            last_month.year,
-            last_month.month,
-            last_day_last,
-            23,
-            59,
-            59,
-            999999,
-            tzinfo=timezone.utc,
+        datetime.combine(
+            date(last_month.year, last_month.month, last_day_last),
+            time.max,
         ),
     )
 
