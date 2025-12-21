@@ -6,26 +6,72 @@
 
 {% block title %}{% translate 'Отчёты' %}{% endblock %}
 {% block content %}
-    <div class="container-fluid">
-        <h2 class="mb-4 text-center">{% translate 'Финансовые отчёты' %}</h2>
-        <!-- Новые графики бюджета -->
-        <div class="row justify-content-center mb-5">
-            <div class="col-lg-8 col-md-10 col-12">
-                <canvas id="budgetChart" height="120"></canvas>
-            </div>
+    <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div class="mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white text-center mb-2">
+                {% translate 'Финансовые отчёты' %}
+            </h1>
+            <p class="text-center text-gray-600 dark:text-gray-400 text-sm sm:text-base">
+                {% translate 'Визуализация ваших доходов, расходов и баланса' %}
+            </p>
         </div>
-        <div class="row justify-content-center mb-5">
-            <div class="col-lg-8 col-md-10 col-12">
-                <canvas id="balanceChart" height="120"></canvas>
+
+        <div class="space-y-8">
+            <div class="flex justify-center">
+                <div class="w-full max-w-5xl">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
+                        <div class="mb-4">
+                            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+                                {% translate 'Доходы и расходы по месяцам' %}
+                            </h2>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                {% translate 'Сравнение доходов и расходов по месяцам' %}
+                            </p>
+                        </div>
+                        <div class="relative h-64 sm:h-80 lg:h-96">
+                            <canvas id="budgetChart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-        <div class="row justify-content-center mb-5">
-            <div class="col-lg-6 col-md-8 col-12">
-                <canvas id="pieChart" height="120"></canvas>
+
+            <div class="flex justify-center">
+                <div class="w-full max-w-5xl">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
+                        <div class="mb-4">
+                            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+                                {% translate 'Баланс по месяцам' %}
+                            </h2>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                {% translate 'Динамика баланса (доходы минус расходы)' %}
+                            </p>
+                        </div>
+                        <div class="relative h-64 sm:h-80 lg:h-96">
+                            <canvas id="balanceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-center">
+                <div class="w-full max-w-4xl">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
+                        <div class="mb-4">
+                            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+                                {% translate 'Структура расходов по категориям' %}
+                            </h2>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                {% translate 'Распределение расходов по категориям за все месяцы' %}
+                            </p>
+                        </div>
+                        <div class="relative h-64 sm:h-80 lg:h-96">
+                            <canvas id="pieChart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <!-- /.container-fluid -->
 
     <!-- Данные для новых графиков -->
     {{ chart_labels|json_script:"chartLabels" }}
@@ -35,15 +81,131 @@
     {{ pie_labels|json_script:"pieLabels" }}
     {{ pie_values|json_script:"pieValues" }}
 
-    <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/chart.umd.min.js' %}"></script>
     <script nonce="{{request.csp_nonce}}">
     document.addEventListener('DOMContentLoaded', function() {
-        // График доходов и расходов
-        const ctx = document.getElementById('budgetChart').getContext('2d');
-        const chartLabels = JSON.parse(document.getElementById('chartLabels').textContent);
-        const chartIncome = JSON.parse(document.getElementById('chartIncome').textContent);
-        const chartExpense = JSON.parse(document.getElementById('chartExpense').textContent);
-        new Chart(ctx, {
+        if (typeof Chart === 'undefined') {
+            return;
+        }
+
+        const isDarkMode = document.documentElement.classList.contains('dark') ||
+                          document.body.classList.contains('dark') ||
+                          window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        const textColor = isDarkMode ? '#e5e7eb' : '#111827';
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        const borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+
+        let chartLabels = [];
+        let chartIncome = [];
+        let chartExpense = [];
+        let chartBalance = [];
+        let pieLabels = [];
+        let pieValues = [];
+
+        try {
+            const chartLabelsEl = document.getElementById('chartLabels');
+            const chartIncomeEl = document.getElementById('chartIncome');
+            const chartExpenseEl = document.getElementById('chartExpense');
+            const chartBalanceEl = document.getElementById('chartBalance');
+            const pieLabelsEl = document.getElementById('pieLabels');
+            const pieValuesEl = document.getElementById('pieValues');
+
+            if (chartLabelsEl) {
+                const content = chartLabelsEl.textContent.trim();
+                if (content) {
+                    chartLabels = JSON.parse(content);
+                }
+            }
+            if (chartIncomeEl) {
+                const content = chartIncomeEl.textContent.trim();
+                if (content) {
+                    chartIncome = JSON.parse(content);
+                }
+            }
+            if (chartExpenseEl) {
+                const content = chartExpenseEl.textContent.trim();
+                if (content) {
+                    chartExpense = JSON.parse(content);
+                }
+            }
+            if (chartBalanceEl) {
+                const content = chartBalanceEl.textContent.trim();
+                if (content) {
+                    chartBalance = JSON.parse(content);
+                }
+            }
+            if (pieLabelsEl) {
+                const content = pieLabelsEl.textContent.trim();
+                if (content) {
+                    pieLabels = JSON.parse(content);
+                }
+            }
+            if (pieValuesEl) {
+                const content = pieValuesEl.textContent.trim();
+                if (content) {
+                    pieValues = JSON.parse(content);
+                }
+            }
+        } catch (error) {
+            return;
+        }
+
+        const budgetChartEl = document.getElementById('budgetChart');
+        const balanceChartEl = document.getElementById('balanceChart');
+        const pieChartEl = document.getElementById('pieChart');
+
+        if (!chartLabels || chartLabels.length === 0) {
+            if (budgetChartEl) {
+                budgetChartEl.parentElement.innerHTML = '<div class="text-center py-8 text-gray-500 dark:text-gray-400"><p>{% translate "Нет данных для отображения графиков" %}</p><p class="text-sm mt-2">{% translate "Добавьте расходы и доходы для отображения графиков" %}</p></div>';
+            }
+            if (balanceChartEl) {
+                balanceChartEl.parentElement.innerHTML = '<div class="text-center py-8 text-gray-500 dark:text-gray-400"><p>{% translate "Нет данных для отображения графиков" %}</p></div>';
+            }
+            if (pieChartEl) {
+                pieChartEl.parentElement.innerHTML = '<div class="text-center py-8 text-gray-500 dark:text-gray-400"><p>{% translate "Нет данных для отображения графиков" %}</p></div>';
+            }
+            return;
+        }
+
+        if (!budgetChartEl || !balanceChartEl) {
+            return;
+        }
+
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: textColor,
+                        padding: 15,
+                        font: {
+                            size: 13,
+                            weight: '500'
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: textColor,
+                    bodyColor: textColor,
+                    borderColor: borderColor,
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    displayColors: true
+                }
+            }
+        };
+
+        const budgetCtx = budgetChartEl.getContext('2d');
+        if (!budgetCtx) {
+            return;
+        }
+
+        new Chart(budgetCtx, {
             type: 'bar',
             data: {
                 labels: chartLabels,
@@ -51,78 +213,51 @@
                     {
                         label: "{{ _('Доходы') }}",
                         data: chartIncome,
-                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
-                        borderColor: 'rgba(40, 167, 69, 1)',
-                        borderWidth: 1
+                        backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                        borderColor: 'rgba(34, 197, 94, 1)',
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        borderSkipped: false
                     },
                     {
                         label: "{{ _('Расходы') }}",
                         data: chartExpense,
-                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
-                        borderColor: 'rgba(220, 53, 69, 1)',
-                        borderWidth: 1
+                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                        borderColor: 'rgba(239, 68, 68, 1)',
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        borderSkipped: false
                     }
                 ]
             },
             options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'top' },
-                    title: { display: true, text: "{{ _('Доходы и расходы по месяцам') }}" }
-                },
+                ...commonOptions,
                 scales: {
-                    y: { beginAtZero: true }
-                }
-            }
-        });
-
-        // График баланса
-        const balanceCtx = document.getElementById('balanceChart').getContext('2d');
-        const chartBalance = JSON.parse(document.getElementById('chartBalance').textContent);
-        new Chart(balanceCtx, {
-            type: 'line',
-            data: {
-                labels: chartLabels,
-                datasets: [{
-                    label: "{{ _('Баланс (Доходы - Расходы)') }}",
-                    data: chartBalance,
-                    borderColor: 'rgba(0, 123, 255, 1)',
-                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.1,
-                    pointBackgroundColor: 'rgba(0, 123, 255, 1)',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'top' },
-                    title: { display: true, text: "{{ _('Баланс по месяцам') }}" }
-                },
-                scales: {
+                    x: {
+                        grid: {
+                            color: gridColor,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
                     y: {
                         beginAtZero: true,
                         grid: {
-                            color: function(context) {
-                                if (context.tick.value === 0) {
-                                    return 'rgba(0, 0, 0, 0.3)';
-                                }
-                                return 'rgba(0, 0, 0, 0.1)';
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const value = context.parsed.y;
-                                const sign = value >= 0 ? '+' : '';
-                                return "{{ _('Баланс:') }}" + sign + value.toFixed(2);
+                            color: gridColor,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: textColor,
+                            font: {
+                                size: 11
+                            },
+                            callback: function(value) {
+                                return value.toLocaleString('ru-RU');
                             }
                         }
                     }
@@ -130,38 +265,176 @@
             }
         });
 
-        // Круговая диаграмма
-        const pieCtx = document.getElementById('pieChart').getContext('2d');
-        const pieLabels = JSON.parse(document.getElementById('pieLabels').textContent);
-        const pieValues = JSON.parse(document.getElementById('pieValues').textContent);
-        if (pieLabels.length > 0) {
-            new Chart(pieCtx, {
-                type: 'pie',
+        if (chartBalance && chartBalance.length > 0) {
+            const balanceCtx = balanceChartEl.getContext('2d');
+            if (!balanceCtx) {
+                return;
+            }
+
+            const minBalance = Math.min(...chartBalance);
+            const maxBalance = Math.max(...chartBalance);
+            const range = maxBalance - minBalance;
+            const padding = range > 0 ? range * 0.1 : Math.abs(minBalance) * 0.1 || 100;
+
+            new Chart(balanceCtx, {
+                type: 'line',
                 data: {
-                    labels: pieLabels,
+                    labels: chartLabels,
                     datasets: [{
-                        data: pieValues,
-                        backgroundColor: [
-                            'rgba(220, 53, 69, 0.7)',
-                            'rgba(255, 193, 7, 0.7)',
-                            'rgba(23, 162, 184, 0.7)',
-                            'rgba(40, 167, 69, 0.7)',
-                            'rgba(108, 117, 125, 0.7)',
-                            'rgba(0, 123, 255, 0.7)',
-                            'rgba(255, 87, 34, 0.7)',
-                            'rgba(156, 39, 176, 0.7)'
-                        ],
-                        borderWidth: 1
+                        label: "{{ _('Баланс (Доходы - Расходы)') }}",
+                        data: chartBalance,
+                        borderColor: chartBalance.some(v => v < 0) && chartBalance.some(v => v >= 0)
+                            ? (isDarkMode ? 'rgba(59, 130, 246, 1)' : 'rgba(59, 130, 246, 1)')
+                            : (minBalance < 0 ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)'),
+                        backgroundColor: chartBalance.some(v => v < 0) && chartBalance.some(v => v >= 0)
+                            ? (isDarkMode ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.1)')
+                            : (minBalance < 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)'),
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: chartBalance.some(v => v < 0) && chartBalance.some(v => v >= 0)
+                            ? 'rgba(59, 130, 246, 1)'
+                            : (minBalance < 0 ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)'),
+                        pointBorderColor: isDarkMode ? '#1f2937' : '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointHoverBorderWidth: 3,
+                        segment: {
+                            borderColor: function(ctx) {
+                                const value = ctx.p1.parsed.y;
+                                if (value < 0) {
+                                    return 'rgba(239, 68, 68, 1)';
+                                } else if (value > 0) {
+                                    return 'rgba(34, 197, 94, 1)';
+                                }
+                                return 'rgba(59, 130, 246, 1)';
+                            }
+                        }
                     }]
                 },
                 options: {
-                    responsive: true,
+                    ...commonOptions,
+                    scales: {
+                        x: {
+                            grid: {
+                                color: gridColor,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            min: minBalance - padding,
+                            max: maxBalance + padding,
+                            grid: {
+                                color: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)';
+                                    }
+                                    return gridColor;
+                                },
+                                lineWidth: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return 2;
+                                    }
+                                    return 1;
+                                },
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: {
+                                    size: 11
+                                },
+                                callback: function(value) {
+                                    const sign = value >= 0 ? '+' : '';
+                                    return sign + value.toLocaleString('ru-RU', {
+                                        minimumFractionDigits: 0,
+                                        maximumFractionDigits: 0
+                                    });
+                                }
+                            }
+                        }
+                    },
                     plugins: {
-                        legend: { position: 'top' },
-                        title: { display: true, text: "{{ _('Структура расходов по категориям (все месяцы)') }}" }
+                        ...commonOptions.plugins,
+                        tooltip: {
+                            ...commonOptions.plugins.tooltip,
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const sign = value >= 0 ? '+' : '';
+                                    return "{{ _('Баланс:') }} " + sign + value.toLocaleString('ru-RU', {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
             });
+        } else {
+            balanceChartEl.parentElement.innerHTML = '<div class="text-center py-8 text-gray-500 dark:text-gray-400"><p>{% translate "Нет данных для отображения графика баланса" %}</p></div>';
+        }
+
+        if (pieChartEl) {
+            if (pieLabels.length > 0 && pieValues.length > 0 && pieLabels.length === pieValues.length) {
+                const pieCtx = pieChartEl.getContext('2d');
+                if (pieCtx) {
+                    new Chart(pieCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: pieLabels,
+                            datasets: [{
+                                data: pieValues,
+                                backgroundColor: [
+                                    'rgba(239, 68, 68, 0.8)',
+                                    'rgba(251, 191, 36, 0.8)',
+                                    'rgba(59, 130, 246, 0.8)',
+                                    'rgba(34, 197, 94, 0.8)',
+                                    'rgba(139, 92, 246, 0.8)',
+                                    'rgba(236, 72, 153, 0.8)',
+                                    'rgba(249, 115, 22, 0.8)',
+                                    'rgba(14, 165, 233, 0.8)'
+                                ],
+                                borderColor: isDarkMode ? '#374151' : '#ffffff',
+                                borderWidth: 2,
+                                hoverOffset: 8
+                            }]
+                        },
+                        options: {
+                            ...commonOptions,
+                            plugins: {
+                                ...commonOptions.plugins,
+                                tooltip: {
+                                    ...commonOptions.plugins.tooltip,
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.parsed || 0;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+                                            return label + ': ' + value.toLocaleString('ru-RU', {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2
+                                            }) + ' (' + percentage + '%)';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } else {
+                pieChartEl.parentElement.innerHTML = '<div class="text-center py-8 text-gray-500 dark:text-gray-400"><p>{% translate "Нет данных для отображения круговой диаграммы" %}</p><p class="text-sm mt-2">{% translate "Добавьте расходы для отображения структуры по категориям" %}</p></div>';
+            }
         }
     });
     </script>

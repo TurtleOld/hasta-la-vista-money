@@ -8,54 +8,92 @@
 {% endblock %}
 
 {% block content %}
-<div class="dashboard-container">
-    <div class="dashboard-header">
-        <h2><i class="bi bi-speedometer2"></i> {% translate 'Интерактивный дашборд (Может содержать ошибки подсчётов)' %}</h2>
-        <div class="dashboard-controls">
-            <button type="button" id="add-widget-btn" class="btn btn-primary">
-                <i class="bi bi-plus-circle"></i> {% translate 'Добавить виджет' %}
-            </button>
-            <button type="button" id="edit-mode-btn" class="btn btn-outline-secondary">
-                <i class="bi bi-pencil"></i> {% translate 'Редактировать' %}
-            </button>
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-8">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                        <svg class="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        {% translate 'Интерактивный дашборд' %}
+                    </h1>
+                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        {% translate 'Может содержать ошибки подсчётов' %}
+                    </p>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    <button type="button" id="add-widget-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        {% translate 'Добавить виджет' %}
+                    </button>
+                    <button type="button" id="edit-mode-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        {% translate 'Редактировать' %}
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+                <label for="period-select" class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    {% translate 'Период:' %}
+                </label>
+                <select id="period-select" class="block w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
+                    <option value="month">{% translate 'Месяц' %}</option>
+                    <option value="quarter">{% translate 'Квартал' %}</option>
+                    <option value="year">{% translate 'Год' %}</option>
+                </select>
+            </div>
         </div>
-    </div>
 
-    <div class="dashboard-period-selector mb-4">
-        <label for="period-select" class="form-label">{% translate 'Период:' %}</label>
-        <select id="period-select" class="form-select">
-            <option value="month" selected>{% translate 'Месяц' %}</option>
-            <option value="quarter">{% translate 'Квартал' %}</option>
-            <option value="year">{% translate 'Год' %}</option>
-        </select>
-    </div>
-
-    <div id="widgets-grid" class="dashboard-grid">
-        <div class="dashboard-empty-state">
-            <i class="bi bi-graph-up fs-1 text-muted"></i>
-            <p class="text-muted">{% translate 'Добавьте виджеты для отображения данных' %}</p>
+        <div id="widgets-grid" class="dashboard-grid">
+            <div class="dashboard-empty-state">
+                <svg class="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                <p class="text-lg font-medium text-gray-600 dark:text-gray-400">
+                    {% translate 'Добавьте виджеты для отображения данных' %}
+                </p>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Модальное окно выбора виджета -->
-<div class="modal fade" id="widget-select-modal" tabindex="-1" aria-labelledby="widget-select-modal-label" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="widget-select-modal-label">
-                    <i class="bi bi-grid-3x3-gap"></i> {% translate 'Выберите виджет' %}
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div id="widget-select-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="widget-select-modal-label" aria-hidden="true">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity modal-backdrop" aria-hidden="true"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white dark:bg-gray-800 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2" id="widget-select-modal-label">
+                        <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                        </svg>
+                        {% translate 'Выберите виджет' %}
+                    </h3>
+                    <button type="button" class="modal-close text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none" aria-label="Close">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div class="modal-body">
-                <div class="list-group list-group-flush">
+            <div class="bg-white dark:bg-gray-800 px-6 py-4">
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
                     {% for widget in available_widgets %}
-                    <button type="button" class="list-group-item list-group-item-action widget-select-btn" data-widget-type="{{ widget.type }}">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-graph-up-arrow me-3 fs-5 text-primary"></i>
-                            <strong>{{ widget.name }}</strong>
-                        </div>
+                    <button type="button" class="w-full widget-select-btn px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150 flex items-center gap-3 group" data-widget-type="{{ widget.type }}">
+                        <svg class="w-6 h-6 text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <span class="font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {{ widget.name }}
+                        </span>
                     </button>
                     {% endfor %}
                 </div>
@@ -64,30 +102,47 @@
     </div>
 </div>
 
-<!-- Модальное окно настройки виджета -->
-<div class="modal fade" id="widget-config-modal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">{% translate 'Настройки виджета' %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div id="widget-config-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" tabindex="-1">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity modal-backdrop" aria-hidden="true"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white dark:bg-gray-800 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {% translate 'Настройки виджета' %}
+                    </h3>
+                    <button type="button" class="modal-close text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none" aria-label="Close">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div class="modal-body">
+            <div class="bg-white dark:bg-gray-800 px-6 py-4">
                 <form id="widget-config-form">
                     <input type="hidden" id="config-widget-id">
-                    <div class="mb-3">
-                        <label for="config-width" class="form-label">{% translate 'Ширина (колонок 1-12)' %}</label>
-                        <input type="number" class="form-control" id="config-width" min="1" max="12" value="6">
+                    <div class="mb-4">
+                        <label for="config-width" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% translate 'Ширина (колонок 1-12)' %}
+                        </label>
+                        <input type="number" class="block w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" id="config-width" min="1" max="12" value="6">
                     </div>
-                    <div class="mb-3">
-                        <label for="config-height" class="form-label">{% translate 'Высота (пикселей)' %}</label>
-                        <input type="number" class="form-control" id="config-height" min="200" value="300">
+                    <div class="mb-4">
+                        <label for="config-height" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% translate 'Высота (пикселей)' %}
+                        </label>
+                        <input type="number" class="block w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" id="config-height" min="200" value="300">
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% translate 'Отмена' %}</button>
-                <button type="button" class="btn btn-primary" id="save-widget-config">{% translate 'Сохранить' %}</button>
+            <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3">
+                <button type="button" class="modal-close px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    {% translate 'Отмена' %}
+                </button>
+                <button type="button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600" id="save-widget-config">
+                    {% translate 'Сохранить' %}
+                </button>
             </div>
         </div>
     </div>
@@ -96,58 +151,9 @@
 
 {% block extra_js %}
 {% csrf_token %}
-<script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-<script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/echarts.min.js' %}?v={% word_hash %}"></script>
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/Sortable.min.js' %}?v={% word_hash %}"></script>
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/chart-configs.js' %}?v={% word_hash %}"></script>
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/chart-utils.js' %}?v={% word_hash %}"></script>
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/dashboard.js' %}?v={% word_hash %}"></script>
-<script nonce="{{request.csp_nonce}}">
-    (function() {
-        function initDashboard() {
-            const grid = document.getElementById('widgets-grid');
-            if (!grid) {
-                console.error('Widgets grid not found');
-                return false;
-            }
-
-            if (window.chartConfigs && window.initChart && window.DashboardManager) {
-                console.log('Initializing DashboardManager...');
-                window.dashboardManager = new window.DashboardManager();
-                return true;
-            } else {
-                console.warn('Dashboard dependencies not ready:', {
-                    chartConfigs: !!window.chartConfigs,
-                    initChart: !!window.initChart,
-                    DashboardManager: !!window.DashboardManager
-                });
-            }
-            return false;
-        }
-
-        function waitForDependencies(attempts = 0) {
-            if (attempts > 10) {
-                console.error('Failed to load dashboard dependencies after 10 attempts');
-                return;
-            }
-
-            if (initDashboard()) {
-                console.log('Dashboard initialized successfully');
-                return;
-            }
-
-            setTimeout(() => {
-                waitForDependencies(attempts + 1);
-            }, 100);
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                waitForDependencies();
-            });
-        } else {
-            waitForDependencies();
-        }
-    })();
-</script>
 {% endblock %}
-

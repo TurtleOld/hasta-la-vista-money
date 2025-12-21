@@ -30,21 +30,26 @@ document.addEventListener('DOMContentLoaded', function () {
     var initialTheme = document.body.getAttribute('data-bs-theme') || 'light';
     applyTheme(initialTheme);
 
-    document.getElementById('theme-toggle').addEventListener('click', function () {
-        var currentTheme = document.body.getAttribute('data-bs-theme');
-        var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        applyTheme(newTheme);
-        fetch(window.SET_THEME_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                theme: newTheme
-            }),
+    var themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function () {
+            var currentTheme = document.body.getAttribute('data-bs-theme');
+            var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+            if (window.SET_THEME_URL) {
+                fetch(window.SET_THEME_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        theme: newTheme
+                    }),
+                });
+            }
         });
-    });
+    }
 
     function getCookie(name) {
         if (!/^[a-zA-Z0-9_-]+$/.test(name)) {

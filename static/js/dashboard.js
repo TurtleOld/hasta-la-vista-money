@@ -74,6 +74,30 @@ class DashboardManager {
 
     _clear(node) { if (node) while (node.firstChild) node.removeChild(node.firstChild); }
 
+    _createSVG(paths, attrs = {}) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        if (attrs.class) svg.setAttribute('class', String(attrs.class));
+        svg.setAttribute('fill', String(attrs.fill || 'none'));
+        svg.setAttribute('stroke', String(attrs.stroke || 'currentColor'));
+        svg.setAttribute('viewBox', String(attrs.viewBox || '0 0 24 24'));
+
+        if (attrs.width) svg.setAttribute('width', String(attrs.width));
+        if (attrs.height) svg.setAttribute('height', String(attrs.height));
+
+        if (Array.isArray(paths) && paths.length > 0) {
+            paths.forEach(path => {
+                if (!path || !path.d) return;
+                const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pathEl.setAttribute('stroke-linecap', String(path.strokeLinecap || 'round'));
+                pathEl.setAttribute('stroke-linejoin', String(path.strokeLinejoin || 'round'));
+                pathEl.setAttribute('stroke-width', String(path.strokeWidth || '2'));
+                pathEl.setAttribute('d', String(path.d));
+                svg.appendChild(pathEl);
+            });
+        }
+        return svg;
+    }
+
     _buildURL(relativePath, params) {
         const path = String(relativePath || '');
 
@@ -131,26 +155,45 @@ class DashboardManager {
         const periodSelect = document.getElementById('period-select');
         const saveConfigBtn = document.getElementById('save-widget-config');
 
-        addWidgetBtn?.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            try { this.showWidgetSelectModal(); } catch (err) { console.error(err); }
-        });
+        if (!addWidgetBtn) {
+            console.warn('add-widget-btn not found');
+        } else {
+            addWidgetBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Add widget button clicked');
+                try {
+                    this.showWidgetSelectModal();
+                } catch (err) {
+                    console.error('Error showing widget select modal:', err);
+                }
+            });
+        }
 
-        editModeBtn?.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.toggleEditMode();
-        });
+        if (!editModeBtn) {
+            console.warn('edit-mode-btn not found');
+        } else {
+            editModeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Edit mode button clicked');
+                this.toggleEditMode();
+            });
+        }
 
-        periodSelect?.addEventListener('change', (e) => {
-            this.period = e.target.value;
-            this.loadDashboard();
-        });
+        if (periodSelect) {
+            periodSelect.addEventListener('change', (e) => {
+                this.period = e.target.value;
+                this.loadDashboard();
+            });
+        }
 
-        saveConfigBtn?.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.saveWidgetConfig();
-        });
+        if (saveConfigBtn) {
+            saveConfigBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.saveWidgetConfig();
+            });
+        }
 
         document.addEventListener('click', (e) => {
             const widgetSelectBtn = e.target.closest('.widget-select-btn');
@@ -220,12 +263,17 @@ class DashboardManager {
         this._clear(grid);
 
         if (this.widgets.length === 0) {
-            grid.appendChild(
-                this._el('div', { class: 'dashboard-empty-state' },
-                    this._icon('bi bi-graph-up fs-1 text-muted'),
-                    this._el('p', { class: 'text-muted' }, 'Добавьте виджеты для отображения данных'),
-                )
-            );
+            const emptyState = this._el('div', { class: 'dashboard-empty-state' });
+            const svg = this._createSVG([{
+                d: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+            }], {
+                class: 'w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500'
+            });
+            const p = this._el('p', { class: 'text-lg font-medium text-gray-600 dark:text-gray-400' });
+            p.textContent = 'Добавьте виджеты для отображения данных';
+            emptyState.appendChild(svg);
+            emptyState.appendChild(p);
+            grid.appendChild(emptyState);
             return;
         }
 
@@ -236,23 +284,46 @@ class DashboardManager {
 
     createWidgetElement(widget) {
         const div = this._el('div', { class: 'widget', dataset: { widgetId: widget.id, width: widget.width || 6 } });
+        div.style.setProperty('--widget-width', widget.width || 6);
         div.style.setProperty('--widget-height', `${widget.height || 300}px`);
 
         const header = this._el('div', { class: 'widget-header' });
-        const title = this._el('h5'); title.textContent = this.getWidgetTitle(widget.widget_type);
-        const controls = this._el('div', { class: 'widget-controls' },
-            this._el('button', { class: 'btn-config-widget', title: 'Настройки', type: 'button', ariaLabel: 'Настройки' }, this._icon('bi bi-gear')),
-            this._el('button', { class: 'btn-remove-widget', title: 'Удалить', type: 'button', ariaLabel: 'Удалить' }, this._icon('bi bi-x-circle')),
-        );
+        const title = this._el('h5', { class: 'text-lg font-semibold text-gray-900 dark:text-white' });
+        title.textContent = this.getWidgetTitle(widget.widget_type);
+
+        const controls = this._el('div', { class: 'widget-controls' });
+        const configBtn = this._el('button', {
+            class: 'btn-config-widget text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
+            title: 'Настройки',
+            type: 'button',
+            ariaLabel: 'Настройки'
+        });
+        const configSvg = this._createSVG([
+            { d: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
+            { d: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z' }
+        ], { class: 'w-5 h-5' });
+        configBtn.appendChild(configSvg);
+
+        const removeBtn = this._el('button', {
+            class: 'btn-remove-widget text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400',
+            title: 'Удалить',
+            type: 'button',
+            ariaLabel: 'Удалить'
+        });
+        const removeSvg = this._createSVG([{
+            d: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z'
+        }], { class: 'w-5 h-5' });
+        removeBtn.appendChild(removeSvg);
+
+        controls.append(configBtn, removeBtn);
         header.append(title, controls);
 
-        const content = this._el('div', { class: 'widget-content', id: `widget-content-${widget.id}` },
-            this._el('div', { class: 'widget-loading' },
-                this._el('div', { class: 'spinner-border spinner-border-sm', role: 'status' },
-                    this._el('span', { class: 'visually-hidden' }, 'Загрузка...')
-                )
-            )
-        );
+        const content = this._el('div', { class: 'widget-content', id: `widget-content-${widget.id}` });
+        const loadingDiv = this._el('div', { class: 'widget-loading flex items-center justify-center h-full' });
+        const spinner = this._el('div', { class: 'animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400' });
+        loadingDiv.appendChild(spinner);
+        content.appendChild(loadingDiv);
+
         const chartContainer = this._el('div', { class: 'widget-chart', id: `chart-${widget.id}` });
         chartContainer.style.height = `${widget.height || 300}px`;
         content.appendChild(chartContainer);
@@ -294,23 +365,29 @@ class DashboardManager {
                 } else {
                     contentDiv?.classList.add('error');
                     this._clear(contentDiv);
-                    contentDiv?.appendChild(
-                        this._el('div', { class: 'error' },
-                            this._icon('bi bi-exclamation-triangle'),
-                            this._el('p', null, 'Не удалось отобразить виджет'),
-                        )
-                    );
+                    const errorDiv = this._el('div', { class: 'flex flex-col items-center justify-center h-full text-center p-4 text-red-600 dark:text-red-400' });
+                    const errorSvg = this._createSVG([{
+                        d: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+                    }], { class: 'w-12 h-12 mb-2' });
+                    const errorP = this._el('p', { class: 'font-medium' });
+                    errorP.textContent = 'Не удалось отобразить виджет';
+                    errorDiv.appendChild(errorSvg);
+                    errorDiv.appendChild(errorP);
+                    contentDiv?.appendChild(errorDiv);
                 }
             } catch (error) {
                 console.error(`Error rendering widget ${widget.id}:`, error);
                 contentDiv?.classList.add('error');
                 this._clear(contentDiv);
-                contentDiv?.appendChild(
-                    this._el('div', { class: 'error' },
-                        this._icon('bi bi-exclamation-triangle'),
-                        this._el('p', null, 'Ошибка отображения виджета'),
-                    )
-                );
+                const errorDiv = this._el('div', { class: 'flex flex-col items-center justify-center h-full text-center p-4 text-red-600 dark:text-red-400' });
+                const errorSvg = this._createSVG([{
+                    d: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+                }], { class: 'w-12 h-12 mb-2' });
+                const errorP = this._el('p', { class: 'font-medium' });
+                errorP.textContent = 'Ошибка отображения виджета';
+                errorDiv.appendChild(errorSvg);
+                errorDiv.appendChild(errorP);
+                contentDiv?.appendChild(errorDiv);
             }
         });
     }
@@ -469,16 +546,19 @@ class DashboardManager {
         this._clear(container);
 
         if (transactions.length === 0) {
-            container.appendChild(
-                this._el('div', { class: 'text-center text-muted py-4' },
-                    this._icon('bi bi-inbox fs-3'),
-                    this._el('p', { class: 'mt-2' }, 'Нет последних операций'),
-                )
-            );
+            const emptyDiv = this._el('div', { class: 'text-center text-gray-500 dark:text-gray-400 py-8' });
+            const emptySvg = this._createSVG([{
+                d: 'M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4'
+            }], { class: 'w-12 h-12 mx-auto mb-2' });
+            const emptyP = this._el('p', { class: 'mt-2 font-medium' });
+            emptyP.textContent = 'Нет последних операций';
+            emptyDiv.appendChild(emptySvg);
+            emptyDiv.appendChild(emptyP);
+            container.appendChild(emptyDiv);
             return null;
         }
 
-        const list = this._el('div', { class: 'list-group list-group-flush' });
+        const list = this._el('div', { class: 'divide-y divide-gray-200 dark:divide-gray-700' });
 
         const formatDate = (dateStr) => {
             const date = new Date(dateStr);
@@ -490,35 +570,62 @@ class DashboardManager {
                 ? num.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 : String(amount);
             const sign = type === 'expense' ? '-' : '+';
-            const cls = type === 'expense' ? 'text-danger' : 'text-success';
-            return this._el('span', { class: cls }, `${sign}${formatted} ₽`);
+            const cls = type === 'expense'
+                ? 'text-red-600 dark:text-red-400 font-semibold'
+                : 'text-green-600 dark:text-green-400 font-semibold';
+            const span = this._el('span', { class: cls });
+            span.textContent = `${sign}${formatted} ₽`;
+            return span;
         };
-        const typeIconNode = (type) => type === 'expense'
-            ? this._icon('bi bi-arrow-down-circle text-danger')
-            : this._icon('bi bi-arrow-up-circle text-success');
 
         for (const t of transactions) {
-            list.appendChild(
-                this._el('div', { class: 'list-group-item border-0 px-0 py-2' },
-                    this._el('div', { class: 'd-flex justify-content-between align-items-start' },
-                        this._el('div', { class: 'flex-grow-1' },
-                            this._el('div', { class: 'd-flex align-items-center gap-2 mb-1' },
-                                typeIconNode(t.type),
-                                this._el('strong', null, String(t.category ?? '')),
-                            ),
-                            this._el('small', { class: 'text-muted d-block' },
-                                this._icon('bi bi-wallet2'), ' ',
-                                String(t.account ?? '')
-                            ),
-                            this._el('small', { class: 'text-muted' },
-                                this._icon('bi bi-calendar3'), ' ',
-                                formatDate(t.date)
-                            ),
-                        ),
-                        this._el('div', { class: 'text-end' }, amountNode(t.amount, t.type))
-                    )
-                )
-            );
+            const item = this._el('div', { class: 'py-3 px-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors' });
+            const itemContent = this._el('div', { class: 'flex justify-between items-start gap-4' });
+
+            const leftDiv = this._el('div', { class: 'flex-1 min-w-0' });
+            const iconRow = this._el('div', { class: 'flex items-center gap-2 mb-1' });
+
+            const typeIcon = t.type === 'expense'
+                ? this._createSVG([{ d: 'M19 14l-7 7m0 0l-7-7m7 7V3' }], { class: 'w-5 h-5 text-red-500 flex-shrink-0' })
+                : this._createSVG([{ d: 'M5 10l7-7m0 0l7 7m-7-7v18' }], { class: 'w-5 h-5 text-green-500 flex-shrink-0' });
+
+            const categoryStrong = this._el('strong', { class: 'text-gray-900 dark:text-white font-medium' });
+            categoryStrong.textContent = String(t.category ?? '');
+
+            iconRow.appendChild(typeIcon);
+            iconRow.appendChild(categoryStrong);
+
+            const infoRow = this._el('div', { class: 'flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400 mt-1' });
+
+            const accountSpan = this._el('span', { class: 'flex items-center gap-1' });
+            const accountSvg = this._createSVG([{
+                d: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'
+            }], { class: 'w-4 h-4' });
+            accountSpan.appendChild(accountSvg);
+            const accountText = document.createTextNode(String(t.account ?? ''));
+            accountSpan.appendChild(accountText);
+
+            const dateSpan = this._el('span', { class: 'flex items-center gap-1' });
+            const dateSvg = this._createSVG([{
+                d: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
+            }], { class: 'w-4 h-4' });
+            dateSpan.appendChild(dateSvg);
+            const dateText = document.createTextNode(formatDate(t.date));
+            dateSpan.appendChild(dateText);
+
+            infoRow.appendChild(accountSpan);
+            infoRow.appendChild(dateSpan);
+
+            leftDiv.appendChild(iconRow);
+            leftDiv.appendChild(infoRow);
+
+            const rightDiv = this._el('div', { class: 'text-right flex-shrink-0' });
+            rightDiv.appendChild(amountNode(t.amount, t.type));
+
+            itemContent.appendChild(leftDiv);
+            itemContent.appendChild(rightDiv);
+            item.appendChild(itemContent);
+            list.appendChild(item);
         }
 
         container.appendChild(list);
@@ -565,11 +672,20 @@ class DashboardManager {
         const grid = document.getElementById('widgets-grid');
         if (!grid || this.sortable) return;
 
-        this.sortable = Sortable.create(grid, {
-            animation: 150,
-            handle: '.widget-header',
-            onEnd: () => this.updateWidgetPositions(),
-        });
+        if (typeof Sortable === 'undefined') {
+            console.warn('Sortable.js is not loaded. Drag and drop functionality will not work.');
+            return;
+        }
+
+        try {
+            this.sortable = Sortable.create(grid, {
+                animation: 150,
+                handle: '.widget-header',
+                onEnd: () => this.updateWidgetPositions(),
+            });
+        } catch (error) {
+            console.error('Error initializing Sortable:', error);
+        }
     }
 
     async updateWidgetPositions() {
@@ -594,21 +710,20 @@ class DashboardManager {
 
     showWidgetSelectModal() {
         const modalElement = document.getElementById('widget-select-modal');
-        if (!modalElement) { console.error('Widget select modal not found'); return; }
-        const bs = window.bootstrap;
-        if (!bs?.Modal) { console.error('Bootstrap Modal is not available'); return; }
-        try {
-            const modal = bs.Modal.getInstance(modalElement) || new bs.Modal(modalElement);
-            modal.show();
-        } catch (error) { console.error('Error showing modal:', error); }
+        if (!modalElement) {
+            console.error('Widget select modal not found');
+            return;
+        }
+        console.log('Showing widget select modal');
+        modalElement.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        this.setupModalCloseHandlers(modalElement);
     }
 
     async addWidget(widgetType) {
         const modalElement = document.getElementById('widget-select-modal');
-        const bs = window.bootstrap;
-        if (modalElement && bs?.Modal) {
-            const modal = bs.Modal.getInstance(modalElement);
-            modal?.hide();
+        if (modalElement) {
+            this.hideModal(modalElement);
         }
         if (!widgetType) { console.error('Widget type is required'); return; }
 
@@ -671,10 +786,9 @@ class DashboardManager {
 
         const modalEl = document.getElementById('widget-config-modal');
         if (!modalEl) return;
-        const bs = window.bootstrap;
-        if (!bs?.Modal) { console.error('Bootstrap Modal is not available'); return; }
-        const modal = bs.Modal.getInstance(modalEl) || new bs.Modal(modalEl);
-        modal.show();
+        modalEl.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        this.setupModalCloseHandlers(modalEl);
     }
 
     async saveWidgetConfig() {
@@ -692,8 +806,10 @@ class DashboardManager {
         try {
             await this.saveWidgetConfigToServer({ widget_id: widgetId, width, height, config: widget.config });
 
-            const bs = window.bootstrap;
-            if (bs?.Modal) bs.Modal.getInstance(document.getElementById('widget-config-modal'))?.hide();
+            const modalEl = document.getElementById('widget-config-modal');
+            if (modalEl) {
+                this.hideModal(modalEl);
+            }
 
             await this.loadDashboard();
         } catch (error) {
@@ -722,9 +838,17 @@ class DashboardManager {
         if (btn) {
             this._clear(btn);
             if (this.editMode) {
-                btn.appendChild(document.createTextNode('Завершить редактирование'));
+                const checkSvg = this._createSVG([{ d: 'M5 13l4 4L19 7' }], { class: 'w-5 h-5' });
+                const checkText = document.createTextNode(' Завершить редактирование');
+                btn.appendChild(checkSvg);
+                btn.appendChild(checkText);
             } else {
-                btn.append(this._icon('bi bi-pencil'), document.createTextNode(' Редактировать'));
+                const editSvg = this._createSVG([{
+                    d: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
+                }], { class: 'w-5 h-5' });
+                const editText = document.createTextNode(' Редактировать');
+                btn.appendChild(editSvg);
+                btn.appendChild(editText);
             }
         }
     }
@@ -743,21 +867,139 @@ class DashboardManager {
         return token || '';
     }
 
+    hideModal(modalElement) {
+        if (!modalElement) return;
+        modalElement.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    setupModalCloseHandlers(modalElement) {
+        const backdrop = modalElement.querySelector('.modal-backdrop');
+        const closeButtons = modalElement.querySelectorAll('.modal-close');
+
+        const closeHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.hideModal(modalElement);
+        };
+
+        if (backdrop) {
+            backdrop.removeEventListener('click', closeHandler);
+            backdrop.addEventListener('click', closeHandler);
+        }
+
+        closeButtons.forEach(btn => {
+            btn.removeEventListener('click', closeHandler);
+            btn.addEventListener('click', closeHandler);
+        });
+    }
+
     showError(message) {
         let region = document.getElementById('alerts-region');
         if (!region) {
-            region = this._el('div', { id: 'alerts-region' });
+            region = this._el('div', { id: 'alerts-region', class: 'fixed top-4 right-4 z-50 max-w-md w-full px-4' });
             document.body.prepend(region);
         }
-        const alert = this._el('div', { class: 'alert alert-danger alert-dismissible fade show', role: 'alert' },
-            this._el('span', null, String(message)),
-            this._el('button', { type: 'button', class: 'btn-close', ariaLabel: 'Close' })
-        );
-        alert.querySelector('.btn-close').addEventListener('click', () => alert.remove());
+        const alert = this._el('div', {
+            class: 'bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-400 p-4 rounded-lg shadow-lg mb-4 flex items-start gap-3',
+            role: 'alert'
+        });
+
+        const errorSvg = this._createSVG([{
+            d: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+        }], { class: 'w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0' });
+
+        const messageDiv = this._el('div', { class: 'flex-1' });
+        const messageP = this._el('p', { class: 'text-sm font-medium text-red-800 dark:text-red-200' });
+        messageP.textContent = String(message);
+        messageDiv.appendChild(messageP);
+
+        const closeBtn = this._el('button', {
+            type: 'button',
+            class: 'text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200',
+            ariaLabel: 'Close'
+        });
+        const closeSvg = this._createSVG([{
+            d: 'M6 18L18 6M6 6l12 12'
+        }], { class: 'w-5 h-5' });
+        closeBtn.appendChild(closeSvg);
+
+        alert.appendChild(errorSvg);
+        alert.appendChild(messageDiv);
+        alert.appendChild(closeBtn);
+
+        closeBtn.addEventListener('click', () => alert.remove());
         region.prepend(alert);
         const timer = setTimeout(() => alert.remove(), 5000);
-        alert.querySelector('.btn-close').addEventListener('click', () => clearTimeout(timer));
+        closeBtn.addEventListener('click', () => clearTimeout(timer));
     }
 }
 
 window.DashboardManager = DashboardManager;
+
+(function() {
+    function initDashboard() {
+        const grid = document.getElementById('widgets-grid');
+        if (!grid) {
+            console.error('Widgets grid not found');
+            return false;
+        }
+
+        const addWidgetBtn = document.getElementById('add-widget-btn');
+        const editModeBtn = document.getElementById('edit-mode-btn');
+
+        if (!addWidgetBtn) {
+            console.warn('add-widget-btn element not found in DOM');
+        }
+        if (!editModeBtn) {
+            console.warn('edit-mode-btn element not found in DOM');
+        }
+
+        if (window.chartConfigs && window.initChart && window.DashboardManager) {
+            if (typeof Sortable === 'undefined') {
+                console.warn('Sortable.js is not loaded. Drag and drop will not work.');
+            }
+            console.log('Initializing DashboardManager...');
+            try {
+                window.dashboardManager = new window.DashboardManager();
+                console.log('DashboardManager initialized successfully');
+                return true;
+            } catch (error) {
+                console.error('Error initializing DashboardManager:', error);
+                return false;
+            }
+        } else {
+            console.warn('Dashboard dependencies not ready:', {
+                chartConfigs: !!window.chartConfigs,
+                initChart: !!window.initChart,
+                DashboardManager: !!window.DashboardManager,
+                Sortable: typeof Sortable !== 'undefined'
+            });
+        }
+        return false;
+    }
+
+    function waitForDependencies(attempts = 0) {
+        if (attempts > 20) {
+            console.error('Failed to load dashboard dependencies after 20 attempts');
+            return;
+        }
+
+        if (initDashboard()) {
+            console.log('Dashboard initialized successfully');
+            return;
+        }
+
+        setTimeout(() => {
+            waitForDependencies(attempts + 1);
+        }, 100);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            waitForDependencies();
+        });
+    } else {
+        waitForDependencies();
+    }
+})();
