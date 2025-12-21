@@ -1,55 +1,5 @@
-document.addEventListener('DOMContentLoaded', function () {
-    var themeIcon = document.getElementById('theme-icon');
-    function updateThemeIcon(theme) {
-        if (!themeIcon) return;
-        if (theme === 'dark') {
-            themeIcon.classList.remove('bi-sun');
-            themeIcon.classList.add('bi-moon');
-        } else {
-            themeIcon.classList.remove('bi-moon');
-            themeIcon.classList.add('bi-sun');
-        }
-    }
-
-
-    function applyTheme(theme) {
-        document.body.classList.add('theme-fade');
-        document.body.setAttribute('data-bs-theme', theme);
-        document.documentElement.setAttribute('data-bs-theme', theme);
-        if (theme === 'dark') {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-        updateThemeIcon(theme);
-        setTimeout(function() {
-            document.body.classList.remove('theme-fade');
-        }, 400);
-    }
-
-    var initialTheme = document.body.getAttribute('data-bs-theme') || 'light';
-    applyTheme(initialTheme);
-
-    var themeToggle = document.getElementById('theme-toggle');
-    if (themeToggle) {
-        themeToggle.addEventListener('click', function () {
-            var currentTheme = document.body.getAttribute('data-bs-theme');
-            var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            applyTheme(newTheme);
-            if (window.SET_THEME_URL) {
-                fetch(window.SET_THEME_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        theme: newTheme
-                    }),
-                });
-            }
-        });
-    }
+(function() {
+    'use strict';
 
     function getCookie(name) {
         if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
@@ -68,4 +18,123 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         return cookieValue;
     }
-});
+
+    function updateThemeIcon(theme) {
+        const themeIcon = document.getElementById('theme-icon');
+        if (!themeIcon) {
+            return;
+        }
+        if (theme === 'dark') {
+            themeIcon.classList.remove('bi-sun');
+            themeIcon.classList.add('bi-moon');
+        } else {
+            themeIcon.classList.remove('bi-moon');
+            themeIcon.classList.add('bi-sun');
+        }
+    }
+
+    function applyTheme(theme) {
+        const html = document.documentElement;
+        const body = document.body;
+
+        body.classList.add('theme-fade');
+
+        body.setAttribute('data-bs-theme', theme);
+        html.setAttribute('data-bs-theme', theme);
+
+        if (theme === 'dark') {
+            html.classList.add('dark');
+            if (!body.classList.contains('dark')) {
+                body.classList.add('dark');
+            }
+        } else {
+            html.classList.remove('dark');
+            body.classList.remove('dark');
+        }
+
+        updateThemeIcon(theme);
+
+        const forceReflow = function() {
+            void body.offsetHeight;
+        };
+
+        requestAnimationFrame(function() {
+            forceReflow();
+            requestAnimationFrame(function() {
+                forceReflow();
+                setTimeout(function() {
+                    body.classList.remove('theme-fade');
+                    if (theme === 'dark' && !html.classList.contains('dark')) {
+                        html.classList.add('dark');
+                    }
+                }, 400);
+            });
+        });
+    }
+
+    function initThemeToggle() {
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+
+        if (!themeToggle || !themeIcon) {
+            return;
+        }
+
+        const initialTheme = document.documentElement.getAttribute('data-bs-theme') ||
+                             document.body.getAttribute('data-bs-theme') ||
+                             'light';
+        updateThemeIcon(initialTheme);
+
+        themeToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const currentTheme = document.documentElement.getAttribute('data-bs-theme') ||
+                                 document.body.getAttribute('data-bs-theme') ||
+                                 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+
+            if (window.SET_THEME_URL) {
+                fetch(window.SET_THEME_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        theme: newTheme
+                    }),
+                }).catch(function(error) {
+                    console.error('Error setting theme:', error);
+                });
+            }
+        });
+    }
+
+    function init() {
+        const html = document.documentElement;
+        const body = document.body;
+
+        const initialTheme = html.getAttribute('data-bs-theme') ||
+                             body.getAttribute('data-bs-theme') ||
+                             (html.classList.contains('dark') ? 'dark' : 'light');
+
+        if (initialTheme === 'dark' && !html.classList.contains('dark')) {
+            html.classList.add('dark');
+            body.classList.add('dark');
+        } else if (initialTheme === 'light' && html.classList.contains('dark')) {
+            html.classList.remove('dark');
+            body.classList.remove('dark');
+        }
+
+        applyTheme(initialTheme);
+        initThemeToggle();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
