@@ -8,26 +8,28 @@
     {{ user.username }}{% endblock %}
 
 {% block content %}
-    <div class="container-fluid">
-        <div class="row mt-4">
-            <!-- Информация о пользователе -->
-            <div class="col-12 mb-4">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col-auto">
-                                <div class="avatar-circle bg-primary text-white d-flex align-items-center justify-content-center">
-                                    {{ user.username|first|upper }}
-                                </div>
+    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto space-y-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="p-6">
+                    <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                        <div class="flex-shrink-0">
+                            <div class="profile-avatar-circle">
+                                {{ user.username|first|upper }}
                             </div>
-                            <div class="col">
-                                <h3 class="mb-1">{{ user.get_full_name|default:user.username }}</h3>
-                                <p class="text-muted mb-0">
-                                    <i class="bi bi-envelope"></i> {{ user.email|default:"Email не указан" }}
+                        </div>
+                        <div class="flex-1 text-center sm:text-left">
+                            <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
+                                {{ user.get_full_name|default:user.username }}
+                            </h2>
+                            <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                                <p class="flex items-center justify-center sm:justify-start gap-2">
+                                    <i class="bi bi-envelope"></i>
+                                    <span>{{ user.email|default:"Email не указан" }}</span>
                                 </p>
-                                <p class="text-muted mb-0">
+                                <p class="flex items-center justify-center sm:justify-start gap-2">
                                     <i class="bi bi-calendar"></i>
-                                    {% translate 'Зарегистрирован' %}: {{ user.date_joined|date:"d.m.Y" }}
+                                    <span>{% translate 'Зарегистрирован' %}: {{ user.date_joined|date:"d.m.Y" }}</span>
                                 </p>
                             </div>
                         </div>
@@ -35,158 +37,129 @@
                 </div>
             </div>
 
-            <!-- Статистика -->
-            <div class="col-12 mb-4">
-                <div class="row">
-                    <div class="col-md-3 mb-3">
-                        <div class="card bg-primary text-white shadow-sm">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <h6 class="card-title">{% translate 'Общий баланс' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.total_balance|comma }} ₽</h4>
-                                    </div>
-                                    <div class="align-self-center">
-                                        <i class="bi bi-wallet fs-1"></i>
-                                    </div>
-                                </div>
-                            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-100 text-sm font-medium mb-1">{% translate 'Общий баланс' %}</p>
+                            <p class="text-2xl font-bold">{{ user_statistics.total_balance|comma }} ₽</p>
+                        </div>
+                        <div class="bg-white/20 rounded-full p-3">
+                            <i class="bi bi-wallet text-2xl"></i>
                         </div>
                     </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card bg-success text-white shadow-sm">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <h6 class="card-title">{% translate 'Доходы (месяц)' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.current_month_income|comma }} ₽</h4>
-                                    </div>
-                                    <div class="align-self-center">
-                                        <i class="bi bi-arrow-up-circle fs-1"></i>
-                                    </div>
-                                </div>
-                            </div>
+                </div>
+                <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-green-100 text-sm font-medium mb-1">{% translate 'Доходы (месяц)' %}</p>
+                            <p class="text-2xl font-bold">{{ user_statistics.current_month_income|comma }} ₽</p>
+                        </div>
+                        <div class="bg-white/20 rounded-full p-3">
+                            <i class="bi bi-arrow-up-circle text-2xl"></i>
                         </div>
                     </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card bg-danger text-white shadow-sm">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <h6 class="card-title">{% translate 'Расходы (месяц)' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.current_month_expenses|comma }} ₽</h4>
-                                    </div>
-                                    <div class="align-self-center">
-                                        <i class="bi bi-arrow-down-circle fs-1"></i>
-                                    </div>
-                                </div>
-                            </div>
+                </div>
+                <div class="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-red-100 text-sm font-medium mb-1">{% translate 'Расходы (месяц)' %}</p>
+                            <p class="text-2xl font-bold">{{ user_statistics.current_month_expenses|comma }} ₽</p>
+                        </div>
+                        <div class="bg-white/20 rounded-full p-3">
+                            <i class="bi bi-arrow-down-circle text-2xl"></i>
                         </div>
                     </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card {% if user_statistics.monthly_savings >= 0 %}bg-info{% else %}bg-warning{% endif %} text-white shadow-sm">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <h6 class="card-title">{% translate 'Сбережения' %}</h6>
-                                        <h4 class="mb-0">{{ user_statistics.monthly_savings|comma }} ₽</h4>
-                                    </div>
-                                    <div class="align-self-center">
-                                        <i class="bi bi-piggy-bank fs-1"></i>
-                                    </div>
-                                </div>
-                            </div>
+                </div>
+                <div class="{% if user_statistics.monthly_savings >= 0 %}bg-gradient-to-br from-cyan-500 to-cyan-600{% else %}bg-gradient-to-br from-yellow-500 to-yellow-600{% endif %} text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="{% if user_statistics.monthly_savings >= 0 %}text-cyan-100{% else %}text-yellow-100{% endif %} text-sm font-medium mb-1">{% translate 'Сбережения' %}</p>
+                            <p class="text-2xl font-bold">{{ user_statistics.monthly_savings|comma }} ₽</p>
+                        </div>
+                        <div class="bg-white/20 rounded-full p-3">
+                            <i class="bi bi-piggy-bank text-2xl"></i>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Вкладки -->
-            <div class="col-12">
-                <div class="card shadow-sm">
-                    <div class="card-header">
-                        <ul class="nav nav-tabs card-header-tabs" id="profileTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="personal-tab" data-bs-toggle="tab"
-                                        data-bs-target="#personal" type="button" role="tab">
-                                    <i class="bi bi-person"></i> {% translate 'Персональная информация' %}
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="statistics-tab" data-bs-toggle="tab"
-                                        data-bs-target="#statistics" type="button" role="tab">
-                                    <i class="bi bi-graph-up"></i> {% translate 'Статистика' %}
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="recent-tab" data-bs-toggle="tab"
-                                        data-bs-target="#recent" type="button" role="tab">
-                                    <i class="bi bi-clock-history"></i> {% translate 'Последние операции' %}
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="settings-tab" data-bs-toggle="tab"
-                                        data-bs-target="#settings" type="button" role="tab">
-                                    <i class="bi bi-gear"></i> {% translate 'Настройки' %}
-                                </button>
-                            </li>
-                        </ul>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex flex-wrap -mb-px" id="profileTabs" role="tablist">
+                        <button class="profile-tab-button active" id="personal-tab" data-tab-target="personal" type="button" role="tab" aria-selected="true" aria-controls="personal">
+                            <i class="bi bi-person mr-2"></i>
+                            <span>{% translate 'Персональная информация' %}</span>
+                        </button>
+                        <button class="profile-tab-button" id="statistics-tab" data-tab-target="statistics" type="button" role="tab" aria-selected="false" aria-controls="statistics">
+                            <i class="bi bi-graph-up mr-2"></i>
+                            <span>{% translate 'Статистика' %}</span>
+                        </button>
+                        <button class="profile-tab-button" id="recent-tab" data-tab-target="recent" type="button" role="tab" aria-selected="false" aria-controls="recent">
+                            <i class="bi bi-clock-history mr-2"></i>
+                            <span>{% translate 'Последние операции' %}</span>
+                        </button>
+                        <button class="profile-tab-button" id="settings-tab" data-tab-target="settings" type="button" role="tab" aria-selected="false" aria-controls="settings">
+                            <i class="bi bi-gear mr-2"></i>
+                            <span>{% translate 'Настройки' %}</span>
+                        </button>
                     </div>
-                    <div class="card-body">
-                        <div class="tab-content" id="profileTabsContent">
-                            <!-- Персональная информация -->
-                            <div class="tab-pane fade show active" id="personal" role="tabpanel">
-                                <form class="ajax-form" method="POST" action="{% url 'users:update_user' user.id %}">
-                                    {% csrf_token %}
-                                    <div class="row">
-                                        {% for field in user_update %}
-                                            <div class="col-md-6 mb-3">
-                                                <div class="form-group {% if field.errors %} has-error{% endif %}">
-                                                    {{ field | as_crispy_field }}
-                                                    {% if field.errors %}
-                                                        {% for error in field.errors %}
-                                                            <p class="help-block text-danger">{{ error }}</p>
-                                                        {% endfor %}
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                    <div class="mt-4">
-                                        <h5>{% translate 'Мои группы' %}</h5>
-                                        <ul class="list-group list-group-flush">
+                </div>
+                <div class="p-6">
+                    <div id="profileTabsContent">
+                        <div class="profile-tab-content active" id="personal" role="tabpanel" aria-labelledby="personal-tab">
+                            <form class="ajax-form" method="POST" action="{% url 'users:update_user' user.id %}">
+                                {% csrf_token %}
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {% for field in user_update %}
+                                        <div class="form-group {% if field.errors %}has-error{% endif %}">
+                                            {{ field | as_crispy_field }}
+                                            {% if field.errors %}
+                                                {% for error in field.errors %}
+                                                    <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="mt-6">
+                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Мои группы' %}</h5>
+                                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <ul class="divide-y divide-gray-200 dark:divide-gray-600">
                                             {% for group in user_update.instance.groups.all %}
-                                                <li class="list-group-item">{{ group.name }}</li>
+                                                <li class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ group.name }}</li>
                                             {% empty %}
-                                                <li class="list-group-item">{% translate 'Вы не состоите ни в одной группе' %}</li>
+                                                <li class="px-4 py-3 text-gray-500 dark:text-gray-400">{% translate 'Вы не состоите ни в одной группе' %}</li>
                                             {% endfor %}
                                         </ul>
                                     </div>
-                                    <div class="mt-3">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="bi bi-check-circle"></i> {% translate 'Сохранить изменения' %}
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
+                                </div>
+                                <div class="mt-6">
+                                    <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600">
+                                        <i class="bi bi-check-circle"></i>
+                                        <span>{% translate 'Сохранить изменения' %}</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
 
-                            <!-- Статистика -->
-                            <div class="tab-pane fade" id="statistics" role="tabpanel">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h5>{% translate 'Общая информация' %}</h5>
-                                        <ul class="list-group list-group-flush">
-                                            <li class="list-group-item d-flex justify-content-between">
-                                                <span>{% translate 'Количество счетов' %}</span>
-                                                <span class="badge bg-primary">{{ user_statistics.accounts_count }}</span>
+                        <div class="profile-tab-content" id="statistics" role="tabpanel" aria-labelledby="statistics-tab">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Общая информация' %}</h5>
+                                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <ul class="divide-y divide-gray-200 dark:divide-gray-600">
+                                            <li class="px-4 py-3 flex items-center justify-between">
+                                                <span class="text-gray-700 dark:text-gray-300">{% translate 'Количество счетов' %}</span>
+                                                <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm font-medium rounded-full">{{ user_statistics.accounts_count }}</span>
                                             </li>
-                                            <li class="list-group-item d-flex justify-content-between">
-                                                <span>{% translate 'Количество чеков' %}</span>
-                                                <span class="badge bg-info">{{ user_statistics.receipts_count }}</span>
+                                            <li class="px-4 py-3 flex items-center justify-between">
+                                                <span class="text-gray-700 dark:text-gray-300">{% translate 'Количество чеков' %}</span>
+                                                <span class="px-3 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300 text-sm font-medium rounded-full">{{ user_statistics.receipts_count }}</span>
                                             </li>
-                                            <li class="list-group-item d-flex justify-content-between">
-                                                <span>{% translate 'Сравнение с прошлым месяцем' %}</span>
-                                                <span class="badge {% if user_statistics.monthly_savings > user_statistics.last_month_savings %}bg-success{% else %}bg-warning{% endif %}">
+                                            <li class="px-4 py-3 flex items-center justify-between">
+                                                <span class="text-gray-700 dark:text-gray-300">{% translate 'Сравнение с прошлым месяцем' %}</span>
+                                                <span class="px-3 py-1 {% if user_statistics.monthly_savings > user_statistics.last_month_savings %}bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300{% else %}bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300{% endif %} text-sm font-medium rounded-full flex items-center gap-1">
                                                     {% if user_statistics.monthly_savings > user_statistics.last_month_savings %}
                                                         <i class="bi bi-arrow-up"></i>
                                                     {% else %}
@@ -195,132 +168,145 @@
                                                 </span>
                                             </li>
                                         </ul>
-                                        <div class="mt-3">
-                                            <a href="{% url 'users:statistics' %}" class="btn btn-outline-primary">
-                                                <i class="bi bi-graph-up"></i> {% translate 'Детальная статистика' %}
-                                            </a>
-                                        </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <h5>{% translate 'Топ категорий расходов (текущий месяц)' %}</h5>
-                                        {% if user_statistics.top_expense_categories %}
-                                            <div class="list-group list-group-flush">
+                                    <div class="mt-4">
+                                        <a href="{% url 'users:statistics' %}" class="inline-flex items-center gap-2 px-4 py-2 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                                            <i class="bi bi-graph-up"></i>
+                                            <span>{% translate 'Детальная статистика' %}</span>
+                                        </a>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Топ категорий расходов (текущий месяц)' %}</h5>
+                                    {% if user_statistics.top_expense_categories %}
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <ul class="divide-y divide-gray-200 dark:divide-gray-600">
                                                 {% for category in user_statistics.top_expense_categories %}
-                                                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                                                        <span>{{ category.category__name }}</span>
-                                                        <span class="badge bg-danger rounded-pill">
+                                                    <li class="px-4 py-3 flex items-center justify-between">
+                                                        <span class="text-gray-900 dark:text-gray-100">{{ category.category__name }}</span>
+                                                        <span class="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-sm font-medium rounded-full">
                                                             {{ category.total|comma }} ₽
                                                         </span>
-                                                    </div>
+                                                    </li>
                                                 {% endfor %}
-                                            </div>
-                                        {% else %}
-                                            <p class="text-muted">{% translate 'Нет данных о расходах за текущий месяц' %}</p>
-                                        {% endif %}
-                                    </div>
+                                            </ul>
+                                        </div>
+                                    {% else %}
+                                        <p class="text-gray-500 dark:text-gray-400">{% translate 'Нет данных о расходах за текущий месяц' %}</p>
+                                    {% endif %}
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Последние операции -->
-                            <div class="tab-pane fade" id="recent" role="tabpanel">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h5>{% translate 'Последние расходы' %}</h5>
-                                        {% if user_statistics.recent_expenses %}
-                                            <div class="list-group">
-                                                {% for expense in user_statistics.recent_expenses %}
-                                                    <div class="list-group-item">
-                                                        <div class="d-flex w-100 justify-content-between">
-                                                            <h6 class="mb-1">{{ expense.category.name }}</h6>
-                                                            <small class="text-danger">{{ expense.amount|comma }} ₽</small>
-                                                        </div>
-                                                        <p class="mb-1">{{ expense.account.name_account }}</p>
-                                                        <small class="text-muted">{{ expense.date|date:"d.m.Y" }}</small>
+                        <div class="profile-tab-content" id="recent" role="tabpanel" aria-labelledby="recent-tab">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Последние расходы' %}</h5>
+                                    {% if user_statistics.recent_expenses %}
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
+                                            {% for expense in user_statistics.recent_expenses %}
+                                                <div class="p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+                                                    <div class="flex items-start justify-between mb-2">
+                                                        <h6 class="font-medium text-gray-900 dark:text-white">{{ expense.category.name }}</h6>
+                                                        <span class="text-red-600 dark:text-red-400 font-semibold">{{ expense.amount|comma }} ₽</span>
                                                     </div>
-                                                {% endfor %}
-                                            </div>
-                                        {% else %}
-                                            <p class="text-muted">{% translate 'Нет данных о расходах' %}</p>
-                                        {% endif %}
-                                    </div>
-                                    <div class="col-md-6">
-                                        <h5>{% translate 'Последние доходы' %}</h5>
-                                        {% if user_statistics.recent_incomes %}
-                                            <div class="list-group">
-                                                {% for income in user_statistics.recent_incomes %}
-                                                    <div class="list-group-item">
-                                                        <div class="d-flex w-100 justify-content-between">
-                                                            <h6 class="mb-1">{{ income.category.name }}</h6>
-                                                            <small class="text-success">{{ income.amount|comma }} ₽</small>
-                                                        </div>
-                                                        <p class="mb-1">{{ income.account.name_account }}</p>
-                                                        <small class="text-muted">{{ income.date|date:"d.m.Y" }}</small>
+                                                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">{{ expense.account.name_account }}</p>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-500">{{ expense.date|date:"d.m.Y" }}</p>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <p class="text-gray-500 dark:text-gray-400">{% translate 'Нет данных о расходах' %}</p>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Последние доходы' %}</h5>
+                                    {% if user_statistics.recent_incomes %}
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
+                                            {% for income in user_statistics.recent_incomes %}
+                                                <div class="p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+                                                    <div class="flex items-start justify-between mb-2">
+                                                        <h6 class="font-medium text-gray-900 dark:text-white">{{ income.category.name }}</h6>
+                                                        <span class="text-green-600 dark:text-green-400 font-semibold">{{ income.amount|comma }} ₽</span>
                                                     </div>
-                                                {% endfor %}
-                                            </div>
-                                        {% else %}
-                                            <p class="text-muted">{% translate 'Нет данных о доходах' %}</p>
-                                        {% endif %}
-                                    </div>
+                                                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">{{ income.account.name_account }}</p>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-500">{{ income.date|date:"d.m.Y" }}</p>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <p class="text-gray-500 dark:text-gray-400">{% translate 'Нет данных о доходах' %}</p>
+                                    {% endif %}
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Настройки -->
-                            <div class="tab-pane fade" id="settings" role="tabpanel">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h5>{% translate 'Безопасность' %}</h5>
-                                        <div class="d-grid gap-2">
-                                            <a class="btn btn-outline-primary" href="{% url 'users:password' %}">
-                                                <i class="bi bi-key"></i> {% translate 'Изменить пароль' %}
+                        <div class="profile-tab-content" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Безопасность' %}</h5>
+                                    <div class="space-y-3">
+                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:password' %}">
+                                            <i class="bi bi-key"></i>
+                                            <span>{% translate 'Изменить пароль' %}</span>
+                                        </a>
+                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-cyan-300 dark:border-cyan-600 text-cyan-700 dark:text-cyan-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-cyan-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'finance_account:list' %}">
+                                            <i class="bi bi-wallet"></i>
+                                            <span>{% translate 'Управление счетами' %}</span>
+                                        </a>
+                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-green-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'reports:list' %}">
+                                            <i class="bi bi-graph-up"></i>
+                                            <span>{% translate 'Отчеты и аналитика' %}</span>
+                                        </a>
+                                    </div>
+                                    <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                                        <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Группы</h5>
+                                        <div class="space-y-3">
+                                            <a class="flex items-center gap-3 w-full px-4 py-3 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:create' %}">
+                                                <i class="bi bi-people"></i>
+                                                <span>{% translate "Создать группу" %}</span>
                                             </a>
-                                            <a class="btn btn-outline-info" href="{% url 'finance_account:list' %}">
-                                                <i class="bi bi-wallet"></i> {% translate 'Управление счетами' %}
+                                            <a class="flex items-center gap-3 w-full px-4 py-3 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-red-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:delete' %}">
+                                                <i class="bi bi-person-dash"></i>
+                                                <span>{% translate "Удалить группу" %}</span>
                                             </a>
-                                            <a class="btn btn-outline-success" href="{% url 'reports:list' %}">
-                                                <i class="bi bi-graph-up"></i> {% translate 'Отчеты и аналитика' %}
+                                            <a class="flex items-center gap-3 w-full px-4 py-3 border border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-green-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:add_user' %}">
+                                                <i class="bi bi-person-plus"></i>
+                                                <span>{% translate "Добавить пользователя в группу" %}</span>
                                             </a>
-                                        </div>
-                                        <hr>
-                                        <h5>Группы</h5>
-                                        <div class="d-grid gap-2">
-                                            <a class="btn btn-outline-primary" href="{% url 'users:groups:create' %}">
-                                                <i class="bi bi-people"></i> {% translate "Создать группу" %}
-                                            </a>
-                                            <a class="btn btn-outline-danger" href="{% url 'users:groups:delete' %}">
-                                                <i class="bi bi-person-dash"></i> {% translate "Удалить группу" %}
-                                            </a>
-                                            <a class="btn btn-outline-success" href="{% url 'users:groups:add_user' %}">
-                                                <i class="bi bi-person-plus"></i> {% translate "Добавить пользователя в группу" %}
-                                            </a>
-                                            <a class="btn btn-outline-dark" href="{% url 'users:groups:delete_user' %}">
-                                                <i class="bi bi-person-plus"></i>  {% translate "Удалить пользователя из группы" %}
+                                            <a class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:delete_user' %}">
+                                                <i class="bi bi-person-dash"></i>
+                                                <span>{% translate "Удалить пользователя из группы" %}</span>
                                             </a>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <h5>{% translate 'Быстрые действия' %}</h5>
-                                        <div class="d-grid gap-2">
-                                            <a class="btn btn-outline-danger" href="{% url 'expense:list' %}">
-                                                <i class="bi bi-plus-circle"></i> {% translate 'Добавить расход' %}
-                                            </a>
-                                            <a class="btn btn-outline-success" href="{% url 'income:list' %}">
-                                                <i class="bi bi-plus-circle"></i> {% translate 'Добавить доход' %}
-                                            </a>
-                                            <a class="btn btn-outline-warning" href="{% url 'receipts:list' %}">
-                                                <i class="bi bi-receipt"></i> {% translate 'Добавить чек' %}
-                                            </a>
-                                            <a class="btn btn-outline-secondary" href="{% url 'users:export_data' %}">
-                                                <i class="bi bi-download"></i> {% translate 'Экспорт данных' %}
-                                            </a>
-                                        </div>
-                                        <hr>
-                                        <h5>{% translate 'Тема' %}</h5>
-                                        <div class="d-grid gap-2">
-                                            <button id="theme-toggle" class="btn btn-outline-secondary">
-                                                <i id="theme-icon" class="bi"></i> {% translate 'Тема' %}
-                                            </button>
-                                        </div>
+                                </div>
+                                <div>
+                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Быстрые действия' %}</h5>
+                                    <div class="space-y-3">
+                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-red-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'expense:list' %}">
+                                            <i class="bi bi-plus-circle"></i>
+                                            <span>{% translate 'Добавить расход' %}</span>
+                                        </a>
+                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-green-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'income:list' %}">
+                                            <i class="bi bi-plus-circle"></i>
+                                            <span>{% translate 'Добавить доход' %}</span>
+                                        </a>
+                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-yellow-300 dark:border-yellow-600 text-yellow-700 dark:text-yellow-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-yellow-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'receipts:list' %}">
+                                            <i class="bi bi-receipt"></i>
+                                            <span>{% translate 'Добавить чек' %}</span>
+                                        </a>
+                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:export_data' %}">
+                                            <i class="bi bi-download"></i>
+                                            <span>{% translate 'Экспорт данных' %}</span>
+                                        </a>
+                                    </div>
+                                    <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                                        <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Тема' %}</h5>
+                                        <button id="theme-toggle" class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                                            <i id="theme-icon" class="bi"></i>
+                                            <span>{% translate 'Тема' %}</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -330,26 +316,10 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
-    <style>
-        .avatar-circle {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .nav-tabs .nav-link {
-            border: none;
-            color: #6c757d;
-        }
-        .nav-tabs .nav-link.active {
-            color: #0d6efd;
-            border-bottom: 2px solid #0d6efd;
-        }
-        .card {
-            border: none;
-            border-radius: 15px;
-        }
-        .list-group-item {
-            border: none;
-            border-bottom: 1px solid #f8f9fa;
-        }
-    </style>
+{% block extra_js %}
+    {% load static %}
+    {% load word_hash %}
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/profile-tabs.js' %}?v={% word_hash %}"></script>
 {% endblock %}
