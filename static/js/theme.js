@@ -34,8 +34,12 @@
     }
 
     function applyTheme(theme) {
-        const html = document.documentElement;
+        const html = document.querySelector('html');
         const body = document.body;
+
+        if (!html) {
+            return;
+        }
 
         body.classList.add('theme-fade');
 
@@ -55,7 +59,7 @@
         updateThemeIcon(theme);
 
         const forceReflow = function() {
-            void body.offsetHeight;
+            return body.offsetHeight;
         };
 
         requestAnimationFrame(function() {
@@ -80,7 +84,8 @@
             return;
         }
 
-        const initialTheme = document.documentElement.getAttribute('data-bs-theme') ||
+        const htmlElement = document.querySelector('html');
+        const initialTheme = htmlElement?.getAttribute('data-bs-theme') ||
                              document.body.getAttribute('data-bs-theme') ||
                              'light';
         updateThemeIcon(initialTheme);
@@ -89,7 +94,8 @@
             e.preventDefault();
             e.stopPropagation();
 
-            const currentTheme = document.documentElement.getAttribute('data-bs-theme') ||
+            const htmlElement = document.querySelector('html');
+            const currentTheme = htmlElement?.getAttribute('data-bs-theme') ||
                                  document.body.getAttribute('data-bs-theme') ||
                                  'light';
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -113,8 +119,12 @@
     }
 
     function init() {
-        const html = document.documentElement;
+        const html = document.querySelector('html');
         const body = document.body;
+
+        if (!html) {
+            return;
+        }
 
         const initialTheme = html.getAttribute('data-bs-theme') ||
                              body.getAttribute('data-bs-theme') ||
