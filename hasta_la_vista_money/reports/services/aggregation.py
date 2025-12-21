@@ -1,14 +1,15 @@
+from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
+from django.utils import timezone
 from typing_extensions import TypedDict
 
-from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
@@ -165,25 +166,61 @@ def _fact_map_for_categories(
     )
     if not months:
         return fact_map
+
+    first_month = months[0]
+    last_month = months[-1]
+
+    first_month_start = timezone.make_aware(
+        datetime(
+            first_month.year,
+            first_month.month,
+            1,
+            0,
+            0,
+            0,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    _, last_day_last = monthrange(last_month.year, last_month.month)
+    last_month_end = timezone.make_aware(
+        datetime(
+            last_month.year,
+            last_month.month,
+            last_day_last,
+            23,
+            59,
+            59,
+            999999,
+            tzinfo=timezone.utc,
+        ),
+    )
+
     qs = (
         model.objects.filter(
             user=user,
             category__in=categories,
-            date__gte=months[0],
-            date__lte=months[-1],
+            date__gte=first_month_start,
+            date__lte=last_month_end,
         )
         .annotate(month=TruncMonth('date'))
         .values('category_id', 'month')
         .annotate(total=Sum('amount'))
     )
+
     for row in qs:
-        month_date = (
-            row['month'].date()
-            if hasattr(row['month'], 'date')
-            else row['month']
-        )
-        total_amount = row['total'] or Decimal(0)
-        fact_map[row['category_id']][month_date] = total_amount
+        month_datetime = row['month']
+        if isinstance(month_datetime, datetime) or hasattr(
+            month_datetime,
+            'date',
+        ):
+            month_date = month_datetime.date()
+        else:
+            month_date = month_datetime
+
+        if isinstance(month_date, date) and month_date in months:
+            total_amount = row['total'] or Decimal(0)
+            fact_map[row['category_id']][month_date] = total_amount
     return fact_map
 
 
@@ -221,21 +258,43 @@ def _pie_for_categories(
 
 
 def budget_charts(user: User) -> BudgetChartsDict:
-    list_dates = DateList.objects.filter(user=user).order_by('date')
-    months = [d.date for d in list_dates]
+    expense_dates = (
+        Expense.objects.filter(user=user)
+        .annotate(month=TruncMonth('date'))
+        .values_list('month', flat=True)
+        .distinct()
+        .order_by('month')
+    )
+    income_dates = (
+        Income.objects.filter(user=user)
+        .annotate(month=TruncMonth('date'))
+        .values_list('month', flat=True)
+        .distinct()
+        .order_by('month')
+    )
+
+    all_months_set = set()
+    for d in expense_dates:
+        if d:
+            month_date = d.date() if hasattr(d, 'date') else d
+            if isinstance(month_date, date):
+                all_months_set.add(month_date)
+    for d in income_dates:
+        if d:
+            month_date = d.date() if hasattr(d, 'date') else d
+            if isinstance(month_date, date):
+                all_months_set.add(month_date)
+
+    months = sorted(all_months_set)
 
     expense_categories = list(
-        user.category_expense_users.filter(parent_category=None).order_by(
-            'name',
-        ),
+        user.category_expense_users.all().order_by('name'),
     )
     income_categories = list(
-        user.category_income_users.filter(parent_category=None).order_by(
-            'name',
-        ),
+        user.category_income_users.all().order_by('name'),
     )
 
-    chart_labels = [m.strftime('%b %Y') for m in months]
+    chart_labels = [m.strftime('%b %Y') for m in months] if months else []
 
     expense_fact = _fact_map_for_categories(
         user,
@@ -253,9 +312,11 @@ def budget_charts(user: User) -> BudgetChartsDict:
     total_expense = _totals_by_month(expense_categories, months, expense_fact)
     total_income = _totals_by_month(income_categories, months, income_fact)
 
-    chart_balance = [
-        total_income[i] - total_expense[i] for i in range(len(months))
-    ]
+    chart_balance = (
+        [total_income[i] - total_expense[i] for i in range(len(months))]
+        if months
+        else []
+    )
 
     pie_labels, pie_values = _pie_for_categories(
         expense_categories,
