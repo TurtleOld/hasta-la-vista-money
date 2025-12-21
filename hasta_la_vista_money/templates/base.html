@@ -101,13 +101,14 @@
         {% include '_mobile_menu.html' %}
     {% endif %}
 
-    <script nonce="{{request.csp_nonce}}" src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
-    <script nonce="{{request.csp_nonce}}" type="text/javascript" src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+
 
     {% compress js %}
     <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
-    <script src="{% static 'js/notifications.js' %}"></script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/htmx.min.js' %}"></script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/tex-mml-chtml.js' %}"></script>
+    <script nonce="{{request.csp_nonce}}" type="text/javascript" src="{% static 'js/tabulator.min.js' %}"></script>
+    <script src="{% static 'js/notifications.js' %}"></>
     <script src="{% static 'js/script.js' %}"></script>
     <script src="{% static 'js/errors_form.js' %}"></script>
     <script src="{% static 'js/account_group_filter.js' %}"></script>
@@ -142,7 +143,7 @@
                 loadScript('{% static "js/receipt_filter.js" %}?v={% word_hash %}').catch(function(error) {
                     console.error('Error loading receipt_filter script:', error);
                 });
-                
+
                 loadScript('{% static "js/tokens.js" %}?v={% word_hash %}').then(function() {
                     return loadScript('{% static "js/receipt_group_filter.js" %}?v={% word_hash %}');
                 }).then(function() {
