@@ -34,7 +34,7 @@ class IncomeForm(
     )
     account = ModelChoiceField(
         queryset=Account.objects.none(),
-        label=_('Счёт списания'),
+        label=_('Счёт пополнения'),
         help_text=_('Выберите на какой счёт зачислить доход'),
     )
     date = DateTimeField(
