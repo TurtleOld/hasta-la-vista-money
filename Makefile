@@ -59,7 +59,7 @@ gettext:
 	@echo "Install gettext manually on Windows; apt only for Linux." && uv run python -c "print('For Windows: choco install gettext (or use MSYS2)')"
 
 staticfiles:
-	@uv run python manage.py collectstatic
+	@uv run python manage.py collectstatic --noinput
 
 start:
 	@uv run python manage.py runserver 127.0.0.1:8000
