@@ -47,10 +47,10 @@
                     </div>
                 </div>
                 <div class="flex justify-end gap-2 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <button class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors duration-200" data-bs-toggle="modal" data-bs-target="#receipt-{{ receipt.id }}">
+                    <button class="receipts-view-button inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200" data-bs-toggle="modal" data-bs-target="#receipt-{{ receipt.id }}">
                         <i class="bi bi-eye"></i>{% translate 'Просмотр' %}
                     </button>
-                    <a href="{% url 'receipts:update' receipt.id %}" class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors duration-200">
+                    <a href="{% url 'receipts:update' receipt.id %}" class="receipts-edit-button inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200">
                         <i class="bi bi-pencil"></i>{% translate 'Редактировать' %}
                     </a>
                     <form class="form-remove-receipt-button m-0" action="{% url 'receipts:delete' receipt.id %}" method="post">
