@@ -5,13 +5,17 @@ from decimal import Decimal
 from typing import Any, cast
 
 import numpy as np
-from dateutil.relativedelta import relativedelta
 from django.db.models import Sum
 from django.utils import timezone
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.utils.date_utils import (
+    get_month_start_end,
+    get_period_dates,
+)
 
 
 def calculate_linear_trend(
@@ -92,38 +96,11 @@ def get_period_comparison(
     Returns:
         Словарь с данными текущего и прошлого периода
     """
-    today = timezone.now().date()
-    today_dt = timezone.make_aware(datetime.combine(today, time.max))
-
-    if period_type == 'month':
-        current_start = today.replace(day=1)
-        previous_start = (current_start - timedelta(days=1)).replace(day=1)
-        previous_end = current_start - timedelta(days=1)
-    elif period_type == 'quarter':
-        quarter = (today.month - 1) // 3
-        current_start = today.replace(month=quarter * 3 + 1, day=1)
-        previous_start = (current_start - relativedelta(months=3)).replace(
-            day=1,
-        )
-        previous_end = current_start - timedelta(days=1)
-    elif period_type == 'year':
-        current_start = today.replace(month=1, day=1)
-        previous_start = (current_start - relativedelta(years=1)).replace(day=1)
-        previous_end = current_start - timedelta(days=1)
-    else:
-        current_start = today.replace(day=1)
-        previous_start = (current_start - timedelta(days=1)).replace(day=1)
-        previous_end = current_start - timedelta(days=1)
-
-    current_start_dt = timezone.make_aware(
-        datetime.combine(current_start, time.min)
-    )
-    previous_start_dt = timezone.make_aware(
-        datetime.combine(previous_start, time.min)
-    )
-    previous_end_dt = timezone.make_aware(
-        datetime.combine(previous_end, time.max)
-    )
+    period_dates = get_period_dates(period_type=period_type)
+    current_start_dt = period_dates['current_start']
+    today_dt = period_dates['current_end']
+    previous_start_dt = period_dates['previous_start']
+    previous_end_dt = period_dates['previous_end']
 
     current_expenses = Expense.objects.filter(
         user=user,
@@ -169,17 +146,19 @@ def get_period_comparison(
         else 0.0
     )
 
+    today = timezone.now().date()
+
     return {
         'current': {
-            'start': current_start.isoformat(),
+            'start': period_dates['current_start'].date().isoformat(),
             'end': today.isoformat(),
             'expenses': float(current_expenses),
             'income': float(current_income),
             'savings': float(current_savings),
         },
         'previous': {
-            'start': previous_start.isoformat(),
-            'end': previous_end.isoformat(),
+            'start': period_dates['previous_start'].date().isoformat(),
+            'end': period_dates['previous_end'].date().isoformat(),
             'expenses': float(previous_expenses),
             'income': float(previous_income),
             'savings': float(previous_savings),
@@ -214,16 +193,14 @@ def get_drill_down_data(
         try:
             period_date = date.fromisoformat(date_str + '-01')
         except ValueError:
-            period_date = timezone.now().date().replace(day=1)
+            period_date = timezone.now().date()
     else:
-        period_date = timezone.now().date().replace(day=1)
+        period_date = timezone.now().date()
 
-    month_start = period_date.replace(day=1)
-    last_day = (month_start + relativedelta(months=1) - timedelta(days=1)).day
-    month_end = month_start.replace(day=last_day)
+    month_start, month_end = get_month_start_end(period_date)
 
     month_start_dt = timezone.make_aware(
-        datetime.combine(month_start, time.min)
+        datetime.combine(month_start, time.min),
     )
     month_end_dt = timezone.make_aware(datetime.combine(month_end, time.max))
 
@@ -251,7 +228,7 @@ def get_drill_down_data(
                 f'{category_relation}__name',
             )
             .annotate(total=Sum('amount'))
-            .order_by('-total')[:10]
+            .order_by('-total')[: constants.TOP_CATEGORIES_LIMIT]
         )
 
         data = [
@@ -308,7 +285,7 @@ def get_drill_down_data(
                 date__gte=month_start_dt,
                 date__lte=month_end_dt,
                 **{f'{category_relation}__id': category_id},
-            ).order_by('-date')[:20],
+            ).order_by('-date')[: constants.RECENT_RECEIPTS_LIMIT],
         )
 
         data = [
