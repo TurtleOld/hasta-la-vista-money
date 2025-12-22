@@ -74,7 +74,6 @@ from hasta_la_vista_money.users.services.notifications import (
 from hasta_la_vista_money.users.services.password import set_user_password
 from hasta_la_vista_money.users.services.profile import update_user_profile
 from hasta_la_vista_money.users.services.registration import register_user
-from hasta_la_vista_money.users.services.statistics import get_user_statistics
 from hasta_la_vista_money.users.services.theme import set_user_theme
 
 if TYPE_CHECKING:
@@ -121,7 +120,11 @@ class ListUsers(
         user_update_pass_form = PasswordChangeForm(
             user=self.request.user,
         )
-        user_statistics = get_user_statistics(self.request.user)
+        container = self.request.container
+        statistics_service = container.users.user_statistics_service()
+        user_statistics = statistics_service.get_user_statistics(
+            self.request.user,
+        )
         context['user_update'] = user_update
         context['user_update_pass_form'] = user_update_pass_form
         context['user_statistics'] = user_statistics
