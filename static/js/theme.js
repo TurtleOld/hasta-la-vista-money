@@ -33,13 +33,19 @@
         }
     }
 
+    function validateTheme(theme) {
+        return theme === 'light' || theme === 'dark' ? theme : 'light';
+    }
+
     function applyTheme(theme) {
-        const html = document.querySelector('html');
+        const html = document.documentElement;
         const body = document.body;
 
         if (!html) {
             return;
         }
+
+        theme = validateTheme(theme);
 
         body.classList.add('theme-fade');
 
@@ -84,20 +90,22 @@
             return;
         }
 
-        const htmlElement = document.querySelector('html');
-        const initialTheme = htmlElement?.getAttribute('data-bs-theme') ||
-                             document.body.getAttribute('data-bs-theme') ||
-                             'light';
+        const htmlElement = document.documentElement;
+        const rawTheme = htmlElement?.getAttribute('data-bs-theme') ||
+            document.body.getAttribute('data-bs-theme') ||
+            'light';
+        const initialTheme = validateTheme(rawTheme);
         updateThemeIcon(initialTheme);
 
         themeToggle.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
 
-            const htmlElement = document.querySelector('html');
-            const currentTheme = htmlElement?.getAttribute('data-bs-theme') ||
-                                 document.body.getAttribute('data-bs-theme') ||
-                                 'light';
+            const htmlElement = document.documentElement;
+            const rawTheme = htmlElement?.getAttribute('data-bs-theme') ||
+                document.body.getAttribute('data-bs-theme') ||
+                'light';
+            const currentTheme = validateTheme(rawTheme);
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             applyTheme(newTheme);
 
@@ -119,16 +127,17 @@
     }
 
     function init() {
-        const html = document.querySelector('html');
+        const html = document.documentElement;
         const body = document.body;
 
         if (!html) {
             return;
         }
 
-        const initialTheme = html.getAttribute('data-bs-theme') ||
-                             body.getAttribute('data-bs-theme') ||
-                             (html.classList.contains('dark') ? 'dark' : 'light');
+        const rawTheme = html.getAttribute('data-bs-theme') ||
+            body.getAttribute('data-bs-theme') ||
+            (html.classList.contains('dark') ? 'dark' : 'light');
+        const initialTheme = validateTheme(rawTheme);
 
         if (initialTheme === 'dark' && !html.classList.contains('dark')) {
             html.classList.add('dark');
