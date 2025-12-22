@@ -45,15 +45,17 @@
     }
 
     function updateThemeIcon(theme) {
-        const themeIcon = document.getElementById('theme-icon');
-        if (!themeIcon) return;
+        const themeIconSun = document.getElementById('theme-icon-sun');
+        const themeIconMoon = document.getElementById('theme-icon-moon');
+
+        if (!themeIconSun || !themeIconMoon) return;
 
         if (theme === THEME_DARK) {
-            themeIcon.classList.remove('bi-sun');
-            themeIcon.classList.add('bi-moon');
+            themeIconSun.classList.add('hidden');
+            themeIconMoon.classList.remove('hidden');
         } else {
-            themeIcon.classList.remove('bi-moon');
-            themeIcon.classList.add('bi-sun');
+            themeIconSun.classList.remove('hidden');
+            themeIconMoon.classList.add('hidden');
         }
     }
 
@@ -97,8 +99,9 @@
 
     function initThemeToggle() {
         const themeToggle = document.getElementById('theme-toggle');
-        const themeIcon = document.getElementById('theme-icon');
-        if (!themeToggle || !themeIcon) return;
+        const themeIconSun = document.getElementById('theme-icon-sun');
+        const themeIconMoon = document.getElementById('theme-icon-moon');
+        if (!themeToggle || !themeIconSun || !themeIconMoon) return;
 
         const initialTheme = readThemeFromDom();
         updateThemeIcon(initialTheme);
