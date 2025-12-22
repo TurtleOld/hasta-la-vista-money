@@ -1,6 +1,9 @@
 name: Docker
+
 permissions:
   contents: read
+  packages: write
+  id-token: write
 
 # This workflow uses actions that are not certified by GitHub.
 # They are provided by a third-party and are governed by
@@ -9,20 +12,21 @@ permissions:
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+    tags:
+      - 'v*'
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+  workflow_dispatch:
 
 env:
-  # Use docker.io for Docker Hub if empty
   REGISTRY: ghcr.io
-  # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
-
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,6 +38,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: theme/static_src/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: theme/static_src
+        run: npm ci
+
+      - name: Build Tailwind CSS
+        working-directory: theme/static_src
+        run: npm run build
+        env:
+          NODE_ENV: production
 
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
@@ -66,12 +87,19 @@ jobs:
         uses: docker/metadata-action@v5.10.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         id: build-and-push
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
@@ -80,6 +108,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           file: docker/production.Dockerfile
+          platforms: linux/amd64,linux/arm64
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
