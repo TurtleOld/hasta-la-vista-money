@@ -115,10 +115,10 @@
 
                 <!-- User Menu -->
                 <div class="flex items-center ml-4 gap-2">
-                    <a href="{% url 'users:profile' user.id %}" class="flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-200 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-green-600 dark:hover:text-green-400">
-                        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 text-green-600 dark:text-green-400 ring-2 ring-green-200 dark:ring-green-800">
-                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    <a href="{% url 'users:profile' user.id %}" class="flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-200 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-green-600 dark:hover:text-green-400 group">
+                        <div class="flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 dark:from-green-900/40 dark:to-emerald-900/40 text-white dark:text-green-400 ring-2 ring-green-200 dark:ring-green-800 shadow-md dark:shadow-none group-hover:ring-green-300 dark:group-hover:ring-green-700 group-hover:shadow-lg transition-all duration-200">
+                            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="background: none; background-color: transparent;">
+                                <path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                             </svg>
                         </div>
                         <span class="hidden md:block text-sm font-medium">{{ user.username }}</span>

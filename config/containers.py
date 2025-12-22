@@ -10,6 +10,7 @@ from hasta_la_vista_money.finance_account.containers import (
 from hasta_la_vista_money.income.containers import IncomeContainer
 from hasta_la_vista_money.loan.containers import LoanContainer
 from hasta_la_vista_money.receipts.containers import ReceiptsContainer
+from hasta_la_vista_money.users.containers import UsersContainer
 
 
 class CoreContainer(containers.DeclarativeContainer):
@@ -72,3 +73,5 @@ class ApplicationContainer(containers.DeclarativeContainer):
     )
 
     loan = providers.Container(LoanContainer)
+
+    users = providers.Container(UsersContainer)

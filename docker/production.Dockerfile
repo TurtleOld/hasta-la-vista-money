@@ -1,3 +1,24 @@
+FROM node:20-alpine AS node-builder
+
+WORKDIR /app
+
+COPY theme/static_src/package.json theme/static_src/package-lock.json theme/static_src/
+
+WORKDIR /app/theme/static_src
+
+RUN npm ci
+
+COPY theme/static_src/ ./
+
+COPY hasta_la_vista_money/ ../../hasta_la_vista_money/
+COPY config/ ../../config/
+COPY core/ ../../core/
+COPY static/ ../../static/
+
+RUN npm run build
+
+WORKDIR /app
+
 FROM python:3.13.9-alpine AS builder
 
 WORKDIR /app
@@ -13,6 +34,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --dev
 
 COPY . .
+
+COPY --from=node-builder /app/static/css/styles.min.css static/css/styles.min.css
 
 FROM python:3.13-slim
 
