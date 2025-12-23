@@ -44,7 +44,6 @@ dependencies = [
     "dependency-injector>=4.48.2",
     "django-tailwind>=4.4.2",
     "crispy-tailwind>=1.0.3",
-    "aiohttp>=3.13.2",
 ]
 
 [project.optional-dependencies]
