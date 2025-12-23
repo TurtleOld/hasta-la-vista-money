@@ -11,6 +11,10 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
+from hasta_la_vista_money.finance_account.currencies import (
+    currency_choices,
+    get_default_currency,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -213,10 +217,11 @@ class TestAccountModel(TestCase):
 
     def test_account_model_choices(self) -> None:
         """Test model choices."""
-        currency_choices = [choice[0] for choice in Account.CURRENCY_LIST]
-        self.assertIn('RUB', currency_choices)
-        self.assertIn('USD', currency_choices)
-        self.assertIn('EUR', currency_choices)
+        currency_choices_list = [choice[0] for choice in currency_choices('ru')]
+        self.assertIn('RUB', currency_choices_list)
+        self.assertIn('USD', currency_choices_list)
+        self.assertIn('EUR', currency_choices_list)
+        self.assertEqual(currency_choices_list[0], 'RUB')
 
         type_choices = [choice[0] for choice in Account.TYPE_ACCOUNT_LIST]
         self.assertIn('Debit', type_choices)

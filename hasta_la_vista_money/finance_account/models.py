@@ -1,4 +1,3 @@
-import asyncio
 from datetime import date
 from decimal import Decimal
 from typing import ClassVar
@@ -13,7 +12,10 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
-from hasta_la_vista_money.finance_account.currencies import currency_choices
+from hasta_la_vista_money.finance_account.currencies import (
+    currency_choices,
+    get_default_currency,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -152,9 +154,9 @@ class Account(TimeStampedModel):
     currency = models.CharField(
         max_length=3,
         choices=currency_choices('ru'),
-        default='RUB',
+        default=get_default_currency,
         verbose_name=_('Валюта'),
-        help_text=_('Валюта счёта (например, RUB, USD)'),
+        help_text=_('Валюта счёта (например, {})').format(', '.join([choice[1] for choice in currency_choices('ru')])),
     )
     limit_credit = models.DecimalField(
         max_digits=constants.TWENTY,

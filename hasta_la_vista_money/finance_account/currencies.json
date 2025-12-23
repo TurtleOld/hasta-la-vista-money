@@ -1,4 +1,9 @@
 [
+{
+    "code_name": "RUB",
+    "russian_name": "Российский рубль",
+    "english_name": "Russian Ruble"
+},
 {"code_name":"AUD","russian_name":"Австралийский доллар","english_name":"Australian Dollar"},
 {"code_name":"ATS","russian_name":"Австрийский шиллинг","english_name":"Austrian Shilling"},
 {"code_name":"AZN","russian_name":"Азербайджанский манат","english_name":"Azerbaijan Manat"},
@@ -7,8 +12,11 @@
 {"code_name":"AON","russian_name":"Ангольская новая кванза","english_name":"Angolan new Kwanza"},
 {"code_name":"AMD","russian_name":"Армянский драм","english_name":"Armenian Dram"},
 {"code_name":"BHD","russian_name":"Бахрейнский динар","english_name":"Bahraini Dinar"},
-{"code_name":"BYR","russian_name":"Белорусский рубль","english_name":"Belarusian Ruble"},
-{"code_name":"BYN","russian_name":"Белорусский рубль","english_name":"Belarusian Ruble"},
+{
+    "code_name": "BYR",
+    "russian_name": "Белорусский рубль",
+    "english_name": "Belarusian Ruble"
+},
 {"code_name":"BEF","russian_name":"Бельгийский франк","english_name":"Belgium Franc"},
 {"code_name":"BGN","russian_name":"Болгарский лев","english_name":"Bulgarian Lev"},
 {"code_name":"BOB","russian_name":"Боливиано","english_name":"Bolivian Boliviano"},
