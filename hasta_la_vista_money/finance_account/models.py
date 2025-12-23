@@ -156,7 +156,9 @@ class Account(TimeStampedModel):
         choices=currency_choices('ru'),
         default=get_default_currency,
         verbose_name=_('Валюта'),
-        help_text=_('Валюта счёта (например, {})').format(', '.join([choice[1] for choice in currency_choices('ru')])),
+        help_text=_('Валюта счёта (например, {})').format(
+            ', '.join([choice[1] for choice in currency_choices('ru')])
+        ),
     )
     limit_credit = models.DecimalField(
         max_digits=constants.TWENTY,

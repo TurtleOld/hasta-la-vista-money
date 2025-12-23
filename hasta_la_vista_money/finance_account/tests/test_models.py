@@ -13,7 +13,6 @@ from hasta_la_vista_money.constants import (
 )
 from hasta_la_vista_money.finance_account.currencies import (
     currency_choices,
-    get_default_currency,
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
