@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date
 from decimal import Decimal
 from typing import ClassVar
@@ -12,6 +13,7 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
+from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.users.models import User
 
 
@@ -107,16 +109,6 @@ class Account(TimeStampedModel):
     Provides methods for money transfer and credit card debt calculations.
     """
 
-    CURRENCY_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
-        ('RUB', _('Российский рубль')),
-        ('USD', _('Доллар США')),
-        ('EUR', _('Евро')),
-        ('GBP', _('Британский фунт')),
-        ('CZK', _('Чешская крона')),
-        ('PLN', _('Польский злотый')),
-        ('TRY', _('Турецкая лира')),
-        ('CNH', _('Китайский юань')),
-    ]
     TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
         ('Credit', _('Кредитный счёт')),
         ('Debit', _('Дебетовый счёт')),
@@ -158,8 +150,8 @@ class Account(TimeStampedModel):
         default=0,
     )
     currency = models.CharField(
-        max_length=10,
-        choices=CURRENCY_LIST,
+        max_length=3,
+        choices=currency_choices('ru'),
         default='RUB',
         verbose_name=_('Валюта'),
         help_text=_('Валюта счёта (например, RUB, USD)'),

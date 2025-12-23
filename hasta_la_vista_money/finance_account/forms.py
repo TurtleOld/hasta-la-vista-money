@@ -28,6 +28,7 @@ from hasta_la_vista_money.finance_account.base_forms import (
     DateFieldMixin,
     FormValidationMixin,
 )
+from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -103,7 +104,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     )
 
     currency = ChoiceField(
-        choices=Account.CURRENCY_LIST,
+        choices=currency_choices(),
         label=_('Валюта счёта'),
         help_text=_('Выберите из списка валюту счёта'),
     )
