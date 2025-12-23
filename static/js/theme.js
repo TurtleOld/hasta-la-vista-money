@@ -31,10 +31,9 @@
 
         if (!rootEl || !bodyEl) return THEME_LIGHT;
 
-        const attr =
-            rootEl.getAttribute('data-bs-theme') ||
-            bodyEl.getAttribute('data-bs-theme') ||
-            '';
+        const rootAttr = rootEl.getAttribute('data-bs-theme');
+        const bodyAttr = bodyEl.getAttribute('data-bs-theme');
+        const attr = rootAttr || bodyAttr || '';
 
         // Явный маппинг на безопасные значения
         if (attr === THEME_DARK) return THEME_DARK;
@@ -131,8 +130,29 @@
     }
 
     function init() {
-        const initialTheme = readThemeFromDom();
-        applyTheme(initialTheme);
+        const rootEl = document.documentElement;
+        const bodyEl = document.body;
+        
+        if (!rootEl || !bodyEl) {
+            initThemeToggle();
+            return;
+        }
+        
+        const rootAttr = rootEl.getAttribute('data-bs-theme');
+        const bodyAttr = bodyEl.getAttribute('data-bs-theme');
+        const currentAttr = rootAttr || bodyAttr;
+        const hasDarkClass = rootEl.classList.contains('dark') || bodyEl.classList.contains('dark');
+        
+        let currentTheme = THEME_LIGHT;
+        if (currentAttr === THEME_DARK) {
+            currentTheme = THEME_DARK;
+        } else if (currentAttr === THEME_LIGHT) {
+            currentTheme = THEME_LIGHT;
+        } else if (hasDarkClass) {
+            currentTheme = THEME_DARK;
+        }
+        
+        updateThemeIcon(currentTheme);
         initThemeToggle();
     }
 

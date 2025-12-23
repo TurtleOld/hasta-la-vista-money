@@ -8,6 +8,11 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 
+from hasta_la_vista_money.finance_account.currencies import (
+    currency_choices,
+    get_default_currency,
+)
+
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
 
@@ -555,10 +560,11 @@ class TestAccount(TestCase):
 
     def test_account_model_choices(self) -> None:
         """Тест выбора в модели Account."""
-        currency_choices = [choice[0] for choice in Account.CURRENCY_LIST]
-        self.assertIn('RUB', currency_choices)
-        self.assertIn('USD', currency_choices)
-        self.assertIn('EUR', currency_choices)
+        currency_choices_list = [choice[0] for choice in currency_choices('ru')]
+        self.assertIn('RUB', currency_choices_list)
+        self.assertIn('USD', currency_choices_list)
+        self.assertIn('EUR', currency_choices_list)
+        self.assertEqual(currency_choices_list[0], 'RUB')
 
         type_choices = [choice[0] for choice in Account.TYPE_ACCOUNT_LIST]
         self.assertIn(ACCOUNT_TYPE_CREDIT, type_choices)
@@ -594,11 +600,11 @@ class TestAccount(TestCase):
         account = Account.objects.create(
             user=self.user,
             name_account='Test Default Account',
-            currency='RUB',
         )
 
         self.assertEqual(account.balance, 0)
         self.assertEqual(account.type_account, 'Debit')
+        self.assertEqual(account.currency, get_default_currency())
 
     def test_transfer_money_form_clean_method(self) -> None:
         """Тест метода clean формы TransferMoneyAccountForm."""
@@ -781,7 +787,7 @@ class TestValidatorsRefactored(TestCase):
             user=self.user,
             name_account='Test Account 1',
             balance=Decimal('1000.00'),
-            currency='RUB',
+            currency=get_default_currency(),
         )
         self.account2 = Account.objects.create(
             user=self.user,
@@ -884,7 +890,7 @@ class TestAddAccountFormRefactored(TestCase):
             'name_account': 'Test Account',
             'type_account': 'Debit',
             'balance': Decimal('1000.00'),
-            'currency': 'RUB',
+            'currency': get_default_currency(),
         }
         form = AddAccountForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -899,7 +905,7 @@ class TestAddAccountFormRefactored(TestCase):
             'payment_due_date': timezone.now().date(),
             'grace_period_days': 30,
             'balance': Decimal('0.00'),
-            'currency': 'RUB',
+            'currency': get_default_currency(),
         }
         form = AddAccountForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -910,7 +916,7 @@ class TestAddAccountFormRefactored(TestCase):
             'name_account': 'Credit Card',
             'type_account': ACCOUNT_TYPE_CREDIT,
             'balance': Decimal('0.00'),
-            'currency': 'RUB',
+            'currency': get_default_currency(),
         }
         form = AddAccountForm(data=form_data)
         self.assertFalse(form.is_valid())
@@ -922,7 +928,7 @@ class TestAddAccountFormRefactored(TestCase):
             'name_account': 'Test Account',
             'type_account': 'Debit',
             'balance': Decimal('1000.00'),
-            'currency': 'RUB',
+            'currency': get_default_currency(),
         }
         form = AddAccountForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -933,7 +939,7 @@ class TestAddAccountFormRefactored(TestCase):
 
         self.assertEqual(account.name_account, 'Test Account')
         self.assertEqual(account.balance, Decimal('1000.00'))
-        self.assertEqual(account.currency, 'RUB')
+        self.assertEqual(account.currency, get_default_currency())
 
 
 class TestTransferMoneyAccountFormRefactored(TestCase):
@@ -948,13 +954,13 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             user=self.user,
             name_account='Test Account 1',
             balance=Decimal('1000.00'),
-            currency='RUB',
+            currency=get_default_currency(),
         )
         self.account2 = Account.objects.create(
             user=self.user,
             name_account='Test Account 2',
             balance=Decimal('500.00'),
-            currency='RUB',
+            currency=get_default_currency(),
         )
         self.container = ApplicationContainer()
         self.transfer_service = (

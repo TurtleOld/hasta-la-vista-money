@@ -169,11 +169,11 @@
                 }
             }
 
-            if (currentPath.indexOf('users') !== -1) {
-                loadScript('{% static "js/theme.js" %}?v={% word_hash %}').catch(function(error) {
-                    console.error('Error loading theme script:', error);
-                });
-            }
+            {% if user.is_authenticated %}
+            loadScript('{% static "js/theme.js" %}?v={% word_hash %}').catch(function(error) {
+                console.error('Error loading theme script:', error);
+            });
+            {% endif %}
 
             const isIncomePage = currentPath.indexOf('income') !== -1;
             const isExpensePage = currentPath.indexOf('expense') !== -1;
