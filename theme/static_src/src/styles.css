@@ -1138,3 +1138,76 @@
   background-color: rgb(22, 163, 74);
   box-shadow: 0 2px 4px -1px rgba(34, 197, 94, 0.2);
 }
+
+.statistics-tab-pane {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.statistics-tab-pane.hidden {
+  display: none;
+}
+
+.statistics-tab-pane.active {
+  display: block;
+}
+
+.statistics-tab-btn {
+  position: relative;
+}
+
+.statistics-tab-btn.active {
+  margin-bottom: -1px;
+}
+
+.credit-card-accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+  opacity: 0;
+}
+
+.credit-card-accordion-content:not(.hidden) {
+  max-height: 5000px;
+  opacity: 1;
+  transition: max-height 0.5s ease-in, opacity 0.3s ease-in;
+}
+
+.credit-card-accordion-btn i {
+  transition: transform 0.3s ease;
+}
+
+.credit-card-accordion-btn[aria-expanded='true'] i {
+  transform: rotate(180deg);
+}
+
+.chart-container {
+  min-height: 300px;
+  position: relative;
+}
+
+[data-bs-theme='dark'] .statistics-page {
+  color-scheme: dark;
+}
+
+[data-bs-theme='dark'] .statistics-page * {
+  color-scheme: dark;
+}
+
+[data-bs-theme='dark'] .statistics-tab-btn.active {
+  background-color: rgb(31 41 55) !important;
+  color: rgb(34 197 94) !important;
+  border-bottom-color: rgb(34 197 94) !important;
+}
+
+[data-bs-theme='dark'] .statistics-tab-pane {
+  color: rgb(243 244 246);
+}
+
+[data-bs-theme='dark'] .credit-card-accordion-btn {
+  background-color: rgb(17 24 39) !important;
+  color: rgb(243 244 246) !important;
+}
+
+[data-bs-theme='dark'] .credit-card-accordion-btn:hover {
+  background-color: rgb(31 41 55) !important;
+}
