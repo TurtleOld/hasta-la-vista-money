@@ -701,7 +701,7 @@ class UploadImageView(
                 user=user,
                 account=account,
                 uploaded_file=uploaded_file,
-                analyze_func=analyze_image_with_ai,
+                image_analysis_function=analyze_image_with_ai,
             )
 
             if not result.success:

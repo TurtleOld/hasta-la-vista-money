@@ -84,5 +84,5 @@ class ReceiptImportServiceProtocol(Protocol):
         user: User,
         account: Account,
         uploaded_file: UploadedFile,
-        analyze_func: Callable[[UploadedFile], str] | None = None,
+        image_analysis_function: Callable[[UploadedFile], str] | None = None,
     ) -> ReceiptImportResult: ...
