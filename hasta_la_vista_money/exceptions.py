@@ -4,11 +4,16 @@ This module defines custom exceptions for different domain areas,
 providing clear error messages and better error handling.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from decimal import Decimal
+
 
 class AccountError(ValueError):
     """Base exception for account-related errors."""
-
-    pass
 
 
 class InsufficientFundsError(AccountError):
@@ -69,8 +74,6 @@ class AccountNotFoundError(AccountError):
 class ReceiptError(ValueError):
     """Base exception for receipt-related errors."""
 
-    pass
-
 
 class ReceiptNotFoundError(ReceiptError):
     """Raised when receipt is not found.
@@ -119,8 +122,6 @@ class ReceiptAlreadyExistsError(ReceiptError):
 class ExpenseError(ValueError):
     """Base exception for expense-related errors."""
 
-    pass
-
 
 class ExpenseNotFoundError(ExpenseError):
     """Raised when expense is not found.
@@ -145,8 +146,6 @@ class ExpenseNotFoundError(ExpenseError):
 class IncomeError(ValueError):
     """Base exception for income-related errors."""
 
-    pass
-
 
 class IncomeNotFoundError(IncomeError):
     """Raised when income is not found.
@@ -166,4 +165,3 @@ class IncomeNotFoundError(IncomeError):
         if message is None:
             message = f'Income {income_id} not found'
         super().__init__(message)
-

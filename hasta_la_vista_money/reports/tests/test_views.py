@@ -21,7 +21,7 @@ from hasta_la_vista_money.users.models import User
 
 class ReportViewTest(TestCase):
     """Test cases for ReportView.
-    
+
     Tests report view functionality including dataset collection,
     data transformation, chart preparation, and authentication handling.
     """
@@ -107,7 +107,7 @@ class ReportViewTest(TestCase):
         self.assertEqual(u_amounts[0], 15.0)
 
     def test_pie_expense_category_authenticated(self) -> None:
-        """Test getting pie chart data for expense categories (authenticated)."""
+        """Test pie chart data for expense categories (authenticated)."""
         request = self.factory.get('/')
         request.user = self.user
         charts_data = ReportView.pie_expense_category(request)
@@ -238,7 +238,7 @@ class ReportViewTest(TestCase):
 
 class ReportsAnalyticMixinTest(TestCase):
     """Test cases for ReportsAnalyticMixin.
-    
+
     Tests mixin functionality for report analytics.
     """
 

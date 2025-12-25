@@ -142,7 +142,7 @@ class ReceiptImportService:
             number_receipt=number_receipt,
         )
 
-    def _convert_to_decimal(self, value: str | int | float | Decimal) -> Decimal:
+    def _convert_to_decimal(self, value: str | float | Decimal) -> Decimal:
         """Convert value to Decimal.
 
         Args:
@@ -155,7 +155,7 @@ class ReceiptImportService:
 
     def _convert_to_optional_decimal(
         self,
-        value: str | int | float | Decimal | None,
+        value: str | float | Decimal | None,
     ) -> Decimal | None:
         """Convert value to Decimal or return None.
 
@@ -176,7 +176,10 @@ class ReceiptImportService:
             | Callable[[UploadedFile, int | None], str]
             | None
         ),
-    ) -> Callable[[UploadedFile], str] | Callable[[UploadedFile, int | None], str]:
+    ) -> (
+        Callable[[UploadedFile], str]
+        | Callable[[UploadedFile, int | None], str]
+    ):
         """Get analysis function to use for image processing.
 
         Args:
@@ -254,10 +257,13 @@ class ReceiptImportService:
             ReceiptImportResult with error if validation fails, None otherwise.
         """
         number_receipt = receipt_data.get('number_receipt')
-        if number_receipt and self._check_exist_receipt(
-            user,
-            number_receipt,
-        ).exists():
+        if (
+            number_receipt
+            and self._check_exist_receipt(
+                user,
+                number_receipt,
+            ).exists()
+        ):
             return ReceiptImportResult(success=False, error='exists')
         return None
 
