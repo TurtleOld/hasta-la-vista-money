@@ -125,8 +125,9 @@ class TestAccountServices(TestCase):
         self.assertEqual(result, Decimal('1000.00'))
 
     def test_get_sum_all_accounts_parametrized(self) -> None:
-        """Параметризация: разные наборы счетов,
-        граничные условия, precision, currency.
+        """Test parametrized sum calculation with different account sets.
+
+        Tests boundary conditions, precision, and currency handling.
         """
         testcases = [
             {
@@ -398,7 +399,7 @@ class TestTransferService(TestCase):
         self.assertEqual(self.to_account.balance, original_to)
 
     def test_sequential_large_transfers_only_first_succeeds(self) -> None:
-        """Два последовательных крупных перевода: второй должен упасть."""
+        """Test two sequential large transfers: second should fail."""
         self.transfer_service.transfer_money(
             from_account=self.from_account,
             to_account=self.to_account,

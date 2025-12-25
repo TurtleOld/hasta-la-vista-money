@@ -16,7 +16,16 @@ from hasta_la_vista_money.users.models import User
 
 
 class ExpenseDataRowDict(TypedDict):
-    """Строка данных расхода."""
+    """Expense data row.
+
+    Attributes:
+        category: Category name.
+        category_id: Category ID.
+        fact: List of actual expense amounts per month.
+        plan: List of planned expense amounts per month.
+        diff: List of differences (fact - plan) per month.
+        percent: List of percentages (fact/plan * 100) per month.
+    """
 
     category: str
     category_id: int
@@ -27,7 +36,16 @@ class ExpenseDataRowDict(TypedDict):
 
 
 class IncomeDataRowDict(TypedDict):
-    """Строка данных дохода."""
+    """Income data row.
+
+    Attributes:
+        category: Category name.
+        category_id: Category ID.
+        fact: List of actual income amounts per month.
+        plan: List of planned income amounts per month.
+        diff: List of differences (fact - plan) per month.
+        percent: List of percentages (fact/plan * 100) per month.
+    """
 
     category: str
     category_id: int
@@ -38,7 +56,16 @@ class IncomeDataRowDict(TypedDict):
 
 
 class BudgetChartDataDict(TypedDict):
-    """Данные для графика бюджета."""
+    """Budget chart data.
+
+    Attributes:
+        chart_labels: List of month labels for chart.
+        chart_plan_execution_income: List of income plan execution
+            percentages.
+        chart_plan_execution_expense: List of expense plan execution
+            percentages.
+        chart_balance: List of balance amounts per month.
+    """
 
     chart_labels: list[str]
     chart_plan_execution_income: list[float]
@@ -47,7 +74,18 @@ class BudgetChartDataDict(TypedDict):
 
 
 class AggregateBudgetDataDict(TypedDict):
-    """Агрегированные данные бюджета."""
+    """Aggregated budget data.
+
+    Attributes:
+        months: List of months in the period.
+        expense_data: List of expense data rows.
+        total_fact_expense: List of total actual expenses per month.
+        total_plan_expense: List of total planned expenses per month.
+        income_data: List of income data rows.
+        total_fact_income: List of total actual income per month.
+        total_plan_income: List of total planned income per month.
+        chart_data: Chart visualization data.
+    """
 
     months: list[date]
     expense_data: list[ExpenseDataRowDict]
@@ -60,7 +98,14 @@ class AggregateBudgetDataDict(TypedDict):
 
 
 class AggregateExpenseTableDict(TypedDict):
-    """Данные для таблицы расходов."""
+    """Aggregated expense table data.
+
+    Attributes:
+        months: List of months in the period.
+        expense_data: List of expense data rows.
+        total_fact_expense: List of total actual expenses per month.
+        total_plan_expense: List of total planned expenses per month.
+    """
 
     months: list[date]
     expense_data: list[ExpenseDataRowDict]
@@ -69,7 +114,14 @@ class AggregateExpenseTableDict(TypedDict):
 
 
 class AggregateIncomeTableDict(TypedDict):
-    """Данные для таблицы доходов."""
+    """Aggregated income table data.
+
+    Attributes:
+        months: List of months in the period.
+        income_data: List of income data rows.
+        total_fact_income: List of total actual income per month.
+        total_plan_income: List of total planned income per month.
+    """
 
     months: list[date]
     income_data: list[IncomeDataRowDict]
@@ -78,41 +130,63 @@ class AggregateIncomeTableDict(TypedDict):
 
 
 class ExpenseApiDataRowDict(TypedDict, total=False):
-    """Строка данных расхода для API."""
+    """Expense data row for API.
+
+    Attributes:
+        category: Category name.
+        category_id: Category ID.
+    """
 
     category: str
     category_id: int
 
 
 class IncomeApiDataRowDict(TypedDict, total=False):
-    """Строка данных дохода для API."""
+    """Income data row for API.
+
+    Attributes:
+        category: Category name.
+        category_id: Category ID.
+    """
 
     category: str
     category_id: int
 
 
 class AggregateExpenseApiDict(TypedDict):
-    """Данные расходов для API."""
+    """Aggregated expense data for API.
+
+    Attributes:
+        months: List of month strings in ISO format.
+        data: List of expense data dictionaries.
+    """
 
     months: list[str]
     data: list[dict[str, Any]]
 
 
 class AggregateIncomeApiDict(TypedDict):
-    """Данные доходов для API."""
+    """Aggregated income data for API.
+
+    Attributes:
+        months: List of month strings in ISO format.
+        data: List of income data dictionaries.
+    """
 
     months: list[str]
     data: list[dict[str, Any]]
 
 
 class BudgetDataError(Exception):
-    """
-    Custom exception for budget data aggregation errors.
-    """
+    """Custom exception for budget data aggregation errors."""
 
 
 class BudgetService:
-    """Сервис для агрегации данных бюджета."""
+    """Service for budget data aggregation.
+
+    Handles aggregation of budget data including expenses, income, plans,
+    and facts for various views (table, chart, API).
+    """
 
     def __init__(
         self,
@@ -120,6 +194,13 @@ class BudgetService:
         income_repository: IncomeRepository,
         planning_repository: PlanningRepository,
     ) -> None:
+        """Initialize BudgetService.
+
+        Args:
+            expense_repository: Repository for expense data access.
+            income_repository: Repository for income data access.
+            planning_repository: Repository for planning data access.
+        """
         self.expense_repository = expense_repository
         self.income_repository = income_repository
         self.planning_repository = planning_repository
@@ -130,7 +211,16 @@ class BudgetService:
         months: list[date],
         expense_categories: list[ExpenseCategory],
     ) -> dict[int, dict[date, int]]:
-        """Get expense facts data for given user and months."""
+        """Get expense facts data for given user and months.
+
+        Args:
+            user: User to get expenses for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         if not months:
             return {}
 
@@ -165,7 +255,16 @@ class BudgetService:
         months: list[date],
         expense_categories: list[ExpenseCategory],
     ) -> dict[int, dict[date, int]]:
-        """Get expense plans data for given user and months."""
+        """Get expense plans data for given user and months.
+
+        Args:
+            user: User to get plans for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         plans_exp = self.planning_repository.filter(
             user=user,
             date__in=months,
@@ -191,7 +290,16 @@ class BudgetService:
         months: list[date],
         income_categories: list[IncomeCategory],
     ) -> dict[int, dict[date, Decimal]]:
-        """Get income facts data for given user and months."""
+        """Get income facts data for given user and months.
+
+        Args:
+            user: User to get income for.
+            months: List of months to aggregate.
+            income_categories: List of income categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         if not months:
             return {}
 
@@ -227,7 +335,16 @@ class BudgetService:
         months: list[date],
         income_categories: list[IncomeCategory],
     ) -> dict[int, dict[date, Decimal]]:
-        """Get income plans data for given user and months."""
+        """Get income plans data for given user and months.
+
+        Args:
+            user: User to get plans for.
+            months: List of months to aggregate.
+            income_categories: List of income categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         plans_inc = self.planning_repository.filter(
             user=user,
             date__in=months,
@@ -253,7 +370,20 @@ class BudgetService:
         expense_categories: list[ExpenseCategory],
         income_categories: list[IncomeCategory],
     ) -> AggregateBudgetDataDict:
-        """Aggregate all budget data for context."""
+        """Aggregate all budget data for context.
+
+        Args:
+            user: User to aggregate data for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories.
+            income_categories: List of income categories.
+
+        Returns:
+            AggregateBudgetDataDict with all aggregated budget data.
+
+        Raises:
+            BudgetDataError: If validation fails.
+        """
         _validate_budget_inputs(
             user,
             months,
@@ -336,7 +466,16 @@ class BudgetService:
         months: list[date],
         expense_categories: list[ExpenseCategory],
     ) -> dict[int, dict[date, int]]:
-        """Get expense facts for table view."""
+        """Get expense facts for table view.
+
+        Args:
+            user: User to get expenses for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         if not months:
             return {}
 
@@ -370,7 +509,16 @@ class BudgetService:
         months: list[date],
         expense_categories: list[ExpenseCategory],
     ) -> dict[int, dict[date, int]]:
-        """Get expense plans for table view."""
+        """Get expense plans for table view.
+
+        Args:
+            user: User to get plans for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         plans_expense = self.planning_repository.filter(
             user=user,
             date__in=months,
@@ -396,7 +544,19 @@ class BudgetService:
         months: list[date],
         expense_categories: list[ExpenseCategory],
     ) -> AggregateExpenseTableDict:
-        """Aggregate data for the expense table view."""
+        """Aggregate data for the expense table view.
+
+        Args:
+            user: User to aggregate data for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories.
+
+        Returns:
+            AggregateExpenseTableDict with expense table data.
+
+        Raises:
+            BudgetDataError: If validation fails.
+        """
         _validate_expense_table_inputs(user, months, expense_categories)
 
         expense_fact_map = self._get_expense_table_facts(
@@ -432,7 +592,16 @@ class BudgetService:
         months: list[date],
         income_categories: list[IncomeCategory],
     ) -> dict[int, dict[date, Decimal]]:
-        """Get income facts for table view."""
+        """Get income facts for table view.
+
+        Args:
+            user: User to get income for.
+            months: List of months to aggregate.
+            income_categories: List of income categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         if not months:
             return {}
 
@@ -468,7 +637,16 @@ class BudgetService:
         months: list[date],
         income_categories: list[IncomeCategory],
     ) -> dict[int, dict[date, Decimal]]:
-        """Get income plans for table view."""
+        """Get income plans for table view.
+
+        Args:
+            user: User to get plans for.
+            months: List of months to aggregate.
+            income_categories: List of income categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         plans_inc = self.planning_repository.filter(
             user=user,
             date__in=months,
@@ -493,7 +671,19 @@ class BudgetService:
         months: list[date],
         income_categories: list[IncomeCategory],
     ) -> AggregateIncomeTableDict:
-        """Aggregate data for the income table view."""
+        """Aggregate data for the income table view.
+
+        Args:
+            user: User to aggregate data for.
+            months: List of months to aggregate.
+            income_categories: List of income categories.
+
+        Returns:
+            AggregateIncomeTableDict with income table data.
+
+        Raises:
+            BudgetDataError: If validation fails.
+        """
         _validate_income_table_inputs(user, months, income_categories)
 
         income_fact_map = self._get_income_table_facts(
@@ -529,7 +719,16 @@ class BudgetService:
         months: list[date],
         expense_categories: list[ExpenseCategory],
     ) -> dict[int, dict[date, int]]:
-        """Get expense facts for API view."""
+        """Get expense facts for API view.
+
+        Args:
+            user: User to get expenses for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         if not months:
             return {}
 
@@ -564,7 +763,16 @@ class BudgetService:
         months: list[date],
         expense_categories: list[ExpenseCategory],
     ) -> dict[int, dict[date, int]]:
-        """Get expense plans for API view."""
+        """Get expense plans for API view.
+
+        Args:
+            user: User to get plans for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         plans_expense = self.planning_repository.filter(
             user=user,
             date__in=months,
@@ -590,7 +798,19 @@ class BudgetService:
         months: list[date],
         expense_categories: list[ExpenseCategory],
     ) -> AggregateExpenseApiDict:
-        """Aggregate data for the expense API view."""
+        """Aggregate data for the expense API view.
+
+        Args:
+            user: User to aggregate data for.
+            months: List of months to aggregate.
+            expense_categories: List of expense categories.
+
+        Returns:
+            AggregateExpenseApiDict with expense API data.
+
+        Raises:
+            BudgetDataError: If validation fails.
+        """
         _validate_expense_api_inputs(user, months, expense_categories)
 
         expense_fact_map = self._get_expense_api_facts(
@@ -619,7 +839,16 @@ class BudgetService:
         months: list[date],
         income_categories: list[IncomeCategory],
     ) -> dict[int, dict[date, Decimal]]:
-        """Get income facts for API view."""
+        """Get income facts for API view.
+
+        Args:
+            user: User to get income for.
+            months: List of months to aggregate.
+            income_categories: List of income categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         if not months:
             return {}
 
@@ -657,7 +886,16 @@ class BudgetService:
         months: list[date],
         income_categories: list[IncomeCategory],
     ) -> dict[int, dict[date, Decimal]]:
-        """Get income plans for API view."""
+        """Get income plans for API view.
+
+        Args:
+            user: User to get plans for.
+            months: List of months to aggregate.
+            income_categories: List of income categories to filter.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         plans_income = self.planning_repository.filter(
             user=user,
             date__in=months,
@@ -683,7 +921,19 @@ class BudgetService:
         months: list[date],
         income_categories: list[IncomeCategory],
     ) -> AggregateIncomeApiDict:
-        """Aggregate data for the income API view."""
+        """Aggregate data for the income API view.
+
+        Args:
+            user: User to aggregate data for.
+            months: List of months to aggregate.
+            income_categories: List of income categories.
+
+        Returns:
+            AggregateIncomeApiDict with income API data.
+
+        Raises:
+            BudgetDataError: If validation fails.
+        """
         _validate_income_api_inputs(user, months, income_categories)
 
         income_fact_map = self._get_income_api_facts(
@@ -714,8 +964,17 @@ def get_categories(
     QuerySet[ExpenseCategory, ExpenseCategory]
     | QuerySet[IncomeCategory, IncomeCategory]
 ):
-    """
-    Returns queryset of categories for the user by type (expense/income).
+    """Get categories queryset for user by type.
+
+    Args:
+        user: User to get categories for.
+        type_: Category type ('expense' or 'income').
+
+    Returns:
+        QuerySet of categories filtered by type and parent_category=None.
+
+    Raises:
+        BudgetDataError: If user is None.
     """
     if user is None:
         error_msg = 'User is required.'
@@ -735,7 +994,17 @@ def _validate_budget_inputs(
     expense_categories: list[ExpenseCategory] | None,
     income_categories: list[IncomeCategory] | None,
 ) -> None:
-    """Validate required inputs for budget aggregation."""
+    """Validate required inputs for budget aggregation.
+
+    Args:
+        _user: User instance to validate.
+        months: List of months to validate.
+        expense_categories: List of expense categories to validate.
+        income_categories: List of income categories to validate.
+
+    Raises:
+        BudgetDataError: If any required input is None.
+    """
     if _user is None:
         error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
@@ -756,7 +1025,17 @@ def _calculate_expense_totals(
     months: list[date],
     expense_categories: list[ExpenseCategory],
 ) -> tuple[list[int], list[int]]:
-    """Calculate total fact and plan expenses for each month."""
+    """Calculate total fact and plan expenses for each month.
+
+    Args:
+        expense_fact_map: Mapping of category_id to month->fact amount.
+        expense_plan_map: Mapping of category_id to month->plan amount.
+        months: List of months to calculate for.
+        expense_categories: List of expense categories.
+
+    Returns:
+        Tuple of (total_fact_expense, total_plan_expense) lists.
+    """
     total_fact_expense = [0] * len(months)
     total_plan_expense = [0] * len(months)
 
@@ -774,7 +1053,17 @@ def _build_expense_data(
     months: list[date],
     expense_categories: list[ExpenseCategory],
 ) -> list[ExpenseDataRowDict]:
-    """Build expense data structure with fact, plan, diff, and percent."""
+    """Build expense data structure with fact, plan, diff, and percent.
+
+    Args:
+        expense_fact_map: Mapping of category_id to month->fact amount.
+        expense_plan_map: Mapping of category_id to month->plan amount.
+        months: List of months to build data for.
+        expense_categories: List of expense categories.
+
+    Returns:
+        List of ExpenseDataRowDict with calculated values.
+    """
     expense_data = []
 
     for cat in expense_categories:
@@ -811,7 +1100,17 @@ def _calculate_income_totals(
     months: list[date],
     income_categories: list[IncomeCategory],
 ) -> tuple[list[Decimal], list[Decimal]]:
-    """Calculate total fact and plan incomes for each month."""
+    """Calculate total fact and plan incomes for each month.
+
+    Args:
+        income_fact_map: Mapping of category_id to month->fact amount.
+        income_plan_map: Mapping of category_id to month->plan amount.
+        months: List of months to calculate for.
+        income_categories: List of income categories.
+
+    Returns:
+        Tuple of (total_fact_income, total_plan_income) lists.
+    """
     total_fact_income = [Decimal(0)] * len(months)
     total_plan_income = [Decimal(0)] * len(months)
 
@@ -829,7 +1128,17 @@ def _build_income_data(
     months: list[date],
     income_categories: list[IncomeCategory],
 ) -> list[IncomeDataRowDict]:
-    """Build income data structure with fact, plan, diff, and percent."""
+    """Build income data structure with fact, plan, diff, and percent.
+
+    Args:
+        income_fact_map: Mapping of category_id to month->fact amount.
+        income_plan_map: Mapping of category_id to month->plan amount.
+        months: List of months to build data for.
+        income_categories: List of income categories.
+
+    Returns:
+        List of IncomeDataRowDict with calculated values.
+    """
     income_data = []
 
     for cat in income_categories:
@@ -867,7 +1176,18 @@ def _build_chart_data(
     total_fact_expense: list[int],
     total_plan_expense: list[int],
 ) -> BudgetChartDataDict:
-    """Build chart data for budget visualization."""
+    """Build chart data for budget visualization.
+
+    Args:
+        months: List of months for chart.
+        total_fact_income: List of total actual income per month.
+        total_plan_income: List of total planned income per month.
+        total_fact_expense: List of total actual expenses per month.
+        total_plan_expense: List of total planned expenses per month.
+
+    Returns:
+        BudgetChartDataDict with chart visualization data.
+    """
     chart_labels = [m.strftime('%b %Y') for m in months]
     chart_plan_execution_income = []
     chart_plan_execution_expense = []
@@ -897,7 +1217,15 @@ def _build_chart_data(
 
 
 def _calculate_percentage(fact: Decimal | int, plan: Decimal | int) -> Decimal:
-    """Calculate percentage of fact vs plan."""
+    """Calculate percentage of fact vs plan.
+
+    Args:
+        fact: Actual amount.
+        plan: Planned amount.
+
+    Returns:
+        Percentage as Decimal (fact/plan * 100), or 0/100 if plan is 0.
+    """
     if plan > 0:
         fact_decimal = Decimal(fact) if isinstance(fact, int) else fact
         plan_decimal = Decimal(plan) if isinstance(plan, int) else plan
@@ -910,7 +1238,16 @@ def _validate_expense_table_inputs(
     months: list[date] | None,
     expense_categories: list[ExpenseCategory] | None,
 ) -> None:
-    """Validate required inputs for expense table aggregation."""
+    """Validate required inputs for expense table aggregation.
+
+    Args:
+        _user: User instance to validate.
+        months: List of months to validate.
+        expense_categories: List of expense categories to validate.
+
+    Raises:
+        BudgetDataError: If any required input is None.
+    """
     if _user is None:
         error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
@@ -928,7 +1265,17 @@ def _build_expense_table_data(
     months: list[date],
     expense_categories: list[ExpenseCategory],
 ) -> tuple[list[ExpenseDataRowDict], list[int], list[int]]:
-    """Build expense table data structure."""
+    """Build expense table data structure.
+
+    Args:
+        expense_fact_map: Mapping of category_id to month->fact amount.
+        expense_plan_map: Mapping of category_id to month->plan amount.
+        months: List of months to build data for.
+        expense_categories: List of expense categories.
+
+    Returns:
+        Tuple of (expense_data, total_fact_expense, total_plan_expense).
+    """
     expense_data = []
     total_fact_expense = [0] * len(months)
     total_plan_expense = [0] * len(months)
@@ -968,7 +1315,16 @@ def _validate_income_table_inputs(
     months: list[date] | None,
     income_categories: list[IncomeCategory] | None,
 ) -> None:
-    """Validate required inputs for income table aggregation."""
+    """Validate required inputs for income table aggregation.
+
+    Args:
+        _user: User instance to validate.
+        months: List of months to validate.
+        income_categories: List of income categories to validate.
+
+    Raises:
+        BudgetDataError: If any required input is None.
+    """
     if _user is None:
         error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
@@ -986,7 +1342,17 @@ def _build_income_table_data(
     months: list[date],
     income_categories: list[IncomeCategory],
 ) -> tuple[list[IncomeDataRowDict], list[Decimal], list[Decimal]]:
-    """Build income table data structure."""
+    """Build income table data structure.
+
+    Args:
+        income_fact_map: Mapping of category_id to month->fact amount.
+        income_plan_map: Mapping of category_id to month->plan amount.
+        months: List of months to build data for.
+        income_categories: List of income categories.
+
+    Returns:
+        Tuple of (income_data, total_fact_income, total_plan_income).
+    """
     income_data = []
     total_fact_income = [Decimal(0)] * len(months)
     total_plan_income = [Decimal(0)] * len(months)
@@ -1026,7 +1392,16 @@ def _validate_expense_api_inputs(
     months: list[date] | None,
     expense_categories: list[ExpenseCategory] | None,
 ) -> None:
-    """Validate required inputs for expense API aggregation."""
+    """Validate required inputs for expense API aggregation.
+
+    Args:
+        _user: User instance to validate.
+        months: List of months to validate.
+        expense_categories: List of expense categories to validate.
+
+    Raises:
+        BudgetDataError: If any required input is None.
+    """
     if _user is None:
         error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
@@ -1044,7 +1419,17 @@ def _build_income_api_data(
     months: list[date],
     income_categories: list[IncomeCategory],
 ) -> list[dict[str, Any]]:
-    """Build income API data structure."""
+    """Build income API data structure.
+
+    Args:
+        income_fact_map: Mapping of category_id to month->fact amount.
+        income_plan_map: Mapping of category_id to month->plan amount.
+        months: List of months to build data for.
+        income_categories: List of income categories.
+
+    Returns:
+        List of dictionaries with income API data.
+    """
     data = []
 
     for cat in income_categories:
@@ -1078,7 +1463,17 @@ def _build_expense_api_data(
     months: list[date],
     expense_categories: list[ExpenseCategory],
 ) -> list[dict[str, Any]]:
-    """Build expense API data structure."""
+    """Build expense API data structure.
+
+    Args:
+        expense_fact_map: Mapping of category_id to month->fact amount.
+        expense_plan_map: Mapping of category_id to month->plan amount.
+        months: List of months to build data for.
+        expense_categories: List of expense categories.
+
+    Returns:
+        List of dictionaries with expense API data.
+    """
     data = []
 
     for cat in expense_categories:
@@ -1111,7 +1506,16 @@ def _validate_income_api_inputs(
     months: list[date] | None,
     income_categories: list[IncomeCategory] | None,
 ) -> None:
-    """Validate required inputs for income API aggregation."""
+    """Validate required inputs for income API aggregation.
+
+    Args:
+        _user: User instance to validate.
+        months: List of months to validate.
+        income_categories: List of income categories to validate.
+
+    Raises:
+        BudgetDataError: If any required input is None.
+    """
     if _user is None:
         error_msg = 'User is required.'
         raise BudgetDataError(error_msg)

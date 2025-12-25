@@ -16,7 +16,16 @@ from hasta_la_vista_money.users.models import User
 
 
 class BudgetChartsDict(TypedDict):
-    """Данные для графиков бюджета."""
+    """Budget chart data.
+
+    Attributes:
+        chart_labels: List of labels for chart.
+        chart_income: List of income values.
+        chart_expense: List of expense values.
+        chart_balance: List of balance values.
+        pie_labels: List of labels for pie chart.
+        pie_values: List of values for pie chart.
+    """
 
     chart_labels: list[str]
     chart_income: list[float]
@@ -29,6 +38,14 @@ class BudgetChartsDict(TypedDict):
 def collect_datasets(
     user: User,
 ) -> tuple[Any, Any]:
+    """Collect expense and income datasets for user.
+
+    Args:
+        user: User to collect datasets for.
+
+    Returns:
+        Tuple of (expense_dataset, income_dataset) QuerySets.
+    """
     expense_dataset = (
         Expense.objects.filter(user=user)
         .values('date')
@@ -47,6 +64,14 @@ def collect_datasets(
 def transform_dataset(
     dataset: Any,
 ) -> tuple[list[str], list[float]]:
+    """Transform dataset to lists of dates and amounts.
+
+    Args:
+        dataset: QuerySet with 'date' and 'total_amount' fields.
+
+    Returns:
+        Tuple of (dates, amounts) lists.
+    """
     dates: list[str] = []
     amounts: list[float] = []
     for item in dataset:
@@ -63,6 +88,15 @@ def unique_aggregate(
     dates: list[str],
     amounts: list[float],
 ) -> tuple[list[str], list[float]]:
+    """Aggregate amounts for unique dates.
+
+    Args:
+        dates: List of date strings.
+        amounts: List of amount values.
+
+    Returns:
+        Tuple of (unique_dates, aggregated_amounts) lists.
+    """
     unique_dates: list[str] = []
     unique_amounts: list[float] = []
     for idx, d in enumerate(dates):
@@ -76,14 +110,25 @@ def unique_aggregate(
 
 
 class SubcategoryDataDict(TypedDict):
-    """Данные подкатегории для графика."""
+    """Subcategory data for chart.
+
+    Attributes:
+        name: Subcategory name.
+        y: Subcategory value.
+    """
 
     name: str
     y: float
 
 
 class ChartDataPointDict(TypedDict):
-    """Точка данных на графике."""
+    """Chart data point.
+
+    Attributes:
+        name: Data point name.
+        y: Data point value.
+        drilldown: Drilldown identifier.
+    """
 
     name: str
     y: float
@@ -91,7 +136,13 @@ class ChartDataPointDict(TypedDict):
 
 
 class DrilldownSeriesDict(TypedDict):
-    """Серия данных для детализации."""
+    """Drilldown data series.
+
+    Attributes:
+        id: Series identifier.
+        name: Series name.
+        data: List of subcategory data.
+    """
 
     id: str
     name: str
@@ -99,7 +150,13 @@ class DrilldownSeriesDict(TypedDict):
 
 
 class ChartDataDict(TypedDict):
-    """Данные для графика категорий."""
+    """Category chart data.
+
+    Attributes:
+        parent_category: Parent category name.
+        data: List of chart data points.
+        drilldown_series: List of drilldown series.
+    """
 
     parent_category: str
     data: list[ChartDataPointDict]
@@ -107,6 +164,14 @@ class ChartDataDict(TypedDict):
 
 
 def pie_expense_category(user: User) -> list[ChartDataDict]:
+    """Get pie chart data for expense categories.
+
+    Args:
+        user: User to get expense categories for.
+
+    Returns:
+        List of ChartDataDict with expense category data and drilldown.
+    """
     expense_data: dict[str, dict[str, float]] = defaultdict(
         lambda: defaultdict(float),
     )
@@ -161,6 +226,17 @@ def _fact_map_for_categories(
     categories: Sequence[ExpenseCategory | IncomeCategory],
     months: list[date],
 ) -> dict[int, dict[date, Decimal]]:
+    """Build fact map for categories by month.
+
+    Args:
+        user: User to get data for.
+        model: Model class (Expense or Income).
+        categories: Sequence of categories.
+        months: List of months to aggregate.
+
+    Returns:
+        Dictionary mapping category_id to month->amount mapping.
+    """
     fact_map: dict[int, dict[date, Decimal]] = defaultdict(
         lambda: defaultdict(lambda: Decimal(0)),
     )
@@ -230,6 +306,16 @@ def _pie_for_categories(
     months: list[date],
     fact_map: dict[int, dict[date, Decimal]],
 ) -> tuple[list[str], list[float]]:
+    """Get pie chart labels and values for categories.
+
+    Args:
+        categories: Sequence of categories.
+        months: List of months.
+        fact_map: Category to month->amount mapping.
+
+    Returns:
+        Tuple of (labels, values) for pie chart.
+    """
     labels: list[str] = []
     values: list[float] = []
     if not months or not categories:
@@ -247,6 +333,14 @@ def _pie_for_categories(
 
 
 def budget_charts(user: User) -> BudgetChartsDict:
+    """Get budget chart data for user.
+
+    Args:
+        user: User to get budget charts for.
+
+    Returns:
+        BudgetChartsDict with chart data for expenses, income, and balance.
+    """
     expense_dates = (
         Expense.objects.filter(user=user)
         .annotate(month=TruncMonth('date'))

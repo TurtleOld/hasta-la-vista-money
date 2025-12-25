@@ -63,14 +63,26 @@ from hasta_la_vista_money.users.services.groups import (
     },
 )
 class UserGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для получения групп пользователя."""
+    """API view for getting user groups.
+
+    Returns list of groups that the specified user belongs to.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """Получить группы пользователя."""
+        """Get user groups.
+
+        Args:
+            request: HTTP request object.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response with user groups list.
+        """
         user_id = request.query_params.get('user_id')
 
         if user_id:
@@ -124,14 +136,26 @@ class UserGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     },
 )
 class AvailableGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
-    """API view для получения доступных групп для пользователя."""
+    """API view for getting available groups for user.
+
+    Returns list of groups that the specified user does not belong to.
+    """
 
     schema = AutoSchema()
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """Получить доступные группы."""
+        """Get available groups for user.
+
+        Args:
+            request: HTTP request object.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Response with available groups list.
+        """
         user_id = request.query_params.get('user_id')
 
         if user_id:

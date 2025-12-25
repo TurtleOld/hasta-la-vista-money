@@ -118,7 +118,14 @@ class AddCategoryForm(
         category_queryset: QuerySet[ExpenseCategory] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Инициализирует queryset для поля 'parent_category'."""
+        """Initialize queryset for 'parent_category' field.
+
+        Args:
+            *args: Positional arguments.
+            category_queryset: Optional queryset for parent categories.
+            **kwargs: Keyword arguments. 'category_queryset' can be provided
+                to configure parent category choices.
+        """
         if 'category_queryset' in kwargs:
             category_queryset = kwargs.pop('category_queryset')
         super().__init__(*args, category_queryset=category_queryset, **kwargs)

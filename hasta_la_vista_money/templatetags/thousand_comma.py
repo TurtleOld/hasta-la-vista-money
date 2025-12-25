@@ -10,9 +10,17 @@ THOUSAND_MINUS_ONE = 999
 
 @register.filter
 def comma(number: Any) -> str:
-    """
-    Функция разделения тысячных и миллионных пробелами.
-    Форматирует число с разделением тысяч пробелами.
+    """Format number with space as thousand separator.
+
+    Formats number with space as thousand separator for thousands
+    and millions.
+
+    Args:
+        number: Number to format (can be int, float, Decimal, or string).
+
+    Returns:
+        Formatted string with space as thousand separator, or '—' if
+        number is None, empty, or invalid.
     """
     try:
         if number is None or number == '':

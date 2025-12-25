@@ -28,27 +28,63 @@ MIN_FUNCTION_PARAMS_COUNT = 2
 
 @dataclass
 class ReceiptImportResult:
+    """Result of receipt import operation.
+
+    Attributes:
+        success: Whether import was successful.
+        error: Error code if import failed ('invalid_file' or 'exists').
+        receipt: Created Receipt instance if successful.
+    """
+
     success: bool
     error: str | None = None
     receipt: Receipt | None = None
 
 
 class ReceiptImportService:
+    """Service for importing receipts from images or JSON data.
+
+    Handles AI-based image analysis, JSON parsing, and receipt creation
+    from external sources.
+    """
+
     def __init__(
         self,
         receipt_repository: ReceiptRepositoryProtocol,
         receipt_creator_service: ReceiptCreatorService,
     ) -> None:
+        """Initialize ReceiptImportService.
+
+        Args:
+            receipt_repository: Repository for receipt data access.
+            receipt_creator_service: Service for creating receipts.
+        """
         self.receipt_repository = receipt_repository
         self.receipt_creator_service = receipt_creator_service
 
     def _clean_json_response(self, text: str) -> str:
+        """Extract JSON from markdown code blocks.
+
+        Args:
+            text: Text that may contain JSON in code blocks.
+
+        Returns:
+            Extracted JSON string or original text if no code blocks found.
+        """
         match = re.search(r'```(?:json)?\s*({.*?})\s*```', text, re.DOTALL)
         if match:
             return match.group(1)
         return text.strip()
 
     def _normalize_date(self, date_str: str) -> str:
+        """Normalize date string to standard format.
+
+        Args:
+            date_str: Date string in various formats.
+
+        Returns:
+            Normalized date string in DD.MM.YYYY HH:MM format.
+        """
         try:
             day, month, year = date_str.split(' ')[0].split('.')
             hour, minute = date_str.split(' ')[1].split(':')
@@ -67,6 +103,14 @@ class ReceiptImportService:
             return f'{day}.{month}.{current_century}{year_short} {time}'
 
     def _parse_receipt_date(self, date_str: str) -> datetime:
+        """Parse receipt date string to datetime.
+
+        Args:
+            date_str: Date string in DD.MM.YYYY HH:MM format.
+
+        Returns:
+            Timezone-aware datetime instance.
+        """
         normalized_date = self._normalize_date(date_str)
         day, month, year = normalized_date.split(' ')[0].split('.')
         hour, minute = normalized_date.split(' ')[1].split(':')
@@ -84,15 +128,40 @@ class ReceiptImportService:
         user: User,
         number_receipt: int | None,
     ) -> QuerySet[Receipt]:
+        """Check if receipt with given number already exists.
+
+        Args:
+            user: User to check receipts for.
+            number_receipt: Receipt number to check.
+
+        Returns:
+            QuerySet of matching receipts.
+        """
         return self.receipt_repository.get_by_user_and_number(
             user=user,
             number_receipt=number_receipt,
         )
 
     def _to_decimal(self, value: Any) -> Decimal:
+        """Convert value to Decimal.
+
+        Args:
+            value: Value to convert.
+
+        Returns:
+            Decimal instance.
+        """
         return Decimal(str(value))
 
     def _to_optional_decimal(self, value: Any) -> Decimal | None:
+        """Convert value to Decimal or return None.
+
+        Args:
+            value: Value to convert, may be None.
+
+        Returns:
+            Decimal instance or None.
+        """
         if value is None:
             return None
         return self._to_decimal(value)
@@ -110,6 +179,21 @@ class ReceiptImportService:
             | None
         ) = None,
     ) -> ReceiptImportResult:
+        """Process uploaded receipt image and create receipt.
+
+        Analyzes image using AI or custom function, parses JSON response,
+        and creates receipt with products.
+
+        Args:
+            user: User importing the receipt.
+            account: Account to charge for the receipt.
+            uploaded_file: Uploaded image file.
+            analyze_func: Optional custom analysis function. If None,
+                uses default AI analysis.
+
+        Returns:
+            ReceiptImportResult with success status and receipt or error.
+        """
         try:
             func = analyze_func
             if func is None:

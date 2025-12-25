@@ -1,4 +1,8 @@
-"""Репозитории для loan модуля."""
+"""Loan repositories module.
+
+This module provides repositories for working with loan data including
+loans, payment schedules, and loan payments.
+"""
 
 from hasta_la_vista_money.loan.repositories.loan_repository import (
     LoanRepository,

@@ -47,7 +47,16 @@ if TYPE_CHECKING:
 
 
 class MonthDataDict(TypedDict, total=False):
-    """Данные за месяц."""
+    """Month data.
+
+    Attributes:
+        month: Month identifier.
+        expenses: Total expenses for month.
+        income: Total income for month.
+        savings: Savings for month.
+        savings_percent: Savings percentage.
+        balance: Balance for month.
+    """
 
     month: str
     expenses: float
@@ -58,7 +67,13 @@ class MonthDataDict(TypedDict, total=False):
 
 
 class ChartDataDict(TypedDict):
-    """Данные для графика."""
+    """Chart data.
+
+    Attributes:
+        labels: List of chart labels.
+        expense_data: List of expense values.
+        income_data: List of income values.
+    """
 
     labels: list[str]
     expense_data: list[float]
@@ -66,14 +81,32 @@ class ChartDataDict(TypedDict):
 
 
 class DeltaByCurrencyDict(TypedDict, total=False):
-    """Изменение баланса по валютам."""
+    """Balance change by currency.
+
+    Attributes:
+        delta: Balance change amount.
+        percent: Balance change percentage.
+    """
 
     delta: float
     percent: float | None
 
 
 class CardMonthDict(TypedDict):
-    """Данные месяца для кредитной карты."""
+    """Credit card month data.
+
+    Attributes:
+        month: Month identifier.
+        purchase_start: Purchase period start.
+        purchase_end: Purchase period end.
+        grace_end: Grace period end date.
+        debt_for_month: Debt for month.
+        is_overdue: Whether payment is overdue.
+        days_until_due: Days until payment due.
+        payments_made: Payments made amount.
+        remaining_debt: Remaining debt amount.
+        is_paid: Whether month is paid.
+    """
 
     month: str
     purchase_start: datetime
@@ -88,7 +121,15 @@ class CardMonthDict(TypedDict):
 
 
 class CardHistoryDict(TypedDict):
-    """История по месяцам для кредитной карты."""
+    """Credit card history by month.
+
+    Attributes:
+        month: Month identifier.
+        debt: Debt amount.
+        final_debt: Final debt amount.
+        grace_end: Grace period end date.
+        is_overdue: Whether payment is overdue.
+    """
 
     month: str
     debt: float
@@ -98,14 +139,30 @@ class CardHistoryDict(TypedDict):
 
 
 class PaymentItemDict(TypedDict):
-    """Элемент платежа."""
+    """Payment item.
+
+    Attributes:
+        amount: Payment amount.
+        date: Payment date.
+    """
 
     amount: Decimal
     date: date
 
 
 class PaymentScheduleItemDict(TypedDict):
-    """Элемент графика платежей."""
+    """Payment schedule item.
+
+    Attributes:
+        month: Month identifier.
+        sum_expense: Total expenses for month.
+        payments_made: Payments made amount.
+        remaining_debt: Remaining debt amount.
+        payment_due: Payment due date.
+        is_overdue: Whether payment is overdue.
+        days_until_due: Days until payment due.
+        is_paid: Whether month is paid.
+    """
 
     month: str
     sum_expense: float
@@ -118,7 +175,19 @@ class PaymentScheduleItemDict(TypedDict):
 
 
 class CreditCardDataDict(TypedDict, total=False):
-    """Данные кредитной карты."""
+    """Credit card data.
+
+    Attributes:
+        name: Card name.
+        limit: Credit limit.
+        debt_now: Current debt.
+        current_grace_info: Current grace period info.
+        history: Payment history.
+        currency: Currency code.
+        card_obj: Account instance.
+        limit_left: Remaining credit limit.
+        payment_schedule: Payment schedule.
+    """
 
     name: str
     limit: Decimal | None
@@ -132,7 +201,16 @@ class CreditCardDataDict(TypedDict, total=False):
 
 
 class IncomeExpenseDict(TypedDict):
-    """Данные о доходе/расходе."""
+    """Income/expense data.
+
+    Attributes:
+        id: Transaction ID.
+        date: Transaction date.
+        account__name_account: Account name.
+        category__name: Category name.
+        amount: Transaction amount.
+        type: Transaction type.
+    """
 
     id: int
     date: date
@@ -143,7 +221,22 @@ class IncomeExpenseDict(TypedDict):
 
 
 class UserDetailedStatisticsDict(TypedDict):
-    """Подробная статистика пользователя."""
+    """User detailed statistics.
+
+    Attributes:
+        months_data: Monthly data list.
+        top_expense_categories: Top expense categories.
+        top_income_categories: Top income categories.
+        receipt_info_by_month: Receipts queryset by month.
+        income_expense: Income/expense transactions.
+        transfer_money_log: Transfer logs queryset.
+        accounts: Accounts queryset.
+        balances_by_currency: Balances by currency.
+        delta_by_currency: Balance changes by currency.
+        chart_combined: Combined chart data.
+        user: User instance.
+        credit_cards_data: Credit cards data list.
+    """
 
     months_data: list[MonthDataDict]
     top_expense_categories: list[dict[str, Any]]
@@ -444,7 +537,15 @@ def _six_months_data(
 def _calculate_card_date_range(
     today_month: date,
 ) -> tuple[datetime, datetime]:
-    """Вычисляет диапазон дат для статистики карты."""
+    """Calculate date range for card statistics.
+
+    Args:
+        today_month: Current month date.
+
+    Returns:
+        Tuple of (first_month_start, last_month_end) as timezone-aware
+        datetimes.
+    """
     first_month_date = today_month - relativedelta(
         months=constants.STATISTICS_YEAR_MONTHS_COUNT - constants.ONE,
     )
@@ -466,7 +567,17 @@ def _build_expenses_receipts_dicts(
     expenses_by_month: QuerySet[Expense, dict[str, Any]],
     receipts_by_month: QuerySet[Receipt, dict[str, Any]],
 ) -> tuple[dict[date, Decimal], dict[date, dict[int, Decimal]]]:
-    """Строит словари expenses и receipts по месяцам."""
+    """Build expenses and receipts dictionaries by month.
+
+    Args:
+        expenses_by_month: QuerySet of expenses aggregated by month.
+        receipts_by_month: QuerySet of receipts aggregated by month.
+
+    Returns:
+        Tuple of (expenses_dict, receipts_dict) where expenses_dict maps
+        month date to total amount, and receipts_dict maps month date to
+        operation_type->amount mapping.
+    """
     expenses_dict: dict[date, Decimal] = {}
     for item in expenses_by_month:
         month_date = item['month'].date().replace(day=1)
@@ -490,7 +601,17 @@ def _calculate_grace_period_end(
     purchase_end: datetime,
     account_service: AccountServiceProtocol,
 ) -> datetime:
-    """Вычисляет дату окончания льготного периода."""
+    """Calculate grace period end date.
+
+    Args:
+        card: Account (credit card) instance.
+        purchase_start_date: Purchase period start date.
+        purchase_end: Purchase period end datetime.
+        account_service: Account service for payment schedule calculations.
+
+    Returns:
+        Grace period end datetime.
+    """
     bank = getattr(card, 'bank', None)
     if bank == 'SBERBANK':
         grace_end_date = purchase_start_date + relativedelta(
@@ -525,7 +646,21 @@ def _build_single_card_month(
     account_service: AccountServiceProtocol,
     now: datetime,
 ) -> tuple[CardMonthDict, float]:
-    """Строит данные для одного месяца карты."""
+    """Build data for single card month.
+
+    Args:
+        month_date: Month date to build data for.
+        expenses_dict: Dictionary mapping month date to expense amount.
+        receipts_dict: Dictionary mapping month date to receipts by
+            operation type.
+        card: Account (credit card) instance.
+        account_service: Account service for payment schedule calculations.
+        now: Current datetime.
+
+    Returns:
+        Tuple of (month_data, final_debt) where month_data contains
+        card statistics for the month and final_debt is the calculated debt.
+    """
     purchase_start_date = month_date.replace(day=1)
     last_day = monthrange(
         purchase_start_date.year,
@@ -601,7 +736,19 @@ def _card_months_block(
     expense_repository: ExpenseRepository,
     receipt_repository: ReceiptRepository,
 ) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
-    """Строит блок данных по месяцам для карты."""
+    """Build months data block for card.
+
+    Args:
+        card: Account (credit card) instance.
+        today_month: Current month date.
+        account_service: Account service for payment schedule calculations.
+        expense_repository: Expense repository for querying expenses.
+        receipt_repository: Receipt repository for querying receipts.
+
+    Returns:
+        Tuple of (months, history) where months is list of monthly card data
+        and history is list of card history entries.
+    """
     now = timezone.now()
     first_month_start, last_month_end = _calculate_card_date_range(today_month)
 

@@ -174,7 +174,10 @@ class TestAccountSerializer(TestCase):
         self.assertNotIn('created_at', data)
 
     def test_account_serializer_invalid_input_parametrized(self) -> None:
-        """Параметризация: невалидные и граничные данные для create/update."""
+        """Test parametrized validation with invalid and boundary data.
+
+        Tests various invalid and boundary values for create/update.
+        """
         testcases = [
             ({}, ['name_account', 'balance', 'currency', 'type_account']),
             (

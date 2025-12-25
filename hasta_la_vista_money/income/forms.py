@@ -25,7 +25,11 @@ class IncomeForm(
     FormQuerysetsMixin,
     ModelForm[Income],
 ):
-    """Модельная форма отображения доходов на сайте."""
+    """Model form for displaying income on the site.
+
+    Provides form fields for creating and editing income records
+    with category, account, date, and amount fields.
+    """
 
     category = ModelChoiceField(
         queryset=IncomeCategory.objects.none(),
@@ -82,7 +86,13 @@ class AddCategoryIncomeForm(
     field = 'parent_category'
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Инициализирует queryset для поля 'parent_category'."""
+        """Initialize queryset for 'parent_category' field.
+
+        Args:
+            *args: Positional arguments.
+            **kwargs: Keyword arguments. 'category_queryset' is extracted
+                and used to configure parent category choices.
+        """
         category_queryset = kwargs.pop('category_queryset', None)
         super().__init__(*args, category_queryset=category_queryset, **kwargs)
 

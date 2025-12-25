@@ -17,7 +17,20 @@ def get_category_choices(
     level: int = 0,
     max_level: int = 2,
 ) -> Generator[tuple[Any, str], None, None]:
-    """Формируем выбор категории в форме."""
+    """Generate category choices for form.
+
+    Creates hierarchical category choices with indentation to show
+    parent-child relationships.
+
+    Args:
+        queryset: QuerySet of category models.
+        parent: Parent category (None for root level).
+        level: Current nesting level.
+        max_level: Maximum nesting depth.
+
+    Yields:
+        Tuples of (category_id, formatted_name) with indentation.
+    """
     for category in queryset.filter(parent_category=parent):
         yield (category.pk, f'{"  >" * level} {category.name}')
         if level < max_level - 1:
@@ -56,7 +69,7 @@ class DeleteObjectMixin:
 
 class CustomSuccessURLUserMixin:
     def __init__(self) -> None:
-        """Конструктов класса инициализирующий аргумент kwargs."""
+        """Initialize class with kwargs argument."""
         self.kwargs: dict[str, Any] | None = None
 
     def get_success_url(self) -> str:
@@ -84,7 +97,7 @@ class UpdateViewMixin:
     depth_limit: int = 3
 
     def __init__(self) -> None:
-        """Конструктов класса инициализирующий аргументы класса."""
+        """Initialize class with class arguments."""
         self.template_name: str | None = None
         self.request: HttpRequest | None = None
 
@@ -123,11 +136,11 @@ class CategoryChoicesMixin:
         depth: int | None = None,
         **kwargs: Any,
     ) -> None:
-        """Инициализирует choices для древовидных категорий.
+        """Initialize choices for hierarchical categories.
 
         Args:
-            category_queryset: QuerySet категорий или None.
-            depth: Глубина иерархии категорий.
+            category_queryset: QuerySet of categories or None.
+            depth: Category hierarchy depth.
         """
         super().__init__(*args, **kwargs)
         if not hasattr(self, 'fields'):
@@ -160,10 +173,10 @@ class CategoryChoicesConfigurerMixin:
         self,
         category_choices: list[tuple[Any, str]],
     ) -> None:
-        """Устанавливает choices для поля категории.
+        """Set choices for category field.
 
         Args:
-            category_choices: Последовательность пар (value, label).
+            category_choices: Sequence of (value, label) pairs.
         """
         if not hasattr(self, 'fields'):
             return
@@ -173,13 +186,13 @@ class CategoryChoicesConfigurerMixin:
 
 
 class FormQuerysetsMixin:
-    """Инициализация queryset'ов полей формы из kwargs.
+    """Initialize form field querysets from kwargs.
 
-    Поддерживает параметры 'category_queryset' и 'account_queryset'.
-    Имя поля категории берётся из атрибута 'field' формы, либо из
-    'category_field_name', либо по умолчанию 'category'.
-    Имя поля счёта задаётся атрибутом 'account_field_name'
-    (по умолчанию 'account').
+    Supports 'category_queryset' and 'account_queryset' parameters.
+    Category field name is taken from form's 'field' attribute, or
+    from 'category_field_name', or defaults to 'category'.
+    Account field name is set by 'account_field_name' attribute
+    (defaults to 'account').
     """
 
     category_field_name: str | None = None

@@ -362,7 +362,11 @@ class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):
 
 
 class ExportUserDataView(LoginRequiredMixin, View):
-    """Представление для экспорта данных пользователя"""
+    """View for exporting user data.
+
+    Provides JSON export of all user financial data including accounts,
+    expenses, income, and receipts.
+    """
 
     def get(
         self,
@@ -385,7 +389,11 @@ class ExportUserDataView(LoginRequiredMixin, View):
 
 
 class UserStatisticsView(LoginRequiredMixin, TemplateView):
-    """Представление для детальной статистики пользователя"""
+    """View for user detailed statistics.
+
+    Displays comprehensive user statistics including monthly data,
+    top categories, and financial overview.
+    """
 
     template_name = 'users/statistics.html'
     request: RequestWithContainer
@@ -404,7 +412,11 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
 
 
 class UserNotificationsView(LoginRequiredMixin, TemplateView):
-    """Представление для уведомлений пользователя"""
+    """View for user notifications.
+
+    Displays user notifications including low balance warnings,
+    expense over income alerts, and savings achievements.
+    """
 
     template_name = 'users/notifications.html'
 
@@ -540,7 +552,11 @@ class SwitchThemeView(LoginRequiredMixin, View):
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
-    """Представление для страницы дашборда."""
+    """View for dashboard page.
+
+    Displays user dashboard with customizable widgets showing
+    financial overview and analytics.
+    """
 
     template_name = 'users/dashboard.html'
 
@@ -562,10 +578,21 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
 
 class DashboardDataView(LoginRequiredMixin, View):
-    """Получение всех данных для дашборда в JSON."""
+    """View for getting all dashboard data in JSON format.
+
+    Provides JSON endpoint for dashboard widgets to fetch financial
+    data including accounts, expenses, income, and analytics.
+    """
 
     def _serialize_account(self, account: Account) -> dict[str, Any]:
-        """Сериализовать объект Account."""
+        """Serialize account to dictionary.
+
+        Args:
+            account: Account instance to serialize.
+
+        Returns:
+            Dictionary with account data.
+        """
         return {
             'id': account.pk,
             'name_account': account.name_account,
@@ -588,7 +615,14 @@ class DashboardDataView(LoginRequiredMixin, View):
         self,
         transfer_log: TransferMoneyLog,
     ) -> dict[str, Any]:
-        """Сериализовать объект TransferMoneyLog."""
+        """Serialize TransferMoneyLog object to dictionary.
+
+        Args:
+            transfer_log: TransferMoneyLog instance to serialize.
+
+        Returns:
+            Dictionary with transfer log data.
+        """
         return {
             'id': transfer_log.pk,
             'user_id': transfer_log.user.pk,
@@ -610,21 +644,42 @@ class DashboardDataView(LoginRequiredMixin, View):
         }
 
     def _serialize_user(self, user: Any) -> dict[str, Any]:
-        """Сериализовать объект User."""
+        """Serialize User object to dictionary.
+
+        Args:
+            user: User instance to serialize.
+
+        Returns:
+            Dictionary with user data.
+        """
         return {
             'id': user.pk,
             'username': user.username,
         }
 
     def _serialize_model(self, model_instance: Any) -> dict[str, Any]:
-        """Сериализовать модель Django."""
+        """Serialize Django model instance to dictionary.
+
+        Args:
+            model_instance: Django model instance to serialize.
+
+        Returns:
+            Dictionary with model ID and class name.
+        """
         return {
             'id': model_instance.pk,
             'model': model_instance.__class__.__name__,
         }
 
     def _serialize_value(self, value: Any) -> Any:
-        """Рекурсивно сериализует значение."""
+        """Recursively serialize value.
+
+        Args:
+            value: Value to serialize (can be model, dict, list, etc.).
+
+        Returns:
+            Serialized value suitable for JSON.
+        """
         if isinstance(value, QuerySet | list | tuple):
             return [self._serialize_value(item) for item in value]
         if isinstance(value, dict):
@@ -648,7 +703,14 @@ class DashboardDataView(LoginRequiredMixin, View):
         self,
         stats: UserDetailedStatisticsDict,
     ) -> dict[str, Any]:
-        """Подготовить статистику для сериализации."""
+        """Prepare statistics for serialization.
+
+        Args:
+            stats: User detailed statistics dictionary.
+
+        Returns:
+            Dictionary with serialized statistics values.
+        """
         return {
             key: self._serialize_value(value) for key, value in stats.items()
         }
@@ -657,7 +719,14 @@ class DashboardDataView(LoginRequiredMixin, View):
         self,
         months_data: list[MonthDataDict],
     ) -> dict[str, Any]:
-        """Рассчитать тренды на основе данных за месяцы."""
+        """Calculate trends based on monthly data.
+
+        Args:
+            months_data: List of monthly data dictionaries.
+
+        Returns:
+            Dictionary with trend calculations (slope, intercept, etc.).
+        """
         trends: dict[str, Any] = {}
         if not months_data:
             return trends
@@ -679,7 +748,14 @@ class DashboardDataView(LoginRequiredMixin, View):
         return trends
 
     def _get_recent_transactions(self, user: User) -> list[Transaction]:
-        """Получить последние транзакции."""
+        """Get recent transactions for user.
+
+        Args:
+            user: User to get transactions for.
+
+        Returns:
+            List of Transaction dictionaries sorted by date descending.
+        """
         recent_expenses = (
             Expense.objects.filter(user=user)
             .select_related('category', 'account')
@@ -790,7 +866,11 @@ class DashboardDataView(LoginRequiredMixin, View):
 
 
 class DashboardWidgetConfigView(LoginRequiredMixin, View):
-    """Управление конфигурацией виджетов."""
+    """View for managing dashboard widget configuration.
+
+    Handles creation, update, and deletion of dashboard widgets
+    with their position, size, and visibility settings.
+    """
 
     def post(
         self,
@@ -882,7 +962,11 @@ class DashboardWidgetConfigView(LoginRequiredMixin, View):
 
 
 class DashboardDrillDownView(LoginRequiredMixin, View):
-    """Получение детализации по категориям (drill-down)."""
+    """View for getting category drill-down data.
+
+    Provides JSON endpoint for drill-down charts showing category
+    details and subcategories.
+    """
 
     def get(
         self,
@@ -909,7 +993,11 @@ class DashboardDrillDownView(LoginRequiredMixin, View):
 
 
 class DashboardComparisonView(LoginRequiredMixin, View):
-    """Сравнение периодов."""
+    """View for period comparison data.
+
+    Provides JSON endpoint for comparing current and previous
+    periods (month, quarter, year).
+    """
 
     def get(
         self,

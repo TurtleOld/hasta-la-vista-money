@@ -1,4 +1,8 @@
-"""Модуль форм по кредитам."""
+"""Loan forms module.
+
+This module provides forms for loan management including loan creation
+and payment forms.
+"""
 
 from decimal import Decimal
 from typing import Any, ClassVar
@@ -70,11 +74,12 @@ class LoanForm(ModelForm[Loan]):
         widgets: ClassVar[dict[str, Any]] = {}
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """
-        Конструктов класса инициализирующий поля формы.
+        """Initialize form fields.
 
-        :param args:
-        :param kwargs:
+        Args:
+            *args: Positional arguments.
+            **kwargs: Keyword arguments. 'user' is extracted and used
+                to filter querysets.
         """
         self.request_user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)

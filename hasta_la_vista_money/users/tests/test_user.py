@@ -52,7 +52,7 @@ class TestUser(TestCase):
         self.assertTrue(user.is_authenticated)
 
     def test_login_user_redirect_after_success(self) -> None:
-        """Тест успешного редиректа после логина."""
+        """Test successful redirect after login."""
         url = reverse_lazy('login')
         self.user1.set_password('testpassword')
         self.user1.save()

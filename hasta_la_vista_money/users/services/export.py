@@ -13,7 +13,16 @@ from hasta_la_vista_money.users.models import User
 
 
 class UserInfoDict(TypedDict):
-    """Информация о пользователе для экспорта."""
+    """User information for export.
+
+    Attributes:
+        username: Username.
+        email: Email address.
+        first_name: First name.
+        last_name: Last name.
+        date_joined: Date joined (ISO format).
+        last_login: Last login date (ISO format) or None.
+    """
 
     username: str
     email: str
@@ -24,7 +33,14 @@ class UserInfoDict(TypedDict):
 
 
 class StatisticsDict(TypedDict):
-    """Статистика для экспорта."""
+    """Statistics for export.
+
+    Attributes:
+        total_balance: Total account balance.
+        total_expenses: Total expenses.
+        total_incomes: Total income.
+        receipts_count: Number of receipts.
+    """
 
     total_balance: float
     total_expenses: float
@@ -33,7 +49,14 @@ class StatisticsDict(TypedDict):
 
 
 class AccountDict(TypedDict):
-    """Словарь с данными счета."""
+    """Account data dictionary.
+
+    Attributes:
+        name_account: Account name.
+        balance: Account balance.
+        currency: Currency code.
+        created_at: Account creation date or None.
+    """
 
     name_account: str
     balance: Decimal
@@ -42,7 +65,14 @@ class AccountDict(TypedDict):
 
 
 class ExpenseDict(TypedDict):
-    """Словарь с данными расхода."""
+    """Expense data dictionary.
+
+    Attributes:
+        amount: Expense amount.
+        date: Expense date.
+        category__name: Category name.
+        account__name_account: Account name.
+    """
 
     amount: Decimal
     date: datetime
@@ -51,7 +81,14 @@ class ExpenseDict(TypedDict):
 
 
 class IncomeDict(TypedDict):
-    """Словарь с данными дохода."""
+    """Income data dictionary.
+
+    Attributes:
+        amount: Income amount.
+        date: Income date.
+        category__name: Category name.
+        account__name_account: Account name.
+    """
 
     amount: Decimal
     date: datetime
@@ -60,7 +97,13 @@ class IncomeDict(TypedDict):
 
 
 class ReceiptDict(TypedDict):
-    """Словарь с данными чека."""
+    """Receipt data dictionary.
+
+    Attributes:
+        receipt_date: Receipt date.
+        seller__name_seller: Seller name.
+        total_sum: Total receipt sum.
+    """
 
     receipt_date: datetime
     seller__name_seller: str
@@ -68,7 +111,16 @@ class ReceiptDict(TypedDict):
 
 
 class UserExportData(TypedDict):
-    """Данные для экспорта пользователя."""
+    """User export data.
+
+    Attributes:
+        user_info: User information.
+        accounts: List of accounts.
+        expenses: List of expenses.
+        incomes: List of income.
+        receipts: List of receipts.
+        statistics: Statistics summary.
+    """
 
     user_info: UserInfoDict
     accounts: list[AccountDict]
@@ -79,6 +131,14 @@ class UserExportData(TypedDict):
 
 
 def get_user_export_data(user: User) -> UserExportData:
+    """Get user data for export.
+
+    Args:
+        user: User to export data for.
+
+    Returns:
+        UserExportData dictionary with all user data.
+    """
     return {
         'user_info': {
             'username': user.username,

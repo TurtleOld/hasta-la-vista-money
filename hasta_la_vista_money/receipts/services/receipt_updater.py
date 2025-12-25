@@ -21,6 +21,12 @@ if TYPE_CHECKING:
 
 
 class ReceiptUpdaterService:
+    """Service for updating receipts with products.
+
+    Handles updating receipts and their products with automatic account
+    balance reconciliation.
+    """
+
     def __init__(
         self,
         account_service: AccountServiceProtocol,
@@ -29,6 +35,15 @@ class ReceiptUpdaterService:
         receipt_repository: ReceiptRepositoryProtocol,
         seller_repository: SellerRepositoryProtocol,
     ) -> None:
+        """Initialize ReceiptUpdaterService.
+
+        Args:
+            account_service: Service for account balance operations.
+            account_repository: Repository for account data access.
+            product_repository: Repository for product data access.
+            receipt_repository: Repository for receipt data access.
+            seller_repository: Repository for seller data access.
+        """
         self.account_service = account_service
         self.account_repository = account_repository
         self.product_repository = product_repository
@@ -44,6 +59,19 @@ class ReceiptUpdaterService:
         form: ReceiptForm,
         product_formset: BaseFormSet[ProductForm],
     ) -> Receipt:
+        """Update receipt and its products.
+
+        Automatically reconciles account balances if account or total changes.
+
+        Args:
+            user: User updating the receipt.
+            receipt: Receipt instance to update.
+            form: Validated receipt form.
+            product_formset: Formset with product data.
+
+        Returns:
+            Updated Receipt instance.
+        """
         old_total_sum = receipt.total_sum
         old_account = receipt.account
         receipt = form.save()

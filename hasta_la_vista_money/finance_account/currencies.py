@@ -1,3 +1,9 @@
+"""Currency utilities.
+
+This module provides functions for working with currencies,
+including getting currency choices and default currency.
+"""
+
 import json
 from functools import lru_cache
 from pathlib import Path
@@ -7,17 +13,35 @@ from django.utils.translation import get_language
 
 @lru_cache
 def _get_currencies_rates():
+    """Get currency rates from JSON file.
+
+    Returns:
+        Dictionary mapping currency codes to currency data.
+    """
     path = Path(__file__).parent / 'currencies.json'
     data = json.loads(path.read_text(encoding='utf-8'))
     return {x['code_name']: x for x in data}
 
 
 def get_default_currency() -> str:
-    """Возвращает валюту по умолчанию (RUB)."""
+    """Get default currency code.
+
+    Returns:
+        Default currency code (RUB).
+    """
     return 'RUB'
 
 
 def currency_choices(lang: str | None = None) -> list[tuple[str, str]]:
+    """Get currency choices for forms.
+
+    Args:
+        lang: Language code. If None, uses current Django language.
+
+    Returns:
+        List of (code, name) tuples for form choices, with default
+        currency (RUB) first.
+    """
     lang = (lang or get_language() or 'ru').lower()
     use_english = lang.startswith('en')
     data = _get_currencies_rates()

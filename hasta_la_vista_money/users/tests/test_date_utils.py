@@ -1,4 +1,8 @@
-"""Тесты для утилит работы с датами."""
+"""Tests for date utilities.
+
+This module provides test cases for date utility functions including
+month calculations, period dates, and decimal conversions.
+"""
 
 from datetime import date, datetime
 
@@ -14,10 +18,13 @@ from hasta_la_vista_money.users.utils.date_utils import (
 
 
 class DateUtilsTest(TestCase):
-    """Тесты для утилит работы с датами."""
+    """Test cases for date utilities.
+
+    Tests month start/end calculations, period dates, and conversions.
+    """
 
     def test_get_month_start_end(self) -> None:
-        """Тест получения начала и конца месяца."""
+        """Test getting month start and end dates."""
         test_date = date(2024, 3, 15)
         month_start, month_end = get_month_start_end(test_date)
 
@@ -25,7 +32,7 @@ class DateUtilsTest(TestCase):
         self.assertEqual(month_end, date(2024, 3, 31))
 
     def test_get_month_start_end_none(self) -> None:
-        """Тест получения начала и конца месяца с None."""
+        """Test getting month start and end with None input."""
         month_start, _ = get_month_start_end(None)
 
         today = timezone.now().date()
@@ -33,7 +40,7 @@ class DateUtilsTest(TestCase):
         self.assertEqual(month_start, expected_start)
 
     def test_get_last_month_start_end(self) -> None:
-        """Тест получения начала и конца прошлого месяца."""
+        """Test getting last month start and end dates."""
         test_date = date(2024, 3, 15)
         last_month_start, last_month_end = get_last_month_start_end(test_date)
 
@@ -41,7 +48,7 @@ class DateUtilsTest(TestCase):
         self.assertEqual(last_month_end, date(2024, 2, 29))
 
     def test_get_period_dates_month(self) -> None:
-        """Тест получения дат периода для месяца."""
+        """Test getting period dates for month."""
         test_date = date(2024, 3, 15)
         period_dates = get_period_dates('month', test_date)
 
@@ -54,7 +61,7 @@ class DateUtilsTest(TestCase):
         self.assertIsInstance(period_dates['current_end'], datetime)
 
     def test_to_decimal(self) -> None:
-        """Тест конвертации в Decimal."""
+        """Test conversion to Decimal."""
         self.assertEqual(to_decimal(10), 10)
         self.assertEqual(to_decimal('10.5'), 10.5)
         self.assertEqual(to_decimal(None), 0)
