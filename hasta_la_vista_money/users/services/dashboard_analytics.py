@@ -50,27 +50,35 @@ def calculate_linear_trend(
         }
 
     # Преобразуем даты в числа (дни от начала)
-    days = np.array([(d - dates[0]).days for d in dates])
-    amounts = np.array([float(v) for v in values])
+    days_from_start = np.array([(d - dates[0]).days for d in dates])
+    transaction_amounts = np.array([float(v) for v in values])
 
     # Линейная регрессия: y = mx + b
-    coeffs = np.polyfit(days, amounts, 1)
-    slope, intercept = coeffs
+    regression_coefficients = np.polyfit(
+        days_from_start, transaction_amounts, 1
+    )
+    slope, intercept = regression_coefficients
 
-    fitted = np.polyval(coeffs, days)
-    ss_res = np.sum((amounts - fitted) ** 2)
-    ss_tot = np.sum((amounts - np.mean(amounts)) ** 2)
-    r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    fitted_values = np.polyval(regression_coefficients, days_from_start)
+    sum_squared_residuals = np.sum((transaction_amounts - fitted_values) ** 2)
+    total_sum_squares = np.sum(
+        (transaction_amounts - np.mean(transaction_amounts)) ** 2
+    )
+    r_squared = (
+        1 - (sum_squared_residuals / total_sum_squares)
+        if total_sum_squares > 0
+        else 0.0
+    )
 
     trend_line = [
-        {'date': dates[i].isoformat(), 'value': float(fitted[i])}
+        {'date': dates[i].isoformat(), 'value': float(fitted_values[i])}
         for i in range(len(dates))
     ]
 
     # Прогноз на 30 дней вперёд
-    last_day = days[-1]
+    last_day = days_from_start[-1]
     forecast_days = np.arange(last_day + 1, last_day + 31)
-    forecast_values = np.polyval(coeffs, forecast_days)
+    forecast_values = np.polyval(regression_coefficients, forecast_days)
     forecast = [
         {
             'date': (dates[-1] + timedelta(days=int(d - last_day))).isoformat(),

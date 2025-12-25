@@ -13,7 +13,7 @@ from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.income.services.income_ops import IncomeOps
+    from hasta_la_vista_money.income.services.income_ops import IncomeService
 
 
 class IncomeOpsTest(TestCase):
@@ -55,7 +55,7 @@ class IncomeOpsTest(TestCase):
         self.container.core.account_service.override(
             providers.Object(self.account_service),
         )
-        self.income_ops: IncomeOps = self.container.income.income_ops()
+        self.income_ops: IncomeService = self.container.income.income_ops()
 
     def tearDown(self) -> None:
         self.container.core.account_service.reset_override()
@@ -68,7 +68,7 @@ class IncomeOpsTest(TestCase):
             account=self.account,
             category=self.category,
             amount=amount,
-            when=self.income.date,
+            income_date=self.income.date,
         )
 
         self.account_service.refund_to_account.assert_called_once_with(
@@ -87,7 +87,7 @@ class IncomeOpsTest(TestCase):
             account=self.account,
             category=self.category,
             amount=new_amount,
-            when=self.income.date,
+            income_date=self.income.date,
         )
 
         self.account_service.refund_to_account.assert_called_once_with(
@@ -105,7 +105,7 @@ class IncomeOpsTest(TestCase):
             account=self.alt_account,
             category=self.category,
             amount=new_amount,
-            when=self.income.date,
+            income_date=self.income.date,
         )
 
         self.account_service.apply_receipt_spend.assert_called_once_with(
@@ -124,7 +124,7 @@ class IncomeOpsTest(TestCase):
                 account=self.other_account,
                 category=self.other_category,
                 amount=Decimal('10.00'),
-                when=self.income.date,
+                income_date=self.income.date,
             )
 
     def test_update_income_rejects_foreign_income(self) -> None:
@@ -135,7 +135,7 @@ class IncomeOpsTest(TestCase):
                 account=self.other_account,
                 category=self.other_category,
                 amount=Decimal('10.00'),
-                when=self.income.date,
+                income_date=self.income.date,
             )
 
     def test_delete_income_rejects_foreign_income(self) -> None:

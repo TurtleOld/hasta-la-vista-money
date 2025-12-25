@@ -123,7 +123,7 @@ class ReceiptImportService:
             tzinfo=timezone.get_current_timezone(),
         )
 
-    def _check_exist_receipt(
+    def _check_receipt_exists(
         self,
         user: User,
         number_receipt: int | None,
@@ -142,7 +142,7 @@ class ReceiptImportService:
             number_receipt=number_receipt,
         )
 
-    def _to_decimal(self, value: Any) -> Decimal:
+    def _convert_to_decimal(self, value: Any) -> Decimal:
         """Convert value to Decimal.
 
         Args:
@@ -153,7 +153,7 @@ class ReceiptImportService:
         """
         return Decimal(str(value))
 
-    def _to_optional_decimal(self, value: Any) -> Decimal | None:
+    def _convert_to_optional_decimal(self, value: Any) -> Decimal | None:
         """Convert value to Decimal or return None.
 
         Args:
@@ -164,7 +164,7 @@ class ReceiptImportService:
         """
         if value is None:
             return None
-        return self._to_decimal(value)
+        return self._convert_to_decimal(value)
 
     @transaction.atomic
     def process_uploaded_image(
@@ -173,7 +173,7 @@ class ReceiptImportService:
         user: User,
         account: Account,
         uploaded_file: UploadedFile,
-        analyze_func: (
+        image_analysis_function: (
             Callable[[UploadedFile], str]
             | Callable[[UploadedFile, int | None], str]
             | None
@@ -188,31 +188,31 @@ class ReceiptImportService:
             user: User importing the receipt.
             account: Account to charge for the receipt.
             uploaded_file: Uploaded image file.
-            analyze_func: Optional custom analysis function. If None,
+            image_analysis_function: Optional custom analysis function. If None,
                 uses default AI analysis.
 
         Returns:
             ReceiptImportResult with success status and receipt or error.
         """
         try:
-            func = analyze_func
-            if func is None:
-                func = receipts_services.analyze_image_with_ai
+            analysis_function = image_analysis_function
+            if analysis_function is None:
+                analysis_function = receipts_services.analyze_image_with_ai
 
-            sig = inspect.signature(func)
+            sig = inspect.signature(analysis_function)
             params = list(sig.parameters.keys())
             if len(params) >= MIN_FUNCTION_PARAMS_COUNT and 'user_id' in params:
-                raw = func(uploaded_file, user_id=user.pk)  # type: ignore[call-arg]
+                raw_response = analysis_function(uploaded_file, user_id=user.pk)  # type: ignore[call-arg]
             else:
-                raw = func(uploaded_file)  # type: ignore[call-arg]
-            if raw and 'json' in raw:
-                raw = self._clean_json_response(raw)
-            data = json.loads(raw)
+                raw_response = analysis_function(uploaded_file)  # type: ignore[call-arg]
+            if raw_response and 'json' in raw_response:
+                raw_response = self._clean_json_response(raw_response)
+            receipt_data = json.loads(raw_response)
         except (json.JSONDecodeError, ValueError, TypeError):
             return ReceiptImportResult(success=False, error='invalid_file')
 
-        number_receipt = data.get('number_receipt')
-        if self._check_exist_receipt(
+        number_receipt = receipt_data.get('number_receipt')
+        if self._check_receipt_exists(
             user,
             number_receipt,
         ).exists():
@@ -222,21 +222,27 @@ class ReceiptImportService:
             user=user,
             account=account,
             receipt_data=ReceiptCreateData(
-                receipt_date=self._parse_receipt_date(data['receipt_date']),
-                total_sum=self._to_decimal(data['total_sum']),
-                number_receipt=data.get('number_receipt'),
-                nds10=self._to_optional_decimal(data.get('nds10')),
-                nds20=self._to_optional_decimal(data.get('nds20')),
-                operation_type=data.get('operation_type', 0),
+                receipt_date=self._parse_receipt_date(
+                    receipt_data['receipt_date']
+                ),
+                total_sum=self._convert_to_decimal(receipt_data['total_sum']),
+                number_receipt=receipt_data.get('number_receipt'),
+                nds10=self._convert_to_optional_decimal(
+                    receipt_data.get('nds10')
+                ),
+                nds20=self._convert_to_optional_decimal(
+                    receipt_data.get('nds20')
+                ),
+                operation_type=receipt_data.get('operation_type', 0),
             ),
             seller_data=SellerCreateData(
                 name_seller=str(
-                    data.get('name_seller', 'Неизвестный продавец')
+                    receipt_data.get('name_seller', 'Неизвестный продавец')
                 ),
-                retail_place_address=data.get('retail_place_address'),
-                retail_place=data.get('retail_place'),
+                retail_place_address=receipt_data.get('retail_place_address'),
+                retail_place=receipt_data.get('retail_place'),
             ),
-            products_data=data.get('items', []),
+            products_data=receipt_data.get('items', []),
         )
 
         return ReceiptImportResult(success=True, error=None, receipt=receipt)

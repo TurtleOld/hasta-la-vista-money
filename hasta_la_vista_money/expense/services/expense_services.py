@@ -83,7 +83,7 @@ class ExpenseService:
 
     def get_categories(self) -> Iterable[dict[str, str | int | None]]:
         """Get expense categories for the user."""
-        qs = (
+        categories_queryset = (
             self.user.category_expense_users.select_related('user')
             .values(
                 'id',
@@ -93,7 +93,9 @@ class ExpenseService:
             )
             .order_by('name', 'parent_category')
         )
-        return cast('Iterable[dict[str, str | int | None]]', qs)
+        return cast(
+            'Iterable[dict[str, str | int | None]]', categories_queryset
+        )
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
         """Get categories queryset for forms."""
@@ -178,7 +180,7 @@ class ExpenseService:
             Automatically reconciles account balances if the account
             or amount changes.
         """
-        expense_updated: Expense = get_queryset_type_income_expenses(
+        updated_expense: Expense = get_queryset_type_income_expenses(
             expense.pk,
             Expense,
             form,
@@ -186,26 +188,26 @@ class ExpenseService:
 
         amount = form.cleaned_data['amount']
         account = form.cleaned_data['account']
-        account_balance = self.account_repository.get_by_id(account.pk)
-        old_account_balance = self.account_repository.get_by_id(
-            expense_updated.account.pk,
+        target_account = self.account_repository.get_by_id(account.pk)
+        current_account = self.account_repository.get_by_id(
+            updated_expense.account.pk,
         )
 
-        if account_balance.user != self.user:
-            error_msg = 'У вас нет прав для выполнения этого действия'
-            raise ValueError(error_msg)
+        if target_account.user != self.user:
+            error_message = 'У вас нет прав для выполнения этого действия'
+            raise ValueError(error_message)
 
         self.account_service.reconcile_account_balances(
-            old_account=old_account_balance,
-            new_account=account_balance,
-            old_total_sum=expense_updated.amount,
+            old_account=current_account,
+            new_account=target_account,
+            old_total_sum=updated_expense.amount,
             new_total_sum=amount,
         )
 
-        expense_updated.user = self.user
-        expense_updated.amount = amount
-        expense_updated.account = account
-        expense_updated.save()
+        updated_expense.user = self.user
+        updated_expense.amount = amount
+        updated_expense.account = account
+        updated_expense.save()
 
     def delete_expense(
         self,

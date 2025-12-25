@@ -242,7 +242,7 @@ class IncomeCreateView(
                 account=account,
                 category=category,
                 amount=amount,
-                when=date,
+                income_date=date,
             )
             messages.success(request, constants.SUCCESS_INCOME_ADDED)
             return HttpResponseRedirect(str(self.success_url))
@@ -383,7 +383,7 @@ class IncomeUpdateView(
                 account=account,
                 category=category,
                 amount=amount,
-                when=date,
+                income_date=date,
             )
             messages.success(request, constants.SUCCESS_INCOME_UPDATE)
             return super().form_valid(form)
