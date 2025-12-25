@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     )
 
 
-class IncomeOps:
+class IncomeService:
     """Service for income operations.
 
     Handles creation, updating, deletion, and copying of income transactions
@@ -29,7 +29,7 @@ class IncomeOps:
         account_service: AccountServiceProtocol,
         income_repository: 'IncomeRepository',
     ) -> None:
-        """Initialize IncomeOps.
+        """Initialize IncomeService.
 
         Args:
             account_service: Service for account balance operations.
@@ -77,7 +77,7 @@ class IncomeOps:
         account: Account,
         category: IncomeCategory,
         amount: Decimal,
-        when: date,
+        income_date: date,
     ) -> Income:
         """Add a new income transaction.
 
@@ -86,7 +86,7 @@ class IncomeOps:
             account: Account to add income to.
             category: Income category.
             amount: Income amount.
-            when: Date of income.
+            income_date: Date of income.
 
         Returns:
             Created Income instance.
@@ -101,7 +101,7 @@ class IncomeOps:
                 account=account,
                 category=category,
                 amount=amount,
-                date=when,
+                date=income_date,
             )
             self.account_service.refund_to_account(account, amount)
         return income
@@ -114,7 +114,7 @@ class IncomeOps:
         account: Account,
         category: IncomeCategory,
         amount: Decimal,
-        when: date,
+        income_date: date,
     ) -> Income:
         """Update an existing income transaction.
 
@@ -126,7 +126,7 @@ class IncomeOps:
             account: New account for the income.
             category: New category for the income.
             amount: New amount for the income.
-            when: New date for the income.
+            income_date: New date for the income.
 
         Returns:
             Updated Income instance.
@@ -159,7 +159,7 @@ class IncomeOps:
             income.account = account
             income.category = category
             income.amount = amount
-            income.date = when
+            income.date = income_date
             income.save()
         return income
 

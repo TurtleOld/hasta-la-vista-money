@@ -311,7 +311,7 @@ class ReceiptImportService:
         user: User,
         account: Account,
         uploaded_file: UploadedFile,
-        analyze_func: (
+        image_analysis_function: (
             Callable[[UploadedFile], str]
             | Callable[[UploadedFile, int | None], str]
             | None
@@ -326,14 +326,14 @@ class ReceiptImportService:
             user: User importing the receipt.
             account: Account to charge for the receipt.
             uploaded_file: Uploaded image file.
-            analyze_func: Optional custom analysis function. If None,
+            image_analysis_function: Optional custom analysis function. If None,
                 uses default AI analysis.
 
         Returns:
             ReceiptImportResult with success status and receipt or error.
         """
         try:
-            func = self._get_analysis_function(analyze_func)
+            func = self._get_analysis_function(image_analysis_function)
             raw_json = self._analyze_image(uploaded_file, func, user.pk)
             receipt_data = self._parse_receipt_json(raw_json)
         except (json.JSONDecodeError, ValueError, TypeError):

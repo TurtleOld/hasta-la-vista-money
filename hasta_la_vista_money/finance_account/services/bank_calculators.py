@@ -80,7 +80,7 @@ class RaiffeisenbankCalculator:
         self.expense_repository = expense_repository
         self.receipt_repository = receipt_repository
 
-    def _get_first_purchase_in_month(
+    def _find_first_purchase_in_month(
         self,
         account: Account,
         month_start: datetime,
@@ -145,7 +145,7 @@ class RaiffeisenbankCalculator:
         Returns:
             Tuple of (grace_end, payments_start, payments_end) datetimes.
         """
-        first_purchase = self._get_first_purchase_in_month(
+        first_purchase = self._find_first_purchase_in_month(
             account,
             purchase_start,
         )

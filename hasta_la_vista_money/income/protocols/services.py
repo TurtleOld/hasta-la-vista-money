@@ -8,7 +8,7 @@ from hasta_la_vista_money.users.models import User
 
 
 @runtime_checkable
-class IncomeOpsProtocol(Protocol):
+class IncomeServiceProtocol(Protocol):
     def add_income(
         self,
         *,
@@ -16,7 +16,7 @@ class IncomeOpsProtocol(Protocol):
         account: Account,
         category: IncomeCategory,
         amount: Decimal,
-        when: date,
+        income_date: date,
     ) -> Income: ...
 
     def update_income(
@@ -27,7 +27,7 @@ class IncomeOpsProtocol(Protocol):
         account: Account,
         category: IncomeCategory,
         amount: Decimal,
-        when: date,
+        income_date: date,
     ) -> Income: ...
 
     def delete_income(

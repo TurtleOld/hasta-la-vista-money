@@ -104,25 +104,29 @@ class CreditCalculationService:
                     datetime.combine(end_date, time.max),
                 )
 
-        expense_qs = self.expense_repository.filter(account=account)
-        income_qs = self.income_repository.filter(account=account)
-        receipt_qs = self.receipt_repository.filter(account=account)
+        expenses_queryset = self.expense_repository.filter(account=account)
+        income_queryset = self.income_repository.filter(account=account)
+        receipts_queryset = self.receipt_repository.filter(account=account)
 
         if start_date_dt and end_date_dt:
-            expense_qs = expense_qs.filter(
+            expenses_queryset = expenses_queryset.filter(
                 date__range=(start_date_dt, end_date_dt),
             )
-            income_qs = income_qs.filter(
+            income_queryset = income_queryset.filter(
                 date__range=(start_date_dt, end_date_dt),
             )
-            receipt_qs = receipt_qs.filter(
+            receipts_queryset = receipts_queryset.filter(
                 receipt_date__range=(start_date_dt, end_date_dt),
             )
 
-        total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or 0
-        total_income = income_qs.aggregate(total=Sum('amount'))['total'] or 0
+        total_expense = (
+            expenses_queryset.aggregate(total=Sum('amount'))['total'] or 0
+        )
+        total_income = (
+            income_queryset.aggregate(total=Sum('amount'))['total'] or 0
+        )
 
-        receipt_aggregation = receipt_qs.aggregate(
+        receipt_aggregation = receipts_queryset.aggregate(
             total_expense=Coalesce(
                 Sum(
                     'total_sum',
@@ -148,7 +152,7 @@ class CreditCalculationService:
         )
         return Decimal(str(result))
 
-    def _get_first_purchase_in_month(
+    def _find_first_purchase_in_month(
         self,
         account: Account,
         month_start: datetime,
@@ -215,10 +219,12 @@ class CreditCalculationService:
         purchase_start = timezone.make_aware(
             datetime.combine(purchase_month.replace(day=1), time.min),
         )
-        last_day = monthrange(purchase_start.year, purchase_start.month)[1]
+        last_day_of_month = monthrange(
+            purchase_start.year, purchase_start.month
+        )[1]
         purchase_end = timezone.make_aware(
             datetime.combine(
-                purchase_start.date().replace(day=last_day),
+                purchase_start.date().replace(day=last_day_of_month),
                 time.max,
             ),
         )
@@ -272,31 +278,31 @@ class CreditCalculationService:
             payments_end: End of payments period.
 
         Returns:
-            Tuple of (debt_for_month, payments_for_period, final_debt).
+            Tuple of (purchase_period_debt, payment_period_debt, total_debt).
         """
-        debt_for_month = self.get_credit_card_debt(
+        purchase_period_debt = self.get_credit_card_debt(
             account,
             purchase_start,
             purchase_end,
         )
 
         if account.bank in SUPPORTED_BANKS:
-            payments_for_period = self.get_credit_card_debt(
+            payment_period_debt = self.get_credit_card_debt(
                 account,
                 payments_start,
                 payments_end,
             )
         else:
-            payments_for_period = Decimal(str(constants.ZERO))
+            payment_period_debt = Decimal(str(constants.ZERO))
 
-        final_debt = (debt_for_month or constants.ZERO) + (
-            payments_for_period or constants.ZERO
+        total_debt = (purchase_period_debt or constants.ZERO) + (
+            payment_period_debt or constants.ZERO
         )
 
         return (  # type: ignore[return-value]
-            debt_for_month or constants.ZERO,
-            payments_for_period or constants.ZERO,
-            final_debt,
+            purchase_period_debt or constants.ZERO,
+            payment_period_debt or constants.ZERO,
+            total_debt,
         )
 
     def _ensure_timezone_aware(self, dt: datetime) -> datetime:
@@ -345,7 +351,7 @@ class CreditCalculationService:
             )
         )
 
-        debt_for_month, payments_for_period, final_debt = (
+        purchase_period_debt, payment_period_debt, total_debt = (
             self._calculate_debt_info(
                 account,
                 purchase_start,
@@ -362,11 +368,11 @@ class CreditCalculationService:
             'purchase_start': purchase_start,
             'purchase_end': purchase_end,
             'grace_end': grace_end,
-            'debt_for_month': debt_for_month,
-            'payments_for_period': payments_for_period,
-            'final_debt': final_debt,
+            'debt_for_month': purchase_period_debt,
+            'payments_for_period': payment_period_debt,
+            'final_debt': total_debt,
             'is_overdue': (
-                timezone.now() > grace_end and final_debt > constants.ZERO
+                timezone.now() > grace_end and total_debt > constants.ZERO
             ),
             'days_until_due': (
                 (grace_end.date() - timezone.now().date()).days
@@ -412,13 +418,13 @@ class CreditCalculationService:
         purchase_start = timezone.make_aware(
             datetime.combine(purchase_start_date, time.min),
         )
-        last_day = monthrange(
+        last_day_of_month = monthrange(
             purchase_start_date.year,
             purchase_start_date.month,
         )[1]
         purchase_end = timezone.make_aware(
             datetime.combine(
-                purchase_start_date.replace(day=last_day),
+                purchase_start_date.replace(day=last_day_of_month),
                 time.max,
             ),
         )
@@ -458,10 +464,12 @@ class CreditCalculationService:
             List of 3 statement dates (monthly intervals).
         """
         statement_dates = []
-        current_date = first_statement_date
+        current_statement_date = first_statement_date
         for _ in range(constants.STATEMENT_DATES_COUNT):
-            statement_dates.append(current_date)
-            current_date = current_date + relativedelta(months=constants.ONE)
+            statement_dates.append(current_statement_date)
+            current_statement_date = current_statement_date + relativedelta(
+                months=constants.ONE
+            )
         return statement_dates
 
     def _calculate_payment_schedule(
@@ -479,10 +487,10 @@ class CreditCalculationService:
             Tuple of (payments_schedule, final_debt).
         """
         payments_schedule: list[PaymentScheduleStatementDict] = []
-        remaining_debt = initial_debt
+        outstanding_debt = initial_debt
 
         for i, statement_date in enumerate(statement_dates):
-            min_payment = remaining_debt * Decimal(
+            min_payment = outstanding_debt * Decimal(
                 str(constants.MIN_PAYMENT_PERCENTAGE),
             )
             payment_due_date = statement_date + relativedelta(
@@ -495,16 +503,16 @@ class CreditCalculationService:
                     {
                         'statement_date': statement_date,
                         'payment_due_date': payment_due_date,
-                        'remaining_debt': remaining_debt,
+                        'remaining_debt': outstanding_debt,
                         'min_payment': min_payment,
                         'statement_number': i + 1,
                     },
                 ),
             )
 
-            remaining_debt = remaining_debt - min_payment
+            outstanding_debt = outstanding_debt - min_payment
 
-        return payments_schedule, remaining_debt
+        return payments_schedule, outstanding_debt
 
     def _calculate_grace_end_date(self, first_purchase: datetime) -> datetime:
         """Calculate grace end date for Raiffeisenbank.
@@ -546,7 +554,7 @@ class CreditCalculationService:
             )
         )
 
-        first_purchase = self._get_first_purchase_in_month(
+        first_purchase = self._find_first_purchase_in_month(
             account,
             purchase_start,
         )
