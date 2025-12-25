@@ -1,10 +1,11 @@
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
+from django.utils import timezone
 from typing_extensions import TypedDict
 
 from hasta_la_vista_money.budget.repositories import PlanningRepository
@@ -224,12 +225,18 @@ class BudgetService:
         if not months:
             return {}
 
+        start_date = timezone.make_aware(
+            datetime.combine(months[0], time.min),
+        )
+        end_date = timezone.make_aware(
+            datetime.combine(months[-1], time.max),
+        )
         expenses = (
             self.expense_repository.filter(
                 user=user,
                 category__in=expense_categories,
-                date__gte=months[0],
-                date__lte=months[-1],
+                date__gte=start_date,
+                date__lte=end_date,
             )
             .annotate(month=TruncMonth('date'))
             .values('category_id', 'month')
@@ -303,12 +310,18 @@ class BudgetService:
         if not months:
             return {}
 
+        start_date = timezone.make_aware(
+            datetime.combine(months[0], time.min),
+        )
+        end_date = timezone.make_aware(
+            datetime.combine(months[-1], time.max),
+        )
         income_queryset = (
             self.income_repository.filter(
                 user=user,
                 category__in=income_categories,
-                date__gte=months[0],
-                date__lte=months[-1],
+                date__gte=start_date,
+                date__lte=end_date,
             )
             .annotate(month=TruncMonth('date'))
             .values('category_id', 'month')
@@ -479,12 +492,18 @@ class BudgetService:
         if not months:
             return {}
 
+        start_date = timezone.make_aware(
+            datetime.combine(months[0], time.min),
+        )
+        end_date = timezone.make_aware(
+            datetime.combine(months[-1], time.max),
+        )
         expenses = (
             self.expense_repository.filter(
                 user=user,
                 category__in=expense_categories,
-                date__gte=months[0],
-                date__lte=months[-1],
+                date__gte=start_date,
+                date__lte=end_date,
             )
             .annotate(month=TruncMonth('date'))
             .values('category_id', 'month')
@@ -605,12 +624,18 @@ class BudgetService:
         if not months:
             return {}
 
+        start_date = timezone.make_aware(
+            datetime.combine(months[0], time.min),
+        )
+        end_date = timezone.make_aware(
+            datetime.combine(months[-1], time.max),
+        )
         income_queryset = (
             self.income_repository.filter(
                 user=user,
                 category__in=income_categories,
-                date__gte=months[0],
-                date__lte=months[-1],
+                date__gte=start_date,
+                date__lte=end_date,
             )
             .annotate(month=TruncMonth('date'))
             .values('category_id', 'month')
@@ -732,12 +757,18 @@ class BudgetService:
         if not months:
             return {}
 
+        start_date = timezone.make_aware(
+            datetime.combine(months[0], time.min),
+        )
+        end_date = timezone.make_aware(
+            datetime.combine(months[-1], time.max),
+        )
         expenses = (
             self.expense_repository.filter(
                 user=user,
                 category__in=expense_categories,
-                date__gte=months[0],
-                date__lte=months[-1],
+                date__gte=start_date,
+                date__lte=end_date,
             )
             .annotate(month=TruncMonth('date'))
             .values('category_id', 'month')
@@ -852,12 +883,18 @@ class BudgetService:
         if not months:
             return {}
 
+        start_date = timezone.make_aware(
+            datetime.combine(months[0], time.min),
+        )
+        end_date = timezone.make_aware(
+            datetime.combine(months[-1], time.max),
+        )
         incomes = (
             self.income_repository.filter(
                 user=user,
                 category__in=income_categories,
-                date__gte=months[0],
-                date__lte=months[-1],
+                date__gte=start_date,
+                date__lte=end_date,
             )
             .annotate(month=TruncMonth('date'))
             .values('category_id', 'month')

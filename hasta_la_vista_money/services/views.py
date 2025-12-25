@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Generator
+from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypeVar, Union, cast
 
@@ -9,6 +10,7 @@ from django.db.models.functions import TruncMonth
 from django.forms import ModelForm
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from hasta_la_vista_money.users.models import User
 
@@ -259,6 +261,9 @@ def get_new_type_operation[M: Model](
 
     if isinstance(expense, Income):
         income_category: IncomeCategory = expense.category
+        date_value = expense.date
+        if isinstance(date_value, datetime) and timezone.is_naive(date_value):
+            date_value = timezone.make_aware(date_value)
         return cast(
             'M',
             Income.objects.create(
@@ -266,10 +271,13 @@ def get_new_type_operation[M: Model](
                 account=expense.account,
                 category=income_category,
                 amount=expense.amount,
-                date=expense.date,
+                date=date_value,
             ),
         )
     expense_category: ExpenseCategory = expense.category
+    date_value = expense.date
+    if isinstance(date_value, datetime) and timezone.is_naive(date_value):
+        date_value = timezone.make_aware(date_value)
     return cast(
         'M',
         Expense.objects.create(
@@ -277,6 +285,6 @@ def get_new_type_operation[M: Model](
             account=expense.account,
             category=expense_category,
             amount=expense.amount,
-            date=expense.date,
+            date=date_value,
         ),
     )

@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.protocols.services import AccountServiceProtocol
@@ -159,7 +160,18 @@ class IncomeService:
             income.account = account
             income.category = category
             income.amount = amount
-            income.date = income_date
+            date_value = income_date
+            if isinstance(date_value, date) and not isinstance(
+                date_value, datetime
+            ):
+                date_value = timezone.make_aware(
+                    datetime.combine(date_value, time.min),
+                )
+            elif isinstance(date_value, datetime) and timezone.is_naive(
+                date_value
+            ):
+                date_value = timezone.make_aware(date_value)
+            income.date = date_value
             income.save()
         return income
 

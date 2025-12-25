@@ -4,11 +4,12 @@ This module provides data access layer for Expense model,
 including filtering, aggregation, and CRUD operations.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Any
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
+from django.utils import timezone
 
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import Account
@@ -100,6 +101,18 @@ class ExpenseRepository:
         Returns:
             Expense: Created expense instance.
         """
+        if 'date' in kwargs:
+            date_value = kwargs['date']
+            if isinstance(date_value, date) and not isinstance(
+                date_value, datetime
+            ):
+                kwargs['date'] = timezone.make_aware(
+                    datetime.combine(date_value, time.min),
+                )
+            elif isinstance(date_value, datetime) and timezone.is_naive(
+                date_value
+            ):
+                kwargs['date'] = timezone.make_aware(date_value)
         return Expense.objects.create(**kwargs)
 
     def filter(self, **kwargs: object) -> QuerySet[Expense]:
