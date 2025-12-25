@@ -27,7 +27,14 @@ class ReceiptImportServiceTestsData(TypedDict):
 
 
 class ReceiptImportServiceTests(TestCase):
+    """Test cases for ReceiptImportService.
+
+    Tests receipt import functionality including image processing,
+    JSON parsing, validation, and receipt creation.
+    """
+
     def setUp(self) -> None:
+        """Set up test data."""
         self.user = User.objects.create_user(
             username='tester',
             password='pass',
@@ -45,6 +52,7 @@ class ReceiptImportServiceTests(TestCase):
         )
 
     def test_process_uploaded_image_success(self) -> None:
+        """Test successful receipt import from uploaded image."""
         # Prepare fake image file
         uploaded_file = SimpleUploadedFile(
             'test.jpg',

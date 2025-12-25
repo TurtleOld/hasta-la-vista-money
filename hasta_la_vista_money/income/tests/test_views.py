@@ -11,8 +11,10 @@ from hasta_la_vista_money.users.models import User
 
 
 class IncomeViewsTest(TestCase):
-    """
-    Test cases for income-related views.
+    """Test cases for income-related views.
+
+    Tests income list, create, update, delete, and copy operations
+    through HTTP requests.
     """
 
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
@@ -23,6 +25,7 @@ class IncomeViewsTest(TestCase):
     ]
 
     def setUp(self) -> None:
+        """Set up test data."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.income = Income.objects.get(pk=1)
@@ -30,11 +33,13 @@ class IncomeViewsTest(TestCase):
         self.parent_category = IncomeCategory.objects.get(name='Зарплата')
 
     def test_list_income(self) -> None:
+        """Test income list view returns success status."""
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('income:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_create(self) -> None:
+        """Test creating a new income through POST request."""
         self.client.force_login(self.user)
         url = reverse_lazy('income:create')
         new_income = {
@@ -48,6 +53,7 @@ class IncomeViewsTest(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_update(self) -> None:
+        """Test updating an existing income through POST request."""
         self.client.force_login(self.user)
         url = reverse_lazy('income:change', args=(self.income.pk,))
         update_income = {
@@ -62,12 +68,14 @@ class IncomeViewsTest(TestCase):
         self.assertEqual(updated_income.amount, 25000)
 
     def test_income_delete(self) -> None:
+        """Test deleting an income through POST request."""
         self.client.force_login(self.user)
         url = reverse_lazy('income:delete_income', args=(self.income.pk,))
         response = self.client.post(url, follow=True)
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_copy_view(self) -> None:
+        """Test copying an income through POST request."""
         self.client.force_login(self.user)
         response = self.client.post(
             reverse_lazy('income:income_copy', args=[self.income.pk]),
@@ -75,6 +83,7 @@ class IncomeViewsTest(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
     def test_income_update_view_get(self) -> None:
+        """Test income update view GET request returns form."""
         self.client.force_login(self.user)
         response = self.client.get(
             reverse_lazy('income:change', args=[self.income.pk]),

@@ -1,3 +1,9 @@
+"""Tests for reports views.
+
+This module provides test cases for ReportView and ReportsAnalyticMixin,
+including dataset collection, data transformation, and chart preparation.
+"""
+
 from datetime import date
 from decimal import Decimal
 from typing import ClassVar
@@ -14,6 +20,12 @@ from hasta_la_vista_money.users.models import User
 
 
 class ReportViewTest(TestCase):
+    """Test cases for ReportView.
+
+    Tests report view functionality including dataset collection,
+    data transformation, chart preparation, and authentication handling.
+    """
+
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
@@ -22,11 +34,13 @@ class ReportViewTest(TestCase):
     ]
 
     def setUp(self) -> None:
+        """Set up test data."""
         self.user = User.objects.get(pk=1)
         self.account = Account.objects.get(pk=1)
         self.factory = RequestFactory()
 
     def test_collect_datasets_authenticated(self) -> None:
+        """Test collecting datasets for authenticated user."""
         request = self.factory.get('/')
         request.user = self.user
         expense_dataset, income_dataset = ReportView.collect_datasets(request)
@@ -34,12 +48,14 @@ class ReportViewTest(TestCase):
         self.assertIsNotNone(income_dataset)
 
     def test_collect_datasets_anonymous_user(self) -> None:
+        """Test that collecting datasets for anonymous user raises error."""
         request = self.factory.get('/')
         request.user = AnonymousUser()
         with self.assertRaises(TypeError):
             ReportView.collect_datasets(request)
 
     def test_transform_data(self) -> None:
+        """Test transforming dataset to dates and amounts."""
         dataset = [
             {'date': '2025-01-01', 'total_amount': 100.0},
             {'date': '2025-01-02', 'total_amount': 200.0},
@@ -49,6 +65,7 @@ class ReportViewTest(TestCase):
         self.assertEqual(len(amounts), 2)
 
     def test_transform_data_expense(self) -> None:
+        """Test transforming expense dataset to dates and amounts."""
         dataset = [
             {'date': '2025-01-01', 'total_amount': 100.0},
         ]
@@ -57,6 +74,7 @@ class ReportViewTest(TestCase):
         self.assertEqual(len(amounts), 1)
 
     def test_transform_data_income(self) -> None:
+        """Test transforming income dataset to dates and amounts."""
         dataset = [
             {'date': '2025-01-01', 'total_amount': 100.0},
         ]
@@ -65,6 +83,7 @@ class ReportViewTest(TestCase):
         self.assertEqual(len(amounts), 1)
 
     def test_unique_data(self) -> None:
+        """Test aggregating duplicate dates in dataset."""
         dates = ['2025-01-01', '2025-01-01', '2025-01-02']
         amounts = [10.0, 5.0, 3.0]
         u_dates, u_amounts = ReportView.unique_data(dates, amounts)
@@ -72,6 +91,7 @@ class ReportViewTest(TestCase):
         self.assertEqual(u_amounts[0], 15.0)
 
     def test_unique_expense_data(self) -> None:
+        """Test aggregating duplicate dates in expense dataset."""
         dates = ['2025-01-01', '2025-01-01']
         amounts = [10.0, 5.0]
         u_dates, u_amounts = ReportView.unique_expense_data(dates, amounts)
@@ -79,6 +99,7 @@ class ReportViewTest(TestCase):
         self.assertEqual(u_amounts[0], 15.0)
 
     def test_unique_income_data(self) -> None:
+        """Test aggregating duplicate dates in income dataset."""
         dates = ['2025-01-01', '2025-01-01']
         amounts = [10.0, 5.0]
         u_dates, u_amounts = ReportView.unique_income_data(dates, amounts)
@@ -86,18 +107,21 @@ class ReportViewTest(TestCase):
         self.assertEqual(u_amounts[0], 15.0)
 
     def test_pie_expense_category_authenticated(self) -> None:
+        """Test pie chart data for expense categories (authenticated)."""
         request = self.factory.get('/')
         request.user = self.user
         charts_data = ReportView.pie_expense_category(request)
         self.assertIsInstance(charts_data, list)
 
     def test_pie_expense_category_anonymous_user(self) -> None:
+        """Test that getting pie chart data for anonymous user raises error."""
         request = self.factory.get('/')
         request.user = AnonymousUser()
         with self.assertRaises(TypeError):
             ReportView.pie_expense_category(request)
 
     def test_get_method(self) -> None:
+        """Test GET method of ReportView."""
         self.client.force_login(self.user)
         with patch.object(ReportView, 'prepare_budget_charts') as mock_prepare:
             mock_prepare.return_value = {'test': 'data'}
@@ -108,6 +132,7 @@ class ReportViewTest(TestCase):
             self.assertEqual(response.status_code, 200)
 
     def test_get_expense_data(self) -> None:
+        """Test getting expense data for categories and months."""
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
@@ -116,6 +141,7 @@ class ReportViewTest(TestCase):
             self.assertIsInstance(result, dict)
 
     def test_get_expense_data_empty_months(self) -> None:
+        """Test getting expense data with empty months list."""
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
@@ -124,6 +150,7 @@ class ReportViewTest(TestCase):
             self.assertEqual(len(result), 0)
 
     def test_get_income_data(self) -> None:
+        """Test getting income data for categories and months."""
         view = ReportView()
         category = IncomeCategory.objects.filter(user=self.user).first()
         if category:
@@ -132,6 +159,7 @@ class ReportViewTest(TestCase):
             self.assertIsInstance(result, dict)
 
     def test_get_income_data_empty_months(self) -> None:
+        """Test getting income data with empty months list."""
         view = ReportView()
         category = IncomeCategory.objects.filter(user=self.user).first()
         if category:
@@ -140,6 +168,7 @@ class ReportViewTest(TestCase):
             self.assertEqual(len(result), 0)
 
     def test_calculate_totals(self) -> None:
+        """Test calculating totals for categories and months."""
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
@@ -152,6 +181,7 @@ class ReportViewTest(TestCase):
             self.assertEqual(len(totals), 1)
 
     def test_calculate_category_totals(self) -> None:
+        """Test calculating category totals from fact map."""
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
@@ -166,6 +196,7 @@ class ReportViewTest(TestCase):
             self.assertIn(category.pk, totals)
 
     def test_calculate_pie_data(self) -> None:
+        """Test calculating pie chart data (labels and values)."""
         view = ReportView()
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category:
@@ -180,12 +211,14 @@ class ReportViewTest(TestCase):
             self.assertIsInstance(values, list)
 
     def test_calculate_pie_data_empty(self) -> None:
+        """Test calculating pie chart data with empty inputs."""
         view = ReportView()
         labels, values = view._calculate_pie_data([], [], {})
         self.assertEqual(len(labels), 0)
         self.assertEqual(len(values), 0)
 
     def test_prepare_budget_charts(self) -> None:
+        """Test preparing budget charts data for authenticated user."""
         request = self.factory.get('/')
         request.user = self.user
         view = ReportView()
@@ -194,6 +227,7 @@ class ReportViewTest(TestCase):
         self.assertIsInstance(charts_data, dict)
 
     def test_prepare_budget_charts_anonymous_user(self) -> None:
+        """Test that preparing budget charts for anonymous user raises error."""
         request = self.factory.get('/')
         request.user = AnonymousUser()
         view = ReportView()
@@ -203,7 +237,13 @@ class ReportViewTest(TestCase):
 
 
 class ReportsAnalyticMixinTest(TestCase):
+    """Test cases for ReportsAnalyticMixin.
+
+    Tests mixin functionality for report analytics.
+    """
+
     def test_get_context_report(self) -> None:
+        """Test getting context data for reports."""
         mixin = ReportsAnalyticMixin()
         context = mixin.get_context_report()
         self.assertIsInstance(context, dict)
