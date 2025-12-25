@@ -1,5 +1,6 @@
+from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 from django.db.models import QuerySet
 
@@ -9,6 +10,7 @@ from hasta_la_vista_money.users.models import User
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import (
         Account,
+        TransferMoneyLog,
     )
     from hasta_la_vista_money.finance_account.services import (
         GracePeriodInfoDict,
@@ -52,8 +54,8 @@ class AccountServiceProtocol(Protocol):
     def get_credit_card_debt(
         self,
         account: 'Account',
-        start_date: Any | None = None,
-        end_date: Any | None = None,
+        start_date: date | datetime | None = None,
+        end_date: date | datetime | None = None,
     ) -> Decimal | None:
         """Calculate credit card debt for a period.
 
@@ -70,7 +72,7 @@ class AccountServiceProtocol(Protocol):
     def calculate_grace_period_info(
         self,
         account: 'Account',
-        purchase_month: Any,
+        purchase_month: date | datetime,
     ) -> 'GracePeriodInfoDict':
         """Calculate grace period information.
 
@@ -86,7 +88,7 @@ class AccountServiceProtocol(Protocol):
     def calculate_raiffeisenbank_payment_schedule(
         self,
         account: 'Account',
-        purchase_month: Any,
+        purchase_month: date | datetime,
     ) -> 'RaiffeisenbankScheduleDict':
         """Calculate Raiffeisenbank payment schedule.
 
@@ -148,7 +150,7 @@ class AccountServiceProtocol(Protocol):
         self,
         user: User,
         limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
-    ) -> Any:
+    ) -> QuerySet['TransferMoneyLog']:
         """Get transfer logs for a user.
 
         Args:
@@ -192,11 +194,11 @@ class AccountServiceProtocol(Protocol):
         """
         ...
 
-    def get_sum_all_accounts(self, accounts: Any) -> Decimal:
+    def get_sum_all_accounts(self, accounts: QuerySet['Account']) -> Decimal:
         """Calculate total balance for accounts.
 
         Args:
-            accounts: Accounts to sum.
+            accounts: QuerySet of accounts to sum.
 
         Returns:
             Total balance as Decimal.

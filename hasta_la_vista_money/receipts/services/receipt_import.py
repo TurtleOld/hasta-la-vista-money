@@ -142,18 +142,21 @@ class ReceiptImportService:
             number_receipt=number_receipt,
         )
 
-    def _to_decimal(self, value: Any) -> Decimal:
+    def _convert_to_decimal(self, value: str | int | float | Decimal) -> Decimal:
         """Convert value to Decimal.
 
         Args:
-            value: Value to convert.
+            value: Value to convert (str, int, float, or Decimal).
 
         Returns:
             Decimal instance.
         """
         return Decimal(str(value))
 
-    def _to_optional_decimal(self, value: Any) -> Decimal | None:
+    def _convert_to_optional_decimal(
+        self,
+        value: str | int | float | Decimal | None,
+    ) -> Decimal | None:
         """Convert value to Decimal or return None.
 
         Args:
@@ -164,7 +167,142 @@ class ReceiptImportService:
         """
         if value is None:
             return None
-        return self._to_decimal(value)
+        return self._convert_to_decimal(value)
+
+    def _get_analysis_function(
+        self,
+        analyze_func: (
+            Callable[[UploadedFile], str]
+            | Callable[[UploadedFile, int | None], str]
+            | None
+        ),
+    ) -> Callable[[UploadedFile], str] | Callable[[UploadedFile, int | None], str]:
+        """Get analysis function to use for image processing.
+
+        Args:
+            analyze_func: Optional custom analysis function.
+
+        Returns:
+            Analysis function to use (custom or default AI function).
+        """
+        if analyze_func is None:
+            return receipts_services.analyze_image_with_ai
+        return analyze_func
+
+    def _analyze_image(
+        self,
+        uploaded_file: UploadedFile,
+        analyze_func: (
+            Callable[[UploadedFile], str]
+            | Callable[[UploadedFile, int | None], str]
+        ),
+        user_id: int | None = None,
+    ) -> str:
+        """Analyze receipt image and extract JSON data.
+
+        Args:
+            uploaded_file: Uploaded image file.
+            analyze_func: Function to analyze the image.
+            user_id: Optional user ID for rate limiting.
+
+        Returns:
+            JSON string with receipt data.
+
+        Raises:
+            json.JSONDecodeError: If JSON parsing fails.
+            ValueError: If data processing fails.
+            TypeError: If data type conversion fails.
+        """
+        sig = inspect.signature(analyze_func)
+        params = list(sig.parameters.keys())
+        if len(params) >= MIN_FUNCTION_PARAMS_COUNT and 'user_id' in params:
+            raw = analyze_func(uploaded_file, user_id=user_id)  # type: ignore[call-arg]
+        else:
+            raw = analyze_func(uploaded_file)  # type: ignore[call-arg]
+
+        if raw and 'json' in raw:
+            raw = self._clean_json_response(raw)
+
+        return raw
+
+    def _parse_receipt_json(self, json_string: str) -> dict[str, Any]:
+        """Parse JSON string to receipt data dictionary.
+
+        Args:
+            json_string: JSON string with receipt data.
+
+        Returns:
+            Dictionary with receipt data.
+
+        Raises:
+            json.JSONDecodeError: If JSON parsing fails.
+        """
+        return json.loads(json_string)
+
+    def _validate_receipt_data(
+        self,
+        user: User,
+        receipt_data: dict[str, Any],
+    ) -> ReceiptImportResult | None:
+        """Validate receipt data and check for duplicates.
+
+        Args:
+            user: User importing the receipt.
+            receipt_data: Parsed receipt data dictionary.
+
+        Returns:
+            ReceiptImportResult with error if validation fails, None otherwise.
+        """
+        number_receipt = receipt_data.get('number_receipt')
+        if number_receipt and self._check_exist_receipt(
+            user,
+            number_receipt,
+        ).exists():
+            return ReceiptImportResult(success=False, error='exists')
+        return None
+
+    def _create_receipt_from_data(
+        self,
+        user: User,
+        account: Account,
+        receipt_data: dict[str, Any],
+    ) -> Receipt:
+        """Create receipt from parsed data dictionary.
+
+        Args:
+            user: User creating the receipt.
+            account: Account to charge for the receipt.
+            receipt_data: Parsed receipt data dictionary.
+
+        Returns:
+            Created Receipt instance.
+        """
+        return self.receipt_creator_service.create_receipt_with_products(
+            user=user,
+            account=account,
+            receipt_data=ReceiptCreateData(
+                receipt_date=self._parse_receipt_date(
+                    receipt_data['receipt_date'],
+                ),
+                total_sum=self._convert_to_decimal(receipt_data['total_sum']),
+                number_receipt=receipt_data.get('number_receipt'),
+                nds10=self._convert_to_optional_decimal(
+                    receipt_data.get('nds10'),
+                ),
+                nds20=self._convert_to_optional_decimal(
+                    receipt_data.get('nds20'),
+                ),
+                operation_type=receipt_data.get('operation_type', 0),
+            ),
+            seller_data=SellerCreateData(
+                name_seller=str(
+                    receipt_data.get('name_seller', 'Неизвестный продавец'),
+                ),
+                retail_place_address=receipt_data.get('retail_place_address'),
+                retail_place=receipt_data.get('retail_place'),
+            ),
+            products_data=receipt_data.get('items', []),
+        )
 
     @transaction.atomic
     def process_uploaded_image(
@@ -182,7 +320,7 @@ class ReceiptImportService:
         """Process uploaded receipt image and create receipt.
 
         Analyzes image using AI or custom function, parses JSON response,
-        and creates receipt with products.
+        validates data, and creates receipt with products.
 
         Args:
             user: User importing the receipt.
@@ -195,48 +333,16 @@ class ReceiptImportService:
             ReceiptImportResult with success status and receipt or error.
         """
         try:
-            func = analyze_func
-            if func is None:
-                func = receipts_services.analyze_image_with_ai
-
-            sig = inspect.signature(func)
-            params = list(sig.parameters.keys())
-            if len(params) >= MIN_FUNCTION_PARAMS_COUNT and 'user_id' in params:
-                raw = func(uploaded_file, user_id=user.pk)  # type: ignore[call-arg]
-            else:
-                raw = func(uploaded_file)  # type: ignore[call-arg]
-            if raw and 'json' in raw:
-                raw = self._clean_json_response(raw)
-            data = json.loads(raw)
+            func = self._get_analysis_function(analyze_func)
+            raw_json = self._analyze_image(uploaded_file, func, user.pk)
+            receipt_data = self._parse_receipt_json(raw_json)
         except (json.JSONDecodeError, ValueError, TypeError):
             return ReceiptImportResult(success=False, error='invalid_file')
 
-        number_receipt = data.get('number_receipt')
-        if self._check_exist_receipt(
-            user,
-            number_receipt,
-        ).exists():
-            return ReceiptImportResult(success=False, error='exists')
+        validation_result = self._validate_receipt_data(user, receipt_data)
+        if validation_result is not None:
+            return validation_result
 
-        receipt = self.receipt_creator_service.create_receipt_with_products(
-            user=user,
-            account=account,
-            receipt_data=ReceiptCreateData(
-                receipt_date=self._parse_receipt_date(data['receipt_date']),
-                total_sum=self._to_decimal(data['total_sum']),
-                number_receipt=data.get('number_receipt'),
-                nds10=self._to_optional_decimal(data.get('nds10')),
-                nds20=self._to_optional_decimal(data.get('nds20')),
-                operation_type=data.get('operation_type', 0),
-            ),
-            seller_data=SellerCreateData(
-                name_seller=str(
-                    data.get('name_seller', 'Неизвестный продавец')
-                ),
-                retail_place_address=data.get('retail_place_address'),
-                retail_place=data.get('retail_place'),
-            ),
-            products_data=data.get('items', []),
-        )
+        receipt = self._create_receipt_from_data(user, account, receipt_data)
 
         return ReceiptImportResult(success=True, error=None, receipt=receipt)
