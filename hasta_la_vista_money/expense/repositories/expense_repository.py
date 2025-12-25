@@ -103,11 +103,15 @@ class ExpenseRepository:
         """
         if 'date' in kwargs:
             date_value = kwargs['date']
-            if isinstance(date_value, date) and not isinstance(date_value, datetime):
+            if isinstance(date_value, date) and not isinstance(
+                date_value, datetime
+            ):
                 kwargs['date'] = timezone.make_aware(
                     datetime.combine(date_value, time.min),
                 )
-            elif isinstance(date_value, datetime) and timezone.is_naive(date_value):
+            elif isinstance(date_value, datetime) and timezone.is_naive(
+                date_value
+            ):
                 kwargs['date'] = timezone.make_aware(date_value)
         return Expense.objects.create(**kwargs)
 

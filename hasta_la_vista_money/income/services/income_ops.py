@@ -161,11 +161,15 @@ class IncomeService:
             income.category = category
             income.amount = amount
             date_value = income_date
-            if isinstance(date_value, date) and not isinstance(date_value, datetime):
+            if isinstance(date_value, date) and not isinstance(
+                date_value, datetime
+            ):
                 date_value = timezone.make_aware(
                     datetime.combine(date_value, time.min),
                 )
-            elif isinstance(date_value, datetime) and timezone.is_naive(date_value):
+            elif isinstance(date_value, datetime) and timezone.is_naive(
+                date_value
+            ):
                 date_value = timezone.make_aware(date_value)
             income.date = date_value
             income.save()
