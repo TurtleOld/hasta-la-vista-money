@@ -1,7 +1,7 @@
-"""Репозиторий для работы со статистикой пользователей.
+"""Django repository for user statistics.
 
-Модуль предоставляет методы для агрегации данных статистики,
-включая работу с расходами, доходами, счетами и чеками.
+This module provides methods for aggregating statistics data,
+including work with expenses, income, accounts, and receipts.
 """
 
 from datetime import datetime
@@ -17,25 +17,25 @@ from hasta_la_vista_money.users.models import User
 
 
 class StatisticsRepository:
-    """Репозиторий для работы со статистикой пользователей.
+    """Repository for user statistics operations.
 
-    Предоставляет методы для агрегации данных по расходам, доходам,
-    счетам и чекам пользователя.
+    Provides methods for aggregating data on expenses, income,
+    accounts, and receipts for users.
     """
 
     def get_accounts_aggregate(
         self,
         user: User,
     ) -> dict[str, Decimal | int]:
-        """Получить агрегированные данные по счетам пользователя.
+        """Get aggregated account data for user.
 
         Args:
-            user: Пользователь для получения статистики.
+            user: User to get statistics for.
 
         Returns:
-            Словарь с ключами:
-            - 'total_balance': Decimal - общий баланс всех счетов
-            - 'accounts_count': int - количество счетов
+            Dictionary with keys:
+            - 'total_balance': Decimal - total balance of all accounts
+            - 'accounts_count': int - number of accounts
         """
         accounts_qs = Account.objects.filter(user=user)
         accounts_data = accounts_qs.aggregate(
@@ -53,16 +53,15 @@ class StatisticsRepository:
         start_date: datetime,
         end_date: datetime | None = None,
     ) -> Decimal:
-        """Получить сумму расходов за период.
+        """Get total expenses sum for period.
 
         Args:
-            user: Пользователь для получения статистики.
-            start_date: Начало периода (включительно).
-            end_date: Конец периода (включительно). Если None,
-                используется текущее время.
+            user: User to get statistics for.
+            start_date: Period start (inclusive).
+            end_date: Period end (inclusive). If None, uses current time.
 
         Returns:
-            Decimal: Сумма расходов за период.
+            Decimal: Total expenses sum for the period.
         """
         qs = Expense.objects.filter(user=user, date__gte=start_date)
         if end_date:
@@ -76,16 +75,15 @@ class StatisticsRepository:
         start_date: datetime,
         end_date: datetime | None = None,
     ) -> Decimal:
-        """Получить сумму доходов за период.
+        """Get total income sum for period.
 
         Args:
-            user: Пользователь для получения статистики.
-            start_date: Начало периода (включительно).
-            end_date: Конец периода (включительно). Если None,
-                используется текущее время.
+            user: User to get statistics for.
+            start_date: Period start (inclusive).
+            end_date: Period end (inclusive). If None, uses current time.
 
         Returns:
-            Decimal: Сумма доходов за период.
+            Decimal: Total income sum for the period.
         """
         qs = Income.objects.filter(user=user, date__gte=start_date)
         if end_date:
@@ -98,15 +96,15 @@ class StatisticsRepository:
         user: User,
         limit: int = 5,
     ) -> QuerySet[Expense]:
-        """Получить последние расходы пользователя.
+        """Get recent expenses for user.
 
         Args:
-            user: Пользователь для получения статистики.
-            limit: Максимальное количество записей.
+            user: User to get expenses for.
+            limit: Maximum number of records.
 
         Returns:
-            QuerySet[Expense]: QuerySet последних расходов с оптимизацией
-                select_related для category и account.
+            QuerySet[Expense]: QuerySet of recent expenses with select_related
+                optimization for category and account.
         """
         return (
             Expense.objects.filter(user=user)
@@ -119,15 +117,15 @@ class StatisticsRepository:
         user: User,
         limit: int = 5,
     ) -> QuerySet[Income]:
-        """Получить последние доходы пользователя.
+        """Get recent income for user.
 
         Args:
-            user: Пользователь для получения статистики.
-            limit: Максимальное количество записей.
+            user: User to get income for.
+            limit: Maximum number of records.
 
         Returns:
-            QuerySet[Income]: QuerySet последних доходов с оптимизацией
-                select_related для category и account.
+            QuerySet[Income]: QuerySet of recent income with select_related
+                optimization for category and account.
         """
         return (
             Income.objects.filter(user=user)
@@ -136,13 +134,13 @@ class StatisticsRepository:
         )
 
     def get_receipts_count(self, user: User) -> int:
-        """Получить количество чеков пользователя.
+        """Get receipts count for user.
 
         Args:
-            user: Пользователь для получения статистики.
+            user: User to get count for.
 
         Returns:
-            int: Количество чеков пользователя.
+            int: Number of receipts for user.
         """
         return Receipt.objects.filter(user=user).count()
 
@@ -152,17 +150,16 @@ class StatisticsRepository:
         start_date: datetime,
         limit: int = 5,
     ) -> QuerySet[Expense, dict[str, str | Decimal]]:
-        """Получить топ категорий расходов за период.
+        """Get top expense categories for period.
 
         Args:
-            user: Пользователь для получения статистики.
-            start_date: Начало периода для фильтрации.
-            limit: Максимальное количество категорий.
+            user: User to get categories for.
+            start_date: Period start for filtering.
+            limit: Maximum number of categories.
 
         Returns:
-            QuerySet[Expense, dict[str, str | Decimal]]: QuerySet с
-                агрегированными данными по категориям, отсортированный
-                по сумме расходов по убыванию.
+            QuerySet[Expense, dict[str, str | Decimal]]: QuerySet with
+                aggregated category data, sorted by expense amount descending.
         """
         return (
             Expense.objects.filter(user=user, date__gte=start_date)

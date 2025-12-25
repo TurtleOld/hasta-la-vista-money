@@ -12,10 +12,14 @@ from hasta_la_vista_money.users.models import User
 
 
 class LoginRateThrottleTestCase(TestCase):
-    """Тесты для класса LoginRateThrottle."""
+    """Test cases for LoginRateThrottle class.
+
+    Tests rate limiting for login requests including authenticated
+    and anonymous users.
+    """
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
+        """Set up test data."""
         self.factory = APIRequestFactory()
         self.user = User.objects.create_user(
             username='testuser',
@@ -23,13 +27,13 @@ class LoginRateThrottleTestCase(TestCase):
         )
 
     def test_scope_attribute(self) -> None:
-        """Тест проверки атрибута scope."""
+        """Test scope attribute."""
         LoginRateThrottle.THROTTLE_RATES = {'login': '5/min'}
         throttle = LoginRateThrottle()
         self.assertEqual(throttle.scope, 'login')
 
     def test_get_cache_key_with_authenticated_user(self) -> None:
-        """Тест получения ключа кэша для аутентифицированного пользователя."""
+        """Test cache key generation for authenticated user."""
         LoginRateThrottle.THROTTLE_RATES = {'login': '5/min'}
         throttle = LoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
@@ -45,7 +49,7 @@ class LoginRateThrottleTestCase(TestCase):
         self.assertIn(str(self.user.pk), cache_key)
 
     def test_get_cache_key_with_anonymous_user(self) -> None:
-        """Тест получения ключа кэша для анонимного пользователя."""
+        """Test cache key generation for anonymous user."""
         LoginRateThrottle.THROTTLE_RATES = {'login': '5/min'}
         throttle = LoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
@@ -65,7 +69,7 @@ class LoginRateThrottleTestCase(TestCase):
             self.assertIn('anonymous_ident', cache_key)
 
     def test_login_throttle_blocks_after_limit(self) -> None:
-        """Проверяет, что после двух запросов следующий блокируется."""
+        """Test that requests are blocked after rate limit is exceeded."""
         LoginRateThrottle.THROTTLE_RATES = {'login': '2/min'}
         throttle = LoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
@@ -92,10 +96,13 @@ class LoginRateThrottleTestCase(TestCase):
 
 
 class AnonLoginRateThrottleTestCase(TestCase):
-    """Тесты для класса AnonLoginRateThrottle."""
+    """Test cases for AnonLoginRateThrottle class.
+
+    Tests rate limiting for anonymous login requests.
+    """
 
     def setUp(self) -> None:
-        """Настройка тестовых данных."""
+        """Set up test data."""
         self.factory = APIRequestFactory()
         self.user = User.objects.create_user(
             username='testuser',
@@ -103,13 +110,13 @@ class AnonLoginRateThrottleTestCase(TestCase):
         )
 
     def test_scope_attribute(self) -> None:
-        """Тест проверки атрибута scope."""
+        """Test scope attribute."""
         AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '5/min'}
         throttle = AnonLoginRateThrottle()
         self.assertEqual(throttle.scope, 'anon')
 
     def test_get_cache_key_with_authenticated_user(self) -> None:
-        """Тест что аутентифицированные пользователи не ограничиваются."""
+        """Test that authenticated users are not throttled."""
         AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '5/min'}
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
@@ -120,7 +127,7 @@ class AnonLoginRateThrottleTestCase(TestCase):
         self.assertIsNone(cache_key)
 
     def test_get_cache_key_with_anonymous_user(self) -> None:
-        """Тест получения ключа кэша для анонимного пользователя."""
+        """Test cache key generation for anonymous user."""
         AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '5/min'}
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
@@ -140,7 +147,7 @@ class AnonLoginRateThrottleTestCase(TestCase):
             self.assertIn('anonymous_ident', cache_key)
 
     def test_get_cache_key_with_unauthenticated_user(self) -> None:
-        """Тест получения ключа кэша для неаутентифицированного пользователя."""
+        """Test cache key generation for unauthenticated user."""
         AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '5/min'}
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')
@@ -160,8 +167,7 @@ class AnonLoginRateThrottleTestCase(TestCase):
             self.assertIn('unauthenticated_ident', cache_key)
 
     def test_anon_throttle_blocks_after_limit(self) -> None:
-        """Проверяет, что после двух
-        анонимных запросов следующий блокируется."""
+        """Test that anonymous requests are blocked after rate limit."""
         AnonLoginRateThrottle.THROTTLE_RATES = {'anon': '2/min'}
         throttle = AnonLoginRateThrottle()
         request = self.factory.post('/api/auth/token/')

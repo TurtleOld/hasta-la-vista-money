@@ -1,4 +1,8 @@
-"""Тесты для views дашборда."""
+"""Tests for dashboard views.
+
+This module provides test cases for dashboard views including
+authentication requirements, template rendering, and JSON responses.
+"""
 
 import json
 from typing import TYPE_CHECKING, Any, cast
@@ -26,7 +30,10 @@ else:
 
 
 class DashboardViewTest(TestCase):
-    """Тесты для DashboardView."""
+    """Test cases for DashboardView.
+
+    Tests dashboard view authentication, template rendering, and context.
+    """
 
     fixtures = [
         'users.yaml',
@@ -43,26 +50,29 @@ class DashboardViewTest(TestCase):
         self.client.force_login(self.user)
 
     def test_dashboard_view_requires_login(self) -> None:
-        """Тест, что дашборд требует авторизации."""
+        """Test that dashboard requires authentication."""
         self.client.logout()
         response = self.client.get(reverse('users:dashboard'))
         self.assertEqual(response.status_code, 302)
 
     def test_dashboard_view_renders_template(self) -> None:
-        """Тест, что дашборд рендерит правильный шаблон."""
+        """Test that dashboard renders correct template."""
         response = self.client.get(reverse('users:dashboard'))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'users/dashboard.html')
 
     def test_dashboard_view_has_context(self) -> None:
-        """Тест, что дашборд имеет правильный контекст."""
+        """Test that dashboard has correct context."""
         response = self.client.get(reverse('users:dashboard'))
         self.assertIn('available_widgets', response.context)
         self.assertIn('default_period', response.context)
 
 
 class DashboardDataViewTest(TestCase):
-    """Тесты для DashboardDataView."""
+    """Test cases for DashboardDataView.
+
+    Tests dashboard data API endpoint, authentication, and JSON responses.
+    """
 
     fixtures = [
         'users.yaml',
@@ -83,26 +93,26 @@ class DashboardDataViewTest(TestCase):
         self.client.force_login(self.user)
 
     def test_dashboard_data_view_requires_login(self) -> None:
-        """Тест, что API дашборда требует авторизации."""
+        """Test that dashboard API requires authentication."""
         self.client.logout()
         response = self.client.get(reverse('users:dashboard_data'))
         self.assertEqual(response.status_code, 302)
 
     def test_dashboard_data_view_returns_json(self) -> None:
-        """Тест, что API возвращает JSON."""
+        """Test that dashboard API returns JSON."""
         response = self.client.get(reverse('users:dashboard_data'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['content-type'], 'application/json')
 
     def test_dashboard_data_view_contains_widgets(self) -> None:
-        """Тест, что ответ содержит виджеты."""
+        """Test that response contains widgets."""
         response = self.client.get(reverse('users:dashboard_data'))
         data = response.json()
         self.assertIn('widgets', data)
         self.assertIsInstance(data['widgets'], list)
 
     def test_dashboard_data_view_contains_analytics(self) -> None:
-        """Тест, что ответ содержит аналитику."""
+        """Test that response contains analytics."""
         response = self.client.get(reverse('users:dashboard_data'))
         data = response.json()
         self.assertIn('analytics', data)
@@ -110,14 +120,14 @@ class DashboardDataViewTest(TestCase):
         self.assertIn('trends', data['analytics'])
 
     def test_dashboard_data_view_contains_recent_transactions(self) -> None:
-        """Тест, что ответ содержит последние операции."""
+        """Test that response contains recent transactions."""
         response = self.client.get(reverse('users:dashboard_data'))
         data = response.json()
         self.assertIn('recent_transactions', data)
         self.assertIsInstance(data['recent_transactions'], list)
 
     def test_dashboard_data_view_with_period(self) -> None:
-        """Тест API с указанием периода."""
+        """Test API with period parameter."""
         response = self.client.get(
             reverse('users:dashboard_data'),
             {'period': 'quarter'},
@@ -153,7 +163,10 @@ class DashboardDataViewTest(TestCase):
 
 
 class DashboardWidgetConfigViewTest(TestCase):
-    """Тесты для DashboardWidgetConfigView."""
+    """Test cases for DashboardWidgetConfigView.
+
+    Tests widget creation, update, deletion, and configuration.
+    """
 
     fixtures = [
         'users.yaml',
@@ -170,7 +183,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         self.client.force_login(self.user)
 
     def test_create_widget(self) -> None:
-        """Тест создания виджета."""
+        """Test widget creation."""
         response = self.client.post(
             reverse('users:dashboard_widget'),
             data={
@@ -189,7 +202,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         self.assertEqual(widget.widget_type, 'balance')
 
     def test_update_widget(self) -> None:
-        """Тест обновления виджета."""
+        """Test widget update."""
         widget = DashboardWidget.objects.create(
             user=self.user,
             widget_type='balance',
@@ -216,7 +229,7 @@ class DashboardWidgetConfigViewTest(TestCase):
         self.assertEqual(widget.height, 400)
 
     def test_delete_widget(self) -> None:
-        """Тест удаления виджета."""
+        """Test widget deletion."""
         widget = DashboardWidget.objects.create(
             user=self.user,
             widget_type='balance',
@@ -239,7 +252,7 @@ class DashboardWidgetConfigViewTest(TestCase):
 
 
 class DashboardAnalyticsEndpointsTest(TestCase):
-    """Тесты для дополнительных аналитических эндпоинтов."""
+    """Test cases for additional analytics endpoints."""
 
     fixtures = [
         'users.yaml',

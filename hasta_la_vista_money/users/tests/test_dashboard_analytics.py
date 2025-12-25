@@ -1,4 +1,8 @@
-"""Тесты для сервисов аналитики дашборда."""
+"""Tests for dashboard analytics services.
+
+This module provides test cases for dashboard analytics functions including
+linear trend calculations, period comparisons, and drill-down data.
+"""
 
 from collections.abc import Sequence
 from datetime import date, timedelta
@@ -26,10 +30,13 @@ User = get_user_model()
 
 
 class CalculateLinearTrendTest(TestCase):
-    """Тесты для функции calculate_linear_trend."""
+    """Test cases for calculate_linear_trend function.
+
+    Tests linear trend calculation with various data scenarios.
+    """
 
     def test_calculate_linear_trend_with_sufficient_data(self) -> None:
-        """Тест расчёта тренда с достаточным количеством данных."""
+        """Test trend calculation with sufficient data."""
         today = timezone.now().date()
         dates = [today - timedelta(days=30 * i) for i in range(5, -1, -1)]
         values = [
@@ -56,7 +63,7 @@ class CalculateLinearTrendTest(TestCase):
         self.assertEqual(len(result['forecast']), 30)
 
     def test_calculate_linear_trend_with_insufficient_data(self) -> None:
-        """Тест расчёта тренда с недостаточным количеством данных."""
+        """Test trend calculation with insufficient data."""
         dates = [timezone.now().date()]
         values = [Decimal(1000)]
 
@@ -70,7 +77,7 @@ class CalculateLinearTrendTest(TestCase):
         self.assertEqual(result['forecast'], [])
 
     def test_calculate_linear_trend_with_empty_data(self) -> None:
-        """Тест расчёта тренда с пустыми данными."""
+        """Test trend calculation with empty data."""
         dates: list[date] = []
         values: list[Decimal] = []
 
@@ -79,7 +86,7 @@ class CalculateLinearTrendTest(TestCase):
         self.assertIn('error', result)
 
     def test_calculate_linear_trend_forecast_dates(self) -> None:
-        """Тест, что прогноз содержит правильные даты."""
+        """Test that forecast contains correct dates."""
         today = timezone.now().date()
         dates = [today - timedelta(days=30 * i) for i in range(5, -1, -1)]
         values = [Decimal(1000) * (i + 1) for i in range(6)]
@@ -93,7 +100,10 @@ class CalculateLinearTrendTest(TestCase):
 
 
 class GetPeriodComparisonTest(TestCase):
-    """Тесты для функции get_period_comparison."""
+    """Test cases for get_period_comparison function.
+
+    Tests period comparison for month, quarter, and year periods.
+    """
 
     fixtures: Sequence[str] = [
         'users.yaml',
@@ -113,7 +123,7 @@ class GetPeriodComparisonTest(TestCase):
         self.user: UserType = user
 
     def test_get_period_comparison_month(self) -> None:
-        """Тест сравнения периодов для месяца."""
+        """Test period comparison for month."""
         result = get_period_comparison(self.user, 'month')
 
         self.assertIn('current', result)
@@ -124,14 +134,14 @@ class GetPeriodComparisonTest(TestCase):
         self.assertIn('income', result['previous'])
 
     def test_get_period_comparison_quarter(self) -> None:
-        """Тест сравнения периодов для квартала."""
+        """Test period comparison for quarter."""
         result = get_period_comparison(self.user, 'quarter')
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
 
     def test_get_period_comparison_year(self) -> None:
-        """Тест сравнения периодов для года."""
+        """Test period comparison for year."""
         result = get_period_comparison(self.user, 'year')
 
         self.assertIn('current', result)
@@ -139,7 +149,10 @@ class GetPeriodComparisonTest(TestCase):
 
 
 class GetDrillDownDataTest(TestCase):
-    """Тесты для функции get_drill_down_data."""
+    """Test cases for get_drill_down_data function.
+
+    Tests drill-down data retrieval for expense and income categories.
+    """
 
     fixtures: Sequence[str] = [
         'users.yaml',
@@ -159,7 +172,7 @@ class GetDrillDownDataTest(TestCase):
         self.user: UserType = user
 
     def test_get_drill_down_data_expense(self) -> None:
-        """Тест получения drill-down данных для расходов."""
+        """Test drill-down data retrieval for expenses."""
         category = ExpenseCategory.objects.filter(user=self.user).first()
         if category is None:
             self.skipTest('No expense category found in fixtures')
@@ -170,7 +183,7 @@ class GetDrillDownDataTest(TestCase):
         self.assertIsInstance(result['data'], list)
 
     def test_get_drill_down_data_income(self) -> None:
-        """Тест получения drill-down данных для доходов."""
+        """Test drill-down data retrieval for income."""
         category = IncomeCategory.objects.filter(user=self.user).first()
         if category is None:
             self.skipTest('No income category found in fixtures')
@@ -181,7 +194,7 @@ class GetDrillDownDataTest(TestCase):
         self.assertIsInstance(result['data'], list)
 
     def test_get_drill_down_data_invalid_category(self) -> None:
-        """Тест с несуществующей категорией."""
+        """Test with non-existent category."""
         invalid_category_id = 99999
 
         result = get_drill_down_data(

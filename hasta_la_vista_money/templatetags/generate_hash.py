@@ -11,7 +11,11 @@ system_random = random.SystemRandom()
 
 @register.simple_tag()
 def word_hash() -> str:
-    """Генерация хеша случайных наборов букв."""
+    """Generate hash from random letter combinations.
+
+    Returns:
+        SHA256 hash of random ASCII letters string.
+    """
     letters = string.ascii_letters
     random_string = ''.join(
         system_random.choice(letters) for _ in range(len(letters))

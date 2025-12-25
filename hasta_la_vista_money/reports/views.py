@@ -121,7 +121,16 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         categories: list[ExpenseCategory],
         months: list[date],
     ) -> dict[int, dict[date, Decimal | int]]:
-        """Получить данные о расходах по категориям и месяцам."""
+        """Get expense data by categories and months.
+
+        Args:
+            user: User to get expenses for.
+            categories: List of expense categories.
+            months: List of months to aggregate.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         fact_map: dict[int, dict[date, Decimal | int]] = defaultdict(
             lambda: defaultdict(lambda: 0)
         )
@@ -153,7 +162,16 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         categories: list[IncomeCategory],
         months: list[date],
     ) -> dict[int, dict[date, Decimal | int]]:
-        """Получить данные о доходах по категориям и месяцам."""
+        """Get income data by categories and months.
+
+        Args:
+            user: User to get income for.
+            categories: List of income categories.
+            months: List of months to aggregate.
+
+        Returns:
+            Dictionary mapping category_id to month->amount mapping.
+        """
         fact_map: dict[int, dict[date, Decimal | int]] = defaultdict(
             lambda: defaultdict(lambda: 0)
         )
@@ -185,7 +203,16 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         months: list[date],
         fact_map: dict[int, dict[date, Decimal | int]],
     ) -> list[int]:
-        """Рассчитать общие суммы по месяцам."""
+        """Calculate total amounts by month.
+
+        Args:
+            categories: List of categories.
+            months: List of months.
+            fact_map: Category to month->amount mapping.
+
+        Returns:
+            List of total amounts per month as integers.
+        """
         totals: list[int] = [0] * len(months)
         for i, m in enumerate(months):
             for cat in categories:
@@ -199,7 +226,16 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         months: list[date],
         fact_map: dict[int, dict[date, Decimal | int]],
     ) -> dict[int, Decimal]:
-        """Рассчитать общие суммы по категориям."""
+        """Calculate total amounts by category.
+
+        Args:
+            categories: List of categories.
+            months: List of months.
+            fact_map: Category to month->amount mapping.
+
+        Returns:
+            Dictionary mapping category_id to total amount.
+        """
         category_totals: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
         for cat in categories:
             for month in months:
@@ -214,7 +250,16 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         months: list[date],
         fact_map: dict[int, dict[date, Decimal | int]],
     ) -> tuple[list[str], list[float]]:
-        """Рассчитать данные для круговой диаграммы."""
+        """Calculate data for pie chart.
+
+        Args:
+            categories: List of categories.
+            months: List of months.
+            fact_map: Category to month->amount mapping.
+
+        Returns:
+            Tuple of (labels, values) for pie chart.
+        """
         labels: list[str] = []
         values: list[float] = []
         if not months or not categories:
@@ -234,7 +279,17 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         return labels, values
 
     def prepare_budget_charts(self, request: HttpRequest) -> dict[str, Any]:
-        """Подготовка данных для графиков бюджета."""
+        """Prepare budget chart data.
+
+        Args:
+            request: HTTP request object.
+
+        Returns:
+            Dictionary with budget chart data.
+
+        Raises:
+            TypeError: If user is not authenticated.
+        """
         if isinstance(request.user, AnonymousUser):
             raise TypeError('User must be authenticated')
         charts_data = budget_charts(

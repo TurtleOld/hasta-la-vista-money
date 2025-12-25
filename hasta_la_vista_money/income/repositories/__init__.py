@@ -1,4 +1,8 @@
-"""Репозитории для income модуля."""
+"""Income repositories module.
+
+This module provides repositories for working with income data including
+income records and income categories.
+"""
 
 from hasta_la_vista_money.income.repositories.income_category_repository import (  # noqa: E501
     IncomeCategoryRepository,

@@ -1,4 +1,8 @@
-"""Dependency injection container для users приложения."""
+"""Dependency injection container for users application.
+
+This module provides DI container configuration for user-related
+repositories and services.
+"""
 
 from dependency_injector import containers, providers
 
@@ -11,9 +15,9 @@ from hasta_la_vista_money.users.services.statistics import (
 
 
 class UsersContainer(containers.DeclarativeContainer):
-    """Контейнер для users приложения.
+    """Dependency injection container for users application.
 
-    Регистрирует репозитории и сервисы для работы с пользователями.
+    Registers repositories and services for working with users.
     """
 
     statistics_repository = providers.Singleton(StatisticsRepository)

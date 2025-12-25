@@ -11,7 +11,10 @@ from hasta_la_vista_money.users.models import User
 
 
 class IncomeQuerySetTest(TestCase):
-    """Тесты для IncomeQuerySet."""
+    """Test cases for IncomeQuerySet.
+
+    Tests filtering, aggregation, and grouping methods for income queryset.
+    """
 
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
@@ -67,14 +70,14 @@ class IncomeQuerySetTest(TestCase):
         )
 
     def test_for_user(self) -> None:
-        """Тест фильтрации по пользователю."""
+        """Test filtering by user."""
         incomes = Income.objects.for_user(self.user1)
         self.assertEqual(incomes.count(), 2)
         for income in incomes:
             self.assertEqual(income.user, self.user1)
 
     def test_for_period(self) -> None:
-        """Тест фильтрации по периоду."""
+        """Test filtering by period."""
         incomes = Income.objects.for_user(self.user1).for_period(
             self.yesterday.date(),
             self.today.date(),
@@ -85,22 +88,22 @@ class IncomeQuerySetTest(TestCase):
             self.assertLessEqual(income.date.date(), self.today.date())
 
     def test_for_category(self) -> None:
-        """Тест фильтрации по категории с подкатегориями."""
+        """Test filtering by category with subcategories."""
         incomes = Income.objects.for_category(self.category1)
         self.assertEqual(incomes.count(), 2)
 
     def test_total_amount(self) -> None:
-        """Тест расчёта общей суммы."""
+        """Test total amount calculation."""
         total = Income.objects.for_user(self.user1).total_amount()
         self.assertEqual(total, Decimal('1500.00'))
 
     def test_total_amount_empty(self) -> None:
-        """Тест расчёта общей суммы для пустого queryset."""
+        """Test total amount calculation for empty queryset."""
         total = Income.objects.filter(amount__lt=0).total_amount()
         self.assertEqual(total, 0)
 
     def test_by_month(self) -> None:
-        """Тест группировки по месяцам."""
+        """Test grouping by months."""
         by_month = Income.objects.for_user(self.user1).by_month()
         self.assertGreater(len(by_month), 0)
         for item in by_month:
@@ -109,7 +112,10 @@ class IncomeQuerySetTest(TestCase):
 
 
 class IncomeManagerTest(TestCase):
-    """Тесты для IncomeManager."""
+    """Test cases for IncomeManager.
+
+    Tests manager methods for income filtering and aggregation.
+    """
 
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
@@ -144,12 +150,12 @@ class IncomeManagerTest(TestCase):
         )
 
     def test_manager_for_user(self) -> None:
-        """Тест метода for_user менеджера."""
+        """Test manager for_user method."""
         incomes = Income.objects.for_user(self.user)
         self.assertEqual(incomes.count(), 2)
 
     def test_manager_for_period(self) -> None:
-        """Тест метода for_period менеджера."""
+        """Test manager for_period method."""
         incomes = Income.objects.for_period(
             self.yesterday.date(),
             self.today.date(),
@@ -157,16 +163,16 @@ class IncomeManagerTest(TestCase):
         self.assertEqual(incomes.count(), 2)
 
     def test_manager_for_category(self) -> None:
-        """Тест метода for_category менеджера."""
+        """Test manager for_category method."""
         incomes = Income.objects.for_category(self.category)
         self.assertEqual(incomes.count(), 2)
 
     def test_manager_total_amount(self) -> None:
-        """Тест метода total_amount менеджера."""
+        """Test manager total_amount method."""
         total = Income.objects.filter(user=self.user).total_amount()
         self.assertEqual(total, Decimal('1500.00'))
 
     def test_manager_by_month(self) -> None:
-        """Тест метода by_month менеджера."""
+        """Test manager by_month method."""
         by_month = Income.objects.filter(user=self.user).by_month()
         self.assertGreater(len(by_month), 0)

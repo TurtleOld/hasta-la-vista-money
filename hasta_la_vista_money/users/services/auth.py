@@ -10,7 +10,14 @@ from hasta_la_vista_money.users.models import User
 
 
 class LoginResult(TypedDict, total=False):
-    """Результат попытки входа пользователя."""
+    """User login attempt result.
+
+    Attributes:
+        user: Authenticated user instance.
+        access: JWT access token.
+        refresh: JWT refresh token.
+        success: Whether login was successful.
+    """
 
     user: User
     access: str
@@ -23,6 +30,16 @@ def login_user(
     form: AuthenticationForm,
     success_message: str,
 ) -> LoginResult:
+    """Authenticate and login user.
+
+    Args:
+        request: HTTP request object.
+        form: Validated authentication form.
+        success_message: Success message to display.
+
+    Returns:
+        LoginResult with user, tokens, and success status.
+    """
     username = form.cleaned_data['username']
     password = form.cleaned_data['password']
 
@@ -57,5 +74,14 @@ def set_auth_cookies_in_response(
     access_token: str,
     refresh_token: str | None = None,
 ) -> HttpResponse:
-    """Helper function to set JWT cookies in a response"""
+    """Set JWT cookies in HTTP response.
+
+    Args:
+        response: HTTP response object.
+        access_token: JWT access token.
+        refresh_token: Optional JWT refresh token.
+
+    Returns:
+        HttpResponse with JWT cookies set.
+    """
     return set_auth_cookies(response, access_token, refresh_token)

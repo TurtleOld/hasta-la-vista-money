@@ -1,3 +1,9 @@
+"""Protocols for expense service interfaces.
+
+This module defines Protocol interfaces for expense-related services,
+enabling dependency injection and type checking.
+"""
+
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -11,6 +17,12 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class ExpenseServiceProtocol(Protocol):
+    """Protocol for expense service interface.
+
+    Defines the contract for expense-related operations including
+    CRUD operations, category management, and data aggregation.
+    """
+
     def get_categories(self) -> Iterable[dict[str, str | int | None]]: ...
     def get_categories_queryset(self) -> QuerySet['ExpenseCategory']: ...
     def get_form_querysets(self) -> dict[str, Any]: ...

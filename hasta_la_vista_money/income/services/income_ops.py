@@ -18,16 +18,37 @@ if TYPE_CHECKING:
 
 
 class IncomeOps:
+    """Service for income operations.
+
+    Handles creation, updating, deletion, and copying of income transactions
+    with automatic account balance management.
+    """
+
     def __init__(
         self,
         account_service: AccountServiceProtocol,
         income_repository: 'IncomeRepository',
     ) -> None:
+        """Initialize IncomeOps.
+
+        Args:
+            account_service: Service for account balance operations.
+            income_repository: Repository for income data access.
+        """
         self.account_service = account_service
         self.income_repository = income_repository
 
     @staticmethod
     def _validate_account_owner(user: User, account: Account) -> None:
+        """Validate that user owns the account.
+
+        Args:
+            user: User to validate ownership for.
+            account: Account to check ownership of.
+
+        Raises:
+            PermissionDenied: If user does not own the account.
+        """
         if account.user != user:
             raise PermissionDenied(
                 _('You do not have permission to add income to this account.'),
@@ -35,6 +56,15 @@ class IncomeOps:
 
     @staticmethod
     def _validate_income_owner(user: User, income: Income) -> None:
+        """Validate that user owns the income.
+
+        Args:
+            user: User to validate ownership for.
+            income: Income to check ownership of.
+
+        Raises:
+            PermissionDenied: If user does not own the income.
+        """
         if income.user != user:
             raise PermissionDenied(
                 _('You do not have permission to modify this income.'),
@@ -49,6 +79,21 @@ class IncomeOps:
         amount: Decimal,
         when: date,
     ) -> Income:
+        """Add a new income transaction.
+
+        Args:
+            user: User creating the income.
+            account: Account to add income to.
+            category: Income category.
+            amount: Income amount.
+            when: Date of income.
+
+        Returns:
+            Created Income instance.
+
+        Raises:
+            PermissionDenied: If user does not own the account.
+        """
         self._validate_account_owner(user, account)
         with transaction.atomic():
             income = self.income_repository.create_income(
@@ -71,6 +116,24 @@ class IncomeOps:
         amount: Decimal,
         when: date,
     ) -> Income:
+        """Update an existing income transaction.
+
+        Automatically reconciles account balances if account or amount changes.
+
+        Args:
+            user: User updating the income.
+            income: Income instance to update.
+            account: New account for the income.
+            category: New category for the income.
+            amount: New amount for the income.
+            when: New date for the income.
+
+        Returns:
+            Updated Income instance.
+
+        Raises:
+            PermissionDenied: If user does not own the income or account.
+        """
         self._validate_income_owner(user, income)
         self._validate_account_owner(user, account)
 
@@ -101,6 +164,17 @@ class IncomeOps:
         return income
 
     def delete_income(self, *, user: User, income: Income) -> None:
+        """Delete an income transaction.
+
+        Automatically restores account balance by subtracting the income amount.
+
+        Args:
+            user: User deleting the income.
+            income: Income instance to delete.
+
+        Raises:
+            PermissionDenied: If user does not own the income.
+        """
         self._validate_income_owner(user, income)
         with transaction.atomic():
             self.account_service.apply_receipt_spend(
@@ -110,6 +184,18 @@ class IncomeOps:
             income.delete()
 
     def copy_income(self, *, user: User, income_id: int) -> Income:
+        """Copy an existing income transaction.
+
+        Args:
+            user: User copying the income.
+            income_id: ID of income to copy.
+
+        Returns:
+            Newly created Income copy.
+
+        Raises:
+            PermissionDenied: If user does not own the income.
+        """
         income = self.income_repository.get_by_id(income_id)
         if income.user != user:
             raise PermissionDenied(

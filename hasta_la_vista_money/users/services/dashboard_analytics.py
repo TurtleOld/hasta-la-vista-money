@@ -1,4 +1,8 @@
-"""Сервисы аналитики для дашборда."""
+"""Dashboard analytics services.
+
+This module provides analytics functions for dashboard widgets,
+including trend calculation, period comparison, and drill-down data.
+"""
 
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -22,15 +26,17 @@ def calculate_linear_trend(
     dates: list[date],
     values: list[Decimal],
 ) -> dict[str, Any]:
-    """
-    Рассчитывает линейную регрессию и прогноз.
+    """Calculate linear regression and forecast.
 
     Args:
-        dates: Список дат
-        values: Список значений для каждой даты
+        dates: List of dates.
+        values: List of values for each date.
 
     Returns:
-        Словарь с коэффициентами тренда, линией тренда и прогнозом
+        Dictionary with trend coefficients, trend line, and forecast.
+        Keys: 'slope', 'intercept', 'r_squared', 'trend_line',
+        'forecast'. If insufficient data, returns error dict with
+        zero values.
     """
     min_data_points_for_trend = 2
     if len(dates) < min_data_points_for_trend:
@@ -86,15 +92,16 @@ def get_period_comparison(
     user: User,
     period_type: str,
 ) -> dict[str, Any]:
-    """
-    Сравнение текущего и прошлого периода.
+    """Compare current and previous period.
 
     Args:
-        user: Пользователь
-        period_type: Тип периода ('month', 'quarter', 'year')
+        user: User to compare periods for.
+        period_type: Period type ('month', 'quarter', 'year').
 
     Returns:
-        Словарь с данными текущего и прошлого периода
+        Dictionary with current and previous period data.
+        Keys: 'current', 'previous', 'change_percent'. Each period
+        contains: 'start', 'end', 'expenses', 'income', 'savings'.
     """
     period_dates = get_period_dates(period_type=period_type)
     current_start_dt = period_dates['current_start']
@@ -177,17 +184,18 @@ def get_drill_down_data(
     date_str: str | None,
     data_type: str = 'expense',
 ) -> dict[str, Any]:
-    """
-    Получение детализации по категориям (drill-down).
+    """Get category drill-down data.
 
     Args:
-        user: Пользователь
-        category_id: ID категории (если None, возвращает топ категории)
-        date_str: Дата в формате YYYY-MM (если None, текущий месяц)
-        data_type: Тип данных ('expense' или 'income')
+        user: User to get data for.
+        category_id: Category ID (if None, returns top categories).
+        date_str: Date in YYYY-MM format (if None, current month).
+        data_type: Data type ('expense' or 'income').
 
     Returns:
-        Словарь с данными для drill-down графика
+        Dictionary with drill-down chart data. Keys: 'period', 'data',
+        'level', optionally 'category_id', 'category_name'. If category
+        not found, returns error dict.
     """
     if date_str:
         try:

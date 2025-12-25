@@ -24,13 +24,23 @@ ExpenseOrIncome = Union['Expense', 'Income']
 
 
 class CategoryTreeBuilder:
-    """Строит дерево категорий и считает число всех потомков."""
+    """Build category tree and count all descendants.
+
+    Constructs hierarchical category structure with total children count
+    for each category node.
+    """
 
     def __init__(
         self,
         categories: list[dict[str, Any]] | QuerySet[Model, Model],
         depth: int,
     ) -> None:
+        """Initialize CategoryTreeBuilder.
+
+        Args:
+            categories: List or QuerySet of category dictionaries.
+            depth: Maximum depth for tree building.
+        """
         self.depth = depth
         self.cats = (
             list(categories) if hasattr(categories, 'values') else categories
@@ -45,6 +55,14 @@ class CategoryTreeBuilder:
         self._memo: dict[int, int] = {}
 
     def count_desc(self, cid: int) -> int:
+        """Count all descendants for category.
+
+        Args:
+            cid: Category ID.
+
+        Returns:
+            Total number of descendants including nested children.
+        """
         cached = self._memo.get(cid)
         if cached is not None:
             return cached
@@ -59,6 +77,15 @@ class CategoryTreeBuilder:
         parent_id: int | None,
         current_depth: int,
     ) -> Generator[dict[str, Any], None, None]:
+        """Build category tree starting from parent.
+
+        Args:
+            parent_id: Parent category ID (None for root).
+            current_depth: Current depth in tree.
+
+        Yields:
+            Category dictionaries with children and total_children_count.
+        """
         for cat in self.children_map.get(parent_id, ()):
             node = {
                 'id': cat['id'],
@@ -78,9 +105,19 @@ def build_category_tree(
     depth: int = 2,
     current_depth: int = 1,
 ) -> Generator[dict[str, Any], None, None]:
-    """
-    Формирование дерева категорий для отображения.
-    Добавляет total_children_count — число всех вложенных подкатегорий.
+    """Build category tree for display.
+
+    Creates hierarchical category structure with total_children_count
+    field indicating number of all nested subcategories.
+
+    Args:
+        categories: List or QuerySet of category dictionaries.
+        parent_id: Parent category ID (None for root).
+        depth: Maximum tree depth.
+        current_depth: Current depth in tree.
+
+    Yields:
+        Category dictionaries with hierarchical structure.
     """
     builder = CategoryTreeBuilder(categories=categories, depth=depth)
     yield from builder.build(parent_id=parent_id, current_depth=current_depth)
@@ -89,14 +126,13 @@ def build_category_tree(
 def _convert_generators_to_lists(
     node: dict[str, Any],
 ) -> dict[str, Any]:
-    """
-    Рекурсивно преобразует генераторы в списки для сериализации.
+    """Recursively convert generators to lists for serialization.
 
     Args:
-        node: Узел дерева категорий
+        node: Category tree node.
 
     Returns:
-        Узел с преобразованными генераторами в списки
+        Node with generators converted to lists.
     """
     result = dict(node)
     if 'children' in result and hasattr(result['children'], '__iter__'):
@@ -168,7 +204,20 @@ def get_queryset_type_income_expenses(
     model: type[M],
     form: ModelForm[M],
 ) -> M:
-    """Функция получения queryset."""
+    """Get model instance by ID or from form.
+
+    Args:
+        type_id: Optional model instance ID.
+        model: Model class.
+        form: Validated model form.
+
+    Returns:
+        Model instance from ID or form.
+
+    Raises:
+        Http404: If type_id provided and instance not found.
+        ValueError: If form save returns None.
+    """
     if type_id:
         return get_object_or_404(model, id=type_id)
     instance = form.save(commit=False)
@@ -182,7 +231,19 @@ def get_new_type_operation[M: Model](
     id_type_operation: int,
     request: HttpRequest,
 ) -> M:
-    """Get new type operation."""
+    """Get operation instance and prepare for new operation.
+
+    Args:
+        model: Model class (Expense or Income).
+        id_type_operation: Operation instance ID.
+        request: HTTP request object.
+
+    Returns:
+        Model instance for new operation creation.
+
+    Raises:
+        Http404: If operation not found.
+    """
     expense = cast(
         'ExpenseOrIncome',
         get_object_or_404(model, pk=id_type_operation, user=request.user),

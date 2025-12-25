@@ -15,7 +15,15 @@ from hasta_la_vista_money.users.models import User
 
 
 class IncomeInfoDict(TypedDict):
-    """Информация о доходе."""
+    """Income information dictionary.
+
+    Attributes:
+        id: Income transaction ID.
+        date: Transaction date.
+        account__name_account: Account name.
+        category__name: Category name.
+        amount: Income amount.
+    """
 
     id: int
     date: datetime | date
@@ -25,7 +33,15 @@ class IncomeInfoDict(TypedDict):
 
 
 class ExpenseInfoDict(TypedDict):
-    """Информация о расходе."""
+    """Expense information dictionary.
+
+    Attributes:
+        id: Expense transaction ID.
+        date: Transaction date.
+        account__name_account: Account name.
+        category__name: Category name.
+        amount: Expense amount.
+    """
 
     id: int
     date: datetime | date

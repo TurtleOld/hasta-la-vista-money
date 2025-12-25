@@ -1,4 +1,8 @@
-"""Модуль задач для пакета reports."""
+"""Reports tasks module.
+
+This module provides async tasks for generating monthly, yearly,
+and user statistics reports.
+"""
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -21,17 +25,16 @@ async def generate_monthly_report(
     year: int,
     month: int,
 ) -> dict[str, Any]:
-    """
-    Генерация месячного отчета для пользователя.
+    """Generate monthly report for user.
 
     Args:
-        user_id: ID пользователя
-        year: Год
-        month: Месяц
-        context: Контекст задачи
+        user_id: User ID.
+        year: Report year.
+        month: Report month.
 
     Returns:
-        Месячный отчет
+        Dictionary with 'success' flag and 'report' data containing
+        income, expense, receipt statistics, top categories, and summary.
     """
     logger.info(
         'Starting monthly report generation',
@@ -203,16 +206,15 @@ async def generate_yearly_report(
     user_id: int,
     year: int,
 ) -> dict[str, Any]:
-    """
-    Генерация годового отчета для пользователя.
+    """Generate yearly report for user.
 
     Args:
-        user_id: ID пользователя
-        year: Год
-        context: Контекст задачи
+        user_id: User ID.
+        year: Report year.
 
     Returns:
-        Годовой отчет
+        Dictionary with 'success' flag and 'report' data containing
+        monthly breakdown, yearly totals, top categories, and summary.
     """
     logger.info(
         'Starting yearly report generation',
@@ -373,15 +375,15 @@ async def generate_yearly_report(
 async def generate_user_statistics(
     user_id: int,
 ) -> dict[str, Any]:
-    """
-    Генерация общей статистики пользователя.
+    """Generate overall user statistics.
 
     Args:
-        user_id: ID пользователя
-        context: Контекст задачи
+        user_id: User ID.
 
     Returns:
-        Общая статистика
+        Dictionary with 'success' flag and 'statistics' data containing
+        total income/expense/receipts, top categories, time periods,
+        and summary.
     """
     logger.info(
         'Starting user statistics generation',

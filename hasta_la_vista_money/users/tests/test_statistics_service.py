@@ -1,4 +1,8 @@
-"""Тесты для UserStatisticsService."""
+"""Tests for UserStatisticsService.
+
+This module provides test cases for UserStatisticsService including
+statistics retrieval and cache invalidation.
+"""
 
 from typing import TYPE_CHECKING, ClassVar
 
@@ -22,7 +26,10 @@ User = get_user_model()
 
 
 class UserStatisticsServiceTest(TestCase):
-    """Тесты для UserStatisticsService."""
+    """Test cases for UserStatisticsService.
+
+    Tests user statistics retrieval, caching, and data structure validation.
+    """
 
     fixtures: ClassVar[list[str]] = [
         'users.yaml',
@@ -37,7 +44,7 @@ class UserStatisticsServiceTest(TestCase):
     ]
 
     def setUp(self) -> None:
-        """Настройка тестового окружения."""
+        """Set up test environment."""
         user = User.objects.first()
         if user is None:
             msg: str = 'No user found in fixtures'
@@ -50,7 +57,7 @@ class UserStatisticsServiceTest(TestCase):
         )
 
     def test_get_user_statistics(self) -> None:
-        """Тест получения статистики пользователя."""
+        """Test user statistics retrieval."""
         stats: UserStatistics = self.service.get_user_statistics(self.user)
 
         self.assertIn('total_balance', stats)
@@ -67,6 +74,6 @@ class UserStatisticsServiceTest(TestCase):
         self.assertIn('last_month_savings', stats)
 
     def test_invalidate_cache(self) -> None:
-        """Тест инвалидации кеша статистики."""
+        """Test statistics cache invalidation."""
         self.service.get_user_statistics(self.user)
         self.service.invalidate_cache(self.user)

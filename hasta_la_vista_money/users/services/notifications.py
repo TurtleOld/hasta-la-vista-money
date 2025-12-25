@@ -11,7 +11,14 @@ from hasta_la_vista_money.users.models import User
 
 
 class NotificationDict(TypedDict):
-    """Словарь уведомления."""
+    """Notification dictionary.
+
+    Attributes:
+        type: Notification type ('warning', 'danger', 'success').
+        title: Notification title.
+        message: Notification message.
+        icon: Bootstrap icon class name.
+    """
 
     type: Literal['warning', 'danger', 'success']
     title: str
@@ -20,6 +27,16 @@ class NotificationDict(TypedDict):
 
 
 def get_user_notifications(user: User) -> list[NotificationDict]:
+    """Get notifications for user.
+
+    Checks for low balance, expense over income, and high savings.
+
+    Args:
+        user: User to get notifications for.
+
+    Returns:
+        List of NotificationDict with user notifications.
+    """
     today = timezone.now().date()
     month_start = today.replace(day=1)
     notifications = []

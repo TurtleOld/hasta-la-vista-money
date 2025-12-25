@@ -1,3 +1,9 @@
+"""Loan calculation service.
+
+This module provides functions for calculating loan payment schedules,
+including annuity and differentiated payment methods.
+"""
+
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -15,6 +21,23 @@ def calculate_annuity_schedule(
     annual_rate: float,
     months: int,
 ) -> dict[str, Any]:
+    """Calculate annuity payment schedule.
+
+    Calculates equal monthly payments with decreasing interest portion
+    and increasing principal portion over time.
+
+    Args:
+        amount: Loan principal amount.
+        annual_rate: Annual interest rate as percentage.
+        months: Loan term in months.
+
+    Returns:
+        Dictionary with:
+        - 'schedule': List of payment details per month
+        - 'total_payment': Total amount to be paid
+        - 'overpayment': Total interest paid
+        - 'monthly_payment': Fixed monthly payment amount
+    """
     monthly_rate = (
         annual_rate / constants.PERCENT_TO_DECIMAL / constants.MONTHS_IN_YEAR
     )
@@ -88,6 +111,22 @@ def calculate_differentiated_schedule(
     annual_rate: float,
     months: int,
 ) -> dict[str, Any]:
+    """Calculate differentiated payment schedule.
+
+    Calculates decreasing monthly payments with fixed principal portion
+    and decreasing interest portion over time.
+
+    Args:
+        amount: Loan principal amount.
+        annual_rate: Annual interest rate as percentage.
+        months: Loan term in months.
+
+    Returns:
+        Dictionary with:
+        - 'schedule': List of payment details per month
+        - 'total_payment': Total amount to be paid
+        - 'overpayment': Total interest paid
+    """
     monthly_rate = (
         annual_rate / constants.PERCENT_TO_DECIMAL / constants.MONTHS_IN_YEAR
     )
@@ -134,6 +173,17 @@ def _persist_schedule(
     start_date: date,
     schedule_data: dict[str, Any],
 ) -> None:
+    """Persist payment schedule to database.
+
+    Args:
+        user_id: User ID owning the loan.
+        loan_id: Loan ID to create schedule for.
+        start_date: Start date of the loan.
+        schedule_data: Dictionary with 'schedule' key containing payment list.
+
+    Raises:
+        Http404: If user or loan not found.
+    """
     user = get_object_or_404(User, id=user_id)
     loan = get_object_or_404(Loan, id=loan_id)
 
@@ -168,6 +218,19 @@ def calculate_annuity_loan_db(
     annual_interest_rate: Decimal,
     period_loan: int,
 ) -> None:
+    """Calculate and persist annuity loan schedule to database.
+
+    Args:
+        user_id: User ID owning the loan.
+        loan_id: Loan ID to create schedule for.
+        start_date: Start date of the loan.
+        loan_amount: Loan principal amount.
+        annual_interest_rate: Annual interest rate as Decimal.
+        period_loan: Loan term in months.
+
+    Raises:
+        Http404: If user or loan not found.
+    """
     schedule_data = calculate_annuity_schedule(
         float(loan_amount),
         float(annual_interest_rate),
@@ -190,6 +253,19 @@ def calculate_differentiated_loan_db(
     annual_interest_rate: Decimal,
     period_loan: int,
 ) -> None:
+    """Calculate and persist differentiated loan schedule to database.
+
+    Args:
+        user_id: User ID owning the loan.
+        loan_id: Loan ID to create schedule for.
+        start_date: Start date of the loan.
+        loan_amount: Loan principal amount.
+        annual_interest_rate: Annual interest rate as Decimal.
+        period_loan: Loan term in months.
+
+    Raises:
+        Http404: If user or loan not found.
+    """
     schedule_data = calculate_differentiated_schedule(
         float(loan_amount),
         float(annual_interest_rate),
@@ -204,6 +280,12 @@ def calculate_differentiated_loan_db(
 
 
 class LoanCalculationService:
+    """Service for loan payment schedule calculations.
+
+    Handles calculation and persistence of loan payment schedules
+    for different loan types (annuity, differentiated).
+    """
+
     def run(
         self,
         *,
@@ -215,6 +297,20 @@ class LoanCalculationService:
         annual_interest_rate: float,
         period_loan: int,
     ) -> None:
+        """Calculate and persist loan payment schedule.
+
+        Args:
+            type_loan: Loan type ('Annuity' or 'Differentiated').
+            user_id: User ID owning the loan.
+            loan: Loan instance to create schedule for.
+            start_date: Start date of the loan.
+            loan_amount: Loan principal amount.
+            annual_interest_rate: Annual interest rate as float.
+            period_loan: Loan term in months.
+
+        Raises:
+            Http404: If user or loan not found.
+        """
         if type_loan == 'Annuity':
             calculate_annuity_loan_db(
                 user_id=user_id,

@@ -1,7 +1,7 @@
-"""Сервис для получения статистики пользователя.
+"""Service for user statistics.
 
-Модуль предоставляет сервис для расчета и получения статистики
-пользователя, включая балансы, расходы, доходы и категории.
+This module provides service for calculating and retrieving user statistics,
+including account balances, expenses, income, and categories.
 """
 
 from datetime import datetime, time
@@ -30,21 +30,21 @@ logger = structlog.get_logger(__name__)
 
 
 class UserStatistics(TypedDict, total=False):
-    """Статистика пользователя.
+    """User statistics data structure.
 
     Attributes:
-        total_balance: Общий баланс всех счетов пользователя.
-        accounts_count: Количество счетов пользователя.
-        current_month_expenses: Сумма расходов за текущий месяц.
-        current_month_income: Сумма доходов за текущий месяц.
-        last_month_expenses: Сумма расходов за прошлый месяц.
-        last_month_income: Сумма доходов за прошлый месяц.
-        recent_expenses: Список последних расходов.
-        recent_incomes: Список последних доходов.
-        receipts_count: Количество чеков пользователя.
-        top_expense_categories: Топ категорий расходов за текущий месяц.
-        monthly_savings: Сбережения за текущий месяц (доходы - расходы).
-        last_month_savings: Сбережения за прошлый месяц.
+        total_balance: Total balance of all user accounts.
+        accounts_count: Number of user accounts.
+        current_month_expenses: Total expenses for current month.
+        current_month_income: Total income for current month.
+        last_month_expenses: Total expenses for last month.
+        last_month_income: Total income for last month.
+        recent_expenses: List of recent expense transactions.
+        recent_incomes: List of recent income transactions.
+        receipts_count: Number of user receipts.
+        top_expense_categories: Top expense categories for current month.
+        monthly_savings: Savings for current month (income - expenses).
+        last_month_savings: Savings for last month.
     """
 
     total_balance: Decimal
@@ -62,40 +62,40 @@ class UserStatistics(TypedDict, total=False):
 
 
 class UserStatisticsService:
-    """Сервис для получения статистики пользователя.
+    """Service for user statistics.
 
-    Предоставляет методы для расчета различных метрик статистики
-    пользователя с использованием репозиториев и кеширования.
+    Provides methods for calculating various user statistics metrics
+    using repositories and caching for optimization.
     """
 
     def __init__(
         self,
         statistics_repository: StatisticsRepository,
     ) -> None:
-        """Инициализация сервиса статистики.
+        """Initialize UserStatisticsService.
 
         Args:
-            statistics_repository: Репозиторий для работы со статистикой.
+            statistics_repository: Repository for statistics data access.
         """
         self.statistics_repository = statistics_repository
         self.cache_timeout = 300
 
     def get_user_statistics(self, user: User) -> UserStatistics:
-        """Получить полную статистику пользователя.
+        """Get complete user statistics.
 
-        Метод получает статистику пользователя, включая балансы счетов,
-        расходы и доходы за текущий и прошлый месяц, последние транзакции
-        и топ категорий. Использует кеширование для оптимизации.
+        Retrieves user statistics including account balances, expenses and
+        income for current and last month, recent transactions, and top
+        categories. Uses caching for optimization.
 
         Args:
-            user: Пользователь для получения статистики.
+            user: User to get statistics for.
 
         Returns:
-            UserStatistics: Словарь со статистикой пользователя.
+            UserStatistics: Dictionary with user statistics.
 
         Raises:
-            ValueError: Если пользователь не валиден.
-            DatabaseError: При ошибках работы с базой данных.
+            ValueError: If user is invalid.
+            DatabaseError: On database errors.
         """
         if not user or not hasattr(user, 'id'):
             error_msg = 'Invalid user provided to get_user_statistics'
@@ -134,13 +134,13 @@ class UserStatisticsService:
         return statistics
 
     def _calculate_statistics(self, user: User) -> UserStatistics:
-        """Рассчитать статистику пользователя.
+        """Calculate user statistics.
 
         Args:
-            user: Пользователь для расчета статистики.
+            user: User to calculate statistics for.
 
         Returns:
-            UserStatistics: Словарь со статистикой пользователя.
+            UserStatistics: Dictionary with user statistics.
         """
         period_dates = self._calculate_period_dates()
 
@@ -188,13 +188,13 @@ class UserStatisticsService:
     def _calculate_period_dates(
         self,
     ) -> dict[str, datetime]:
-        """Рассчитать даты периодов для статистики.
+        """Calculate period dates for statistics.
 
         Returns:
-            Словарь с ключами:
-            - 'month_start': datetime начала текущего месяца
-            - 'last_month_start': datetime начала прошлого месяца
-            - 'last_month_end': datetime конца прошлого месяца
+            Dictionary with keys:
+            - 'month_start': datetime of current month start
+            - 'last_month_start': datetime of last month start
+            - 'last_month_end': datetime of last month end
         """
         today = timezone.now().date()
         month_start_date, _ = get_month_start_end(today)
@@ -222,13 +222,13 @@ class UserStatisticsService:
         self,
         user: User,
     ) -> dict[str, Decimal | int]:
-        """Получить статистику по счетам пользователя.
+        """Get account statistics for user.
 
         Args:
-            user: Пользователь для получения статистики.
+            user: User to get statistics for.
 
         Returns:
-            Словарь с ключами 'total_balance' и 'accounts_count'.
+            Dictionary with 'total_balance' and 'accounts_count' keys.
         """
         return self.statistics_repository.get_accounts_aggregate(user)
 
@@ -239,16 +239,16 @@ class UserStatisticsService:
         last_month_start: datetime,
         last_month_end: datetime,
     ) -> dict[str, Decimal]:
-        """Получить статистику по расходам за периоды.
+        """Get expense statistics for periods.
 
         Args:
-            user: Пользователь для получения статистики.
-            month_start: Начало текущего месяца.
-            last_month_start: Начало прошлого месяца.
-            last_month_end: Конец прошлого месяца.
+            user: User to get statistics for.
+            month_start: Start of current month.
+            last_month_start: Start of last month.
+            last_month_end: End of last month.
 
         Returns:
-            Словарь с ключами 'current' и 'last_month'.
+            Dictionary with 'current' and 'last_month' keys.
         """
         current_expenses = (
             self.statistics_repository.get_expenses_sum_by_period(
@@ -276,16 +276,16 @@ class UserStatisticsService:
         last_month_start: datetime,
         last_month_end: datetime,
     ) -> dict[str, Decimal]:
-        """Получить статистику по доходам за периоды.
+        """Get income statistics for periods.
 
         Args:
-            user: Пользователь для получения статистики.
-            month_start: Начало текущего месяца.
-            last_month_start: Начало прошлого месяца.
-            last_month_end: Конец прошлого месяца.
+            user: User to get statistics for.
+            month_start: Start of current month.
+            last_month_start: Start of last month.
+            last_month_end: End of last month.
 
         Returns:
-            Словарь с ключами 'current' и 'last_month'.
+            Dictionary with 'current' and 'last_month' keys.
         """
         current_income = self.statistics_repository.get_income_sum_by_period(
             user,
@@ -306,13 +306,13 @@ class UserStatisticsService:
         self,
         user: User,
     ) -> dict[str, list[Expense] | list[Income]]:
-        """Получить последние транзакции пользователя.
+        """Get recent transactions for user.
 
         Args:
-            user: Пользователь для получения статистики.
+            user: User to get transactions for.
 
         Returns:
-            Словарь с ключами 'expenses' и 'incomes'.
+            Dictionary with 'expenses' and 'incomes' keys.
         """
         recent_expenses = self.statistics_repository.get_recent_expenses(
             user,
@@ -333,14 +333,14 @@ class UserStatisticsService:
         user: User,
         month_start: datetime,
     ) -> list[dict[str, str | Decimal]]:
-        """Получить топ категорий расходов за текущий месяц.
+        """Get top expense categories for current month.
 
         Args:
-            user: Пользователь для получения статистики.
-            month_start: Начало текущего месяца.
+            user: User to get categories for.
+            month_start: Start of current month.
 
         Returns:
-            Список словарей с данными о категориях расходов.
+            List of dictionaries with expense category data.
         """
         return list(
             self.statistics_repository.get_top_expense_categories(
@@ -351,23 +351,23 @@ class UserStatisticsService:
         )
 
     def _get_cache_key(self, user: User) -> str:
-        """Получить ключ кеша для статистики пользователя.
+        """Get cache key for user statistics.
 
         Args:
-            user: Пользователь для генерации ключа.
+            user: User to generate key for.
 
         Returns:
-            str: Ключ кеша в формате 'user_statistics_{user_id}_{month}'.
+            Cache key in format 'user_statistics_{user_id}_{month}'.
         """
         today = timezone.now().date()
         current_month = today.strftime('%Y-%m')
         return f'user_statistics_{user.id}_{current_month}'
 
     def invalidate_cache(self, user: User) -> None:
-        """Инвалидировать кеш статистики пользователя.
+        """Invalidate user statistics cache.
 
         Args:
-            user: Пользователь для инвалидации кеша.
+            user: User to invalidate cache for.
         """
         cache_key = self._get_cache_key(user)
         cache.delete(cache_key)
@@ -379,20 +379,20 @@ class UserStatisticsService:
 
 
 def get_user_statistics(user: User) -> UserStatistics:
-    """Получить статистику пользователя (legacy функция).
+    """Get user statistics (legacy function).
 
-    Функция для обратной совместимости. Создает сервис и репозиторий
-    напрямую. Для новых кодов рекомендуется использовать DI контейнер.
+    Function for backward compatibility. Creates service and repository
+    directly. For new code, use DI container instead.
 
     Args:
-        user: Пользователь для получения статистики.
+        user: User to get statistics for.
 
     Returns:
-        UserStatistics: Словарь со статистикой пользователя.
+        UserStatistics: Dictionary with user statistics.
 
     Raises:
-        ValueError: Если пользователь не валиден.
-        DatabaseError: При ошибках работы с базой данных.
+        ValueError: If user is invalid.
+        DatabaseError: On database errors.
     """
     repository = StatisticsRepository()
     service = UserStatisticsService(statistics_repository=repository)

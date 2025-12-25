@@ -11,13 +11,26 @@ from hasta_la_vista_money.users.models import User
 
 
 class GroupDict(TypedDict):
-    """Словарь с информацией о группе."""
+    """Group information dictionary.
+
+    Attributes:
+        id: Group ID.
+        name: Group name.
+    """
 
     id: int
     name: str
 
 
 def get_user_groups(user: User) -> list[GroupDict]:
+    """Get all groups for user.
+
+    Args:
+        user: User to get groups for.
+
+    Returns:
+        List of GroupDict with user's groups.
+    """
     return cast(
         'list[GroupDict]',
         list(
@@ -27,6 +40,14 @@ def get_user_groups(user: User) -> list[GroupDict]:
 
 
 def get_groups_not_for_user(user: User) -> list[GroupDict]:
+    """Get groups not assigned to user.
+
+    Args:
+        user: User to check groups for.
+
+    Returns:
+        List of GroupDict with groups not assigned to user.
+    """
     return cast(
         'list[GroupDict]',
         list(
@@ -40,17 +61,34 @@ def get_groups_not_for_user(user: User) -> list[GroupDict]:
 
 
 def create_group(form: ModelForm[Group]) -> Group:
+    """Create a new group.
+
+    Args:
+        form: Validated group form.
+
+    Returns:
+        Created Group instance.
+    """
     return form.save()
 
 
 def delete_group(form: ModelForm[Group]) -> None:
+    """Delete a group.
+
+    Args:
+        form: Validated group form with 'group' in cleaned_data.
+    """
     group = form.cleaned_data['group']
     group.delete()
 
 
 def add_user_to_group(request: HttpRequest, user: User, group: Group) -> None:
-    """
-    Service to add a user to a group with checks and user messages.
+    """Add user to group with checks and user messages.
+
+    Args:
+        request: HTTP request object.
+        user: User to add to group.
+        group: Group to add user to.
     """
     if group in user.groups.all():
         messages.error(
@@ -67,8 +105,12 @@ def remove_user_from_group(
     user: User,
     group: Group,
 ) -> None:
-    """
-    Service to remove a user from a group with checks and user messages.
+    """Remove user from group with checks and user messages.
+
+    Args:
+        request: HTTP request object.
+        user: User to remove from group.
+        group: Group to remove user from.
     """
     if group not in user.groups.all():
         messages.error(

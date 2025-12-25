@@ -53,8 +53,9 @@ class TestValidatePositiveAmount(TestCase):
         validate_positive_amount(amount)
 
     def test_validate_positive_amount_parametrized(self) -> None:
-        """Параметризация: некорректные и граничные значения
-        разных типов на входе positive_amount.
+        """Test parametrized validation with invalid and boundary values.
+
+        Tests various types of invalid and boundary values for positive_amount.
         """
         invalid_cases = [
             0,

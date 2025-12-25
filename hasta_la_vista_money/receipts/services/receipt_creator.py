@@ -25,6 +25,12 @@ if TYPE_CHECKING:
 
 
 class ReceiptCreatorService:
+    """Service for creating receipts with products.
+
+    Handles creation of receipts from various sources (AI, manual entry, import)
+    with automatic seller and product management.
+    """
+
     def __init__(
         self,
         account_service: AccountServiceProtocol,
@@ -33,6 +39,15 @@ class ReceiptCreatorService:
         receipt_repository: ReceiptRepositoryProtocol,
         seller_repository: SellerRepositoryProtocol,
     ) -> None:
+        """Initialize ReceiptCreatorService.
+
+        Args:
+            account_service: Service for account balance operations.
+            account_repository: Repository for account data access.
+            product_repository: Repository for product data access.
+            receipt_repository: Repository for receipt data access.
+            seller_repository: Repository for seller data access.
+        """
         self.account_service = account_service
         self.account_repository = account_repository
         self.product_repository = product_repository
@@ -50,7 +65,19 @@ class ReceiptCreatorService:
         products_data: Iterable[dict[str, Any]] | None = None,
         manual: bool = False,
     ) -> Receipt:
-        """Create receipt and related products from raw data."""
+        """Create receipt and related products from raw data.
+
+        Args:
+            user: User creating the receipt.
+            account: Account to charge for the receipt.
+            receipt_data: Receipt creation data.
+            seller_data: Seller creation data.
+            products_data: Optional iterable of product dictionaries.
+            manual: Whether receipt is manually created.
+
+        Returns:
+            Created Receipt instance.
+        """
 
         account_balance = self.account_repository.get_by_id(account.pk)
         self.account_service.apply_receipt_spend(
@@ -95,6 +122,17 @@ class ReceiptCreatorService:
         product_formset: BaseFormSet[Any],
         seller: Seller,
     ) -> Receipt | None:
+        """Create receipt from manual form entry.
+
+        Args:
+            user: User creating the receipt.
+            receipt_form: Validated receipt form.
+            product_formset: Formset with product data.
+            seller: Seller instance for the receipt.
+
+        Returns:
+            Created Receipt instance, or None if user doesn't own the account.
+        """
         receipt = receipt_form.save(commit=False)
         total_sum = receipt.total_sum
         account = receipt.account
@@ -141,6 +179,15 @@ class ReceiptCreatorService:
         user: User,
         seller_data: 'SellerCreateData',
     ) -> Seller:
+        """Create or update seller from data.
+
+        Args:
+            user: User owning the seller.
+            seller_data: Seller creation data.
+
+        Returns:
+            Seller instance (created or updated).
+        """
         name_seller = seller_data.name_seller or 'Неизвестный продавец'
         return self.seller_repository.update_or_create_seller(
             user=user,
@@ -158,6 +205,15 @@ class ReceiptCreatorService:
         user: User,
         products_data: Iterable[dict[str, Any]] | None,
     ) -> list['Product']:
+        """Prepare Product instances from raw data.
+
+        Args:
+            user: User owning the products.
+            products_data: Iterable of product dictionaries.
+
+        Returns:
+            List of Product instances ready for creation.
+        """
         products: list[Product] = []
         if products_data is None:
             return products
@@ -189,6 +245,14 @@ class ReceiptCreatorService:
 
 @dataclass
 class SellerCreateData:
+    """Data for creating or updating a seller.
+
+    Attributes:
+        name_seller: Seller name.
+        retail_place_address: Optional retail place address.
+        retail_place: Optional retail place name.
+    """
+
     name_seller: str
     retail_place_address: str | None = None
     retail_place: str | None = None
@@ -196,6 +260,17 @@ class SellerCreateData:
 
 @dataclass
 class ReceiptCreateData:
+    """Data for creating a receipt.
+
+    Attributes:
+        receipt_date: Receipt date and time.
+        total_sum: Total receipt amount.
+        number_receipt: Optional receipt number.
+        operation_type: Optional operation type (purchase/return).
+        nds10: Optional VAT 10% amount.
+        nds20: Optional VAT 20% amount.
+    """
+
     receipt_date: datetime
     total_sum: Decimal
     number_receipt: int | None = None

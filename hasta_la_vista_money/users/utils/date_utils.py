@@ -1,7 +1,7 @@
-"""Утилиты для работы с датами и периодами.
+"""Date and period utilities.
 
-Модуль предоставляет функции для расчета дат периодов,
-используемые в статистике и аналитике.
+This module provides functions for calculating period dates,
+used in statistics and analytics.
 """
 
 from datetime import date, datetime, time, timedelta
@@ -12,14 +12,13 @@ from django.utils import timezone
 
 
 def get_month_start_end(period_date: date | None = None) -> tuple[date, date]:
-    """Получить начало и конец месяца для указанной даты.
+    """Get start and end of month for specified date.
 
     Args:
-        period_date: Дата для расчета периода. Если None, используется
-            текущая дата.
+        period_date: Date to calculate period for. If None, uses current date.
 
     Returns:
-        Кортеж из (начало_месяца, конец_месяца).
+        Tuple of (month_start, month_end).
     """
     if period_date is None:
         period_date = timezone.now().date()
@@ -34,14 +33,13 @@ def get_month_start_end(period_date: date | None = None) -> tuple[date, date]:
 def get_last_month_start_end(
     period_date: date | None = None,
 ) -> tuple[date, date]:
-    """Получить начало и конец предыдущего месяца.
+    """Get start and end of previous month.
 
     Args:
-        period_date: Дата для расчета периода. Если None, используется
-            текущая дата.
+        period_date: Date to calculate period for. If None, uses current date.
 
     Returns:
-        Кортеж из (начало_предыдущего_месяца, конец_предыдущего_месяца).
+        Tuple of (last_month_start, last_month_end).
     """
     if period_date is None:
         period_date = timezone.now().date()
@@ -57,20 +55,19 @@ def get_period_dates(
     period_type: str = 'month',
     period_date: date | None = None,
 ) -> dict[str, datetime]:
-    """Получить даты начала и конца периода.
+    """Get start and end dates for period.
 
     Args:
-        period_type: Тип периода ('month', 'quarter', 'year').
-            По умолчанию 'month'.
-        period_date: Дата для расчета периода. Если None, используется
-            текущая дата.
+        period_type: Period type ('month', 'quarter', 'year').
+            Defaults to 'month'.
+        period_date: Date to calculate period for. If None, uses current date.
 
     Returns:
-        Словарь с ключами:
-        - 'current_start': datetime начала текущего периода
-        - 'current_end': datetime конца текущего периода
-        - 'previous_start': datetime начала предыдущего периода
-        - 'previous_end': datetime конца предыдущего периода
+        Dictionary with keys:
+        - 'current_start': datetime of current period start
+        - 'current_end': datetime of current period end
+        - 'previous_start': datetime of previous period start
+        - 'previous_end': datetime of previous period end
     """
     if period_date is None:
         period_date = timezone.now().date()
@@ -118,13 +115,13 @@ def get_period_dates(
 
 
 def to_decimal(value: float | str | None) -> Decimal:
-    """Конвертировать значение в Decimal.
+    """Convert value to Decimal.
 
     Args:
-        value: Значение для конвертации. Может быть int, float, str или None.
+        value: Value to convert. Can be int, float, str, or None.
 
     Returns:
-        Decimal: Конвертированное значение. Если value is None, возвращает 0.
+        Decimal: Converted value. Returns Decimal(0) if value is None.
     """
     if value is None:
         return Decimal(0)

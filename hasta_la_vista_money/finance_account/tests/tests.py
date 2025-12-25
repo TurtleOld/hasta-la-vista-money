@@ -228,7 +228,7 @@ class TestAccount(TestCase):
         )
 
     def test_transfer_money_insufficient_funds(self) -> None:
-        """Тест перевода средств при недостаточном балансе."""
+        """Test money transfer with insufficient balance."""
         self.client.force_login(self.user)
 
         amount = self.account1.balance + Decimal(1000)
@@ -251,7 +251,7 @@ class TestAccount(TestCase):
         self.assertContains(response, 'from_account')
 
     def test_transfer_money_same_account(self) -> None:
-        """Тест перевода средств на тот же счет."""
+        """Test money transfer to the same account."""
         self.client.force_login(self.user)
 
         transfer_money = {
@@ -272,7 +272,7 @@ class TestAccount(TestCase):
         self.assertContains(response, 'to_account')
 
     def test_transfer_money_invalid_form(self) -> None:
-        """Тест перевода средств с невалидной формой."""
+        """Test money transfer with invalid form."""
         self.client.force_login(self.user)
 
         transfer_money = {
@@ -293,7 +293,7 @@ class TestAccount(TestCase):
         self.assertContains(response, 'amount')
 
     def test_transfer_money_no_ajax(self) -> None:
-        """Тест перевода средств без AJAX запроса."""
+        """Test money transfer without AJAX request."""
         self.client.force_login(self.user)
 
         transfer_money = {
@@ -314,7 +314,7 @@ class TestAccount(TestCase):
         self.assertRedirects(response, reverse('finance_account:list'))
 
     def test_account_model_methods(self) -> None:
-        """Тест методов модели Account."""
+        """Test Account model methods."""
         self.assertEqual(str(self.account1), 'Банковская карта')
 
         expected_url = reverse(
@@ -340,7 +340,7 @@ class TestAccount(TestCase):
         self.assertFalse(result)
 
     def test_transfer_money_log_model(self) -> None:
-        """Тест модели TransferMoneyLog."""
+        """Test TransferMoneyLog model."""
         transfer_log = TransferMoneyLog.objects.create(
             user=self.user,
             from_account=self.account1,
@@ -358,7 +358,7 @@ class TestAccount(TestCase):
         self.assertEqual(str(transfer_log), expected_str)
 
     def test_account_form_validation(self) -> None:
-        """Тест валидации формы AddAccountForm."""
+        """Test AddAccountForm validation."""
         form = AddAccountForm(
             data={
                 'name_account': 'Test Account',
@@ -381,7 +381,7 @@ class TestAccount(TestCase):
         self.assertFalse(form.is_valid())
 
     def test_transfer_money_form_validation(self) -> None:
-        """Тест валидации формы TransferMoneyAccountForm."""
+        """Test TransferMoneyAccountForm validation."""
         form = TransferMoneyAccountForm(
             user=self.user,
             transfer_service=self.transfer_service,
@@ -425,7 +425,7 @@ class TestAccount(TestCase):
         self.assertFalse(form.is_valid())
 
     def test_transfer_money_form_save(self) -> None:
-        """Тест сохранения формы TransferMoneyAccountForm."""
+        """Test TransferMoneyAccountForm save method."""
         form = TransferMoneyAccountForm(
             user=self.user,
             transfer_service=self.transfer_service,
@@ -448,13 +448,13 @@ class TestAccount(TestCase):
                 self.assertEqual(transfer_log.amount, 100)
 
     def test_account_view_methods(self) -> None:
-        """Тест методов класса AccountView."""
+        """Test AccountView class methods."""
         self.assertTrue(hasattr(AccountView, 'get_context_data'))
         self.assertTrue(hasattr(AccountView, 'context_object_name'))
         self.assertEqual(AccountView.context_object_name, 'finance_account')
 
     def test_prepare_functions(self) -> None:
-        """Тест функций из модуля prepare."""
+        """Test functions from prepare module."""
         income_info = collect_info_income(self.user)
         self.assertIsNotNone(income_info)
 
@@ -465,7 +465,7 @@ class TestAccount(TestCase):
         self.assertIsInstance(sorted_data, list)
 
     def test_account_serializer(self) -> None:
-        """Тест сериализатора AccountSerializer."""
+        """Test AccountSerializer."""
         serializer = AccountSerializer(self.account1)
         data: Any = serializer.data
 
@@ -478,7 +478,7 @@ class TestAccount(TestCase):
         self.assertEqual(data['currency'], self.account1.currency)
 
     def test_account_create_view(self) -> None:
-        """Тест представления создания счета."""
+        """Test account creation view."""
         self.client.force_login(self.user)
 
         url = reverse('finance_account:create')
@@ -499,7 +499,7 @@ class TestAccount(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_change_account_view(self) -> None:
-        """Тест представления изменения счета."""
+        """Test account update view."""
         self.client.force_login(self.user)
 
         url = reverse('finance_account:change', args=[self.account1.pk])
@@ -520,7 +520,7 @@ class TestAccount(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_account_view_context_data(self) -> None:
-        """Тест контекста данных в AccountView."""
+        """Test AccountView context data."""
         self.client.force_login(self.user)
 
         url = reverse('finance_account:list')
@@ -534,19 +534,19 @@ class TestAccount(TestCase):
         self.assertIn('sum_all_accounts', response.context)
 
     def test_account_view_unauthenticated(self) -> None:
-        """Тест AccountView для неаутентифицированного пользователя."""
+        """Test AccountView for unauthenticated user."""
         url = reverse('finance_account:list')
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 302)
 
     def test_account_form_initial_values(self) -> None:
-        """Тест начальных значений формы AddAccountForm."""
+        """Test AddAccountForm initial values."""
         form = AddAccountForm()
         self.assertEqual(form.fields['type_account'].initial, 'Debit')
 
     def test_transfer_money_form_initialization(self) -> None:
-        """Тест инициализации формы TransferMoneyAccountForm."""
+        """Test TransferMoneyAccountForm initialization."""
         form = TransferMoneyAccountForm(
             user=self.user,
             transfer_service=self.transfer_service,
@@ -559,7 +559,7 @@ class TestAccount(TestCase):
         self.assertIn('notes', form.fields)
 
     def test_account_model_choices(self) -> None:
-        """Тест выбора в модели Account."""
+        """Test Account model choices."""
         currency_choices_list = [choice[0] for choice in currency_choices('ru')]
         self.assertIn('RUB', currency_choices_list)
         self.assertIn('USD', currency_choices_list)
@@ -572,7 +572,7 @@ class TestAccount(TestCase):
         self.assertIn('CASH', type_choices)
 
     def test_transfer_money_log_ordering(self) -> None:
-        """Тест сортировки TransferMoneyLog."""
+        """Test TransferMoneyLog ordering."""
         log1 = TransferMoneyLog.objects.create(
             user=self.user,
             from_account=self.account1,
@@ -596,7 +596,7 @@ class TestAccount(TestCase):
         self.assertEqual(logs[1], log1)
 
     def test_account_model_defaults(self) -> None:
-        """Тест значений по умолчанию в модели Account."""
+        """Test Account model default values."""
         account = Account.objects.create(
             user=self.user,
             name_account='Test Default Account',
@@ -607,7 +607,7 @@ class TestAccount(TestCase):
         self.assertEqual(account.currency, get_default_currency())
 
     def test_transfer_money_form_clean_method(self) -> None:
-        """Тест метода clean формы TransferMoneyAccountForm."""
+        """Test TransferMoneyAccountForm clean method."""
         form: TransferMoneyAccountForm = TransferMoneyAccountForm(
             user=self.user,
             transfer_service=self.transfer_service,
@@ -626,7 +626,7 @@ class TestAccount(TestCase):
         self.assertIn('from_account', form.errors)
 
     def test_account_view_with_no_data(self) -> None:
-        """Тест AccountView с пустыми данными."""
+        """Test AccountView with empty data."""
         Expense.objects.all().delete()
         Income.objects.all().delete()
 
