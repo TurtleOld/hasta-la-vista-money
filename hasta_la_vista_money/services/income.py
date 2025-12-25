@@ -1,8 +1,9 @@
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.finance_account.models import Account
@@ -26,12 +27,17 @@ def add_income(
         )
     account.balance += amount
     account.save()
+    date_value = date
+    if isinstance(date_value, date) and not isinstance(date_value, datetime):
+        date_value = timezone.make_aware(datetime.combine(date_value, time.min))
+    elif isinstance(date_value, datetime) and timezone.is_naive(date_value):
+        date_value = timezone.make_aware(date_value)
     return Income.objects.create(
         user=user,
         account=account,
         category=category,
         amount=amount,
-        date=date,
+        date=date_value,
     )
 
 
@@ -64,7 +70,12 @@ def update_income(
     income.account = account
     income.category = category
     income.amount = amount
-    income.date = date
+    date_value = date
+    if isinstance(date_value, date) and not isinstance(date_value, datetime):
+        date_value = timezone.make_aware(datetime.combine(date_value, time.min))
+    elif isinstance(date_value, datetime) and timezone.is_naive(date_value):
+        date_value = timezone.make_aware(date_value)
+    income.date = date_value
     income.save()
     return income
 

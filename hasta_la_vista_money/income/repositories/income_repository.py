@@ -4,10 +4,11 @@ This module provides data access layer for Income model,
 including filtering, aggregation, and CRUD operations.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any
 
 from django.db.models import QuerySet, Sum
+from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
@@ -144,6 +145,14 @@ class IncomeRepository:
         Returns:
             Income: Created income instance.
         """
+        if 'date' in kwargs:
+            date_value = kwargs['date']
+            if isinstance(date_value, date) and not isinstance(date_value, datetime):
+                kwargs['date'] = timezone.make_aware(
+                    datetime.combine(date_value, time.min),
+                )
+            elif isinstance(date_value, datetime) and timezone.is_naive(date_value):
+                kwargs['date'] = timezone.make_aware(date_value)
         return Income.objects.create(**kwargs)
 
     def filter(self, **kwargs: object) -> QuerySet[Income]:

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, ClassVar
 
 from django.db.models import QuerySet
@@ -10,6 +11,7 @@ from django.forms import (
     ModelForm,
 )
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -69,6 +71,16 @@ class AddExpenseForm(FormQuerysetsMixin, ModelForm[Expense]):
             account_queryset=account_queryset,
             **kwargs,
         )
+
+    def clean_date(self) -> datetime:
+        date_value = self.cleaned_data.get('date')
+        if (
+            date_value
+            and isinstance(date_value, datetime)
+            and timezone.is_naive(date_value)
+        ):
+            return timezone.make_aware(date_value)
+        return date_value
 
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
