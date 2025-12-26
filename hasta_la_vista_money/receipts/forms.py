@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -23,6 +24,7 @@ from django.forms import (
     formset_factory,
 )
 from django.forms.fields import IntegerField
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_filters import widgets
 
@@ -350,3 +352,189 @@ class UploadImageForm(Form):
                 ),
             )
         return file
+
+
+class PendingReceiptReviewForm(Form):
+    """Form for reviewing and editing pending receipt data."""
+
+    receipt_date = DateTimeField(
+        label=_('Дата и время чека'),
+        widget=DateTimeInput(
+            attrs={
+                'class': 'form-control',
+                'type': 'datetime-local',
+            },
+            format='%Y-%m-%dT%H:%M',
+        ),
+        required=True,
+    )
+    name_seller = CharField(
+        label=_('Название продавца'),
+        max_length=255,
+        widget=TextInput(attrs={'class': 'form-control'}),
+        required=True,
+    )
+    retail_place = CharField(
+        label=_('Торговая точка'),
+        max_length=1000,
+        widget=TextInput(attrs={'class': 'form-control'}),
+        required=False,
+    )
+    retail_place_address = CharField(
+        label=_('Адрес торговой точки'),
+        max_length=1000,
+        widget=TextInput(attrs={'class': 'form-control'}),
+        required=False,
+    )
+    number_receipt = IntegerField(
+        label=_('Номер чека'),
+        widget=NumberInput(attrs={'class': 'form-control'}),
+        required=False,
+    )
+    total_sum = DecimalField(
+        label=_('Общая сумма'),
+        max_digits=10,
+        decimal_places=2,
+        widget=NumberInput(
+            attrs={
+                'class': 'form-control total-sum',
+                'step': '0.01',
+                'readonly': True,
+            },
+        ),
+        required=True,
+    )
+    nds10 = DecimalField(
+        label=_('НДС 10%'),
+        max_digits=constants.SIXTY,
+        decimal_places=constants.TWO,
+        widget=NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        required=False,
+    )
+    nds20 = DecimalField(
+        label=_('НДС 20%'),
+        max_digits=constants.SIXTY,
+        decimal_places=constants.TWO,
+        widget=NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        required=False,
+    )
+    operation_type = ChoiceField(
+        label=_('Тип операции'),
+        choices=OPERATION_TYPES,
+        widget=Select(attrs={'class': 'form-control'}),
+        required=False,
+    )
+
+    def __init__(
+        self, receipt_data: dict[str, Any], *args: Any, **kwargs: Any
+    ) -> None:
+        """Initialize form with receipt data.
+
+        Args:
+            receipt_data: Dictionary with receipt data.
+            *args: Positional arguments.
+            **kwargs: Keyword arguments.
+        """
+        super().__init__(*args, **kwargs)
+        if receipt_data:
+            receipt_date_str = receipt_data.get('receipt_date', '')
+            if receipt_date_str:
+                try:
+                    day, month, year = receipt_date_str.split(' ')[0].split('.')
+                    hour, minute = receipt_date_str.split(' ')[1].split(':')
+                    receipt_date = datetime(
+                        int(year),
+                        int(month),
+                        int(day),
+                        int(hour),
+                        int(minute),
+                        tzinfo=timezone.get_current_timezone(),
+                    )
+                    self.fields['receipt_date'].initial = receipt_date
+                except (ValueError, IndexError):
+                    self.fields['receipt_date'].initial = receipt_date_str
+
+            self.fields['name_seller'].initial = receipt_data.get('name_seller')
+            self.fields['retail_place'].initial = receipt_data.get(
+                'retail_place'
+            )
+            self.fields['retail_place_address'].initial = receipt_data.get(
+                'retail_place_address',
+            )
+            self.fields['number_receipt'].initial = receipt_data.get(
+                'number_receipt',
+            )
+            self.fields['total_sum'].initial = receipt_data.get('total_sum')
+            self.fields['nds10'].initial = receipt_data.get('nds10')
+            self.fields['nds20'].initial = receipt_data.get('nds20')
+            self.fields['operation_type'].initial = receipt_data.get(
+                'operation_type',
+                0,
+            )
+
+
+class PendingReceiptProductForm(Form):
+    """Form for editing a single product in pending receipt."""
+
+    product_name = CharField(
+        label=_('Название товара'),
+        max_length=1000,
+        widget=TextInput(attrs={'class': 'form-control'}),
+        required=True,
+    )
+    category = CharField(
+        label=_('Категория'),
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        widget=TextInput(attrs={'class': 'form-control'}),
+        required=False,
+    )
+    price = DecimalField(
+        label=_('Цена за единицу'),
+        max_digits=10,
+        decimal_places=2,
+        widget=NumberInput(
+            attrs={'class': 'form-control price', 'step': '0.01'},
+        ),
+        required=True,
+    )
+    quantity = DecimalField(
+        label=_('Количество'),
+        max_digits=10,
+        decimal_places=2,
+        widget=NumberInput(
+            attrs={'class': 'form-control quantity', 'step': '0.01'},
+        ),
+        required=True,
+    )
+    amount = DecimalField(
+        label=_('Сумма'),
+        max_digits=10,
+        decimal_places=2,
+        widget=NumberInput(
+            attrs={
+                'class': 'form-control amount',
+                'step': '0.01',
+                'readonly': True,
+            },
+        ),
+        required=True,
+    )
+    nds_type = IntegerField(
+        label=_('Тип НДС'),
+        widget=NumberInput(attrs={'class': 'form-control'}),
+        required=False,
+    )
+    nds_sum = DecimalField(
+        label=_('Сумма НДС'),
+        max_digits=10,
+        decimal_places=2,
+        widget=NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        required=False,
+    )
+
+
+PendingReceiptProductFormSet = formset_factory(
+    PendingReceiptProductForm,
+    extra=0,
+    can_delete=True,
+)
