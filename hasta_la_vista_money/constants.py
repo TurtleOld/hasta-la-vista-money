@@ -74,6 +74,9 @@ QR_CODE_NOT_CONSIDERED: Final[tuple[str]] = (
 SUCCESS_MESSAGE_CREATE_RECEIPT: Final = _('Чек успешно добавлен!')
 SUCCESS_MESSAGE_DELETE_RECEIPT: Final = _('Чек успешно удален!')
 ERROR_PROCESSING_RECEIPT: Final = _('Ошибка обработки чека, попробуйте позже')
+ERROR_MODEL_UNAVAILABLE: Final = _(
+    'Модель ИИ недоступна. Проверьте настройки API_MODEL в переменных окружения.'
+)
 
 # ============================================================================
 # Receipt Category Names

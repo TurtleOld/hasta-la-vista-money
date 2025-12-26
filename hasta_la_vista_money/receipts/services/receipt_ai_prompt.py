@@ -18,7 +18,12 @@ from django.core.files.uploadedfile import UploadedFile
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
 from django.http import HttpRequest
-from openai import OpenAI as OpenAIDefault
+from openai import (
+    APIError,
+    APITimeoutError,
+    BadRequestError,
+    OpenAI as OpenAIDefault,
+)
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -41,6 +46,10 @@ logger = structlog.get_logger(__name__)
 
 class RateLimitExceededError(Exception):
     """Exception raised when external API rate limit is exceeded."""
+
+
+class ModelUnavailableError(Exception):
+    """Exception raised when AI model is unavailable."""
 
 
 def check_openai_rate_limit(user_id: int | None = None) -> None:
@@ -100,7 +109,9 @@ def image_to_base64(uploaded_file: UploadedFile) -> str:
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+    retry=retry_if_exception_type(
+        (ConnectionError, TimeoutError, APITimeoutError),
+    ),
     reraise=True,
 )
 def analyze_image_with_ai(
@@ -139,9 +150,15 @@ def analyze_image_with_ai(
     )
     token = str(config('API_KEY', default=''))
     model = str(config('API_MODEL', default='openai/gpt-4o'))
-    timeout = config('OPENAI_TIMEOUT', default=30.0, cast=float)
+    base_timeout = config('OPENAI_TIMEOUT', default=120.0, cast=float)
 
     image_size = image_base64.size if hasattr(image_base64, 'size') else 0
+    if image_size > 5 * 1024 * 1024:
+        timeout = base_timeout * 2
+    elif image_size > 2 * 1024 * 1024:
+        timeout = base_timeout * 1.5
+    else:
+        timeout = base_timeout
     logger.info(
         'OpenAI API request started',
         extra={
@@ -279,6 +296,59 @@ def analyze_image_with_ai(
             },
         )
 
+    except BadRequestError as e:
+        error_str = str(e)
+        if 'unavailable_model' in error_str.lower() or 'unavailable model' in error_str.lower():
+            logger.error(
+                'OpenAI API model unavailable',
+                extra={
+                    'error': error_str,
+                    'error_type': type(e).__name__,
+                    'model': model,
+                    'base_url': base_url,
+                },
+            )
+            error_msg = (
+                f'Модель {model} недоступна. '
+                f'Проверьте правильность имени модели в переменной окружения API_MODEL. '
+                f'Доступные модели можно проверить в документации GitHub Models API.'
+            )
+            raise ModelUnavailableError(error_msg) from e
+        logger.exception(
+            'OpenAI API bad request error',
+            extra={
+                'error': error_str,
+                'error_type': type(e).__name__,
+                'model': model,
+            },
+        )
+        error_msg = f'Ошибка запроса к API: {error_str}'
+        raise RuntimeError(error_msg) from e
+    except APIError as e:
+        logger.exception(
+            'OpenAI API error',
+            extra={
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'model': model,
+            },
+        )
+        error_msg = f'Ошибка API: {e!s}'
+        raise RuntimeError(error_msg) from e
+    except APITimeoutError as e:
+        logger.error(
+            'OpenAI API timeout error',
+            extra={
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'model': model,
+                'timeout': timeout,
+                'image_size': image_size,
+            },
+            exc_info=True,
+        )
+        error_msg = f'Превышено время ожидания ответа API ({timeout} сек). Попробуйте позже или уменьшите размер изображения.'
+        raise RuntimeError(error_msg) from e
     except (ConnectionError, TimeoutError) as e:
         logger.warning(
             'OpenAI API connection/timeout error',
@@ -299,7 +369,7 @@ def analyze_image_with_ai(
                 'model': model,
             },
         )
-        error_msg = f'Error analyzing image: {e!s}'
+        error_msg = f'Ошибка обработки данных: {e!s}'
         raise RuntimeError(error_msg) from e
     except Exception as e:
         logger.exception(
@@ -310,7 +380,7 @@ def analyze_image_with_ai(
                 'model': model,
             },
         )
-        error_msg = f'Unexpected error analyzing image: {e!s}'
+        error_msg = f'Неожиданная ошибка при анализе изображения: {e!s}'
         raise RuntimeError(error_msg) from e
     else:
         return content

@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import CreateView, DeleteView, FormView, ListView
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
@@ -542,6 +542,29 @@ class ReceiptUpdateView(
             )
 
 
+class ReceiptDetailView(
+    LoginRequiredMixin,
+    DetailView[Receipt],
+    BaseView,
+    UserAuthMixin,
+):
+    model = Receipt
+    template_name: str = 'receipts/receipt_view.html'
+    context_object_name: str = 'receipt'
+
+    def get_object(self, queryset: QuerySet[Receipt] | None = None) -> Receipt:
+        request = cast('RequestWithContainer', self.request)
+        receipt_repository = request.container.receipts.receipt_repository()
+        receipt = (
+            receipt_repository.get_by_user_with_related(self.request.user)
+            .filter(pk=self.kwargs['pk'])
+            .first()
+        )
+        if receipt is None:
+            raise Http404('Receipt not found')
+        return cast('Receipt', receipt)
+
+
 class ReceiptDeleteView(
     LoginRequiredMixin,
     DeleteView[Receipt, Any],
@@ -713,6 +736,10 @@ class UploadImageView(
                     'exists': (
                         ValueError(constants.RECEIPT_ALREADY_EXISTS),
                         str(gettext_lazy(constants.RECEIPT_ALREADY_EXISTS)),
+                    ),
+                    'model_unavailable': (
+                        ValueError(constants.ERROR_MODEL_UNAVAILABLE),
+                        constants.ERROR_MODEL_UNAVAILABLE,
                     ),
                 }
                 error_tuple = error_messages.get(
