@@ -345,7 +345,7 @@ class ReceiptImportService:
             func = self._get_analysis_function(image_analysis_function)
             raw_json = self._analyze_image(uploaded_file, func, user.pk)
             receipt_data = self._parse_receipt_json(raw_json)
-        except ModelUnavailableError as e:
+        except ModelUnavailableError:
             return ReceiptImportResult(
                 success=False,
                 error='model_unavailable',

@@ -22,6 +22,8 @@ from openai import (
     APIError,
     APITimeoutError,
     BadRequestError,
+)
+from openai import (
     OpenAI as OpenAIDefault,
 )
 from tenacity import (
@@ -106,6 +108,198 @@ def image_to_base64(uploaded_file: UploadedFile) -> str:
     return f'data:image/jpeg;base64,{encoded_str}'
 
 
+def _get_openai_client() -> type[OpenAIDefault]:
+    """Get OpenAI client class.
+
+    Returns:
+        OpenAI client class.
+    """
+    try:
+        services_mod = importlib.import_module(
+            'hasta_la_vista_money.receipts.services'
+        )
+        return getattr(services_mod, 'OpenAI', OpenAIDefault)
+    except ModuleNotFoundError:  # pragma: no cover
+        return OpenAIDefault
+
+
+def _calculate_timeout(image_size: int, base_timeout: float) -> float:
+    """Calculate timeout based on image size.
+
+    Args:
+        image_size: Size of the image in bytes.
+        base_timeout: Base timeout in seconds.
+
+    Returns:
+        Calculated timeout in seconds.
+    """
+    if image_size > 5 * 1024 * 1024:
+        return base_timeout * 2
+    if image_size > 2 * 1024 * 1024:
+        return base_timeout * 1.5
+    return base_timeout
+
+
+def _create_receipt_messages(
+    image_base64: UploadedFile,
+) -> list['ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam']:
+    """Create messages for receipt analysis prompt.
+
+    Args:
+        image_base64: Uploaded receipt image file.
+
+    Returns:
+        List of message parameters for OpenAI API.
+    """
+    return [
+        cast(
+            'ChatCompletionSystemMessageParam',
+            {
+                'role': 'system',
+                'content': (
+                    'Вы — помощник, который помогает извлекать данные с '
+                    'кассовых чеков. Ваша задача — проанализировать '
+                    'изображение и вернуть JSON без доп. текста. '
+                    'Извлекайте все артикулы из чека, даже если названия '
+                    'повторяются. Каждый артикул добавляйте в items '
+                    'как отдельный элемент.'
+                ),
+            },
+        ),
+        cast(
+            'ChatCompletionUserMessageParam',
+            {
+                'role': 'user',
+                'content': [
+                    {
+                        'type': 'text',
+                        'text': (
+                            'На изображении представлен кассовый чек. '
+                            'Преобразуйте его в JSON со след. ключами:  '
+                            '- **name_seller**: имя продавца, если указано. '
+                            '- **retail_place_address**: адрес расчетов, '
+                            'если указан. '
+                            '- **retail_place**: место расчетов, '
+                            'если указано.'
+                        ),
+                    },
+                    {
+                        'type': 'text',
+                        'text': (
+                            '- **total_sum**: итоговая сумма в чеке. '
+                            '- **operation_type**: тип операции '
+                            '(1 "Приход", 2 для "Расход"). '
+                            '- **receipt_date**: дата и время '
+                            '"ДД.ММ.ГГГГ ЧЧ:ММ", '
+                            'напр.: "20.05.2025 11:40". '
+                            '- **number_receipt**: номер ФД из чека '
+                            '(числовое значение). '
+                            '- **nds10**: сумма НДС 10% или 0. '
+                            '- **nds20**: сумма НДС 20% или 0. '
+                            '- **items**: список товаров, каждый товар '
+                            'содержит:  '
+                            '  - **product_name**: название товара.  '
+                            '  - **category**: категория товара.  '
+                            '  - **price**: цена.  '
+                            '  - **quantity**: количество.  '
+                            '  - **amount**: сумма (цена × количество). '
+                            'Нельзя пропускать товары с чека или '
+                            'с нулевой ценой. Ответьте только корректным '
+                            'JSON, без доп. текста.'
+                        ),
+                    },
+                    {
+                        'type': 'text',
+                        'text': (
+                            'Обратите внимание: повт. товары с одинаковыми '
+                            'названиями нужно добавлять в items отдельными '
+                            'элементами. Например, если товар "Хлеб" '
+                            'встречается несколько раз, каждый раз он '
+                            'должен быть записан отдельно.'
+                        ),
+                    },
+                    {
+                        'type': 'text',
+                        'text': (
+                            'Пример:\n'
+                            '1. Хлеб пшеничный 25.00 x 2 = 50.00\n'
+                            '2. Хлеб пшеничный 25.00 x 1 = 25.00\n'
+                            '3. Молоко 3% 45.00 x 1 = 45.00\n'
+                            '\n'
+                            'Ожидаемый JSON:\n'
+                            '"items": [\n'
+                            '  {"product_name": "Хлеб пшеничный", '
+                            '"category": "Хлебобулочные изделия", '
+                            '"price": 25.00, "quantity": 2, '
+                            '"amount": 50.00},\n'
+                            '  {"product_name": "Хлеб пшеничный", '
+                            '"category": "Хлебобулочные изделия", '
+                            '"price": 25.00, "quantity": 1, '
+                            '"amount": 25.00},\n'
+                            '  {"product_name": "Молоко 3%", '
+                            '"price": 45.00, "quantity": 1, '
+                            '"amount": 45.00}\n'
+                            ']\n'
+                        ),
+                    },
+                    {
+                        'type': 'image_url',
+                        'image_url': {'url': image_to_base64(image_base64)},
+                    },
+                ],
+            },
+        ),
+    ]
+
+
+def _handle_bad_request_error(
+    e: BadRequestError,
+    model: str,
+    base_url: str,
+) -> None:
+    """Handle BadRequestError from OpenAI API.
+
+    Args:
+        e: BadRequestError exception.
+        model: Model name.
+        base_url: Base URL for API.
+
+    Raises:
+        ModelUnavailableError: If model is unavailable.
+        RuntimeError: For other bad request errors.
+    """
+    error_str = str(e)
+    if (
+        'unavailable_model' in error_str.lower()
+        or 'unavailable model' in error_str.lower()
+    ):
+        logger.exception(
+            'OpenAI API model unavailable',
+            extra={
+                'error': error_str,
+                'error_type': type(e).__name__,
+                'model': model,
+                'base_url': base_url,
+            },
+        )
+        error_msg = (
+            f'Модель {model} недоступна. '
+            f'Проверьте правильность имени модели в переменной окружения API_MODEL. '
+            f'Доступные модели можно проверить в документации GitHub Models API.'
+        )
+        raise ModelUnavailableError(error_msg) from e
+    logger.exception(
+        'OpenAI API bad request error',
+        extra={
+            'error': error_str,
+            'error_type': type(e).__name__,
+            'model': model,
+        },
+    )
+    error_msg = f'Ошибка запроса к API: {error_str}'
+    raise RuntimeError(error_msg) from e
+
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -137,13 +331,7 @@ def analyze_image_with_ai(
         RateLimitExceededError: If rate limit is exceeded.
     """
     check_openai_rate_limit(user_id)
-    try:
-        services_mod = importlib.import_module(
-            'hasta_la_vista_money.receipts.services'
-        )
-        openai_cls = getattr(services_mod, 'OpenAI', OpenAIDefault)
-    except ModuleNotFoundError:  # pragma: no cover
-        openai_cls = OpenAIDefault
+    openai_cls = _get_openai_client()
 
     base_url = str(
         config('API_BASE_URL', default='https://models.github.ai/inference')
@@ -153,12 +341,7 @@ def analyze_image_with_ai(
     base_timeout = config('OPENAI_TIMEOUT', default=120.0, cast=float)
 
     image_size = image_base64.size if hasattr(image_base64, 'size') else 0
-    if image_size > 5 * 1024 * 1024:
-        timeout = base_timeout * 2
-    elif image_size > 2 * 1024 * 1024:
-        timeout = base_timeout * 1.5
-    else:
-        timeout = base_timeout
+    timeout = _calculate_timeout(image_size, base_timeout)
     logger.info(
         'OpenAI API request started',
         extra={
@@ -176,107 +359,7 @@ def analyze_image_with_ai(
             timeout=timeout,
         )
 
-        messages: list[
-            ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam
-        ] = [
-            cast(
-                'ChatCompletionSystemMessageParam',
-                {
-                    'role': 'system',
-                    'content': (
-                        'Вы — помощник, который помогает извлекать данные с '
-                        'кассовых чеков. Ваша задача — проанализировать '
-                        'изображение и вернуть JSON без доп. текста. '
-                        'Извлекайте все артикулы из чека, даже если названия '
-                        'повторяются. Каждый артикул добавляйте в items '
-                        'как отдельный элемент.'
-                    ),
-                },
-            ),
-            cast(
-                'ChatCompletionUserMessageParam',
-                {
-                    'role': 'user',
-                    'content': [
-                        {
-                            'type': 'text',
-                            'text': (
-                                'На изображении представлен кассовый чек. '
-                                'Преобразуйте его в JSON со след. ключами:  '
-                                '- **name_seller**: имя продавца, если указано. '
-                                '- **retail_place_address**: адрес расчетов, '
-                                'если указан. '
-                                '- **retail_place**: место расчетов, '
-                                'если указано.'
-                            ),
-                        },
-                        {
-                            'type': 'text',
-                            'text': (
-                                '- **total_sum**: итоговая сумма в чеке. '
-                                '- **operation_type**: тип операции '
-                                '(1 "Приход", 2 для "Расход"). '
-                                '- **receipt_date**: дата и время '
-                                '"ДД.ММ.ГГГГ ЧЧ:ММ", '
-                                'напр.: "20.05.2025 11:40". '
-                                '- **number_receipt**: номер ФД из чека '
-                                '(числовое значение). '
-                                '- **nds10**: сумма НДС 10% или 0. '
-                                '- **nds20**: сумма НДС 20% или 0. '
-                                '- **items**: список товаров, каждый товар '
-                                'содержит:  '
-                                '  - **product_name**: название товара.  '
-                                '  - **category**: категория товара.  '
-                                '  - **price**: цена.  '
-                                '  - **quantity**: количество.  '
-                                '  - **amount**: сумма (цена × количество). '
-                                'Нельзя пропускать товары с чека или '
-                                'с нулевой ценой. Ответьте только корректным '
-                                'JSON, без доп. текста.'
-                            ),
-                        },
-                        {
-                            'type': 'text',
-                            'text': (
-                                'Обратите внимание: повт. товары с одинаковыми '
-                                'названиями нужно добавлять в items отдельными '
-                                'элементами. Например, если товар "Хлеб" '
-                                'встречается несколько раз, каждый раз он '
-                                'должен быть записан отдельно.'
-                            ),
-                        },
-                        {
-                            'type': 'text',
-                            'text': (
-                                'Пример:\n'
-                                '1. Хлеб пшеничный 25.00 x 2 = 50.00\n'
-                                '2. Хлеб пшеничный 25.00 x 1 = 25.00\n'
-                                '3. Молоко 3% 45.00 x 1 = 45.00\n'
-                                '\n'
-                                'Ожидаемый JSON:\n'
-                                '"items": [\n'
-                                '  {"product_name": "Хлеб пшеничный", '
-                                '"category": "Хлебобулочные изделия", '
-                                '"price": 25.00, "quantity": 2, '
-                                '"amount": 50.00},\n'
-                                '  {"product_name": "Хлеб пшеничный", '
-                                '"category": "Хлебобулочные изделия", '
-                                '"price": 25.00, "quantity": 1, '
-                                '"amount": 25.00},\n'
-                                '  {"product_name": "Молоко 3%", '
-                                '"price": 45.00, "quantity": 1, '
-                                '"amount": 45.00}\n'
-                                ']\n'
-                            ),
-                        },
-                        {
-                            'type': 'image_url',
-                            'image_url': {'url': image_to_base64(image_base64)},
-                        },
-                    ],
-                },
-            ),
-        ]
+        messages = _create_receipt_messages(image_base64)
 
         response = client.chat.completions.create(
             model=model,
@@ -297,33 +380,7 @@ def analyze_image_with_ai(
         )
 
     except BadRequestError as e:
-        error_str = str(e)
-        if 'unavailable_model' in error_str.lower() or 'unavailable model' in error_str.lower():
-            logger.error(
-                'OpenAI API model unavailable',
-                extra={
-                    'error': error_str,
-                    'error_type': type(e).__name__,
-                    'model': model,
-                    'base_url': base_url,
-                },
-            )
-            error_msg = (
-                f'Модель {model} недоступна. '
-                f'Проверьте правильность имени модели в переменной окружения API_MODEL. '
-                f'Доступные модели можно проверить в документации GitHub Models API.'
-            )
-            raise ModelUnavailableError(error_msg) from e
-        logger.exception(
-            'OpenAI API bad request error',
-            extra={
-                'error': error_str,
-                'error_type': type(e).__name__,
-                'model': model,
-            },
-        )
-        error_msg = f'Ошибка запроса к API: {error_str}'
-        raise RuntimeError(error_msg) from e
+        _handle_bad_request_error(e, model, base_url)
     except APIError as e:
         logger.exception(
             'OpenAI API error',
@@ -336,7 +393,7 @@ def analyze_image_with_ai(
         error_msg = f'Ошибка API: {e!s}'
         raise RuntimeError(error_msg) from e
     except APITimeoutError as e:
-        logger.error(
+        logger.exception(
             'OpenAI API timeout error',
             extra={
                 'error': str(e),
@@ -345,7 +402,6 @@ def analyze_image_with_ai(
                 'timeout': timeout,
                 'image_size': image_size,
             },
-            exc_info=True,
         )
         error_msg = f'Превышено время ожидания ответа API ({timeout} сек). Попробуйте позже или уменьшите размер изображения.'
         raise RuntimeError(error_msg) from e
