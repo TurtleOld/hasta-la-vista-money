@@ -43,6 +43,6 @@ jobs:
         uses: softprops/action-gh-release@v2.5.0
         with:
           generate_release_notes: true
-          tag_name: ${{ github.ref }}
+          tag_name: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
           body: ${{ steps.changelog.outputs.changelog }}
