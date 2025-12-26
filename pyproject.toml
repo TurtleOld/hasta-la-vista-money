@@ -1,6 +1,6 @@
 [project]
 name = "hastalavistamoney"
-version = "1.9.0"
+version = "1.10.0"
 description = "Home Accounting Project"
 authors = [
     {name = "Alexander Pavlov", email = "dev@pavlovteam.ru"}
@@ -245,7 +245,7 @@ known_first_party = "hasta_la_vista_money"
 sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
 [tool.bumpversion]
-current_version = "1.9.0"
+current_version = "1.10.0"
 commit = false
 tag = true
 
