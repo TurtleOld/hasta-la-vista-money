@@ -16,6 +16,9 @@ from core.repositories.protocols import ReceiptRepositoryProtocol
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts import services as receipts_services
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.receipts.services.receipt_ai_prompt import (
+    ModelUnavailableError,
+)
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
     ReceiptCreatorService,
@@ -342,6 +345,11 @@ class ReceiptImportService:
             func = self._get_analysis_function(image_analysis_function)
             raw_json = self._analyze_image(uploaded_file, func, user.pk)
             receipt_data = self._parse_receipt_json(raw_json)
+        except ModelUnavailableError:
+            return ReceiptImportResult(
+                success=False,
+                error='model_unavailable',
+            )
         except (json.JSONDecodeError, ValueError, TypeError):
             return ReceiptImportResult(success=False, error='invalid_file')
 

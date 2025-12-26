@@ -15,6 +15,7 @@ from hasta_la_vista_money.receipts.views import (
     ProductByMonthView,
     ReceiptCreateView,
     ReceiptDeleteView,
+    ReceiptDetailView,
     ReceiptUpdateView,
     ReceiptView,
     SellerCreateView,
@@ -31,6 +32,7 @@ urlpatterns = [
         name='create_seller',
     ),
     path('update/<int:pk>/', ReceiptUpdateView.as_view(), name='update'),
+    path('view/<int:pk>/', ReceiptDetailView.as_view(), name='view'),
     path('<int:pk>/', ReceiptDeleteView.as_view(), name='delete'),
     path(
         'delete/<int:pk>/',
