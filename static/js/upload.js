@@ -42,10 +42,20 @@
         const submitBtn = document.getElementById('submitBtn');
         const form = document.getElementById('uploadForm');
         const loadingIcon = document.getElementById('loadingIcon');
+        const buttonText = document.getElementById('buttonText');
         const errorBox = document.getElementById('upload-error');
 
         if (!uploadZone || !fileInput || !submitBtn || !form) {
             return;
+        }
+
+        if (loadingIcon) {
+            loadingIcon.style.display = 'none';
+            loadingIcon.classList.add('hidden');
+        }
+        if (buttonText) {
+            buttonText.style.display = 'inline-flex';
+            buttonText.classList.remove('hidden');
         }
 
         const maxSize = 5 * 1024 * 1024;
@@ -93,12 +103,16 @@
         }
 
         function setLoading(isLoading) {
-            if (!loadingIcon) {
+            if (!loadingIcon || !buttonText) {
                 return;
             }
             if (isLoading) {
+                buttonText.style.display = 'none';
+                loadingIcon.style.display = 'inline-flex';
                 loadingIcon.classList.remove('hidden');
             } else {
+                buttonText.style.display = 'inline-flex';
+                loadingIcon.style.display = 'none';
                 loadingIcon.classList.add('hidden');
             }
         }
@@ -227,14 +241,25 @@
             if (!fileInput.files || fileInput.files.length === 0) {
                 e.preventDefault();
                 setError('Пожалуйста, выберите изображение для загрузки');
+                setLoading(false);
                 return;
             }
             submitBtn.disabled = true;
             setLoading(true);
         });
+
+        setLoading(false);
+
+        window.addEventListener('load', () => {
+            setLoading(false);
+        });
     }
 
     if (typeof document !== 'undefined') {
-        document.addEventListener('DOMContentLoaded', initReceiptImageUpload);
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initReceiptImageUpload);
+        } else {
+            initReceiptImageUpload();
+        }
     }
 })();
