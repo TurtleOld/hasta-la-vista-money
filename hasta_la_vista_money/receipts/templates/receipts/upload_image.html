@@ -77,11 +77,11 @@
 
             <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <button type="submit" id="submitBtn" disabled class="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60">
-                    <span class="inline-flex items-center gap-2">
+                    <span id="buttonText" class="inline-flex items-center gap-2">
                         <i class="bi bi-check2-circle"></i>
                         <span>{% translate 'Загрузить' %}</span>
                     </span>
-                    <span id="loadingIcon" class="hidden ml-3 inline-flex items-center gap-2 text-sm font-medium">
+                    <span id="loadingIcon" class="hidden inline-flex items-center gap-2 text-sm font-medium">
                         <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
                         {% translate 'Загрузка...' %}
                     </span>

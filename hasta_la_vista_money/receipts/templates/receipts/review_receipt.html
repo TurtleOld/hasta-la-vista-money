@@ -1,0 +1,367 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load csp %}
+
+{% block title %}{% translate 'Проверка чека перед сохранением' %}{% endblock %}
+
+{% block extra_css %}
+<style nonce="{{ request.csp_nonce }}">
+    input[readonly],
+    input[readonly]:focus {
+        background-color: #f3f4f6;
+        cursor: not-allowed;
+    }
+    .dark input[readonly],
+    .dark input[readonly]:focus {
+        background-color: #374151;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-6">
+        <h1 class="text-2xl sm:text-3xl font-heading font-semibold text-gray-900 dark:text-gray-100">
+            {% translate 'Проверка чека перед сохранением' %}
+        </h1>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            {% translate 'Проверьте и при необходимости отредактируйте данные чека. После проверки нажмите "Всё верно, сохранить".' %}
+        </p>
+    </div>
+
+    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm p-5 sm:p-6">
+        <form method="post" class="space-y-6" novalidate>
+            {% csrf_token %}
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-1">
+                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ form.receipt_date.label }}
+                    </label>
+                    {{ form.receipt_date }}
+                    {% if form.receipt_date.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400">
+                            {{ form.receipt_date.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ form.number_receipt.label }}
+                    </label>
+                    {{ form.number_receipt }}
+                    {% if form.number_receipt.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400">
+                            {{ form.number_receipt.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ form.name_seller.label }}
+                    </label>
+                    {{ form.name_seller }}
+                    {% if form.name_seller.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400">
+                            {{ form.name_seller.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ form.total_sum.label }}
+                    </label>
+                    {{ form.total_sum }}
+                    {% if form.total_sum.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400">
+                            {{ form.total_sum.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ form.retail_place.label }}
+                    </label>
+                    {{ form.retail_place }}
+                    {% if form.retail_place.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400">
+                            {{ form.retail_place.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ form.operation_type.label }}
+                    </label>
+                    {{ form.operation_type }}
+                    {% if form.operation_type.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400">
+                            {{ form.operation_type.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ form.retail_place_address.label }}
+                    </label>
+                    {{ form.retail_place_address }}
+                    {% if form.retail_place_address.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400">
+                            {{ form.retail_place_address.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {{ form.nds10.label }}
+                        </label>
+                        {{ form.nds10 }}
+                        {% if form.nds10.errors %}
+                            <div class="text-sm text-red-600 dark:text-red-400">
+                                {{ form.nds10.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {{ form.nds20.label }}
+                        </label>
+                        {{ form.nds20 }}
+                        {% if form.nds20.errors %}
+                            <div class="text-sm text-red-600 dark:text-red-400">
+                                {{ form.nds20.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h2 class="text-xl font-heading font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                    {% translate 'Позиции чека' %}
+                </h2>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% translate 'Название' %}
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% translate 'Категория' %}
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% translate 'Цена' %}
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% translate 'Количество' %}
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% translate 'Сумма' %}
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% translate 'Удалить' %}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            {{ product_formset.management_form }}
+                            {% for form in product_formset %}
+                                <tr class="product-row">
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        {{ form.product_name }}
+                                        {% if form.product_name.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.product_name.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        {{ form.category }}
+                                        {% if form.category.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.category.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        {{ form.price }}
+                                        {% if form.price.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.price.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        {{ form.quantity }}
+                                        {% if form.quantity.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.quantity.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        {{ form.amount }}
+                                        {% if form.amount.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
+                                                {{ form.amount.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        {{ form.DELETE }}
+                                    </td>
+                                    {% for hidden in form.hidden_fields %}
+                                        {{ hidden }}
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
+                <button
+                    type="submit"
+                    name="save"
+                    class="inline-flex items-center justify-center rounded-xl bg-green-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700"
+                >
+                    <i class="bi bi-check2-circle mr-2"></i>
+                    {% translate 'Всё верно, сохранить' %}
+                </button>
+                <button
+                    type="submit"
+                    name="update"
+                    class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                    <i class="bi bi-save mr-2"></i>
+                    {% translate 'Сохранить изменения' %}
+                </button>
+                <a
+                    href="{% url 'receipts:list' %}"
+                    class="inline-flex items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-6 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                    {% translate 'Отмена' %}
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script nonce="{{ request.csp_nonce }}">
+(function() {
+    function initReceiptReview() {
+        const productRows = document.querySelectorAll('.product-row');
+        const totalSumInput = document.getElementById('id_total_sum');
+
+        function amountUpdate(event) {
+            try {
+                const input = event ? event.target : this;
+                const row = input.closest('tr.product-row');
+                if (!row) {
+                    return;
+                }
+
+                const priceInput = row.querySelector('input[name*="price"]') || row.querySelector('input.price');
+                const quantityInput = row.querySelector('input[name*="quantity"]') || row.querySelector('input.quantity');
+                const amountInput = row.querySelector('input[name*="amount"]') || row.querySelector('input.amount');
+
+                if (!priceInput || !quantityInput || !amountInput) {
+                    return;
+                }
+
+                const price = parseFloat(String(priceInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
+                const quantity = parseFloat(String(quantityInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
+                const amount = (price * quantity).toFixed(2);
+                
+                amountInput.value = amount;
+                amountInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+                calculateTotalSum();
+            } catch (error) {
+                console.error('Receipt review error:', error);
+            }
+        }
+
+        function calculateTotalSum() {
+            if (!totalSumInput) {
+                return;
+            }
+
+            const amountInputs = document.querySelectorAll('input[name*="amount"]');
+            let total_sum = 0;
+
+            amountInputs.forEach(amountInput => {
+                const row = amountInput.closest('tr.product-row');
+                if (row) {
+                    const deleteCheckbox = row.querySelector('input[name*="DELETE"]');
+                    if (deleteCheckbox && deleteCheckbox.checked) {
+                        return;
+                    }
+                }
+                const value = String(amountInput.value).replace(',', '.').replace(/\s/g, '');
+                total_sum += parseFloat(value) || 0;
+            });
+
+            totalSumInput.value = total_sum.toFixed(2);
+        }
+
+        productRows.forEach(row => {
+            const priceInput = row.querySelector('input[name*="price"]') || row.querySelector('input.price');
+            const quantityInput = row.querySelector('input[name*="quantity"]') || row.querySelector('input.quantity');
+            const amountInput = row.querySelector('input[name*="amount"]') || row.querySelector('input.amount');
+            const deleteCheckbox = row.querySelector('input[name*="DELETE"]');
+
+            if (priceInput && quantityInput && amountInput) {
+                priceInput.addEventListener('input', amountUpdate);
+                priceInput.addEventListener('change', amountUpdate);
+                priceInput.addEventListener('blur', amountUpdate);
+
+                quantityInput.addEventListener('input', amountUpdate);
+                quantityInput.addEventListener('change', amountUpdate);
+                quantityInput.addEventListener('blur', amountUpdate);
+
+                if (deleteCheckbox) {
+                    deleteCheckbox.addEventListener('change', calculateTotalSum);
+                }
+
+                const price = parseFloat(String(priceInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
+                const quantity = parseFloat(String(quantityInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
+                if (price > 0 && quantity > 0) {
+                    const amount = (price * quantity).toFixed(2);
+                    amountInput.value = amount;
+                }
+            }
+        });
+
+        calculateTotalSum();
+
+        const form = document.querySelector('form[method="post"]');
+        if (form) {
+            form.addEventListener('submit', function() {
+                calculateTotalSum();
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initReceiptReview);
+    } else {
+        initReceiptReview();
+    }
+})();
+</script>
+{% endblock %}

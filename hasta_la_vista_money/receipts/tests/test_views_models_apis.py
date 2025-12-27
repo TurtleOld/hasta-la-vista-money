@@ -17,7 +17,6 @@ from config.containers import ApplicationContainer
 from config.middleware import CoreMiddleware
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.core.types import RequestWithContainer  # noqa: TC001
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
     ProductForm,
@@ -27,7 +26,12 @@ from hasta_la_vista_money.receipts.forms import (
     SellerForm,
     UploadImageForm,
 )
-from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.models import (
+    PendingReceipt,
+    Product,
+    Receipt,
+    Seller,
+)
 from hasta_la_vista_money.receipts.services import (
     analyze_image_with_ai,
     image_to_base64,
@@ -37,6 +41,7 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 )
 
 if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
     from hasta_la_vista_money.users.models import User as UserType
 else:
     UserType = get_user_model()
@@ -744,6 +749,7 @@ class TestUploadImageView(TestCase):
             user=self.user,
             number_receipt=12345,
         ).delete()
+        PendingReceipt.objects.filter(user=self.user).delete()
 
         mock_analyze.return_value = json.dumps(
             {
@@ -780,10 +786,327 @@ class TestUploadImageView(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
 
+        self.mock_account_service.apply_receipt_spend.assert_not_called()
+
+        pending_receipt = PendingReceipt.objects.filter(
+            user=self.user,
+        ).first()
+        self.assertIsNotNone(pending_receipt)
+        if pending_receipt is not None:
+            self.assertEqual(pending_receipt.account.pk, self.account.pk)
+            self.assertEqual(
+                pending_receipt.receipt_data['total_sum'],
+                '100.00',
+            )
+
+        redirect_location = response.get('Location', '')  # type: ignore[call-overload]
+        self.assertIn('/receipts/review/', redirect_location)
+
+
+class TestReviewPendingReceiptView(TestCase):
+    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
+        'users.yaml',
+        'finance_account.yaml',
+    ]
+
+    def setUp(self) -> None:
+        self.user = UserType.objects.get(pk=1)
+        self.user2 = (
+            UserType.objects.get(pk=2)
+            if UserType.objects.filter(pk=2).exists()
+            else None
+        )
+        self.account = Account.objects.get(pk=1)
+        self.mock_account_service = MagicMock(spec=AccountServiceProtocol)
+        self.mock_account_service.apply_receipt_spend.return_value = (
+            self.account
+        )
+        self.container = ApplicationContainer()
+        self.container.core.account_service.override(
+            providers.Object(self.mock_account_service),
+        )
+
+        mock_account_repository = MagicMock()
+        mock_account_repository.get_by_id.return_value = self.account
+        self.container.finance_account.account_repository.override(
+            providers.Object(mock_account_repository),
+        )
+
+        self.container.receipts.receipt_creator_service.override(
+            providers.Factory(
+                ReceiptCreatorService,
+                account_service=providers.Object(self.mock_account_service),
+                account_repository=providers.Object(mock_account_repository),
+                product_repository=self.container.receipts.product_repository,
+                receipt_repository=self.container.receipts.receipt_repository,
+                seller_repository=self.container.receipts.seller_repository,
+            ),
+        )
+
+        original_init = CoreMiddleware.__init__
+
+        def patched_init(
+            self_instance: CoreMiddleware,
+            get_response: Any,
+        ) -> None:
+            original_init(self_instance, get_response)
+            self_instance.container = self.container
+
+        def patched_call(
+            self_instance: CoreMiddleware,
+            request: Any,
+        ) -> Any:
+            request_with_container = cast('RequestWithContainer', request)
+            request_with_container.container = self_instance.container
+            return self_instance.get_response(request_with_container)
+
+        self.middleware_init_patcher = patch.object(
+            CoreMiddleware,
+            '__init__',
+            patched_init,
+        )
+        self.middleware_init_patcher.start()
+
+        self.middleware_patcher = patch.object(
+            CoreMiddleware,
+            '__call__',
+            patched_call,
+        )
+        self.middleware_patcher.start()
+
+        self.receipt_data = {
+            'name_seller': 'Тестовый продавец',
+            'total_sum': '150.00',
+            'number_receipt': '54321',
+            'receipt_date': '20.05.2023 14:30',
+            'nds10': None,
+            'nds20': None,
+            'operation_type': 1,
+            'items': [
+                {
+                    'product_name': 'Товар 1',
+                    'price': '50.00',
+                    'quantity': '2',
+                    'amount': '100.00',
+                    'category': 'Продукты',
+                    'nds_type': None,
+                    'nds_sum': 0,
+                },
+                {
+                    'product_name': 'Товар 2',
+                    'price': '50.00',
+                    'quantity': '1',
+                    'amount': '50.00',
+                    'category': 'Напитки',
+                    'nds_type': None,
+                    'nds_sum': 0,
+                },
+            ],
+        }
+
+        self.pending_receipt = PendingReceipt.objects.create(
+            user=self.user,
+            account=self.account,
+            receipt_data=self.receipt_data,
+            expires_at=timezone.now() + timedelta(hours=24),
+        )
+
+    def tearDown(self) -> None:
+        self.container.core.account_service.reset_override()
+        self.container.finance_account.account_repository.reset_override()
+        self.container.receipts.receipt_creator_service.reset_override()
+        self.middleware_patcher.stop()
+        self.middleware_init_patcher.stop()
+        PendingReceipt.objects.all().delete()
+        Receipt.objects.filter(user=self.user, number_receipt=54321).delete()
+
+    def test_review_pending_receipt_view_get(self) -> None:
+        self.client.force_login(self.user)
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': self.pending_receipt.pk},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertIn('pending_receipt', response.context)
+        self.assertIn('product_formset', response.context)
+        self.assertEqual(
+            response.context['pending_receipt'].pk,
+            self.pending_receipt.pk,
+        )
+
+    def test_review_pending_receipt_view_unauthorized(self) -> None:
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': self.pending_receipt.pk},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_review_pending_receipt_view_wrong_user(self) -> None:
+        if self.user2 is None:
+            self.skipTest('Второй пользователь не найден в фикстурах')
+        self.client.force_login(self.user2)
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': self.pending_receipt.pk},
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_review_pending_receipt_view_expired(self) -> None:
+        expired_receipt = PendingReceipt.objects.create(
+            user=self.user,
+            account=self.account,
+            receipt_data=self.receipt_data,
+            expires_at=timezone.now() - timedelta(hours=1),
+        )
+        self.client.force_login(self.user)
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': expired_receipt.pk},
+        )
+        response = self.client.get(url)
+        self.assertRedirects(response, '/receipts/upload/')
+        self.assertFalse(
+            PendingReceipt.objects.filter(pk=expired_receipt.pk).exists(),
+        )
+
+    def test_review_pending_receipt_view_post_save(self) -> None:
+        self.client.force_login(self.user)
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': self.pending_receipt.pk},
+        )
+
+        data = {
+            'receipt_date': '2023-05-20T14:30',
+            'name_seller': 'Обновленный продавец',
+            'retail_place': 'Магазин',
+            'retail_place_address': 'Адрес магазина',
+            'number_receipt': '54321',
+            'total_sum': '150.00',
+            'nds10': '',
+            'nds20': '',
+            'operation_type': '1',
+            'form-TOTAL_FORMS': '2',
+            'form-INITIAL_FORMS': '0',
+            'form-MIN_NUM_FORMS': '0',
+            'form-MAX_NUM_FORMS': '1000',
+            'form-0-product_name': 'Товар 1',
+            'form-0-category': 'Продукты',
+            'form-0-price': '50.00',
+            'form-0-quantity': '2',
+            'form-0-amount': '100.00',
+            'form-0-nds_type': '',
+            'form-0-nds_sum': '',
+            'form-1-product_name': 'Товар 2',
+            'form-1-category': 'Напитки',
+            'form-1-price': '50.00',
+            'form-1-quantity': '1',
+            'form-1-amount': '50.00',
+            'form-1-nds_type': '',
+            'form-1-nds_sum': '',
+            'save': 'Сохранить',
+        }
+
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, '/receipts/')
+
         self.mock_account_service.apply_receipt_spend.assert_called_once()
         call_args = self.mock_account_service.apply_receipt_spend.call_args
         self.assertEqual(call_args[0][0].pk, self.account.pk)
-        self.assertEqual(call_args[0][1], Decimal('100.00'))
+        self.assertEqual(call_args[0][1], Decimal('150.00'))
+
+        self.assertFalse(
+            PendingReceipt.objects.filter(pk=self.pending_receipt.pk).exists(),
+        )
+
+        receipt = Receipt.objects.filter(
+            user=self.user,
+            number_receipt=54321,
+        ).first()
+        self.assertIsNotNone(receipt)
+        if receipt is not None:
+            self.assertEqual(receipt.total_sum, Decimal('150.00'))
+            self.assertEqual(receipt.account.pk, self.account.pk)
+
+    def test_review_pending_receipt_view_post_update(self) -> None:
+        self.client.force_login(self.user)
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': self.pending_receipt.pk},
+        )
+
+        data = {
+            'receipt_date': '2023-05-20T14:30',
+            'name_seller': 'Обновленный продавец',
+            'retail_place': 'Магазин',
+            'retail_place_address': 'Адрес магазина',
+            'number_receipt': '54321',
+            'total_sum': '200.00',
+            'nds10': '',
+            'nds20': '',
+            'operation_type': '1',
+            'form-TOTAL_FORMS': '2',
+            'form-INITIAL_FORMS': '0',
+            'form-MIN_NUM_FORMS': '0',
+            'form-MAX_NUM_FORMS': '1000',
+            'form-0-product_name': 'Товар 1',
+            'form-0-category': 'Продукты',
+            'form-0-price': '50.00',
+            'form-0-quantity': '2',
+            'form-0-amount': '100.00',
+            'form-0-nds_type': '',
+            'form-0-nds_sum': '',
+            'form-1-product_name': 'Товар 2',
+            'form-1-category': 'Напитки',
+            'form-1-price': '100.00',
+            'form-1-quantity': '1',
+            'form-1-amount': '100.00',
+            'form-1-nds_type': '',
+            'form-1-nds_sum': '',
+        }
+
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+
+        redirect_location = response.get('Location', '')  # type: ignore[call-overload]
+        self.assertIn('/receipts/review/', redirect_location)
+
+        self.mock_account_service.apply_receipt_spend.assert_not_called()
+
+        updated_pending_receipt = PendingReceipt.objects.get(
+            pk=self.pending_receipt.pk,
+        )
+        self.assertEqual(
+            updated_pending_receipt.receipt_data['total_sum'],
+            200.0,
+        )
+        self.assertEqual(
+            updated_pending_receipt.receipt_data['name_seller'],
+            'Обновленный продавец',
+        )
+
+    def test_review_pending_receipt_view_post_invalid_form(self) -> None:
+        self.client.force_login(self.user)
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': self.pending_receipt.pk},
+        )
+
+        data = {
+            'receipt_date': '',
+            'name_seller': '',
+            'total_sum': '',
+        }
+
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        form = response.context['form']
+        self.assertFalse(form.is_valid())
+        self.assertIn('receipt_date', form.errors)
 
 
 class TestProductByMonthView(TestCase):
