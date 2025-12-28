@@ -1,0 +1,60 @@
+{% load i18n %}
+
+<input type="checkbox" id="instruction-modal-toggle" class="peer hidden" />
+
+<label for="instruction-modal-toggle" class="fixed inset-0 z-[60] hidden cursor-pointer bg-black/50 backdrop-blur-sm opacity-0 transition-opacity duration-300 peer-checked:block peer-checked:opacity-100" onclick="if(document.getElementById('mobileMenuState')) document.getElementById('mobileMenuState').checked = false;"></label>
+
+<div class="fixed inset-0 z-[70] hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300 peer-checked:flex peer-checked:opacity-100 pointer-events-none peer-checked:pointer-events-auto">
+    <div class="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 scale-95 peer-checked:scale-100">
+        <div class="flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    {% translate 'Инструкция по загрузке чеков' %}
+                </h2>
+                <label for="instruction-modal-toggle" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer">
+                    <i class="bi bi-x-lg text-lg"></i>
+                    <span class="sr-only">{% translate 'Закрыть' %}</span>
+                </label>
+            </div>
+
+            <div class="flex-1 overflow-y-auto px-6 py-4">
+                <div class="prose prose-sm dark:prose-invert max-w-none">
+                    <div class="space-y-4 text-gray-700 dark:text-gray-300">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                                {% translate 'Ремарка*' %}
+                            </h3>
+                            <p class="leading-relaxed">
+                                {% translate 'Для качественного распознования чека, лучше его взять его с сайта lkdr.nalog.ru. Регистрация по номеру телефона. Чтобы туда чеки попадали, нужно их добавлять через мобильное приложение "Мои чеки онлайн", либо чеки добавляются в личный кабинет автоматически если при получении чека в онлайн магазинах указан ваш номер телефона и\или электронная почта.' %}
+                            </p>
+                        </div>
+
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                                {% translate 'Как загрузить чек?' %}
+                            </h3>
+                            <p class="text-sm leading-relaxed">
+                                {% translate 'Дополнительная информация и рекомендации по использованию функции загрузки чеков. Опишите возможные проблемы и способы их решения.' %}
+                            </p>
+                        </div>
+
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                                {% translate 'Заголовок раздела 3' %}
+                            </h3>
+                            <p class="text-sm leading-relaxed">
+                                {% translate 'Полезные советы и подсказки для пользователей. Можно добавить информацию о поддерживаемых форматах, размерах файлов и других важных деталях.' %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+                <label for="instruction-modal-toggle" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 cursor-pointer">
+                    {% translate 'Понятно' %}
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
