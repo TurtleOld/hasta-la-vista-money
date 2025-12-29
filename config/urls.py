@@ -40,10 +40,10 @@ urlpatterns = [
         ),
     ),
     path(
-        'hasta-la-vista-money/',
+        'finance_account/',
         include(
             'hasta_la_vista_money.finance_account.urls',
-            namespace='applications',
+            namespace='finance_account',
         ),
     ),
     path(
@@ -65,13 +65,6 @@ urlpatterns = [
         include(
             'hasta_la_vista_money.expense.urls',
             namespace='expense',
-        ),
-    ),
-    path(
-        'finance_account/',
-        include(
-            'hasta_la_vista_money.finance_account.urls',
-            namespace='finance_account',
         ),
     ),
     path(

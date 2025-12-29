@@ -43,7 +43,7 @@ class TestUser(TestCase):
         }
 
         response = self.client.post(url, new_user, follow=True)
-        self.assertRedirects(response, '/hasta-la-vista-money/')
+        self.assertRedirects(response, '/finance_account/')
 
     def test_login_user_success(self) -> None:
         self.client.force_login(self.user1)
@@ -67,7 +67,7 @@ class TestUser(TestCase):
         )
 
         self.assertEqual(response.status_code, constants.REDIRECTS)
-        self.assertRedirects(response, '/hasta-la-vista-money/')
+        self.assertRedirects(response, '/finance_account/')
 
     def test_login_user_invalid_credentials(self) -> None:
         url = reverse_lazy('login')
