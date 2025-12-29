@@ -1,8 +1,9 @@
 ARG PYTHON_VERSION=3.13.9
 ARG NODE_VERSION=20
-ARG UV_VERSION=0.9.18
+ARG UV_VERSION=0.7.13
 
 FROM node:${NODE_VERSION}-alpine AS node-builder
+ARG NODE_VERSION
 WORKDIR /app
 COPY theme/static_src/package.json theme/static_src/package-lock.json ./theme/static_src/
 WORKDIR /app/theme/static_src
@@ -17,6 +18,8 @@ WORKDIR /app/theme/static_src
 RUN npm run build
 
 FROM python:${PYTHON_VERSION}-slim AS py-builder
+ARG PYTHON_VERSION
+ARG UV_VERSION
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -36,6 +39,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 FROM python:${PYTHON_VERSION}-slim AS runtime
+ARG PYTHON_VERSION
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
