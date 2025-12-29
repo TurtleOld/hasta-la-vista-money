@@ -19,7 +19,7 @@ RUN npm run build
 
 WORKDIR /app
 
-FROM python:3.13.9-alpine AS builder
+FROM python:3.13-alpine AS builder
 
 WORKDIR /app
 
@@ -37,7 +37,7 @@ COPY . .
 
 COPY --from=node-builder /app/static/css/styles.min.css static/css/styles.min.css
 
-FROM python:3.13-slim
+FROM python:3.13-alpine
 
 WORKDIR /app
 
