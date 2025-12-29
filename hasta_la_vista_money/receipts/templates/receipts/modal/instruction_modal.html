@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load static %}
 
 <input type="checkbox" id="instruction-modal-toggle" class="peer hidden" />
 
@@ -8,7 +9,7 @@
     <div class="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 scale-95 peer-checked:scale-100">
         <div class="flex flex-col max-h-[90vh]">
             <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                <h2 class="text-xl font-semibold text-white">
                     {% translate 'Инструкция по загрузке чеков' %}
                 </h2>
                 <label for="instruction-modal-toggle" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer">
@@ -22,10 +23,10 @@
                     <div class="space-y-4 text-gray-700 dark:text-gray-300">
                         <div>
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                {% translate 'Ремарка*' %}
+                                {% translate 'Примечание*' %}
                             </h3>
                             <p class="leading-relaxed">
-                                {% translate 'Для качественного распознования чека, лучше его взять его с сайта lkdr.nalog.ru. Регистрация по номеру телефона. Чтобы туда чеки попадали, нужно их добавлять через мобильное приложение "Мои чеки онлайн", либо чеки добавляются в личный кабинет автоматически если при получении чека в онлайн магазинах указан ваш номер телефона и\или электронная почта.' %}
+                                {% translate 'Для качественного распознавания чека лучше взять его с сайта lkdr.nalog.ru. Регистрация по номеру телефона. Чтобы туда чеки попадали, нужно их добавлять через мобильное приложение "Мои чеки онлайн", либо чеки добавляются в личный кабинет автоматически, если при получении чека в онлайн-магазинах указан ваш номер телефона и/или электронная почта.' %}
                             </p>
                         </div>
 
@@ -34,16 +35,19 @@
                                 {% translate 'Как загрузить чек?' %}
                             </h3>
                             <p class="text-sm leading-relaxed">
-                                {% translate 'Дополнительная информация и рекомендации по использованию функции загрузки чеков. Опишите возможные проблемы и способы их решения.' %}
+                                {% translate 'Если чек брать с сайта, то лучше сделать скриншот, чтобы была видна вся основная информация о покупках, продавце и чеке. Пример ниже:' %}
+                                <img width="70%" height="70%" src="{% static 'img/receipt_screenshot.png' %}" alt="Скриншот чека">
+                                {% translate 'Можно просто скачать чек и загрузить скачанную версию, но за счёт того, что в чеке будут лишние данные, точность распознавания может быть ниже.' %}
                             </p>
                         </div>
 
                         <div>
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                {% translate 'Заголовок раздела 3' %}
+                                {% translate 'Дополнительная информация' %}
                             </h3>
                             <p class="text-sm leading-relaxed">
-                                {% translate 'Полезные советы и подсказки для пользователей. Можно добавить информацию о поддерживаемых форматах, размерах файлов и других важных деталях.' %}
+                                {% translate 'Можно также загрузить фото чека, но чек не должен быть обрезан или сильно смят, тогда качество распознавания будет выше, иначе данные могут распознаться неправильно/неполностью.<br>Пример фото чека ниже. Но и в этом случае распознавание текста чека зависит от мощности используемой модели.' %}
+                                <img width="70%" height="70%" src="{% static 'img/receipt_photo.png' %}" alt="Фото чека">
                             </p>
                         </div>
                     </div>

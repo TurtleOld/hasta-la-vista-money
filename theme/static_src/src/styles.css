@@ -1396,3 +1396,11 @@ body:has(#instruction-modal-toggle:checked) #mobileMenuState {
 body:has(#instruction-modal-toggle:checked) #mobileMenu {
   display: none !important;
 }
+
+[data-credit-field="true"] {
+  display: none !important;
+}
+
+[data-credit-field="true"].show {
+  display: block !important;
+}
