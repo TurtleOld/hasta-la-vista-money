@@ -208,6 +208,17 @@
                     console.error('Error loading loan script:', error);
                 });
             }
+
+            var shouldLoadAccountForm = currentPath.indexOf('create') !== -1 || 
+                                       currentPath.indexOf('add') !== -1 || 
+                                       currentPath.indexOf('change') !== -1 ||
+                                       currentPath.indexOf('update') !== -1;
+            
+            if (shouldLoadAccountForm) {
+                loadScript('{% static "js/account_form.js" %}?v={% word_hash %}').catch(function(error) {
+                    console.error('Error loading account_form script:', error);
+                });
+            }
         })();
     </script>
     {% block extra_js %}

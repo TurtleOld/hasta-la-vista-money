@@ -20,7 +20,7 @@
                     {% csrf_token %}
                     {% if add_account_form %}
                     {% for field in add_account_form %}
-                    <div class="space-y-1.5{% if field.errors %} has-error{% endif %}{% if field.name == 'limit_credit' or field.name == 'payment_due_date' %} credit-only-field-container{% endif %}">
+                    <div class="space-y-1.5{% if field.errors %} has-error{% endif %}{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} credit-only-field-container{% endif %}"{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} data-credit-field="true"{% endif %}>
                         {% if field == 'balance' %}
                         {{ field | comma }}
                         {% else %}
@@ -54,21 +54,4 @@
         </div>
     </div>
 </div>
-<script nonce="{{ request.csp_nonce }}">
-    document.addEventListener('DOMContentLoaded', function() {
-        function toggleCreditFields() {
-            var typeSelect = document.getElementById('id_type_account');
-            var creditFields = document.querySelectorAll('.credit-only-field-container');
-            var show = typeSelect && (typeSelect.value === 'CreditCard' || typeSelect.value === 'Credit');
-            creditFields.forEach(function(field) {
-                field.style.display = show ? 'block' : 'none';
-            });
-        }
-        var typeSelect = document.getElementById('id_type_account');
-        if (typeSelect) {
-            typeSelect.addEventListener('change', toggleCreditFields);
-            toggleCreditFields();
-        }
-    });
-</script>
 {% endblock %}
