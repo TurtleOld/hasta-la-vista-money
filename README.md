@@ -6,7 +6,7 @@
 [![Lines of Code](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=code)](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=code)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
-[![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
+[![Django](https://img.shields.io/badge/Django-6.0-green.svg)](https://www.djangoproject.com/)
 
 **[🇺🇸 English version](ENGLISH.md)** | **[📚 Документация](https://hasta-la-vista-money.readthedocs.io/)**
 

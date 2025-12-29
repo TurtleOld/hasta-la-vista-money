@@ -12,7 +12,7 @@ from django.forms import BaseFormSet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import ReceiptForm
-from hasta_la_vista_money.receipts.models import Receipt, Seller
+from hasta_la_vista_money.receipts.models import PendingReceipt, Receipt, Seller
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
     SellerCreateData,
@@ -86,3 +86,33 @@ class ReceiptImportServiceProtocol(Protocol):
         uploaded_file: UploadedFile,
         image_analysis_function: Callable[[UploadedFile], str] | None = None,
     ) -> ReceiptImportResult: ...
+
+
+@runtime_checkable
+class PendingReceiptServiceProtocol(Protocol):
+    """Protocol for pending receipt service interface.
+
+    Defines the contract for managing pending receipts before
+    final confirmation.
+    """
+
+    def create_pending_receipt(
+        self,
+        *,
+        user: User,
+        account: Account,
+        receipt_data: dict[str, Any],
+    ) -> PendingReceipt: ...
+
+    def update_pending_receipt(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        receipt_data: dict[str, Any],
+    ) -> PendingReceipt: ...
+
+    def convert_to_receipt(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+    ) -> Receipt: ...

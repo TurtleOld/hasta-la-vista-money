@@ -99,7 +99,7 @@ class IndexView(TemplateView):
         request: HttpRequest,
     ) -> HttpResponseBase:
         if request.user.is_authenticated:
-            return redirect('applications:list')
+            return redirect('finance_account:list')
         return redirect('login')
 
 
@@ -141,7 +141,7 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to after successful login."""
-        return '/hasta-la-vista-money/'
+        return '/finance_account/'
 
     def dispatch(
         self,

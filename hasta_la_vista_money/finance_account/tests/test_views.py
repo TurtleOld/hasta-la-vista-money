@@ -167,7 +167,7 @@ class TestAccountCreateView(TestCase):
         """Test get_success_url method."""
         view = AccountCreateView()
         url = view.get_success_url()
-        self.assertEqual(url, reverse_lazy('applications:list'))
+        self.assertEqual(url, reverse_lazy('finance_account:list'))
 
 
 class TestChangeAccountView(TestCase):
