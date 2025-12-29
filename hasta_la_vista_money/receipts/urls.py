@@ -18,6 +18,7 @@ from hasta_la_vista_money.receipts.views import (
     ReceiptDetailView,
     ReceiptUpdateView,
     ReceiptView,
+    ReviewPendingReceiptView,
     SellerCreateView,
     UploadImageView,
 )
@@ -73,6 +74,11 @@ urlpatterns = [
         'upload/',
         UploadImageView.as_view(),
         name='upload',
+    ),
+    path(
+        'review/<int:pk>/',
+        ReviewPendingReceiptView.as_view(),
+        name='review',
     ),
     path(
         'seller-autocomplete/',

@@ -5,12 +5,13 @@ including relationships with users and accounts.
 """
 
 from collections.abc import Iterable
-from datetime import datetime
-from typing import ClassVar
+from datetime import datetime, timedelta
+from typing import Any, ClassVar
 
 from django.db import models
 from django.db.models import Min
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -472,3 +473,80 @@ class Receipt(models.Model):
             str: URL for updating this receipt.
         """
         return str(reverse_lazy('receipts:update', args=[self.pk]))
+
+
+class PendingReceipt(models.Model):
+    """Model for temporarily storing receipt data before final confirmation.
+
+    Stores receipt data from AI recognition in JSON format,
+    allowing users to review and edit before saving to Receipt model.
+
+    Attributes:
+        user: Foreign key to the User who uploaded the receipt.
+        account: Foreign key to the Account used for this receipt.
+        receipt_data: JSON field containing all receipt data.
+        created_at: Timestamp when the pending receipt was created.
+        expires_at: Timestamp when the pending receipt expires.
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='pending_receipts',
+    )
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name='pending_receipts',
+    )
+    receipt_data = models.JSONField(
+        verbose_name=_('Данные чека'),
+        help_text=_('JSON данные чека для редактирования'),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Дата создания'),
+    )
+    expires_at = models.DateTimeField(
+        verbose_name=_('Дата истечения'),
+        help_text=_('Время, после которого запись будет удалена'),
+    )
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Override save to set expires_at if not provided.
+
+        Args:
+            *args: Positional arguments.
+            **kwargs: Keyword arguments.
+        """
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(hours=24)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['-created_at']
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['expires_at']),
+        ]
+        verbose_name = _('Временный чек')
+        verbose_name_plural = _('Временные чеки')
+
+    def __str__(self) -> str:
+        """Return string representation of the pending receipt.
+
+        Returns:
+            str: Pending receipt identifier.
+        """
+        seller_name = self.receipt_data.get(
+            'name_seller', 'Неизвестный продавец'
+        )
+        return f'{seller_name} - {self.created_at.strftime("%d.%m.%Y %H:%M")}'
+
+    def get_absolute_url(self) -> str:
+        """Get absolute URL for pending receipt review.
+
+        Returns:
+            str: URL for reviewing this pending receipt.
+        """
+        return str(reverse_lazy('receipts:review', args=[self.pk]))

@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -14,10 +15,11 @@ from hasta_la_vista_money.core.types import RequestWithContainer
 
 if TYPE_CHECKING:
     from django.forms import ModelChoiceField
+from django.forms import Form
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.utils.translation import gettext_lazy
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import (
     CreateView,
@@ -37,13 +39,15 @@ from hasta_la_vista_money.core.views import (
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.forms import (
+    PendingReceiptProductFormSet,
+    PendingReceiptReviewForm,
     ProductFormSet,
     ReceiptFilter,
     ReceiptForm,
     SellerForm,
     UploadImageForm,
 )
-from hasta_la_vista_money.receipts.models import Receipt, Seller
+from hasta_la_vista_money.receipts.models import PendingReceipt, Receipt, Seller
 from hasta_la_vista_money.receipts.services import (
     analyze_image_with_ai,
     paginator_custom_view,
@@ -726,46 +730,34 @@ class UploadImageView(
             receipt_import_service = (
                 request.container.receipts.receipt_import_service()
             )
-            result = receipt_import_service.process_uploaded_image(
+            pending_receipt_service = (
+                request.container.receipts.pending_receipt_service()
+            )
+
+            receipt_data = receipt_import_service.extract_receipt_data(
                 user=user,
-                account=account,
                 uploaded_file=uploaded_file,
                 image_analysis_function=analyze_image_with_ai,
             )
 
-            if not result.success:
-                error_messages = {
-                    'invalid_file': (
-                        ValueError(constants.INVALID_FILE_FORMAT),
-                        constants.INVALID_FILE_FORMAT,
-                    ),
-                    'exists': (
-                        ValueError(constants.RECEIPT_ALREADY_EXISTS),
-                        str(gettext_lazy(constants.RECEIPT_ALREADY_EXISTS)),
-                    ),
-                    'model_unavailable': (
-                        ValueError(constants.ERROR_MODEL_UNAVAILABLE),
-                        constants.ERROR_MODEL_UNAVAILABLE,
-                    ),
-                }
-                error_tuple = error_messages.get(
-                    result.error,
-                    (
-                        ValueError(constants.ERROR_PROCESSING_RECEIPT),
-                        constants.ERROR_PROCESSING_RECEIPT,
-                    ),
-                )
+            if receipt_data is None:
                 return self.handle_form_error_with_message(
                     form,
-                    error_tuple[0],
-                    cast('StrOrPromise', error_tuple[1]),
+                    ValueError(constants.ERROR_PROCESSING_RECEIPT),
+                    constants.ERROR_PROCESSING_RECEIPT,
                 )
+
+            pending_receipt = pending_receipt_service.create_pending_receipt(
+                user=user,
+                account=account,
+                receipt_data=receipt_data,
+            )
 
             messages.success(
                 request,
-                'Чек успешно загружен и обработан!',
+                'Чек успешно распознан! Проверьте данные перед сохранением.',
             )
-            return super().form_valid(form)
+            return redirect('receipts:review', pk=pending_receipt.pk)
         except ValueError as e:
             logger.exception('Error processing receipt', error=e)
             return self.handle_form_error_with_message(
@@ -787,3 +779,242 @@ class UploadImageView(
         if isinstance(uploaded_file, list):
             uploaded_file = uploaded_file[0]
         return uploaded_file
+
+
+class ReviewPendingReceiptView(
+    LoginRequiredMixin,
+    FormView[Any],
+    FormErrorHandlingMixin,
+):
+    """View for reviewing and editing pending receipt before final save."""
+
+    template_name = 'receipts/review_receipt.html'
+    success_url: ClassVar[str] = cast(
+        'str',
+        reverse_lazy('receipts:list'),
+    )  # type: ignore[misc]
+
+    def dispatch(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Check if pending receipt exists and belongs to user.
+
+        Args:
+            request: HTTP request.
+            *args: Positional arguments.
+            **kwargs: Keyword arguments.
+
+        Returns:
+            HTTP response.
+        """
+        pending_receipt = get_object_or_404(
+            PendingReceipt,
+            pk=kwargs.get('pk'),
+        )
+        if pending_receipt.user != request.user:
+            raise Http404
+        if pending_receipt.expires_at < timezone.now():
+            messages.error(
+                request,
+                (
+                    'Время редактирования чека истекло. '
+                    'Пожалуйста, загрузите чек заново.'
+                ),
+            )
+            pending_receipt.delete()
+            return redirect('receipts:upload')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_class(self) -> type[Form]:
+        """Get form class for pending receipt review.
+
+        Returns:
+            Form class.
+        """
+        self.form_class = PendingReceiptReviewForm
+        return self.form_class
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get form kwargs with receipt data.
+
+        Returns:
+            Dictionary with form kwargs.
+        """
+        kwargs = super().get_form_kwargs()
+        pending_receipt = self.get_pending_receipt()
+        kwargs['receipt_data'] = pending_receipt.receipt_data
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Get context data for template.
+
+        Args:
+            **kwargs: Keyword arguments.
+
+        Returns:
+            Dictionary with context data.
+        """
+        context = super().get_context_data(**kwargs)
+        pending_receipt = self.get_pending_receipt()
+        context['pending_receipt'] = pending_receipt
+
+        receipt_data = pending_receipt.receipt_data
+        products_data = receipt_data.get('items', [])
+
+        if self.request.method == 'POST':
+            product_formset = PendingReceiptProductFormSet(
+                self.request.POST,
+                initial=products_data,
+            )
+        else:
+            product_formset = PendingReceiptProductFormSet(
+                initial=products_data,
+            )
+
+        context['product_formset'] = product_formset
+        return context
+
+    def get_pending_receipt(self) -> PendingReceipt:
+        """Get pending receipt instance.
+
+        Returns:
+            PendingReceipt instance.
+        """
+        return get_object_or_404(
+            PendingReceipt,
+            pk=self.kwargs.get('pk'),
+            user=self.request.user,
+        )
+
+    def form_valid(self, form: Form) -> HttpResponse:
+        """Handle valid form submission.
+
+        Args:
+            form: Validated form.
+
+        Returns:
+            HTTP response.
+        """
+        request = cast('RequestWithContainer', self.request)
+        pending_receipt = self.get_pending_receipt()
+        product_formset = PendingReceiptProductFormSet(self.request.POST)
+
+        if not product_formset.is_valid():
+            return self.form_invalid(form)
+
+        receipt_data = self._build_receipt_data(form, product_formset)
+        pending_receipt_service = (
+            request.container.receipts.pending_receipt_service()
+        )
+
+        updated_pending_receipt = (
+            pending_receipt_service.update_pending_receipt(
+                pending_receipt=pending_receipt,
+                receipt_data=receipt_data,
+            )
+        )
+
+        if 'save' in self.request.POST:
+            try:
+                pending_receipt_service.convert_to_receipt(
+                    pending_receipt=updated_pending_receipt,
+                )
+                messages.success(
+                    request,
+                    'Чек успешно сохранён!',
+                )
+                return redirect('receipts:list')
+            except Exception as e:
+                logger.exception('Error saving receipt', error=e)
+                messages.error(
+                    request,
+                    'Ошибка при сохранении чека. Попробуйте ещё раз.',
+                )
+                return self.form_invalid(form)
+        else:
+            messages.success(
+                request,
+                (
+                    'Изменения сохранены. '
+                    'Проверьте данные перед финальным сохранением.'
+                ),
+            )
+            return redirect('receipts:review', pk=updated_pending_receipt.pk)
+
+    def _build_receipt_data(
+        self,
+        form: Form,
+        product_formset: Any,
+    ) -> dict[str, Any]:
+        """Build receipt data dictionary from form and formset.
+
+        Args:
+            form: Receipt review form.
+            product_formset: Product formset.
+
+        Returns:
+            Dictionary with receipt data.
+        """
+        receipt_date = form.cleaned_data['receipt_date']
+        if isinstance(receipt_date, datetime):
+            receipt_date_str = receipt_date.strftime('%d.%m.%Y %H:%M')
+        else:
+            receipt_date_str = str(receipt_date)
+
+        items = []
+        for product_form in product_formset:
+            if product_form.cleaned_data and not product_form.cleaned_data.get(
+                'DELETE', False
+            ):
+                nds_sum_value = product_form.cleaned_data.get('nds_sum')
+                items.append(
+                    {
+                        'product_name': product_form.cleaned_data.get(
+                            'product_name',
+                        ),
+                        'category': product_form.cleaned_data.get(
+                            'category', ''
+                        ),
+                        'price': float(
+                            product_form.cleaned_data.get('price', 0)
+                        ),
+                        'quantity': float(
+                            product_form.cleaned_data.get('quantity', 0),
+                        ),
+                        'amount': float(
+                            product_form.cleaned_data.get('amount', 0)
+                        ),
+                        'nds_type': product_form.cleaned_data.get('nds_type'),
+                        'nds_sum': (
+                            float(nds_sum_value)
+                            if nds_sum_value is not None
+                            else 0
+                        ),
+                    },
+                )
+
+        return {
+            'receipt_date': receipt_date_str,
+            'name_seller': form.cleaned_data.get('name_seller', ''),
+            'retail_place': form.cleaned_data.get('retail_place'),
+            'retail_place_address': form.cleaned_data.get(
+                'retail_place_address'
+            ),
+            'number_receipt': form.cleaned_data.get('number_receipt'),
+            'total_sum': float(form.cleaned_data.get('total_sum', 0)),
+            'nds10': (
+                float(form.cleaned_data.get('nds10', 0))
+                if form.cleaned_data.get('nds10')
+                else None
+            ),
+            'nds20': (
+                float(form.cleaned_data.get('nds20', 0))
+                if form.cleaned_data.get('nds20')
+                else None
+            ),
+            'operation_type': form.cleaned_data.get('operation_type', 0),
+            'items': items,
+        }

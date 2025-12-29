@@ -741,3 +741,46 @@
 [data-bs-theme='light'] th {
   font-family: 'Montserrat', 'Inter', 'Roboto', system-ui, sans-serif !important;
 }
+
+[data-bs-theme='light'] .instruction-modal-content {
+  border-color: rgb(229 231 235) !important;
+  background-color: white !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-header {
+  border-bottom-color: rgb(229 231 235) !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-title {
+  color: rgb(17 24 39) !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-close {
+  color: rgb(107 114 128) !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-close:hover {
+  background-color: rgb(243 244 246) !important;
+  color: rgb(55 65 81) !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-section-title {
+  color: rgb(17 24 39) !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-section-text {
+  color: rgb(55 65 81) !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-footer {
+  border-top-color: rgb(229 231 235) !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-button {
+  background-color: rgb(37 99 235) !important;
+  color: white !important;
+}
+
+[data-bs-theme='light'] .instruction-modal-button:hover {
+  background-color: rgb(29 78 216) !important;
+}

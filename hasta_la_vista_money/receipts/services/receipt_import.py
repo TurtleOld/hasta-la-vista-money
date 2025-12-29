@@ -360,3 +360,34 @@ class ReceiptImportService:
         receipt = self._create_receipt_from_data(user, account, receipt_data)
 
         return ReceiptImportResult(success=True, error=None, receipt=receipt)
+
+    def extract_receipt_data(
+        self,
+        *,
+        user: User,
+        uploaded_file: UploadedFile,
+        image_analysis_function: (
+            Callable[[UploadedFile], str]
+            | Callable[[UploadedFile, int | None], str]
+            | None
+        ) = None,
+    ) -> dict[str, Any] | None:
+        """Extract receipt data from uploaded image without creating receipt.
+
+        Args:
+            user: User uploading the receipt.
+            uploaded_file: Uploaded image file.
+            image_analysis_function: Optional custom analysis function. If None,
+                uses default AI analysis.
+
+        Returns:
+            Dictionary with receipt data, or None if extraction failed.
+        """
+        try:
+            func = self._get_analysis_function(image_analysis_function)
+            raw_json = self._analyze_image(uploaded_file, func, user.pk)
+            return self._parse_receipt_json(raw_json)
+        except ModelUnavailableError:
+            return None
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return None

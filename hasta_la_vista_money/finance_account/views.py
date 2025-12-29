@@ -196,7 +196,7 @@ class AccountCreateView(
         Returns:
             str: Success redirect URL.
         """
-        return str(reverse_lazy('applications:list'))
+        return str(reverse_lazy('finance_account:list'))
 
     def form_valid(self, form: AddAccountForm) -> HttpResponseRedirect:
         """
