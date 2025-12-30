@@ -46,23 +46,19 @@ RUN pip install uv==0.7.13 && \
 
 ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
 
-COPY pyproject.toml uv.lock ./
-
-RUN uv sync --dev
-
 COPY --from=builder /app /app
+
+COPY --chown=appuser:appuser docker/entrypoint.sh /app/entrypoint.sh
 
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/.venv/bin/granian && \
     chmod +x /app/.venv/bin/python && \
+    chmod +x /app/entrypoint.sh && \
     mkdir -p /app/staticfiles /app/logs && \
     chown -R appuser:appuser /app/staticfiles /app/logs && \
     chmod -R 755 /app/staticfiles /app/logs
 
 USER appuser
-
-COPY --chown=appuser:appuser docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD [".venv/bin/granian", "--interface", "asgi", "config.asgi:application", "--port", "8001", "--host", "0.0.0.0"]
