@@ -48,7 +48,7 @@ ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
 
 COPY --from=builder /app /app
 
-COPY --chown=appuser:appuser docker/entrypoint.sh /app/entrypoint.sh
+COPY docker/entrypoint.sh /app/entrypoint.sh
 
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/.venv/bin/granian && \
