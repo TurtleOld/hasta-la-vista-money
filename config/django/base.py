@@ -269,7 +269,7 @@ else:
         DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
-                'NAME': 'postgres',
+                'NAME': config('POSTGRES_DB', default='hlvm'),
                 'USER': config('POSTGRES_USER', default='postgres'),
                 'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
                 'HOST': config('POSTGRES_HOST', default='localhost'),
