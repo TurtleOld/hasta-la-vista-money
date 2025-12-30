@@ -48,12 +48,15 @@ ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
 
 COPY --from=builder /app /app
 
-COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY docker/entrypoint.sh /tmp/entrypoint.sh
 
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/.venv/bin/granian && \
     chmod +x /app/.venv/bin/python && \
+    sed -i 's/\r$//' /tmp/entrypoint.sh && \
+    mv /tmp/entrypoint.sh /app/entrypoint.sh && \
     chmod +x /app/entrypoint.sh && \
+    ls -la /app/entrypoint.sh && \
     mkdir -p /app/staticfiles /app/logs && \
     chown -R appuser:appuser /app/staticfiles /app/logs && \
     chmod -R 755 /app/staticfiles /app/logs
