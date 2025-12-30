@@ -252,30 +252,35 @@ elif config('GITHUB_WORKFLOW', default=''):
             'PORT': '5432',
         },
     }
-elif config('DATABASE_URL', default='') or config('POSTGRES_DB', default=''):
-    DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('POSTGRES_DB', default='postgres'),
-            'USER': config('POSTGRES_USER', default='postgres'),
-            'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
-            'HOST': config('POSTGRES_HOST', default='localhost'),
-            'PORT': config('POSTGRES_PORT', default='5432'),
-            'CONN_MAX_AGE': CONN_MAX_AGE,
-        },
-    }
-    database_url = config('DATABASE_URL', default='')
-    if database_url:
-        DATABASES['default'] = dict(
-            dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE),
-        )
 else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        },
-    }
+    database_url = config('DATABASE_URL', default='')
+    postgres_db = config('POSTGRES_DB', default='')
+
+    if database_url or postgres_db:
+        DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': config('POSTGRES_DB', default='postgres'),
+                'USER': config('POSTGRES_USER', default='postgres'),
+                'PASSWORD': config('POSTGRES_PASSWORD', default='postgres'),
+                'HOST': config('POSTGRES_HOST', default='localhost'),
+                'PORT': config('POSTGRES_PORT', default='5432'),
+                'CONN_MAX_AGE': CONN_MAX_AGE,
+            },
+        }
+        if database_url:
+            DATABASES['default'] = dict(
+                dj_database_url.parse(
+                    str(database_url), conn_max_age=CONN_MAX_AGE
+                ),
+            )
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            },
+        }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
