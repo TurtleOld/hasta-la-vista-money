@@ -49,6 +49,11 @@ services:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
       SECRET_KEY: ${SECRET_KEY}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS}
       BASE_URL: ${BASE_URL}
@@ -66,7 +71,7 @@ services:
     networks:
       - default
     healthcheck:
-      test: ["CMD", "python3", "-c", "import socket; s=socket.create_connection(('localhost',8001),5); s.close()"]
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import socket; s=socket.create_connection(('localhost',8001),5); s.close()"]
       interval: 30s
       timeout: 10s
       retries: 3
