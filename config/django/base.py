@@ -255,7 +255,7 @@ elif config('GITHUB_WORKFLOW', default=''):
 else:
     database_url = config('DATABASE_URL', default='')
     postgres_db = config('POSTGRES_DB', default='')
-    
+
     if database_url or postgres_db:
         DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
             'default': {
@@ -270,7 +270,9 @@ else:
         }
         if database_url:
             DATABASES['default'] = dict(
-                dj_database_url.parse(str(database_url), conn_max_age=CONN_MAX_AGE),
+                dj_database_url.parse(
+                    str(database_url), conn_max_age=CONN_MAX_AGE
+                ),
             )
     else:
         DATABASES = {
