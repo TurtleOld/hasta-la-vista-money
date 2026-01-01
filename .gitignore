@@ -133,6 +133,9 @@ downloads/
 staticfiles/
 eggs/
 node_modules/
+
+# Compiled CSS
+static/css/styles.min.css
 .eggs/
 lib/
 lib64/

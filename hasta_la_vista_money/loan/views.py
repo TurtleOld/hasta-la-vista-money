@@ -28,7 +28,7 @@ logger = structlog.get_logger(__name__)
 
 class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
     model = Loan
-    template_name = 'loan/loan_modern.html'
+    template_name = 'loan/loan.html'
     no_permission_url = reverse_lazy('login')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
