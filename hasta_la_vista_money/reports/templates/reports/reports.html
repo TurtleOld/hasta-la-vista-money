@@ -88,10 +88,26 @@
             return;
         }
 
-        const isDarkMode = document.documentElement.classList.contains('dark') ||
-                          document.body.classList.contains('dark') ||
-                          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const getTheme = () => {
+            const bodyTheme = document.body.getAttribute('data-bs-theme');
+            const htmlTheme = document.documentElement.getAttribute('data-bs-theme');
+            if (bodyTheme === 'dark' || htmlTheme === 'dark') {
+                return 'dark';
+            }
+            if (bodyTheme === 'light' || htmlTheme === 'light') {
+                return 'light';
+            }
+            if (document.documentElement.classList.contains('dark') ||
+                document.body.classList.contains('dark')) {
+                return 'dark';
+            }
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                return 'dark';
+            }
+            return 'light';
+        };
 
+        const isDarkMode = getTheme() === 'dark';
         const textColor = isDarkMode ? '#e5e7eb' : '#111827';
         const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
         const borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
@@ -184,7 +200,8 @@
                         font: {
                             size: 13,
                             weight: '500'
-                        }
+                        },
+                        usePointStyle: false
                     }
                 },
                 tooltip: {
@@ -195,7 +212,13 @@
                     borderWidth: 1,
                     padding: 12,
                     cornerRadius: 8,
-                    displayColors: true
+                    displayColors: true,
+                    titleFont: {
+                        color: textColor
+                    },
+                    bodyFont: {
+                        color: textColor
+                    }
                 }
             }
         };

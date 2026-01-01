@@ -157,6 +157,14 @@
   fill: rgb(17 24 39);
 }
 
+[data-bs-theme='light'] canvas {
+  color: rgb(17 24 39) !important;
+}
+
+[data-bs-theme='light'] .chartjs-render-monitor {
+  color: rgb(17 24 39) !important;
+}
+
 [data-bs-theme='light'] .widget-controls button:hover {
   background-color: #f3f4f6;
 }
@@ -202,6 +210,12 @@
 [data-bs-theme='light'] nav a:hover {
   background-color: rgb(243 244 246) !important;
   color: rgb(22 163 74) !important;
+}
+
+[data-bs-theme='light'] nav a:hover:has(.logo),
+[data-bs-theme='light'] nav a:has(.logo):hover,
+[data-bs-theme='light'] nav a[href*='finance_account']:hover {
+  background-color: transparent !important;
 }
 
 [data-bs-theme='light'] nav ul[id*='Dropdown'],
@@ -531,6 +545,12 @@
   background-color: white !important;
 }
 
+[data-bs-theme='light'] summary.bg-transparent {
+  background: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
 [data-bs-theme='light'] .border-gray-200.dark\:border-gray-700,
 [data-bs-theme='light'] .border-gray-200 {
   border-color: rgb(229 231 235) !important;
@@ -571,8 +591,14 @@
   background-color: rgb(240 253 244) !important;
 }
 
-[data-bs-theme='light'] .bg-gradient-to-r.from-blue-600.to-indigo-600 {
+[data-bs-theme='light'] .bg-gradient-to-r.from-blue-600.to-indigo-600,
+[data-bs-theme='light'] button.bg-gradient-to-r.from-blue-600.to-indigo-600 {
   background: linear-gradient(to right, rgb(37 99 235), rgb(79 70 229)) !important;
+}
+
+[data-bs-theme='light'] .bg-gradient-to-r.from-blue-600.to-indigo-600.hover\:from-blue-700.hover\:to-indigo-700:hover,
+[data-bs-theme='light'] button.bg-gradient-to-r.from-blue-600.to-indigo-600.hover\:from-blue-700.hover\:to-indigo-700:hover {
+  background: linear-gradient(to right, rgb(29 78 216), rgb(67 56 202)) !important;
 }
 
 [data-bs-theme='light'] .bg-gradient-to-r.from-green-600.to-emerald-600 {
@@ -703,8 +729,7 @@
   background: linear-gradient(to right, rgb(220 252 231), rgb(209 250 229)) !important;
 }
 
-[data-bs-theme='light'] .bg-gradient-to-r.from-blue-600.to-indigo-600,
-[data-bs-theme='light'] div.bg-gradient-to-r.from-blue-600.to-indigo-600 {
+[data-bs-theme='light'] div.bg-gradient-to-r.from-blue-600.to-indigo-600:not(button) {
   background: linear-gradient(to right, rgb(219 234 254), rgb(224 231 255)) !important;
 }
 
