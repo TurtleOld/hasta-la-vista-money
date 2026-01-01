@@ -8,23 +8,23 @@
 <div class="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50 px-4 py-12 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 sm:px-6 lg:px-8">
     <div class="w-full max-w-md space-y-8">
         <div class="text-center">
-            <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-600 to-emerald-600 shadow-lg">
+            <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-600 to-emerald-600 shadow-lg transition-transform duration-300 hover:scale-110">
                 <svg class="h-12 w-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
             </div>
-            <h1 class="text-4xl font-bold tracking-tight text-black dark:text-white">
-                <span class="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">Hasta La Vista, Money!</span>
+            <h1 class="text-4xl font-bold">
+                <span class="text-green-600">Hasta La Vista, Money!</span>
             </h1>
-            <p class="mt-3 text-base text-black dark:text-white">
+            <p class="mt-3 text-base text-gray-700 dark:text-gray-300">
                 {% translate 'Удобная домашняя бухгалтерия. Управляй финансами семьи грамотно!' %}
             </p>
-            <h2 class="mt-6 text-xl font-semibold text-black dark:text-white">
+            <h2 class="mt-6 text-xl font-semibold text-gray-900 dark:text-white">
                 {% translate 'Вход в приложение' %}
             </h2>
         </div>
 
-        <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800 dark:shadow-gray-900/50">
+        <div class="rounded-2xl bg-white p-8 shadow-xl transition-all duration-300 hover:shadow-2xl dark:bg-gray-800 dark:shadow-gray-900/50">
             <form method="post" class="space-y-6 text-black dark:text-white dark:[&_label]:text-white dark:[&_small]:text-gray-300">
                 {% csrf_token %}
 
@@ -59,7 +59,7 @@
                 {% endif %}
 
                 <div>
-                    <button type="submit" class="group relative w-full flex justify-center items-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-green-500/30 transition-all duration-200 hover:from-green-700 hover:to-emerald-700 hover:shadow-xl hover:shadow-green-500/40 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 active:scale-95">
+                    <button type="submit" class="group relative w-full flex justify-center items-center gap-2 rounded-xl px-6 py-3 text-black bg-green-600 font-semibold shadow-lg transition-all duration-200 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 active:scale-95">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
                         </svg>
