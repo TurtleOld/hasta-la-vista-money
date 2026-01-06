@@ -17,6 +17,9 @@ from rest_framework.views import APIView
 
 from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
 from hasta_la_vista_money.api.serializers import GroupQuerySerializer
+from hasta_la_vista_money.authentication.authentication import (
+    CookieJWTAuthentication,
+)
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -51,6 +54,7 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
     pagination_class = StandardResultsSetPagination
@@ -89,34 +93,75 @@ class ExpenseByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
         try:
             all_expenses = expense_service.get_expenses_by_group(group_id)
-            expense_data = [
-                {
-                    'id': expense.pk,
-                    'amount': float(getattr(expense, 'amount', 0)),
-                    'category': getattr(expense, 'category', {}).get('name', '')
-                    if isinstance(getattr(expense, 'category', None), dict)
-                    else getattr(getattr(expense, 'category', None), 'name', '')
-                    if hasattr(getattr(expense, 'category', None), 'name')
-                    else '',
-                    'account': getattr(expense, 'account', {}).get('name', '')
-                    if isinstance(getattr(expense, 'account', None), dict)
-                    else getattr(
-                        getattr(expense, 'account', None), 'name_account', ''
+            expense_data = []
+            for expense in all_expenses:
+                if isinstance(expense, dict):
+                    expense_id = expense.get('id', '')
+                    amount = float(expense.get('amount', 0))
+                    category = (
+                        expense.get('category', {}).get('name', '')
+                        if isinstance(expense.get('category'), dict)
+                        else ''
                     )
-                    if hasattr(
-                        getattr(expense, 'account', None), 'name_account'
+                    account = (
+                        expense.get('account', {}).get('name_account', '')
+                        if isinstance(expense.get('account'), dict)
+                        else ''
                     )
-                    else '',
-                    'date': (
+                    expense_date = expense.get('date')
+                    date_str = (
                         expense_date.strftime('%d.%m.%Y')
-                        if (expense_date := getattr(expense, 'date', None))
-                        is not None
-                        and hasattr(expense_date, 'strftime')
-                        else str(getattr(expense, 'date', ''))
-                    ),
-                }
-                for expense in all_expenses
-            ]
+                        if expense_date and hasattr(expense_date, 'strftime')
+                        else str(expense_date)
+                        if expense_date
+                        else ''
+                    )
+                else:
+                    expense_id = expense.pk
+                    amount = float(getattr(expense, 'amount', 0))
+                    category = (
+                        getattr(expense, 'category', {}).get('name', '')
+                        if isinstance(getattr(expense, 'category', None), dict)
+                        else getattr(
+                            getattr(expense, 'category', None),
+                            'name',
+                            '',
+                        )
+                        if hasattr(getattr(expense, 'category', None), 'name')
+                        else ''
+                    )
+                    account = (
+                        getattr(expense, 'account', {}).get('name_account', '')
+                        if isinstance(getattr(expense, 'account', None), dict)
+                        else getattr(
+                            getattr(expense, 'account', None),
+                            'name_account',
+                            '',
+                        )
+                        if hasattr(
+                            getattr(expense, 'account', None),
+                            'name_account',
+                        )
+                        else ''
+                    )
+                    expense_date = getattr(expense, 'date', None)
+                    date_str = (
+                        expense_date.strftime('%d.%m.%Y')
+                        if expense_date and hasattr(expense_date, 'strftime')
+                        else str(expense_date)
+                        if expense_date
+                        else ''
+                    )
+
+                expense_data.append(
+                    {
+                        'id': expense_id,
+                        'amount': amount,
+                        'category': category,
+                        'account': account,
+                        'date': date_str,
+                    },
+                )
 
             paginator = self.pagination_class()
             paginated_data: list[dict[str, Any]] | None = (
@@ -170,6 +215,7 @@ class ExpenseDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
     pagination_class = StandardResultsSetPagination

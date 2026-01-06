@@ -15,6 +15,9 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from hasta_la_vista_money.authentication.authentication import (
+    CookieJWTAuthentication,
+)
 from hasta_la_vista_money.budget.models import Planning
 from hasta_la_vista_money.budget.repositories import (
     PlanningRepository,
@@ -293,6 +296,7 @@ class PlanningExpenseDict(TypedDict):
 )
 class ExpenseBudgetAPIView(APIView):
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = [IsAuthenticated]
     throttle_classes = (UserRateThrottle,)
 
@@ -353,6 +357,7 @@ class ExpenseBudgetAPIView(APIView):
 )
 class IncomeBudgetAPIView(APIView):
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = [IsAuthenticated]
     throttle_classes = (UserRateThrottle,)
 
