@@ -14,6 +14,7 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -22,6 +23,9 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from hasta_la_vista_money.api.serializers import BudgetTypeSerializer
+from hasta_la_vista_money.authentication.authentication import (
+    CookieJWTAuthentication,
+)
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -70,6 +74,7 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication, SessionAuthentication)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -150,6 +155,7 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication, SessionAuthentication)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -235,6 +241,7 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication, SessionAuthentication)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 

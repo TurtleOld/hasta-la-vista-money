@@ -18,6 +18,9 @@ from rest_framework.views import APIView
 
 from hasta_la_vista_money.api.pagination import StandardResultsSetPagination
 from hasta_la_vista_money.api.serializers import GroupQuerySerializer
+from hasta_la_vista_money.authentication.authentication import (
+    CookieJWTAuthentication,
+)
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -64,6 +67,7 @@ class IncomeByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
     pagination_class = StandardResultsSetPagination
@@ -173,6 +177,7 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
     pagination_class = StandardResultsSetPagination
@@ -268,6 +273,7 @@ class IncomeRetrieveAPIView(RetrieveAPIView[Income], UserAuthMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
     queryset = Income.objects.select_related('category', 'account', 'user')

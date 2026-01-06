@@ -15,6 +15,9 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from hasta_la_vista_money.authentication.authentication import (
+    CookieJWTAuthentication,
+)
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -69,6 +72,7 @@ class UserGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -142,6 +146,7 @@ class AvailableGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 

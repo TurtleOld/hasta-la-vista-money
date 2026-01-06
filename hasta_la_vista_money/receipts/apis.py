@@ -25,6 +25,9 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.authentication.authentication import (
+    CookieJWTAuthentication,
+)
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -65,6 +68,7 @@ class ReceiptListAPIView(ListCreateAPIView[Receipt]):
 
     schema = AutoSchema()
     serializer_class = ReceiptSerializer
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
     pagination_class = StandardResultsSetPagination
@@ -101,6 +105,7 @@ class SellerDetailAPIView(RetrieveAPIView[Seller]):
     schema = AutoSchema()
     queryset = Seller.objects.all()
     serializer_class = SellerSerializer
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
     lookup_field = 'id'
@@ -151,6 +156,7 @@ class DataUrlAPIView(APIView):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -211,6 +217,7 @@ class SellerCreateAPIView(APIView):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -253,6 +260,7 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
     schema = AutoSchema()
     queryset = Receipt.objects.none()
     serializer_class = ReceiptSerializer
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -453,6 +461,7 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
     pagination_class = StandardResultsSetPagination
@@ -497,7 +506,7 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
             if users_in_group:
                 receipt_queryset = receipt_repository.get_by_users(
-                    users_in_group
+                    users_in_group,
                 )
             else:
                 receipt_queryset = receipt_repository.filter(pk__in=[])
@@ -530,7 +539,7 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
         receipt_serializer = ReceiptSerializer(paginated_receipts, many=True)
         paginated_response = paginator.get_paginated_response(
-            receipt_serializer.data
+            receipt_serializer.data,
         )
 
         paginated_data = paginated_response.data
@@ -556,6 +565,7 @@ class ReceiptDeleteAPIView(APIView):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -593,7 +603,7 @@ class ReceiptDeleteAPIView(APIView):
         user = cast('User', request.user)
         if receipt.user != user:
             raise PermissionDenied(
-                'You do not have permission to delete this receipt'
+                'You do not have permission to delete this receipt',
             )
 
         receipt.delete()
@@ -635,6 +645,7 @@ class SellerAutocompleteAPIView(APIView):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -688,6 +699,7 @@ class ProductAutocompleteAPIView(APIView):
     """
 
     schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication,)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
