@@ -41,7 +41,7 @@ jobs:
           python-version: '3.14.2'
 
       - name: Setup uv and Handle Its Cache
-        uses: hynek/setup-cached-uv@2a4a9b893253e16cf11e6def5f774336af2f80bc
+        uses: hynek/setup-cached-uv@ae460f75dcef535482cb6754a8ca5ad6aac63ce7
         with:
           version: "0.9.7"
 
