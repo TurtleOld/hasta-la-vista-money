@@ -9,6 +9,7 @@ from django.urls import path
 
 from hasta_la_vista_money.finance_account.apis import (
     AccountListCreateAPIView,
+    AccountRetrieveUpdateDestroyAPIView,
     AccountsByGroupAPIView,
 )
 from hasta_la_vista_money.finance_account.views import (
@@ -50,6 +51,11 @@ urlpatterns = [
         'list/',
         AccountListCreateAPIView.as_view(),
         name='api_list',
+    ),
+    path(
+        'list/<int:pk>/',
+        AccountRetrieveUpdateDestroyAPIView.as_view(),
+        name='api_detail',
     ),
     path(
         'by-group/',
