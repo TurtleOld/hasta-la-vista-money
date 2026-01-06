@@ -14,6 +14,7 @@ from drf_spectacular.utils import (
     extend_schema,
 )
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -73,7 +74,7 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
-    authentication_classes = (CookieJWTAuthentication,)
+    authentication_classes = (CookieJWTAuthentication, SessionAuthentication)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -154,7 +155,7 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
-    authentication_classes = (CookieJWTAuthentication,)
+    authentication_classes = (CookieJWTAuthentication, SessionAuthentication)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
@@ -240,7 +241,7 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     """
 
     schema = AutoSchema()
-    authentication_classes = (CookieJWTAuthentication,)
+    authentication_classes = (CookieJWTAuthentication, SessionAuthentication)
     permission_classes = (IsAuthenticated,)
     throttle_classes = (UserRateThrottle,)
 
