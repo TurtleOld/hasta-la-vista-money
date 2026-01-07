@@ -341,36 +341,27 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         try:
             return self._handle_receipt_creation(request_data)
         except DjangoValidationError as error:
-            error_message = self._extract_validation_error_message(error)
+            error_message = str(error)
+            if hasattr(error, 'message_dict'):
+                messages = []
+                for errors in error.message_dict.values():
+                    if isinstance(errors, list):
+                        messages.extend(errors)
+                    else:
+                        messages.append(str(errors))
+                error_message = '; '.join(messages)
+            elif hasattr(error, 'messages') and error.messages:
+                if isinstance(error.messages, list):
+                    error_message = '; '.join(
+                        str(msg) for msg in error.messages
+                    )
+                else:
+                    error_message = '; '.join(error.messages)
+            elif isinstance(error, DjangoValidationError):
+                error_message = str(error)
             return self._error_response(error_message)
         except (ValueError, TypeError, decimal.InvalidOperation) as error:
             return self._error_response(str(error))
-
-    def _extract_validation_error_message(
-        self,
-        error: DjangoValidationError,
-    ) -> str:
-        """Extract error message from DjangoValidationError.
-
-        Args:
-            error: DjangoValidationError instance.
-
-        Returns:
-            str: Formatted error message.
-        """
-        if hasattr(error, 'message_dict'):
-            messages = []
-            for errors in error.message_dict.values():
-                if isinstance(errors, list):
-                    messages.extend(errors)
-                else:
-                    messages.append(str(errors))
-            return '; '.join(messages)
-        if hasattr(error, 'messages') and error.messages:
-            if isinstance(error.messages, list):
-                return '; '.join(str(msg) for msg in error.messages)
-            return '; '.join(error.messages)
-        return str(error)
 
     def _handle_receipt_creation(
         self,
