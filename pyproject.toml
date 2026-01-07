@@ -159,6 +159,9 @@ known-first-party = ["hasta_la_vista_money"]
 "hasta_la_vista_money/receipts/services/receipt_ai_prompt.py" = [
   "E501",
 ]
+"hasta_la_vista_money/receipts/apis.py" = [
+  "C901", # _process_request complexity is acceptable
+]
 "hasta_la_vista_money/income/views.py" = [
   "E501", # long translation strings
 ]

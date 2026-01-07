@@ -8,6 +8,8 @@ import decimal
 import json
 from typing import TYPE_CHECKING, Any, cast
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
@@ -338,6 +340,26 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
 
         try:
             return self._handle_receipt_creation(request_data)
+        except DjangoValidationError as error:
+            error_message = str(error)
+            if hasattr(error, 'message_dict'):
+                messages = []
+                for errors in error.message_dict.values():
+                    if isinstance(errors, list):
+                        messages.extend(errors)
+                    else:
+                        messages.append(str(errors))
+                error_message = '; '.join(messages)
+            elif hasattr(error, 'messages') and error.messages:
+                if isinstance(error.messages, list):
+                    error_message = '; '.join(
+                        str(msg) for msg in error.messages
+                    )
+                else:
+                    error_message = '; '.join(error.messages)
+            elif isinstance(error, DjangoValidationError):
+                error_message = str(error)
+            return self._error_response(error_message)
         except (ValueError, TypeError, decimal.InvalidOperation) as error:
             return self._error_response(str(error))
 
@@ -382,17 +404,30 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
 
         # Map data and create receipt
         receipt_data = mapper.map_request_to_receipt_data(request_data)
-        seller_data = mapper.map_request_to_seller_data(request_data)
         products_data = request_data.get('product', [])
 
         request_with_container = cast('RequestWithContainer', self.request)
         receipt_creator_service = (
             request_with_container.container.receipts.receipt_creator_service()
         )
+
+        # Check if seller is provided as ID or as object
+        seller_in_request = request_data.get('seller')
+        seller_id = None
+        seller_data = None
+
+        if isinstance(seller_in_request, int):
+            # Seller is provided as ID - use it directly
+            seller_id = seller_in_request
+        else:
+            # Seller is provided as object - map it
+            seller_data = mapper.map_request_to_seller_data(request_data)
+
         receipt = receipt_creator_service.create_receipt_with_products(
             user=user,
             account=account,
             receipt_data=receipt_data,
+            seller_id=seller_id,
             seller_data=seller_data,
             products_data=products_data,
         )
@@ -411,7 +446,7 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
             Response: JSON response with error message and 400 status.
         """
         return Response(
-            message,
+            {'detail': message},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -606,7 +641,18 @@ class ReceiptDeleteAPIView(APIView):
                 'You do not have permission to delete this receipt',
             )
 
-        receipt.delete()
+        with transaction.atomic():
+            request_with_container = cast('RequestWithContainer', request)
+            container = request_with_container.container
+            account_service = container.finance_account.account_service()
+
+            account_service.refund_to_account(
+                receipt.account,
+                receipt.total_sum,
+            )
+
+            receipt.delete()
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

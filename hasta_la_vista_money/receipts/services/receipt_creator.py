@@ -61,7 +61,8 @@ class ReceiptCreatorService:
         user: User,
         account: 'Account',
         receipt_data: 'ReceiptCreateData',
-        seller_data: 'SellerCreateData',
+        seller_data: 'SellerCreateData | None' = None,
+        seller_id: int | None = None,
         products_data: Iterable[dict[str, Any]] | None = None,
         manual: bool = False,
     ) -> Receipt:
@@ -71,7 +72,8 @@ class ReceiptCreatorService:
             user: User creating the receipt.
             account: Account to charge for the receipt.
             receipt_data: Receipt creation data.
-            seller_data: Seller creation data.
+            seller_data: Seller creation data (used if seller_id is None).
+            seller_id: Existing seller ID (takes precedence over seller_data).
             products_data: Optional iterable of product dictionaries.
             manual: Whether receipt is manually created.
 
@@ -85,9 +87,22 @@ class ReceiptCreatorService:
             receipt_data.total_sum,
         )
 
-        seller = self._create_or_update_seller(
-            user=user, seller_data=seller_data
-        )
+        if seller_id is not None:
+            try:
+                seller = Seller.objects.get(id=seller_id, user=user)
+            except Seller.DoesNotExist as err:
+                error_msg = (
+                    f'Seller with ID {seller_id} not found '
+                    'or does not belong to user'
+                )
+                raise ValueError(error_msg) from err
+        elif seller_data is not None:
+            seller = self._create_or_update_seller(
+                user=user,
+                seller_data=seller_data,
+            )
+        else:
+            raise ValueError('Either seller_id or seller_data must be provided')
         receipt = self.receipt_repository.create_receipt(
             user=user,
             account=account,
@@ -102,11 +117,12 @@ class ReceiptCreatorService:
         )
 
         products = self._prepare_products(
-            user=user, products_data=products_data
+            user=user,
+            products_data=products_data,
         )
         if products:
             created_products = self.product_repository.bulk_create_products(
-                products
+                products,
             )
             for product in created_products:
                 self.receipt_repository.add_product_to_receipt(receipt, product)
@@ -237,7 +253,7 @@ class ReceiptCreatorService:
                     amount=Decimal(str(amount or 0)),
                     nds_type=raw_product.get('nds_type'),
                     nds_sum=Decimal(str(raw_product.get('nds_sum', 0))),
-                )
+                ),
             )
 
         return products
