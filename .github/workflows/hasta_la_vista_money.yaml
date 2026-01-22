@@ -35,7 +35,7 @@ jobs:
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6.0.2
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: '3.14.2'
