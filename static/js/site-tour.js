@@ -343,7 +343,7 @@ console.log('[SiteTour] File loaded');
                     }
                 },
                 {
-                    element: 'a[href*="/receipts/products/"]',
+                    element: 'a[href*="/receipts/products"]',
                     popover: {
                         title: 'Часто покупаемые товары',
                         description: 'Просмотрите список ваших часто покупаемых товаров',
@@ -352,7 +352,7 @@ console.log('[SiteTour] File loaded');
                     }
                 },
                 {
-                    element: 'a[href*="/receipts/add-seller/"]',
+                    element: 'a[href*="/receipts/create_seller/"]',
                     popover: {
                         title: 'Добавить продавца',
                         description: 'Создайте новую запись о продавце',
