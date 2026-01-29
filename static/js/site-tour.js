@@ -18,12 +18,34 @@ console.log('[SiteTour] File loaded');
         return;
     }
 
+    // Determine current page from URL
+    function getCurrentPage() {
+        const pathname = window.location.pathname;
+        
+        if (pathname.includes('/receipts')) {
+            return 'receipts';
+        } else if (pathname.includes('/expense')) {
+            return 'expense';
+        } else if (pathname.includes('/income')) {
+            return 'income';
+        } else if (pathname.includes('/budget')) {
+            return 'budget';
+        } else if (pathname.includes('/loan')) {
+            return 'loan';
+        } else if (pathname.includes('/reports')) {
+            return 'reports';
+        } else if (pathname.includes('/finance_account')) {
+            return 'finance_account';
+        }
+        
+        return 'unknown';
+    }
+
     // Wait for driver.js to be available (it should be loaded via CDN or bundler)
     function initTourWhenReady(retryCount = 0) {
         console.log('[SiteTour] initTourWhenReady called, retry:', retryCount);
         
         // Try to access Driver from window object
-        // The driver.js IIFE exports as window.driver.js (the function itself)
         console.log('[SiteTour] window.driver available:', !!window.driver);
         if (window.driver) {
             console.log('[SiteTour] window.driver properties:', Object.keys(window.driver));
@@ -53,12 +75,10 @@ console.log('[SiteTour] File loaded');
 
         console.log('[SiteTour] driver.js loaded successfully');
         console.log('[SiteTour] driverConstructor type:', typeof driverConstructor);
-        console.log('[SiteTour] driverConstructor:', driverConstructor);
 
         // The IIFE returns an object with a 'driver' property containing the actual constructor
         const actualConstructor = driverConstructor.driver || driverConstructor;
         console.log('[SiteTour] actualConstructor type:', typeof actualConstructor);
-        console.log('[SiteTour] actualConstructor:', actualConstructor);
 
         // Initialize driver instance
         let driver;
@@ -77,8 +97,7 @@ console.log('[SiteTour] File loaded');
             return;
         }
 
-        console.log('[SiteTour] driver instance methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(driver)));
-        console.log('[SiteTour] driver instance properties:', Object.keys(driver));
+        console.log('[SiteTour] driver instance created successfully');
 
         // Helper function to toggle dropdown menu
         function toggleFinanceDropdown(show = true) {
@@ -118,8 +137,8 @@ console.log('[SiteTour] File loaded');
             }
         }
 
-        // Define tour steps
-        const tourSteps = [
+        // Common navbar steps (shown on all pages)
+        const commonNavbarSteps = [
             {
                 element: '#navbar',
                 popover: {
@@ -139,15 +158,6 @@ console.log('[SiteTour] File loaded');
                 }
             },
             {
-                element: '#receipts',
-                popover: {
-                    title: 'Чеки',
-                    description: 'Управление вашими чекам',
-                    side: 'bottom',
-                    align: 'start'
-                }
-            },
-            {
                 element: '#financeDropdown',
                 popover: {
                     title: 'Финансы',
@@ -156,7 +166,6 @@ console.log('[SiteTour] File loaded');
                     align: 'start'
                 },
                 onHighlightStarted: () => {
-                    // Close dropdown when highlighting this element
                     toggleFinanceDropdown(false);
                 }
             },
@@ -169,7 +178,6 @@ console.log('[SiteTour] File loaded');
                     align: 'start'
                 },
                 onHighlightStarted: () => {
-                    // Open dropdown before showing this element
                     toggleFinanceDropdown(true);
                 }
             },
@@ -182,11 +190,9 @@ console.log('[SiteTour] File loaded');
                     align: 'start'
                 },
                 onHighlightStarted: () => {
-                    // Keep dropdown open
                     toggleFinanceDropdown(true);
                 },
                 onDeselected: () => {
-                    // Close dropdown when moving to next step
                     toggleFinanceDropdown(false);
                 }
             },
@@ -218,15 +224,6 @@ console.log('[SiteTour] File loaded');
                 },
             },
             {
-                element: '#dashboard',
-                popover: {
-                    title: 'Дашборд',
-                    description: 'Просмотр общей информации о ваших финансах',
-                    side: 'bottom',
-                    align: 'start'
-                },
-            },
-            {
                 element: '#user-menu',
                 popover: {
                     title: 'Меню пользователя',
@@ -235,7 +232,6 @@ console.log('[SiteTour] File loaded');
                     align: 'start'
                 },
                 onHighlightStarted: () => {
-                    // Close dropdown when highlighting this element
                     toggleUserDropdown(false);
                 }
             },
@@ -248,7 +244,6 @@ console.log('[SiteTour] File loaded');
                     align: 'start'
                 },
                 onHighlightStarted: () => {
-                    // Open dropdown before showing this element
                     toggleUserDropdown(true);
                 }
             },
@@ -261,69 +256,230 @@ console.log('[SiteTour] File loaded');
                     align: 'start'
                 },
                 onHighlightStarted: () => {
-                    // Keep dropdown open
                     toggleUserDropdown(true);
                 },
                 onDeselected: () => {
-                    // Close dropdown when tour ends
                     toggleUserDropdown(false);
-                }
-            },
-            {
-                element: '#detailed-statistics',
-                popover: {
-                    title: 'Детальная статистика',
-                    description: 'Нажмите здесь для просмотра детальной статистики по доходам, расходам, чекам и переводам',
-                    side: 'bottom',
-                    align: 'start'
-                }
-            },
-            {
-                element: '#finance-account-create',
-                popover: {
-                    title: 'Добавить счет',
-                    description: 'Нажмите здесь для создания нового финансового счета',
-                    side: 'bottom',
-                    align: 'start'
-                }
-            },
-            {
-                element: '#transfer-money-between-accounts',
-                popover: {
-                    title: 'Перевести средства',
-                    description: 'Нажмите здесь для перевода средств между вашими счетами',
-                    side: 'bottom',
-                    align: 'start'
-                }
-            },
-            {
-                element: '#group-accounts',
-                popover: {
-                    title: 'Группа счетов',
-                    description: 'Здесь будет отображаться список всех групп, в которых вы состоите.<br>Создание группы происходит в настройках.\nПереключаться между группами по выбору из выпадающего списка',
-                    side: 'bottom',
-                    align: 'start'
-                }
-            },
-            {
-                element: '#balance-trend-widget',
-                popover: {
-                    title: 'Тренд баланса',
-                    description: 'Здесь отображается текущий баланс вашей группы счетов и тренд изменения баланса.<br><br>• <strong>Текущий баланс</strong> - общая сумма всех счетов<br>• <strong>Период (7 и 30 дней, 12 месяцев)</strong> - переключение периода анализа<br>• <strong>Изменение в ₽</strong> - абсолютное изменение за период<br>• <strong>Процент (%)</strong> - процентное изменение за период<br>• <strong>График</strong> - визуализация тренда баланса с цветовой кодировкой (зеленый - рост, красный - падение)',
-                    side: 'bottom',
-                    align: 'start'
-                }
-            },
-            {
-                element: '#sum-all-groups-accounts',
-                popover: {
-                    title: 'Сумма всех счетов со всех групп',
-                    description: 'Здесь будет отображаться сумма всех счетов всех групп, в которых вы состоите',
-                    side: 'bottom',
-                    align: 'start'
                 }
             }
         ];
+
+        // Page-specific tour steps
+        const pageTours = {
+            finance_account: [
+                ...commonNavbarSteps,
+                {
+                    element: '#receipts',
+                    popover: {
+                        title: 'Чеки',
+                        description: 'Управление вашими чеками',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#detailed-statistics',
+                    popover: {
+                        title: 'Детальная статистика',
+                        description: 'Нажмите здесь для просмотра детальной статистики по доходам, расходам, чекам и переводам',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#finance-account-create',
+                    popover: {
+                        title: 'Добавить счет',
+                        description: 'Нажмите здесь для создания нового финансового счета',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#transfer-money-between-accounts',
+                    popover: {
+                        title: 'Перевести средства',
+                        description: 'Нажмите здесь для перевода средств между вашими счетами',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#group-accounts',
+                    popover: {
+                        title: 'Группа счетов',
+                        description: 'Здесь будет отображаться список всех групп, в которых вы состоите.<br>Создание группы происходит в настройках.\nПереключаться между группами по выбору из выпадающего списка',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#balance-trend-widget',
+                    popover: {
+                        title: 'Тренд баланса',
+                        description: 'Здесь отображается текущий баланс вашей группы счетов и тренд изменения баланса.<br><br>• <strong>Текущий баланс</strong> - общая сумма всех счетов<br>• <strong>Период (7 и 30 дней, 12 месяцев)</strong> - переключение периода анализа<br>• <strong>Изменение в ₽</strong> - абсолютное изменение за период<br>• <strong>Процент (%)</strong> - процентное изменение за период<br>• <strong>График</strong> - визуализация тренда баланса с цветовой кодировкой (зеленый - рост, красный - падение)',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#sum-all-groups-accounts',
+                    popover: {
+                        title: 'Сумма всех счетов со всех групп',
+                        description: 'Здесь будет отображаться сумма всех счетов всех групп, в которых вы состоите',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                }
+            ],
+            receipts: [
+                {
+                    element: '#receipts',
+                    popover: {
+                        title: 'Чеки',
+                        description: 'Вы находитесь на странице управления чеками',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: 'a[href*="/receipts/products/"]',
+                    popover: {
+                        title: 'Часто покупаемые товары',
+                        description: 'Просмотрите список ваших часто покупаемых товаров',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: 'a[href*="/receipts/add-seller/"]',
+                    popover: {
+                        title: 'Добавить продавца',
+                        description: 'Создайте новую запись о продавце',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: 'a[href*="/receipts/create/"]',
+                    popover: {
+                        title: 'Добавить чек',
+                        description: 'Вручную добавьте новый чек в систему',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: 'a[href*="/receipts/upload/"]',
+                    popover: {
+                        title: 'Добавить чек из изображения',
+                        description: 'Загрузите фотографию чека для автоматической обработки',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#receipt-group-select',
+                    popover: {
+                        title: 'Группа чеков',
+                        description: 'Фильтруйте чеки по группам счетов',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                }
+            ],
+            expense: [
+                ...commonNavbarSteps,
+                {
+                    element: '#financeDropdownMenu li:nth-child(2) a',
+                    popover: {
+                        title: 'Расходы',
+                        description: 'Вы находитесь на странице управления расходами',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                }
+            ],
+            income: [
+                ...commonNavbarSteps,
+                {
+                    element: '#financeDropdownMenu li:nth-child(1) a',
+                    popover: {
+                        title: 'Доходы',
+                        description: 'Вы находитесь на странице управления доходами',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                }
+            ],
+            budget: [
+                ...commonNavbarSteps,
+                {
+                    element: '#budget',
+                    popover: {
+                        title: 'Бюджет',
+                        description: 'Вы находитесь на странице управления бюджетом',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                }
+            ],
+            loan: [
+                ...commonNavbarSteps,
+                {
+                    element: '#loans',
+                    popover: {
+                        title: 'Кредиты',
+                        description: 'Вы находитесь на странице управления кредитами и займами',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                }
+            ],
+            reports: [
+                ...commonNavbarSteps,
+                {
+                    element: '#reports',
+                    popover: {
+                        title: 'Отчеты',
+                        description: 'Вы находитесь на странице аналитики и отчетов',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                }
+            ]
+        };
+
+        // Get current page
+        const currentPage = getCurrentPage();
+        console.log('[SiteTour] Current page:', currentPage);
+
+        // Get tour steps for current page
+        const tourSteps = pageTours[currentPage] || commonNavbarSteps;
+
+        // Check if user is visiting page for the first time
+        function isFirstVisitToPage() {
+            try {
+                const storageKey = `siteTourCompleted_${currentPage}`;
+                const visited = localStorage.getItem(storageKey);
+                console.log('[SiteTour] Storage key:', storageKey, 'Visited:', !!visited);
+                return !visited;
+            } catch (error) {
+                console.warn('[SiteTour] localStorage not available:', error);
+                return false;
+            }
+        }
+
+        // Mark tour as completed for this page
+        function markTourCompletedForPage() {
+            try {
+                const storageKey = `siteTourCompleted_${currentPage}`;
+                localStorage.setItem(storageKey, 'true');
+                console.log('[SiteTour] Marked tour as completed for page:', currentPage);
+            } catch (error) {
+                console.warn('[SiteTour] Could not save to localStorage:', error);
+            }
+        }
 
         // Start the tour
         function startTour() {
@@ -334,68 +490,68 @@ console.log('[SiteTour] File loaded');
                 console.warn('[SiteTour] Some tour elements are missing:', missingElements.map(s => s.element));
                 // Don't start tour if essential elements are missing
                 if (missingElements.length === tourSteps.length) {
+                    console.warn('[SiteTour] All tour elements are missing, skipping tour');
                     return;
                 }
             }
 
             try {
                 const validSteps = tourSteps.filter(step => document.querySelector(step.element));
-                console.log('[SiteTour] Starting tour with', validSteps.length, 'steps');
+                console.log('[SiteTour] Starting tour for', currentPage, 'with', validSteps.length, 'steps');
                 driver.setSteps(validSteps);
                 driver.drive(0);
+                markTourCompletedForPage();
             } catch (error) {
                 console.error('[SiteTour] Error starting tour:', error);
             }
         }
 
-        // Check if user is visiting for the first time
-        function isFirstVisit() {
-            try {
-                const visited = localStorage.getItem('siteTourCompleted');
-                return !visited;
-            } catch (error) {
-                console.warn('[SiteTour] localStorage not available:', error);
-                return false;
-            }
-        }
-
-        // Mark tour as completed
-        function markTourCompleted() {
-            try {
-                localStorage.setItem('siteTourCompleted', 'true');
-            } catch (error) {
-                console.warn('[SiteTour] Could not save to localStorage:', error);
-            }
-        }
-
         // Initialize tour
         function initTour() {
-            if (isFirstVisit()) {
-                // Show tour after content is loaded (increased to 2.5 seconds to ensure DOM is ready)
+            if (isFirstVisitToPage()) {
+                console.log('[SiteTour] First visit to page detected, scheduling tour start');
+                // Show tour after content is loaded
                 setTimeout(() => {
                     startTour();
                 }, 2500);
+            } else {
+                console.log('[SiteTour] Page already visited, tour not starting automatically');
             }
         }
 
-        // Note: driver.js doesn't have an 'on' method, so we'll mark tour as completed
-        // when the user starts it or after the timeout
-        console.log('[SiteTour] Tour initialized, starting initialization sequence');
+        console.log('[SiteTour] Tour initialization setup complete');
 
-        // Export functions for manual triggering (FIRST - before initTour)
+        // Export functions for manual triggering
         window.SiteTour = {
             start: startTour,
             restart: () => {
-                console.log('[SiteTour] Restart called');
+                console.log('[SiteTour] Restart called for page:', currentPage);
                 try {
-                    localStorage.removeItem('siteTourCompleted');
+                    const storageKey = `siteTourCompleted_${currentPage}`;
+                    localStorage.removeItem(storageKey);
                 } catch (error) {
                     console.warn('[SiteTour] Could not remove from localStorage:', error);
                 }
                 startTour();
             },
-            markCompleted: markTourCompleted,
-            driver: driver
+            markCompleted: markTourCompletedForPage,
+            restartAll: () => {
+                console.log('[SiteTour] Restart all called - clearing all page tours');
+                try {
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && key.startsWith('siteTourCompleted_')) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                } catch (error) {
+                    console.warn('[SiteTour] Could not clear localStorage:', error);
+                }
+            },
+            driver: driver,
+            currentPage: currentPage
         };
         console.log('[SiteTour] window.SiteTour methods exported');
 
