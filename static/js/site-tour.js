@@ -99,6 +99,25 @@ console.log('[SiteTour] File loaded');
             }
         }
 
+        // Helper function to toggle user dropdown menu
+        function toggleUserDropdown(show = true) {
+            const button = document.getElementById('userDropdownButton');
+            const menu = document.getElementById('userDropdownMenu');
+            const arrow = document.getElementById('userDropdownArrow');
+
+            if (!button || !menu || !arrow) return;
+
+            if (show) {
+                menu.classList.remove('hidden');
+                button.setAttribute('aria-expanded', 'true');
+                arrow.style.transform = 'rotate(180deg)';
+            } else {
+                menu.classList.add('hidden');
+                button.setAttribute('aria-expanded', 'false');
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+
         // Define tour steps
         const tourSteps = [
             {
@@ -106,7 +125,8 @@ console.log('[SiteTour] File loaded');
                 popover: {
                     title: 'Навигация',
                     description: 'Используйте это меню для перемещения по сайту',
-                    position: 'bottom'
+                    side: 'bottom',
+                    align: 'start'
                 }
             },
             {
@@ -114,7 +134,8 @@ console.log('[SiteTour] File loaded');
                 popover: {
                     title: 'Список счетов',
                     description: 'Нажатие на логотип возвращает на главную и список счетов',
-                    position: 'bottom'
+                    side: 'bottom',
+                    align: 'start'
                 }
             },
             {
@@ -122,17 +143,19 @@ console.log('[SiteTour] File loaded');
                 popover: {
                     title: 'Чеки',
                     description: 'Управление вашими чекам',
-                    position: 'bottom'
+                    side: 'bottom',
+                    align: 'start'
                 }
             },
             {
                 element: '#financeDropdown',
                 popover: {
                     title: 'Финансы',
-                    description: 'Управление расходами и доходами. Нажмите на кнопку для раскрытия меню.',
-                    position: 'bottom'
+                    description: 'Управление расходами и доходами. Нажмите далее для раскрытия меню.',
+                    side: 'bottom',
+                    align: 'start'
                 },
-                onHighlight: () => {
+                onHighlightStarted: () => {
                     // Close dropdown when highlighting this element
                     toggleFinanceDropdown(false);
                 }
@@ -142,9 +165,10 @@ console.log('[SiteTour] File loaded');
                 popover: {
                     title: 'Доходы',
                     description: 'Здесь вы можете управлять вашими доходами',
-                    position: 'bottom'
+                    side: 'bottom',
+                    align: 'start'
                 },
-                onHighlight: () => {
+                onHighlightStarted: () => {
                     // Open dropdown before showing this element
                     toggleFinanceDropdown(true);
                 }
@@ -154,19 +178,95 @@ console.log('[SiteTour] File loaded');
                 popover: {
                     title: 'Расходы',
                     description: 'Здесь вы можете управлять вашими расходами',
-                    position: 'bottom'
+                    side: 'bottom',
+                    align: 'start'
                 },
-                onHighlight: () => {
+                onHighlightStarted: () => {
                     // Keep dropdown open
                     toggleFinanceDropdown(true);
+                },
+                onDeselected: () => {
+                    // Close dropdown when moving to next step
+                    toggleFinanceDropdown(false);
                 }
             },
             {
-                element: '#reports-section',
+                element: '#budget',
+                popover: {
+                    title: 'Бюджет',
+                    description: 'Здесь вы можете управлять вашим бюджетом',
+                    side: 'bottom',
+                    align: 'start'
+                }
+            },
+            {
+                element: '#loans',
+                popover: {
+                    title: 'Кредиты',
+                    description: 'Здесь вы можете управлять вашими кредитами',
+                    side: 'bottom',
+                    align: 'start'
+                }
+            },
+            {
+                element: '#reports',
                 popover: {
                     title: 'Отчеты',
                     description: 'Анализ ваших финансов с помощью отчетов',
-                    position: 'bottom'
+                    side: 'bottom',
+                    align: 'start'
+                },
+            },
+            {
+                element: '#dashboard',
+                popover: {
+                    title: 'Дашборд',
+                    description: 'Просмотр общей информации о ваших финансах',
+                    side: 'bottom',
+                    align: 'start'
+                },
+            },
+            {
+                element: '#user-menu',
+                popover: {
+                    title: 'Меню пользователя',
+                    description: 'Управление вашим аккаунтом и выход',
+                    side: 'bottom',
+                    align: 'start'
+                },
+                onHighlightStarted: () => {
+                    // Close dropdown when highlighting this element
+                    toggleUserDropdown(false);
+                }
+            },
+            {
+                element: '#userDropdownMenu li:nth-child(1) a',
+                popover: {
+                    title: 'Профиль',
+                    description: 'Перейти в ваш профиль для изменения настроек',
+                    side: 'left',
+                    align: 'start'
+                },
+                onHighlightStarted: () => {
+                    // Open dropdown before showing this element
+                    toggleUserDropdown(true);
+                }
+            },
+            {
+                element: '#userDropdownMenu li:nth-child(3) button',
+                popover: {
+                    title: 'Выход',
+                    description: 'Выйти из вашего аккаунта',
+                    side: 'left',
+                    align: 'start'
+                },
+                onHighlightStarted: () => {
+                    // Keep dropdown open
+                    toggleUserDropdown(true);
+                },
+                onDeselected: () => {
+                    // Close dropdown when tour ends
+                    toggleUserDropdown(false);
                 }
             }
         ];

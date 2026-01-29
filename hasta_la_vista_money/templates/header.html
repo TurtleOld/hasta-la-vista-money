@@ -65,22 +65,18 @@
                             </li>
                         </ul>
                     </li>
-
-                    <!-- Budget (Staff Only) -->
-                    {% if user.is_staff %}
-                        <li>
-                            <a class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium {% if request.path == '/budget/' %}bg-gradient-to-r from-green-600 to-emerald-600 text-green-50 dark:text-white shadow-lg shadow-green-500/30{% else %}text-gray-700 dark:text-gray-300{% endif %}"
-                               href="{% url 'budget:list' %}">
-                            <svg class="w-4 h-4 flex-shrink-0" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                </svg>
-                                <span>{% translate 'Бюджет' %}</span>
-                            </a>
-                        </li>
-                    {% endif %}
-
+                    <!-- Budget-->
+                    <li id="budget">
+                        <a class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium {% if request.path == '/budget/' %}bg-gradient-to-r from-green-600 to-emerald-600 text-green-50 dark:text-white shadow-lg shadow-green-500/30{% else %}text-gray-700 dark:text-gray-300{% endif %}"
+                            href="{% url 'budget:list' %}">
+                        <svg class="w-4 h-4 flex-shrink-0" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            <span>{% translate 'Бюджет' %}</span>
+                        </a>
+                    </li>
                     <!-- Loans -->
-                    <li>
+                    <li id="loans">
                         <a class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium {% if request.path == '/loan/' %}bg-gradient-to-r from-green-600 to-emerald-600 text-green-50 dark:text-white shadow-lg shadow-green-500/30{% else %}text-gray-700 dark:text-gray-300{% endif %}"
                            href="{% url 'loan:list' %}">
                             <svg class="w-4 h-4 flex-shrink-0" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -91,7 +87,7 @@
                     </li>
 
                     <!-- Reports -->
-                    <li>
+                    <li id="reports">
                         <a class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium {% if request.path == '/reports/' %}bg-gradient-to-r from-green-600 to-emerald-600 text-green-50 dark:text-white shadow-lg shadow-green-500/30{% else %}text-gray-700 dark:text-gray-300{% endif %}"
                            href="{% url 'reports:list' %}">
                             <svg class="w-4 h-4 flex-shrink-0" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -102,7 +98,7 @@
                     </li>
 
                     <!-- Dashboard -->
-                    <li>
+                    <li id="dashboard">
                         <a class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium {% if request.path == '/users/dashboard/' %}bg-gradient-to-r from-green-600 to-emerald-600 text-green-50 dark:text-white shadow-lg shadow-green-500/30{% else %}text-gray-700 dark:text-gray-300{% endif %}"
                            href="{% url 'users:dashboard' %}">
                             <svg class="w-4 h-4 flex-shrink-0" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -114,7 +110,7 @@
                 </ul>
 
                 <!-- User Menu -->
-                <div class="flex items-center ml-4 gap-2">
+                <div id="user-menu" class="flex items-center ml-4 gap-2">
                     <a href="{% url 'users:profile' user.id %}" class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-gray-700 dark:text-gray-300">
                         <div class="flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 dark:from-green-900/40 dark:to-emerald-900/40 text-white dark:text-green-400 ring-2 ring-green-200 dark:ring-green-800 shadow-md dark:shadow-none">
                             <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="background: none; background-color: transparent;">
