@@ -60,26 +60,7 @@
                     </div>
                 </div>
                 <div class="xl:col-span-1 space-y-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <h3 class="font-heading text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                                <span>{% translate 'Информация' %}</span>
-                            </h3>
-                        </div>
-                        <div class="p-5 space-y-4">
-                            <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                                {% translate 'Здесь вы можете управлять своими счетами, переводить средства между ними и просматривать балансы.' %}
-                            </p>
-                            <div class="h-px bg-gray-200 dark:bg-gray-700"></div>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                                {% translate 'Для просмотра детальной статистики по доходам, расходам, чекам и переводам перейдите в раздел' %}
-                                <a href="{% url 'users:statistics' %}" class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium underline decoration-2 underline-offset-2 transition-colors duration-200">{% translate 'Детальная статистика' %}</a>.
-                            </p>
-                        </div>
-                    </div>
+                    {% include 'finance_account/_balance_trend_widget.html' %}
                     <div id="sum-all-groups-accounts" class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
                         <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
                             <h3 class="font-heading text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">

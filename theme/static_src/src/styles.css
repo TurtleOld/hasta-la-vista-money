@@ -1404,3 +1404,7 @@ body:has(#instruction-modal-toggle:checked) #mobileMenu {
 [data-credit-field="true"].show {
   display: block !important;
 }
+
+[data-balance-trend] {
+  display: none !important;
+}

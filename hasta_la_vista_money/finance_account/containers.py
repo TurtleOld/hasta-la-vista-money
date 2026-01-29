@@ -10,6 +10,7 @@ from hasta_la_vista_money.finance_account.repositories import (
 )
 from hasta_la_vista_money.finance_account.services import (
     AccountService,
+    BalanceTrendService,
     TransferService,
 )
 
@@ -39,10 +40,12 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
         TransferService,
         transfer_money_log_repository=transfer_money_log_repository,
     )
+    balance_trend_service = providers.Factory(BalanceTrendService)
     account_page_context_service = providers.Factory(
         AccountPageContextService,
         account_repository=account_repository,
         transfer_money_log_repository=transfer_money_log_repository,
         account_service=account_service,
         transfer_service=transfer_service,
+        balance_trend_service=balance_trend_service,
     )
