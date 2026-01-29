@@ -268,6 +268,51 @@ console.log('[SiteTour] File loaded');
                     // Close dropdown when tour ends
                     toggleUserDropdown(false);
                 }
+            },
+            {
+                element: '#detailed-statistics',
+                popover: {
+                    title: 'Детальная статистика',
+                    description: 'Нажмите здесь для просмотра детальной статистики по доходам, расходам, чекам и переводам',
+                    side: 'bottom',
+                    align: 'start'
+                }
+            },
+            {
+                element: '#finance-account-create',
+                popover: {
+                    title: 'Добавить счет',
+                    description: 'Нажмите здесь для создания нового финансового счета',
+                    side: 'bottom',
+                    align: 'start'
+                }
+            },
+            {
+                element: '#transfer-money-between-accounts',
+                popover: {
+                    title: 'Перевести средства',
+                    description: 'Нажмите здесь для перевода средств между вашими счетами',
+                    side: 'bottom',
+                    align: 'start'
+                }
+            },
+            {
+                element: '#group-accounts',
+                popover: {
+                    title: 'Группа счетов',
+                    description: 'Здесь будет отображаться список всех групп, в которых вы состоите.\nСоздание группы происходит в настройках.\nПереключаться между группами по выбору из выпадающего списка',
+                    side: 'bottom',
+                    align: 'start'
+                }
+            },
+            {
+                element: '#sum-all-groups-accounts',
+                popover: {
+                    title: 'Сумма всех счетов со всех групп',
+                    description: 'Здесь будет отображаться сумма всех счетов всех групп, в которых вы состоите',
+                    side: 'bottom',
+                    align: 'start'
+                }
             }
         ];
 
