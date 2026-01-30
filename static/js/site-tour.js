@@ -137,6 +137,25 @@ console.log('[SiteTour] File loaded');
             }
         }
 
+        // Helper function to toggle receipt filter
+        function toggleReceiptFilter(show = true) {
+            const filterCollapse = document.getElementById('filterCollapse');
+            const filterToggle = document.getElementById('filterToggle');
+            const filterToggleIcon = document.getElementById('filterToggleIcon');
+
+            if (!filterCollapse || !filterToggle || !filterToggleIcon) return;
+
+            if (show) {
+                filterCollapse.classList.remove('hidden');
+                filterToggle.setAttribute('aria-expanded', 'true');
+                filterToggleIcon.classList.add('rotate-180');
+            } else {
+                filterCollapse.classList.add('hidden');
+                filterToggle.setAttribute('aria-expanded', 'false');
+                filterToggleIcon.classList.remove('rotate-180');
+            }
+        }
+
         // Common navbar steps (shown on all pages)
         const commonNavbarSteps = [
             {
@@ -340,6 +359,21 @@ console.log('[SiteTour] File loaded');
                         description: 'Вы находитесь на странице управления чеками',
                         side: 'bottom',
                         align: 'start'
+                    }
+                },
+                {
+                    element: '#filterToggle',
+                    popover: {
+                        title: 'Фильтр чеков',
+                        description: 'Нажмите здесь для раскрытия фильтра. Фильтр позволяет вам:<br>• Фильтровать чеки по периоду<br>• Задавать диапазон сумм<br>• Выбирать продавца<br>• Искать товары в чеках',
+                        side: 'bottom',
+                        align: 'start'
+                    },
+                    onHighlightStarted: () => {
+                        toggleReceiptFilter(true);
+                    },
+                    onDeselected: () => {
+                        toggleReceiptFilter(false);
                     }
                 },
                 {
