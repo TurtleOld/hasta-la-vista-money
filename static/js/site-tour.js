@@ -353,15 +353,6 @@ console.log('[SiteTour] File loaded');
             ],
             receipts: [
                 {
-                    element: '#receipts',
-                    popover: {
-                        title: 'Чеки',
-                        description: 'Вы находитесь на странице управления чеками',
-                        side: 'bottom',
-                        align: 'start'
-                    }
-                },
-                {
                     element: '#filterToggle',
                     popover: {
                         title: 'Фильтр чеков',
@@ -423,40 +414,83 @@ console.log('[SiteTour] File loaded');
                 }
             ],
             expense: [
-                ...commonNavbarSteps,
                 {
-                    element: '#financeDropdownMenu li:nth-child(2) a',
+                    element: '#toggle-group-filter',
                     popover: {
-                        title: 'Расходы',
-                        description: 'Вы находитесь на странице управления расходами',
+                        title: 'Фильтр по группе',
+                        description: 'Нажмите здесь для раскрытия фильтра по группе. Это позволит вам просматривать расходы для разных групп счетов.',
                         side: 'bottom',
+                        align: 'end'
+                    }
+                },
+                {
+                    element: 'a[href*="/expense/create"]',
+                    popover: {
+                        title: 'Добавить расход',
+                        description: 'Нажмите здесь для создания нового расхода',
+                        side: 'bottom',
+                        align: 'end'
+                    }
+                },
+                {
+                    element: 'a[href*="/expense/category"]',
+                    popover: {
+                        title: 'Управление категориями',
+                        description: 'Нажмите здесь для управления категориями расходов',
+                        side: 'bottom',
+                        align: 'end'
+                    }
+                },
+                {
+                    element: '.expense-table',
+                    popover: {
+                        title: 'Таблица расходов',
+                        description: 'Здесь отображается список всех ваших расходов с информацией о сумме, дате, категории и счете.<br><br>Вы можете сортировать и фильтровать данные используя заголовки колонок.<br><br><strong>Важно:</strong> В таблице также отображаются чеки.',
+                        side: 'top',
                         align: 'start'
                     }
                 }
             ],
             income: [
-                ...commonNavbarSteps,
                 {
-                    element: '#financeDropdownMenu li:nth-child(1) a',
+                    element: '#toggle-group-filter',
                     popover: {
-                        title: 'Доходы',
-                        description: 'Вы находитесь на странице управления доходами',
+                        title: 'Фильтр по группе',
+                        description: 'Нажмите здесь для раскрытия фильтра по группе. Это позволит вам просматривать доходы для разных групп счетов.',
                         side: 'bottom',
+                        align: 'end'
+                    }
+                },
+                {
+                    element: 'a[href*="/income/create"]',
+                    popover: {
+                        title: 'Добавить доход',
+                        description: 'Нажмите здесь для создания нового дохода',
+                        side: 'bottom',
+                        align: 'end'
+                    }
+                },
+                {
+                    element: 'a[href*="/income/category"]',
+                    popover: {
+                        title: 'Управление категориями',
+                        description: 'Нажмите здесь для управления категориями доходов',
+                        side: 'bottom',
+                        align: 'end'
+                    }
+                },
+                {
+                    element: '.income-table',
+                    popover: {
+                        title: 'Таблица доходов',
+                        description: 'Здесь отображается список всех ваших доходов с информацией о сумме, дате, категории и счете. Вы можете сортировать и фильтровать данные используя заголовки колонок.',
+                        side: 'top',
                         align: 'start'
                     }
                 }
             ],
             budget: [
-                ...commonNavbarSteps,
-                {
-                    element: '#budget',
-                    popover: {
-                        title: 'Бюджет',
-                        description: 'Вы находитесь на странице управления бюджетом',
-                        side: 'bottom',
-                        align: 'start'
-                    }
-                }
+                
             ],
             loan: [
                 ...commonNavbarSteps,

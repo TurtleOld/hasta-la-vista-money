@@ -381,13 +381,6 @@ function initExpensePage() {
         tryLoad(0);
     }
 
-    if (typeof Tabulator === 'undefined') {
-        ensureTabulatorLoaded(function () {
-            location.reload();
-        });
-        return;
-    }
-
     function formatMoney(amount) {
         return parseFloat(amount).toLocaleString('ru-RU', {
             minimumFractionDigits: 2,
@@ -539,6 +532,10 @@ function initExpensePage() {
     }
 
     function initExpenseTable() {
+        if (!table) {
+            console.error('Таблица не найдена перед инициализацией Tabulator');
+            return;
+        }
         try {
             console.log('Инициализация Tabulator для expense, элемент найден:', !!table);
             window.expenseTabulator = new Tabulator('#expense-table', {
@@ -712,6 +709,16 @@ function initExpensePage() {
         setTimeout(function () {
             fixTabulatorInlineStyles();
         }, 200);
+    });
+
+    window.expenseTabulator.on('dataLoadError', function (error) {
+        console.error('Ошибка загрузки данных expense:', error);
+        if (skeleton) {
+            skeleton.style.display = 'none';
+            skeleton.classList.add('hidden');
+        }
+        table.classList.remove('invisible', 'hidden', 'd-none');
+        table.classList.add('visible');
     });
 
     const toggleBtn = document.getElementById('toggle-group-filter');
