@@ -1,12 +1,6 @@
 // Site Tour using driver.js
-console.log('[SiteTour] File loaded');
-
 (function() {
-    console.log('[SiteTour] IIFE function called');
     'use strict';
-
-    console.log('[SiteTour] Script initialized');
-    console.log('[SiteTour] User authenticated:', typeof window.userIsAuthenticated !== 'undefined');
 
     // Create SiteTour object immediately
     window.SiteTour = window.SiteTour || {};
@@ -14,71 +8,49 @@ console.log('[SiteTour] File loaded');
     // Check if user is authenticated (driver.js should only be available for authenticated users)
     if (typeof window.userIsAuthenticated === 'undefined') {
         // User is not authenticated, don't load tour
-        console.log('[SiteTour] User not authenticated, skipping tour');
         return;
     }
 
-    // Determine current page from URL
-    function getCurrentPage() {
-        const pathname = window.location.pathname;
-        
-        if (pathname.includes('/receipts')) {
-            return 'receipts';
-        } else if (pathname.includes('/expense')) {
-            return 'expense';
-        } else if (pathname.includes('/income')) {
-            return 'income';
-        } else if (pathname.includes('/budget')) {
-            return 'budget';
-        } else if (pathname.includes('/loan')) {
-            return 'loan';
-        } else if (pathname.includes('/reports')) {
-            return 'reports';
-        } else if (pathname.includes('/finance_account')) {
-            return 'finance_account';
+        // Determine current page from URL
+        function getCurrentPage() {
+            const pathname = window.location.pathname;
+            
+            if (pathname.includes('/receipts')) {
+                return 'receipts';
+            } else if (pathname.includes('/expense') && pathname.includes('/budget')) {
+                return 'budget_expense';
+            } else if (pathname.includes('/income') && pathname.includes('/budget')) {
+                return 'budget_income';
+            } else if (pathname.includes('/budget')) {
+                return 'budget';
+            } else if (pathname.includes('/expense')) {
+                return 'expense';
+            } else if (pathname.includes('/income')) {
+                return 'income';
+            } else if (pathname.includes('/loan')) {
+                return 'loan';
+            } else if (pathname.includes('/reports')) {
+                return 'reports';
+            } else if (pathname.includes('/finance_account')) {
+                return 'finance_account';
+            }
+            
+            return 'unknown';
         }
-        
-        return 'unknown';
-    }
 
     // Wait for driver.js to be available (it should be loaded via CDN or bundler)
     function initTourWhenReady(retryCount = 0) {
-        console.log('[SiteTour] initTourWhenReady called, retry:', retryCount);
-        
-        // Try to access Driver from window object
-        console.log('[SiteTour] window.driver available:', !!window.driver);
-        if (window.driver) {
-            console.log('[SiteTour] window.driver properties:', Object.keys(window.driver));
-        }
-        if (retryCount === 0) {
-            console.log('[SiteTour] Checking for window.driver.js:', window.driver && window.driver.js);
-        }
-        
         const driverConstructor = window.driver && window.driver.js;
         
         if (!driverConstructor) {
             if (retryCount < 50) { // Max 50 retries = 5 seconds
-                if (retryCount % 10 === 0) {
-                    console.log('[SiteTour] Waiting for driver.js... (retry ' + (retryCount + 1) + ')');
-                }
                 setTimeout(() => initTourWhenReady(retryCount + 1), 100);
-            } else {
-                console.error('[SiteTour] driver.js failed to load after 5 seconds');
-                console.error('[SiteTour] typeof window.driver:', typeof window.driver);
-                console.error('[SiteTour] window.driver:', window.driver);
-                if (window.driver) {
-                    console.error('[SiteTour] Available properties in window.driver:', Object.keys(window.driver));
-                }
             }
             return;
         }
 
-        console.log('[SiteTour] driver.js loaded successfully');
-        console.log('[SiteTour] driverConstructor type:', typeof driverConstructor);
-
         // The IIFE returns an object with a 'driver' property containing the actual constructor
         const actualConstructor = driverConstructor.driver || driverConstructor;
-        console.log('[SiteTour] actualConstructor type:', typeof actualConstructor);
 
         // Initialize driver instance
         let driver;
@@ -156,8 +128,8 @@ console.log('[SiteTour] File loaded');
             }
         }
 
-        // Common navbar steps (shown on all pages)
-        const commonNavbarSteps = [
+        // Common navbar steps (shown only on finance_account page)
+        const financeAccountNavbarSteps = [
             {
                 element: '#navbar',
                 popover: {
@@ -286,7 +258,7 @@ console.log('[SiteTour] File loaded');
         // Page-specific tour steps
         const pageTours = {
             finance_account: [
-                ...commonNavbarSteps,
+                ...financeAccountNavbarSteps,
                 {
                     element: '#receipts',
                     popover: {
@@ -490,31 +462,182 @@ console.log('[SiteTour] File loaded');
                 }
             ],
             budget: [
-                
+                {
+                    element: '#budget-expense-table-btn',
+                    popover: {
+                        title: 'Таблица расходов',
+                        description: 'Нажмите здесь для просмотра таблицы всех расходов по категориям и месяцам. Вы сможете увидеть план и фактические расходы, а также управлять планированием.',
+                        side: 'bottom',
+                        align: 'start'
+                    },
+                    onNextClick: (element) => {
+                        // Переход в таблицу расходов
+                        const btn = document.querySelector('#budget-expense-table-btn');
+                        if (btn) {
+                            setTimeout(() => {
+                                btn.click();
+                                setTimeout(() => {
+                                    // Ждем загрузки страницы
+                                    if (window.SiteTour && window.SiteTour.driver) {
+                                        window.SiteTour.driver.drive(1);
+                                    }
+                                }, 1500);
+                            }, 100);
+                        }
+                    }
+                },
+                {
+                    element: '#expense-budget-table',
+                    popover: {
+                        title: 'Таблица расходов',
+                        description: 'Здесь вы видите таблицу с планируемыми и фактическими расходами.<br><br><strong>Структура таблицы:</strong><br>• Каждая строка - это категория расходов<br>• Каждая колонка - это месяц<br>• Слева план (Plan), справа фактические расходы (Fact)<br><br>Вы можете редактировать плановые значения прямо в таблице, кликнув по нужной ячейке.',
+                        side: 'top',
+                        align: 'start'
+                    },
+                    onNextClick: (element) => {
+                        // Переход назад на главную бюджета
+                        const backBtn = document.querySelector('a[href*="/budget"]:first-of-type');
+                        if (backBtn) {
+                            setTimeout(() => {
+                                backBtn.click();
+                                setTimeout(() => {
+                                    if (window.SiteTour && window.SiteTour.driver) {
+                                        window.SiteTour.driver.drive(2);
+                                    }
+                                }, 1500);
+                            }, 100);
+                        }
+                    }
+                },
+                {
+                    element: '#budget-income-table-btn',
+                    popover: {
+                        title: 'Таблица доходов',
+                        description: 'Нажмите здесь для просмотра таблицы всех доходов по категориям и месяцам. Аналогично таблице расходов, вы можете планировать и отслеживать доходы.',
+                        side: 'bottom',
+                        align: 'start'
+                    },
+                    onNextClick: (element) => {
+                        // Переход в таблицу доходов
+                        const btn = document.querySelector('#budget-income-table-btn');
+                        if (btn) {
+                            setTimeout(() => {
+                                btn.click();
+                                setTimeout(() => {
+                                    if (window.SiteTour && window.SiteTour.driver) {
+                                        window.SiteTour.driver.drive(3);
+                                    }
+                                }, 1500);
+                            }, 100);
+                        }
+                    }
+                },
+                {
+                    element: '#income-budget-table',
+                    popover: {
+                        title: 'Таблица доходов',
+                        description: 'Здесь отображается таблица с планируемыми и фактическими доходами.<br><br><strong>Структура таблицы:</strong><br>• Каждая строка - это категория дохода<br>• Каждая колонка - это месяц<br>• Слева план (Plan), справа фактические доходы (Fact)<br><br>Вы можете редактировать плановые значения доходов, кликнув по нужной ячейке.',
+                        side: 'top',
+                        align: 'start'
+                    },
+                    onNextClick: (element) => {
+                        // Переход назад на главную бюджета
+                        const backBtn = document.querySelector('a[href*="/budget"]:first-of-type');
+                        if (backBtn) {
+                            setTimeout(() => {
+                                backBtn.click();
+                                setTimeout(() => {
+                                    if (window.SiteTour && window.SiteTour.driver) {
+                                        window.SiteTour.driver.drive(4);
+                                    }
+                                }, 1500);
+                            }, 100);
+                        }
+                    }
+                },
+                {
+                    element: '#budget-reports-btn',
+                    popover: {
+                        title: 'Отчёты',
+                        description: 'Здесь вы можете переходить к разделу отчетов для более детального анализа ваших доходов и расходов с различными диаграммами и статистикой.',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#budget-add-months-btn',
+                    popover: {
+                        title: 'Добавить ещё месяцы',
+                        description: 'Нажмите эту кнопку для добавления новых месяцев к вашему плану бюджета. Это позволит вам планировать расходы и доходы на более длительный период.',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                }
+            ],
+            budget_expense: [
+                {
+                    element: '#expense-budget-table',
+                    popover: {
+                        title: 'Таблица расходов',
+                        description: 'Здесь вы видите таблицу с планируемыми и фактическими расходами.<br><br><strong>Структура таблицы:</strong><br>• <strong>Строки</strong> - категории расходов<br>• <strong>Колонки</strong> - месяцы<br>• <strong>Слева (Plan)</strong> - плановые расходы<br>• <strong>Справа (Fact)</strong> - фактические расходы<br><br><strong>Редактирование:</strong> Кликните по ячейке плана, чтобы отредактировать плановое значение. Система автоматически сохранит изменения.',
+                        side: 'top',
+                        align: 'start'
+                    }
+                }
+            ],
+            budget_income: [
+                {
+                    element: '#income-budget-table',
+                    popover: {
+                        title: 'Таблица доходов',
+                        description: 'Здесь отображается таблица с планируемыми и фактическими доходами.<br><br><strong>Структура таблицы:</strong><br>• <strong>Строки</strong> - категории доходов<br>• <strong>Колонки</strong> - месяцы<br>• <strong>Слева (Plan)</strong> - плановые доходы<br>• <strong>Справа (Fact)</strong> - фактические доходы<br><br><strong>Редактирование:</strong> Кликните по ячейке плана, чтобы отредактировать плановое значение. Система автоматически сохранит изменения.',
+                        side: 'top',
+                        align: 'start'
+                    }
+                }
             ],
             loan: [
-                ...commonNavbarSteps,
                 {
-                    element: '#loans',
+                    element: 'a[href*="/loan/create"]',
                     popover: {
-                        title: 'Кредиты',
-                        description: 'Вы находитесь на странице управления кредитами и займами',
+                        title: 'Добавить кредит',
+                        description: 'Нажмите здесь для создания нового кредита. Вы сможете указать сумму, ставку и срок кредита.',
                         side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: 'details.group',
+                    popover: {
+                        title: 'Подсказка по расчетам',
+                        description: 'Раскройте этот раздел для получения информации о расчетах кредитов. Здесь содержатся формулы для расчета аннуитетных платежей и прочие справочные данные.',
+                        side: 'bottom',
+                        align: 'start'
+                    },
+                    onHighlightStarted: () => {
+                        const details = document.querySelector('details.group');
+                        if (details) {
+                            details.open = true;
+                        }
+                    },
+                    onDeselected: () => {
+                        const details = document.querySelector('details.group');
+                        if (details) {
+                            details.open = false;
+                        }
+                    }
+                },
+                {
+                    element: '#loans-list',
+                    popover: {
+                        title: 'Список кредитов',
+                        description: 'Здесь отображаются все ваши кредиты в виде карточек.<br><br><strong>Каждая карточка показывает:</strong><br>• Номер и тип кредита<br>• Сумму, ставку и срок<br>• Общую сумму к возврату<br>• Размер переплаты<br><br><strong>Действия:</strong> Нажмите кнопку "График" для просмотра расписания платежей или "Платеж" для внесения платежа',
+                        side: 'top',
                         align: 'start'
                     }
                 }
             ],
             reports: [
-                ...commonNavbarSteps,
-                {
-                    element: '#reports',
-                    popover: {
-                        title: 'Отчеты',
-                        description: 'Вы находитесь на странице аналитики и отчетов',
-                        side: 'bottom',
-                        align: 'start'
-                    }
-                }
             ]
         };
 
@@ -523,34 +646,102 @@ console.log('[SiteTour] File loaded');
         console.log('[SiteTour] Current page:', currentPage);
 
         // Get tour steps for current page
-        const tourSteps = pageTours[currentPage] || commonNavbarSteps;
+        const tourSteps = pageTours[currentPage] || [];
 
-        // Check if user is visiting page for the first time
-        function isFirstVisitToPage() {
+        // Check if tour is globally disabled
+        function isTourGloballyDisabled() {
             try {
-                const storageKey = `siteTourCompleted_${currentPage}`;
-                const visited = localStorage.getItem(storageKey);
-                console.log('[SiteTour] Storage key:', storageKey, 'Visited:', !!visited);
-                return !visited;
+                const disabled = localStorage.getItem('siteTourGloballyDisabled');
+                console.log('[SiteTour] Tour globally disabled:', !!disabled);
+                return !!disabled;
             } catch (error) {
                 console.warn('[SiteTour] localStorage not available:', error);
                 return false;
             }
         }
 
-        // Mark tour as completed for this page
-        function markTourCompletedForPage() {
+        // Mark tour as globally disabled
+        function disableTourGlobally() {
             try {
-                const storageKey = `siteTourCompleted_${currentPage}`;
-                localStorage.setItem(storageKey, 'true');
-                console.log('[SiteTour] Marked tour as completed for page:', currentPage);
+                localStorage.setItem('siteTourGloballyDisabled', 'true');
+                console.log('[SiteTour] Tour disabled globally');
             } catch (error) {
                 console.warn('[SiteTour] Could not save to localStorage:', error);
             }
         }
 
+        // Enable tour globally
+        function enableTourGlobally() {
+            try {
+                localStorage.removeItem('siteTourGloballyDisabled');
+                console.log('[SiteTour] Tour enabled globally');
+            } catch (error) {
+                console.warn('[SiteTour] Could not access localStorage:', error);
+            }
+        }
+
+        // Helper function to create checkbox HTML for popover
+        function createDontShowCheckboxHTML() {
+            return `
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+                    <label style="display: flex; align-items: center; font-size: 14px; margin: 0; cursor: pointer;">
+                        <input type="checkbox" id="siteTourDontShowCheckbox" 
+                               style="margin-right: 8px; cursor: pointer; width: 16px; height: 16px;">
+                        <span>Больше не показывать</span>
+                    </label>
+                </div>
+            `;
+        }
+
+        // Override the popover description to add checkbox to last step
+        function enhancePopoverWithCheckbox(steps) {
+            if (steps.length === 0) return steps;
+            
+            // Clone the steps to avoid mutating original
+            const enhancedSteps = steps.map((step, index) => {
+                const newStep = { ...step };
+                
+                // Add checkbox HTML to the last step
+                if (index === steps.length - 1) {
+                    const originalDesc = newStep.popover.description || '';
+                    newStep.popover.description = originalDesc + createDontShowCheckboxHTML();
+                    
+                    // Add callback to handle checkbox change
+                    const originalOnHighlightStarted = newStep.onHighlightStarted;
+                    newStep.onHighlightStarted = () => {
+                        if (originalOnHighlightStarted) {
+                            originalOnHighlightStarted();
+                        }
+                        
+                        // Set up checkbox listener after a short delay to ensure it's in DOM
+                        setTimeout(() => {
+                            const checkbox = document.getElementById('siteTourDontShowCheckbox');
+                            if (checkbox) {
+                                checkbox.addEventListener('change', () => {
+                                    if (checkbox.checked) {
+                                        console.log('[SiteTour] User disabled tour globally');
+                                        disableTourGlobally();
+                                    }
+                                });
+                            }
+                        }, 100);
+                    };
+                }
+                
+                return newStep;
+            });
+            
+            return enhancedSteps;
+        }
+
         // Start the tour
         function startTour() {
+            // Check if tour is globally disabled
+            if (isTourGloballyDisabled()) {
+                console.log('[SiteTour] Tour is globally disabled, skipping');
+                return;
+            }
+
             // Check if all required elements exist
             const missingElements = tourSteps.filter(step => !document.querySelector(step.element));
             
@@ -565,26 +756,28 @@ console.log('[SiteTour] File loaded');
 
             try {
                 const validSteps = tourSteps.filter(step => document.querySelector(step.element));
-                console.log('[SiteTour] Starting tour for', currentPage, 'with', validSteps.length, 'steps');
-                driver.setSteps(validSteps);
+                const enhancedSteps = enhancePopoverWithCheckbox(validSteps);
+                
+                console.log('[SiteTour] Starting tour for', currentPage, 'with', enhancedSteps.length, 'steps');
+                driver.setSteps(enhancedSteps);
                 driver.drive(0);
-                markTourCompletedForPage();
             } catch (error) {
                 console.error('[SiteTour] Error starting tour:', error);
             }
         }
 
-        // Initialize tour
+        // Initialize tour - show on every page load (unless globally disabled)
         function initTour() {
-            if (isFirstVisitToPage()) {
-                console.log('[SiteTour] First visit to page detected, scheduling tour start');
-                // Show tour after content is loaded
-                setTimeout(() => {
-                    startTour();
-                }, 2500);
-            } else {
-                console.log('[SiteTour] Page already visited, tour not starting automatically');
+            if (isTourGloballyDisabled()) {
+                console.log('[SiteTour] Tour is globally disabled, not starting');
+                return;
             }
+
+            console.log('[SiteTour] Tour is enabled, scheduling tour start');
+            // Show tour after content is loaded
+            setTimeout(() => {
+                startTour();
+            }, 2500);
         }
 
         console.log('[SiteTour] Tour initialization setup complete');
@@ -594,29 +787,25 @@ console.log('[SiteTour] File loaded');
             start: startTour,
             restart: () => {
                 console.log('[SiteTour] Restart called for page:', currentPage);
-                try {
-                    const storageKey = `siteTourCompleted_${currentPage}`;
-                    localStorage.removeItem(storageKey);
-                } catch (error) {
-                    console.warn('[SiteTour] Could not remove from localStorage:', error);
-                }
                 startTour();
             },
-            markCompleted: markTourCompletedForPage,
+            enableTour: () => {
+                console.log('[SiteTour] Enable tour called');
+                enableTourGlobally();
+                startTour();
+            },
+            disableTour: () => {
+                console.log('[SiteTour] Disable tour called');
+                disableTourGlobally();
+            },
             restartAll: () => {
-                console.log('[SiteTour] Restart all called - clearing all page tours');
+                console.log('[SiteTour] Restart all called - clearing global disable flag');
                 try {
-                    const keysToRemove = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        if (key && key.startsWith('siteTourCompleted_')) {
-                            keysToRemove.push(key);
-                        }
-                    }
-                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                    enableTourGlobally();
                 } catch (error) {
                     console.warn('[SiteTour] Could not clear localStorage:', error);
                 }
+                startTour();
             },
             driver: driver,
             currentPage: currentPage
