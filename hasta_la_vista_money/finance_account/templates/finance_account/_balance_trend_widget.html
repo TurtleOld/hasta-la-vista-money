@@ -1,0 +1,83 @@
+{% load i18n comma %}
+
+<div id="balance-trend-widget" class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+    <div class="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h3 class="font-heading text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+            </svg>
+            <span>{% translate 'Тренд баланса' %}</span>
+        </h3>
+    </div>
+    
+    <div class="p-5 space-y-4">
+        <!-- Current Balance Display -->
+        <div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">{% translate 'Текущий баланс' %}</p>
+            <p class="font-mono text-3xl font-bold text-purple-600 dark:text-purple-400">
+                {% if balance_trend.current_balance %}
+                    {{ balance_trend.current_balance|floatformat:2 }} ₽
+                {% else %}
+                    0.00 ₽
+                {% endif %}
+            </p>
+        </div>
+        
+        <!-- Period Selector -->
+        <div class="flex gap-2">
+            <button data-period="7d" class="period-btn px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 {% if selected_period == '7d' or not selected_period %}bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300{% else %}bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600{% endif %}">
+                7 дней
+            </button>
+            <button data-period="30d" class="period-btn px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 {% if selected_period == '30d' %}bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300{% else %}bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600{% endif %}">
+                30 дней
+            </button>
+            <button data-period="12m" class="period-btn px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 {% if selected_period == '12m' %}bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300{% else %}bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600{% endif %}">
+                12 месяцев
+            </button>
+        </div>
+        
+        <!-- Delta Display -->
+        {% if balance_trend.has_data %}
+            <div class="grid grid-cols-2 gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">{% translate 'Изменение' %}</p>
+                    <p class="font-mono font-semibold {% if balance_trend.delta_absolute >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {% if balance_trend.delta_absolute >= 0 %}+{% endif %}{{ balance_trend.delta_absolute|floatformat:2 }} ₽
+                    </p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">{% translate 'Процент' %}</p>
+                    <p class="font-mono font-semibold {% if balance_trend.delta_percent >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {% if balance_trend.delta_percent >= 0 %}+{% endif %}{{ balance_trend.delta_percent|floatformat:1 }}%
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Chart Container -->
+            <div class="mt-4">
+                <canvas id="balance-trend-chart" height="100"></canvas>
+            </div>
+        {% else %}
+            <!-- Empty State -->
+            <div class="py-8 text-center">
+                <svg class="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                    {% translate 'Нет данных о транзакциях' %}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-500 mb-4">
+                    {% translate 'Добавьте счет и записывайте расходы и доходы' %}
+                </p>
+                <a href="{% url 'finance_account:create' %}" class="inline-flex items-center gap-2 px-4 py-2 text-white font-medium rounded-xl transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    <span>{% translate 'Добавить счет' %}</span>
+                </a>
+            </div>
+        {% endif %}
+    </div>
+    <div data-balance-trend data-has-data="{{ balance_trend.has_data|lower }}">{{ selected_period|default:"30d" }}</div>
+    {% if balance_trend.has_data %}<div style="display: none;" data-series>{{ balance_trend.series|safe }}</div>{% endif %}
+</div>

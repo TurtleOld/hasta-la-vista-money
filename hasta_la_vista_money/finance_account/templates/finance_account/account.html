@@ -19,19 +19,19 @@
                         <span>{% translate 'Мои счета' %}</span>
                     </h1>
                     <div class="flex flex-wrap items-center gap-2.5">
-                        <a href="{% url 'users:statistics' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 font-medium rounded-xl border border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                        <a id="detailed-statistics" href="{% url 'users:statistics' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 font-medium rounded-xl border border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                             </svg>
                             <span>{% translate 'Детальная статистика' %}</span>
                         </a>
-                        <a href="{% url 'finance_account:create' %}" class="add-account-button inline-flex items-center gap-2 px-4 py-2 text-white font-medium rounded-xl transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                        <a id="finance-account-create" href="{% url 'finance_account:create' %}" class="add-account-button inline-flex items-center gap-2 px-4 py-2 text-white font-medium rounded-xl transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                             </svg>
                             <span>{% translate 'Добавить счет' %}</span>
                         </a>
-                        <a href="{% url 'finance_account:transfer_money' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-xl border border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                        <a id="transfer-money-between-accounts" href="{% url 'finance_account:transfer_money' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-xl border border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
                             </svg>
@@ -45,7 +45,7 @@
                 <div class="xl:col-span-2 space-y-4">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-2 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                         <div class="font-heading font-semibold text-gray-900 dark:text-white">{% translate 'Счета' %}</div>
-                        <div class="flex items-center gap-2.5">
+                        <div id="group-accounts" class="flex items-center gap-2.5">
                             <label for="account-group-select" class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Группа счетов:</label>
                             <select id="account-group-select" class="px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
                                 <option value="my" {% if request.GET.group_id == 'my' or not request.GET.group_id %}selected{% endif %}>Мои</option>
@@ -60,27 +60,8 @@
                     </div>
                 </div>
                 <div class="xl:col-span-1 space-y-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <h3 class="font-heading text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                                <span>{% translate 'Информация' %}</span>
-                            </h3>
-                        </div>
-                        <div class="p-5 space-y-4">
-                            <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                                {% translate 'Здесь вы можете управлять своими счетами, переводить средства между ними и просматривать балансы.' %}
-                            </p>
-                            <div class="h-px bg-gray-200 dark:bg-gray-700"></div>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                                {% translate 'Для просмотра детальной статистики по доходам, расходам, чекам и переводам перейдите в раздел' %}
-                                <a href="{% url 'users:statistics' %}" class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium underline decoration-2 underline-offset-2 transition-colors duration-200">{% translate 'Детальная статистика' %}</a>.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+                    {% include 'finance_account/_balance_trend_widget.html' %}
+                    <div id="sum-all-groups-accounts" class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
                         <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
                             <h3 class="font-heading text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                 <svg class="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

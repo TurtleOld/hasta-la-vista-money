@@ -1,0 +1,374 @@
+/* ============================================
+   Modern Popover Styles for 2025-2026
+   ============================================ */
+
+/* Base pointer events control */
+.driver-active .driver-overlay,
+.driver-active * {
+  pointer-events: none;
+}
+
+.driver-active .driver-active-element,
+.driver-active .driver-active-element *,
+.driver-popover,
+.driver-popover * {
+  pointer-events: auto;
+}
+
+/* Animations */
+@keyframes animate-fade-in {
+  0% {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes animate-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fade animation */
+.driver-fade .driver-overlay {
+  animation: animate-fade-in 0.2s ease-in-out;
+}
+
+.driver-fade .driver-popover {
+  animation: animate-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Main Popover Container */
+.driver-popover {
+  all: unset;
+  box-sizing: border-box;
+  color: #1a1a1a;
+  margin: 0;
+  padding: 20px;
+  border-radius: 12px;
+  min-width: 280px;
+  max-width: 380px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.07),
+    0 10px 24px rgba(0, 0, 0, 0.1),
+    0 0 1px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  z-index: 1000000000;
+  position: fixed;
+  top: 0;
+  right: 0;
+  backdrop-filter: blur(10px);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .driver-popover {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    color: #f3f4f6;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow:
+      0 4px 6px rgba(0, 0, 0, 0.3),
+      0 10px 24px rgba(0, 0, 0, 0.4),
+      0 0 1px rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* All text elements */
+.driver-popover * {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    'Inter', sans-serif;
+}
+
+/* Title Styling */
+.driver-popover-title {
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 700;
+  display: block;
+  position: relative;
+  margin: 0;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@media (prefers-color-scheme: dark) {
+  .driver-popover-title {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* Close Button */
+.driver-popover-close-btn {
+  all: unset;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: 500;
+  color: #9ca3af;
+  z-index: 1;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.driver-popover-close-btn:hover,
+.driver-popover-close-btn:focus {
+  color: #1a1a1a;
+  background-color: rgba(0, 0, 0, 0.05);
+  transform: scale(1.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .driver-popover-close-btn {
+    color: #6b7280;
+  }
+
+  .driver-popover-close-btn:hover,
+  .driver-popover-close-btn:focus {
+    color: #f3f4f6;
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Title and Description spacing */
+.driver-popover-title[style*='block'] + .driver-popover-description {
+  margin-top: 10px;
+}
+
+/* Description Text */
+.driver-popover-description {
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #4b5563;
+  letter-spacing: 0.2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .driver-popover-description {
+    color: #d1d5db;
+  }
+}
+
+/* Footer Container */
+.driver-popover-footer {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Progress Text */
+.driver-popover-progress-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #9ca3af;
+  letter-spacing: 0.3px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .driver-popover-progress-text {
+    color: #6b7280;
+  }
+}
+
+/* Footer Buttons */
+.driver-popover-footer button {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 8px 14px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: 0;
+  line-height: 1.3;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+  color: #1a1a1a;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.driver-popover-footer button:hover,
+.driver-popover-footer button:focus {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-color: #9ca3af;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.driver-popover-footer button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  .driver-popover-footer button {
+    background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+    border-color: #4b5563;
+    color: #f3f4f6;
+  }
+
+  .driver-popover-footer button:hover,
+  .driver-popover-footer button:focus {
+    background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+    border-color: #6b7280;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Disabled button state */
+.driver-popover-footer .driver-popover-btn-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* Overflow handling */
+:not(body):has(> .driver-active-element) {
+  overflow: hidden !important;
+}
+
+/* No interaction state */
+.driver-no-interaction,
+.driver-no-interaction * {
+  pointer-events: none !important;
+}
+
+/* Navigation Buttons Container */
+.driver-popover-navigation-btns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.driver-popover-navigation-btns button + button {
+  margin-left: 0;
+}
+
+/* Arrow Styling */
+.driver-popover-arrow {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+  border-color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .driver-popover-arrow {
+    border-color: #1f2937;
+  }
+}
+
+/* Arrow default states */
+.driver-popover-arrow-side-over {
+  display: none;
+}
+
+/* Left Arrow */
+.driver-popover-arrow-side-left {
+  left: 100%;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-top-color: transparent;
+}
+
+/* Right Arrow */
+.driver-popover-arrow-side-right {
+  right: 100%;
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  border-top-color: transparent;
+}
+
+/* Top Arrow */
+.driver-popover-arrow-side-top {
+  top: 100%;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+}
+
+/* Bottom Arrow */
+.driver-popover-arrow-side-bottom {
+  bottom: 100%;
+  border-left-color: transparent;
+  border-top-color: transparent;
+  border-right-color: transparent;
+}
+
+/* Center Arrow */
+.driver-popover-arrow-side-center {
+  display: none;
+}
+
+/* Arrow alignments - Start */
+.driver-popover-arrow-side-left.driver-popover-arrow-align-start,
+.driver-popover-arrow-side-right.driver-popover-arrow-align-start {
+  top: 15px;
+}
+
+.driver-popover-arrow-side-top.driver-popover-arrow-align-start,
+.driver-popover-arrow-side-bottom.driver-popover-arrow-align-start {
+  left: 15px;
+}
+
+/* Arrow alignments - End */
+.driver-popover-arrow-align-end.driver-popover-arrow-side-left,
+.driver-popover-arrow-align-end.driver-popover-arrow-side-right {
+  bottom: 15px;
+}
+
+.driver-popover-arrow-side-top.driver-popover-arrow-align-end,
+.driver-popover-arrow-side-bottom.driver-popover-arrow-align-end {
+  right: 15px;
+}
+
+/* Arrow alignments - Center */
+.driver-popover-arrow-side-left.driver-popover-arrow-align-center,
+.driver-popover-arrow-side-right.driver-popover-arrow-align-center {
+  top: 50%;
+  margin-top: -6px;
+}
+
+.driver-popover-arrow-side-top.driver-popover-arrow-align-center,
+.driver-popover-arrow-side-bottom.driver-popover-arrow-align-center {
+  left: 50%;
+  margin-left: -6px;
+}
+
+/* No arrow state */
+.driver-popover-arrow-none {
+  display: none;
+}

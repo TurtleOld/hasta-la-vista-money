@@ -10,6 +10,9 @@ from hasta_la_vista_money.finance_account.services.account_service import (
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
+from hasta_la_vista_money.finance_account.services.balance_trend_service import (  # noqa: E501
+    BalanceTrendService,
+)
 from hasta_la_vista_money.finance_account.services.bank_calculators import (
     DefaultBankCalculator,
     RaiffeisenbankCalculator,
@@ -48,6 +51,7 @@ __all__ = [
     'AccountService',
     'BalanceService',
     'BalanceServiceProtocol',
+    'BalanceTrendService',
     'BankCalculatorProtocol',
     'CreditCalculationService',
     'CreditCalculationServiceProtocol',

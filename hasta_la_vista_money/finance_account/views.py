@@ -141,9 +141,14 @@ class AccountView(
             group_id,
         )
 
+        # Get balance trend period from query parameters
+        balance_trend_period = request.GET.get('balance_trend_period', '30d')
+
         page_context = page_context_service.build_account_list_context(
             user,
             accounts,
+            group_id=group_id,
+            balance_trend_period=balance_trend_period,
         )
 
         context.update(page_context)

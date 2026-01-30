@@ -18,7 +18,10 @@ if TYPE_CHECKING:
         AccountRepository,
         TransferMoneyLogRepository,
     )
-    from hasta_la_vista_money.finance_account.services import TransferService
+    from hasta_la_vista_money.finance_account.services import (
+        BalanceTrendService,
+        TransferService,
+    )
 
 
 class AccountPageContextService:
@@ -30,6 +33,7 @@ class AccountPageContextService:
         transfer_money_log_repository: 'TransferMoneyLogRepository',
         account_service: 'AccountServiceProtocol',
         transfer_service: 'TransferService',
+        balance_trend_service: 'BalanceTrendService',
     ) -> None:
         """Initialize service with required repositories and services.
 
@@ -39,11 +43,13 @@ class AccountPageContextService:
                 operations.
             account_service: Service for account business logic.
             transfer_service: Service for transfer operations.
+            balance_trend_service: Service for balance trend computation.
         """
         self.account_repository = account_repository
         self.transfer_money_log_repository = transfer_money_log_repository
         self.account_service = account_service
         self.transfer_service = transfer_service
+        self.balance_trend_service = balance_trend_service
 
     def get_user_with_groups(self, user_pk: int) -> User:
         """Get user with prefetched groups to avoid repeated queries.
@@ -82,12 +88,16 @@ class AccountPageContextService:
         self,
         user: User,
         accounts: QuerySet[Account],
+        group_id: str | None = None,
+        balance_trend_period: str = '30d',
     ) -> dict[str, Any]:
         """Build complete context for account list page.
 
         Args:
             user: User instance with prefetched groups.
             accounts: QuerySet of accounts to display.
+            group_id: Optional group ID for filtering.
+            balance_trend_period: Period for balance trend ('7d', '30d', '12m').
 
         Returns:
             Dictionary with all context data for the page.
@@ -100,6 +110,12 @@ class AccountPageContextService:
         context.update(self._build_forms_context(user))
         context.update(self._build_transfer_log_context(user))
         context.update(self._build_sums_context(user))
+        context.update(
+            self._build_balance_trend_context(
+                accounts,
+                balance_trend_period,
+            ),
+        )
 
         return context
 
@@ -176,4 +192,28 @@ class AccountPageContextService:
         return {
             'sum_all_accounts': sum_all_accounts,
             'sum_all_accounts_in_group': sum_all_accounts_in_group,
+        }
+
+    def _build_balance_trend_context(
+        self,
+        accounts: QuerySet[Account],
+        period: str = '30d',
+    ) -> dict[str, Any]:
+        """Build context with balance trend data.
+
+        Args:
+            accounts: QuerySet of accounts to compute trend for.
+            period: Period for trend ('7d', '30d', '12m').
+
+        Returns:
+            Dictionary with balance trend data.
+        """
+        balance_trend = self.balance_trend_service.get_balance_trend(
+            accounts,
+            period,
+        )
+
+        return {
+            'balance_trend': balance_trend,
+            'selected_period': period,
         }

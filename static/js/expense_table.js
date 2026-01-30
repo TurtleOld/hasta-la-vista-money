@@ -313,81 +313,6 @@ function initExpensePage() {
         return observer;
     }
 
-    function ensureTabulatorLoaded(onReady) {
-        if (typeof window.Tabulator !== 'undefined') {
-            onReady();
-            return;
-        }
-
-        const sources = Object.freeze([
-            'https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
-            'https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
-        ]);
-        const allowedSources = new Set(sources);
-
-        function tryLoad(srcIndex) {
-            if (srcIndex >= sources.length) {
-                console.error('Tabulator не загружен (все источники недоступны)');
-                if (skeleton) {
-                    skeleton.style.display = 'none';
-                    skeleton.classList.add('hidden');
-                }
-                table.classList.remove('invisible', 'hidden', 'd-none');
-                table.classList.add('visible');
-                return;
-            }
-
-            if (!Number.isInteger(srcIndex) || srcIndex < 0 || srcIndex >= sources.length) {
-                tryLoad(srcIndex + 1);
-                return;
-            }
-            const srcValue = sources.at(srcIndex);
-            if (typeof srcValue !== 'string') {
-                tryLoad(srcIndex + 1);
-                return;
-            }
-            const script = document.createElement('script');
-            let validatedSrc;
-            try {
-                const candidateUrl = new URL(srcValue);
-                if (candidateUrl.protocol !== 'https:') {
-                    tryLoad(srcIndex + 1);
-                    return;
-                }
-                validatedSrc = candidateUrl.toString();
-                if (!allowedSources.has(validatedSrc)) {
-                    tryLoad(srcIndex + 1);
-                    return;
-                }
-            } catch (error) {
-                tryLoad(srcIndex + 1);
-                return;
-            }
-            script.src = validatedSrc;
-            script.setAttribute('async', 'true');
-            script.onload = function () {
-                if (typeof window.Tabulator !== 'undefined') {
-                    onReady();
-                } else {
-                    tryLoad(srcIndex + 1);
-                }
-            };
-            script.onerror = function () {
-                tryLoad(srcIndex + 1);
-            };
-            document.head.appendChild(script);
-        }
-
-        tryLoad(0);
-    }
-
-    if (typeof Tabulator === 'undefined') {
-        ensureTabulatorLoaded(function () {
-            location.reload();
-        });
-        return;
-    }
-
     function formatMoney(amount) {
         return parseFloat(amount).toLocaleString('ru-RU', {
             minimumFractionDigits: 2,
@@ -539,6 +464,10 @@ function initExpensePage() {
     }
 
     function initExpenseTable() {
+        if (!table) {
+            console.error('Таблица не найдена перед инициализацией Tabulator');
+            return;
+        }
         try {
             console.log('Инициализация Tabulator для expense, элемент найден:', !!table);
             window.expenseTabulator = new Tabulator('#expense-table', {
@@ -712,6 +641,16 @@ function initExpensePage() {
         setTimeout(function () {
             fixTabulatorInlineStyles();
         }, 200);
+    });
+
+    window.expenseTabulator.on('dataLoadError', function (error) {
+        console.error('Ошибка загрузки данных expense:', error);
+        if (skeleton) {
+            skeleton.style.display = 'none';
+            skeleton.classList.add('hidden');
+        }
+        table.classList.remove('invisible', 'hidden', 'd-none');
+        table.classList.add('visible');
     });
 
     const toggleBtn = document.getElementById('toggle-group-filter');

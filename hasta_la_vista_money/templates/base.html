@@ -18,7 +18,8 @@
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.googleapis.com">
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link nonce="{{request.csp_nonce}}" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Gloria+Hallelujah&display=swap" rel="stylesheet">
-        <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
+<link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
+<link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'css/driver.css' %}">
     {% endblock %}
 </head>
 <body class="min-h-screen bg-white dark:bg-gray-800 {% if user.is_authenticated %}pb-20 md:pb-0{% endif %}" {% if user.is_authenticated %}data-bs-theme="{{ user.theme|default:'light' }}"{% else %}data-bs-theme="light"{% endif %}>
@@ -115,15 +116,17 @@
 
 
 
-    {% compress js %}
-    <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
+{% compress js %}
+<script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/htmx.min.js' %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/tex-mml-chtml.js' %}"></script>
     <script nonce="{{request.csp_nonce}}" type="text/javascript" src="{% static 'js/tabulator.min.js' %}"></script>
-    <script src="{% static 'js/notifications.js' %}"></>
+    <script src="{% static 'js/tour-controls.js' %}"></script>
+<script src="{% static 'js/notifications.js' %}"></script>
     <script src="{% static 'js/script.js' %}"></script>
     <script src="{% static 'js/errors_form.js' %}"></script>
     <script src="{% static 'js/account_group_filter.js' %}"></script>
+    <script src="{% static 'js/balance_trend_widget.js' %}"></script>
     <script src="{% static 'js/lazy-loader.js' %}"></script>
     <script src="{% static 'js/mathjax.js' %}"></script>
     {% if user.is_authenticated %}
@@ -132,6 +135,14 @@
         <script src="{% static 'js/upload.js' %}"></script>
     {% endif %}
     {% endcompress %}
+    {% if user.is_authenticated %}
+    <script nonce="{{request.csp_nonce}}">
+        // Set flag for authenticated user BEFORE loading site-tour.js
+        window.userIsAuthenticated = true;
+    </script>
+    <script src="{% static 'js/driver.js' %}" nonce="{{request.csp_nonce}}"></script>
+    <script src="{% static 'js/site-tour.js' %}" nonce="{{request.csp_nonce}}"></script>
+    {% endif %}
     <script nonce="{{request.csp_nonce}}">
         (function() {
             if (typeof window.LazyLoader === 'undefined') {
