@@ -12,7 +12,6 @@
                 return;
             }
 
-            // Get data from data attributes if widget exists
             const dataElement = widget.querySelector('[data-balance-trend]');
             if (dataElement) {
                 try {
@@ -26,7 +25,6 @@
 
             this.attachPeriodButtonListeners();
             
-            // Check if there's data to render chart
             const chartContainer = widget.querySelector('[data-has-data]');
             if (chartContainer && chartContainer.textContent === 'true') {
                 this.renderChart();
@@ -47,7 +45,10 @@
         changePeriod: function(period) {
             const params = new URLSearchParams(window.location.search);
             params.set('balance_trend_period', period);
-            window.location.href = window.location.pathname + '?' + params.toString();
+            const safeUrl = window.location.pathname + '?' + params.toString();
+            if (safeUrl.startsWith('/') || safeUrl.startsWith(window.location.origin)) {
+                window.location.href = safeUrl;
+            }
         },
 
         renderChart: function() {

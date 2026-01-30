@@ -12,6 +12,19 @@
     }
 
         // Determine current page from URL
+        // Valid page names for security validation
+        const VALID_PAGES = new Set([
+            'receipts',
+            'budget_expense',
+            'budget_income',
+            'budget',
+            'expense',
+            'income',
+            'loan',
+            'reports',
+            'finance_account'
+        ]);
+
         function getCurrentPage() {
             const pathname = window.location.pathname;
             
@@ -36,6 +49,11 @@
             }
             
             return 'unknown';
+        }
+
+        // Validate page name to prevent object injection attacks
+        function isValidPage(pageName) {
+            return VALID_PAGES.has(pageName);
         }
 
     // Wait for driver.js to be available (it should be loaded via CDN or bundler)
@@ -470,7 +488,7 @@
                         side: 'bottom',
                         align: 'start'
                     },
-                    onNextClick: (element) => {
+                    onNextClick: () => {
                         // Переход в таблицу расходов
                         const btn = document.querySelector('#budget-expense-table-btn');
                         if (btn) {
@@ -494,7 +512,7 @@
                         side: 'top',
                         align: 'start'
                     },
-                    onNextClick: (element) => {
+                    onNextClick: () => {
                         // Переход назад на главную бюджета
                         const backBtn = document.querySelector('a[href*="/budget"]:first-of-type');
                         if (backBtn) {
@@ -517,7 +535,7 @@
                         side: 'bottom',
                         align: 'start'
                     },
-                    onNextClick: (element) => {
+                    onNextClick: () => {
                         // Переход в таблицу доходов
                         const btn = document.querySelector('#budget-income-table-btn');
                         if (btn) {
@@ -540,7 +558,7 @@
                         side: 'top',
                         align: 'start'
                     },
-                    onNextClick: (element) => {
+                    onNextClick: () => {
                         // Переход назад на главную бюджета
                         const backBtn = document.querySelector('a[href*="/budget"]:first-of-type');
                         if (backBtn) {
@@ -645,8 +663,12 @@
         const currentPage = getCurrentPage();
         console.log('[SiteTour] Current page:', currentPage);
 
-        // Get tour steps for current page
-        const tourSteps = pageTours[currentPage] || [];
+        // Validate page name to prevent generic object injection attacks
+        // Use only if it's in our whitelist (VALID_PAGES)
+        const validatedPage = isValidPage(currentPage) ? currentPage : 'unknown';
+        
+        // Get tour steps for current page (safely access with validated key)
+        const tourSteps = (validatedPage !== 'unknown' && pageTours[validatedPage]) ? pageTours[validatedPage] : [];
 
         // Check if tour is globally disabled
         function isTourGloballyDisabled() {
