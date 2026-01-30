@@ -96,7 +96,7 @@ class BalanceTrendService:
         )
 
         # Calculate delta
-        delta_absolute = float(current_balance - period_start_balance)
+        delta_absolute = Decimal(current_balance - period_start_balance)
         delta_percent = (
             (delta_absolute / period_start_balance * 100)
             if period_start_balance != 0
