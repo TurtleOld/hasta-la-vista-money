@@ -1,5 +1,7 @@
 'use strict';
 
+/* global Chart */
+
 (function() {
     const balanceTrendWidget = {
         period: '30d',
@@ -47,7 +49,7 @@
             params.set('balance_trend_period', period);
             const safeUrl = window.location.pathname + '?' + params.toString();
             if (safeUrl.startsWith('/') || safeUrl.startsWith(window.location.origin)) {
-                window.location.href = safeUrl;
+                window.location.href = encodeURI(safeUrl);
             }
         },
 

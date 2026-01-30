@@ -703,8 +703,8 @@
         }
 
         // Helper function to create checkbox HTML for popover
-        function createDontShowCheckboxHTML() {
-            return `
+        function createDontShowCheckboxHtml() {
+            const checkboxHtml = `
                 <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
                     <label style="display: flex; align-items: center; font-size: 14px; margin: 0; cursor: pointer;">
                         <input type="checkbox" id="siteTourDontShowCheckbox" 
@@ -713,6 +713,7 @@
                     </label>
                 </div>
             `;
+            return checkboxHtml;
         }
 
         // Override the popover description to add checkbox to last step
@@ -726,7 +727,8 @@
                 // Add checkbox HTML to the last step
                 if (index === steps.length - 1) {
                     const originalDesc = newStep.popover.description || '';
-                    newStep.popover.description = originalDesc + createDontShowCheckboxHTML();
+                    const descriptionWithHtml = originalDesc + createDontShowCheckboxHtml();
+                    newStep.popover.description = descriptionWithHtml;
                     
                     // Add callback to handle checkbox change
                     const originalOnHighlightStarted = newStep.onHighlightStarted;
@@ -808,7 +810,7 @@
         window.SiteTour = {
             start: startTour,
             restart: () => {
-                console.log('[SiteTour] Restart called for page:', currentPage);
+                console.log('[SiteTour] Restart called for page:', validatedPage);
                 startTour();
             },
             enableTour: () => {
@@ -830,7 +832,7 @@
                 startTour();
             },
             driver: driver,
-            currentPage: currentPage
+            currentPage: validatedPage
         };
         console.log('[SiteTour] window.SiteTour methods exported');
 
