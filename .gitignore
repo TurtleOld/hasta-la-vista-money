@@ -235,3 +235,9 @@ Writerside
 .cursor\rules\codacy.mdc
 
 logs/
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
+.codacy
+.cursor/
