@@ -7,6 +7,7 @@ and receipt expenses, including CRUD operations and data aggregation.
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
+from django.core.cache import cache
 from django.db.models import Sum
 from django.db.models.functions import ExtractYear, TruncMonth
 from django.db.models.query import QuerySet
@@ -94,7 +95,8 @@ class ExpenseService:
             .order_by('name', 'parent_category')
         )
         return cast(
-            'Iterable[dict[str, str | int | None]]', categories_queryset
+            'Iterable[dict[str, str | int | None]]',
+            categories_queryset,
         )
 
     def get_categories_queryset(self) -> QuerySet[ExpenseCategory]:
@@ -414,11 +416,43 @@ class ExpenseCategoryService:
         """
         category = form.save(commit=False)
         category.user = self.user
-        return self.expense_category_repository.create_category(
+        new_category = self.expense_category_repository.create_category(
             user=category.user,
             name=category.name,
             parent_category=category.parent_category,
         )
+
+        # Clear category tree cache for this user
+        for depth in range(1, 6):  # Clear cache for depth 1-5
+            cache_key = f'category_tree_expense_{self.user.pk}_{depth}'
+            cache.delete(cache_key)
+
+        return new_category
+
+    def update_category(
+        self,
+        category: ExpenseCategory,
+        form: AddCategoryForm,
+    ) -> ExpenseCategory:
+        """Update an existing expense category.
+
+        Args:
+            category: The category instance to update.
+            form: Validated category form with updated data.
+
+        Returns:
+            ExpenseCategory: The updated category instance.
+        """
+        category.name = form.cleaned_data['name']
+        category.parent_category = form.cleaned_data.get('parent_category')
+        category.save()
+
+        # Clear category tree cache for this user
+        for depth in range(1, 6):  # Clear cache for depth 1-5
+            cache_key = f'category_tree_expense_{self.user.pk}_{depth}'
+            cache.delete(cache_key)
+
+        return category
 
 
 class ReceiptExpenseService:
