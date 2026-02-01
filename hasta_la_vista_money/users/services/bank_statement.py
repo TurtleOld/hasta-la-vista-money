@@ -68,11 +68,13 @@ class BankStatementParser:
 
             for idx, table in enumerate(tables):
                 logger.info('Processing table %d/%d', idx + 1, len(tables))
-                df = table.df
+                table_data = table.df
                 if len(
-                    df.columns,
-                ) >= MIN_TABLE_COLUMNS and self._is_transaction_table(df):
-                    parsed_transactions = self._parse_table(df)
+                    table_data.columns,
+                ) >= MIN_TABLE_COLUMNS and self._is_transaction_table(
+                    table_data,
+                ):
+                    parsed_transactions = self._parse_table(table_data)
                     logger.info(
                         'Extracted %d transactions from table %d',
                         len(parsed_transactions),
