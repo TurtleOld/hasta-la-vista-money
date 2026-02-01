@@ -43,6 +43,7 @@ from hasta_la_vista_money.finance_account.models import (
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
+    BankStatementUploadForm,
     DeleteUserFromGroupForm,
     GroupCreateForm,
     GroupDeleteForm,
@@ -1017,3 +1018,83 @@ class DashboardComparisonView(LoginRequiredMixin, View):
         )
 
         return JsonResponse(comparison_data)
+
+
+class BankStatementUploadView(
+    LoginRequiredMixin,
+    SuccessMessageMixin[BankStatementUploadForm],
+    FormView[BankStatementUploadForm],
+):
+    """View for uploading bank statements in PDF format."""
+
+    template_name = 'users/bank_statement_upload.html'
+    form_class = BankStatementUploadForm
+    success_message = _(
+        'Выписка успешно обработана. '
+        'Создано операций: %(total_count)s '
+        '(доходов: %(income_count)s, расходов: %(expense_count)s)',
+    )
+    request: AuthRequest
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Add user to form kwargs."""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form: BankStatementUploadForm) -> HttpResponse:
+        """Process uploaded PDF file."""
+        from hasta_la_vista_money.users.services.bank_statement import (
+            BankStatementParseError,
+            process_bank_statement,
+        )
+
+        pdf_file = form.cleaned_data['pdf_file']
+        account = form.cleaned_data['account']
+
+        try:
+            import os
+            import tempfile
+
+            tmp_file_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix='.pdf',
+                ) as tmp_file:
+                    tmp_file_path = tmp_file.name
+                    for chunk in pdf_file.chunks():
+                        tmp_file.write(chunk)
+                    tmp_file.flush()
+
+                result = process_bank_statement(
+                    tmp_file_path,
+                    account,
+                    self.request.user,
+                )
+            finally:
+                if tmp_file_path and os.path.exists(tmp_file_path):
+                    os.remove(tmp_file_path)
+
+            self.success_message = self.success_message % result
+
+        except BankStatementParseError as e:
+            messages.error(
+                self.request,
+                f'Ошибка при обработке выписки: {e!s}',
+            )
+            return self.form_invalid(form)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.exception('Unexpected error processing bank statement')
+            messages.error(
+                self.request,
+                f'Произошла непредвиденная ошибка: {e!s}',
+            )
+            return self.form_invalid(form)
+
+        return super().form_valid(form)
+
+    def get_success_url(self) -> str:
+        """Return URL to redirect after successful upload."""
+        return str(reverse_lazy('income:list'))

@@ -3,6 +3,7 @@
 from django.urls import include, path
 
 from hasta_la_vista_money.users.views import (
+    BankStatementUploadView,
     CreateUser,
     DashboardComparisonView,
     DashboardDataView,
@@ -58,5 +59,10 @@ urlpatterns = [
         'dashboard/comparison/',
         DashboardComparisonView.as_view(),
         name='dashboard_comparison',
+    ),
+    path(
+        'bank-statement-upload/',
+        BankStatementUploadView.as_view(),
+        name='bank_statement_upload',
     ),
 ]
