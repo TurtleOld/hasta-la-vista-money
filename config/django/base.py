@@ -221,7 +221,7 @@ else:
         }
     else:
         raise ImproperlyConfigured(
-            'REDIS_LOCATION is required when DEBUG=False'
+            'REDIS_LOCATION is required when DEBUG=False',
         )
 
 # Session backend configuration
@@ -259,12 +259,14 @@ else:
         DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
             'default': dict(
                 dj_database_url.parse(
-                    str(database_url), conn_max_age=CONN_MAX_AGE
+                    str(database_url),
+                    conn_max_age=CONN_MAX_AGE,
                 ),
             ),
         }
     elif config('POSTGRES_PASSWORD', default='') or config(
-        'POSTGRES_USER', default=''
+        'POSTGRES_USER',
+        default='',
     ):
         DATABASES: dict[str, Any] = {  # type: ignore[no-redef]
             'default': {
@@ -644,3 +646,20 @@ STATICFILES_FINDERS = [
 TAILWIND_APP_NAME = 'theme'
 NPM_BIN_PATH = config('NPM_BIN_PATH', default='npm')
 TAILWIND_CSS_PATH = 'css/styles.min.css'
+
+# Celery settings
+redis_base = config('REDIS_LOCATION', default='redis://localhost:6379')
+if redis_base.endswith(('/0', '/1')):
+    redis_base = redis_base.rsplit('/', 1)[0]
+
+CELERY_BROKER_URL = f'{redis_base}/1'
+CELERY_RESULT_BACKEND = f'{redis_base}/1'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_TASK_DEFAULT_QUEUE = 'hlvm_tasks'
+CELERY_TASK_DEFAULT_EXCHANGE = 'hlvm_tasks'
+CELERY_TASK_DEFAULT_ROUTING_KEY = 'hlvm_tasks'
