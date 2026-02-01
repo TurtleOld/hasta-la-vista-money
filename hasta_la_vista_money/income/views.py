@@ -284,15 +284,16 @@ class IncomeCopyView(
         """
         income_id = kwargs.get('pk')
         if income_id is None:
-            return JsonResponse(
-                {'success': False, 'error': 'Income ID is required'},
-            )
+            messages.error(request, _('Income ID is required'))
+            return HttpResponseRedirect(reverse_lazy(INCOME_LIST_URL_NAME))
         try:
             income_ops = request.container.income.income_ops()
             income_ops.copy_income(user=request.user, income_id=int(income_id))
-            return JsonResponse({'success': True})
+            messages.success(request, _('Операция дохода успешно скопирована!'))
+            return HttpResponseRedirect(reverse_lazy(INCOME_LIST_URL_NAME))
         except (ValueError, TypeError, PermissionDenied) as e:
-            return self.handle_ajax_error_with_success_flag(e)
+            messages.error(request, str(e))
+            return HttpResponseRedirect(reverse_lazy(INCOME_LIST_URL_NAME))
 
 
 class IncomeUpdateView(
@@ -412,17 +413,29 @@ class IncomeDeleteView(
         request: RequestWithContainer,
         *args: object,
         **kwargs: object,
-    ) -> JsonResponse:
+    ) -> HttpResponse:
         """
         Handle POST request to delete an income record.
         """
-        income = self.get_object()
+        income_id = kwargs.get('pk')
+        if income_id is None:
+            messages.error(request, _('Income ID is required'))
+            return HttpResponseRedirect(str(self.success_url))
+
+        income = get_object_or_404(
+            Income,
+            pk=income_id,
+            user=request.user,
+        )
+
         try:
             income_ops = request.container.income.income_ops()
             income_ops.delete_income(user=request.user, income=income)
-            return JsonResponse({'success': True})
+            messages.success(request, constants.SUCCESS_INCOME_DELETED)
+            return HttpResponseRedirect(str(self.success_url))
         except (ValueError, TypeError, PermissionDenied) as e:
-            return self.handle_ajax_error_with_success_flag(e)
+            messages.error(request, str(e))
+            return HttpResponseRedirect(str(self.success_url))
 
 
 class IncomeCategoryView(LoginRequiredMixin, ListView[IncomeCategory]):

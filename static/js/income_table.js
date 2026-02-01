@@ -630,7 +630,7 @@ function initIncomePage() {
                         buttons += `<span class="inline-flex items-center gap-1.5">`;
                         buttons += `<a href="/income/change/${sanitizedId}/" class="${base} ${editClass}" title="Редактировать" aria-label="Редактировать">${editIcon}</a>`;
                         buttons += `<form method="post" action="/income/${sanitizedId}/copy/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${copyClass}" title="Копировать" aria-label="Копировать">${copyIcon}</button></form>`;
-                        buttons += `<form method="post" action="/income/${sanitizedId}/delete/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${deleteClass}" title="Удалить" aria-label="Удалить" onclick="return confirm(&quot;${escapedConfirm}&quot;);">${deleteIcon}</button></form>`;
+                        buttons += `<form method="post" action="/income/delete/${sanitizedId}/" class="inline-flex"><input type="hidden" name="csrfmiddlewaretoken" value="${escapedToken}"><button type="submit" class="${base} ${deleteClass}" title="Удалить" aria-label="Удалить" onclick="return confirm(&quot;${escapedConfirm}&quot;);">${deleteIcon}</button></form>`;
                         buttons += `</span>`;
                     } else {
                         buttons += `<span class="text-gray-500 dark:text-gray-400">Только просмотр</span>`;
