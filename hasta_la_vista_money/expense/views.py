@@ -197,8 +197,9 @@ class ExpenseCopyView(
             return redirect(
                 str(
                     reverse_lazy(
-                        'expense:change', kwargs={'pk': new_expense.pk}
-                    )
+                        'expense:change',
+                        kwargs={'pk': new_expense.pk},
+                    ),
                 ),
             )
         except (ValueError, TypeError) as e:
@@ -349,6 +350,16 @@ class ExpenseDeleteView(
     success_url = reverse_lazy(constants.EXPENSE_LIST_URL)
     context_object_name = 'expense'
     no_permission_url = reverse_lazy('login')
+
+    def get_object(self, queryset: Any = None) -> Expense:
+        """
+        Get the expense object for deletion, ensuring it belongs to the user.
+        """
+        return get_object_or_404(
+            Expense,
+            pk=self.kwargs['pk'],
+            user=self.request.user,
+        )
 
     def form_valid(
         self,
