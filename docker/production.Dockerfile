@@ -19,7 +19,7 @@ RUN npm run build
 
 WORKDIR /app
 
-FROM python:3.13.9-alpine AS builder
+FROM python:3.13.9-slim AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,17 @@ RUN pip install uv==0.7.13
 
 ENV PATH="/root/.local/bin:$PATH"
 
-RUN apk add --no-cache gcc python3-dev musl-dev linux-headers
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
 
@@ -37,11 +47,20 @@ COPY . .
 
 COPY --from=node-builder /app/static/css/styles.min.css static/css/styles.min.css
 
-FROM python:3.13.9-alpine
+FROM python:3.13.9-slim
 
 WORKDIR /app
 
-RUN pip install uv==0.7.13 && \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/* && \
+    pip install uv==0.7.13 && \
     adduser --disabled-password --gecos '' appuser
 
 ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
