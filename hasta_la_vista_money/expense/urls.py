@@ -3,6 +3,7 @@ from django.urls import path
 from hasta_la_vista_money.expense.views import (
     ExpenseCategoryCreateView,
     ExpenseCategoryDeleteView,
+    ExpenseCategoryUpdateView,
     ExpenseCategoryView,
     ExpenseCopyView,
     ExpenseCreateView,
@@ -26,6 +27,11 @@ urlpatterns = [
         'category/<int:pk>/',
         ExpenseCategoryDeleteView.as_view(),
         name='delete_category_expense',
+    ),
+    path(
+        'category/<int:pk>/update/',
+        ExpenseCategoryUpdateView.as_view(),
+        name='update_category_expense',
     ),
     path(
         'create/category/',
