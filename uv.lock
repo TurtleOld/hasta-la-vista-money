@@ -1203,6 +1203,7 @@ version = "1.10.0"
 source = { editable = "." }
 dependencies = [
     { name = "camelot-py" },
+    { name = "celery" },
     { name = "channels" },
     { name = "crispy-tailwind" },
     { name = "dependency-injector" },
@@ -1235,6 +1236,7 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "python-decouple" },
     { name = "pyyaml" },
+    { name = "redis" },
     { name = "sentry-sdk" },
     { name = "twisted", extra = ["http2", "tls"] },
     { name = "types-django-filter" },
@@ -1292,6 +1294,7 @@ dev = [
 requires-dist = [
     { name = "bump2version", marker = "extra == 'dev'", specifier = ">=1.0.1" },
     { name = "camelot-py", extras = ["base"], specifier = ">=1.0.9" },
+    { name = "celery", specifier = ">=5.4.0" },
     { name = "channels", specifier = ">=4.0.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.3.2" },
     { name = "crispy-tailwind", specifier = ">=1.0.3" },
@@ -1337,6 +1340,7 @@ requires-dist = [
     { name = "python-dateutil", specifier = ">=2.8.2" },
     { name = "python-decouple", specifier = ">=3.8" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "redis", specifier = ">=5.2.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "sentry-sdk", specifier = ">=2.22.0" },
     { name = "twisted", extras = ["http2", "tls"], specifier = ">=25.0.0" },
