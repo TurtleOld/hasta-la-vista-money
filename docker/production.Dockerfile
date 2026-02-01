@@ -29,14 +29,14 @@ ENV PATH="/root/.local/bin:$PATH"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    libgl1 \
+    gcc=4:13.2.0-1 \
+    g++=4:13.2.0-1 \
+    libglib2.0-0=2.80.0-1 \
+    libsm6=2:1.2.4-1 \
+    libxext6=2:1.3.6-1 \
+    libxrender-dev=1:0.9.11-1 \
+    libgomp1=14.1.0-1 \
+    libgl1=1.7.0-1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
@@ -53,12 +53,12 @@ WORKDIR /app
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libgomp1 \
-    libgl1 \
+    libglib2.0-0=2.80.0-1 \
+    libsm6=2:1.2.4-1 \
+    libxext6=2:1.3.6-1 \
+    libxrender1=2:0.9.11-1 \
+    libgomp1=14.1.0-1 \
+    libgl1=1.7.0-1 \
     && rm -rf /var/lib/apt/lists/* && \
     pip install uv==0.7.13 && \
     adduser --disabled-password --gecos '' appuser
