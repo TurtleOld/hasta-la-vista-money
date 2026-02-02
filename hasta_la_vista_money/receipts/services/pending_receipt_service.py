@@ -4,6 +4,7 @@ from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from core.repositories.protocols import ReceiptRepositoryProtocol
 from hasta_la_vista_money.finance_account.models import Account
@@ -122,7 +123,7 @@ class PendingReceiptService:
             ),
             seller_data=SellerCreateData(
                 name_seller=str(
-                    receipt_data.get('name_seller', 'Неизвестный продавец'),
+                    receipt_data.get('name_seller', _('Неизвестный продавец')),
                 ),
                 retail_place_address=receipt_data.get('retail_place_address'),
                 retail_place=receipt_data.get('retail_place'),

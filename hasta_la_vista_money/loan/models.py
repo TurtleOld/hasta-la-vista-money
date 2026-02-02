@@ -4,8 +4,7 @@ from typing import ClassVar
 
 from django.db import models
 from django.urls import reverse
-from django.utils.translation import gettext as _
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -14,8 +13,8 @@ from hasta_la_vista_money.users.models import User
 
 class Loan(models.Model):
     TYPE_LOAN: ClassVar[list[tuple[str, str]]] = [
-        ('Annuity', str(gettext_lazy('Аннуитетный'))),
-        ('Differentiated', str(gettext_lazy('Дифференцированный'))),
+        ('Annuity', _('Аннуитетный')),
+        ('Differentiated', _('Дифференцированный')),
     ]
 
     user = models.ForeignKey(
