@@ -20,8 +20,6 @@ from hasta_la_vista_money.users.services.groups import (
 class UserLoginForm(AuthenticationForm):
     """Form for user authentication using username or email."""
 
-    username: CharField
-
     username = CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,
         label=_('Имя пользователя или Email'),
@@ -174,7 +172,6 @@ class GroupCreateForm(ModelForm[Group]):
 class GroupDeleteForm(forms.Form):
     """Form for deleting user groups."""
 
-    group: forms.ModelChoiceField[Group]
     group = forms.ModelChoiceField(
         queryset=Group.objects.all(),
         label=_('Группа для удаления'),
@@ -189,8 +186,6 @@ class GroupDeleteForm(forms.Form):
 class UserGroupBaseForm(forms.Form):
     """Base form for user-group operations."""
 
-    user: forms.ModelChoiceField[User]
-    group: forms.ModelChoiceField[Group]
     user_instance: User | None = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

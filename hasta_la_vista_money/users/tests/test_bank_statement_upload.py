@@ -18,9 +18,14 @@ from faker import Faker
 from hasta_la_vista_money.expense.models import ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.users.forms import BankStatementUploadForm
 from hasta_la_vista_money.users.models import BankStatementUpload, User
 from hasta_la_vista_money.users.services.bank_statement import (
+    BankStatementParseError,
     BankStatementParser,
+    _get_or_create_expense_category,
+    _get_or_create_income_category,
+    process_bank_statement,
 )
 
 
@@ -885,10 +890,6 @@ class TestBankStatementFormValidation(TestCase):
 
     def test_form_valid_data(self) -> None:
         """Test form with valid data."""
-        from hasta_la_vista_money.users.forms import (
-            BankStatementUploadForm,
-        )
-
         account = Account.objects.create(
             user=self.user,
             name_account='Test Account',
@@ -913,10 +914,6 @@ class TestBankStatementFormValidation(TestCase):
 
     def test_form_file_too_large(self) -> None:
         """Test form with file larger than 10MB."""
-        from hasta_la_vista_money.users.forms import (
-            BankStatementUploadForm,
-        )
-
         account = Account.objects.create(
             user=self.user,
             name_account='Test Account',
@@ -943,10 +940,6 @@ class TestBankStatementFormValidation(TestCase):
 
     def test_form_invalid_extension(self) -> None:
         """Test form with invalid file extension."""
-        from hasta_la_vista_money.users.forms import (
-            BankStatementUploadForm,
-        )
-
         account = Account.objects.create(
             user=self.user,
             name_account='Test Account',
@@ -971,10 +964,6 @@ class TestBankStatementFormValidation(TestCase):
 
     def test_form_missing_account(self) -> None:
         """Test form without account selection."""
-        from hasta_la_vista_money.users.forms import (
-            BankStatementUploadForm,
-        )
-
         pdf_content = b'%PDF-1.4 fake pdf'
         pdf_file = SimpleUploadedFile(
             'statement.pdf',
@@ -1003,13 +992,6 @@ class TestBankStatementIntegration(TestCase):
 
     def test_full_workflow_with_mock_data(self) -> None:
         """Test complete workflow from upload to transaction creation."""
-        from hasta_la_vista_money.users.services.bank_statement import (
-            BankStatementParseError,
-            process_bank_statement,
-        )
-        from hasta_la_vista_money.expense.models import Expense
-        from hasta_la_vista_money.income.models import Income
-
         account = Account.objects.create(
             user=self.user,
             name_account='Test Account',
@@ -1039,11 +1021,6 @@ class TestBankStatementIntegration(TestCase):
 
     def test_category_creation_for_transaction(self) -> None:
         """Test that categories are created for transactions."""
-        from hasta_la_vista_money.users.services.bank_statement import (
-            _get_or_create_expense_category,
-            _get_or_create_income_category,
-        )
-
         # Create expense category
         expense_cat = _get_or_create_expense_category(
             self.user,
@@ -1076,10 +1053,6 @@ class TestBankStatementIntegration(TestCase):
 
     def test_category_name_truncation(self) -> None:
         """Test that category names are truncated to 250 characters."""
-        from hasta_la_vista_money.users.services.bank_statement import (
-            _get_or_create_expense_category,
-        )
-
         # Create a very long category name
         long_name = 'A' * 300
         category = _get_or_create_expense_category(self.user, long_name)
