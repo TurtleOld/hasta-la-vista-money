@@ -22,7 +22,6 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from hasta_la_vista_money.api.serializers import BudgetTypeSerializer
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
@@ -45,13 +44,7 @@ from hasta_la_vista_money.users.models import User
     description='Генерирует список дат для бюджета на основе последней даты',
     request={
         'type': 'object',
-        'properties': {
-            'type': {
-                'type': 'string',
-                'enum': ['expense', 'income'],
-                'description': 'Тип бюджета',
-            },
-        },
+        'properties': {},
     },
     responses={
         200: OpenApiResponse(
@@ -87,17 +80,13 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         """Generate date list.
 
         Args:
-            request: HTTP request with budget type data (expense/income).
+            request: HTTP request.
             *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
 
         Returns:
             Response: JSON response with success flag and redirect_url.
         """
-        serializer = BudgetTypeSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        type_ = serializer.validated_data['type']
-
         user = cast('User', request.user)
         queryset_user = get_object_or_404(User, username=user)
 
@@ -108,12 +97,12 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             )
         else:
             queryset_last_date = timezone.now().replace(day=1)
-        generate_date_list(queryset_last_date, queryset_user, type_)
 
-        if type_ == 'income':
-            redirect_url = str(reverse_lazy('budget:income_table'))
-        else:
-            redirect_url = str(reverse_lazy('budget:expense_table'))
+        # Generate dates for both income and expense types
+        generate_date_list(queryset_last_date, queryset_user, 'expense')
+        generate_date_list(queryset_last_date, queryset_user, 'income')
+
+        redirect_url = str(reverse_lazy('budget:list'))
 
         return Response(
             {'success': True, 'redirect_url': redirect_url},
