@@ -241,3 +241,5 @@ logs/
 .github/instructions/codacy.instructions.md
 .codacy
 .cursor/
+
+uv.lock
