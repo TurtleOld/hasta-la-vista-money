@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate 'Загрузка банковской выписки' %}{% endblock %}
+
+{% block content %}
+    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-3xl mx-auto">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">
+                        <i class="bi bi-file-earmark-pdf mr-2"></i>
+                        {% translate 'Загрузка банковской выписки' %}
+                    </h2>
+                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        {% translate 'Загрузите PDF файл с банковской выпиской для автоматического создания операций' %}
+                    </p>
+                </div>
+
+                <div class="p-6">
+                    <form method="post" enctype="multipart/form-data" class="space-y-6" id="uploadForm">
+                        {% csrf_token %}
+
+                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <i class="bi bi-info-circle text-blue-500 dark:text-blue-400 text-xl"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-blue-800 dark:text-blue-300">
+                                        {% translate 'Как это работает?' %}
+                                    </h3>
+                                    <div class="mt-2 text-sm text-blue-700 dark:text-blue-400">
+                                        <ul class="list-disc pl-5 space-y-1">
+                                            <li>{% translate 'Система автоматически извлечет данные из выписки' %}</li>
+                                            <li>{% translate 'Положительные суммы будут записаны как доходы' %}</li>
+                                            <li>{% translate 'Отрицательные суммы будут записаны как расходы' %}</li>
+                                            <li>{% translate 'Детали платежа будут использованы для создания категорий' %}</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="form-group">
+                                {{ form.account | as_crispy_field }}
+                                {% if form.account.errors %}
+                                    {% for error in form.account.errors %}
+                                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                {{ form.pdf_file | as_crispy_field }}
+                                {% if form.pdf_file.errors %}
+                                    {% for error in form.pdf_file.errors %}
+                                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {% if form.non_field_errors %}
+                            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                                {% for error in form.non_field_errors %}
+                                    <p class="text-sm text-red-800 dark:text-red-300">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <div class="flex items-center justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <a href="{% url 'users:profile' user.id %}"
+                               class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                                <i class="bi bi-arrow-left"></i>
+                                <span>{% translate 'Отмена' %}</span>
+                            </a>
+                            <button type="submit" id="submitBtn"
+                                    class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="bi bi-upload" id="uploadIcon"></i>
+                                <span id="btnText">{% translate 'Загрузить и обработать' %}</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Progress indicator -->
+            <div id="progressIndicator" class="hidden mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                            <i class="bi bi-hourglass-split mr-2"></i>
+                            <span id="progressTitle">{% translate 'Обработка выписки...' %}</span>
+                        </h3>
+                        <span id="progressPercent" class="text-sm font-semibold text-blue-600 dark:text-blue-400">0%</span>
+                    </div>
+
+                    <!-- Progress bar -->
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mb-4">
+                        <div id="progressBar" class="bg-blue-600 dark:bg-blue-500 h-4 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                    </div>
+
+                    <!-- Progress details -->
+                    <div id="progressDetails" class="text-sm text-gray-600 dark:text-gray-400">
+                        <p id="progressStatus">{% translate 'Инициализация...' %}</p>
+                        <p id="progressTransactions" class="mt-1 hidden">
+                            {% translate 'Обработано транзакций:' %} <span id="processedCount">0</span> / <span id="totalCount">0</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="bi bi-exclamation-triangle text-yellow-500 dark:text-yellow-400 text-xl"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                            {% translate 'Важно!' %}
+                        </h3>
+                        <div class="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li>{% translate 'Убедитесь, что выписка в формате PDF' %}</li>
+                                <li>{% translate 'Максимальный размер файла - 10 МБ' %}</li>
+                                <li>{% translate 'Операции будут привязаны к выбранному счёту' %}</li>
+                                <li>{% translate 'После обработки проверьте созданные операции и категории' %}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}">
+    // Pass Django context data to JavaScript
+    window.bankStatementData = {
+        uploadId: '{{ upload_id|default:"" }}',
+        showProgress: {% if show_progress %}true{% else %}false{% endif %},
+        sessionUploadId: '{{ request.session.last_upload_id|default:"" }}'
+    };
+
+    window.bankStatementUrls = {
+        statusUrl: '{% url "users:bank_statement_upload_status" 0 %}',
+        accountList: '{% url "finance_account:list" %}'
+    };
+
+    window.bankStatementTranslations = {
+        pending: '{% translate "В очереди..." %}',
+        fileUploaded: '{% translate "Файл загружен" %}',
+        processing: '{% translate "Обрабатывается..." %}',
+        processingStatement: '{% translate "Обработка выписки" %}',
+        completed: '{% translate "Завершено! Создано:" %}',
+        incomes: '{% translate "доходов" %}',
+        expenses: '{% translate "расходов" %}',
+        done: '{% translate "Готово!" %}',
+        error: '{% translate "Ошибка:" %}',
+        unknownError: '{% translate "Неизвестная ошибка" %}',
+        processingError: '{% translate "Ошибка обработки" %}',
+        uploading: '{% translate "Загрузка..." %}'
+    };
+</script>
+<script src="{% static 'js/bank-statement-upload.js' %}" defer></script>
+{% endblock %}

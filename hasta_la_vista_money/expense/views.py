@@ -4,6 +4,7 @@ from typing import Any, cast
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.cache import cache
 from django.http import (
     HttpResponse,
     HttpResponseRedirect,
@@ -12,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import CreateView, DeleteView, DetailView
+from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from django.views.generic.list import ListView
 
 from hasta_la_vista_money import constants
@@ -197,8 +198,9 @@ class ExpenseCopyView(
             return redirect(
                 str(
                     reverse_lazy(
-                        'expense:change', kwargs={'pk': new_expense.pk}
-                    )
+                        'expense:change',
+                        kwargs={'pk': new_expense.pk},
+                    ),
                 ),
             )
         except (ValueError, TypeError) as e:
@@ -350,6 +352,16 @@ class ExpenseDeleteView(
     context_object_name = 'expense'
     no_permission_url = reverse_lazy('login')
 
+    def get_object(self, queryset: Any = None) -> Expense:
+        """
+        Get the expense object for deletion, ensuring it belongs to the user.
+        """
+        return get_object_or_404(
+            Expense,
+            pk=self.kwargs['pk'],
+            user=self.request.user,
+        )
+
     def form_valid(
         self,
         form: Any,
@@ -468,6 +480,75 @@ class ExpenseCategoryCreateView(
         return self.render_to_response(self.get_context_data(form=form))
 
 
+class ExpenseCategoryUpdateView(
+    LoginRequiredMixin,
+    UpdateView[ExpenseCategory, AddCategoryForm],
+    UserAuthMixin,
+    FormErrorHandlingMixin,
+):
+    """View for updating an expense category."""
+
+    model = ExpenseCategory
+    template_name = 'expense/update_category_expense.html'
+    form_class = AddCategoryForm
+    success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
+
+    def get_object(self, queryset: Any = None) -> ExpenseCategory:
+        """Get the category object to update."""
+        return get_object_or_404(
+            ExpenseCategory,
+            pk=self.kwargs['pk'],
+            user=self.request.user,
+        )
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get form kwargs with user-specific queryset."""
+        kwargs = super().get_form_kwargs()
+        request = cast('RequestWithContainer', self.request)
+        category_service = request.container.expense.expense_category_service(
+            user=request.user,
+            request=request,
+        )
+        kwargs['category_queryset'] = category_service.get_categories_queryset()
+        return kwargs
+
+    def form_valid(self, form: Any) -> HttpResponse:
+        """Handle valid form submission."""
+        request = cast('RequestWithContainer', self.request)
+        category_service = request.container.expense.expense_category_service(
+            user=request.user,
+            request=request,
+        )
+
+        try:
+            category_name = self.request.POST.get('name')
+            self.object = category_service.update_category(
+                self.get_object(),
+                form,
+            )
+            messages.success(
+                self.request,
+                _('Категория "{category_name}" была успешно обновлена!').format(
+                    category_name=category_name,
+                ),
+            )
+            return redirect(self.get_success_url())
+        except (ValueError, TypeError) as e:
+            return self.handle_form_error_with_message(
+                form,
+                e,
+                'Ошибка при обновлении категории: {error}',
+            )
+
+    def form_invalid(self, form: Any) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.error(
+            self.request,
+            _('Ошибка при обновлении категории. Проверьте введенные данные.'),
+        )
+        return self.render_to_response(self.get_context_data(form=form))
+
+
 class ExpenseCategoryDeleteView(
     DeleteObjectMixin,
     LoginRequiredMixin,
@@ -481,3 +562,14 @@ class ExpenseCategoryDeleteView(
     success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
     success_message = str(constants.SUCCESS_CATEGORY_EXPENSE_DELETED)
     error_message = str(constants.ACCESS_DENIED_DELETE_EXPENSE_CATEGORY)
+
+    def form_valid(self, form: Any) -> HttpResponse:
+        """Handle valid form submission for deletion."""
+        response = super().form_valid(form)
+
+        # Clear category tree cache for this user
+        for depth in range(1, 6):  # Clear cache for depth 1-5
+            cache_key = f'category_tree_expense_{self.request.user.pk}_{depth}'
+            cache.delete(cache_key)
+
+        return response

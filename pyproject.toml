@@ -44,6 +44,9 @@ dependencies = [
     "dependency-injector>=4.48.2",
     "django-tailwind>=4.4.2",
     "crispy-tailwind>=1.0.3",
+    "camelot-py[base]>=1.0.9",
+    "celery>=5.4.0",
+    "redis>=5.2.0",
 ]
 
 [project.optional-dependencies]

@@ -3,6 +3,7 @@ from django.urls import path
 from hasta_la_vista_money.income.views import (
     IncomeCategoryCreateView,
     IncomeCategoryDeleteView,
+    IncomeCategoryUpdateView,
     IncomeCategoryView,
     IncomeCopyView,
     IncomeCreateView,
@@ -35,6 +36,11 @@ urlpatterns = [
         'category/<int:pk>/',
         IncomeCategoryDeleteView.as_view(),
         name='delete_category_income',
+    ),
+    path(
+        'category/<int:pk>/update/',
+        IncomeCategoryUpdateView.as_view(),
+        name='update_category_income',
     ),
     path(
         '<int:pk>/copy/',

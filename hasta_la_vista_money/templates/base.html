@@ -142,6 +142,52 @@
     </script>
     <script src="{% static 'js/driver.js' %}" nonce="{{request.csp_nonce}}"></script>
     <script src="{% static 'js/site-tour.js' %}" nonce="{{request.csp_nonce}}"></script>
+    <script nonce="{{request.csp_nonce}}">
+        // Reset mobile menu state on page load to prevent overlay blocking
+        function resetMobileMenu() {
+            const mobileMenuState = document.getElementById('mobileMenuState');
+            if (mobileMenuState) {
+                mobileMenuState.checked = false;
+            }
+        }
+
+        // Reset on page load
+        document.addEventListener('DOMContentLoaded', resetMobileMenu);
+
+        // Reset on page show (handles back/forward navigation)
+        window.addEventListener('pageshow', resetMobileMenu);
+
+        // Reset immediately (in case DOMContentLoaded already fired)
+        resetMobileMenu();
+
+        // Ensure JWT token is set for API requests
+        {% if user.is_authenticated %}
+        function ensureJWTToken() {
+            // Check if access_token cookie exists
+            const hasAccessToken = document.cookie.split(';').some(cookie => {
+                return cookie.trim().startsWith('access_token=');
+            });
+
+            // If no access token, get it from session
+            if (!hasAccessToken) {
+                fetch('/authentication/token/session/', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                                      document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || ''
+                    }
+                }).catch(error => {
+                    console.error('Failed to obtain JWT token:', error);
+                });
+            }
+        }
+
+        // Get JWT token on page load
+        document.addEventListener('DOMContentLoaded', ensureJWTToken);
+        ensureJWTToken();
+        {% endif %}
+    </script>
     {% endif %}
     <script nonce="{{request.csp_nonce}}">
         (function() {

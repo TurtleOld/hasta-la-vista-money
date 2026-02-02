@@ -1408,3 +1408,7 @@ body:has(#instruction-modal-toggle:checked) #mobileMenu {
 [data-balance-trend] {
   display: none !important;
 }
+
+[data-series] {
+  display: none !important;
+}

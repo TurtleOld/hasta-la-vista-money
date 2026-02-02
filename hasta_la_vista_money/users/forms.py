@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import (
     add_user_to_group,
@@ -18,8 +19,6 @@ from hasta_la_vista_money.users.services.groups import (
 
 class UserLoginForm(AuthenticationForm):
     """Form for user authentication using username or email."""
-
-    username: CharField
 
     username = CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,
@@ -173,7 +172,6 @@ class GroupCreateForm(ModelForm[Group]):
 class GroupDeleteForm(forms.Form):
     """Form for deleting user groups."""
 
-    group: forms.ModelChoiceField[Group]
     group = forms.ModelChoiceField(
         queryset=Group.objects.all(),
         label=_('Группа для удаления'),
@@ -188,8 +186,6 @@ class GroupDeleteForm(forms.Form):
 class UserGroupBaseForm(forms.Form):
     """Base form for user-group operations."""
 
-    user: forms.ModelChoiceField[User]
-    group: forms.ModelChoiceField[Group]
     user_instance: User | None = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -270,3 +266,48 @@ class DeleteUserFromGroupForm(UserGroupBaseForm):
             self.cleaned_data['user'],
             self.cleaned_data['group'],
         )
+
+
+class BankStatementUploadForm(forms.Form):
+    """Form for uploading bank statements in PDF format."""
+
+    pdf_file = forms.FileField(
+        label=_('PDF файл выписки'),
+        widget=forms.FileInput(
+            attrs={
+                'class': 'form-control',
+                'accept': '.pdf',
+            },
+        ),
+        help_text=_('Загрузите банковскую выписку в формате PDF'),
+        error_messages={
+            'required': _('Пожалуйста, выберите файл для загрузки.'),
+        },
+    )
+
+    def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+        self.fields['account'] = forms.ModelChoiceField(
+            queryset=Account.objects.filter(user=user),
+            label=_('Счёт'),
+            widget=forms.Select(attrs={'class': 'form-select'}),
+            help_text=_('Выберите счёт, на который будут записаны операции'),
+            error_messages={
+                'required': _('Пожалуйста, выберите счёт.'),
+            },
+        )
+
+    def clean_pdf_file(self) -> Any:
+        """Validate PDF file."""
+        pdf_file = self.cleaned_data.get('pdf_file')
+        if pdf_file:
+            if not pdf_file.name.endswith('.pdf'):
+                raise forms.ValidationError(
+                    _('Разрешены только PDF файлы.'),
+                )
+            if pdf_file.size > 10 * 1024 * 1024:
+                raise forms.ValidationError(
+                    _('Размер файла не должен превышать 10 МБ.'),
+                )
+        return pdf_file

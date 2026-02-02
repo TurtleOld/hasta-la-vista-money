@@ -43,6 +43,7 @@ services:
       dockerfile: docker/production.Dockerfile
     volumes:
       - staticfiles_data:/app/staticfiles
+      - media_data:/app/media
     ports:
       - "8001:8001"
     env_file:
@@ -56,6 +57,7 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-development}
       SENTRY_ENDPOINT: ${SENTRY_ENDPOINT:-}
+      REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
     depends_on:
       db:
         condition: service_healthy
@@ -69,6 +71,28 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: ./
+      dockerfile: docker/production.Dockerfile
+    command: uv run celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
+    volumes:
+      - media_data:/app/media
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
+      SECRET_KEY: ${SECRET_KEY:-change_me}
+      REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - default
     restart: unless-stopped
 
   nginx:
@@ -88,6 +112,7 @@ volumes:
   postgres_data:
   staticfiles_data:
   redis_data:
+  media_data:
 
 networks:
   default:

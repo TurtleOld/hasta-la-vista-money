@@ -43,6 +43,7 @@ from hasta_la_vista_money.finance_account.models import (
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
+    BankStatementUploadForm,
     DeleteUserFromGroupForm,
     GroupCreateForm,
     GroupDeleteForm,
@@ -50,7 +51,11 @@ from hasta_la_vista_money.users.forms import (
     UpdateUserForm,
     UserLoginForm,
 )
-from hasta_la_vista_money.users.models import DashboardWidget, User
+from hasta_la_vista_money.users.models import (
+    BankStatementUpload,
+    DashboardWidget,
+    User,
+)
 from hasta_la_vista_money.users.services.auth import login_user
 from hasta_la_vista_money.users.services.dashboard_analytics import (
     calculate_linear_trend,
@@ -75,6 +80,9 @@ from hasta_la_vista_money.users.services.password import set_user_password
 from hasta_la_vista_money.users.services.profile import update_user_profile
 from hasta_la_vista_money.users.services.registration import register_user
 from hasta_la_vista_money.users.services.theme import set_user_theme
+from hasta_la_vista_money.users.tasks import (
+    process_bank_statement_task,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -1017,3 +1025,138 @@ class DashboardComparisonView(LoginRequiredMixin, View):
         )
 
         return JsonResponse(comparison_data)
+
+
+class BankStatementUploadView(
+    LoginRequiredMixin,
+    SuccessMessageMixin[BankStatementUploadForm],
+    FormView[BankStatementUploadForm],
+):
+    """View for uploading bank statements in PDF format."""
+
+    template_name = 'users/bank_statement_upload.html'
+    form_class = BankStatementUploadForm
+    success_message = _(
+        'Банковская выписка загружена и будет обработана в фоновом режиме. '
+        'Данные появятся в расходах и доходах в течение нескольких минут.',
+    )
+    request: AuthRequest
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Add user to form kwargs."""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form: BankStatementUploadForm) -> HttpResponse:
+        """Process uploaded PDF file asynchronously."""
+        logger = logging.getLogger(__name__)
+        pdf_file = form.cleaned_data['pdf_file']
+        account = form.cleaned_data['account']
+
+        try:
+            logger.info(
+                'Creating bank statement upload for user %s, account %s',
+                self.request.user.username,
+                account.name_account,
+            )
+
+            # Create upload record
+            upload = BankStatementUpload.objects.create(
+                user=self.request.user,
+                account=account,
+                pdf_file=pdf_file,
+                status='pending',
+            )
+
+            logger.info('Created upload record with id=%d', upload.id)
+
+            # Start background task
+            task = process_bank_statement_task.delay(upload.id)
+            logger.info('Started background task with id=%s', task.id)
+
+            # Store upload ID in session for progress tracking
+            self.request.session['last_upload_id'] = upload.id
+
+            messages.success(self.request, str(self.success_message))
+
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.exception('Error creating upload record')
+            messages.error(
+                self.request,
+                f'Произошла ошибка при загрузке файла: {e!s}',
+            )
+            return self.form_invalid(form)
+
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add extra context data."""
+        context = super().get_context_data(**kwargs)
+        # Check if there's an ongoing upload
+        last_upload_id = self.request.session.get('last_upload_id')
+        if last_upload_id:
+            try:
+                upload = BankStatementUpload.objects.get(
+                    id=last_upload_id,
+                    user=self.request.user,
+                )
+                # Show progress if not completed
+                if upload.status in ['pending', 'processing']:
+                    context['show_progress'] = True
+                    context['upload_id'] = upload.id
+                elif upload.status == 'completed':
+                    # Clear session if completed
+                    self.request.session.pop('last_upload_id', None)
+            except BankStatementUpload.DoesNotExist:
+                # Clear invalid session data
+                self.request.session.pop('last_upload_id', None)
+        return context
+
+    def get_success_url(self) -> str:
+        """Return URL to redirect after successful upload."""
+        # Redirect back to the same page to show progress
+        return str(reverse_lazy('users:bank_statement_upload'))
+
+
+class BankStatementUploadStatusView(LoginRequiredMixin, View):
+    """View for checking bank statement upload progress."""
+
+    def get(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+    ) -> JsonResponse:
+        """Get upload status and progress.
+
+        Args:
+            request: HTTP request.
+            upload_id: ID of the upload to check.
+
+        Returns:
+            JSON response with upload status and progress.
+        """
+        try:
+            upload = BankStatementUpload.objects.get(
+                id=upload_id,
+                user=request.user,
+            )
+
+            return JsonResponse(
+                {
+                    'status': upload.status,
+                    'progress': upload.progress,
+                    'total_transactions': upload.total_transactions,
+                    'processed_transactions': upload.processed_transactions,
+                    'income_count': upload.income_count,
+                    'expense_count': upload.expense_count,
+                    'error_message': upload.error_message,
+                },
+            )
+
+        except BankStatementUpload.DoesNotExist:
+            return JsonResponse(
+                {'error': 'Upload not found'},
+                status=404,
+            )

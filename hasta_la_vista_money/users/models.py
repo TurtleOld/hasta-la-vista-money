@@ -13,10 +13,13 @@ from django.db.models import (
     BooleanField,
     CharField,
     DateTimeField,
+    FileField,
     ForeignKey,
+    IntegerField,
     JSONField,
     Model,
     PositiveIntegerField,
+    TextField,
 )
 
 
@@ -81,6 +84,65 @@ class DashboardWidget(Model):
             str: Formatted string with username and widget type.
         """
         return f'{self.user.username} - {self.widget_type}'
+
+
+class BankStatementUpload(Model):
+    """Model for tracking bank statement upload and processing status.
+
+    Attributes:
+        user: Foreign key to the User who uploaded the statement.
+        account: Foreign key to the Account associated with the statement.
+        pdf_file: Path to the uploaded PDF file.
+        status: Current processing status (pending, processing, completed,
+            failed).
+        progress: Progress percentage (0-100).
+        total_transactions: Total number of transactions found.
+        processed_transactions: Number of transactions processed so far.
+        income_count: Number of income transactions created.
+        expense_count: Number of expense transactions created.
+        error_message: Error message if processing failed.
+        celery_task_id: Celery task ID for tracking.
+        created_at: Timestamp when the upload was created.
+        updated_at: Timestamp when the upload was last updated.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'В очереди'),
+        ('processing', 'Обрабатывается'),
+        ('completed', 'Завершено'),
+        ('failed', 'Ошибка'),
+    ]
+
+    user = ForeignKey(
+        User,
+        on_delete=CASCADE,
+        related_name='bank_statement_uploads',
+    )
+    account = ForeignKey('finance_account.Account', on_delete=CASCADE)
+    pdf_file = FileField(upload_to='bank_statements/')
+    status = CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    progress = IntegerField(default=0)
+    total_transactions = IntegerField(default=0)
+    processed_transactions = IntegerField(default=0)
+    income_count = IntegerField(default=0)
+    expense_count = IntegerField(default=0)
+    error_message = TextField(blank=True, default='')
+    celery_task_id = CharField(max_length=255, blank=True, default='')
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Загрузка банковской выписки'
+        verbose_name_plural = 'Загрузки банковских выписок'
+
+    def __str__(self) -> str:
+        """Return string representation of the upload.
+
+        Returns:
+            str: Formatted string with username and status.
+        """
+        return f'{self.user.username} - {self.status} - {self.created_at}'
 
 
 class TokenAdmin(admin.ModelAdmin[Any]):

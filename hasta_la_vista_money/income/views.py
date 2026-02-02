@@ -4,20 +4,20 @@ from typing import Any, Literal, TypedDict, cast
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.db.models.aggregates import Sum
 from django.db.models.functions import TruncMonth
 from django.http import (
     HttpResponse,
     HttpResponseRedirect,
-    JsonResponse,
 )
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils import formats
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import DeleteView
+from django.views.generic import DeleteView, UpdateView
 from django.views.generic.edit import CreateView
 from django.views.generic.list import ListView
 from django_stubs_ext import StrOrPromise
@@ -284,15 +284,16 @@ class IncomeCopyView(
         """
         income_id = kwargs.get('pk')
         if income_id is None:
-            return JsonResponse(
-                {'success': False, 'error': 'Income ID is required'},
-            )
+            messages.error(request, _('Income ID is required'))
+            return HttpResponseRedirect(reverse_lazy(INCOME_LIST_URL_NAME))
         try:
             income_ops = request.container.income.income_ops()
             income_ops.copy_income(user=request.user, income_id=int(income_id))
-            return JsonResponse({'success': True})
+            messages.success(request, _('Операция дохода успешно скопирована!'))
+            return HttpResponseRedirect(reverse_lazy(INCOME_LIST_URL_NAME))
         except (ValueError, TypeError, PermissionDenied) as e:
-            return self.handle_ajax_error_with_success_flag(e)
+            messages.error(request, str(e))
+            return HttpResponseRedirect(reverse_lazy(INCOME_LIST_URL_NAME))
 
 
 class IncomeUpdateView(
@@ -412,17 +413,29 @@ class IncomeDeleteView(
         request: RequestWithContainer,
         *args: object,
         **kwargs: object,
-    ) -> JsonResponse:
+    ) -> HttpResponse:
         """
         Handle POST request to delete an income record.
         """
-        income = self.get_object()
+        income_id = kwargs.get('pk')
+        if income_id is None:
+            messages.error(request, _('Income ID is required'))
+            return HttpResponseRedirect(str(self.success_url))
+
+        income = get_object_or_404(
+            Income,
+            pk=income_id,
+            user=request.user,
+        )
+
         try:
             income_ops = request.container.income.income_ops()
             income_ops.delete_income(user=request.user, income=income)
-            return JsonResponse({'success': True})
+            messages.success(request, constants.SUCCESS_INCOME_DELETED)
+            return HttpResponseRedirect(str(self.success_url))
         except (ValueError, TypeError, PermissionDenied) as e:
-            return self.handle_ajax_error_with_success_flag(e)
+            messages.error(request, str(e))
+            return HttpResponseRedirect(str(self.success_url))
 
 
 class IncomeCategoryView(LoginRequiredMixin, ListView[IncomeCategory]):
@@ -516,6 +529,13 @@ class IncomeCategoryCreateView(
         category_form = form.save(commit=False)
         category_form.user = self.request.user
         category_form.save()
+
+        # Clear category tree cache for this user
+        user = get_object_or_404(User, username=self.request.user)
+        for depth in range(1, 6):  # Clear cache for depth 1-5
+            cache_key = f'category_tree_income_{user.pk}_{depth}'
+            cache.delete(cache_key)
+
         messages.success(
             self.request,
             _('Category "%(name)s" was successfully added!')
@@ -542,6 +562,85 @@ class IncomeCategoryCreateView(
         return self.render_to_response(self.get_context_data(form=form))
 
 
+class IncomeCategoryUpdateView(
+    LoginRequiredMixin,
+    UpdateView[IncomeCategory, AddCategoryIncomeForm],
+):
+    """
+    View for updating an income category.
+    """
+
+    model = IncomeCategory
+    template_name = 'income/update_category_income.html'
+    form_class = AddCategoryIncomeForm
+    success_url = reverse_lazy('income:category_list')
+
+    def get_object(self, queryset: Any = None) -> IncomeCategory:
+        """
+        Get the category object to update, ensuring it belongs to the user.
+        """
+        return get_object_or_404(
+            IncomeCategory,
+            pk=self.kwargs['pk'],
+            user=self.request.user,
+        )
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """
+        Provide form kwargs with user-specific category queryset.
+        """
+        kwargs = super().get_form_kwargs()
+        user = get_object_or_404(User, username=self.request.user)
+        categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .order_by('parent_category__name', 'name')
+            .all()
+        )
+        kwargs['category_queryset'] = categories
+        return kwargs
+
+    def form_valid(self, form: Any) -> HttpResponse:
+        """
+        Handle valid form submission for income category update.
+        """
+        category_name = self.request.POST.get('name')
+        category = form.save(commit=False)
+        category.user = self.request.user
+        category.save()
+
+        # Clear category tree cache for this user
+        user = get_object_or_404(User, username=self.request.user)
+        for depth in range(1, 6):  # Clear cache for depth 1-5
+            cache_key = f'category_tree_income_{user.pk}_{depth}'
+            cache.delete(cache_key)
+
+        messages.success(
+            self.request,
+            _('Category "%(name)s" was successfully updated!')
+            % {'name': category_name},
+        )
+
+        return HttpResponseRedirect(str(self.success_url))
+
+    def form_invalid(self, form: Any) -> HttpResponse:
+        """
+        Handle invalid form submission for income category update.
+        """
+        error_message: str
+        if 'name' in form.errors:
+            error_message = str(_('Такая категория уже существует!'))
+        else:
+            error_message = str(
+                _(
+                    'Ошибка при обновлении категории. '
+                    'Проверьте введенные данные.',
+                ),
+            )
+        messages.error(self.request, error_message)
+        return self.render_to_response(self.get_context_data(form=form))
+
+
 class IncomeCategoryDeleteView(
     DeleteObjectMixin,
     DeleteView[IncomeCategory, AddCategoryIncomeForm],
@@ -555,3 +654,15 @@ class IncomeCategoryDeleteView(
     success_message = str(constants.SUCCESS_CATEGORY_INCOME_DELETED)
     error_message = str(constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY)
     success_url = reverse_lazy('income:category_list')
+
+    def form_valid(self, form: Any) -> HttpResponse:
+        """Handle valid form submission for deletion."""
+        response = super().form_valid(form)
+
+        # Clear category tree cache for this user
+        user = get_object_or_404(User, username=self.request.user)
+        for depth in range(1, 6):  # Clear cache for depth 1-5
+            cache_key = f'category_tree_income_{user.pk}_{depth}'
+            cache.delete(cache_key)
+
+        return response
