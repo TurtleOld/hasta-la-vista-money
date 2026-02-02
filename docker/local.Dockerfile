@@ -14,9 +14,16 @@ ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
 
 WORKDIR /app
 
-COPY --chown=appuser:appuser pyproject.toml uv.lock ./
+COPY --chown=appuser:appuser pyproject.toml ./
 
 USER appuser
+
+RUN if [ -f uv.lock ]; then \
+      echo "Using existing uv.lock"; \
+    else \
+      echo "Generating uv.lock..."; \
+      uv lock; \
+    fi
 
 RUN uv sync --dev
 

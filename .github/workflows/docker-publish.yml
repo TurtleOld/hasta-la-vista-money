@@ -56,6 +56,26 @@ jobs:
         env:
           NODE_ENV: production
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install uv
+        run: pip install uv==0.7.13
+
+      - name: Generate uv.lock
+        run: uv lock
+
+      - name: Verify uv.lock exists
+        run: |
+          if [ ! -f uv.lock ]; then
+            echo "Error: uv.lock was not generated"
+            exit 1
+          fi
+          echo "uv.lock generated successfully"
+
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
       - name: Install cosign
