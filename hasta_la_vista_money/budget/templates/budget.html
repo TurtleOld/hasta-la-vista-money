@@ -35,14 +35,20 @@
     </div>
     
     <div class="flex justify-center mb-6">
-        <form action="{% url 'budget:generate_date' %}" method="post" class="m-0">
+        <form id="generate-dates-form" class="m-0">
             {% csrf_token %}
-            <button id="budget-add-months-btn" type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                {% translate 'Добавить ещё месяцы' %}
-            </button>
+            <div class="flex items-center gap-3">
+                <select id="budget-type-select" class="px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                    <option value="expense">{% translate 'Расходы' %}</option>
+                    <option value="income">{% translate 'Доходы' %}</option>
+                </select>
+                <button id="budget-add-months-btn" type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    {% translate 'Добавить ещё месяцы' %}
+                </button>
+            </div>
         </form>
     </div>
     
@@ -60,6 +66,47 @@
 <script nonce="{{request.csp_nonce}}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script nonce="{{request.csp_nonce}}">
 document.addEventListener('DOMContentLoaded', function() {
+    // Обработка формы генерации дат
+    const generateDatesForm = document.getElementById('generate-dates-form');
+    if (generateDatesForm) {
+        generateDatesForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const typeSelect = document.getElementById('budget-type-select');
+            const type = typeSelect ? typeSelect.value : 'expense';
+            
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch('/budget/generate-date/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ type: type })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert('{% translate "Ошибка при генерации дат" %}');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('{% translate "Произошла ошибка. Попробуйте снова." %}');
+            });
+        });
+    }
+    
     // График выполнения плана
     const planExecutionCtx = document.getElementById('planExecutionChart').getContext('2d');
     const chartLabels = JSON.parse(document.getElementById('chartLabels').textContent);
