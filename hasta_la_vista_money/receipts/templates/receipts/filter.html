@@ -27,7 +27,7 @@
             {% csrf_token %}
             <!-- Date Range -->
             <div class="space-y-2">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                 <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -40,7 +40,7 @@
 <!-- Amount Range -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                   <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2"></path>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -50,7 +50,7 @@
                 {{ receipt_filter.form.total_sum_min | as_crispy_field }}
               </div>
               <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                   <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2"></path>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -63,7 +63,7 @@
             
             <!-- Seller -->
             <div class="space-y-2">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                 <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9l1-5h16l1 5M5 9v11h14V9"></path>
@@ -75,7 +75,7 @@
                 </div>
 <!-- Products with Multi-select -->
             <div class="space-y-2">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"
                 for="product-autocomplete">
                 <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -111,7 +111,7 @@
                 </svg>
                 <!-- Autocomplete Dropdown -->
                 <div id="product-autocomplete-dropdown"
-                  class="fixed w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg hidden max-h-60 overflow-y-auto z-[99999]">
+                  class="fixed w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg hidden max-h-60 overflow-y-auto z-99999">
                 </div>
                 <!-- Hidden input for form submission -->
                 <input type="hidden" id="selected-products-input" name="product_names" value="">

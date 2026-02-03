@@ -6,7 +6,7 @@ import django_filters
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
-from django.db.models import Min, QuerySet
+from django.db.models import Min, Q, QuerySet
 from django.forms import (
     CharField,
     ChoiceField,
@@ -130,32 +130,30 @@ class ReceiptFilter(django_filters.FilterSet):
         value: str,
     ) -> QuerySet[Receipt]:
         """Фильтрация чеков по нескольким наименованиям товаров.
-        
+
         Args:
             queryset: QuerySet чеков для фильтрации.
             field_name: Имя поля (не используется).
             value: Строка с названиями товаров, разделенными запятой.
-            
+
         Returns:
             QuerySet[Receipt]: Отфильтрованный QuerySet чеков.
         """
         if not value:
             return queryset
-            
-        # Разделяем строку на отдельные названия товаров
-        product_names = [name.strip() for name in value.split(',') if name.strip()]
-        
+
+        product_names = [
+            name.strip() for name in value.split(',') if name.strip()
+        ]
+
         if not product_names:
             return queryset
-            
-        # Создаем Q-объекты для каждого товара
-        from django.db.models import Q
+
         q_objects = Q()
-        
+
         for product_name in product_names:
             q_objects |= Q(product__product_name__icontains=product_name)
-        
-        # Фильтруем чеки, которые содержат хотя бы один из указанных товаров
+
         return queryset.filter(q_objects).distinct()
 
     class Meta:

@@ -174,7 +174,7 @@ class ReceiptImportService:
 
     def _convert_to_optional_int(
         self,
-        value: str | int | float | None,
+        value: str | float | None,
     ) -> int | None:
         """Convert value to int or return None.
 
