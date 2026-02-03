@@ -162,8 +162,7 @@
         // Reset immediately (in case DOMContentLoaded already fired)
         resetMobileMenu();
 
-        // Ensure JWT token is set for API requests
-        {% if user.is_authenticated %}
+            // Ensure JWT token is set for API requests
         function ensureJWTToken() {
             // Check if access_token cookie exists
             const hasAccessToken = document.cookie.split(';').some(cookie => {
@@ -187,10 +186,8 @@
 
         // Get JWT token on page load
         document.addEventListener('DOMContentLoaded', ensureJWTToken);
-        ensureJWTToken();
-        {% endif %}
-    </script>
-    {% endif %}
+            ensureJWTToken();
+</script>
     <script nonce="{{request.csp_nonce}}">
         (function() {
             if (typeof window.LazyLoader === 'undefined') {
@@ -234,11 +231,9 @@
                 }
             }
 
-            {% if user.is_authenticated %}
             loadScript('{% static "js/theme.js" %}?v={% word_hash %}').catch(function(error) {
                 console.error('Error loading theme script:', error);
             });
-            {% endif %}
 
             const isIncomePage = currentPath.indexOf('income') !== -1;
             const isExpensePage = currentPath.indexOf('expense') !== -1;
@@ -282,5 +277,6 @@
         window.GROUPS_FOR_USER_URL = "{% url 'users:ajax:groups_for_user' %}";
         window.GROUPS_NOT_FOR_USER_URL = "{% url 'users:ajax:groups_not_for_user' %}";
     </script>
+    {% endif %}
 </body>
 </html>
