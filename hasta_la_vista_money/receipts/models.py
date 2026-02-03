@@ -396,7 +396,7 @@ class Receipt(models.Model):
     """
 
     receipt_date = models.DateTimeField()
-    number_receipt = models.IntegerField(default=None, null=True)
+    number_receipt = models.BigIntegerField(default=None, null=True)
     nds10 = models.DecimalField(
         blank=True,
         max_digits=constants.SIXTY,

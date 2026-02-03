@@ -123,12 +123,14 @@
     <script nonce="{{request.csp_nonce}}" type="text/javascript" src="{% static 'js/tabulator.min.js' %}"></script>
     <script src="{% static 'js/tour-controls.js' %}"></script>
 <script src="{% static 'js/notifications.js' %}"></script>
+    <script src="{% static 'js/tokens.js' %}"></script>
     <script src="{% static 'js/script.js' %}"></script>
     <script src="{% static 'js/errors_form.js' %}"></script>
     <script src="{% static 'js/account_group_filter.js' %}"></script>
     <script src="{% static 'js/balance_trend_widget.js' %}"></script>
     <script src="{% static 'js/lazy-loader.js' %}"></script>
     <script src="{% static 'js/mathjax.js' %}"></script>
+    <script src="{% static 'js/receipts-filter.js' %}"></script>
     {% if user.is_authenticated %}
         <script src="{% static 'js/header.js' %}"></script>
         <script src="{% static 'js/bottom-nav.js' %}"></script>
@@ -209,13 +211,7 @@
             }
 
             if (currentPath.indexOf('receipts') !== -1) {
-                loadScript('{% static "js/receipt_filter.js" %}?v={% word_hash %}').catch(function(error) {
-                    console.error('Error loading receipt_filter script:', error);
-                });
-
-                loadScript('{% static "js/tokens.js" %}?v={% word_hash %}').then(function() {
-                    return loadScript('{% static "js/receipt_group_filter.js" %}?v={% word_hash %}');
-                }).then(function() {
+                loadScript('{% static "js/receipt_group_filter.js" %}?v={% word_hash %}').then(function () {
                     if (currentPath.indexOf('update') !== -1) {
                         return loadScript('{% static "js/receipt_update.js" %}?v={% word_hash %}');
                     }

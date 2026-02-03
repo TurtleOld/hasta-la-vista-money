@@ -322,17 +322,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (window.location.pathname.includes('/receipts')) {
-        window.tokens.ensureValidAccessToken().then(valid => {
-            if (valid) {
-                window.tokens.scheduleAccessTokenRefresh();
-            } else {
-                window.tokens.refreshTokensIfNeeded().then(refreshed => {
-                    if (refreshed) {
-                        window.tokens.scheduleAccessTokenRefresh();
-                    }
-                });
-            }
-        });
+        if (window.tokens && typeof window.tokens.ensureValidAccessToken === 'function') {
+            window.tokens.ensureValidAccessToken().then(valid => {
+                if (valid) {
+                    window.tokens.scheduleAccessTokenRefresh();
+                } else {
+                    window.tokens.refreshTokensIfNeeded().then(refreshed => {
+                        if (refreshed) {
+                            window.tokens.scheduleAccessTokenRefresh();
+                        }
+                    });
+                }
+            });
+        }
     }
 
     const deleteForm = document.getElementById('delete-user-from-group-form');
@@ -471,9 +473,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
 
                         if (sessionResponse.ok) {
-                            const refreshed = await window.tokens.refreshTokensIfNeeded();
-                            if (refreshed) {
-                                return ultraSafeFetch(path, options);
+                            if (window.tokens && typeof window.tokens.refreshTokensIfNeeded === 'function') {
+                                const refreshed = await window.tokens.refreshTokensIfNeeded();
+                                if (refreshed) {
+                                    return ultraSafeFetch(path, options);
+                                } else {
+                                    return response;
+                                }
                             } else {
                                 return response;
                             }

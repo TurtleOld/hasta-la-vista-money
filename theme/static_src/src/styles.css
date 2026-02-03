@@ -1410,5 +1410,101 @@ body:has(#instruction-modal-toggle:checked) #mobileMenu {
 }
 
 [data-series] {
-  display: none !important;
+    display: none !important;
+}
+
+/* Стили для фильтра чеков */
+.receipts-filter-card {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.receipts-filter-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.receipts-filter-reset-button:hover {
+  background-color: rgba(107, 114, 128, 0.1);
+}
+
+.receipts-add-button {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.receipts-add-button:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.receipts-stats-button {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.receipts-stats-button:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.receipts-header-gradient {
+  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+}
+
+.receipts-actions-card {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Стили для автодополнения */
+#product-autocomplete-dropdown {
+  position: fixed;
+  animation: slideDown 0.2s ease-out;
+  z-index: 99999;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.autocomplete-item {
+  transition: all 0.15s ease;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.dark .autocomplete-item:hover,
+.dark .autocomplete-item.active {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+/* Стили для тегов товаров */
+.group:hover {
+  background-color: rgba(16, 185, 129, 0.2);
+}
+
+/* Анимация для спиннера */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
