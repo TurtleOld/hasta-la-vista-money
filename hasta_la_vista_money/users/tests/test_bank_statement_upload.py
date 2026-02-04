@@ -1593,14 +1593,22 @@ class TestBankStatementParserAdvanced(TestCase):
         try:
             parser = BankStatementParser(pdf_path)
 
-            # The _clean_description method only truncates to 250 if the cleaned
-            # result is empty. Otherwise it returns the cleaned result.
-            # So we need to create a description that will be cleaned to empty.
+            # The _clean_description method returns cleaned description as-is.
+            # Only when cleaned result is empty, it falls back to first part
+            # before comma or first 100 chars of original description.
+            # Final truncation to 250 chars happens in _parse_transaction_row.
+
+            # Test with description that becomes empty after cleaning
+            # (only city/address info which gets removed)
+            empty_after_clean = 'г Москва, ул Тверская, д 10'
+            result = parser._clean_description(empty_after_clean)
+            self.assertLessEqual(len(result), 100)
+
+            # Test with long description that won't be cleaned away
             long_desc = 'A' * 300
             result = parser._clean_description(long_desc)
-
-            # Should be truncated to 100 characters if cleaned result is empty
-            self.assertLessEqual(len(result), 100)
+            # _clean_description doesn't truncate non-empty cleaned results
+            self.assertEqual(len(result), 300)
         finally:
             pdf_path.unlink()
 
