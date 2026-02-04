@@ -26,7 +26,7 @@ transprepare:
 	@uv run python manage.py makemessages --locale=en
 
 transcompile:
-	@uv run python manage.py compilemessages
+	@uv run python manage.py compilemessages --locale=en
 
 shell:
 	@uv shell

@@ -3,20 +3,20 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: Hasta La Vista Money\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-02 21:35+0300\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: \n"
+"POT-Creation-Date: 2026-02-04 12:00+0000\n"
+"PO-Revision-Date: 2026-02-04 12:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: English\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
 
 #: hasta_la_vista_money/authentication/authentication.py:133
 #, python-brace-format
@@ -24,59 +24,55 @@ msgid "Ожидался экземпляр User, получен {type_name}"
 msgstr "Expected User instance, got {type_name}"
 
 #: hasta_la_vista_money/authentication/views.py:29
-#, fuzzy
-#| msgid "Последние операции"
 msgid "Получение JWT токенов из сессии"
-msgstr "Recent transactions"
+msgstr "Getting JWT tokens from session"
+
 
 #: hasta_la_vista_money/authentication/views.py:30
 msgid "Получить JWT токены на основе Django session аутентификации"
-msgstr ""
+msgstr "Get JWT tokens based on Django session authentication"
 
 #: hasta_la_vista_money/authentication/views.py:34
 #: hasta_la_vista_money/authentication/views.py:84
-#, fuzzy
-#| msgid "Чек успешно добавлен!"
 msgid "Токены успешно получены"
-msgstr "Receipt added successfully!"
+msgstr "Tokens received successfully"
+
 
 #: hasta_la_vista_money/authentication/views.py:42
-#, fuzzy
-#| msgid "Ошибка при удалении расхода: {error}"
 msgid "Ошибка при получении токенов"
-msgstr "Error deleting expense: {error}"
+msgstr "Error retrieving tokens"
+
 
 #: hasta_la_vista_money/authentication/views.py:53
 msgid "Пользователь не авторизован"
 msgstr "User not authorized"
 
 #: hasta_la_vista_money/authentication/views.py:76
-#, fuzzy
-#| msgid "Последние операции"
 msgid "Получение JWT токенов"
-msgstr "Recent transactions"
+msgstr "Getting JWT tokens"
+
 
 #: hasta_la_vista_money/authentication/views.py:78
 msgid ""
 "Получить access и refresh JWT токены. Токены возвращаются в JSON ответе и "
 "дополнительно устанавливаются в HttpOnly cookies для веб-клиентов."
-msgstr ""
+msgstr "Get access and refresh JWT tokens. Tokens are returned in JSON response and additionally set in HttpOnly cookies for web clients."
+"Get access and refresh JWT tokens."
+"Tokens are returned in JSON response and additionally set in HttpOnly cookies for web clients."
 
 #: hasta_la_vista_money/authentication/views.py:94
 msgid "Ошибка валидации данных"
-msgstr ""
+msgstr "Data validation error"
 
 #: hasta_la_vista_money/authentication/views.py:95
-#, fuzzy
-#| msgid "Дифференцированные"
 msgid "Неверные учетные данные"
-msgstr "Differentiated"
+msgstr "Invalid credentials"
+
 
 #: hasta_la_vista_money/authentication/views.py:135
-#, fuzzy
-#| msgid "Управление кредитами"
 msgid "Обновление JWT токена"
-msgstr "Loan management"
+msgstr "Refreshing JWT token"
+
 
 #: hasta_la_vista_money/authentication/views.py:137
 msgid ""
@@ -85,16 +81,19 @@ msgid ""
 "Приоритет: сначала JSON body, затем cookie. Ответ всегда содержит access и "
 "refresh в JSON. Cookies устанавливаются дополнительно для веб-клиентов."
 msgstr ""
+"Refresh access token using refresh token. Refresh token can be passed in "
+"JSON body ({\"refresh\": \"<token>\"}) or in HttpOnly cookie. Priority: "
+"first JSON body, then cookie. Response always contains access and refresh in "
+"JSON. Cookies are set additionally for web clients."
 
 #: hasta_la_vista_money/authentication/views.py:145
-#, fuzzy
-#| msgid "Чек успешно добавлен!"
 msgid "Токены успешно обновлены"
-msgstr "Receipt added successfully!"
+msgstr "Tokens updated successfully"
+
 
 #: hasta_la_vista_money/authentication/views.py:159
 msgid "Невалидный или истёкший refresh токен"
-msgstr ""
+msgstr "Invalid or expired refresh token"
 
 #: hasta_la_vista_money/budget/models.py:43
 #: hasta_la_vista_money/budget/models.py:128
@@ -220,10 +219,9 @@ msgid "Бюджет по категориям"
 msgstr "Budget by categories"
 
 #: hasta_la_vista_money/budget/templates/budget.html:13
-#, fuzzy
-#| msgid "Динамика доходов и расходов"
 msgid "Анализ выполнения плана по доходам и расходам"
-msgstr "Income and expense dynamics"
+msgstr "Analysis of income and expense plan execution"
+
 
 #: hasta_la_vista_money/budget/templates/budget.html:21
 #: hasta_la_vista_money/budget/templates/expense_table.html:8
@@ -261,10 +259,9 @@ msgid "Выполнение плана по месяцам (%)"
 msgstr "Plan completion by months (%)"
 
 #: hasta_la_vista_money/budget/templates/expense_table.html:17
-#, fuzzy
-#| msgid "Тип планирования: расход или доход"
 msgid "Детальный анализ планирования расходов по категориям"
-msgstr "Planning type: expense or income"
+msgstr "Detailed analysis of expense planning by categories"
+
 
 #: hasta_la_vista_money/budget/templates/expense_table.html:23
 #: hasta_la_vista_money/budget/templates/income_table.html:23
@@ -274,11 +271,11 @@ msgstr "Back"
 
 #: hasta_la_vista_money/budget/templates/income_table.html:17
 msgid "Детальный анализ планирования доходов по категориям"
-msgstr ""
+msgstr "Detailed analysis of income planning by categories"
 
 #: hasta_la_vista_money/constants.py:58
 msgid "Такой чек уже существует!"
-msgstr ""
+msgstr "Such receipt already exists!"
 
 #: hasta_la_vista_money/constants.py:59 hasta_la_vista_money/constants.py:74
 msgid "Чек успешно добавлен!"
@@ -286,49 +283,45 @@ msgstr "Receipt added successfully!"
 
 #: hasta_la_vista_money/constants.py:61
 msgid "Чек не корректен, перепроверьте в приложении налоговой!"
-msgstr ""
+msgstr "Receipt is not valid, double-check in the tax app!"
 
 #: hasta_la_vista_money/constants.py:63
-#, fuzzy
-#| msgid "Чек успешно добавлен!"
 msgid "Чек успешно обновлен!"
-msgstr "Receipt added successfully!"
+msgstr "Receipt updated successfully!"
+
 
 #: hasta_la_vista_money/constants.py:65
 msgid ""
 "Чек не прошёл валидацию! Вероятно он ещё не попал в базу данных налоговой! "
 "Обычно чек попадает в базу не позже суток. Попробуйте позже или внесите "
 "данные вручную на сайте."
-msgstr ""
+msgstr "Receipt did not pass validation! It probably has not yet been added to the tax database! Usually the receipt is added to the database within 24 hours. Try again later or enter the data manually on the website."
 
 #: hasta_la_vista_money/constants.py:71
 msgid ""
 "QR-код не считался, попробуйте ещё раз или воспользуйтесь сторонним "
 "приложением и передайте текст из QR-кода боту"
-msgstr ""
+msgstr "QR code was not read, try again or use a third-party application and pass the text from the QR code to the bot"
 
 #: hasta_la_vista_money/constants.py:75
-#, fuzzy
-#| msgid "Чек успешно добавлен!"
 msgid "Чек успешно удален!"
-msgstr "Receipt added successfully!"
+msgstr "Receipt deleted successfully!"
+
 
 #: hasta_la_vista_money/constants.py:76
-#, fuzzy
-#| msgid "Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже."
 msgid "Ошибка обработки чека, попробуйте позже"
-msgstr "An error occurred while retrieving accounts. Please try again later."
+msgstr "Error processing receipt, try again later"
+
 
 #: hasta_la_vista_money/constants.py:78
 msgid ""
 "Модель ИИ недоступна. Проверьте настройки API_MODEL в переменных окружения."
-msgstr ""
+msgstr "AI model is unavailable. Check API_MODEL settings in environment variables."
 
 #: hasta_la_vista_money/constants.py:86
-#, fuzzy
-#| msgid "Статистика по чекам"
 msgid "Покупки по чекам"
-msgstr "Receipt statistics"
+msgstr "Purchases from receipts"
+
 
 #: hasta_la_vista_money/constants.py:93
 msgid "Вы успешно авторизовались!"
@@ -448,57 +441,56 @@ msgstr "New seller added successfully!"
 
 #: hasta_la_vista_money/constants.py:182
 msgid "Неверный формат файла или пустые данные"
-msgstr ""
+msgstr "Invalid file format or empty data"
 
 #: hasta_la_vista_money/constants.py:435
 msgid "Январь"
-msgstr ""
+msgstr "January"
 
 #: hasta_la_vista_money/constants.py:436
 msgid "Февраль"
-msgstr ""
+msgstr "February"
 
 #: hasta_la_vista_money/constants.py:437
 msgid "Март"
-msgstr ""
+msgstr "March"
 
 #: hasta_la_vista_money/constants.py:438
 msgid "Апрель"
-msgstr ""
+msgstr "April"
 
 #: hasta_la_vista_money/constants.py:439
-#, fuzzy
-#| msgid "Мои"
 msgid "Май"
-msgstr "My"
+msgstr "May"
+
 
 #: hasta_la_vista_money/constants.py:440
 msgid "Июнь"
-msgstr ""
+msgstr "June"
 
 #: hasta_la_vista_money/constants.py:441
 msgid "Июль"
-msgstr ""
+msgstr "July"
 
 #: hasta_la_vista_money/constants.py:442
 msgid "Август"
-msgstr ""
+msgstr "August"
 
 #: hasta_la_vista_money/constants.py:443
 msgid "Сентябрь"
-msgstr ""
+msgstr "September"
 
 #: hasta_la_vista_money/constants.py:444
 msgid "Октябрь"
-msgstr ""
+msgstr "October"
 
 #: hasta_la_vista_money/constants.py:445
 msgid "Ноябрь"
-msgstr ""
+msgstr "November"
 
 #: hasta_la_vista_money/constants.py:446
 msgid "Декабрь"
-msgstr ""
+msgstr "December"
 
 #: hasta_la_vista_money/expense/filters.py:17
 #: hasta_la_vista_money/expense/templates/expense/_expense_table_block.html:12
@@ -576,7 +568,7 @@ msgstr "No parent category"
 #: hasta_la_vista_money/expense/services/expense_services.py:201
 #: hasta_la_vista_money/expense/services/expense_services.py:237
 msgid "У вас нет прав для выполнения этого действия"
-msgstr ""
+msgstr "You do not have permission to perform this action"
 
 #: hasta_la_vista_money/expense/templates/expense/_expense_form_partial.html:29
 #: hasta_la_vista_money/expense/templates/expense/add_expense.html:5
@@ -638,10 +630,9 @@ msgid "Добавить категорию расхода"
 msgstr "Add expense category"
 
 #: hasta_la_vista_money/expense/templates/expense/add_category_expense.html:20
-#, fuzzy
-#| msgid "Добавить категорию расхода"
 msgid "Создайте новую категорию для расходов"
-msgstr "Add expense category"
+msgstr "Create a new category for expenses"
+
 
 #: hasta_la_vista_money/expense/templates/expense/add_category_expense.html:67
 #: hasta_la_vista_money/expense/templates/expense/modals/add_expense.html:50
@@ -653,23 +644,20 @@ msgid "Добавить"
 msgstr "Add"
 
 #: hasta_la_vista_money/expense/templates/expense/add_expense.html:20
-#, fuzzy
-#| msgid "Заполните информацию о вашем кредите для начала отслеживания"
 msgid "Заполните форму для добавления нового расхода"
-msgstr "Fill in your loan information to start tracking"
+msgstr "Fill in the form to add a new expense"
+
 
 #: hasta_la_vista_money/expense/templates/expense/change_expense.html:5
 #: hasta_la_vista_money/expense/templates/expense/change_expense.html:16
-#, fuzzy
-#| msgid "Изменить доходную операцию"
 msgid "Изменить расходную операцию"
-msgstr "Edit income transaction"
+msgstr "Edit expense transaction"
+
 
 #: hasta_la_vista_money/expense/templates/expense/change_expense.html:19
-#, fuzzy
-#| msgid "Изменить доходную операцию"
 msgid "Измените данные расходной операции"
-msgstr "Edit income transaction"
+msgstr "Edit expense transaction data"
+
 
 #: hasta_la_vista_money/expense/templates/expense/change_expense.html:49
 #: hasta_la_vista_money/expense/templates/expense/update_category_expense.html:67
@@ -699,10 +687,9 @@ msgstr "Go back"
 #: hasta_la_vista_money/income/templates/income/income_cat_list.html:14
 #: hasta_la_vista_money/income/templates/income/income_cat_list.html:40
 #: hasta_la_vista_money/income/templates/income/income_cat_list.html:66
-#, fuzzy
-#| msgid "Удалить категорию"
 msgid "Редактировать категорию"
-msgstr "Delete category"
+msgstr "Edit category"
+
 
 #: hasta_la_vista_money/expense/templates/expense/expense_cat_list.html:21
 #: hasta_la_vista_money/expense/templates/expense/expense_cat_list.html:47
@@ -733,10 +720,9 @@ msgstr "Expenses"
 
 #: hasta_la_vista_money/expense/templates/expense/show_expense.html:18
 #: hasta_la_vista_money/income/templates/income/show_income.html:11
-#, fuzzy
-#| msgid "Фильтры и поиск"
 msgid "Фильтр по группе"
-msgstr "Filters and search"
+msgstr "Filter by group"
+
 
 #: hasta_la_vista_money/expense/templates/expense/show_expense.html:24
 #: hasta_la_vista_money/income/templates/income/show_income.html:17
@@ -750,16 +736,14 @@ msgstr "My"
 
 #: hasta_la_vista_money/expense/templates/expense/update_category_expense.html:5
 #: hasta_la_vista_money/expense/templates/expense/update_category_expense.html:17
-#, fuzzy
-#| msgid "Добавить категорию расхода"
 msgid "Изменить категорию расхода"
-msgstr "Add expense category"
+msgstr "Edit expense category"
+
 
 #: hasta_la_vista_money/expense/templates/expense/update_category_expense.html:20
-#, fuzzy
-#| msgid "Добавить категорию расхода"
 msgid "Обновите данные категории расхода"
-msgstr "Add expense category"
+msgstr "Update expense category data"
+
 
 #: hasta_la_vista_money/expense/views.py:192
 msgid "Некорректный идентификатор расхода."
@@ -805,23 +789,20 @@ msgid "Ошибка при добавлении категории. Провер
 msgstr "Error adding category. Please check the entered data."
 
 #: hasta_la_vista_money/expense/views.py:531
-#, fuzzy, python-brace-format
-#| msgid "Категория \"{category_name}\" была успешно добавлена!"
 msgid "Категория \"{category_name}\" была успешно обновлена!"
-msgstr "Category \"{category_name}\" was successfully added!"
+msgstr "Категория \"{category_name}\" была успешно обновлена!"
+
 
 #: hasta_la_vista_money/expense/views.py:540
-#, fuzzy, python-brace-format
-#| msgid "Ошибка при создании категории: {error}"
 msgid "Ошибка при обновлении категории: {error}"
-msgstr "Error creating category: {error}"
+msgstr "Error updating category: {error}"
+
 
 #: hasta_la_vista_money/expense/views.py:547
 #: hasta_la_vista_money/income/views.py:636
-#, fuzzy
-#| msgid "Ошибка при добавлении категории. Проверьте введенные данные."
 msgid "Ошибка при обновлении категории. Проверьте введенные данные."
-msgstr "Error adding category. Please check the entered data."
+msgstr "Error updating category. Please check the entered data."
+
 
 #: hasta_la_vista_money/finance_account/base_forms.py:142
 #: hasta_la_vista_money/finance_account/validators.py:138
@@ -896,6 +877,7 @@ msgid ""
 "валюте.\n"
 "Максимальная длина 20 символов."
 msgstr ""
+"Enter the initial balance that is currently in the bank account\\in cash "
 "currency.\n"
 "Maximum length 20 characters."
 
@@ -909,7 +891,7 @@ msgstr "Select account currency from the list"
 
 #: hasta_la_vista_money/finance_account/forms.py:140
 msgid "Баланс не может быть отрицательным для данного типа счёта"
-msgstr ""
+msgstr "Balance cannot be negative for this account type"
 
 #: hasta_la_vista_money/finance_account/forms.py:232
 msgid "Со счёта:"
@@ -936,10 +918,9 @@ msgid "Дата и время создания"
 msgstr "Creation date and time"
 
 #: hasta_la_vista_money/finance_account/models.py:99
-#, fuzzy
-#| msgid "Дата и время создания"
 msgid "Дата и время обновления"
-msgstr "Creation date and time"
+msgstr "Update date and time"
+
 
 #: hasta_la_vista_money/finance_account/models.py:115
 msgid "Кредитный счёт"
@@ -986,10 +967,9 @@ msgid "Валюта"
 msgstr "Currency"
 
 #: hasta_la_vista_money/finance_account/models.py:159
-#, fuzzy
-#| msgid "Валюта счёта (например, RUB, USD)"
 msgid "Валюта счёта (например, {})"
-msgstr "Account currency (e.g., RUB, USD)"
+msgstr "Account currency (e.g., {})"
+
 
 #: hasta_la_vista_money/finance_account/models.py:170
 #: hasta_la_vista_money/finance_account/models.py:176
@@ -999,7 +979,7 @@ msgstr "Only for credit cards and credit accounts"
 #: hasta_la_vista_money/finance_account/models.py:183
 msgid ""
 "Для кредитных карт: сколько дней длится беспроцентный период (например, 120)"
-msgstr ""
+msgstr "For credit cards: how many days the interest-free period lasts (e.g., 120)"
 "For credit cards: how many days the interest-free period lasts (e.g., 120)"
 
 #: hasta_la_vista_money/finance_account/models.py:193
@@ -1017,16 +997,14 @@ msgid "Дополнительная информация о переводе"
 msgstr "Additional information about the transfer"
 
 #: hasta_la_vista_money/finance_account/models.py:316
-#, fuzzy
-#| msgid "Дата перевода"
 msgid "Лог перевода денег"
-msgstr "Transfer date"
+msgstr "Money transfer log"
+
 
 #: hasta_la_vista_money/finance_account/models.py:317
-#, fuzzy
-#| msgid "Дата перевода"
 msgid "Логи переводов денег"
-msgstr "Transfer date"
+msgstr "Money transfer logs"
+
 
 #: hasta_la_vista_money/finance_account/models.py:332
 #, python-brace-format
@@ -1038,52 +1016,44 @@ msgstr ""
 "account \"{to_account}\". "
 
 #: hasta_la_vista_money/finance_account/serializers.py:85
-#, fuzzy
-#| msgid "Не удалось создать счет. Пожалуйста, попробуйте позже."
 msgid "Не удалось создать счёт без контекста запроса."
-msgstr "Failed to create account. Please try again later."
+msgstr "Failed to create account without request context."
+
 
 #: hasta_la_vista_money/finance_account/serializers.py:91
-#, fuzzy
-#| msgid "Не удалось создать счет. Пожалуйста, попробуйте позже."
 msgid "Не удалось создать счёт без аутентификации пользователя."
-msgstr "Failed to create account. Please try again later."
+msgstr "Failed to create account without user authentication."
+
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:9
-#, fuzzy
-#| msgid "Общий баланс"
 msgid "Тренд баланса"
-msgstr "Total balance"
+msgstr "Balance trend"
+
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:16
-#, fuzzy
-#| msgid "Общий баланс"
 msgid "Текущий баланс"
-msgstr "Total balance"
+msgstr "Current balance"
+
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:43
-#, fuzzy
-#| msgid "Определение:"
 msgid "Изменение"
-msgstr "Definition:"
+msgstr "Change"
+
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:49
-#, fuzzy
-#| msgid "Проценты"
 msgid "Процент"
-msgstr "Interest"
+msgstr "Percent"
+
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:67
-#, fuzzy
-#| msgid "Нет данных о расходах"
 msgid "Нет данных о транзакциях"
-msgstr "No expense data"
+msgstr "No transaction data"
+
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:70
-#, fuzzy
-#| msgid "Тип планирования: расход или доход"
 msgid "Добавьте счет и записывайте расходы и доходы"
-msgstr "Planning type: expense or income"
+msgstr "Add an account and record expenses and income"
+
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:76
 #: hasta_la_vista_money/finance_account/templates/finance_account/account.html:32
@@ -1122,7 +1092,9 @@ msgstr "This is the total of all accounts of all users in your group."
 #: hasta_la_vista_money/finance_account/templates/finance_account/account.html:81
 msgid ""
 "Вы не состоите ни в одной группе. Отображается сумма только ваших счетов."
-msgstr ""
+msgstr "You are not a member of any group. Only the total of your accounts is displayed."
+"You are not a member of any group."
+"Only the total of your accounts is displayed."
 "You are not a member of any group. Only the total of your accounts is "
 "displayed."
 
@@ -1148,53 +1120,47 @@ msgid "Изменить счёт"
 msgstr "Edit account"
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/transfer_money.html:21
-#, fuzzy
-#| msgid "Назад к списку"
 msgid "Назад к счетам"
-msgstr "Back to list"
+msgstr "Back to accounts"
+
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/transfer_money.html:57
 msgid "Перевести"
 msgstr "Transfer"
 
 #: hasta_la_vista_money/finance_account/validators.py:37
-#, fuzzy
-#| msgid "Недостаточно средств"
 msgid "Недостаточно средств на счете"
-msgstr "Insufficient funds"
+msgstr "Insufficient funds in account"
+
 
 #: hasta_la_vista_money/finance_account/validators.py:61
 msgid "Необходимо указать счет-источник"
-msgstr ""
+msgstr "Source account must be specified"
 
 #: hasta_la_vista_money/finance_account/validators.py:66
 msgid "Необходимо указать счет-получатель"
-msgstr ""
+msgstr "Destination account must be specified"
 
 #: hasta_la_vista_money/finance_account/validators.py:71
 msgid "Нельзя переводить деньги на тот же счет"
-msgstr ""
+msgstr "Cannot transfer money to the same account"
 
 #: hasta_la_vista_money/finance_account/validators.py:105
 msgid "Для кредитного счёта необходимо указать банк"
-msgstr ""
+msgstr "Bank must be specified for credit account"
 
 #: hasta_la_vista_money/finance_account/validators.py:108
 msgid "Для кредитного счёта необходимо указать лимит"
-msgstr ""
+msgstr "Limit must be specified for credit account"
 
 #: hasta_la_vista_money/finance_account/validators.py:112
 msgid "Для кредитного счёта необходимо указать дату платежа"
-msgstr ""
+msgstr "Payment date must be specified for credit account"
 
 #: hasta_la_vista_money/finance_account/validators.py:117
-#, fuzzy
-#| msgid ""
-#| "Для кредитных карт: сколько дней длится беспроцентный период (например, "
-#| "120)"
 msgid "Для кредитного счёта необходимо указать льготный период"
-msgstr ""
-"For credit cards: how many days the interest-free period lasts (e.g., 120)"
+msgstr "Для кредитного счёта необходимо указать льготный период"
+
 
 #: hasta_la_vista_money/finance_account/views.py:232
 msgid "Не удалось создать счет. Пожалуйста, попробуйте позже."
@@ -1204,16 +1170,17 @@ msgstr "Failed to create account. Please try again later."
 msgid ""
 "Произошла ошибка при загрузке формы изменения счета. Пожалуйста, попробуйте "
 "позже."
-msgstr ""
+msgstr "An error occurred while loading the account edit form. Please try again later."
+"An error occurred while loading the account edit form."
+"Please try again later."
 "An error occurred while loading the account edit form. Please try again "
 "later."
 
 #: hasta_la_vista_money/finance_account/views.py:319
 #: hasta_la_vista_money/finance_account/views.py:323
-#, fuzzy
-#| msgid "Не удалось создать счет. Пожалуйста, попробуйте позже."
 msgid "Не удалось изменить счет. Пожалуйста, попробуйте позже."
-msgstr "Failed to create account. Please try again later."
+msgstr "Failed to update account. Please try again later."
+
 
 #: hasta_la_vista_money/finance_account/views.py:392
 msgid "Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже."
@@ -1224,10 +1191,9 @@ msgid "Выберите категорию дохода"
 msgstr "Select income category"
 
 #: hasta_la_vista_money/income/forms.py:43
-#, fuzzy
-#| msgid "Сумма пополнения"
 msgid "Счёт пополнения"
-msgstr "Credit amount"
+msgstr "Top-up account"
+
 
 #: hasta_la_vista_money/income/forms.py:44
 msgid "Выберите на какой счёт зачислить доход"
@@ -1259,16 +1225,14 @@ msgid "You do not have permission to add income to this account."
 msgstr "You do not have permission to add income to this account."
 
 #: hasta_la_vista_money/income/services/income_ops.py:71
-#, fuzzy
-#| msgid "You do not have permission to update this income."
 msgid "You do not have permission to modify this income."
-msgstr "You do not have permission to update this income."
+msgstr "You do not have permission to modify this income."
+
 
 #: hasta_la_vista_money/income/services/income_ops.py:214
-#, fuzzy
-#| msgid "You do not have permission to update this income."
 msgid "You do not have permission to copy this income."
-msgstr "You do not have permission to update this income."
+msgstr "You do not have permission to copy this income."
+
 
 #: hasta_la_vista_money/income/templates/income/_income_form.html:45
 #: hasta_la_vista_money/income/templates/income/create_income.html:25
@@ -1282,10 +1246,9 @@ msgid "Добавить категорию дохода"
 msgstr "Add income category"
 
 #: hasta_la_vista_money/income/templates/income/add_category_income.html:20
-#, fuzzy
-#| msgid "Добавить категорию дохода"
 msgid "Создайте новую категорию для доходов"
-msgstr "Add income category"
+msgstr "Create a new category for income"
+
 
 #: hasta_la_vista_money/income/templates/income/change_income.html:5
 #: hasta_la_vista_money/income/templates/income/change_income.html:16
@@ -1293,10 +1256,9 @@ msgid "Изменить доходную операцию"
 msgstr "Edit income transaction"
 
 #: hasta_la_vista_money/income/templates/income/change_income.html:19
-#, fuzzy
-#| msgid "Изменить доходную операцию"
 msgid "Измените данные доходной операции"
-msgstr "Edit income transaction"
+msgstr "Edit income transaction data"
+
 
 #: hasta_la_vista_money/income/templates/income/create_income.html:5
 #: hasta_la_vista_money/income/templates/income/create_income.html:17
@@ -1304,10 +1266,9 @@ msgid "Добавить новый доход"
 msgstr "Add new income"
 
 #: hasta_la_vista_money/income/templates/income/create_income.html:20
-#, fuzzy
-#| msgid "Начало погашения основного долга"
 msgid "Заполните форму для добавления нового дохода"
-msgstr "Start of principal debt repayment"
+msgstr "Fill in the form to add a new income"
+
 
 #: hasta_la_vista_money/income/templates/income/income.html:7
 msgid "Информация о доходе"
@@ -1333,16 +1294,14 @@ msgstr "Add new income transaction"
 
 #: hasta_la_vista_money/income/templates/income/update_category_income.html:5
 #: hasta_la_vista_money/income/templates/income/update_category_income.html:17
-#, fuzzy
-#| msgid "Добавить категорию дохода"
 msgid "Изменить категорию дохода"
-msgstr "Add income category"
+msgstr "Edit income category"
+
 
 #: hasta_la_vista_money/income/templates/income/update_category_income.html:20
-#, fuzzy
-#| msgid "Добавить категорию дохода"
 msgid "Обновите данные категории дохода"
-msgstr "Add income category"
+msgstr "Update income category data"
+
 
 #: hasta_la_vista_money/income/views.py:234
 msgid "All fields must be filled."
@@ -1351,13 +1310,12 @@ msgstr "All fields must be filled."
 #: hasta_la_vista_money/income/views.py:287
 #: hasta_la_vista_money/income/views.py:422
 msgid "Income ID is required"
-msgstr ""
+msgstr "Income ID is required"
 
 #: hasta_la_vista_money/income/views.py:292
-#, fuzzy
-#| msgid "Операция дохода успешно обновлена!"
 msgid "Операция дохода успешно скопирована!"
-msgstr "Income transaction updated successfully!"
+msgstr "Income transaction copied successfully!"
+
 
 #: hasta_la_vista_money/income/views.py:541
 #, python-format
@@ -1369,16 +1327,14 @@ msgid "Такая категория уже была добавлена!"
 msgstr "Such category has already been added!"
 
 #: hasta_la_vista_money/income/views.py:620
-#, fuzzy, python-format
-#| msgid "Category \"%(name)s\" was successfully added!"
 msgid "Category \"%(name)s\" was successfully updated!"
-msgstr "Category \"%(name)s\" was successfully added!"
+msgstr "Category \"%(name)s\" was successfully updated!"
+
 
 #: hasta_la_vista_money/income/views.py:632
-#, fuzzy
-#| msgid "Такая категория уже была добавлена!"
 msgid "Такая категория уже существует!"
-msgstr "Such category has already been added!"
+msgstr "Such category already exists!"
+
 
 #: hasta_la_vista_money/loan/forms.py:41
 msgid "Укажите дату начала кредита"
@@ -1531,7 +1487,7 @@ msgstr "Specify the loan term in months (e.g., 12 for a year)"
 
 #: hasta_la_vista_money/loan/templates/loan/add_loan_modern.html:211
 msgid "После добавления кредита автоматически создастся график платежей"
-msgstr ""
+msgstr "After adding the loan, a payment schedule will be automatically created"
 "After adding the loan, a payment schedule will be automatically created"
 
 #: hasta_la_vista_money/loan/templates/loan/add_loan_modern.html:309
@@ -1675,7 +1631,7 @@ msgid ""
 "Поскольку каждый банк производит расчет коэффициента самостоятельно, как "
 "следствие, возникают различия в округлении получившихся цифр коэффициента. "
 "Данные, предоставленные банком и на этой странице, могут не совпадать!"
-msgstr ""
+msgstr "Since each bank calculates the coefficient independently, there may be differences in rounding of the resulting coefficient numbers. The data provided by the bank and on this page may not match!"
 "Since each bank calculates the coefficient independently, there may be "
 "differences in rounding the resulting coefficient figures. Data provided by "
 "the bank and on this page may not match!"
@@ -1684,7 +1640,7 @@ msgstr ""
 msgid ""
 "Сведения, указанные банком, являются приоритетными, на текущей странице - "
 "справочной информацией для лучшего понимания по планированию бюджета!"
-msgstr ""
+msgstr "Information provided by the bank is priority; information on this page is reference information for better understanding of budget planning!"
 "Information provided by the bank is priority; information on this page is "
 "reference material for better budget planning understanding!"
 
@@ -1832,7 +1788,7 @@ msgid ""
 "Аннуитетный платеж — это способ погашения кредита, при котором заемщик "
 "ежемесячно платит фиксированную сумму. Эта сумма включает как часть "
 "основного долга, так и начисленные проценты."
-msgstr ""
+msgstr "An annuity payment is a method of loan repayment where the borrower pays a fixed amount monthly. This amount includes both part of the principal debt and accrued interest."
 "An annuity payment is a method of loan repayment where the borrower pays a "
 "fixed amount monthly. This amount includes both part of the principal debt "
 "and accrued interest."
@@ -1851,7 +1807,7 @@ msgstr "The monthly payment remains constant throughout the entire loan term."
 msgid ""
 "В начале срока большая часть платежа идет на погашение процентов, а меньшая "
 "— на погашение основного долга."
-msgstr ""
+msgstr "At the beginning of the term, most of the payment goes toward interest repayment, and a smaller part toward principal debt repayment."
 "At the beginning of the term, most of the payment goes toward interest "
 "repayment, while a smaller portion goes toward principal debt repayment."
 
@@ -1859,7 +1815,7 @@ msgstr ""
 msgid ""
 "По мере выплаты кредита соотношение меняется: проценты уменьшаются, а доля "
 "основного долга увеличивается."
-msgstr ""
+msgstr "As the loan is repaid, the ratio changes: interest decreases, and the share of principal debt increases."
 "As the loan is repaid, the ratio changes: interest decreases while the "
 "portion of principal debt increases."
 
@@ -1902,7 +1858,7 @@ msgid ""
 "ежемесячный платеж будет одинаковым, например, 8 885 рублей. В первый месяц "
 "большая часть этой суммы пойдет на проценты, а меньшая — на погашение "
 "основного долга."
-msgstr ""
+msgstr "If you took a loan for 100,000 rubles at 12%% annual rate for 12 months, the monthly payment will be the same, for example, 8,885 rubles. In the first month, most of this amount will go toward interest, and a smaller part toward principal debt repayment."
 "If you took a loan for 100,000 rubles at 12%% annual rate for 12 months, "
 "then the monthly payment will be the same, for example, 8,885 rubles. In the "
 "first month, most of this amount will go toward interest, while a smaller "
@@ -1917,7 +1873,7 @@ msgid ""
 "Дифференцированный платеж — это способ погашения кредита, при котором "
 "заемщик ежемесячно выплачивает фиксированную часть основного долга плюс "
 "проценты на остаток задолженности."
-msgstr ""
+msgstr "A differentiated payment is a method of loan repayment where the borrower monthly pays a fixed part of the principal debt plus interest on the remaining balance."
 "A differentiated payment is a method of loan repayment where the borrower "
 "monthly pays a fixed portion of the principal debt plus interest on the "
 "remaining balance."
@@ -1926,7 +1882,7 @@ msgstr ""
 msgid ""
 "Ежемесячный платеж уменьшается с течением времени, так как проценты "
 "начисляются на остаток долга, который постепенно снижается."
-msgstr ""
+msgstr "The monthly payment decreases over time, as interest is charged on the remaining debt, which gradually decreases."
 "The monthly payment decreases over time as interest is charged on the "
 "remaining debt, which gradually decreases."
 
@@ -1934,7 +1890,7 @@ msgstr ""
 msgid ""
 "Сразу после получения кредита заемщик начинает активно погашать основной "
 "долг."
-msgstr ""
+msgstr "Immediately after receiving the loan, the borrower begins actively repaying the principal debt."
 "Immediately after receiving the loan, the borrower begins actively repaying "
 "the principal debt."
 
@@ -1942,7 +1898,7 @@ msgstr ""
 msgid ""
 "Первоначальные платежи выше, чем при аннуитетной схеме, но общая переплата "
 "по кредиту меньше."
-msgstr ""
+msgstr "Initial payments are higher than with the annuity scheme, but the total overpayment on the loan is less."
 "Initial payments are higher than with the annuity scheme, but the total "
 "overpayment on the loan is less."
 
@@ -2083,7 +2039,9 @@ msgstr "Which method to choose?"
 msgid ""
 "подходит тем, кто ценит стабильность и предсказуемость ежемесячных расходов. "
 "Это удобно для длительных кредитов (например, ипотека)."
-msgstr ""
+msgstr "is suitable for those who value stability and predictability of monthly expenses. This is convenient for long-term loans (e.g., mortgage)."
+"is suitable for those who value stability and predictability of monthly expenses."
+"This is convenient for long-term loans (e.g., mortgage)."
 "is suitable for those who value stability and predictability of monthly "
 "expenses. This is convenient for long-term loans (e.g., mortgage)."
 
@@ -2092,7 +2050,7 @@ msgid ""
 "выгоден тем, кто хочет минимизировать переплату по кредиту и готов к более "
 "высоким платежам в начале срока. Этот вариант чаще используется для "
 "краткосрочных кредитов."
-msgstr ""
+msgstr "is beneficial for those who want to minimize loan overpayment and are ready for higher payments at the beginning of the term. This option is more often used for short-term loans."
 "is beneficial for those who want to minimize loan overpayment and are ready "
 "for higher payments at the beginning of the term. This option is more often "
 "used for short-term loans."
@@ -2105,7 +2063,7 @@ msgstr "Summary:"
 msgid ""
 "Аннуитетный платеж — это равные ежемесячные выплаты, где большая часть денег "
 "в начале идет на проценты."
-msgstr ""
+msgstr "An annuity payment is equal monthly payments where most of the money at the beginning goes toward interest."
 "An annuity payment is equal monthly payments where most of the money goes "
 "toward interest at the beginning."
 
@@ -2113,7 +2071,7 @@ msgstr ""
 msgid ""
 "Дифференцированный платеж — это уменьшающиеся ежемесячные выплаты, где сразу "
 "активно гасится основной долг."
-msgstr ""
+msgstr "A differentiated payment is decreasing monthly payments where the principal debt is actively repaid immediately."
 "A differentiated payment is decreasing monthly payments where the principal "
 "debt is actively repaid immediately."
 
@@ -2241,7 +2199,7 @@ msgstr "Calculated automatically based on total product amounts"
 
 #: hasta_la_vista_money/receipts/forms.py:310
 msgid "Имя файла не указано"
-msgstr ""
+msgstr "Filename not specified"
 
 #: hasta_la_vista_money/receipts/forms.py:314
 msgid "Разрешены только файлы форматов: JPG, JPEG или PNG"
@@ -2252,40 +2210,34 @@ msgid "Выберите файл"
 msgstr "Select file"
 
 #: hasta_la_vista_money/receipts/forms.py:350
-#, fuzzy
-#| msgid "Размер файла не должен превышать 5MB"
 msgid "Размер файла не должен превышать "
-msgstr "File size must not exceed 5MB"
+msgstr "File size must not exceed "
+
 
 #: hasta_la_vista_money/receipts/forms.py:361
-#, fuzzy
-#| msgid "Дата и время покупки"
 msgid "Дата и время чека"
-msgstr "Purchase date and time"
+msgstr "Receipt date and time"
+
 
 #: hasta_la_vista_money/receipts/forms.py:372
-#, fuzzy
-#| msgid "Название магазина"
 msgid "Название продавца"
-msgstr "Store name"
+msgstr "Seller name"
+
 
 #: hasta_la_vista_money/receipts/forms.py:378
-#, fuzzy
-#| msgid "Итоговая сумма:"
 msgid "Торговая точка"
-msgstr "Total amount:"
+msgstr "Point of sale"
+
 
 #: hasta_la_vista_money/receipts/forms.py:384
-#, fuzzy
-#| msgid "Адрес места покупки"
 msgid "Адрес торговой точки"
-msgstr "Purchase location address"
+msgstr "Point of sale address"
+
 
 #: hasta_la_vista_money/receipts/forms.py:390
-#, fuzzy
-#| msgid "Номер документа"
 msgid "Номер чека"
-msgstr "Document number"
+msgstr "Receipt number"
+
 
 #: hasta_la_vista_money/receipts/forms.py:395
 #: hasta_la_vista_money/receipts/templates/receipts/receipts.html:39
@@ -2294,38 +2246,35 @@ msgstr "Total amount"
 
 #: hasta_la_vista_money/receipts/forms.py:408
 msgid "НДС 10%"
-msgstr ""
+msgstr "VAT 10%"
 
 #: hasta_la_vista_money/receipts/forms.py:415
 msgid "НДС 20%"
-msgstr ""
+msgstr "VAT 20%"
 
 #: hasta_la_vista_money/receipts/forms.py:480
-#, fuzzy
-#| msgid "Название категории"
 msgid "Название товара"
-msgstr "Category name"
+msgstr "Product name"
+
 
 #: hasta_la_vista_money/receipts/forms.py:492
 msgid "Цена за единицу"
-msgstr ""
+msgstr "Price per unit"
 
 #: hasta_la_vista_money/receipts/forms.py:501
 #: hasta_la_vista_money/receipts/templates/receipts/review_receipt.html:169
-#, fuzzy
-#| msgid "Количество чеков"
 msgid "Количество"
-msgstr "Number of receipts"
+msgstr "Quantity"
+
 
 #: hasta_la_vista_money/receipts/forms.py:523
 msgid "Тип НДС"
-msgstr ""
+msgstr "VAT type"
 
 #: hasta_la_vista_money/receipts/forms.py:528
-#, fuzzy
-#| msgid "Сумма до"
 msgid "Сумма НДС"
-msgstr "Amount to"
+msgstr "VAT amount"
+
 
 #: hasta_la_vista_money/receipts/models.py:22
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_view.html:22
@@ -2345,79 +2294,72 @@ msgid "Возврат выигрыша или продажи"
 msgstr "Winning or sale refund"
 
 #: hasta_la_vista_money/receipts/models.py:503
-#, fuzzy
-#| msgid "Кассовый чек"
 msgid "Данные чека"
-msgstr "Cash receipt"
+msgstr "Receipt data"
+
 
 #: hasta_la_vista_money/receipts/models.py:504
-#, fuzzy
-#| msgid "Нет данных для отображения"
 msgid "JSON данные чека для редактирования"
-msgstr "No data to display"
+msgstr "JSON receipt data for editing"
+
 
 #: hasta_la_vista_money/receipts/models.py:511
-#, fuzzy
-#| msgid "Дата создания"
 msgid "Дата истечения"
-msgstr "Creation date"
+msgstr "Expiration date"
+
 
 #: hasta_la_vista_money/receipts/models.py:512
-#, fuzzy
-#| msgid "Выберите счёт, с которого будет списана сумма"
 msgid "Время, после которого запись будет удалена"
-msgstr "Select the account from which the amount will be debited"
+msgstr "Time after which the record will be deleted"
+
 
 #: hasta_la_vista_money/receipts/models.py:532
-#, fuzzy
-#| msgid "Кассовый чек"
 msgid "Временный чек"
-msgstr "Cash receipt"
+msgstr "Temporary receipt"
+
 
 #: hasta_la_vista_money/receipts/models.py:533
-#, fuzzy
-#| msgid "Полезные функции:"
 msgid "Временные чеки"
-msgstr "Useful features:"
+msgstr "Temporary receipts"
+
 
 #: hasta_la_vista_money/receipts/services/pending_receipt_service.py:126
 #: hasta_la_vista_money/receipts/services/receipt_creator.py:208
-#, fuzzy
-#| msgid "Добавить продавца"
 msgid "Неизвестный продавец"
-msgstr "Add seller"
+msgstr "Unknown seller"
+
 
 #: hasta_la_vista_money/receipts/services/receipt_ai_prompt.py:89
 msgid "Превышен лимит запросов к OpenAI API: "
-msgstr ""
+msgstr "OpenAI API request limit exceeded: "
 
 #: hasta_la_vista_money/receipts/services/receipt_ai_prompt.py:292
 msgid ""
 "Проверьте правильность имени модели в переменной окружения API_MODEL. "
 "Доступные модели можно проверить в документации GitHub Models API."
-msgstr ""
+msgstr "Check the model name in the API_MODEL environment variable. Available models can be checked in the GitHub Models API documentation."
+"Check the model name in the API_MODEL environment variable."
+"Available models can be checked in the GitHub Models API documentation."
 
 #: hasta_la_vista_money/receipts/services/receipt_ai_prompt.py:414
 msgid "Попробуйте позже или уменьшите размер изображения."
-msgstr ""
+msgstr "Try again later or reduce image size."
 
 #: hasta_la_vista_money/receipts/services/receipt_creator.py:214
 #: hasta_la_vista_money/receipts/services/receipt_creator.py:215
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:99
-#, fuzzy
-#| msgid "Экспорт данных"
 msgid "Нет данных"
-msgstr "Data export"
+msgstr "No data"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/filter.html:12
 msgid "Фильтр чеков"
 msgstr "Receipt filter"
 
 #: hasta_la_vista_money/receipts/templates/receipts/filter.html:14
-#, fuzzy
-#| msgid "Перевести средства"
 msgid "Переключить фильтр"
-msgstr "Transfer funds"
+msgstr "Toggle filter"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/filter.html:40
 msgid "Сумма (от)"
@@ -2441,16 +2383,14 @@ msgid "Фильтровать"
 msgstr "Filter"
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:13
-#, fuzzy
-#| msgid "Регистрация прошла успешно!"
 msgid "Инструкция по загрузке чеков"
-msgstr "Registration completed successfully!"
+msgstr "Receipt upload instructions"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:26
-#, fuzzy
-#| msgid "Примечания"
 msgid "Примечание*"
-msgstr "Notes"
+msgstr "Note*"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:29
 msgid ""
@@ -2460,30 +2400,35 @@ msgid ""
 "личный кабинет автоматически, если при получении чека в онлайн-магазинах "
 "указан ваш номер телефона и/или электронная почта."
 msgstr ""
+"For quality receipt recognition, it is better to get it from the lkdr.nalog."
+"ru website. Registration by phone number. For receipts to appear there, you "
+"need to add them via the \"My Receipts Online\" mobile app, or receipts are "
+"added to your personal account automatically if your phone number and/or "
+"email is specified when receiving a receipt from online stores."
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:35
-#, fuzzy
-#| msgid "Добавить чек"
 msgid "Как загрузить чек?"
-msgstr "Add receipt"
+msgstr "How to upload a receipt?"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:38
 msgid ""
 "Если чек брать с сайта, то лучше сделать скриншот, чтобы была видна вся "
 "основная информация о покупках, продавце и чеке. Пример ниже:"
-msgstr ""
+msgstr "If you take the receipt from the website, it is better to take a screenshot so that all the main information about purchases, seller and receipt is visible. Example below:"
+"If you take the receipt from the website, it is better to take a screenshot so that all the main information about purchases, seller and receipt is visible."
+"Example below:"
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:40
 msgid ""
 "Можно просто скачать чек и загрузить скачанную версию, но за счёт того, что "
 "в чеке будут лишние данные, точность распознавания может быть ниже."
-msgstr ""
+msgstr "You can simply download the receipt and upload the downloaded version, but due to the fact that the receipt will have extra data, recognition accuracy may be lower."
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:46
-#, fuzzy
-#| msgid "Дополнительная информация о переводе"
 msgid "Дополнительная информация"
-msgstr "Additional information about the transfer"
+msgstr "Additional information"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:49
 msgid ""
@@ -2491,11 +2436,11 @@ msgid ""
 "смят, тогда качество распознавания будет выше, иначе данные могут "
 "распознаться неправильно/неполностью.<br>Пример фото чека ниже. Но и в этом "
 "случае распознавание текста чека зависит от мощности используемой модели."
-msgstr ""
+msgstr "You can also upload a photo of the receipt, but the receipt should not be cropped or heavily wrinkled, then the recognition quality will be higher, otherwise the data may be recognized incorrectly/incompletely.<br>Example of a receipt photo below. But even in this case, receipt text recognition depends on the power of the model used."
 
 #: hasta_la_vista_money/receipts/templates/receipts/modal/instruction_modal.html:59
 msgid "Понятно"
-msgstr ""
+msgstr "Got it"
 
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:5
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:16
@@ -2505,43 +2450,37 @@ msgstr "Frequently purchased products"
 
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:18
 msgid "Статистика покупок по месяцам и общая статистика"
-msgstr ""
+msgstr "Purchase statistics by months and overall statistics"
 
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:31
-#, fuzzy
-#| msgid "Статистика по чекам"
 msgid "Статистика по месяцам"
-msgstr "Receipt statistics"
+msgstr "Statistics by months"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:44
-#, fuzzy
-#| msgid "Товар"
 msgid "товаров"
-msgstr "Product"
+msgstr "products"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:66
-#, fuzzy
-#| msgid "Нет данных для отображения"
 msgid "Нет данных за выбранный период"
-msgstr "No data to display"
+msgstr "No data for the selected period"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:81
-#, fuzzy
-#| msgid "Месячная статистика"
 msgid "Общая статистика"
-msgstr "Monthly statistics"
+msgstr "General statistics"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:83
-#, fuzzy
-#| msgid "Расходы за весь период"
 msgid "Топ-10 самых покупаемых товаров за весь период"
-msgstr "Expenses for the entire period"
+msgstr "Top 10 most purchased products for the entire period"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/purchased_products.html:113
-#, fuzzy
-#| msgid "Назад к списку"
 msgid "Назад к списку чеков"
-msgstr "Back to list"
+msgstr "Back to receipts list"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_form.html:7
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_form.html:20
@@ -2553,39 +2492,34 @@ msgstr "Add receipt"
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_form.html:48
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_update.html:48
-#, fuzzy
-#| msgid "Информация о кредите"
 msgid "Информация о чеке"
-msgstr "Loan information"
+msgstr "Receipt information"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_form.html:77
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_update.html:77
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_view.html:81
-#, fuzzy
-#| msgid "Товары:"
 msgid "Товары"
-msgstr "Products:"
+msgstr "Products"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_form.html:105
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_update.html:105
-#, fuzzy
-#| msgid "Добавить чек"
 msgid "Добавить товар"
-msgstr "Add receipt"
+msgstr "Add product"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_form.html:111
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_update.html:111
-#, fuzzy
-#| msgid "Удалить один товар"
 msgid "Удалить товар"
-msgstr "Remove one product"
+msgstr "Remove product"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_update.html:8
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_update.html:21
-#, fuzzy
-#| msgid "Удалить чек"
 msgid "Редактировать чек"
-msgstr "Delete receipt"
+msgstr "Edit receipt"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_update.html:127
 #: hasta_la_vista_money/receipts/templates/receipts/review_receipt.html:251
@@ -2594,10 +2528,9 @@ msgid "Сохранить изменения"
 msgstr "Save changes"
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_view.html:6
-#, fuzzy
-#| msgid "Просмотр"
 msgid "Просмотр чека"
-msgstr "View"
+msgstr "View receipt"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_view.html:17
 msgid "Кассовый чек"
@@ -2610,10 +2543,9 @@ msgstr "Purchase refund"
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_view.html:34
 #: hasta_la_vista_money/receipts/templates/receipts/receipts_block.html:70
 #: hasta_la_vista_money/users/templates/users/dashboard.html:37
-#, fuzzy
-#| msgid "Фильтровать"
 msgid "Редактировать"
-msgstr "Filter"
+msgstr "Edit"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_view.html:70
 #: hasta_la_vista_money/receipts/templates/receipts/receipts_block.html:75
@@ -2642,16 +2574,14 @@ msgid "Списано со счёта:"
 msgstr "Debited from account:"
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_view.html:165
-#, fuzzy
-#| msgid "Дата и время покупки"
 msgid "Дата и время:"
-msgstr "Purchase date and time"
+msgstr "Date and time:"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipt_view.html:177
-#, fuzzy
-#| msgid "Номер документа"
 msgid "Номер чека:"
-msgstr "Document number"
+msgstr "Receipt number:"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipts.html:9
 msgid "Список чеков"
@@ -2674,10 +2604,9 @@ msgid "Добавить продавца"
 msgstr "Add seller"
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipts.html:86
-#, fuzzy
-#| msgid "Загрузка чеков с изображения"
 msgid "Добавить чек из изображения"
-msgstr "Uploading receipts from image"
+msgstr "Add receipt from image"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/receipts_block.html:19
 msgid "Возврат"
@@ -2693,80 +2622,74 @@ msgstr "Products:"
 
 #: hasta_la_vista_money/receipts/templates/receipts/review_receipt.html:7
 #: hasta_la_vista_money/receipts/templates/receipts/review_receipt.html:27
-#, fuzzy
-#| msgid "Загрузка чеков с изображения"
 msgid "Проверка чека перед сохранением"
-msgstr "Uploading receipts from image"
+msgstr "Receipt verification before saving"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/review_receipt.html:30
 msgid ""
 "Проверьте и при необходимости отредактируйте данные чека. После проверки "
 "нажмите \"Всё верно, сохранить\"."
 msgstr ""
+"Check and edit the receipt data if necessary. After checking, click "
+"\"Everything is correct, save\"."
 
 #: hasta_la_vista_money/receipts/templates/receipts/review_receipt.html:152
-#, fuzzy
-#| msgid "Мои чеки"
 msgid "Позиции чека"
-msgstr "My receipts"
+msgstr "Receipt items"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/review_receipt.html:160
-#, fuzzy
-#| msgid "Название группы"
 msgid "Название"
-msgstr "Group name"
+msgstr "Name"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/review_receipt.html:243
-#, fuzzy
-#| msgid "Сохранить"
 msgid "Всё верно, сохранить"
-msgstr "Save"
+msgstr "Everything is correct, save"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:7
 msgid "Загрузка чеков с изображения"
 msgstr "Uploading receipts from image"
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:12
-#, fuzzy
-#| msgid "Загрузка..."
 msgid "Загрузка чека"
-msgstr "Uploading..."
+msgstr "Loading receipt"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:15
 msgid "Загрузите фото чека, выберите счёт и отправьте на распознавание."
-msgstr ""
+msgstr "Upload a photo of the receipt, select an account and send for recognition."
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:21
 msgid "Инструкция"
-msgstr ""
+msgstr "Instructions"
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:35
-#, fuzzy
-#| msgid "Перетащите файл сюда или нажмите для выбора"
 msgid "Перетащите изображение сюда или нажмите для выбора"
-msgstr "Drag file here or click to select"
+msgstr "Drag image here or click to select"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:38
 msgid "JPG, JPEG или PNG, до 5 МБ"
-msgstr ""
+msgstr "JPG, JPEG or PNG, up to 5 MB"
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:41
-#, fuzzy
-#| msgid "Или вставьте изображение из буфера обмена (Ctrl+V)"
 msgid "Также можно вставить изображение из буфера обмена (Ctrl+V)"
-msgstr "Or paste image from clipboard (Ctrl+V)"
+msgstr "You can also paste an image from clipboard (Ctrl+V)"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:54
-#, fuzzy
-#| msgid "Предварительный расчет:"
 msgid "Предварительный просмотр чека"
-msgstr "Preliminary calculation:"
+msgstr "Receipt preview"
+
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:68
 msgid ""
 "Проверьте, что чек снят без бликов и обрезанных краёв — так распознавание "
 "будет точнее."
-msgstr ""
+msgstr "Make sure the receipt is taken without glare and cropped edges - this way recognition will be more accurate."
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:88
 msgid "Загрузить"
@@ -2774,101 +2697,89 @@ msgstr "Upload"
 
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:97
 msgid "После загрузки вы сможете проверить позиции и суммы перед сохранением."
-msgstr ""
+msgstr "After uploading, you will be able to check items and amounts before saving."
 
 #: hasta_la_vista_money/receipts/views.py:493
-#, fuzzy
-#| msgid "Пожалуйста, выберите пользователя."
 msgid "Пожалуйста, исправьте ошибки в форме."
-msgstr "Please select a user."
+msgstr "Please correct the errors in the form."
+
 
 #: hasta_la_vista_money/receipts/views.py:498
-#, fuzzy
-#| msgid "Пожалуйста, выберите пользователя."
 msgid "Пожалуйста, исправьте ошибки в товарах."
-msgstr "Please select a user."
+msgstr "Please correct the errors in products."
+
 
 #: hasta_la_vista_money/receipts/views.py:758
 msgid "Чек успешно распознан! Проверьте данные перед сохранением."
-msgstr ""
+msgstr "Receipt successfully recognized! Check the data before saving."
 
 #: hasta_la_vista_money/receipts/views.py:823
-#, fuzzy
-#| msgid "Произошла ошибка при получении счетов. Пожалуйста, попробуйте позже."
 msgid "Время редактирования чека истекло. Пожалуйста, загрузите чек заново."
-msgstr "An error occurred while retrieving accounts. Please try again later."
+msgstr "Receipt editing time has expired. Please upload the receipt again."
+
 
 #: hasta_la_vista_money/receipts/views.py:927
-#, fuzzy
-#| msgid "Чек успешно добавлен!"
 msgid "Чек успешно сохранён!"
-msgstr "Receipt added successfully!"
+msgstr "Receipt saved successfully!"
+
 
 #: hasta_la_vista_money/receipts/views.py:934
-#, fuzzy
-#| msgid "Ошибка при создании категории: {error}"
 msgid "Ошибка при сохранении чека. Попробуйте ещё раз."
-msgstr "Error creating category: {error}"
+msgstr "Error saving receipt. Please try again."
+
 
 #: hasta_la_vista_money/receipts/views.py:941
 msgid "Изменения сохранены. Проверьте данные перед финальным сохранением."
-msgstr ""
+msgstr "Changes saved. Check the data before final saving."
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:12
 msgid "Финансовые отчёты"
 msgstr "Financial reports"
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:15
-#, fuzzy
-#| msgid "Динамика доходов и расходов"
 msgid "Визуализация ваших доходов, расходов и баланса"
-msgstr "Income and expense dynamics"
+msgstr "Visualization of your income, expenses and balance"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:25
 msgid "Доходы и расходы по месяцам"
 msgstr "Income and expenses by months"
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:28
-#, fuzzy
-#| msgid "Доходы и расходы по месяцам"
 msgid "Сравнение доходов и расходов по месяцам"
-msgstr "Income and expenses by months"
+msgstr "Comparison of income and expenses by months"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:43
 msgid "Баланс по месяцам"
 msgstr "Balance by months"
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:46
-#, fuzzy
-#| msgid "Динамика доходов и расходов"
 msgid "Динамика баланса (доходы минус расходы)"
-msgstr "Income and expense dynamics"
+msgstr "Balance dynamics (income minus expenses)"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:61
-#, fuzzy
-#| msgid "Структура расходов по категориям (все месяцы)"
 msgid "Структура расходов по категориям"
-msgstr "Expense structure by categories (all months)"
+msgstr "Expense structure by categories"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:64
-#, fuzzy
-#| msgid "Структура расходов по категориям (все месяцы)"
 msgid "Распределение расходов по категориям за все месяцы"
-msgstr "Expense structure by categories (all months)"
+msgstr "Distribution of expenses by categories for all months"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:176
 #: hasta_la_vista_money/reports/templates/reports/reports.html:179
 #: hasta_la_vista_money/reports/templates/reports/reports.html:182
-#, fuzzy
-#| msgid "Нет данных для отображения"
 msgid "Нет данных для отображения графиков"
-msgstr "No data to display"
+msgstr "No data to display charts"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:176
-#, fuzzy
-#| msgid "Нет данных для отображения"
 msgid "Добавьте расходы и доходы для отображения графиков"
-msgstr "No data to display"
+msgstr "Add expenses and income to display charts"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:307
 msgid "Баланс (Доходы - Расходы)"
@@ -2879,20 +2790,18 @@ msgid "Баланс:"
 msgstr "Balance:"
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:407
-#, fuzzy
-#| msgid "Нет данных для отображения"
 msgid "Нет данных для отображения графика баланса"
-msgstr "No data to display"
+msgstr "No data to display balance chart"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:459
-#, fuzzy
-#| msgid "Нет данных для отображения"
 msgid "Нет данных для отображения круговой диаграммы"
-msgstr "No data to display"
+msgstr "No data to display pie chart"
+
 
 #: hasta_la_vista_money/reports/templates/reports/reports.html:459
 msgid "Добавьте расходы для отображения структуры по категориям"
-msgstr ""
+msgstr "Add expenses to display structure by categories"
 
 #: hasta_la_vista_money/services/income.py:57
 msgid "You do not have permission to update this income."
@@ -2907,54 +2816,47 @@ msgid "404 - Страница не найдена"
 msgstr "404 - Page not found"
 
 #: hasta_la_vista_money/templates/404.html:26
-#, fuzzy
-#| msgid "404 - Страница не найдена"
 msgid "Страница не найдена"
-msgstr "404 - Page not found"
+msgstr "Page not found"
+
 
 #: hasta_la_vista_money/templates/404.html:30
 msgid "Извините, страница, которую вы ищете, не существует или была удалена."
-msgstr ""
+msgstr "Sorry, the page you are looking for does not exist or has been removed."
 "Sorry, the page you are looking for does not exist or has been removed."
 
 #: hasta_la_vista_money/templates/404.html:38
 #: hasta_la_vista_money/templates/500.html:56
 msgid "На главную"
-msgstr ""
+msgstr "Home"
 
 #: hasta_la_vista_money/templates/500.html:5
-#, fuzzy
-#| msgid "Ошибка на сервере"
 msgid "500 - Ошибка на сервере"
-msgstr "Server error"
+msgstr "500 - Server error"
+
 
 #: hasta_la_vista_money/templates/500.html:26
 msgid "Ошибка на сервере"
 msgstr "Server error"
 
 #: hasta_la_vista_money/templates/500.html:30
-#, fuzzy
-#| msgid ""
-#| "Произошла ошибка при загрузке формы изменения счета. Пожалуйста, "
-#| "попробуйте позже."
 msgid ""
 "Произошла внутренняя ошибка сервера. Мы уже работаем над её устранением. "
 "Пожалуйста, попробуйте позже."
-msgstr ""
-"An error occurred while loading the account edit form. Please try again "
-"later."
+msgstr "An internal server error occurred. We are already working on fixing it. Please try again later."
+
 
 #: hasta_la_vista_money/templates/500.html:40
 msgid "Что делать?"
-msgstr ""
+msgstr "What to do?"
 
 #: hasta_la_vista_money/templates/500.html:43
 msgid "Обновите страницу через несколько минут"
-msgstr ""
+msgstr "Refresh the page in a few minutes"
 
 #: hasta_la_vista_money/templates/500.html:44
 msgid "Проверьте, правильно ли введен адрес"
-msgstr ""
+msgstr "Check if the address is entered correctly"
 
 #: hasta_la_vista_money/templates/500.html:45
 msgid ""
@@ -2962,12 +2864,14 @@ msgid ""
 "dark:text-orange-400 hover:underline\" href=\"https://github.com/TurtleOld/"
 "hasta-la-vista-money/issues\">issue</a>"
 msgstr ""
+"If the problem persists, please report it to the <a class=\"text-orange-600 "
+"dark:text-orange-400 hover:underline\" href=\"https://github.com/TurtleOld/"
+"hasta-la-vista-money/issues\">issue tracker</a>"
 
 #: hasta_la_vista_money/templates/500.html:63
-#, fuzzy
-#| msgid "Добавить кредит"
 msgid "Обновить страницу"
-msgstr "Add loan"
+msgstr "Refresh page"
+
 
 #: hasta_la_vista_money/templates/_bottom_nav.html:33
 #: hasta_la_vista_money/templates/_mobile_menu.html:23
@@ -2976,16 +2880,15 @@ msgid "Чеки"
 msgstr "Receipts"
 
 #: hasta_la_vista_money/templates/_mobile_menu.html:9
-#, fuzzy
-#| msgid "Закрыть"
 msgid "Закрыть меню"
-msgstr "Close"
+msgstr "Close menu"
+
 
 #: hasta_la_vista_money/templates/_mobile_menu.html:75
 #: hasta_la_vista_money/templates/header.html:107
 #: hasta_la_vista_money/users/templates/users/dashboard.html:5
 msgid "Дашборд"
-msgstr ""
+msgstr "Dashboard"
 
 #: hasta_la_vista_money/templates/_mobile_menu.html:83
 #: hasta_la_vista_money/templates/header.html:134
@@ -2994,7 +2897,7 @@ msgstr "Profile"
 
 #: hasta_la_vista_money/templates/header.html:9
 msgid "Открыть меню"
-msgstr ""
+msgstr "Open menu"
 
 #: hasta_la_vista_money/templates/header.html:42
 msgid "Финансы"
@@ -3114,89 +3017,77 @@ msgstr "Select group."
 
 #: hasta_la_vista_money/users/forms.py:280
 msgid "PDF файл выписки"
-msgstr ""
+msgstr "PDF statement file"
 
 #: hasta_la_vista_money/users/forms.py:287
-#, fuzzy
-#| msgid "Скачайте список всех ваших кредитов в формате CSV"
 msgid "Загрузите банковскую выписку в формате PDF"
-msgstr "Download a list of all your loans in CSV format"
+msgstr "Upload bank statement in PDF format"
+
 
 #: hasta_la_vista_money/users/forms.py:289
-#, fuzzy
-#| msgid "Пожалуйста, выберите группу."
 msgid "Пожалуйста, выберите файл для загрузки."
-msgstr "Please select a group."
+msgstr "Please select a file to upload."
+
 
 #: hasta_la_vista_money/users/forms.py:300
-#, fuzzy
-#| msgid "Выберите счёт, на который будет зачислена сумма"
 msgid "Выберите счёт, на который будут записаны операции"
-msgstr "Select the account to which the amount will be credited"
+msgstr "Select the account to which operations will be recorded"
+
 
 #: hasta_la_vista_money/users/forms.py:302
-#, fuzzy
-#| msgid "Пожалуйста, выберите группу."
 msgid "Пожалуйста, выберите счёт."
-msgstr "Please select a group."
+msgstr "Please select an account."
+
 
 #: hasta_la_vista_money/users/forms.py:312
-#, fuzzy
-#| msgid "Разрешены только файлы форматов: JPG, JPEG или PNG"
 msgid "Разрешены только PDF файлы."
-msgstr "Only JPG, JPEG or PNG format files are allowed"
+msgstr "Only PDF files are allowed."
+
 
 #: hasta_la_vista_money/users/forms.py:316
-#, fuzzy
-#| msgid "Размер файла не должен превышать 5MB"
 msgid "Размер файла не должен превышать 10 МБ."
-msgstr "File size must not exceed 5MB"
+msgstr "File size must not exceed 10 MB."
+
 
 #: hasta_la_vista_money/users/models.py:78
-#, fuzzy
-#| msgid "Бюджет по категориям"
 msgid "Виджет дашборда"
-msgstr "Budget by categories"
+msgstr "Dashboard widget"
+
 
 #: hasta_la_vista_money/users/models.py:79
-#, fuzzy
-#| msgid "Бюджет по категориям"
 msgid "Виджеты дашборда"
-msgstr "Budget by categories"
+msgstr "Dashboard widgets"
+
 
 #: hasta_la_vista_money/users/models.py:111
-#, fuzzy
-#| msgid "Все кредиты"
 msgid "В очереди"
-msgstr "All loans"
+msgstr "In queue"
+
 
 #: hasta_la_vista_money/users/models.py:112
 msgid "Обрабатывается"
-msgstr ""
+msgstr "Processing"
 
 #: hasta_la_vista_money/users/models.py:113
 msgid "Завершено"
-msgstr ""
+msgstr "Completed"
 
 #: hasta_la_vista_money/users/models.py:114
-#, fuzzy
-#| msgid "Ошибка: {error}"
 msgid "Ошибка"
-msgstr "Error: {error}"
+msgstr "Error"
+
 
 #: hasta_la_vista_money/users/models.py:137
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:6
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:15
-#, fuzzy
-#| msgid "Загрузка чеков с изображения"
 msgid "Загрузка банковской выписки"
-msgstr "Uploading receipts from image"
+msgstr "Bank statement upload"
+
 
 #: hasta_la_vista_money/users/models.py:138
-#, fuzzy
-#| msgid "Загрузка чеков с изображения"
 msgid "Загрузки банковских выписок"
-msgstr "Uploading receipts from image"
+msgstr "Bank statement uploads"
+
 
 #: hasta_la_vista_money/users/services/groups.py:96
 msgid "Пользователь уже состоит в выбранной группе."
@@ -3218,196 +3109,173 @@ msgstr "User successfully removed from group."
 msgid ""
 "Загрузите PDF файл с банковской выпиской для автоматического создания "
 "операций"
-msgstr ""
+msgstr "Upload a PDF file with bank statement for automatic transaction creation"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:33
 msgid "Как это работает?"
-msgstr ""
+msgstr "How does it work?"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:37
-#, fuzzy
-#| msgid "Высчитывается автоматически на основании цены и количества"
 msgid "Система автоматически извлечет данные из выписки"
-msgstr "Calculated automatically based on price and quantity"
+msgstr "The system will automatically extract data from the statement"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:38
 msgid "Положительные суммы будут записаны как доходы"
-msgstr ""
+msgstr "Positive amounts will be recorded as income"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:39
 msgid "Отрицательные суммы будут записаны как расходы"
-msgstr ""
+msgstr "Negative amounts will be recorded as expenses"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:40
-#, fuzzy
-#| msgid "Выберите родительскую категорию дохода для создаваемой категории"
 msgid "Детали платежа будут использованы для создания категорий"
-msgstr "Select the parent income category for the category being created"
+msgstr "Payment details will be used to create categories"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:84
-#, fuzzy
-#| msgid "Загрузите изображение чека"
 msgid "Загрузить и обработать"
-msgstr "Upload receipt image"
+msgstr "Upload and process"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:97
-#, fuzzy
-#| msgid "Обработать изображение"
 msgid "Обработка выписки..."
-msgstr "Process image"
+msgstr "Processing statement..."
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:109
-#, fuzzy
-#| msgid "Информация"
 msgid "Инициализация..."
-msgstr "Information"
+msgstr "Initializing..."
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:111
-#, fuzzy
-#| msgid "Обработать изображение"
 msgid "Обработано транзакций:"
-msgstr "Process image"
+msgstr "Transactions processed:"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:124
 msgid "Важно!"
-msgstr ""
+msgstr "Important!"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:128
 msgid "Убедитесь, что выписка в формате PDF"
-msgstr ""
+msgstr "Make sure the statement is in PDF format"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:129
 msgid "Максимальный размер файла - 10 МБ"
-msgstr ""
+msgstr "Maximum file size - 10 MB"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:130
 msgid "Операции будут привязаны к выбранному счёту"
-msgstr ""
+msgstr "Transactions will be linked to the selected account"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:131
-#, fuzzy
-#| msgid "После добавления кредита автоматически создастся график платежей"
 msgid "После обработки проверьте созданные операции и категории"
-msgstr ""
-"After adding the loan, a payment schedule will be automatically created"
+msgstr "After processing, check the created transactions and categories"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:156
-#, fuzzy
-#| msgid "Выберите кредит..."
 msgid "В очереди..."
-msgstr "Select loan..."
+msgstr "In queue..."
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:157
 msgid "Файл загружен"
-msgstr ""
+msgstr "File uploaded"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:158
 msgid "Обрабатывается..."
-msgstr ""
+msgstr "Processing..."
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:159
-#, fuzzy
-#| msgid "Обработать изображение"
 msgid "Обработка выписки"
-msgstr "Process image"
+msgstr "Processing statement"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:160
-#, fuzzy
-#| msgid "Группа успешно создана"
 msgid "Завершено! Создано:"
-msgstr "Group successfully created"
+msgstr "Completed! Created:"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:161
-#, fuzzy
-#| msgid "Доход"
 msgid "доходов"
-msgstr "Income"
+msgstr "income"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:162
-#, fuzzy
-#| msgid "Расход"
 msgid "расходов"
-msgstr "Expense"
+msgstr "expenses"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:163
 msgid "Готово!"
-msgstr ""
+msgstr "Done!"
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:164
-#, fuzzy
-#| msgid "Ошибка: {error}"
 msgid "Ошибка:"
-msgstr "Error: {error}"
+msgstr "Error:"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:165
-#, fuzzy
-#| msgid "Ежемесячная ставка:"
 msgid "Неизвестная ошибка"
-msgstr "Monthly rate:"
+msgstr "Unknown error"
+
 
 #: hasta_la_vista_money/users/templates/users/bank_statement_upload.html:166
-#, fuzzy
-#| msgid "Ошибка на сервере"
 msgid "Ошибка обработки"
-msgstr "Server error"
+msgstr "Processing error"
+
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:20
-#, fuzzy
-#| msgid "Добавить новый доход"
 msgid "Интерактивный дашборд"
-msgstr "Add new income"
+msgstr "Interactive dashboard"
+
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:23
 msgid "Может содержать ошибки подсчётов"
-msgstr ""
+msgstr "May contain calculation errors"
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:31
-#, fuzzy
-#| msgid "Добавить кредит"
 msgid "Добавить виджет"
-msgstr "Add loan"
+msgstr "Add widget"
+
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:44
-#, fuzzy
-#| msgid "Период"
 msgid "Период:"
-msgstr "Period"
+msgstr "Period:"
+
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:48
 msgid "Квартал"
-msgstr ""
+msgstr "Quarter"
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:49
-#, fuzzy
-#| msgid "Мои"
 msgid "Год"
-msgstr "My"
+msgstr "Year"
+
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:60
-#, fuzzy
-#| msgid "Нет данных для отображения"
 msgid "Добавьте виджеты для отображения данных"
-msgstr "No data to display"
+msgstr "Add widgets to display data"
+
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:78
-#, fuzzy
-#| msgid "Выберите кредит..."
 msgid "Выберите виджет"
-msgstr "Select loan..."
+msgstr "Select widget"
+
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:113
-#, fuzzy
-#| msgid "Настройки"
 msgid "Настройки виджета"
-msgstr "Settings"
+msgstr "Widget settings"
+
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:127
 msgid "Ширина (колонок 1-12)"
-msgstr ""
+msgstr "Width (columns 1-12)"
 
 #: hasta_la_vista_money/users/templates/users/dashboard.html:133
 msgid "Высота (пикселей)"
-msgstr ""
+msgstr "Height (pixels)"
 
 #: hasta_la_vista_money/users/templates/users/login.html:5
 msgid "Страница входа"
@@ -3418,10 +3286,9 @@ msgid "Удобная домашняя бухгалтерия. Управляй 
 msgstr "Convenient home accounting. Manage your family finances wisely!"
 
 #: hasta_la_vista_money/users/templates/users/login.html:23
-#, fuzzy
-#| msgid "Предупреждение:"
 msgid "Вход в приложение"
-msgstr "Warning:"
+msgstr "Application login"
+
 
 #: hasta_la_vista_money/users/templates/users/login.html:66
 #: hasta_la_vista_money/users/views.py:189
@@ -3605,10 +3472,9 @@ msgid "Отчеты и аналитика"
 msgstr "Reports and analytics"
 
 #: hasta_la_vista_money/users/templates/users/profile.html:263
-#, fuzzy
-#| msgid "Загрузка чеков с изображения"
 msgid "Загрузка банковских выписок"
-msgstr "Uploading receipts from image"
+msgstr "Bank statement uploads"
+
 
 #: hasta_la_vista_money/users/templates/users/profile.html:271
 msgid "Создать группу"
@@ -3637,11 +3503,11 @@ msgstr "Theme"
 
 #: hasta_la_vista_money/users/templates/users/profile.html:323
 msgid "Тур"
-msgstr ""
+msgstr "Tour"
 
 #: hasta_la_vista_money/users/templates/users/profile.html:326
 msgid "Включить тур по сайту"
-msgstr ""
+msgstr "Enable site tour"
 
 #: hasta_la_vista_money/users/templates/users/registration.html:5
 #: hasta_la_vista_money/users/templates/users/registration.html:17
@@ -3650,17 +3516,16 @@ msgstr "New user registration"
 
 #: hasta_la_vista_money/users/templates/users/registration.html:20
 msgid "Создайте аккаунт для управления личными финансами"
-msgstr ""
+msgstr "Create an account to manage personal finances"
 
 #: hasta_la_vista_money/users/templates/users/registration.html:50
 msgid "Зарегистрироваться"
 msgstr "Register"
 
 #: hasta_la_vista_money/users/templates/users/set_password.html:18
-#, fuzzy
-#| msgid "Установить новый пароль"
 msgid "Установка нового пароля"
-msgstr "Set new password"
+msgstr "Setting new password"
+
 
 #: hasta_la_vista_money/users/templates/users/statistics.html:27
 msgid "Всего счетов"
@@ -3742,7 +3607,7 @@ msgstr "User successfully removed from group"
 msgid ""
 "Банковская выписка загружена и будет обработана в фоновом режиме. Данные "
 "появятся в расходах и доходах в течение нескольких минут."
-msgstr ""
+msgstr "Bank statement uploaded and will be processed in the background. Data will appear in expenses and income within a few minutes."
 
 #~ msgid "Вы не авторизованы"
 #~ msgstr "You are not authorized"
