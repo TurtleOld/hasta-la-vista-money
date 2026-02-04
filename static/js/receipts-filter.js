@@ -448,19 +448,21 @@
             throw new Error('Invalid URL provided');
         }
 
+
         try {
             const urlObj = new URL(url, window.location.origin);
             if (urlObj.origin !== window.location.origin) {
                 throw new Error('URL must be from same origin');
             }
 
+            const validatedUrl = urlObj.toString();
+
             options.credentials = 'include';
             options.headers = options.headers || {};
             options.headers['X-Requested-With'] = 'XMLHttpRequest';
 
-            let response = await fetch(url, options);
+            let response = await fetch(validatedUrl, options);
 
-            // Обработка 401 - попытка обновить токен
             if (response.status === 401) {
                 const refreshResp = await fetch('/authentication/token/refresh/', {
                     method: 'POST',
@@ -469,7 +471,7 @@
                 });
 
                 if (refreshResp.ok) {
-                    return fetch(url, options);
+                    return fetch(validatedUrl, options);
                 }
             }
 
