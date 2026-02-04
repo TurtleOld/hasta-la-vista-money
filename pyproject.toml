@@ -144,14 +144,17 @@ known-first-party = ["hasta_la_vista_money"]
   "S603", # do not require `shell=True`
   "S607", # partial executable paths
   "SLF001", # private member access in tests
+  "PD901", # df is acceptable in tests
 ]
 "**/test_*.py" = [
   "SLF001", # private member access in tests
   "S106",
+  "PD901", # df is acceptable in tests
 ]
 "**/tests.py" = [
   "SLF001", # private member access in tests
   "S106",
+  "PD901", # df is acceptable in tests
 ]
 "**/forms.py" = [
   "RUF012", # Django Meta classes don't support ClassVar
