@@ -441,6 +441,20 @@
     }
 
     /**
+     * Список разрешённых путей API для безопасных запросов
+     */
+    const ALLOWED_API_PATHS = [
+        '/api/receipts/product-autocomplete/'
+    ];
+
+    /**
+     * Проверяет, является ли путь разрешённым для API запросов
+     */
+    function isAllowedApiPath(pathname) {
+        return ALLOWED_API_PATHS.some(allowed => pathname.startsWith(allowed));
+    }
+
+    /**
      * Fetch с авторизацией
      */
     async function fetchWithAuth(url, options = {}) {
@@ -448,38 +462,43 @@
             throw new Error('Invalid URL provided');
         }
 
+        // Парсим и валидируем URL
+        const urlObj = new URL(url, window.location.origin);
 
-        try {
-            const urlObj = new URL(url, window.location.origin);
-            if (urlObj.origin !== window.location.origin) {
-                throw new Error('URL must be from same origin');
-            }
-
-            const validatedUrl = urlObj.toString();
-
-            options.credentials = 'include';
-            options.headers = options.headers || {};
-            options.headers['X-Requested-With'] = 'XMLHttpRequest';
-
-            let response = await fetch(validatedUrl, options);
-
-            if (response.status === 401) {
-                const refreshResp = await fetch('/authentication/token/refresh/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include'
-                });
-
-                if (refreshResp.ok) {
-                    return fetch(validatedUrl, options);
-                }
-            }
-
-            return response;
-        } catch (e) {
-            console.error('Fetch error:', e);
-            throw e;
+        // Проверка same-origin
+        if (urlObj.origin !== window.location.origin) {
+            throw new Error('URL must be from same origin');
         }
+
+        // Проверка на разрешённые пути API
+        if (!isAllowedApiPath(urlObj.pathname)) {
+            throw new Error('URL path is not in the allowed API paths list');
+        }
+
+        // Используем только pathname и search для построения безопасного URL
+        const safeUrl = `${urlObj.pathname}${urlObj.search}`;
+
+        options.credentials = 'include';
+        options.headers = options.headers || {};
+        options.headers['X-Requested-With'] = 'XMLHttpRequest';
+
+        let response = await fetch(safeUrl, options);
+
+        // Обработка 401 - попытка обновить токен
+        if (response.status === 401) {
+            const tokenRefreshUrl = '/authentication/token/refresh/';
+            const refreshResp = await fetch(tokenRefreshUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
+            });
+
+            if (refreshResp.ok) {
+                return fetch(safeUrl, options);
+            }
+        }
+
+        return response;
     }
 
     // Экспорт функций для использования в других модулях
