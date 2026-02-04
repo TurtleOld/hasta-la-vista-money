@@ -1,7 +1,7 @@
 """Tests for bank statement upload functionality."""
 
 import tempfile
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import ClassVar
@@ -1185,7 +1185,9 @@ class TestBankStatementParserAdvanced(TestCase):
             transaction = parser._parse_transaction_row(row, df, 1)
 
             # Basic validation - just check it returns a dict or None
-            self.assertTrue(transaction is None or isinstance(transaction, dict))
+            self.assertTrue(
+                transaction is None or isinstance(transaction, dict),
+            )
         finally:
             pdf_path.unlink()
 
@@ -1212,7 +1214,9 @@ class TestBankStatementParserAdvanced(TestCase):
             transaction = parser._parse_transaction_row(row, df, 1)
 
             # Basic validation - just check it returns a dict or None
-            self.assertTrue(transaction is None or isinstance(transaction, dict))
+            self.assertTrue(
+                transaction is None or isinstance(transaction, dict),
+            )
         finally:
             pdf_path.unlink()
 
@@ -1736,7 +1740,7 @@ class TestBankStatementProcessIntegration(TestCase):
             pdf_path = Path(temp_file.name)
 
         try:
-            process_bank_statement(
+            result = process_bank_statement(
                 pdf_path=pdf_path,
                 account=self.account,
                 user=self.user,
@@ -1754,11 +1758,11 @@ class TestBankStatementProcessIntegration(TestCase):
     ) -> None:
         """Test that existing categories are reused."""
         # Create existing categories
-        existing_income = IncomeCategory.objects.create(
+        IncomeCategory.objects.create(
             user=self.user,
             name='Зарплата Январь',
         )
-        existing_expense = ExpenseCategory.objects.create(
+        ExpenseCategory.objects.create(
             user=self.user,
             name='Продукты Магнит',
         )
@@ -1879,9 +1883,9 @@ class TestBankStatementEdgeCases(TestCase):
         try:
             parser = BankStatementParser(pdf_path)
 
-            # The _clean_description method only strips trailing special characters
-            # from the cleaned result, not all special characters.
-            # It strips ' ,;.' from the end.
+            # The _clean_description method only strips trailing
+            # special characters from the cleaned result, not all
+            # special characters. It strips ' ,;.' from the end.
             result = parser._clean_description(
                 'Покупка товаров в магазине, г Москва, ул Тверская',
             )

@@ -1,3 +1,4 @@
+/* eslint-env browser */
 /**
  * Receipt Filter Module
  * Модуль для управления фильтром чеков с автодополнением и множественным выбором товаров
@@ -103,7 +104,7 @@
     function loadSelectedProductsFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const productNames = urlParams.get('product_names');
-        
+
         if (productNames) {
             try {
                 const decoded = decodeURIComponent(productNames);
@@ -148,10 +149,10 @@
      */
     async function handleInput() {
         const query = elements.productInput.value.trim();
-        
+
         // Скрываем спиннер
         hideSpinner();
-        
+
         if (query.length === 0) {
             hideDropdown();
             return;
@@ -163,7 +164,7 @@
         try {
             const response = await fetchWithAuth(`/api/receipts/product-autocomplete/?q=${encodeURIComponent(query)}`);
             hideSpinner();
-            
+
             if (!response.ok) {
                 hideDropdown();
                 return;
@@ -173,7 +174,7 @@
             state.autocompleteResults = (data.results || []).filter(
                 product => !state.selectedProducts.has(product)
             );
-            
+
             showDropdown();
         } catch (e) {
             hideSpinner();
@@ -187,7 +188,7 @@
      */
     function handleKeydown(e) {
         const items = elements.autocompleteDropdown.querySelectorAll('.autocomplete-item');
-        
+
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             state.currentFocus++;
@@ -238,7 +239,7 @@
      * Обработка клика вне dropdown
      */
     function handleDocumentClick(e) {
-        if (!elements.productInput.contains(e.target) && 
+        if (!elements.productInput.contains(e.target) &&
             !elements.autocompleteDropdown.contains(e.target)) {
             hideDropdown();
         }
@@ -247,7 +248,7 @@
     /**
      * Обработка отправки формы
      */
-    function handleFormSubmit(e) {
+    function handleFormSubmit() {
         // Обновляем скрытое поле с выбранными товарами
         elements.selectedProductsInput.value = Array.from(state.selectedProducts).join(',');
     }
@@ -262,13 +263,13 @@
         }
 
         elements.autocompleteDropdown.innerHTML = '';
-        
+
         state.autocompleteResults.forEach((product, index) => {
             const item = document.createElement('div');
             item.className = 'autocomplete-item px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors duration-150';
             item.textContent = product;
             item.dataset.index = index;
-            
+
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -277,19 +278,19 @@
                 hideDropdown();
                 elements.productInput.focus();
             });
-            
+
             elements.autocompleteDropdown.appendChild(item);
         });
 
         // Позиционируем dropdown относительно viewport (fixed), чтобы не обрезался родительскими контейнерами
         // Это гарантирует, что dropdown будет отображаться поверх всех элементов независимо от прокрутки
         const wrapperRect = elements.productInputWrapper.getBoundingClientRect();
-        
+
         // Вычисляем margin-top из класса mt-1 (0.25rem) для точного позиционирования
         // Используем getComputedStyle для получения актуального значения margin
         const dropdownComputedStyle = window.getComputedStyle(elements.autocompleteDropdown);
         const marginTop = parseFloat(dropdownComputedStyle.marginTop) || 4; // mt-1 = 0.25rem ≈ 4px
-        
+
         // Устанавливаем точное позиционирование относительно viewport
         elements.autocompleteDropdown.style.position = 'fixed';
         // Левая граница строго соответствует левой границе обертки инпута
@@ -318,10 +319,10 @@
      */
     function setActiveItem(items) {
         removeActive(items);
-        
+
         if (state.currentFocus >= items.length) state.currentFocus = 0;
         if (state.currentFocus < 0) state.currentFocus = items.length - 1;
-        
+
         if (items[state.currentFocus]) {
             items[state.currentFocus].classList.add('active', 'bg-green-100', 'dark:bg-green-900/30');
             items[state.currentFocus].scrollIntoView({ block: 'nearest' });
@@ -342,7 +343,7 @@
      */
     function addProduct(productName) {
         if (!productName || state.selectedProducts.has(productName)) return;
-        
+
         state.selectedProducts.add(productName);
         renderSelectedProducts();
     }
@@ -361,7 +362,7 @@
     function renderSelectedProducts() {
         // Очищаем контейнер
         elements.selectedProductsContainer.innerHTML = '';
-        
+
         if (state.selectedProducts.size === 0) {
             // Показываем placeholder
             elements.selectedProductsContainer.appendChild(elements.selectedProductsPlaceholder);
@@ -385,11 +386,11 @@
     function createProductTag(productName) {
         const tag = document.createElement('div');
         tag.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-full transition-all duration-200 hover:bg-green-200 dark:hover:bg-green-900/50 group';
-        
+
         const nameSpan = document.createElement('span');
         nameSpan.textContent = productName;
         nameSpan.className = 'max-w-[200px] truncate';
-        
+
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
         removeButton.className = 'flex items-center justify-center w-4 h-4 text-green-600 dark:text-green-500 hover:text-green-800 dark:hover:text-green-300 transition-colors duration-150';
@@ -400,10 +401,10 @@
         `;
         removeButton.setAttribute('aria-label', `Удалить ${productName}`);
         removeButton.addEventListener('click', () => removeProduct(productName));
-        
+
         tag.appendChild(nameSpan);
         tag.appendChild(removeButton);
-        
+
         return tag;
     }
 
@@ -466,7 +467,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include'
                 });
-                
+
                 if (refreshResp.ok) {
                     return fetch(url, options);
                 }

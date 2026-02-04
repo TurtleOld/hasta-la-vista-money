@@ -110,7 +110,7 @@ class CompressorNonceMiddleware:
             return None
 
         safe_nonce = self._escape_nonce(nonce)
-        return safe_nonce if safe_nonce else None
+        return safe_nonce or None
 
     def _is_html_response(self, response: Any) -> bool:
         """Check if response is HTML content."""
