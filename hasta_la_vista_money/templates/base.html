@@ -32,10 +32,10 @@
             <div class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-none" role="status" aria-live="polite">
                 <div class="flex flex-col gap-3">
                     {% for message in messages %}
-                        <div class="pointer-events-auto theme-fade [animation:fadeInUp_0.3s_ease-out,fadeOutSlideUp_0.35s_ease-in_4.2s_forwards]">
-                            <div class="relative overflow-hidden rounded-2xl border shadow-xl backdrop-blur supports-[backdrop-filter]:bg-gray-950/75 dark:supports-[backdrop-filter]:bg-white/70 {% if 'error' in message.tags or 'danger' in message.tags %}border-red-400/30 bg-gradient-to-r from-gray-950/90 to-red-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-red-400 before:to-rose-400 dark:border-red-200/70 dark:from-red-50/90 dark:to-white/70{% elif 'success' in message.tags %}border-emerald-400/30 bg-gradient-to-r from-gray-950/90 to-emerald-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-emerald-400 before:to-green-400 dark:border-emerald-200/70 dark:from-emerald-50/90 dark:to-white/70{% elif 'warning' in message.tags %}border-orange-400/30 bg-gradient-to-r from-gray-950/90 to-orange-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-orange-400 before:to-amber-400 dark:border-orange-200/70 dark:from-orange-50/90 dark:to-white/70{% else %}border-blue-400/30 bg-gradient-to-r from-gray-950/90 to-blue-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-blue-400 before:to-indigo-400 dark:border-blue-200/70 dark:from-blue-50/90 dark:to-white/70{% endif %}">
+                        <div class="pointer-events-auto theme-fade animate-[fadeInUp_0.3s_ease-out,fadeOutSlideUp_0.35s_ease-in_4.2s_forwards]">
+                            <div class="relative overflow-hidden rounded-2xl border shadow-xl backdrop-blur supports-backdrop-filter:bg-gray-950/75 dark:supports-backdrop-filter:bg-white/70 {% if 'error' in message.tags or 'danger' in message.tags %}border-red-400/30 bg-linear-to-r from-gray-950/90 to-red-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-linear-to-b before:from-red-400 before:to-rose-400 dark:border-red-200/70 dark:from-red-50/90 dark:to-white/70{% elif 'success' in message.tags %}border-emerald-400/30 bg-linear-to-r from-gray-950/90 to-emerald-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-linear-to-b before:from-emerald-400 before:to-green-400 dark:border-emerald-200/70 dark:from-emerald-50/90 dark:to-white/70{% elif 'warning' in message.tags %}border-orange-400/30 bg-linear-to-r from-gray-950/90 to-orange-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-linear-to-b before:from-orange-400 before:to-amber-400 dark:border-orange-200/70 dark:from-orange-50/90 dark:to-white/70{% else %}border-blue-400/30 bg-linear-to-r from-gray-950/90 to-blue-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-linear-to-b before:from-blue-400 before:to-indigo-400 dark:border-blue-200/70 dark:from-blue-50/90 dark:to-white/70{% endif %}">
                                 <div class="flex items-center gap-3 p-4 pl-5">
-                                    <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ring-1 ring-inset {% if 'error' in message.tags or 'danger' in message.tags %}bg-red-100/80 text-red-700 ring-red-200 dark:bg-red-900/40 dark:text-red-300 dark:ring-red-900/50{% elif 'success' in message.tags %}bg-emerald-100/80 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-900/50{% elif 'warning' in message.tags %}bg-orange-100/80 text-orange-700 ring-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:ring-orange-900/50{% else %}bg-blue-100/80 text-blue-700 ring-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-900/50{% endif %}">
+                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset {% if 'error' in message.tags or 'danger' in message.tags %}bg-red-100/80 text-red-700 ring-red-200 dark:bg-red-900/40 dark:text-red-300 dark:ring-red-900/50{% elif 'success' in message.tags %}bg-emerald-100/80 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-900/50{% elif 'warning' in message.tags %}bg-orange-100/80 text-orange-700 ring-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:ring-orange-900/50{% else %}bg-blue-100/80 text-blue-700 ring-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-900/50{% endif %}">
                                         {% if 'error' in message.tags or 'danger' in message.tags %}
                                             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
@@ -55,7 +55,7 @@
                                         {% endif %}
                                     </div>
                                     <div class="min-w-0 flex-1">
-                                        <p class="text-sm -mb-px font-semibold leading-snug text-center text-white dark:text-gray-900 break-words">
+                                        <p class="text-sm -mb-px font-semibold leading-snug text-center text-white dark:text-gray-900 wrap-break-word">
                                             {{ message }}
                                         </p>
                                     </div>
@@ -71,10 +71,10 @@
             <div class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-none" role="status" aria-live="polite">
                 <div class="flex flex-col gap-3">
                     {% for message in messages %}
-                        <div class="pointer-events-auto theme-fade [animation:fadeInUp_0.3s_ease-out,fadeOutSlideUp_0.35s_ease-in_4.2s_forwards]">
-                            <div class="relative overflow-hidden rounded-2xl border shadow-xl backdrop-blur supports-[backdrop-filter]:bg-gray-950/75 dark:supports-[backdrop-filter]:bg-white/70 {% if 'error' in message.tags or 'danger' in message.tags %}border-red-400/30 bg-gradient-to-r from-gray-950/90 to-red-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-red-400 before:to-rose-400 dark:border-red-200/70 dark:from-red-50/90 dark:to-white/70{% elif 'success' in message.tags %}border-emerald-400/30 bg-gradient-to-r from-gray-950/90 to-emerald-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-emerald-400 before:to-green-400 dark:border-emerald-200/70 dark:from-emerald-50/90 dark:to-white/70{% elif 'warning' in message.tags %}border-orange-400/30 bg-gradient-to-r from-gray-950/90 to-orange-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-orange-400 before:to-amber-400 dark:border-orange-200/70 dark:from-orange-50/90 dark:to-white/70{% else %}border-blue-400/30 bg-gradient-to-r from-gray-950/90 to-blue-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-blue-400 before:to-indigo-400 dark:border-blue-200/70 dark:from-blue-50/90 dark:to-white/70{% endif %}">
+                        <div class="pointer-events-auto theme-fade animate-[fadeInUp_0.3s_ease-out,fadeOutSlideUp_0.35s_ease-in_4.2s_forwards]">
+                            <div class="relative overflow-hidden rounded-2xl border shadow-xl backdrop-blur supports-backdrop-filter:bg-gray-950/75 dark:supports-backdrop-filter:bg-white/70 {% if 'error' in message.tags or 'danger' in message.tags %}border-red-400/30 bg-linear-to-r from-gray-950/90 to-red-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-linear-to-b before:from-red-400 before:to-rose-400 dark:border-red-200/70 dark:from-red-50/90 dark:to-white/70{% elif 'success' in message.tags %}border-emerald-400/30 bg-linear-to-r from-gray-950/90 to-emerald-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-linear-to-b before:from-emerald-400 before:to-green-400 dark:border-emerald-200/70 dark:from-emerald-50/90 dark:to-white/70{% elif 'warning' in message.tags %}border-orange-400/30 bg-linear-to-r from-gray-950/90 to-orange-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-linear-to-b before:from-orange-400 before:to-amber-400 dark:border-orange-200/70 dark:from-orange-50/90 dark:to-white/70{% else %}border-blue-400/30 bg-linear-to-r from-gray-950/90 to-blue-950/35 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-linear-to-b before:from-blue-400 before:to-indigo-400 dark:border-blue-200/70 dark:from-blue-50/90 dark:to-white/70{% endif %}">
                                 <div class="flex items-center gap-3 p-4 pl-5">
-                                    <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ring-1 ring-inset {% if 'error' in message.tags or 'danger' in message.tags %}bg-red-100/80 text-red-700 ring-red-200 dark:bg-red-900/40 dark:text-red-300 dark:ring-red-900/50{% elif 'success' in message.tags %}bg-emerald-100/80 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-900/50{% elif 'warning' in message.tags %}bg-orange-100/80 text-orange-700 ring-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:ring-orange-900/50{% else %}bg-blue-100/80 text-blue-700 ring-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-900/50{% endif %}">
+                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset {% if 'error' in message.tags or 'danger' in message.tags %}bg-red-100/80 text-red-700 ring-red-200 dark:bg-red-900/40 dark:text-red-300 dark:ring-red-900/50{% elif 'success' in message.tags %}bg-emerald-100/80 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-900/50{% elif 'warning' in message.tags %}bg-orange-100/80 text-orange-700 ring-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:ring-orange-900/50{% else %}bg-blue-100/80 text-blue-700 ring-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:ring-blue-900/50{% endif %}">
                                         {% if 'error' in message.tags or 'danger' in message.tags %}
                                             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
@@ -94,7 +94,7 @@
                                         {% endif %}
                                     </div>
                                     <div class="min-w-0 flex-1">
-                                        <p class="text-sm font-semibold leading-snug text-center text-white dark:text-gray-900 break-words">
+                                        <p class="text-sm font-semibold leading-snug text-center text-white dark:text-gray-900 wrap-break-word">
                                             {{ message }}
                                         </p>
                                     </div>
@@ -123,12 +123,14 @@
     <script nonce="{{request.csp_nonce}}" type="text/javascript" src="{% static 'js/tabulator.min.js' %}"></script>
     <script src="{% static 'js/tour-controls.js' %}"></script>
 <script src="{% static 'js/notifications.js' %}"></script>
+    <script src="{% static 'js/tokens.js' %}"></script>
     <script src="{% static 'js/script.js' %}"></script>
     <script src="{% static 'js/errors_form.js' %}"></script>
     <script src="{% static 'js/account_group_filter.js' %}"></script>
     <script src="{% static 'js/balance_trend_widget.js' %}"></script>
     <script src="{% static 'js/lazy-loader.js' %}"></script>
     <script src="{% static 'js/mathjax.js' %}"></script>
+    <script src="{% static 'js/receipts-filter.js' %}"></script>
     {% if user.is_authenticated %}
         <script src="{% static 'js/header.js' %}"></script>
         <script src="{% static 'js/bottom-nav.js' %}"></script>
@@ -160,8 +162,7 @@
         // Reset immediately (in case DOMContentLoaded already fired)
         resetMobileMenu();
 
-        // Ensure JWT token is set for API requests
-        {% if user.is_authenticated %}
+            // Ensure JWT token is set for API requests
         function ensureJWTToken() {
             // Check if access_token cookie exists
             const hasAccessToken = document.cookie.split(';').some(cookie => {
@@ -185,10 +186,8 @@
 
         // Get JWT token on page load
         document.addEventListener('DOMContentLoaded', ensureJWTToken);
-        ensureJWTToken();
-        {% endif %}
-    </script>
-    {% endif %}
+            ensureJWTToken();
+</script>
     <script nonce="{{request.csp_nonce}}">
         (function() {
             if (typeof window.LazyLoader === 'undefined') {
@@ -209,13 +208,7 @@
             }
 
             if (currentPath.indexOf('receipts') !== -1) {
-                loadScript('{% static "js/receipt_filter.js" %}?v={% word_hash %}').catch(function(error) {
-                    console.error('Error loading receipt_filter script:', error);
-                });
-
-                loadScript('{% static "js/tokens.js" %}?v={% word_hash %}').then(function() {
-                    return loadScript('{% static "js/receipt_group_filter.js" %}?v={% word_hash %}');
-                }).then(function() {
+                loadScript('{% static "js/receipt_group_filter.js" %}?v={% word_hash %}').then(function () {
                     if (currentPath.indexOf('update') !== -1) {
                         return loadScript('{% static "js/receipt_update.js" %}?v={% word_hash %}');
                     }
@@ -238,11 +231,9 @@
                 }
             }
 
-            {% if user.is_authenticated %}
             loadScript('{% static "js/theme.js" %}?v={% word_hash %}').catch(function(error) {
                 console.error('Error loading theme script:', error);
             });
-            {% endif %}
 
             const isIncomePage = currentPath.indexOf('income') !== -1;
             const isExpensePage = currentPath.indexOf('expense') !== -1;
@@ -286,5 +277,6 @@
         window.GROUPS_FOR_USER_URL = "{% url 'users:ajax:groups_for_user' %}";
         window.GROUPS_NOT_FOR_USER_URL = "{% url 'users:ajax:groups_not_for_user' %}";
     </script>
+    {% endif %}
 </body>
 </html>

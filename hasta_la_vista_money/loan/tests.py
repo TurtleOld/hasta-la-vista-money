@@ -762,22 +762,22 @@ class TestLoanCalculator(TestCase):
 
             if '.' in payment_str:
                 self.assertLessEqual(
-                    len(payment_str.split('.')[-1]),
+                    len(payment_str.rsplit('.', maxsplit=1)[-1]),
                     constants.DECIMAL_PLACES_PRECISION,
                 )
             if '.' in interest_str:
                 self.assertLessEqual(
-                    len(interest_str.split('.')[-1]),
+                    len(interest_str.rsplit('.', maxsplit=1)[-1]),
                     constants.DECIMAL_PLACES_PRECISION,
                 )
             if '.' in principal_str:
                 self.assertLessEqual(
-                    len(principal_str.split('.')[-1]),
+                    len(principal_str.rsplit('.', maxsplit=1)[-1]),
                     constants.DECIMAL_PLACES_PRECISION,
                 )
             if '.' in balance_str:
                 self.assertLessEqual(
-                    len(balance_str.split('.')[-1]),
+                    len(balance_str.rsplit('.', maxsplit=1)[-1]),
                     constants.DECIMAL_PLACES_PRECISION,
                 )
 

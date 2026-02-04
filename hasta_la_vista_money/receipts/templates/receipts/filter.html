@@ -3,11 +3,15 @@
 
 <div class="sticky top-0 z-10 mt-2 mb-4">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="receipts-filter-card bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 transition-all duration-300">
+    <div
+      class="receipts-filter-card bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 transition-all duration-300 shadow-sm hover:shadow-md">
       <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <span class="font-heading font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <svg class="h-4 w-4 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18l-7 8v6l-4 2v-8L3 4z"></path>
+          <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z">
+            </path>
           </svg>
           {% translate 'Фильтр чеков' %}
         </span>
@@ -21,18 +25,22 @@
         <div class="p-6">
           <form id="receipts-filter-form" action="" method="get" autocomplete="off" class="space-y-6 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
             {% csrf_token %}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                  <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M4 11h16M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                  </svg>
-                  {% translate 'Период' %}
+            <!-- Date Range -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 7V3m8 4V3M4 11h16M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                {% translate 'Период' %}
                 </label>
                 {{ receipt_filter.form.receipt_date | as_crispy_field }}
-              </div>
+                </div>
+<!-- Amount Range -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                   <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2"></path>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -42,7 +50,7 @@
                 {{ receipt_filter.form.total_sum_min | as_crispy_field }}
               </div>
               <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                   <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10V6m0 12v-2"></path>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -51,40 +59,78 @@
                 </label>
                 {{ receipt_filter.form.total_sum_max | as_crispy_field }}
               </div>
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                  <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9l1-5h16l1 5M5 9v11h14V9"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20v-6h6v6"></path>
-                  </svg>
-                  {% translate 'Продавец' %}
+            </div>
+            
+            <!-- Seller -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9l1-5h16l1 5M5 9v11h14V9"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20v-6h6v6"></path>
+                </svg>
+                {% translate 'Продавец' %}
                 </label>
                 {{ receipt_filter.form.name_seller | as_crispy_field }}
-              </div>
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5" for="product-autocomplete">
-                  <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 16V8a2 2 0 00-1-1.732l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.732l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.27 6.96L12 12l8.73-5.04"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 22V12"></path>
-                  </svg>
-                  {% translate 'Товар' %}
+                </div>
+<!-- Products with Multi-select -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"
+                for="product-autocomplete">
+                <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 16V8a2 2 0 00-1-1.732l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.732l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z">
+                  </path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.27 6.96L12 12l8.73-5.04"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 22V12"></path>
+                </svg>
+                {% translate 'Товары' %}
+                <span class="text-xs text-gray-500 dark:text-gray-400 font-normal">({% translate 'несколько' %})</span>
                 </label>
-                {% if request.GET.product_name %}
-                <input type="text" id="product-autocomplete" name="product_name" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200" placeholder="{% translate 'Введите товар' %}" value="{{ request.GET.product_name|default:'' }}" autocomplete="off">
-                {% else %}
-                <input type="text" id="product-autocomplete" name="product_name" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200" placeholder="{% translate 'Введите товар' %}" autocomplete="off">
-                {% endif %}
+              <!-- Selected Products Tags -->
+              <div id="selected-products-container"
+                class="flex flex-wrap gap-2 mb-2 min-h-[32px] p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 relative">
+                <div id="selected-products-placeholder" class="text-sm text-gray-400 dark:text-gray-500 flex items-center">
+                  {% translate 'Выберите товары для фильтрации' %}
+                </div>
               </div>
+              
+              <!-- Product Input with Autocomplete -->
+              <div class="relative product-input-wrapper">
+                <input type="text" id="product-autocomplete" name="product_name"
+                  class="w-full px-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200 placeholder-gray-400"
+                  placeholder="{% translate 'Начните вводить название товара...' %}" autocomplete="off">
+                <svg id="product-input-spinner"
+                  class="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 animate-spin hidden" fill="none"
+                  viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                  </path>
+                </svg>
+                <!-- Autocomplete Dropdown -->
+                <div id="product-autocomplete-dropdown"
+                  class="fixed w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg hidden max-h-60 overflow-y-auto z-99999">
+                </div>
+                <!-- Hidden input for form submission -->
+                <input type="hidden" id="selected-products-input" name="product_names" value="">
+              </div>
+              
             </div>
+<!-- Action Buttons -->
             <div class="flex flex-wrap gap-3 pt-2">
-              <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors duration-200">
+              <button type="submit"
+                class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-all duration-200 shadow-sm hover:shadow">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18l-7 8v6l-4 2v-8L3 4z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z">
+                  </path>
                 </svg>
                 {% translate 'Фильтровать' %}
               </button>
-              <a href="?" class="receipts-filter-reset-button inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg transition-all duration-200">
+              <a href="?"
+                class="receipts-filter-reset-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2a10 10 0 100 20 10 10 0 000-20z"></path>
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 9l-6 6M9 9l6 6"></path>

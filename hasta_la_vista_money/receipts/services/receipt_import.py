@@ -89,7 +89,7 @@ class ReceiptImportService:
             Normalized date string in DD.MM.YYYY HH:MM format.
         """
         try:
-            day, month, year = date_str.split(' ')[0].split('.')
+            day, month, year = date_str.split(' ', maxsplit=1)[0].split('.')
             hour, minute = date_str.split(' ')[1].split(':')
             aware_dt = datetime(
                 int(year),
@@ -171,6 +171,25 @@ class ReceiptImportService:
         if value is None:
             return None
         return self._convert_to_decimal(value)
+
+    def _convert_to_optional_int(
+        self,
+        value: str | float | None,
+    ) -> int | None:
+        """Convert value to int or return None.
+
+        Args:
+            value: Value to convert, may be None.
+
+        Returns:
+            int instance or None.
+        """
+        if value is None:
+            return None
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return None
 
     def _get_analysis_function(
         self,
@@ -259,7 +278,9 @@ class ReceiptImportService:
         Returns:
             ReceiptImportResult with error if validation fails, None otherwise.
         """
-        number_receipt = receipt_data.get('number_receipt')
+        number_receipt = self._convert_to_optional_int(
+            receipt_data.get('number_receipt'),
+        )
         if (
             number_receipt
             and self._check_exist_receipt(
@@ -294,7 +315,9 @@ class ReceiptImportService:
                     receipt_data['receipt_date'],
                 ),
                 total_sum=self._convert_to_decimal(receipt_data['total_sum']),
-                number_receipt=receipt_data.get('number_receipt'),
+                number_receipt=self._convert_to_optional_int(
+                    receipt_data.get('number_receipt'),
+                ),
                 nds10=self._convert_to_optional_decimal(
                     receipt_data.get('nds10'),
                 ),

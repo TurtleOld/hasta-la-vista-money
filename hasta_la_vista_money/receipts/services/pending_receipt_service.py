@@ -144,7 +144,7 @@ class PendingReceiptService:
             Timezone-aware datetime instance.
         """
         try:
-            day, month, year = date_str.split(' ')[0].split('.')
+            day, month, year = date_str.split(' ', maxsplit=1)[0].split('.')
             hour, minute = date_str.split(' ')[1].split(':')
             return datetime(
                 int(year),
@@ -177,7 +177,7 @@ class PendingReceiptService:
             Normalized date string in DD.MM.YYYY HH:MM format.
         """
         try:
-            day, month, year = date_str.split(' ')[0].split('.')
+            day, month, year = date_str.split(' ', maxsplit=1)[0].split('.')
             hour, minute = date_str.split(' ')[1].split(':')
             aware_dt = datetime(
                 int(year),

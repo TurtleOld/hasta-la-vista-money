@@ -6,7 +6,7 @@ import django_filters
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
-from django.db.models import Min, QuerySet
+from django.db.models import Min, Q, QuerySet
 from django.forms import (
     CharField,
     ChoiceField,
@@ -82,8 +82,8 @@ class ReceiptFilter(django_filters.FilterSet):
             attrs={'class': 'form-control', 'placeholder': _('Сумма до')},
         ),
     )
-    product_name = django_filters.CharFilter(
-        method='filter_by_product_name',
+    product_names = django_filters.CharFilter(
+        method='filter_by_product_names',
         label='',
         widget=TextInput(
             attrs={
@@ -123,14 +123,38 @@ class ReceiptFilter(django_filters.FilterSet):
             .distinct()
         )
 
-    def filter_by_product_name(
+    def filter_by_product_names(
         self,
         queryset: QuerySet[Receipt],
+        field_name: str,
         value: str,
     ) -> QuerySet[Receipt]:
-        if value:
-            return queryset.filter(product__product_name__icontains=value)
-        return queryset
+        """Фильтрация чеков по нескольким наименованиям товаров.
+
+        Args:
+            queryset: QuerySet чеков для фильтрации.
+            field_name: Имя поля (не используется).
+            value: Строка с названиями товаров, разделенными запятой.
+
+        Returns:
+            QuerySet[Receipt]: Отфильтрованный QuerySet чеков.
+        """
+        if not value:
+            return queryset
+
+        product_names = [
+            name.strip() for name in value.split(',') if name.strip()
+        ]
+
+        if not product_names:
+            return queryset
+
+        q_objects = Q()
+
+        for product_name in product_names:
+            q_objects |= Q(product__product_name__icontains=product_name)
+
+        return queryset.filter(q_objects).distinct()
 
     class Meta:
         model = Receipt
@@ -140,7 +164,7 @@ class ReceiptFilter(django_filters.FilterSet):
             'account',
             'total_sum_min',
             'total_sum_max',
-            'product_name',
+            'product_names',
         ]
 
 
