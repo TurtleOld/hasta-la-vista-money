@@ -26,12 +26,14 @@ from hasta_la_vista_money.users.models import User
 
 @extend_schema(
     tags=['authentication'],
-    summary='Получение JWT токенов из сессии',
-    description='Получить JWT токены на основе Django session аутентификации',
+    summary=_('Получение JWT токенов из сессии'),
+    description=_(
+        'Получить JWT токены на основе Django session аутентификации',
+    ),
     request=None,
     responses={
         200: OpenApiResponse(
-            description='Токены успешно получены',
+            description=_('Токены успешно получены'),
             response={
                 'type': 'object',
                 'properties': {
@@ -39,7 +41,7 @@ from hasta_la_vista_money.users.models import User
                 },
             },
         ),
-        400: OpenApiResponse(description='Ошибка при получении токенов'),
+        400: OpenApiResponse(description=_('Ошибка при получении токенов')),
     },
 )
 class SessionTokenObtainView(APIView):
@@ -73,15 +75,15 @@ class SessionTokenObtainView(APIView):
 
 @extend_schema(
     tags=['authentication'],
-    summary='Получение JWT токенов',
-    description=(
+    summary=_('Получение JWT токенов'),
+    description=_(
         'Получить access и refresh JWT токены. '
         'Токены возвращаются в JSON ответе и дополнительно устанавливаются '
-        'в HttpOnly cookies для веб-клиентов.'
+        'в HttpOnly cookies для веб-клиентов.',
     ),
     responses={
         200: OpenApiResponse(
-            description='Токены успешно получены',
+            description=_('Токены успешно получены'),
             response={
                 'type': 'object',
                 'properties': {
@@ -91,8 +93,8 @@ class SessionTokenObtainView(APIView):
                 },
             },
         ),
-        400: OpenApiResponse(description='Ошибка валидации данных'),
-        401: OpenApiResponse(description='Неверные учетные данные'),
+        400: OpenApiResponse(description=_('Ошибка валидации данных')),
+        401: OpenApiResponse(description=_('Неверные учетные данные')),
     },
 )
 class CookieTokenObtainPairView(TokenObtainPairView):
@@ -132,17 +134,17 @@ class CookieTokenObtainPairView(TokenObtainPairView):
 
 @extend_schema(
     tags=['authentication'],
-    summary='Обновление JWT токена',
-    description=(
+    summary=_('Обновление JWT токена'),
+    description=_(
         'Обновить access токен используя refresh токен. '
         'Refresh токен может быть передан в JSON body ({"refresh": "<token>"}) '
         'или в HttpOnly cookie. Приоритет: сначала JSON body, затем cookie. '
         'Ответ всегда содержит access и refresh в JSON. '
-        'Cookies устанавливаются дополнительно для веб-клиентов.'
+        'Cookies устанавливаются дополнительно для веб-клиентов.',
     ),
     responses={
         200: OpenApiResponse(
-            description='Токены успешно обновлены',
+            description=_('Токены успешно обновлены'),
             response={
                 'type': 'object',
                 'properties': {
@@ -156,7 +158,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             description='Refresh токен не найден (отсутствует в body и cookie)',
         ),
         401: OpenApiResponse(
-            description='Невалидный или истёкший refresh токен',
+            description=_('Невалидный или истёкший refresh токен'),
         ),
     },
 )

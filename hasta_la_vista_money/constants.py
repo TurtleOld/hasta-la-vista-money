@@ -55,19 +55,19 @@ RECEIPT_OPERATION_RETURN: Final = 2
 # ============================================================================
 # User-facing messages related to receipt operations
 
-RECEIPT_ALREADY_EXISTS: Final = 'Такой чек уже существует!'
-RECEIPT_BE_ADDED: Final = 'Чек успешно добавлен!'
-RECEIPT_CANNOT_BE_ADDED: Final[tuple[str]] = (
+RECEIPT_ALREADY_EXISTS: Final = _('Такой чек уже существует!')
+RECEIPT_BE_ADDED: Final = _('Чек успешно добавлен!')
+RECEIPT_CANNOT_BE_ADDED: Final = _(
     'Чек не корректен, перепроверьте в приложении налоговой!',
 )
 SUCCESS_MESSAGE_UPDATE_RECEIPT: Final = _('Чек успешно обновлен!')
-RECEIPT_NOT_ACCEPTED: Final[tuple[str]] = (
+RECEIPT_NOT_ACCEPTED: Final = _(
     'Чек не прошёл валидацию! '
     'Вероятно он ещё не попал в базу данных налоговой! '
     'Обычно чек попадает в базу не позже суток. '
     'Попробуйте позже или внесите данные вручную на сайте.',
 )
-QR_CODE_NOT_CONSIDERED: Final[tuple[str]] = (
+QR_CODE_NOT_CONSIDERED: Final = _(
     'QR-код не считался, попробуйте ещё раз или воспользуйтесь '
     'сторонним приложением и передайте текст из QR-кода боту',
 )
@@ -76,14 +76,14 @@ SUCCESS_MESSAGE_DELETE_RECEIPT: Final = _('Чек успешно удален!')
 ERROR_PROCESSING_RECEIPT: Final = _('Ошибка обработки чека, попробуйте позже')
 ERROR_MODEL_UNAVAILABLE: Final = _(
     'Модель ИИ недоступна. Проверьте настройки API_MODEL '
-    'в переменных окружения.'
+    'в переменных окружения.',
 )
 
 # ============================================================================
 # Receipt Category Names
 # ============================================================================
 
-RECEIPT_CATEGORY_NAME: Final = 'Покупки по чекам'
+RECEIPT_CATEGORY_NAME: Final = _('Покупки по чекам')
 
 # ============================================================================
 # User Messages - Authentication
@@ -414,6 +414,7 @@ CURRENT_YEAR = timezone.now().year
 # Month Name Mappings
 # ============================================================================
 # Dictionaries mapping month names to numbers and vice versa
+# Note: Keys use regular strings, values use gettext_lazy
 
 MONTH_NUMBERS: Final = {
     'Январь': 1,
@@ -431,18 +432,18 @@ MONTH_NUMBERS: Final = {
 }
 
 MONTH_NAMES: Final = {
-    1: 'Январь',
-    2: 'Февраль',
-    3: 'Март',
-    4: 'Апрель',
-    5: 'Май',
-    6: 'Июнь',
-    7: 'Июль',
-    8: 'Август',
-    9: 'Сентябрь',
-    10: 'Октябрь',
-    11: 'Ноябрь',
-    12: 'Декабрь',
+    1: _('Январь'),
+    2: _('Февраль'),
+    3: _('Март'),
+    4: _('Апрель'),
+    5: _('Май'),
+    6: _('Июнь'),
+    7: _('Июль'),
+    8: _('Август'),
+    9: _('Сентябрь'),
+    10: _('Октябрь'),
+    11: _('Ноябрь'),
+    12: _('Декабрь'),
 }
 
 # ============================================================================

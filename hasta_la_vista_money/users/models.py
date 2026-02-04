@@ -21,6 +21,7 @@ from django.db.models import (
     PositiveIntegerField,
     TextField,
 )
+from django.utils.translation import gettext_lazy as _
 
 
 class User(AbstractUser):
@@ -74,8 +75,8 @@ class DashboardWidget(Model):
 
     class Meta:
         ordering = ['position', 'created_at']
-        verbose_name = 'Виджет дашборда'
-        verbose_name_plural = 'Виджеты дашборда'
+        verbose_name = _('Виджет дашборда')
+        verbose_name_plural = _('Виджеты дашборда')
 
     def __str__(self) -> str:
         """Return string representation of the widget.
@@ -107,10 +108,10 @@ class BankStatementUpload(Model):
     """
 
     STATUS_CHOICES = [
-        ('pending', 'В очереди'),
-        ('processing', 'Обрабатывается'),
-        ('completed', 'Завершено'),
-        ('failed', 'Ошибка'),
+        ('pending', _('В очереди')),
+        ('processing', _('Обрабатывается')),
+        ('completed', _('Завершено')),
+        ('failed', _('Ошибка')),
     ]
 
     user = ForeignKey(
@@ -133,8 +134,8 @@ class BankStatementUpload(Model):
 
     class Meta:
         ordering = ['-created_at']
-        verbose_name = 'Загрузка банковской выписки'
-        verbose_name_plural = 'Загрузки банковских выписок'
+        verbose_name = _('Загрузка банковской выписки')
+        verbose_name_plural = _('Загрузки банковских выписок')
 
     def __str__(self) -> str:
         """Return string representation of the upload.
