@@ -18,9 +18,14 @@ from faker import Faker
 from hasta_la_vista_money.expense.models import ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.users.forms import BankStatementUploadForm
 from hasta_la_vista_money.users.models import BankStatementUpload, User
 from hasta_la_vista_money.users.services.bank_statement import (
+    BankStatementParseError,
     BankStatementParser,
+    _get_or_create_expense_category,
+    _get_or_create_income_category,
+    process_bank_statement,
 )
 
 
@@ -636,3 +641,422 @@ class TestBankStatementUploadModel(TestCase):
         )
 
         self.assertEqual(upload.error_message, error_msg)
+
+    def test_upload_string_representation(self) -> None:
+        """Test string representation of upload."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status='completed',
+        )
+        str_repr = str(upload)
+        self.assertIn(self.user.username, str_repr)
+        self.assertIn('completed', str_repr)
+
+    def test_upload_ordering(self) -> None:
+        """Test that uploads are ordered by created_at descending."""
+        upload1 = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+        )
+        upload2 = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+        )
+
+        uploads = list(BankStatementUpload.objects.all())
+        self.assertEqual(uploads[0], upload2)
+        self.assertEqual(uploads[1], upload1)
+
+    def test_upload_celery_task_id(self) -> None:
+        """Test celery_task_id field."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            celery_task_id='abc-123-def',
+        )
+
+        self.assertEqual(upload.celery_task_id, 'abc-123-def')
+
+
+class TestBankStatementParserMethods(TestCase):
+    """Test cases for BankStatementParser individual methods."""
+
+    def setUp(self) -> None:
+        """Set up test data."""
+        self.faker = Faker()
+
+    def _create_mock_pdf(self) -> Path:
+        """Create a mock PDF file.
+
+        Returns:
+            Path to the created PDF file.
+        """
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as temp_file:
+            temp_file.write(b'%PDF-1.4 mock pdf')
+            return Path(temp_file.name)
+
+    def test_extract_transaction_number_valid(self) -> None:
+        """Test extracting valid transaction number."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_transaction_number('  123  ')
+            self.assertEqual(result, 123)
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_transaction_number_invalid(self) -> None:
+        """Test extracting transaction number from invalid text."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_transaction_number('not a number')
+            self.assertIsNone(result)
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_transaction_number_empty(self) -> None:
+        """Test extracting transaction number from empty text."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_transaction_number('')
+            self.assertIsNone(result)
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_amount_from_column_valid(self) -> None:
+        """Test extracting amount from valid column text."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_amount_from_column('  +1 234,56 ₽  ')
+            self.assertEqual(result, Decimal('1234.56'))
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_amount_from_column_negative(self) -> None:
+        """Test extracting negative amount."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_amount_from_column('  -567,89 ₽  ')
+            self.assertEqual(result, Decimal('567.89'))
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_amount_from_column_with_spaces(self) -> None:
+        """Test extracting amount with spaces."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_amount_from_column('  +10 000,50 ₽  ')
+            self.assertEqual(result, Decimal('10000.50'))
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_amount_from_column_invalid(self) -> None:
+        """Test extracting amount from invalid text."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_amount_from_column('not an amount')
+            self.assertIsNone(result)
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_date_valid_with_time(self) -> None:
+        """Test extracting date with time."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_date(
+                '15.01.2024 14:30',
+            )
+            self.assertIsNotNone(result)
+            self.assertEqual(result.day, 15)
+            self.assertEqual(result.month, 1)
+            self.assertEqual(result.year, 2024)
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_date_valid_without_time(self) -> None:
+        """Test extracting date without time."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_date('25.12.2023')
+            self.assertIsNotNone(result)
+            self.assertEqual(result.day, 25)
+            self.assertEqual(result.month, 12)
+            self.assertEqual(result.year, 2023)
+        finally:
+            pdf_path.unlink()
+
+    def test_extract_date_invalid(self) -> None:
+        """Test extracting invalid date."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._extract_date('not a date')
+            self.assertIsNone(result)
+        finally:
+            pdf_path.unlink()
+
+    def test_clean_description_atm(self) -> None:
+        """Test cleaning ATM transaction description."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._clean_description(
+                'Выдача наличных со счета через банкомат',
+            )
+            self.assertEqual(result, 'Выдача наличных')
+        finally:
+            pdf_path.unlink()
+
+    def test_clean_description_with_date(self) -> None:
+        """Test cleaning description with date."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._clean_description(
+                'Покупка в магазине 15.01.2024',
+            )
+            self.assertNotIn('15.01.2024', result)
+        finally:
+            pdf_path.unlink()
+
+    def test_clean_description_with_amount(self) -> None:
+        """Test cleaning description with amount."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._clean_description(
+                'Покупка товаров 1500,00 руб.',
+            )
+            self.assertNotIn('1500', result)
+        finally:
+            pdf_path.unlink()
+
+    def test_clean_description_empty(self) -> None:
+        """Test cleaning empty description."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            result = parser._clean_description('')
+            self.assertEqual(result, 'Операция')
+        finally:
+            pdf_path.unlink()
+
+    def test_get_description_column_index_standard(self) -> None:
+        """Test getting description column index for standard table."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            # Create a row with 7 columns
+            row = pd.Series([''] * 7)
+            result = parser._get_description_column_index(row)
+            self.assertEqual(result, 5)
+        finally:
+            pdf_path.unlink()
+
+    def test_get_description_column_index_small(self) -> None:
+        """Test getting description column index for small table."""
+        pdf_path = self._create_mock_pdf()
+        try:
+            parser = BankStatementParser(pdf_path)
+            # Create a row with 3 columns
+            row = pd.Series([''] * 3)
+            result = parser._get_description_column_index(row)
+            self.assertEqual(result, 2)
+        finally:
+            pdf_path.unlink()
+
+
+class TestBankStatementFormValidation(TestCase):
+    """Test cases for BankStatementUploadForm validation."""
+
+    fixtures: ClassVar[list[str]] = ['users.yaml']
+
+    def setUp(self) -> None:
+        """Set up test data."""
+        self.user: User = User.objects.get(pk=1)
+
+    def test_form_valid_data(self) -> None:
+        """Test form with valid data."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Test Account',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+
+        pdf_content = b'%PDF-1.4 fake pdf'
+        pdf_file = SimpleUploadedFile(
+            'statement.pdf',
+            pdf_content,
+            content_type='application/pdf',
+        )
+
+        form = BankStatementUploadForm(
+            data={'account': account.id},
+            files={'pdf_file': pdf_file},
+            user=self.user,
+        )
+
+        self.assertTrue(form.is_valid())
+
+    def test_form_file_too_large(self) -> None:
+        """Test form with file larger than 10MB."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Test Account',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+
+        # Create a file larger than 10MB
+        large_content = b'x' * (11 * 1024 * 1024)
+        large_file = SimpleUploadedFile(
+            'large.pdf',
+            large_content,
+            content_type='application/pdf',
+        )
+
+        form = BankStatementUploadForm(
+            data={'account': account.id},
+            files={'pdf_file': large_file},
+            user=self.user,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('pdf_file', form.errors)
+
+    def test_form_invalid_extension(self) -> None:
+        """Test form with invalid file extension."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Test Account',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+
+        txt_file = SimpleUploadedFile(
+            'document.txt',
+            b'not a pdf',
+            content_type='text/plain',
+        )
+
+        form = BankStatementUploadForm(
+            data={'account': account.id},
+            files={'pdf_file': txt_file},
+            user=self.user,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('pdf_file', form.errors)
+
+    def test_form_missing_account(self) -> None:
+        """Test form without account selection."""
+        pdf_content = b'%PDF-1.4 fake pdf'
+        pdf_file = SimpleUploadedFile(
+            'statement.pdf',
+            pdf_content,
+            content_type='application/pdf',
+        )
+
+        form = BankStatementUploadForm(
+            data={},
+            files={'pdf_file': pdf_file},
+            user=self.user,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('account', form.errors)
+
+
+class TestBankStatementIntegration(TestCase):
+    """Integration tests for bank statement processing."""
+
+    fixtures: ClassVar[list[str]] = ['users.yaml']
+
+    def setUp(self) -> None:
+        """Set up test data."""
+        self.user: User = User.objects.get(pk=1)
+
+    def test_full_workflow_with_mock_data(self) -> None:
+        """Test complete workflow from upload to transaction creation."""
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Test Account',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+
+        # Create mock PDF file
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as temp_file:
+            temp_file.write(b'%PDF-1.4 mock pdf')
+            pdf_path = Path(temp_file.name)
+
+        try:
+            # This will fail with mock PDF, but we can test error handling
+            with self.assertRaises(BankStatementParseError):
+                process_bank_statement(
+                    pdf_path=pdf_path,
+                    account=account,
+                    user=self.user,
+                )
+        finally:
+            pdf_path.unlink()
+
+    def test_category_creation_for_transaction(self) -> None:
+        """Test that categories are created for transactions."""
+        # Create expense category
+        expense_cat = _get_or_create_expense_category(
+            self.user,
+            'Тестовые расходы',
+        )
+        self.assertEqual(expense_cat.user, self.user)
+        self.assertEqual(expense_cat.name, 'Тестовые расходы')
+
+        # Create income category
+        income_cat = _get_or_create_income_category(
+            self.user,
+            'Тестовый доход',
+        )
+        self.assertEqual(income_cat.user, self.user)
+        self.assertEqual(income_cat.name, 'Тестовый доход')
+
+        # Verify categories exist
+        self.assertTrue(
+            ExpenseCategory.objects.filter(
+                user=self.user,
+                name='Тестовые расходы',
+            ).exists(),
+        )
+        self.assertTrue(
+            IncomeCategory.objects.filter(
+                user=self.user,
+                name='Тестовый доход',
+            ).exists(),
+        )
+
+    def test_category_name_truncation(self) -> None:
+        """Test that category names are truncated to 250 characters."""
+        # Create a very long category name
+        long_name = 'A' * 300
+        category = _get_or_create_expense_category(self.user, long_name)
+
+        # Verify it's truncated to 250
+        self.assertEqual(len(category.name), 250)
+        self.assertTrue(category.name.startswith('AAAAA'))

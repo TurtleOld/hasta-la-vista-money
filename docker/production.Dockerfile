@@ -39,7 +39,14 @@ RUN apt-get update && \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
+
+RUN if [ -f uv.lock ]; then \
+      echo "Using existing uv.lock"; \
+    else \
+      echo "Generating uv.lock..."; \
+      uv lock; \
+    fi
 
 RUN uv sync --dev
 
