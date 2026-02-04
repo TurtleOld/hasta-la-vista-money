@@ -490,12 +490,12 @@ class ReceiptUpdateView(
         if not form.is_valid():
             messages.error(
                 self.request,
-                'Пожалуйста, исправьте ошибки в форме.',
+                _('Пожалуйста, исправьте ошибки в форме.'),
             )
         if not product_formset.is_valid():
             messages.error(
                 self.request,
-                'Пожалуйста, исправьте ошибки в товарах.',
+                _('Пожалуйста, исправьте ошибки в товарах.'),
             )
 
         return self.render_to_response(context)
@@ -755,7 +755,7 @@ class UploadImageView(
 
             messages.success(
                 request,
-                'Чек успешно распознан! Проверьте данные перед сохранением.',
+                _('Чек успешно распознан! Проверьте данные перед сохранением.'),
             )
             return redirect('receipts:review', pk=pending_receipt.pk)
         except ValueError as e:
@@ -819,9 +819,9 @@ class ReviewPendingReceiptView(
         if pending_receipt.expires_at < timezone.now():
             messages.error(
                 request,
-                (
+                _(
                     'Время редактирования чека истекло. '
-                    'Пожалуйста, загрузите чек заново.'
+                    'Пожалуйста, загрузите чек заново.',
                 ),
             )
             pending_receipt.delete()
@@ -924,22 +924,22 @@ class ReviewPendingReceiptView(
                 )
                 messages.success(
                     request,
-                    'Чек успешно сохранён!',
+                    _('Чек успешно сохранён!'),
                 )
                 return redirect('receipts:list')
             except Exception as e:
                 logger.exception('Error saving receipt', error=e)
                 messages.error(
                     request,
-                    'Ошибка при сохранении чека. Попробуйте ещё раз.',
+                    _('Ошибка при сохранении чека. Попробуйте ещё раз.'),
                 )
                 return self.form_invalid(form)
         else:
             messages.success(
                 request,
-                (
+                _(
                     'Изменения сохранены. '
-                    'Проверьте данные перед финальным сохранением.'
+                    'Проверьте данные перед финальным сохранением.',
                 ),
             )
             return redirect('receipts:review', pk=updated_pending_receipt.pk)
@@ -967,7 +967,8 @@ class ReviewPendingReceiptView(
         items = []
         for product_form in product_formset:
             if product_form.cleaned_data and not product_form.cleaned_data.get(
-                'DELETE', False
+                'DELETE',
+                False,
             ):
                 nds_sum_value = product_form.cleaned_data.get('nds_sum')
                 items.append(
@@ -976,16 +977,17 @@ class ReviewPendingReceiptView(
                             'product_name',
                         ),
                         'category': product_form.cleaned_data.get(
-                            'category', ''
+                            'category',
+                            '',
                         ),
                         'price': float(
-                            product_form.cleaned_data.get('price', 0)
+                            product_form.cleaned_data.get('price', 0),
                         ),
                         'quantity': float(
                             product_form.cleaned_data.get('quantity', 0),
                         ),
                         'amount': float(
-                            product_form.cleaned_data.get('amount', 0)
+                            product_form.cleaned_data.get('amount', 0),
                         ),
                         'nds_type': product_form.cleaned_data.get('nds_type'),
                         'nds_sum': (
@@ -1001,7 +1003,7 @@ class ReviewPendingReceiptView(
             'name_seller': form.cleaned_data.get('name_seller', ''),
             'retail_place': form.cleaned_data.get('retail_place'),
             'retail_place_address': form.cleaned_data.get(
-                'retail_place_address'
+                'retail_place_address',
             ),
             'number_receipt': form.cleaned_data.get('number_receipt'),
             'total_sum': float(form.cleaned_data.get('total_sum', 0)),
