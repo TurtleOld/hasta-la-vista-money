@@ -265,7 +265,7 @@ class ExpenseCreateView(
             return self.handle_form_error_with_message(
                 form,
                 e,
-                'Ошибка при создании расхода: {error}',
+                _('Ошибка при создании расхода: {error}'),
             )
 
     def form_invalid(self, form: Any) -> HttpResponse:
@@ -333,7 +333,7 @@ class ExpenseUpdateView(
             return self.handle_form_error_with_message(
                 form,
                 e,
-                'Ошибка при обновлении расхода: {error}',
+                _('Ошибка при обновлении расхода: {error}'),
             )
 
 
@@ -468,7 +468,7 @@ class ExpenseCategoryCreateView(
             return self.handle_form_error_with_message(
                 form,
                 e,
-                'Ошибка при создании категории: {error}',
+                _('Ошибка при создании категории: {error}'),
             )
 
     def form_invalid(self, form: Any) -> HttpResponse:
@@ -537,7 +537,7 @@ class ExpenseCategoryUpdateView(
             return self.handle_form_error_with_message(
                 form,
                 e,
-                'Ошибка при обновлении категории: {error}',
+                _('Ошибка при обновлении категории: {error}'),
             )
 
     def form_invalid(self, form: Any) -> HttpResponse:

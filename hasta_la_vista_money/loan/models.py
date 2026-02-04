@@ -4,8 +4,8 @@ from typing import ClassVar
 
 from django.db import models
 from django.urls import reverse
-from django.utils.translation import gettext as _
-from django.utils.translation import gettext_lazy
+from django.utils.functional import Promise
+from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -13,9 +13,9 @@ from hasta_la_vista_money.users.models import User
 
 
 class Loan(models.Model):
-    TYPE_LOAN: ClassVar[list[tuple[str, str]]] = [
-        ('Annuity', str(gettext_lazy('Аннуитетный'))),
-        ('Differentiated', str(gettext_lazy('Дифференцированный'))),
+    TYPE_LOAN: ClassVar[list[tuple[str, str | Promise]]] = [
+        ('Annuity', _('Аннуитетный')),
+        ('Differentiated', _('Дифференцированный')),
     ]
 
     user = models.ForeignKey(
@@ -58,7 +58,7 @@ class Loan(models.Model):
         Returns:
             str: Formatted string with loan ID and amount.
         """
-        return _(f'Кредит №{self.pk} на сумму {self.loan_amount}')
+        return str(_(f'Кредит №{self.pk} на сумму {self.loan_amount}'))
 
     def get_absolute_url(self) -> str:
         """Get absolute URL for loan deletion.

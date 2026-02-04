@@ -13,6 +13,7 @@ from django.db.models.functions import ExtractYear, TruncMonth
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
 from django.utils.formats import date_format
+from django.utils.translation import gettext_lazy as _
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.constants import (
@@ -196,7 +197,7 @@ class ExpenseService:
         )
 
         if target_account.user != self.user:
-            error_message = 'У вас нет прав для выполнения этого действия'
+            error_message = _('У вас нет прав для выполнения этого действия')
             raise ValueError(error_message)
 
         self.account_service.reconcile_account_balances(
@@ -232,7 +233,7 @@ class ExpenseService:
         account_balance = self.account_repository.get_by_id(account.pk)
 
         if account_balance.user != self.user:
-            error_msg = 'У вас нет прав для выполнения этого действия'
+            error_msg = _('У вас нет прав для выполнения этого действия')
             raise ValueError(error_msg)
 
         self.account_service.refund_to_account(account_balance, amount)

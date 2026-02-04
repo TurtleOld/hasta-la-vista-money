@@ -18,6 +18,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
 from django.http import HttpRequest
+from django.utils.translation import gettext_lazy as _
 from openai import (
     APIError,
     APITimeoutError,
@@ -83,7 +84,12 @@ def check_openai_rate_limit(user_id: int | None = None) -> None:
                 'window': window,
             },
         )
-        error_msg = f'Превышен лимит запросов к OpenAI API: {count}/{limit} за {window} секунд'
+        error_msg = str(
+            _(
+                'Превышен лимит запросов к OpenAI API: '
+                f'{count}/{limit} за {window} секунд',
+            ),
+        )
         raise RateLimitExceededError(error_msg)
 
     cache.set(cache_key, count + 1, window)
@@ -116,7 +122,7 @@ def _get_openai_client() -> type[OpenAIDefault]:
     """
     try:
         services_mod = importlib.import_module(
-            'hasta_la_vista_money.receipts.services'
+            'hasta_la_vista_money.receipts.services',
         )
         return getattr(services_mod, 'OpenAI', OpenAIDefault)
     except ModuleNotFoundError:  # pragma: no cover
@@ -282,12 +288,15 @@ def _handle_bad_request_error(
                 'base_url': base_url,
             },
         )
-        error_msg = (
-            f'Модель {model} недоступна. '
-            f'Проверьте правильность имени модели в переменной окружения API_MODEL. '
-            f'Доступные модели можно проверить в документации GitHub Models API.'
+        error_msg = str(
+            _(
+                f'Модель {model} недоступна. '
+                'Проверьте правильность имени модели в переменной окружения API_MODEL. '
+                'Доступные модели можно проверить в документации GitHub Models API.',
+            ),
         )
         raise ModelUnavailableError(error_msg) from e
+
     logger.exception(
         'OpenAI API bad request error',
         extra={
@@ -296,7 +305,7 @@ def _handle_bad_request_error(
             'model': model,
         },
     )
-    error_msg = f'Ошибка запроса к API: {error_str}'
+    error_msg = str(_(f'Ошибка запроса к API: {error_str}'))
     raise RuntimeError(error_msg) from e
 
 
@@ -334,7 +343,7 @@ def analyze_image_with_ai(
     openai_cls = _get_openai_client()
 
     base_url = str(
-        config('API_BASE_URL', default='https://models.github.ai/inference')
+        config('API_BASE_URL', default='https://models.github.ai/inference'),
     )
     token = str(config('API_KEY', default=''))
     model = str(config('API_MODEL', default='openai/gpt-4o'))
@@ -390,7 +399,7 @@ def analyze_image_with_ai(
                 'model': model,
             },
         )
-        error_msg = f'Ошибка API: {e!s}'
+        error_msg = str(_(f'Ошибка API: {e!s}'))
         raise RuntimeError(error_msg) from e
     except APITimeoutError as e:
         logger.exception(
@@ -403,7 +412,12 @@ def analyze_image_with_ai(
                 'image_size': image_size,
             },
         )
-        error_msg = f'Превышено время ожидания ответа API ({timeout} сек). Попробуйте позже или уменьшите размер изображения.'
+        error_msg = str(
+            _(
+                f'Превышено время ожидания ответа API ({timeout} сек). '
+                'Попробуйте позже или уменьшите размер изображения.',
+            ),
+        )
         raise RuntimeError(error_msg) from e
     except (ConnectionError, TimeoutError) as e:
         logger.warning(
@@ -425,7 +439,7 @@ def analyze_image_with_ai(
                 'model': model,
             },
         )
-        error_msg = f'Ошибка обработки данных: {e!s}'
+        error_msg = str(_(f'Ошибка обработки данных: {e!s}'))
         raise RuntimeError(error_msg) from e
     except Exception as e:
         logger.exception(
@@ -436,7 +450,7 @@ def analyze_image_with_ai(
                 'model': model,
             },
         )
-        error_msg = f'Неожиданная ошибка при анализе изображения: {e!s}'
+        error_msg = str(_(f'Неожиданная ошибка при анализе изображения: {e!s}'))
         raise RuntimeError(error_msg) from e
     else:
         return content

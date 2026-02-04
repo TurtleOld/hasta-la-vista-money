@@ -23,10 +23,10 @@ pre-commit-update:
 	@echo "Updating pre-commit hooks..." && uv run pre-commit autoupdate && echo "Pre-commit hooks updated successfully!"
 
 transprepare:
-	@uv run django-admin makemessages
+	@uv run python manage.py makemessages --locale=en
 
 transcompile:
-	@uv run django-admin compilemessages
+	@uv run python manage.py compilemessages --locale=en
 
 shell:
 	@uv shell

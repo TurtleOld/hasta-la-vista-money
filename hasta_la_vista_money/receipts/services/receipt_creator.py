@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 from django.forms.formsets import BaseFormSet
+from django.utils.translation import gettext_lazy as _
 
 from core.protocols.services import AccountServiceProtocol
 from core.repositories.protocols import (
@@ -204,14 +205,15 @@ class ReceiptCreatorService:
         Returns:
             Seller instance (created or updated).
         """
-        name_seller = seller_data.name_seller or 'Неизвестный продавец'
+        name_seller = seller_data.name_seller or str(_('Неизвестный продавец'))
         return self.seller_repository.update_or_create_seller(
             user=user,
             name_seller=name_seller,
             defaults={
                 'retail_place_address': seller_data.retail_place_address
-                or 'Нет данных',
-                'retail_place': seller_data.retail_place or 'Нет данных',
+                or str(_('Нет данных')),
+                'retail_place': seller_data.retail_place
+                or str(_('Нет данных')),
             },
         )
 
