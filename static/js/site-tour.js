@@ -27,7 +27,7 @@
 
         function getCurrentPage() {
             const pathname = window.location.pathname;
-            
+
             if (pathname.includes('/receipts')) {
                 return 'receipts';
             } else if (pathname.includes('/expense') && pathname.includes('/budget')) {
@@ -47,7 +47,7 @@
             } else if (pathname.includes('/finance_account')) {
                 return 'finance_account';
             }
-            
+
             return 'unknown';
         }
 
@@ -59,7 +59,7 @@
     // Wait for driver.js to be available (it should be loaded via CDN or bundler)
     function initTourWhenReady(retryCount = 0) {
         const driverConstructor = window.driver && window.driver.js;
-        
+
         if (!driverConstructor) {
             if (retryCount < 50) { // Max 50 retries = 5 seconds
                 setTimeout(() => initTourWhenReady(retryCount + 1), 100);
@@ -94,9 +94,9 @@
             const button = document.getElementById('financeDropdownButton');
             const menu = document.getElementById('financeDropdownMenu');
             const arrow = document.getElementById('financeDropdownArrow');
-            
+
             if (!button || !menu || !arrow) return;
-            
+
             if (show) {
                 menu.classList.remove('hidden');
                 button.setAttribute('aria-expanded', 'true');
@@ -162,6 +162,15 @@
                 popover: {
                     title: 'Список счетов',
                     description: 'Нажатие на логотип возвращает на главную и список счетов',
+                    side: 'bottom',
+                    align: 'start'
+                }
+            },
+            {
+                element: '#receipts',
+                popover: {
+                    title: 'Чеки',
+                    description: 'Управление вашими чеками',
                     side: 'bottom',
                     align: 'start'
                 }
@@ -273,19 +282,9 @@
             }
         ];
 
-        // Page-specific tour steps
         const pageTours = {
             finance_account: [
                 ...financeAccountNavbarSteps,
-                {
-                    element: '#receipts',
-                    popover: {
-                        title: 'Чеки',
-                        description: 'Управление вашими чеками',
-                        side: 'bottom',
-                        align: 'start'
-                    }
-                },
                 {
                     element: '#detailed-statistics',
                     popover: {
@@ -666,7 +665,7 @@
         // Validate page name to prevent generic object injection attacks
         // Use only if it's in our whitelist (VALID_PAGES)
         const validatedPage = isValidPage(currentPage) ? currentPage : 'unknown';
-        
+
         // Get tour steps for current page (safely access with validated key)
         const tourSteps = (validatedPage !== 'unknown' && pageTours[validatedPage]) ? pageTours[validatedPage] : [];
 
@@ -707,7 +706,7 @@
             const checkboxHtml = `
                 <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
                     <label style="display: flex; align-items: center; font-size: 14px; margin: 0; cursor: pointer;">
-                        <input type="checkbox" id="siteTourDontShowCheckbox" 
+                        <input type="checkbox" id="siteTourDontShowCheckbox"
                                style="margin-right: 8px; cursor: pointer; width: 16px; height: 16px;">
                         <span>Больше не показывать</span>
                     </label>
@@ -719,24 +718,24 @@
         // Override the popover description to add checkbox to last step
         function enhancePopoverWithCheckbox(steps) {
             if (steps.length === 0) return steps;
-            
+
             // Clone the steps to avoid mutating original
             const enhancedSteps = steps.map((step, index) => {
                 const newStep = { ...step };
-                
+
                 // Add checkbox HTML to the last step
                 if (index === steps.length - 1) {
                     const originalDesc = newStep.popover.description || '';
                     const descriptionWithHtml = originalDesc + createDontShowCheckboxHtml();
                     newStep.popover.description = descriptionWithHtml;
-                    
+
                     // Add callback to handle checkbox change
                     const originalOnHighlightStarted = newStep.onHighlightStarted;
                     newStep.onHighlightStarted = () => {
                         if (originalOnHighlightStarted) {
                             originalOnHighlightStarted();
                         }
-                        
+
                         // Set up checkbox listener after a short delay to ensure it's in DOM
                         setTimeout(() => {
                             const checkbox = document.getElementById('siteTourDontShowCheckbox');
@@ -751,10 +750,10 @@
                         }, 100);
                     };
                 }
-                
+
                 return newStep;
             });
-            
+
             return enhancedSteps;
         }
 
@@ -768,7 +767,7 @@
 
             // Check if all required elements exist
             const missingElements = tourSteps.filter(step => !document.querySelector(step.element));
-            
+
             if (missingElements.length > 0) {
                 console.warn('[SiteTour] Some tour elements are missing:', missingElements.map(s => s.element));
                 // Don't start tour if essential elements are missing
@@ -781,7 +780,7 @@
             try {
                 const validSteps = tourSteps.filter(step => document.querySelector(step.element));
                 const enhancedSteps = enhancePopoverWithCheckbox(validSteps);
-                
+
                 console.log('[SiteTour] Starting tour for', currentPage, 'with', enhancedSteps.length, 'steps');
                 driver.setSteps(enhancedSteps);
                 driver.drive(0);
