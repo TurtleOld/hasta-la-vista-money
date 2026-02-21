@@ -10,9 +10,9 @@ done
 echo "Database is up - executing migrations"
 /app/.venv/bin/python manage.py migrate --noinput
 
-echo "Creating staticfiles and logs directories with proper permissions"
-mkdir -p /app/staticfiles /app/logs
-chmod -R 755 /app/staticfiles /app/logs
+echo "Creating staticfiles, media and logs directories with proper permissions"
+mkdir -p /app/staticfiles /app/media /app/logs
+chmod -R 755 /app/staticfiles /app/media /app/logs
 
 echo "Collecting static files"
 /app/.venv/bin/python manage.py collectstatic --noinput --clear

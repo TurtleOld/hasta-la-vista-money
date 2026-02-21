@@ -4,7 +4,7 @@ services:
   db:
     image: postgres:18
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -27,7 +27,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "26379:6379"
     restart: unless-stopped
     networks:
       - default
@@ -102,6 +102,7 @@ services:
     volumes:
       - ${CONF_PATH:-./nginx}/nginx.conf:/etc/nginx/nginx.conf
       - staticfiles_data:/app/staticfiles
+      - media_data:/app/media
     depends_on:
       - hlvm-server
     networks:
