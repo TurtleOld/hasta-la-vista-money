@@ -20,6 +20,7 @@ import camelot
 from django.db import transaction
 from django.utils import timezone
 from pdfminer.high_level import extract_text  # type: ignore[import-untyped]
+from pdfminer.pdfparser import PDFSyntaxError
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -744,7 +745,7 @@ def _create_parser(pdf_path: Path) -> BaseBankStatementParser:
     """Auto-detect bank from PDF content and return matching parser."""
     try:
         text = _extract_pdf_text_for_detection(pdf_path)
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, PDFSyntaxError) as e:
         logger.warning(
             'Could not extract text for bank detection '
             '(using generic parser): %s',

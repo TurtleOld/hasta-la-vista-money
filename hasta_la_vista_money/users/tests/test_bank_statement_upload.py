@@ -2089,17 +2089,19 @@ class TestBankDetection(TestCase):
         finally:
             pdf_path.unlink()
 
-    def test_detection_failure_falls_back_to_generic(self) -> None:
-        """_create_parser returns _GenericBankParser on failure."""
+    def test_detection_failure_propagates_error(self) -> None:
+        """_create_parser propagates unexpected extraction errors."""
         pdf_path = self._make_pdf()
         try:
-            with patch(
-                'hasta_la_vista_money.users.services.bank_statement'
-                '._extract_pdf_text_for_detection',
-                side_effect=RuntimeError('pdfminer error'),
+            with (
+                patch(
+                    'hasta_la_vista_money.users.services.bank_statement'
+                    '._extract_pdf_text_for_detection',
+                    side_effect=RuntimeError('pdfminer error'),
+                ),
+                self.assertRaises(RuntimeError),
             ):
-                parser = _create_parser(pdf_path)
-                self.assertIsInstance(parser, _GenericBankParser)
+                _create_parser(pdf_path)
         finally:
             pdf_path.unlink()
 
