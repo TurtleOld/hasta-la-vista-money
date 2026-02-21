@@ -22,6 +22,7 @@ else:
     from hasta_la_vista_money.income.models import Income, IncomeCategory
 
 M = TypeVar('M', bound=Model)
+TModel = TypeVar('TModel', bound=Model)
 ExpenseOrIncome = Union['Expense', 'Income']
 
 
@@ -201,11 +202,11 @@ def collect_info_receipt(user: User) -> Any:
     )
 
 
-def get_queryset_type_income_expenses(
+def get_queryset_type_income_expenses[TModel: Model](
     type_id: int | None,
-    model: type[M],
-    form: ModelForm[M],
-) -> M:
+    model: type[TModel],
+    form: ModelForm[TModel],
+) -> TModel:
     """Get model instance by ID or from form.
 
     Args:

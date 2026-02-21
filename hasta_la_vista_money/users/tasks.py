@@ -4,8 +4,10 @@ import logging
 
 from celery import shared_task
 from django.db import transaction
+from django.db.models import F
 
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import BankStatementUpload
 from hasta_la_vista_money.users.services.bank_statement import (
@@ -136,12 +138,14 @@ def _process_transactions(
     income_count = 0
     expense_count = 0
     batch_size = 10
+    total = len(transactions)
 
     for idx, trans in enumerate(transactions):
         with transaction.atomic():
             amount = trans['amount']
             description = trans['description']
             trans_date = trans['date']
+            abs_amount = abs(amount)
 
             if amount > 0:
                 category, _ = IncomeCategory.objects.get_or_create(
@@ -152,8 +156,12 @@ def _process_transactions(
                     user=upload.user,
                     account=upload.account,
                     category=category,
-                    amount=abs(amount),
+                    amount=abs_amount,
                     date=trans_date,
+                )
+                # Update account balance: income adds to balance
+                Account.objects.filter(pk=upload.account.pk).update(
+                    balance=F('balance') + abs_amount,
                 )
                 income_count += 1
             else:
@@ -165,24 +173,28 @@ def _process_transactions(
                     user=upload.user,
                     account=upload.account,
                     category=category,
-                    amount=abs(amount),
+                    amount=abs_amount,
                     date=trans_date,
+                )
+                # Update account balance: expense subtracts from balance
+                Account.objects.filter(pk=upload.account.pk).update(
+                    balance=F('balance') - abs_amount,
                 )
                 expense_count += 1
 
-            upload.processed_transactions = idx + 1
-            upload.income_count = income_count
-            upload.expense_count = expense_count
-            upload.progress = int((idx + 1) / len(transactions) * 100)
+        upload.processed_transactions = idx + 1
+        upload.income_count = income_count
+        upload.expense_count = expense_count
+        upload.progress = int((idx + 1) / total * 100)
 
-            # Save progress every batch
-            if (idx + 1) % batch_size == 0:
-                upload.save()
-                logger.info(
-                    'Progress: %d/%d transactions (%d%%)',
-                    idx + 1,
-                    len(transactions),
-                    upload.progress,
-                )
+        # Save progress every batch or on last transaction
+        if (idx + 1) % batch_size == 0 or idx == total - 1:
+            upload.save()
+            logger.info(
+                'Progress: %d/%d transactions (%d%%)',
+                idx + 1,
+                total,
+                upload.progress,
+            )
 
     return income_count, expense_count

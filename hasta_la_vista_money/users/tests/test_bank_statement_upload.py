@@ -23,8 +23,12 @@ from hasta_la_vista_money.users.models import BankStatementUpload, User
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
+    _create_parser,
+    _GenericBankParser,
     _get_or_create_expense_category,
     _get_or_create_income_category,
+    _RaiffeisenBankParser,
+    _SberbankParser,
     process_bank_statement,
 )
 
@@ -2001,3 +2005,395 @@ class TestBankStatementEdgeCases(TestCase):
         ) as temp_file:
             temp_file.write(b'%PDF-1.4 mock pdf')
             return Path(temp_file.name)
+
+
+class TestBankDetection(TestCase):
+    """Test auto-detection of bank type from PDF text content."""
+
+    def _make_pdf(self) -> Path:
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as f:
+            f.write(b'%PDF-1.4 mock')
+            return Path(f.name)
+
+    def test_detects_raiffeisen_by_bank_name(self) -> None:
+        """_create_parser returns _RaiffeisenBankParser."""
+        pdf_path = self._make_pdf()
+        try:
+            with patch(
+                'hasta_la_vista_money.users.services.bank_statement'
+                '._extract_pdf_text_for_detection',
+                return_value='Выписка по счету АО «Райффайзенбанк» 2025',
+            ):
+                parser = _create_parser(pdf_path)
+                self.assertIsInstance(parser, _RaiffeisenBankParser)
+        finally:
+            pdf_path.unlink()
+
+    def test_detects_sberbank_by_title(self) -> None:
+        """_create_parser returns _SberbankParser for credit card."""
+        pdf_path = self._make_pdf()
+        try:
+            with patch(
+                'hasta_la_vista_money.users.services.bank_statement'
+                '._extract_pdf_text_for_detection',
+                return_value='Выписка по счёту кредитной карты ПАВЛОВ',
+            ):
+                parser = _create_parser(pdf_path)
+                self.assertIsInstance(parser, _SberbankParser)
+        finally:
+            pdf_path.unlink()
+
+    def test_detects_raiffeisen_by_column_headers(self) -> None:
+        """_create_parser falls back to column-header detection."""
+        pdf_path = self._make_pdf()
+        try:
+            with patch(
+                'hasta_la_vista_money.users.services.bank_statement'
+                '._extract_pdf_text_for_detection',
+                return_value='Выписка по счету\n№ П/П\nПоступления\nРасходы',
+            ):
+                parser = _create_parser(pdf_path)
+                self.assertIsInstance(parser, _RaiffeisenBankParser)
+        finally:
+            pdf_path.unlink()
+
+    def test_detects_sberbank_by_column_headers(self) -> None:
+        """_create_parser falls back to column-header detection for Sberbank."""
+        pdf_path = self._make_pdf()
+        try:
+            with patch(
+                'hasta_la_vista_money.users.services.bank_statement'
+                '._extract_pdf_text_for_detection',
+                return_value='КАТЕГОРИЯ\nСУММА В РУБЛЯХ\nОСТАТОК СРЕДСТВ',
+            ):
+                parser = _create_parser(pdf_path)
+                self.assertIsInstance(parser, _SberbankParser)
+        finally:
+            pdf_path.unlink()
+
+    def test_unknown_bank_falls_back_to_generic(self) -> None:
+        """_create_parser returns _GenericBankParser for unrecognised text."""
+        pdf_path = self._make_pdf()
+        try:
+            with patch(
+                'hasta_la_vista_money.users.services.bank_statement'
+                '._extract_pdf_text_for_detection',
+                return_value='Выписка по счёту Банк Незнакомый 2025',
+            ):
+                parser = _create_parser(pdf_path)
+                self.assertIsInstance(parser, _GenericBankParser)
+        finally:
+            pdf_path.unlink()
+
+    def test_detection_failure_falls_back_to_generic(self) -> None:
+        """_create_parser returns _GenericBankParser on failure."""
+        pdf_path = self._make_pdf()
+        try:
+            with patch(
+                'hasta_la_vista_money.users.services.bank_statement'
+                '._extract_pdf_text_for_detection',
+                side_effect=RuntimeError('pdfminer error'),
+            ):
+                parser = _create_parser(pdf_path)
+                self.assertIsInstance(parser, _GenericBankParser)
+        finally:
+            pdf_path.unlink()
+
+    def test_bank_statement_parser_facade_uses_delegate(self) -> None:
+        """BankStatementParser.parse() delegates to the detected bank parser."""
+        pdf_path = self._make_pdf()
+        try:
+            with (
+                patch(
+                    'hasta_la_vista_money.users.services.bank_statement'
+                    '._extract_pdf_text_for_detection',
+                    return_value='Выписка по счёту кредитной карты',
+                ),
+                patch.object(
+                    _SberbankParser,
+                    'parse',
+                    return_value=[],
+                ) as mock_parse,
+            ):
+                facade = BankStatementParser(pdf_path)
+                result = facade.parse()
+                mock_parse.assert_called_once()
+                self.assertEqual(result, [])
+        finally:
+            pdf_path.unlink()
+
+
+class TestRaiffeisenBankParser(TestCase):
+    """Unit tests for the Raiffeisen-specific amount extraction."""
+
+    def _make_pdf(self) -> Path:
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as f:
+            f.write(b'%PDF-1.4 mock')
+            return Path(f.name)
+
+    def _make_parser(self) -> _RaiffeisenBankParser:
+        pdf_path = self._make_pdf()
+        self.addCleanup(pdf_path.unlink)
+        return _RaiffeisenBankParser(pdf_path)
+
+    def _make_row(self, cols: list) -> pd.Series:
+        return pd.Series(cols)
+
+    def test_income_from_col3(self) -> None:
+        """Income amount is read from col[3] (Поступления) as positive."""
+        parser = self._make_parser()
+        row = self._make_row(
+            [
+                '1',
+                '28.12.2025 11:10',
+                'ZP0000001',
+                '+ 1 500,00 ₽',
+                '',
+                'Описание',
+                '*6008',
+            ],
+        )
+        amount = parser._extract_amount_from_row(row)
+        self.assertIsNotNone(amount)
+        self.assertEqual(amount, Decimal('1500.00'))
+        self.assertGreater(amount, 0)
+
+    def test_expense_from_col4(self) -> None:
+        """Expense amount is read from col[4] (Расходы) as negative."""
+        parser = self._make_parser()
+        row = self._make_row(
+            [
+                '2',
+                '28.12.2025 11:10',
+                'ZP0000002',
+                '',
+                '- 13,20 ₽',
+                'Описание',
+                '*6008',
+            ],
+        )
+        amount = parser._extract_amount_from_row(row)
+        self.assertIsNotNone(amount)
+        self.assertEqual(amount, Decimal('-13.20'))
+        self.assertLess(amount, 0)
+
+    def test_zero_amount_when_both_cols_empty(self) -> None:
+        """Returns None when both Поступления and Расходы are empty."""
+        parser = self._make_parser()
+        row = self._make_row(['3', '28.12.2025 11:10', '', '', '', '', ''])
+        amount = parser._extract_amount_from_row(row)
+        self.assertIsNone(amount)
+
+    def test_description_column_index_is_5(self) -> None:
+        """Raiffeisen always uses column 5 for the description."""
+        parser = self._make_parser()
+        row = self._make_row([''] * 7)
+        self.assertEqual(parser._get_description_column_index(row), 5)
+
+    def test_large_income_amount(self) -> None:
+        """Correctly parses large amounts with space as thousands separator."""
+        parser = self._make_parser()
+        row = self._make_row(
+            [
+                '4',
+                '02.12.2025 14:45',
+                '',
+                '+ 70 000,00 ₽',
+                '',
+                'Перевод',
+                '',
+            ],
+        )
+        amount = parser._extract_amount_from_row(row)
+        self.assertEqual(amount, Decimal('70000.00'))
+
+    def test_large_expense_amount(self) -> None:
+        """Correctly parses large negative amounts."""
+        parser = self._make_parser()
+        row = self._make_row(
+            [
+                '5',
+                '11.12.2025 16:04',
+                'ZP000001',
+                '',
+                '- 37 177,01 ₽',
+                'Рублевый перевод',
+                '',
+            ],
+        )
+        amount = parser._extract_amount_from_row(row)
+        self.assertEqual(amount, Decimal('-37177.01'))
+
+
+class TestSberbankParser(TestCase):
+    """Unit tests for the Sberbank credit card statement parser."""
+
+    def _make_pdf(self) -> Path:
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as f:
+            f.write(b'%PDF-1.4 mock')
+            return Path(f.name)
+
+    def _make_parser(self) -> _SberbankParser:
+        pdf_path = self._make_pdf()
+        self.addCleanup(pdf_path.unlink)
+        return _SberbankParser(pdf_path)
+
+    def _make_df(self, rows: list) -> pd.DataFrame:
+        return pd.DataFrame(rows)
+
+    def test_is_transaction_table_detects_header(self) -> None:
+        """Table with КАТЕГОРИЯ header is recognised as a transaction table."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                [
+                    'ДАТА ОПЕРАЦИИ (МСК)',
+                    'КАТЕГОРИЯ',
+                    'СУММА В РУБЛЯХ',
+                    'ОСТАТОК СРЕДСТВ',
+                ],
+                ['18.02.2026 17:11', 'Транспорт', '73,00 ₽', '59 016,93 ₽'],
+            ],
+        )
+        self.assertTrue(parser._is_transaction_table(df))
+
+    def test_is_transaction_table_rejects_unrelated(self) -> None:
+        """Table without recognised headers is not a transaction table."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                ['Балансовый отчёт', 'Сумма'],
+                ['Итого', '1 000,00 ₽'],
+            ],
+        )
+        self.assertFalse(parser._is_transaction_table(df))
+
+    def test_parse_table_two_row_transaction(self) -> None:
+        """A standard two-row Sberbank transaction is parsed correctly."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                ['18.02.2026 17:11', 'Транспорт', '73,00 ₽', '59 016,93 ₽'],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKACARD', '', ''],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 1)
+        t = transactions[0]
+        self.assertEqual(t['description'], 'Транспорт')
+        self.assertEqual(t['amount'], Decimal('-73.00'))
+
+    def test_parse_table_income_with_plus_sign(self) -> None:
+        """Top-ups (income) prefixed with '+' are positive."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                [
+                    '09.02.2026 15:50',
+                    'Перевод на карту',
+                    '+50 546,00 ₽',
+                    '63 493,18 ₽',
+                ],
+                ['09.02.2026 / 552183', 'Перевод от П.', '', ''],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0]['amount'], Decimal('50546.00'))
+        self.assertGreater(transactions[0]['amount'], 0)
+
+    def test_parse_table_skips_zero_amount(self) -> None:
+        """Rows where amount cannot be extracted are skipped."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                ['18.02.2026 17:11', 'Категория', '', '1 000,00 ₽'],
+                ['18.02.2026 / 123', 'Описание', '', ''],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 0)
+
+    def test_parse_table_multiple_transactions(self) -> None:
+        """Multiple consecutive two-row transactions are all parsed."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                ['18.02.2026 17:11', 'Транспорт', '73,00 ₽', '59 016,93 ₽'],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKA', '', ''],
+                [
+                    '18.02.2026 20:20',
+                    'Рестораны и кафе',
+                    '3 276,00 ₽',
+                    '53 534,93 ₽',
+                ],
+                ['18.02.2026 / 098646', 'Korolyov SUSHI VOK', '', ''],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 2)
+        self.assertEqual(transactions[0]['description'], 'Транспорт')
+        self.assertEqual(transactions[1]['description'], 'Рестораны и кафе')
+
+    def test_extract_sberbank_amount_negative(self) -> None:
+        """Amount without '+' prefix is treated as an expense (negative)."""
+        parser = self._make_parser()
+        result = parser._extract_sberbank_amount('3 276,00 ₽')
+        self.assertEqual(result, Decimal('-3276.00'))
+
+    def test_extract_sberbank_amount_positive(self) -> None:
+        """Amount with '+' prefix is treated as income (positive)."""
+        parser = self._make_parser()
+        result = parser._extract_sberbank_amount('+50 546,00 ₽')
+        self.assertEqual(result, Decimal('50546.00'))
+
+    def test_extract_sberbank_amount_returns_none_for_empty(self) -> None:
+        """Returns None for empty or nan text."""
+        parser = self._make_parser()
+        self.assertIsNone(parser._extract_sberbank_amount(''))
+        self.assertIsNone(parser._extract_sberbank_amount('nan'))
+
+    def test_find_data_start_row_skips_headers(self) -> None:
+        """_find_data_start_row returns index of first row with a valid date."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                ['ДАТА ОПЕРАЦИИ (МСК)', 'КАТЕГОРИЯ', 'СУММА', 'ОСТАТОК'],
+                ['Дата обработки', 'Описание', '', ''],
+                ['18.02.2026 17:11', 'Транспорт', '73,00 ₽', '59 016,93 ₽'],
+            ],
+        )
+        self.assertEqual(parser._find_data_start_row(df), 2)
+
+    def test_category_used_as_description(self) -> None:
+        """The Sberbank category name becomes the transaction description."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                [
+                    '17.02.2026 04:28',
+                    'Коммунальные платежи, связь, интернет.',
+                    '1 000,00 ₽',
+                    '62 359,93 ₽',
+                ],
+                ['17.02.2026 / 347879', 'MOSCOW OOO VISP', '', ''],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(
+            transactions[0]['description'],
+            'Коммунальные платежи, связь, интернет.',
+        )

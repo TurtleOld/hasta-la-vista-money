@@ -296,6 +296,7 @@ class CreateUser(
     def form_valid(self, form: RegisterUserForm) -> HttpResponse:
         response = super().form_valid(form)
         register_user(form)
+        cache.delete('has_superuser')
         return response
 
 

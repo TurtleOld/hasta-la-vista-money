@@ -10,7 +10,8 @@ from hasta_la_vista_money.users.models import User
 
 class CheckAdminMiddleware:
     def __init__(
-        self, get_response: Callable[[HttpRequest], HttpResponse]
+        self,
+        get_response: Callable[[HttpRequest], HttpResponse],
     ) -> None:
         """init."""
         self.get_response = get_response
@@ -21,7 +22,11 @@ class CheckAdminMiddleware:
             has_superuser = User.objects.filter(is_superuser=True).exists()
             cache.set('has_superuser', has_superuser, 300)
 
-        registration_url = str(reverse_lazy('users:registration'))
-        if not has_superuser and request.path != registration_url:
-            return redirect('users:registration')
+        if not has_superuser:
+            allowed_paths = {
+                str(reverse_lazy('users:registration')),
+                str(reverse_lazy('login')),
+            }
+            if request.path not in allowed_paths:
+                return redirect('users:registration')
         return self.get_response(request)
