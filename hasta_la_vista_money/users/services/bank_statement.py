@@ -210,11 +210,13 @@ class _GenericBankParser(BaseBankStatementParser):
 
             for idx, table in enumerate(tables):
                 logger.info('Processing table %d/%d', idx + 1, len(tables))
-                df = table.df
+                table_df = table.df
                 if len(
-                    df.columns,
-                ) >= MIN_TABLE_COLUMNS and self._is_transaction_table(df):
-                    parsed = self._parse_table(df)
+                    table_df.columns,
+                ) >= MIN_TABLE_COLUMNS and self._is_transaction_table(
+                    table_df,
+                ):
+                    parsed = self._parse_table(table_df)
                     logger.info(
                         'Extracted %d transactions from table %d',
                         len(parsed),
@@ -437,11 +439,13 @@ class _SberbankParser(BaseBankStatementParser):
 
             for idx, table in enumerate(tables):
                 logger.info('Processing table %d/%d', idx + 1, len(tables))
-                df = table.df
+                table_df = table.df
                 if len(
-                    df.columns,
-                ) >= MIN_SBERBANK_COLUMNS and self._is_transaction_table(df):
-                    parsed = self._parse_table(df)
+                    table_df.columns,
+                ) >= MIN_SBERBANK_COLUMNS and self._is_transaction_table(
+                    table_df,
+                ):
+                    parsed = self._parse_table(table_df)
                     logger.info(
                         'Extracted %d transactions from table %d',
                         len(parsed),
