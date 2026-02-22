@@ -475,6 +475,27 @@ function initExpensePage() {
                 ajaxParams: function () {
                     return { group_id: getGroupId() };
                 },
+                pagination: true,
+                paginationMode: 'remote',
+                ajaxURLGenerator: function (url, config, params) {
+                    try {
+                        const u = new URL(url, window.location.origin);
+                        const groupId = getGroupId();
+                        if (groupId) {
+                            u.searchParams.set('group_id', groupId);
+                        }
+                        if (params && params.page) {
+                            u.searchParams.set('page', params.page);
+                        }
+                        if (params && params.size) {
+                            u.searchParams.set('size', params.size);
+                        }
+                        return u.toString();
+                    } catch (e) {
+                        console.warn('Failed to build ajax url for expense', e);
+                        return url;
+                    }
+                },
                 ajaxResponse: function (url, params, response) {
                     console.log('AJAX ответ получен для expense:', { url, params, response });
                     table.classList.remove('invisible', 'hidden', 'd-none');
@@ -483,9 +504,16 @@ function initExpensePage() {
                         skeleton.style.display = 'none';
                         skeleton.classList.add('hidden');
                     }
-                    const data = response.results || response.data || response;
+                    const data = (response && response.results) ? response.results : (response.data || response);
                     console.log('Данные для отображения expense:', data);
                     renderMobileCards(data);
+                    if (response && typeof response.count === 'number') {
+                        return {
+                            data: data,
+                            last_page: Math.max(1, Math.ceil(response.count / (params.size || 25))),
+                            total_rows: response.count,
+                        };
+                    }
                     return data;
                 },
                 ajaxError: function (error) {
@@ -541,7 +569,6 @@ function initExpensePage() {
             }
                 ],
                 layout: 'fitColumns',
-                pagination: true,
                 paginationSize: 25,
                 paginationSizeSelector: [10, 25, 50, 100],
                 paginationCounter: 'rows',
