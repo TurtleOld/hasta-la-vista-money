@@ -3,6 +3,8 @@ from typing import Any
 
 from django.urls import include, path
 
+from .settings import DEBUG_TOOLBAR_ENABLED
+
 try:
     import debug_toolbar
 except ImportError:
@@ -31,8 +33,6 @@ def show_toolbar() -> bool:
 
     Additionally, we don't want to deal with the INTERNAL_IPS thing.
     """
-    from .settings import DEBUG_TOOLBAR_ENABLED  # noqa: PLC0415
-
     if not DEBUG_TOOLBAR_ENABLED:
         return False
 
@@ -95,6 +95,7 @@ class DebugToolbarSetup:
         if not show_toolbar():
             return urlpatterns
 
-        import debug_toolbar  # noqa: PLC0415
+        if debug_toolbar is None:
+            return urlpatterns
 
         return [*urlpatterns, path('__debug__/', include(debug_toolbar.urls))]
