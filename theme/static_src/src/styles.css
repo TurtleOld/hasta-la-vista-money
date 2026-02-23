@@ -1,7 +1,11 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+}
+
+@custom-variant dark (&:where(.dark, .dark *, [data-bs-theme="dark"], [data-bs-theme="dark"] *));
 
 @import './tabulator-tailwind.css';
 @import './light.css';
@@ -332,6 +336,32 @@
     }
   }
 }
+/* crispy-tailwind dark mode overrides */
+@layer base {
+  [data-bs-theme='dark'] input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  [data-bs-theme='dark'] textarea,
+  [data-bs-theme='dark'] select {
+    background-color: rgb(31 41 55) !important; /* gray-800 */
+    color: rgb(229 231 235) !important;         /* gray-200 */
+    border-color: rgb(75 85 99) !important;     /* gray-600 */
+  }
+
+  [data-bs-theme='dark'] input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
+  [data-bs-theme='dark'] textarea:focus,
+  [data-bs-theme='dark'] select:focus {
+    border-color: rgb(16 185 129) !important;   /* emerald-500 */
+    outline: none;
+  }
+
+  [data-bs-theme='dark'] label {
+    color: rgb(209 213 219);  /* gray-300 */
+  }
+
+  [data-bs-theme='dark'] small {
+    color: rgb(156 163 175);  /* gray-400 */
+  }
+}
+
 /* Keyframes for message toast animations */
 @keyframes fadeInUp {
     from {

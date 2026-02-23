@@ -6,10 +6,10 @@
             <svg class="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
             </svg>
-            <span>{% translate 'Тренд баланса' %}</span>
+            <span>{% translate 'Динамика баланса' %}</span>
         </h3>
     </div>
-    
+
     <div class="p-5 space-y-4">
         <!-- Current Balance Display -->
         <div>
@@ -22,7 +22,7 @@
                 {% endif %}
             </p>
         </div>
-        
+
         <!-- Period Selector -->
         <div class="flex gap-2">
             <button data-period="7d" class="period-btn px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 {% if selected_period == '7d' or not selected_period %}bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300{% else %}bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600{% endif %}">
@@ -35,7 +35,7 @@
                 12 месяцев
             </button>
         </div>
-        
+
         <!-- Delta Display -->
         {% if balance_trend.has_data %}
             <div class="grid grid-cols-2 gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -52,7 +52,7 @@
                     </p>
                 </div>
             </div>
-            
+
             <!-- Chart Container -->
             <div class="mt-4">
                 <canvas id="balance-trend-chart" height="100"></canvas>

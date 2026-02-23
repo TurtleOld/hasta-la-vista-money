@@ -1,8 +1,152 @@
 /**
- * Bank Statement Upload - Progress tracking and form handling
+ * Bank Statement Upload - Drag-and-drop, progress tracking and form handling
  */
 (function() {
     'use strict';
+
+    function formatSize(bytes) {
+        const numBytes = Number(bytes);
+        if (!Number.isFinite(numBytes) || numBytes <= 0) return '0 Б';
+        const k = 1024;
+        const units = Object.freeze(['Б', 'КБ', 'МБ', 'ГБ']);
+        const i = Math.min(Math.floor(Math.log(numBytes) / Math.log(k)), units.length - 1);
+        const value = Math.round((numBytes / (k ** i)) * 100) / 100;
+        const unit = units[Math.max(0, i)] || 'Б';
+        return String(value) + ' ' + unit;
+    }
+
+    function initDragAndDrop() {
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('pdf-file-input');
+        const preview = document.getElementById('pdf-preview');
+        const filenameEl = document.getElementById('pdf-filename');
+        const filesizeEl = document.getElementById('pdf-filesize');
+        const removePdf = document.getElementById('remove-pdf');
+        const errorBox = document.getElementById('upload-error');
+        const submitBtn = document.getElementById('submitBtn');
+        const form = document.getElementById('uploadForm');
+
+        if (!uploadZone || !fileInput || !submitBtn || !form) return;
+
+        const maxSize = 10 * 1024 * 1024;
+
+        const dragActiveClasses = [
+            'border-blue-400', 'dark:border-blue-500',
+            'bg-blue-50', 'dark:bg-blue-900/20'
+        ];
+        const errorClasses = [
+            'border-red-400', 'dark:border-red-500',
+            'bg-red-50', 'dark:bg-red-900/20'
+        ];
+
+        function setZoneClasses(state) {
+            uploadZone.classList.remove(...dragActiveClasses, ...errorClasses);
+            if (state === 'drag') uploadZone.classList.add(...dragActiveClasses);
+            if (state === 'error') uploadZone.classList.add(...errorClasses);
+        }
+
+        function setError(message) {
+            setZoneClasses('error');
+            if (errorBox) {
+                errorBox.textContent = message;
+                errorBox.classList.remove('hidden');
+            }
+        }
+
+        function clearError() {
+            setZoneClasses(null);
+            if (errorBox) {
+                errorBox.textContent = '';
+                errorBox.classList.add('hidden');
+            }
+        }
+
+        function showPreview(file) {
+            if (filenameEl) filenameEl.textContent = file.name || '';
+            if (filesizeEl) filesizeEl.textContent = formatSize(file.size);
+            if (preview) preview.classList.remove('hidden');
+        }
+
+        function resetFile() {
+            fileInput.value = '';
+            if (preview) preview.classList.add('hidden');
+            if (filenameEl) filenameEl.textContent = '';
+            if (filesizeEl) filesizeEl.textContent = '';
+            submitBtn.disabled = true;
+            clearError();
+        }
+
+        function fileLooksPdf(file) {
+            if (!file) return false;
+            if (file.type === 'application/pdf') return true;
+            return (file.name || '').toLowerCase().endsWith('.pdf');
+        }
+
+        function setFile(file) {
+            clearError();
+            if (!fileLooksPdf(file)) {
+                resetFile();
+                setError('Разрешены только файлы в формате PDF');
+                return;
+            }
+            if (file.size > maxSize) {
+                resetFile();
+                setError('Размер файла не должен превышать 10 МБ');
+                return;
+            }
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+            showPreview(file);
+            submitBtn.disabled = false;
+            setZoneClasses(null);
+        }
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            setZoneClasses('drag');
+        });
+
+        uploadZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            setZoneClasses(null);
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            setZoneClasses(null);
+            const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+            if (files.length > 0) setFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = e.target && e.target.files ? Array.from(e.target.files) : [];
+            if (files.length > 0) setFile(files[0]);
+            else resetFile();
+        });
+
+        if (removePdf) {
+            removePdf.addEventListener('click', () => resetFile());
+        }
+
+        form.addEventListener('submit', (e) => {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                e.preventDefault();
+                setError('Пожалуйста, выберите PDF файл для загрузки');
+                return;
+            }
+        });
+
+        submitBtn.disabled = true;
+    }
+
+    if (typeof document !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDragAndDrop);
+        } else {
+            initDragAndDrop();
+        }
+    }
 
     /**
      * Validates if a URL is safe for redirect

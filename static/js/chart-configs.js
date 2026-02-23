@@ -7,7 +7,7 @@ const chartConfigs = {
             },
         },
         legend: {
-            data: ['Расходы', 'Тренд', 'Прогноз'],
+            data: ['Расходы', 'Динамика', 'Прогноз'],
             bottom: 0,
         },
         grid: {
@@ -34,7 +34,7 @@ const chartConfigs = {
                 },
             },
             {
-                name: 'Тренд',
+                name: 'Динамика',
                 type: 'line',
                 smooth: true,
                 data: [],
@@ -75,7 +75,7 @@ const chartConfigs = {
             },
         },
         legend: {
-            data: ['Доходы', 'Тренд', 'Прогноз'],
+            data: ['Доходы', 'Динамика', 'Прогноз'],
             bottom: 0,
         },
         grid: {
@@ -102,7 +102,7 @@ const chartConfigs = {
                 },
             },
             {
-                name: 'Тренд',
+                name: 'Динамика',
                 type: 'line',
                 smooth: true,
                 data: [],

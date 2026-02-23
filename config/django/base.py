@@ -47,7 +47,7 @@ allowed_hosts = str(config('ALLOWED_HOSTS', default=''))
 ALLOWED_HOSTS = allowed_hosts.split(',') if allowed_hosts else []
 csrf_trusted_origins = str(config('CSRF_TRUSTED_ORIGINS', default=''))
 CSRF_TRUSTED_ORIGINS = (
-    csrf_trusted_origins.split() if csrf_trusted_origins else []
+    csrf_trusted_origins.split(',') if csrf_trusted_origins else []
 )
 INTERNAL_IPS = [config('LOCAL_IPS', default='127.0.0.1')]
 
