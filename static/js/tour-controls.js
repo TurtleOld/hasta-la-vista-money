@@ -37,13 +37,34 @@
         }
     };
 
+    // Update button label based on current tour state
+    function updateTourButtonLabel() {
+        const labelEnable = document.getElementById('site-tour-label-enable');
+        const labelDisable = document.getElementById('site-tour-label-disable');
+        if (!labelEnable || !labelDisable) return;
+
+        if (window.TourControls.isDisabled()) {
+            labelEnable.classList.remove('hidden');
+            labelDisable.classList.add('hidden');
+        } else {
+            labelEnable.classList.add('hidden');
+            labelDisable.classList.remove('hidden');
+        }
+    }
+
     // Set up event listener for site-tour-on button
     function setupTourButton() {
         const tourButton = document.getElementById('site-tour-on');
         if (tourButton) {
+            updateTourButtonLabel();
             tourButton.addEventListener('click', function(e) {
                 e.preventDefault();
-                window.TourControls.enableAndShow();
+                if (window.TourControls.isDisabled()) {
+                    window.TourControls.enableAndShow();
+                } else {
+                    window.TourControls.disable();
+                }
+                updateTourButtonLabel();
             });
         }
     }
