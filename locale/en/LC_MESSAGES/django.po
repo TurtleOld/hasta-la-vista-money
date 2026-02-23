@@ -1026,8 +1026,8 @@ msgstr "Failed to create account without user authentication."
 
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:9
-msgid "Тренд баланса"
-msgstr "Balance trend"
+msgid "Динамика баланса"
+msgstr "Balance dynamics"
 
 
 #: hasta_la_vista_money/finance_account/templates/finance_account/_balance_trend_widget.html:16
@@ -3508,6 +3508,10 @@ msgstr "Tour"
 #: hasta_la_vista_money/users/templates/users/profile.html:326
 msgid "Включить тур по сайту"
 msgstr "Enable site tour"
+
+#: hasta_la_vista_money/users/templates/users/profile.html:327
+msgid "Отключить тур по сайту"
+msgstr "Disable site tour"
 
 #: hasta_la_vista_money/users/templates/users/registration.html:5
 #: hasta_la_vista_money/users/templates/users/registration.html:17

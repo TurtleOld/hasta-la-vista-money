@@ -338,7 +338,7 @@ class DashboardManager {
             case 'expenses_chart': return 'График расходов';
             case 'income_chart': return 'График доходов';
             case 'comparison': return 'Сравнение периодов';
-            case 'trend': return 'Тренды и прогнозы';
+            case 'trend': return 'Динамика и прогнозы';
             case 'top_categories': return 'Топ категорий';
             case 'recent_transactions': return 'Последние операции';
             default: return String(widgetType || 'Виджет');

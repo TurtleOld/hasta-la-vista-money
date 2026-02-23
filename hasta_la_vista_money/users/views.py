@@ -578,7 +578,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             {'type': 'expenses_chart', 'name': 'График расходов'},
             {'type': 'income_chart', 'name': 'График доходов'},
             {'type': 'comparison', 'name': 'Сравнение периодов'},
-            {'type': 'trend', 'name': 'Тренды и прогнозы'},
+            {'type': 'trend', 'name': 'Динамика и прогнозы'},
             {'type': 'top_categories', 'name': 'Топ категорий'},
             {'type': 'recent_transactions', 'name': 'Последние операции'},
         ]

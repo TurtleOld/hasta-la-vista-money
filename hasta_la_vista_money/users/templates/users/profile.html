@@ -23,11 +23,11 @@
                                 {{ user.get_full_name|default:user.username }}
                             </h2>
                             <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                                <p class="flex items-center justify-center sm:justify-start gap-2">
+                                <p class="flex items-center justify-center sm:justify-start">
                                     <i class="bi bi-envelope"></i>
                                     <span>{{ user.email|default:"Email не указан" }}</span>
                                 </p>
-                                <p class="flex items-center justify-center sm:justify-start gap-2">
+                                <p class="flex items-center justify-center sm:justify-start">
                                     <i class="bi bi-calendar"></i>
                                     <span>{% translate 'Зарегистрирован' %}: {{ user.date_joined|date:"d.m.Y" }}</span>
                                 </p>
@@ -323,7 +323,8 @@
                                         <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Тур' %}</h5>
                                         <button id="site-tour-on"
                                             class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
-                                            <span>{% translate 'Включить тур по сайту' %}</span>
+                                            <span id="site-tour-label-enable" class="hidden">{% translate 'Включить тур по сайту' %}</span>
+                                            <span id="site-tour-label-disable" class="hidden">{% translate 'Отключить тур по сайту' %}</span>
                                         </button>
                                     </div>
                                 </div>

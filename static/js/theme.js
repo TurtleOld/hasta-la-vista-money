@@ -69,6 +69,7 @@
 
         bodyEl.setAttribute('data-bs-theme', safeTheme);
         rootEl.setAttribute('data-bs-theme', safeTheme);
+        rootEl.setAttribute('data-theme', safeTheme);
 
         if (safeTheme === THEME_DARK) {
             rootEl.classList.add('dark');
@@ -132,17 +133,17 @@
     function init() {
         const rootEl = document.documentElement;
         const bodyEl = document.body;
-        
+
         if (!rootEl || !bodyEl) {
             initThemeToggle();
             return;
         }
-        
+
         const rootAttr = rootEl.getAttribute('data-bs-theme');
         const bodyAttr = bodyEl.getAttribute('data-bs-theme');
         const currentAttr = rootAttr || bodyAttr;
         const hasDarkClass = rootEl.classList.contains('dark') || bodyEl.classList.contains('dark');
-        
+
         let currentTheme = THEME_LIGHT;
         if (currentAttr === THEME_DARK) {
             currentTheme = THEME_DARK;
@@ -151,7 +152,7 @@
         } else if (hasDarkClass) {
             currentTheme = THEME_DARK;
         }
-        
+
         updateThemeIcon(currentTheme);
         initThemeToggle();
     }
