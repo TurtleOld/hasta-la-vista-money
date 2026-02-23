@@ -41,7 +41,7 @@ def calculate_linear_trend(
     min_data_points_for_trend = 2
     if len(dates) < min_data_points_for_trend:
         return {
-            'error': 'Недостаточно данных для расчёта тренда',
+            'error': 'Недостаточно данных для расчёта динамики',
             'slope': 0.0,
             'intercept': 0.0,
             'r_squared': 0.0,
@@ -55,14 +55,16 @@ def calculate_linear_trend(
 
     # Линейная регрессия: y = mx + b
     regression_coefficients = np.polyfit(
-        days_from_start, transaction_amounts, 1
+        days_from_start,
+        transaction_amounts,
+        1,
     )
     slope, intercept = regression_coefficients
 
     fitted_values = np.polyval(regression_coefficients, days_from_start)
     sum_squared_residuals = np.sum((transaction_amounts - fitted_values) ** 2)
     total_sum_squares = np.sum(
-        (transaction_amounts - np.mean(transaction_amounts)) ** 2
+        (transaction_amounts - np.mean(transaction_amounts)) ** 2,
     )
     r_squared = (
         1 - (sum_squared_residuals / total_sum_squares)
@@ -227,7 +229,8 @@ def get_drill_down_data(
     else:
         model = cast('type[Expense | Income]', Income)
         category_model = cast(
-            'type[ExpenseCategory | IncomeCategory]', IncomeCategory
+            'type[ExpenseCategory | IncomeCategory]',
+            IncomeCategory,
         )
         category_relation = 'category'
 
