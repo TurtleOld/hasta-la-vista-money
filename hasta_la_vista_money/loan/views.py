@@ -1,17 +1,21 @@
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db import transaction
 from django.db.models import Sum
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DeleteView, ListView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.loan.forms import LoanForm, PaymentMakeLoanForm
 
 if TYPE_CHECKING:
@@ -60,16 +64,16 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
                 .annotate(total=Sum('monthly_payment'))
             )
             payments_dict = {
-                item['loan_id']: float(item['total'] or 0)
+                item['loan_id']: Decimal(str(item['total'] or 0))
                 for item in payments_by_loan
             }
             total_overpayment = sum(
-                payments_dict.get(loan_item.pk, 0.0)
-                - float(loan_item.loan_amount)
+                payments_dict.get(loan_item.pk, Decimal(0))
+                - loan_item.loan_amount
                 for loan_item in loan_list
             )
         else:
-            total_overpayment = 0.0
+            total_overpayment = Decimal(0)
 
         context = super().get_context_data(**kwargs)
         context['loan_form'] = loan_form
@@ -138,15 +142,17 @@ class LoanCreateView(
         if period_loan is None:
             raise ValueError('period_loan is None')
 
-        form.save()
-        loan = Loan.objects.filter(
-            date=date,
-            loan_amount=loan_amount,
-        ).first()
-
-        if loan is None:
-            form.add_error(None, 'Не удалось найти созданный кредит')
-            return self.form_invalid(form)
+        with transaction.atomic():
+            credit_account = Account.objects.create(
+                user=request.user,
+                name_account=str(_(f'Кредитный счёт на {loan_amount}')),
+                balance=loan_amount,
+                currency='RU',
+                type_account=Account.TYPE_ACCOUNT_LIST[0][0],
+            )
+            loan_instance = form.save(commit=False)
+            loan_instance.account = credit_account
+            loan_instance.save()
 
         loan_calculation_service = (
             request.container.loan.loan_calculation_service()
@@ -154,10 +160,10 @@ class LoanCreateView(
         loan_calculation_service.run(
             type_loan=str(type_loan),
             user_id=request.user.pk,
-            loan=loan,
+            loan=loan_instance,
             start_date=date,
-            loan_amount=float(loan_amount),
-            annual_interest_rate=float(annual_interest_rate),
+            loan_amount=loan_amount,
+            annual_interest_rate=annual_interest_rate,
             period_loan=int(period_loan),
         )
         return redirect(str(self.success_url))
