@@ -1067,7 +1067,7 @@ class BankStatementUploadView(
                 user=self.request.user,
                 account=account,
                 pdf_file=pdf_file,
-                status='pending',
+                status=BankStatementUpload.Status.PENDING,
             )
 
             logger.info('Created upload record with id=%d', upload.id)
@@ -1104,10 +1104,13 @@ class BankStatementUploadView(
                     user=self.request.user,
                 )
                 # Show progress if not completed
-                if upload.status in ['pending', 'processing']:
+                if upload.status in [
+                    BankStatementUpload.Status.PENDING,
+                    BankStatementUpload.Status.PROCESSING,
+                ]:
                     context['show_progress'] = True
                     context['upload_id'] = upload.id
-                elif upload.status == 'completed':
+                elif upload.status == BankStatementUpload.Status.COMPLETED:
                     # Clear session if completed
                     self.request.session.pop('last_upload_id', None)
             except BankStatementUpload.DoesNotExist:
