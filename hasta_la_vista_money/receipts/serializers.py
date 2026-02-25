@@ -1,5 +1,6 @@
 from typing import Any
 
+from django.db import transaction
 from django_stubs_ext.db.models import TypedModelMeta
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import CharField, ModelSerializer, Serializer
@@ -35,6 +36,7 @@ class ReceiptSerializer(ModelSerializer[Receipt]):
         model = Receipt
         fields = '__all__'
 
+    @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> Receipt:
         products_data = validated_data.pop('product')
         seller_data = validated_data.pop('seller')
@@ -43,12 +45,13 @@ class ReceiptSerializer(ModelSerializer[Receipt]):
             raise InvalidSellerDataError
         seller = seller_serializer.save()
         receipt = Receipt.objects.create(seller=seller, **validated_data)
+        products = []
         for product_data in products_data:
             product_serializer = ProductSerializer(data=product_data)
             if not product_serializer.is_valid():
                 raise InvalidProductDataError
-            product = product_serializer.save()
-            receipt.product.add(product)
+            products.append(product_serializer.save())
+        receipt.product.set(products)
         return receipt
 
 
