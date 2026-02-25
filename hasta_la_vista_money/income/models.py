@@ -4,8 +4,10 @@ This module contains models for incomes and income categories,
 including relationships with users, accounts, and hierarchical categories.
 """
 
+from decimal import Decimal
 from typing import ClassVar
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -62,6 +64,7 @@ class Income(models.Model):
     amount = models.DecimalField(
         max_digits=constants.TWENTY,
         decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
