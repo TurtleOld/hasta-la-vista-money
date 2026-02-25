@@ -13,20 +13,14 @@ app = Celery('hasta_la_vista_money')
 # Configure Celery using settings from Django settings
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
-# Use Redis as broker and result backend
-# Use database 1 for Celery to avoid conflicts with cache (db 0)
-redis_base = config('REDIS_LOCATION', default='redis://localhost:6379')
-if redis_base.endswith(('/0', '/1')):
-    redis_base = redis_base.rsplit('/', 1)[0]
-
-app.conf.broker_url = f'{redis_base}/1'
-app.conf.result_backend = f'{redis_base}/1'
-
 # Auto-discover tasks in all installed apps
 app.autodiscover_tasks()
 
 # Celery configuration
+redis_url = str(config('REDIS_LOCATION', default='redis://localhost:6379'))
 app.conf.update(
+    broker_url=redis_url,
+    result_backend=redis_url,
     task_serializer='json',
     accept_content=['json'],
     result_serializer='json',

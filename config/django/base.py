@@ -659,12 +659,11 @@ NPM_BIN_PATH = config('NPM_BIN_PATH', default='npm')
 TAILWIND_CSS_PATH = 'css/styles.min.css'
 
 # Celery settings
-redis_base = config('REDIS_LOCATION', default='redis://localhost:6379')
-if redis_base.endswith(('/0', '/1')):
-    redis_base = redis_base.rsplit('/', 1)[0]
-
-CELERY_BROKER_URL = f'{redis_base}/1'
-CELERY_RESULT_BACKEND = f'{redis_base}/1'
+CELERY_BROKER_URL = config('REDIS_LOCATION', default='redis://localhost:6379')
+CELERY_RESULT_BACKEND = config(
+    'REDIS_LOCATION',
+    default='redis://localhost:6379',
+)
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
