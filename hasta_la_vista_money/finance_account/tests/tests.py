@@ -425,7 +425,7 @@ class TestAccount(TestCase):
         self.assertFalse(form.is_valid())
 
     def test_transfer_money_form_save(self) -> None:
-        """Test TransferMoneyAccountForm save method."""
+        """Test transfer via TransferService using form's cleaned data."""
         form = TransferMoneyAccountForm(
             user=self.user,
             transfer_service=self.transfer_service,
@@ -440,7 +440,15 @@ class TestAccount(TestCase):
         )
 
         if form.is_valid():
-            transfer_log = form.save()
+            cd = form.cleaned_data
+            transfer_log = self.transfer_service.transfer_money(
+                from_account=cd['from_account'],
+                to_account=cd['to_account'],
+                amount=cd['amount'],
+                user=cd['from_account'].user,
+                exchange_date=cd.get('exchange_date'),
+                notes=cd.get('notes'),
+            )
             if transfer_log is not None:
                 self.assertEqual(transfer_log.user, self.user)
                 self.assertEqual(transfer_log.from_account, self.account1)
@@ -1071,7 +1079,7 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
         self.assertIn('amount', form.errors)
 
     def test_form_save(self) -> None:
-        """Test form save functionality using TransferService."""
+        """Test transfer via TransferService using form's cleaned data."""
         form_data = {
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
@@ -1087,7 +1095,15 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
         )
         self.assertTrue(form.is_valid())
 
-        transfer_log = form.save()
+        cd = form.cleaned_data
+        transfer_log = self.transfer_service.transfer_money(
+            from_account=cd['from_account'],
+            to_account=cd['to_account'],
+            amount=cd['amount'],
+            user=cd['from_account'].user,
+            exchange_date=cd.get('exchange_date'),
+            notes=cd.get('notes'),
+        )
 
         self.assertIsInstance(transfer_log, TransferMoneyLog)
         self.assertEqual(transfer_log.from_account, self.account1)
@@ -1101,7 +1117,7 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
         self.assertEqual(self.account2.balance, Decimal('600.00'))
 
     def test_form_save_without_commit(self) -> None:
-        """Test form save without commit raises error."""
+        """Test that form validates correctly without calling save."""
         form_data = {
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
@@ -1116,6 +1132,6 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             data=form_data,
         )
         self.assertTrue(form.is_valid())
-
-        with self.assertRaises(ValueError):
-            form.save(commit=False)
+        # Business logic is now in the view's form_valid(); form only validates
+        self.assertIn('from_account', form.cleaned_data)
+        self.assertIn('to_account', form.cleaned_data)
