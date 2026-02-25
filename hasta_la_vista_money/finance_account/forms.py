@@ -8,7 +8,7 @@ Includes comprehensive validation, user-specific account filtering, and proper
 error handling for financial operations.
 """
 
-from typing import Any, cast
+from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.forms import (
@@ -274,40 +274,6 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
                     self.add_error('from_account', e.message)
 
         return cleaned_data or {}
-
-    def save(self, commit: bool = True) -> TransferMoneyLog:
-        """Save the transfer using TransferService.
-
-        Executes the money transfer through the TransferService and creates
-        a transfer log entry for audit purposes.
-
-        Args:
-            commit: Whether to commit the transfer to database.
-
-        Returns:
-            TransferMoneyLog: Created transfer log entry.
-
-        Raises:
-            ValueError: If transfer fails due to insufficient funds or
-            invalid accounts.
-        """
-        if not commit:
-            error_msg = 'Transfer forms must be committed'
-            raise ValueError(error_msg)
-
-        cleaned_data = self.cleaned_data
-
-        return cast(
-            'TransferMoneyLog',
-            self.transfer_service.transfer_money(
-                from_account=cleaned_data['from_account'],
-                to_account=cleaned_data['to_account'],
-                amount=cleaned_data['amount'],
-                user=cleaned_data['from_account'].user,
-                exchange_date=cleaned_data.get('exchange_date'),
-                notes=cleaned_data.get('notes'),
-            ),
-        )
 
     class Meta:
         model = TransferMoneyLog
