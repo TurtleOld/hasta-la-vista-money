@@ -93,6 +93,12 @@ services:
         condition: service_started
     networks:
       - default
+    healthcheck:
+      test: ["CMD-SHELL", "uv run celery -A config inspect ping --destination celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   nginx:

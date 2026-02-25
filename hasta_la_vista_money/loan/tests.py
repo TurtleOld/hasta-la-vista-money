@@ -177,7 +177,15 @@ class TestLoan(TestCase):
         self.assertFalse(form.is_valid())
 
     def test_loan_form_save(self) -> None:
-        """Test LoanForm save method."""
+        """Test LoanForm save method with account provided separately."""
+        loan_amount = Decimal(10000)
+        credit_account = Account.objects.create(
+            user=self.user,
+            name_account='Кредитный счёт на 10000',
+            balance=loan_amount,
+            currency='RU',
+            type_account=Account.TYPE_ACCOUNT_LIST[0][0],
+        )
         form = LoanForm(
             data={
                 'type_loan': 'Annuity',
@@ -189,7 +197,9 @@ class TestLoan(TestCase):
             user=self.user,
         )
         if form.is_valid():
-            form.save()
+            loan_instance = form.save(commit=False)
+            loan_instance.account = credit_account
+            loan_instance.save()
             self.assertTrue(
                 Loan.objects.filter(
                     loan_amount=constants.TEST_LOAN_AMOUNT_MEDIUM,

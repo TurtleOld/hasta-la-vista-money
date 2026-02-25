@@ -468,7 +468,7 @@ REST_FRAMEWORK = {
 }
 
 # Sentry
-RATE = 0.01
+RATE = 0.1
 SENTRY_DSN = config('SENTRY_DSN', default='')
 if SENTRY_DSN:
     sentry_sdk.init(
@@ -561,6 +561,13 @@ SIMPLE_JWT = {
         config('REFRESH_TOKEN_LIFETIME', default=7, cast=int) * 24 * 60 * 60
     ),
 }
+
+# Pending receipt expiry in hours (configurable via env)
+PENDING_RECEIPT_EXPIRY_HOURS: int = config(
+    'PENDING_RECEIPT_EXPIRY_HOURS',
+    default=24,
+    cast=int,
+)
 
 logs_dir = BASE_DIR / 'logs'
 if not logs_dir.exists():

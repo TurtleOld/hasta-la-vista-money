@@ -25,10 +25,15 @@ class BudgetModelTest(TestCase):
         )
         self.date = date(2024, 1, 1)
         self.datelist = DateList.objects.create(user=self.user, date=self.date)
+        self.expense_category = ExpenseCategory.objects.create(
+            user=self.user,
+            name='Test Category',
+        )
         self.planning = Planning.objects.create(
             user=self.user,
             date=self.date,
             planning_type='expense',
+            category_expense=self.expense_category,
             amount=100,
         )
 

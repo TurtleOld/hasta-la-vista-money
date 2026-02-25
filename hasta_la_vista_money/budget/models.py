@@ -2,7 +2,9 @@ from datetime import date
 from decimal import Decimal
 from typing import ClassVar
 
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import CheckConstraint, Q
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.expense.models import ExpenseCategory
@@ -193,10 +195,33 @@ class Planning(models.Model):
                 ],
                 name='unique_planning_per_user_category_date_type',
             ),
+            CheckConstraint(
+                condition=(
+                    Q(planning_type='expense', category_expense__isnull=False)
+                    | Q(planning_type='income', category_income__isnull=False)
+                ),
+                name='planning_category_matches_type',
+            ),
         ]
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['user', 'date', 'planning_type']),
         ]
+
+    def clean(self) -> None:
+        if (
+            self.planning_type == self.Type.EXPENSE
+            and not self.category_expense_id
+        ):
+            raise ValidationError(
+                {'category_expense': _('Required for expense planning.')},
+            )
+        if (
+            self.planning_type == self.Type.INCOME
+            and not self.category_income_id
+        ):
+            raise ValidationError(
+                {'category_income': _('Required for income planning.')},
+            )
 
     def __str__(self) -> str:
         return (

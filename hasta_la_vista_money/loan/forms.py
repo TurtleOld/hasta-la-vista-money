@@ -4,7 +4,6 @@ This module provides forms for loan management including loan creation
 and payment forms.
 """
 
-from decimal import Decimal
 from typing import Any, ClassVar
 
 from django.db.models import QuerySet
@@ -88,16 +87,16 @@ class LoanForm(ModelForm[Loan]):
         select_classes = 'loan-form-select'
 
         self.fields['type_loan'].widget = Select(
-            attrs={'class': select_classes}
+            attrs={'class': select_classes},
         )
         self.fields['loan_amount'].widget = NumberInput(
-            attrs={'class': input_classes, 'step': '0.01'}
+            attrs={'class': input_classes, 'step': '0.01'},
         )
         self.fields['annual_interest_rate'].widget = NumberInput(
-            attrs={'class': input_classes, 'step': '0.01'}
+            attrs={'class': input_classes, 'step': '0.01'},
         )
         self.fields['period_loan'].widget = NumberInput(
-            attrs={'class': input_classes, 'step': '1'}
+            attrs={'class': input_classes, 'step': '1'},
         )
 
     def save(self, commit: bool = True) -> Loan:
@@ -107,14 +106,8 @@ class LoanForm(ModelForm[Loan]):
         if loan_amount is None:
             raise ValueError('loan_amount is required')
         form.user = self.request_user
-        form.account = Account.objects.create(
-            user=self.request_user,
-            name_account=str(_(f'Кредитный счёт на {loan_amount}')),
-            balance=Decimal(str(loan_amount)),
-            currency='RU',
-            type_account=Account.TYPE_ACCOUNT_LIST[0][0],
-        )
-        form.save()
+        if commit:
+            form.save()
         return form
 
 
@@ -171,7 +164,7 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
         self.fields['account'].widget.attrs.update({'class': select_classes})
         self.fields['loan'].widget.attrs.update({'class': select_classes})
         self.fields['amount'].widget = NumberInput(
-            attrs={'class': input_classes, 'step': '0.01'}
+            attrs={'class': input_classes, 'step': '0.01'},
         )
 
     def get_account_queryset(self) -> QuerySet[Account]:

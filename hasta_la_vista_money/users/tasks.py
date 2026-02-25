@@ -61,7 +61,7 @@ def process_bank_statement_task(
         )
 
         # Mark as completed
-        upload.status = 'completed'
+        upload.status = BankStatementUpload.Status.COMPLETED
         upload.progress = 100
         upload.save()
 
@@ -86,7 +86,7 @@ def process_bank_statement_task(
         logger.exception('Failed to parse bank statement')
         try:
             upload = BankStatementUpload.objects.get(id=upload_id)
-            upload.status = 'failed'
+            upload.status = BankStatementUpload.Status.FAILED
             upload.error_message = f'Ошибка парсинга: {e!s}'
             upload.save()
         except BankStatementUpload.DoesNotExist:
@@ -97,7 +97,7 @@ def process_bank_statement_task(
         logger.exception('Unexpected error processing bank statement')
         try:
             upload = BankStatementUpload.objects.get(id=upload_id)
-            upload.status = 'failed'
+            upload.status = BankStatementUpload.Status.FAILED
             upload.error_message = f'Непредвиденная ошибка: {e!s}'
             upload.save()
         except BankStatementUpload.DoesNotExist:
@@ -116,7 +116,7 @@ def _initialize_upload(
         upload: Upload instance to initialize.
         task: Celery task instance.
     """
-    upload.status = 'processing'
+    upload.status = BankStatementUpload.Status.PROCESSING
     upload.celery_task_id = task.request.id
     upload.progress = 0
     upload.save()
@@ -152,35 +152,37 @@ def _process_transactions(
                     user=upload.user,
                     name=description[:250],
                 )
-                Income.objects.create(
+                _, created = Income.objects.get_or_create(
                     user=upload.user,
                     account=upload.account,
                     category=category,
                     amount=abs_amount,
                     date=trans_date,
                 )
-                # Update account balance: income adds to balance
-                Account.objects.filter(pk=upload.account.pk).update(
-                    balance=F('balance') + abs_amount,
-                )
-                income_count += 1
+                if created:
+                    # Update account balance only for new records
+                    Account.objects.filter(pk=upload.account.pk).update(
+                        balance=F('balance') + abs_amount,
+                    )
+                    income_count += 1
             else:
                 category, _ = ExpenseCategory.objects.get_or_create(
                     user=upload.user,
                     name=description[:250],
                 )
-                Expense.objects.create(
+                _, created = Expense.objects.get_or_create(
                     user=upload.user,
                     account=upload.account,
                     category=category,
                     amount=abs_amount,
                     date=trans_date,
                 )
-                # Update account balance: expense subtracts from balance
-                Account.objects.filter(pk=upload.account.pk).update(
-                    balance=F('balance') - abs_amount,
-                )
-                expense_count += 1
+                if created:
+                    # Update account balance only for new records
+                    Account.objects.filter(pk=upload.account.pk).update(
+                        balance=F('balance') - abs_amount,
+                    )
+                    expense_count += 1
 
         upload.processed_transactions = idx + 1
         upload.income_count = income_count

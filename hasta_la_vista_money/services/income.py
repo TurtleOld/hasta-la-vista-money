@@ -2,6 +2,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -11,6 +12,7 @@ from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
 
 
+@transaction.atomic
 def add_income(
     user: User,
     account: Account,
@@ -41,6 +43,7 @@ def add_income(
     )
 
 
+@transaction.atomic
 def update_income(
     user: User,
     income: Income,
@@ -80,6 +83,7 @@ def update_income(
     return income
 
 
+@transaction.atomic
 def delete_income(user: User, income: Income) -> None:
     """
     Delete an income record and update the account balance.
@@ -94,6 +98,7 @@ def delete_income(user: User, income: Income) -> None:
     income.delete()
 
 
+@transaction.atomic
 def copy_income(user: User, income_id: int) -> Income:
     """
     Copy an income record and update the account balance for the new record.

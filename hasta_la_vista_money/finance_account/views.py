@@ -375,7 +375,18 @@ class TransferMoneyAccountView(
         """
         request = cast('WSGIRequestWithContainer', self.request)
         try:
-            form.save()
+            cleaned_data = form.cleaned_data
+            transfer_service = (
+                request.container.finance_account.transfer_service()
+            )
+            transfer_service.transfer_money(
+                from_account=cleaned_data['from_account'],
+                to_account=cleaned_data['to_account'],
+                amount=cleaned_data['amount'],
+                user=cleaned_data['from_account'].user,
+                exchange_date=cleaned_data.get('exchange_date'),
+                notes=cleaned_data.get('notes'),
+            )
             messages.success(request, self.success_message)
             return HttpResponseRedirect(reverse('finance_account:list'))
         except ValidationError as e:

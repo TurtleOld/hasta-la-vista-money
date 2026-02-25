@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import ClassVar
 
-from django.db import models
+from django.db import models, transaction
 from django.urls import reverse
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
@@ -157,7 +157,7 @@ class Account(TimeStampedModel):
         default=get_default_currency,
         verbose_name=_('Валюта'),
         help_text=_('Валюта счёта (например, {})').format(
-            ', '.join([choice[1] for choice in currency_choices('ru')])
+            ', '.join([choice[1] for choice in currency_choices('ru')]),
         ),
     )
     limit_credit = models.DecimalField(
@@ -211,6 +211,7 @@ class Account(TimeStampedModel):
         """
         return reverse('finance_account:change', args=[self.pk])
 
+    @transaction.atomic
     def transfer_money(self, to_account: 'Account', amount: Decimal) -> bool:
         """
         Transfers a specified amount of money from this account to another
@@ -292,12 +293,14 @@ class TransferMoneyLog(TimeStampedModel):
     from_account = models.ForeignKey(
         Account,
         related_name='from_account',
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
     )
     to_account = models.ForeignKey(
         Account,
         related_name='to_account',
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
     )
     amount = models.DecimalField(
         max_digits=constants.TWENTY,

@@ -359,7 +359,7 @@ class TestTransferMoneyAccountForm(TestCase):
         self.assertFalse(form.is_valid())
 
     def test_form_save(self) -> None:
-        """Test form save functionality using TransferService."""
+        """Test transfer via TransferService using form's cleaned data."""
         form_data = {
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
@@ -377,7 +377,15 @@ class TestTransferMoneyAccountForm(TestCase):
         )
         self.assertTrue(form.is_valid())
 
-        transfer_log = form.save()
+        cd = form.cleaned_data
+        transfer_log = self.transfer_service.transfer_money(
+            from_account=cd['from_account'],
+            to_account=cd['to_account'],
+            amount=cd['amount'],
+            user=cd['from_account'].user,
+            exchange_date=cd.get('exchange_date'),
+            notes=cd.get('notes'),
+        )
 
         self.assertIsInstance(transfer_log, TransferMoneyLog)
         self.assertEqual(transfer_log.from_account, self.account1)
@@ -391,7 +399,7 @@ class TestTransferMoneyAccountForm(TestCase):
         self.assertEqual(self.account2.balance, Decimal('600.00'))
 
     def test_form_save_without_commit(self) -> None:
-        """Test form save without commit raises error."""
+        """Test that form validates correctly without calling save."""
         form_data = {
             'from_account': self.account1.pk,
             'to_account': self.account2.pk,
@@ -408,9 +416,9 @@ class TestTransferMoneyAccountForm(TestCase):
             data=form_data,
         )
         self.assertTrue(form.is_valid())
-
-        with self.assertRaises(ValueError):
-            form.save(commit=False)
+        # Business logic is now in the view's form_valid(); form only validates
+        self.assertIn('from_account', form.cleaned_data)
+        self.assertIn('to_account', form.cleaned_data)
 
     def test_form_clean_method(self) -> None:
         """Test form clean method validation."""

@@ -19,6 +19,7 @@ from django.db.models import (
     JSONField,
     Model,
     PositiveIntegerField,
+    TextChoices,
     TextField,
 )
 from django.utils.translation import gettext_lazy as _
@@ -107,12 +108,11 @@ class BankStatementUpload(Model):
         updated_at: Timestamp when the upload was last updated.
     """
 
-    STATUS_CHOICES = [
-        ('pending', _('В очереди')),
-        ('processing', _('Обрабатывается')),
-        ('completed', _('Завершено')),
-        ('failed', _('Ошибка')),
-    ]
+    class Status(TextChoices):
+        PENDING = 'pending', _('В очереди')
+        PROCESSING = 'processing', _('Обрабатывается')
+        COMPLETED = 'completed', _('Завершено')
+        FAILED = 'failed', _('Ошибка')
 
     user = ForeignKey(
         User,
@@ -121,7 +121,11 @@ class BankStatementUpload(Model):
     )
     account = ForeignKey('finance_account.Account', on_delete=CASCADE)
     pdf_file = FileField(upload_to='bank_statements/')
-    status = CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
     progress = IntegerField(default=0)
     total_transactions = IntegerField(default=0)
     processed_transactions = IntegerField(default=0)

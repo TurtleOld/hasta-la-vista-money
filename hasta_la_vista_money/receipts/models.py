@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import Any, ClassVar
 
+from django.conf import settings
 from django.db import models
 from django.db.models import Min
 from django.urls import reverse_lazy
@@ -520,7 +521,9 @@ class PendingReceipt(models.Model):
             **kwargs: Keyword arguments.
         """
         if not self.expires_at:
-            self.expires_at = timezone.now() + timedelta(hours=24)
+            self.expires_at = timezone.now() + timedelta(
+                hours=settings.PENDING_RECEIPT_EXPIRY_HOURS,
+            )
         super().save(*args, **kwargs)
 
     class Meta:
@@ -539,7 +542,8 @@ class PendingReceipt(models.Model):
             str: Pending receipt identifier.
         """
         seller_name = self.receipt_data.get(
-            'name_seller', 'Неизвестный продавец'
+            'name_seller',
+            'Неизвестный продавец',
         )
         return f'{seller_name} - {self.created_at.strftime("%d.%m.%Y %H:%M")}'
 
