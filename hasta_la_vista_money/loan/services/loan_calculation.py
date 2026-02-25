@@ -293,8 +293,8 @@ class LoanCalculationService:
         user_id: int,
         loan: Loan,
         start_date: date,
-        loan_amount: float,
-        annual_interest_rate: float,
+        loan_amount: Decimal,
+        annual_interest_rate: Decimal,
         period_loan: int,
     ) -> None:
         """Calculate and persist loan payment schedule.

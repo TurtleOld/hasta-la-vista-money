@@ -2,6 +2,7 @@ import decimal
 from decimal import Decimal
 from typing import ClassVar
 
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import Promise
@@ -29,12 +30,17 @@ class Loan(models.Model):
         related_name='loan_accounts',
     )
     date = models.DateTimeField()
-    loan_amount = models.FloatField(
-        max_length=constants.TWO_HUNDRED_FIFTY,
+    loan_amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
     )
     annual_interest_rate = models.DecimalField(
-        max_digits=constants.TWO_HUNDRED_FIFTY,
-        decimal_places=constants.TWO,
+        max_digits=6,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal('0.01')),
+            MaxValueValidator(Decimal('999.99')),
+        ],
     )
     period_loan = models.IntegerField()
     type_loan = models.CharField(
@@ -112,7 +118,8 @@ class PaymentMakeLoan(models.Model):
     )
     account = models.ForeignKey(
         Account,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
         related_name='payment_make_loan_accounts',
     )
     date = models.DateTimeField()

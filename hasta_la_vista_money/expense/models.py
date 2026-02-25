@@ -4,8 +4,10 @@ This module contains models for expenses and expense categories,
 including relationships with users, accounts, and hierarchical categories.
 """
 
+from decimal import Decimal
 from typing import ClassVar
 
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from hasta_la_vista_money import constants
@@ -91,6 +93,7 @@ class Expense(models.Model):
     amount = models.DecimalField(
         max_digits=constants.TWENTY,
         decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
