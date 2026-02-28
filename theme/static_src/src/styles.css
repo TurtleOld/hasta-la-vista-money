@@ -341,24 +341,31 @@
   [data-bs-theme='dark'] input:not([type='checkbox']):not([type='radio']):not([type='file']),
   [data-bs-theme='dark'] textarea,
   [data-bs-theme='dark'] select {
-    background-color: rgb(31 41 55) !important; /* gray-800 */
-    color: rgb(229 231 235) !important;         /* gray-200 */
-    border-color: rgb(75 85 99) !important;     /* gray-600 */
+    background-color: rgb(31 41 55) !important;
+    color: rgb(229 231 235) !important;
+    border-color: rgb(75 85 99) !important;
   }
 
   [data-bs-theme='dark'] input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
   [data-bs-theme='dark'] textarea:focus,
   [data-bs-theme='dark'] select:focus {
-    border-color: rgb(16 185 129) !important;   /* emerald-500 */
+    border-color: rgb(16 185 129) !important;
     outline: none;
   }
 
+  [data-bs-theme='dark'] input[readonly]:not([type='checkbox']):not([type='radio']):not([type='file']),
+  [data-bs-theme='dark'] input[readonly]:not([type='checkbox']):not([type='radio']):not([type='file']):focus {
+    background-color: rgb(55 65 81) !important;
+    color: rgb(156 163 175) !important;
+    cursor: not-allowed;
+  }
+
   [data-bs-theme='dark'] label {
-    color: rgb(209 213 219);  /* gray-300 */
+    color: rgb(209 213 219);
   }
 
   [data-bs-theme='dark'] small {
-    color: rgb(156 163 175);  /* gray-400 */
+    color: rgb(156 163 175);
   }
 }
 

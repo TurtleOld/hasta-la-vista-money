@@ -66,6 +66,7 @@ RUN apt-get update && \
     libxrender1 \
     libgomp1 \
     libgl1 \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/* && \
     pip install uv==0.7.13 && \
     adduser --disabled-password --gecos '' appuser

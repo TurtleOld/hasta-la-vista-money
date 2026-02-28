@@ -1,21 +1,24 @@
 #!/bin/sh
 set -e
 
-echo "Waiting for database connection..."
-until /app/.venv/bin/python manage.py check --database default > /dev/null 2>&1; do
+DB_HOST=$(echo "${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}" | sed 's|.*@\([^:/]*\).*|\1|')
+DB_PORT=$(echo "${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}" | sed 's|.*:\([0-9]*\)/.*|\1|')
+
+echo "Waiting for database connection at ${DB_HOST}:${DB_PORT}..."
+until nc -z "${DB_HOST}" "${DB_PORT}" 2>/dev/null; do
     echo "Database is unavailable - sleeping"
     sleep 2
 done
 
 echo "Database is up - executing migrations"
-/app/.venv/bin/python manage.py migrate --noinput
+uv run python manage.py migrate --noinput
 
 echo "Creating staticfiles, media and logs directories with proper permissions"
 mkdir -p /app/staticfiles /app/media /app/logs
 chmod -R 755 /app/staticfiles /app/media /app/logs
 
 echo "Collecting static files"
-/app/.venv/bin/python manage.py collectstatic --noinput --clear
+uv run python manage.py collectstatic --noinput --clear
 
 echo "Starting application"
 exec "$@"
