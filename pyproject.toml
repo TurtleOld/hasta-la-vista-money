@@ -47,6 +47,7 @@ dependencies = [
     "camelot-py[base]>=1.0.9",
     "celery>=5.4.0",
     "redis>=5.2.0",
+    "tenacity>=9.0.0",
 ]
 
 [project.optional-dependencies]
@@ -90,15 +91,10 @@ dev = [
     "mkdocs-render-swagger-plugin>=0.1.2",
     "django-stubs[compatible-mypy]>=5.1.0",
     "types-python-dateutil>=2.9.0.20241003",
-    "safety>=3.6.2",
     "factory-boy>=3.3.0",
     "django-tailwind[cookiecutter,honcho,reload]>=4.4.2",
 ]
 
-[[tool.uv.index]]
-name = "safety"
-url = "https://pkgs.safetycli.com/repository/pavlovteam/project/hastalavistamoney/pypi/simple/"
-default = false
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
