@@ -49,7 +49,7 @@ jobs:
         run: uv lock
 
       - name: Install ruff
-        uses: astral-sh/ruff-action@48f37fab2d6ea096fb20b2f34d7d2c509f7c12c3
+        uses: astral-sh/ruff-action@845ce6a88f094f09928687ac72bb2720c9a89eb3
         with:
           version: "0.12.8"
       - run: ruff check --fix
