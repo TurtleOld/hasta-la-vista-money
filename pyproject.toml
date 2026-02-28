@@ -47,6 +47,7 @@ dependencies = [
     "camelot-py[base]>=1.0.9",
     "celery>=5.4.0",
     "redis>=5.2.0",
+    "tenacity>=9.0.0",
 ]
 
 [project.optional-dependencies]
