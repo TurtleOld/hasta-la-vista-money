@@ -44,19 +44,44 @@ from hasta_la_vista_money.receipts.models import (
     Seller,
 )
 
+_INPUT_CLASSES = (
+    'w-full rounded-xl border border-gray-300 dark:border-gray-600 '
+    'bg-white dark:bg-gray-800 px-3 py-2 '
+    'text-sm text-gray-900 dark:text-gray-100 '
+    'shadow-sm transition '
+    'focus:border-emerald-500 focus:outline-none '
+    'focus:ring-2 focus:ring-emerald-500/20 '
+    'dark:focus:border-emerald-400'
+)
+_SELECT_CLASSES = (
+    'w-full rounded-xl border border-gray-300 dark:border-gray-600 '
+    'bg-white dark:bg-gray-800 px-3 py-2 '
+    'text-sm text-gray-900 dark:text-gray-100 '
+    'shadow-sm transition '
+    'focus:border-emerald-500 focus:outline-none '
+    'focus:ring-2 focus:ring-emerald-500/20 '
+    'dark:focus:border-emerald-400'
+)
+_READONLY_CLASSES = (
+    'w-full rounded-xl border border-gray-200 dark:border-gray-700 '
+    'bg-gray-100 dark:bg-gray-700/60 px-3 py-2 '
+    'text-sm text-gray-700 dark:text-gray-300 '
+    'shadow-sm cursor-not-allowed'
+)
+
 
 class ReceiptFilter(django_filters.FilterSet):
     name_seller = django_filters.ModelChoiceFilter(
         queryset=Seller.objects.all(),
         field_name='seller__name_seller',
         label='',
-        widget=Select(attrs={'class': 'form-control mb-2'}),
+        widget=Select(attrs={'class': f'{_SELECT_CLASSES} mb-2'}),
     )
     receipt_date = django_filters.DateFromToRangeFilter(
         label='',
         widget=widgets.RangeWidget(
             attrs={
-                'class': 'form-control',
+                'class': _INPUT_CLASSES,
                 'type': 'date',
             },
         ),
@@ -64,14 +89,14 @@ class ReceiptFilter(django_filters.FilterSet):
     account = django_filters.ModelChoiceFilter(
         queryset=Account.objects.all(),
         label='',
-        widget=Select(attrs={'class': 'form-control mb-4'}),
+        widget=Select(attrs={'class': f'{_SELECT_CLASSES} mb-4'}),
     )
     total_sum_min = django_filters.NumberFilter(
         field_name='total_sum',
         lookup_expr='gte',
         label='',
         widget=NumberInput(
-            attrs={'class': 'form-control', 'placeholder': _('Сумма от')},
+            attrs={'class': _INPUT_CLASSES, 'placeholder': _('Сумма от')},
         ),
     )
     total_sum_max = django_filters.NumberFilter(
@@ -79,7 +104,7 @@ class ReceiptFilter(django_filters.FilterSet):
         lookup_expr='lte',
         label='',
         widget=NumberInput(
-            attrs={'class': 'form-control', 'placeholder': _('Сумма до')},
+            attrs={'class': _INPUT_CLASSES, 'placeholder': _('Сумма до')},
         ),
     )
     product_names = django_filters.CharFilter(
@@ -87,7 +112,7 @@ class ReceiptFilter(django_filters.FilterSet):
         label='',
         widget=TextInput(
             attrs={
-                'class': 'form-control',
+                'class': _INPUT_CLASSES,
                 'autocomplete': 'off',
                 'placeholder': _('Введите товар'),
             },
@@ -266,6 +291,7 @@ class ReceiptForm(ModelForm[Receipt]):
         help_text=_(
             'Выберите продавца. Если он ещё не создан, нажмите кнопку ниже.',
         ),
+        widget=Select(attrs={'class': _SELECT_CLASSES}),
     )
     account = ModelChoiceField(
         queryset=Account.objects.none(),
@@ -274,6 +300,7 @@ class ReceiptForm(ModelForm[Receipt]):
             'Выберите счёт списания. '
             'Если он ещё не создан, нажмите кнопку ниже.',
         ),
+        widget=Select(attrs={'class': _SELECT_CLASSES}),
     )
     receipt_date = DateTimeField(
         label=_('Дата и время покупки'),
@@ -281,7 +308,7 @@ class ReceiptForm(ModelForm[Receipt]):
         input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         widget=DateTimeInput(
             format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
-            attrs={'type': 'datetime-local', 'class': 'form-control'},
+            attrs={'type': 'datetime-local', 'class': _INPUT_CLASSES},
         ),
     )
     operation_type = ChoiceField(
@@ -343,13 +370,13 @@ class UploadImageForm(Form):
     account = ModelChoiceField(
         label=_('Счёт'),
         queryset=Account.objects.all(),
-        widget=Select(attrs={'class': 'form-control'}),
+        widget=Select(attrs={'class': _SELECT_CLASSES}),
     )
     file = FileField(
         label=_('Выберите файл'),
         widget=ClearableFileInput(
             attrs={
-                'class': 'form-control',
+                'class': _INPUT_CLASSES,
                 'accept': '.jpg,.jpeg,.png',
                 'data-max-size': str(constants.MAX_FILE_SIZE_BYTES),
             },
@@ -385,7 +412,7 @@ class PendingReceiptReviewForm(Form):
         label=_('Дата и время чека'),
         widget=DateTimeInput(
             attrs={
-                'class': 'form-control',
+                'class': _INPUT_CLASSES,
                 'type': 'datetime-local',
             },
             format='%Y-%m-%dT%H:%M',
@@ -395,24 +422,24 @@ class PendingReceiptReviewForm(Form):
     name_seller = CharField(
         label=_('Название продавца'),
         max_length=255,
-        widget=TextInput(attrs={'class': 'form-control'}),
+        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
         required=True,
     )
     retail_place = CharField(
         label=_('Торговая точка'),
         max_length=1000,
-        widget=TextInput(attrs={'class': 'form-control'}),
+        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
         required=False,
     )
     retail_place_address = CharField(
         label=_('Адрес торговой точки'),
         max_length=1000,
-        widget=TextInput(attrs={'class': 'form-control'}),
+        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
         required=False,
     )
     number_receipt = IntegerField(
         label=_('Номер чека'),
-        widget=NumberInput(attrs={'class': 'form-control'}),
+        widget=NumberInput(attrs={'class': _INPUT_CLASSES}),
         required=False,
     )
     total_sum = DecimalField(
@@ -421,7 +448,7 @@ class PendingReceiptReviewForm(Form):
         decimal_places=2,
         widget=NumberInput(
             attrs={
-                'class': 'form-control total-sum',
+                'class': f'{_READONLY_CLASSES} total-sum',
                 'step': '0.01',
                 'readonly': True,
             },
@@ -432,25 +459,28 @@ class PendingReceiptReviewForm(Form):
         label=_('НДС 10%'),
         max_digits=constants.SIXTY,
         decimal_places=constants.TWO,
-        widget=NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        widget=NumberInput(attrs={'class': _INPUT_CLASSES, 'step': '0.01'}),
         required=False,
     )
     nds20 = DecimalField(
         label=_('НДС 20%'),
         max_digits=constants.SIXTY,
         decimal_places=constants.TWO,
-        widget=NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        widget=NumberInput(attrs={'class': _INPUT_CLASSES, 'step': '0.01'}),
         required=False,
     )
     operation_type = ChoiceField(
         label=_('Тип операции'),
         choices=OPERATION_TYPES,
-        widget=Select(attrs={'class': 'form-control'}),
+        widget=Select(attrs={'class': _SELECT_CLASSES}),
         required=False,
     )
 
     def __init__(
-        self, receipt_data: dict[str, Any], *args: Any, **kwargs: Any
+        self,
+        receipt_data: dict[str, Any],
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """Initialize form with receipt data.
 
@@ -480,7 +510,7 @@ class PendingReceiptReviewForm(Form):
 
             self.fields['name_seller'].initial = receipt_data.get('name_seller')
             self.fields['retail_place'].initial = receipt_data.get(
-                'retail_place'
+                'retail_place',
             )
             self.fields['retail_place_address'].initial = receipt_data.get(
                 'retail_place_address',
@@ -503,13 +533,13 @@ class PendingReceiptProductForm(Form):
     product_name = CharField(
         label=_('Название товара'),
         max_length=1000,
-        widget=TextInput(attrs={'class': 'form-control'}),
+        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
         required=True,
     )
     category = CharField(
         label=_('Категория'),
         max_length=constants.TWO_HUNDRED_FIFTY,
-        widget=TextInput(attrs={'class': 'form-control'}),
+        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
         required=False,
     )
     price = DecimalField(
@@ -517,7 +547,7 @@ class PendingReceiptProductForm(Form):
         max_digits=10,
         decimal_places=2,
         widget=NumberInput(
-            attrs={'class': 'form-control price', 'step': '0.01'},
+            attrs={'class': f'{_INPUT_CLASSES} price', 'step': '0.01'},
         ),
         required=True,
     )
@@ -526,7 +556,7 @@ class PendingReceiptProductForm(Form):
         max_digits=10,
         decimal_places=2,
         widget=NumberInput(
-            attrs={'class': 'form-control quantity', 'step': '0.01'},
+            attrs={'class': f'{_INPUT_CLASSES} quantity', 'step': '0.01'},
         ),
         required=True,
     )
@@ -536,7 +566,7 @@ class PendingReceiptProductForm(Form):
         decimal_places=2,
         widget=NumberInput(
             attrs={
-                'class': 'form-control amount',
+                'class': f'{_READONLY_CLASSES} amount',
                 'step': '0.01',
                 'readonly': True,
             },
@@ -545,14 +575,14 @@ class PendingReceiptProductForm(Form):
     )
     nds_type = IntegerField(
         label=_('Тип НДС'),
-        widget=NumberInput(attrs={'class': 'form-control'}),
+        widget=NumberInput(attrs={'class': _INPUT_CLASSES}),
         required=False,
     )
     nds_sum = DecimalField(
         label=_('Сумма НДС'),
         max_digits=10,
         decimal_places=2,
-        widget=NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        widget=NumberInput(attrs={'class': _INPUT_CLASSES, 'step': '0.01'}),
         required=False,
     )
 
