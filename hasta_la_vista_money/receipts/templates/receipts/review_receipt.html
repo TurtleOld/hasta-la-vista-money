@@ -8,257 +8,251 @@
 
 {% block extra_css %}
 <style nonce="{{ request.csp_nonce }}">
-    input[readonly],
-    input[readonly]:focus {
-        background-color: #f3f4f6;
-        cursor: not-allowed;
+    .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
     }
-    .dark input[readonly],
-    .dark input[readonly]:focus {
-        background-color: #374151;
+    .field-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+    }
+    .dark .field-label {
+        color: #9ca3af;
+    }
+    .product-row.marked-delete td {
+        opacity: 0.4;
+    }
+    .product-row.marked-delete td input:not([type="checkbox"]) {
+        text-decoration: line-through;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
-    <div class="mb-6">
-        <h1 class="text-2xl sm:text-3xl font-heading font-semibold text-gray-900 dark:text-gray-100">
-            {% translate 'Проверка чека перед сохранением' %}
-        </h1>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            {% translate 'Проверьте и при необходимости отредактируйте данные чека. После проверки нажмите "Всё верно, сохранить".' %}
-        </p>
+
+    <div class="mb-8 flex items-start gap-4">
+        <div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-2xl bg-green-100 dark:bg-green-900/30">
+            <i class="bi bi-receipt text-xl text-green-600 dark:text-green-400"></i>
+        </div>
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-heading font-semibold text-gray-900 dark:text-gray-100">
+                {% translate 'Проверка чека перед сохранением' %}
+            </h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {% translate 'Проверьте и при необходимости отредактируйте данные чека. После проверки нажмите "Всё верно, сохранить".' %}
+            </p>
+        </div>
     </div>
 
-    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm p-5 sm:p-6">
-        <form method="post" class="space-y-6" novalidate>
-            {% csrf_token %}
+    <form method="post" novalidate>
+        {% csrf_token %}
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="space-y-1">
-                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {{ form.receipt_date.label }}
-                    </label>
-                    {{ form.receipt_date }}
-                    {% if form.receipt_date.errors %}
-                        <div class="text-sm text-red-600 dark:text-red-400">
-                            {{ form.receipt_date.errors }}
-                        </div>
-                    {% endif %}
+        <div class="space-y-6">
+
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
+                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        <i class="bi bi-shop text-gray-400 dark:text-gray-500"></i>
+                        {% translate 'Продавец' %}
+                    </h2>
                 </div>
-
-                <div class="space-y-1">
-                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {{ form.number_receipt.label }}
-                    </label>
-                    {{ form.number_receipt }}
-                    {% if form.number_receipt.errors %}
-                        <div class="text-sm text-red-600 dark:text-red-400">
-                            {{ form.number_receipt.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="space-y-1">
-                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {{ form.name_seller.label }}
-                    </label>
-                    {{ form.name_seller }}
-                    {% if form.name_seller.errors %}
-                        <div class="text-sm text-red-600 dark:text-red-400">
-                            {{ form.name_seller.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="space-y-1">
-                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {{ form.total_sum.label }}
-                    </label>
-                    {{ form.total_sum }}
-                    {% if form.total_sum.errors %}
-                        <div class="text-sm text-red-600 dark:text-red-400">
-                            {{ form.total_sum.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="space-y-1">
-                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {{ form.retail_place.label }}
-                    </label>
-                    {{ form.retail_place }}
-                    {% if form.retail_place.errors %}
-                        <div class="text-sm text-red-600 dark:text-red-400">
-                            {{ form.retail_place.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="space-y-1">
-                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {{ form.operation_type.label }}
-                    </label>
-                    {{ form.operation_type }}
-                    {% if form.operation_type.errors %}
-                        <div class="text-sm text-red-600 dark:text-red-400">
-                            {{ form.operation_type.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="space-y-1">
-                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {{ form.retail_place_address.label }}
-                    </label>
-                    {{ form.retail_place_address }}
-                    {% if form.retail_place_address.errors %}
-                        <div class="text-sm text-red-600 dark:text-red-400">
-                            {{ form.retail_place_address.errors }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-1">
-                        <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {{ form.nds10.label }}
-                        </label>
-                        {{ form.nds10 }}
-                        {% if form.nds10.errors %}
-                            <div class="text-sm text-red-600 dark:text-red-400">
-                                {{ form.nds10.errors }}
-                            </div>
+                <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-2 field-group">
+                        <span class="field-label">{{ form.name_seller.label }}</span>
+                        {{ form.name_seller }}
+                        {% if form.name_seller.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.name_seller.errors }}</div>
                         {% endif %}
                     </div>
-
-                    <div class="space-y-1">
-                        <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {{ form.nds20.label }}
-                        </label>
-                        {{ form.nds20 }}
-                        {% if form.nds20.errors %}
-                            <div class="text-sm text-red-600 dark:text-red-400">
-                                {{ form.nds20.errors }}
-                            </div>
+                    <div class="field-group">
+                        <span class="field-label">{{ form.retail_place.label }}</span>
+                        {{ form.retail_place }}
+                        {% if form.retail_place.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.retail_place.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="md:col-span-3 field-group">
+                        <span class="field-label">{{ form.retail_place_address.label }}</span>
+                        {{ form.retail_place_address }}
+                        {% if form.retail_place_address.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.retail_place_address.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
             </div>
 
-            <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h2 class="text-xl font-heading font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                    {% translate 'Позиции чека' %}
-                </h2>
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
+                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        <i class="bi bi-file-text text-gray-400 dark:text-gray-500"></i>
+                        {% translate 'Реквизиты чека' %}
+                    </h2>
+                </div>
+                <div class="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="col-span-2 field-group">
+                        <span class="field-label">{{ form.receipt_date.label }}</span>
+                        {{ form.receipt_date }}
+                        {% if form.receipt_date.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.receipt_date.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="field-group">
+                        <span class="field-label">{{ form.number_receipt.label }}</span>
+                        {{ form.number_receipt }}
+                        {% if form.number_receipt.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.number_receipt.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="field-group">
+                        <span class="field-label">{{ form.operation_type.label }}</span>
+                        {{ form.operation_type }}
+                        {% if form.operation_type.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.operation_type.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="field-group">
+                        <span class="field-label">{{ form.nds10.label }}</span>
+                        {{ form.nds10 }}
+                        {% if form.nds10.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.nds10.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="field-group">
+                        <span class="field-label">{{ form.nds20.label }}</span>
+                        {{ form.nds20 }}
+                        {% if form.nds20.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.nds20.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="field-group">
+                        <span class="field-label">{{ form.total_sum.label }}</span>
+                        {{ form.total_sum }}
+                        {% if form.total_sum.errors %}
+                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.total_sum.errors }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
 
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        <i class="bi bi-list-ul text-gray-400 dark:text-gray-500"></i>
+                        {% translate 'Позиции чека' %}
+                    </h2>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">
+                        {{ product_formset.total_form_count }} {% translate 'позиций' %}
+                    </span>
+                </div>
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    {% translate 'Название' %}
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    {% translate 'Категория' %}
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    {% translate 'Цена' %}
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    {% translate 'Количество' %}
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    {% translate 'Сумма' %}
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    {% translate 'Удалить' %}
-                                </th>
+                    <table class="min-w-full">
+                        <thead>
+                            <tr class="border-b border-gray-100 dark:border-gray-800">
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-px">#</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Название' %}</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Категория' %}</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Цена' %}</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Кол-во' %}</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Сумма' %}</th>
+                                <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Удалить' %}</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                             {{ product_formset.management_form }}
-                            {% for form in product_formset %}
-                                <tr class="product-row">
-                                    <td class="px-4 py-3 whitespace-nowrap">
-                                        {{ form.product_name }}
-                                        {% if form.product_name.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
-                                                {{ form.product_name.errors }}
-                                            </div>
+                            {% for product_form in product_formset %}
+                                <tr class="product-row group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                    <td class="px-4 py-3 text-sm text-gray-400 dark:text-gray-600 tabular-nums w-px">
+                                        {{ forloop.counter }}
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        {{ product_form.product_name }}
+                                        {% if product_form.product_name.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.product_name.errors }}</div>
                                         {% endif %}
                                     </td>
-                                    <td class="px-4 py-3 whitespace-nowrap">
-                                        {{ form.category }}
-                                        {% if form.category.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
-                                                {{ form.category.errors }}
-                                            </div>
+                                    <td class="px-4 py-3">
+                                        {{ product_form.category }}
+                                        {% if product_form.category.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.category.errors }}</div>
                                         {% endif %}
                                     </td>
-                                    <td class="px-4 py-3 whitespace-nowrap">
-                                        {{ form.price }}
-                                        {% if form.price.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
-                                                {{ form.price.errors }}
-                                            </div>
+                                    <td class="px-4 py-3 text-right">
+                                        {{ product_form.price }}
+                                        {% if product_form.price.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.price.errors }}</div>
                                         {% endif %}
                                     </td>
-                                    <td class="px-4 py-3 whitespace-nowrap">
-                                        {{ form.quantity }}
-                                        {% if form.quantity.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
-                                                {{ form.quantity.errors }}
-                                            </div>
+                                    <td class="px-4 py-3 text-right">
+                                        {{ product_form.quantity }}
+                                        {% if product_form.quantity.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.quantity.errors }}</div>
                                         {% endif %}
                                     </td>
-                                    <td class="px-4 py-3 whitespace-nowrap">
-                                        {{ form.amount }}
-                                        {% if form.amount.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">
-                                                {{ form.amount.errors }}
-                                            </div>
+                                    <td class="px-4 py-3 text-right">
+                                        {{ product_form.amount }}
+                                        {% if product_form.amount.errors %}
+                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.amount.errors }}</div>
                                         {% endif %}
                                     </td>
-                                    <td class="px-4 py-3 whitespace-nowrap">
-                                        {{ form.DELETE }}
+                                    <td class="px-4 py-3 text-center">
+                                        {{ product_form.DELETE }}
                                     </td>
-                                    {% for hidden in form.hidden_fields %}
+                                    {% for hidden in product_form.hidden_fields %}
                                         {{ hidden }}
                                     {% endfor %}
                                 </tr>
                             {% endfor %}
                         </tbody>
+                        <tfoot>
+                            <tr class="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
+                                <td colspan="5" class="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 text-right">
+                                    {% translate 'Итого:' %}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <span class="text-sm font-bold text-gray-900 dark:text-gray-100" id="total-sum-display">—</span>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
-                <button
-                    type="submit"
-                    name="save"
-                    class="inline-flex items-center justify-center rounded-xl bg-green-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700"
-                >
-                    <i class="bi bi-check2-circle mr-2"></i>
-                    {% translate 'Всё верно, сохранить' %}
-                </button>
-                <button
-                    type="submit"
-                    name="update"
-                    class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-                >
-                    <i class="bi bi-save mr-2"></i>
-                    {% translate 'Сохранить изменения' %}
-                </button>
+            <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button
+                        type="submit"
+                        name="save"
+                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    >
+                        <i class="bi bi-check2-circle text-base"></i>
+                        {% translate 'Всё верно, сохранить' %}
+                    </button>
+                    <button
+                        type="submit"
+                        name="update"
+                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 px-6 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                    >
+                        <i class="bi bi-save text-base"></i>
+                        {% translate 'Сохранить изменения' %}
+                    </button>
+                </div>
                 <a
                     href="{% url 'receipts:list' %}"
-                    class="inline-flex items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-6 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition hover:bg-gray-50 dark:hover:bg-gray-700"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-medium text-gray-500 dark:text-gray-400 transition hover:text-gray-700 dark:hover:text-gray-200"
                 >
+                    <i class="bi bi-x-lg text-base"></i>
                     {% translate 'Отмена' %}
                 </a>
             </div>
-        </form>
-    </div>
+
+        </div>
+    </form>
 </div>
 
 <script nonce="{{ request.csp_nonce }}">
@@ -266,28 +260,30 @@
     function initReceiptReview() {
         const productRows = document.querySelectorAll('.product-row');
         const totalSumInput = document.getElementById('id_total_sum');
+        const totalSumDisplay = document.getElementById('total-sum-display');
+
+        function formatAmount(value) {
+            return new Intl.NumberFormat('ru-RU', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(value);
+        }
 
         function amountUpdate(event) {
             try {
                 const input = event ? event.target : this;
                 const row = input.closest('tr.product-row');
-                if (!row) {
-                    return;
-                }
+                if (!row) return;
 
                 const priceInput = row.querySelector('input[name*="price"]') || row.querySelector('input.price');
                 const quantityInput = row.querySelector('input[name*="quantity"]') || row.querySelector('input.quantity');
                 const amountInput = row.querySelector('input[name*="amount"]') || row.querySelector('input.amount');
 
-                if (!priceInput || !quantityInput || !amountInput) {
-                    return;
-                }
+                if (!priceInput || !quantityInput || !amountInput) return;
 
                 const price = parseFloat(String(priceInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
                 const quantity = parseFloat(String(quantityInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
-                const amount = (price * quantity).toFixed(2);
-                
-                amountInput.value = amount;
+                amountInput.value = (price * quantity).toFixed(2);
                 amountInput.dispatchEvent(new Event('change', { bubbles: true }));
 
                 calculateTotalSum();
@@ -297,26 +293,20 @@
         }
 
         function calculateTotalSum() {
-            if (!totalSumInput) {
-                return;
-            }
-
             const amountInputs = document.querySelectorAll('input[name*="amount"]');
-            let total_sum = 0;
+            let total = 0;
 
             amountInputs.forEach(amountInput => {
                 const row = amountInput.closest('tr.product-row');
                 if (row) {
                     const deleteCheckbox = row.querySelector('input[name*="DELETE"]');
-                    if (deleteCheckbox && deleteCheckbox.checked) {
-                        return;
-                    }
+                    if (deleteCheckbox && deleteCheckbox.checked) return;
                 }
-                const value = String(amountInput.value).replace(',', '.').replace(/\s/g, '');
-                total_sum += parseFloat(value) || 0;
+                total += parseFloat(String(amountInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
             });
 
-            totalSumInput.value = total_sum.toFixed(2);
+            if (totalSumInput) totalSumInput.value = total.toFixed(2);
+            if (totalSumDisplay) totalSumDisplay.textContent = formatAmount(total) + ' ₽';
         }
 
         productRows.forEach(row => {
@@ -326,23 +316,25 @@
             const deleteCheckbox = row.querySelector('input[name*="DELETE"]');
 
             if (priceInput && quantityInput && amountInput) {
-                priceInput.addEventListener('input', amountUpdate);
-                priceInput.addEventListener('change', amountUpdate);
-                priceInput.addEventListener('blur', amountUpdate);
-
-                quantityInput.addEventListener('input', amountUpdate);
-                quantityInput.addEventListener('change', amountUpdate);
-                quantityInput.addEventListener('blur', amountUpdate);
-
-                if (deleteCheckbox) {
-                    deleteCheckbox.addEventListener('change', calculateTotalSum);
-                }
+                ['input', 'change', 'blur'].forEach(evt => {
+                    priceInput.addEventListener(evt, amountUpdate);
+                    quantityInput.addEventListener(evt, amountUpdate);
+                });
 
                 const price = parseFloat(String(priceInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
                 const quantity = parseFloat(String(quantityInput.value).replace(',', '.').replace(/\s/g, '')) || 0;
                 if (price > 0 && quantity > 0) {
-                    const amount = (price * quantity).toFixed(2);
-                    amountInput.value = amount;
+                    amountInput.value = (price * quantity).toFixed(2);
+                }
+            }
+
+            if (deleteCheckbox) {
+                deleteCheckbox.addEventListener('change', function() {
+                    row.classList.toggle('marked-delete', this.checked);
+                    calculateTotalSum();
+                });
+                if (deleteCheckbox.checked) {
+                    row.classList.add('marked-delete');
                 }
             }
         });
@@ -351,9 +343,7 @@
 
         const form = document.querySelector('form[method="post"]');
         if (form) {
-            form.addEventListener('submit', function() {
-                calculateTotalSum();
-            });
+            form.addEventListener('submit', calculateTotalSum);
         }
     }
 
