@@ -51,7 +51,7 @@ def process_bank_statement_task(
         transactions = parser.parse()
 
         upload.total_transactions = len(transactions)
-        upload.save()
+        upload.save(update_fields=['total_transactions'])
 
         logger.info('Found %d transactions to process', len(transactions))
 
@@ -63,7 +63,7 @@ def process_bank_statement_task(
         # Mark as completed
         upload.status = BankStatementUpload.Status.COMPLETED
         upload.progress = 100
-        upload.save()
+        upload.save(update_fields=['status', 'progress'])
 
         logger.info(
             'Completed: %d income, %d expenses',
@@ -88,7 +88,7 @@ def process_bank_statement_task(
             upload = BankStatementUpload.objects.get(id=upload_id)
             upload.status = BankStatementUpload.Status.FAILED
             upload.error_message = f'Ошибка парсинга: {e!s}'
-            upload.save()
+            upload.save(update_fields=['status', 'error_message'])
         except BankStatementUpload.DoesNotExist:
             logger.warning('Upload record not found for error handling')
         raise
@@ -99,7 +99,7 @@ def process_bank_statement_task(
             upload = BankStatementUpload.objects.get(id=upload_id)
             upload.status = BankStatementUpload.Status.FAILED
             upload.error_message = f'Непредвиденная ошибка: {e!s}'
-            upload.save()
+            upload.save(update_fields=['status', 'error_message'])
         except BankStatementUpload.DoesNotExist:
             logger.warning('Upload record not found for error handling')
         # Retry the task
@@ -119,7 +119,7 @@ def _initialize_upload(
     upload.status = BankStatementUpload.Status.PROCESSING
     upload.celery_task_id = task.request.id
     upload.progress = 0
-    upload.save()
+    upload.save(update_fields=['status', 'celery_task_id', 'progress'])
 
 
 def _process_transactions(
@@ -191,7 +191,14 @@ def _process_transactions(
 
         # Save progress every batch or on last transaction
         if (idx + 1) % batch_size == 0 or idx == total - 1:
-            upload.save()
+            upload.save(
+                update_fields=[
+                    'processed_transactions',
+                    'income_count',
+                    'expense_count',
+                    'progress',
+                ],
+            )
             logger.info(
                 'Progress: %d/%d transactions (%d%%)',
                 idx + 1,
