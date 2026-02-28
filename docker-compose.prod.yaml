@@ -63,6 +63,7 @@ services:
 
   celery-worker:
     image: ghcr.io/turtleold/hasta-la-vista-money:main
+    entrypoint: ["/app/celery-entrypoint.sh"]
     command: uv run celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
     volumes:
       - media_data:/app/media

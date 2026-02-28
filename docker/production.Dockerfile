@@ -75,17 +75,18 @@ ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
 COPY --from=builder /app /app
 
 COPY --from=builder /app/docker/entrypoint.sh /app/entrypoint.sh
+COPY --from=builder /app/docker/celery-entrypoint.sh /app/celery-entrypoint.sh
 
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/.venv/bin/granian && \
     chmod +x /app/.venv/bin/python && \
-    sed -i 's/\r$//' /app/entrypoint.sh && \
-    chmod +x /app/entrypoint.sh && \
+    sed -i 's/\r$//' /app/entrypoint.sh /app/celery-entrypoint.sh && \
+    chmod +x /app/entrypoint.sh /app/celery-entrypoint.sh && \
     test -f /app/entrypoint.sh && \
     head -1 /app/entrypoint.sh && \
-    mkdir -p /app/staticfiles /app/logs && \
-    chown -R appuser:appuser /app/staticfiles /app/logs && \
-    chmod -R 755 /app/staticfiles /app/logs
+    mkdir -p /app/staticfiles /app/media /app/logs && \
+    chown -R appuser:appuser /app/staticfiles /app/media /app/logs && \
+    chmod -R 755 /app/staticfiles /app/media /app/logs
 
 USER appuser
 

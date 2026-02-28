@@ -2,7 +2,7 @@
 set -e
 
 echo "Waiting for database connection..."
-while ! /app/.venv/bin/python manage.py check --database default 2>&1; do
+until /app/.venv/bin/python manage.py check --database default > /dev/null 2>&1; do
     echo "Database is unavailable - sleeping"
     sleep 2
 done
