@@ -1,5 +1,4 @@
 from dependency_injector import containers, providers
-from openai import OpenAI
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.budget.containers import BudgetContainer
@@ -15,12 +14,6 @@ from hasta_la_vista_money.users.containers import UsersContainer
 
 class CoreContainer(containers.DeclarativeContainer):
     config = providers.Configuration()
-
-    openai_client = providers.Singleton(
-        OpenAI,
-        base_url=config.openai.base_url,
-        api_key=config.openai.api_key,
-    )
 
     account_service: providers.Dependency[AccountServiceProtocol] = (
         providers.Dependency()

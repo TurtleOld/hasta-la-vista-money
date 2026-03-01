@@ -38,8 +38,8 @@ __all__ = [
 ]
 
 
-def check_openai_rate_limit(user_id: int | None = None) -> None:
-    """Check OpenAI API rate limit.
+def check_ai_rate_limit(user_id: int | None = None) -> None:
+    """Check AI API rate limit.
 
     Args:
         user_id: User ID for rate limiting. If None, uses global limit.
@@ -48,18 +48,18 @@ def check_openai_rate_limit(user_id: int | None = None) -> None:
         RateLimitExceededError: If rate limit is exceeded.
     """
     if user_id is not None:
-        cache_key = f'openai_rate_limit_user_{user_id}'
-        limit = config('OPENAI_RATE_LIMIT_PER_USER', default=10, cast=int)
+        cache_key = f'ai_rate_limit_user_{user_id}'
+        limit = config('AI_RATE_LIMIT_PER_USER', default=10, cast=int)
     else:
-        cache_key = 'openai_rate_limit_global'
-        limit = config('OPENAI_RATE_LIMIT_GLOBAL', default=100, cast=int)
+        cache_key = 'ai_rate_limit_global'
+        limit = config('AI_RATE_LIMIT_GLOBAL', default=100, cast=int)
 
-    window = config('OPENAI_RATE_LIMIT_WINDOW', default=60, cast=int)
+    window = config('AI_RATE_LIMIT_WINDOW', default=60, cast=int)
 
     count = cache.get(cache_key, 0)
     if count >= limit:
         logger.warning(
-            'OpenAI API rate limit exceeded',
+            'AI API rate limit exceeded',
             extra={
                 'user_id': user_id,
                 'count': count,
@@ -69,7 +69,7 @@ def check_openai_rate_limit(user_id: int | None = None) -> None:
         )
         error_msg = str(
             _(
-                'Превышен лимит запросов к OpenAI API: '
+                'Превышен лимит запросов к API: '
                 f'{count}/{limit} за {window} секунд',
             ),
         )
@@ -119,7 +119,7 @@ def analyze_image_with_ai(
         RuntimeError: When image analysis errors occur.
         TypeError: If AI response doesn't contain content.
     """
-    check_openai_rate_limit(user_id)
+    check_ai_rate_limit(user_id)
     provider = get_ai_provider()
     return provider.analyze(image_base64)
 

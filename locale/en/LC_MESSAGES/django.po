@@ -2186,8 +2186,8 @@ msgid "Поле необязательное"
 msgstr "Optional field"
 
 #: hasta_la_vista_money/receipts/forms.py:278
-msgid "НДС по ставке 20%"
-msgstr "VAT at 20% rate"
+msgid "НДС по ставке 22%"
+msgstr "VAT at 22% rate"
 
 #: hasta_la_vista_money/receipts/forms.py:283
 msgid "Итоговая сумма по чеку"
@@ -2249,8 +2249,8 @@ msgid "НДС 10%"
 msgstr "VAT 10%"
 
 #: hasta_la_vista_money/receipts/forms.py:415
-msgid "НДС 20%"
-msgstr "VAT 20%"
+msgid "НДС 22%"
+msgstr "VAT 22%"
 
 #: hasta_la_vista_money/receipts/forms.py:480
 msgid "Название товара"
