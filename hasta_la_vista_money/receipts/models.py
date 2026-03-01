@@ -385,7 +385,7 @@ class Receipt(models.Model):
         receipt_date: Date and time of the receipt.
         number_receipt: Fiscal document number.
         nds10: VAT amount at 10% rate.
-        nds20: VAT amount at 20% rate.
+        nds20: VAT amount at 22% rate.
         operation_type: Type of operation (purchase, return, etc.).
         total_sum: Total sum of the receipt.
         manual: Whether receipt was entered manually.

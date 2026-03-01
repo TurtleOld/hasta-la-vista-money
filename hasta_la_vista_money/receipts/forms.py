@@ -326,7 +326,7 @@ class ReceiptForm(ModelForm[Receipt]):
         required=False,
     )
     nds20 = DecimalField(
-        label=_('НДС по ставке 20%'),
+        label=_('НДС по ставке 22%'),
         help_text=_('Поле необязательное'),
         required=False,
     )
@@ -463,7 +463,7 @@ class PendingReceiptReviewForm(Form):
         required=False,
     )
     nds20 = DecimalField(
-        label=_('НДС 20%'),
+        label=_('НДС 22%'),
         max_digits=constants.SIXTY,
         decimal_places=constants.TWO,
         widget=NumberInput(attrs={'class': _INPUT_CLASSES, 'step': '0.01'}),
