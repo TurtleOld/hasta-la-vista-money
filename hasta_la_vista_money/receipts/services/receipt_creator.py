@@ -286,7 +286,7 @@ class ReceiptCreateData:
         number_receipt: Optional receipt number.
         operation_type: Optional operation type (purchase/return).
         nds10: Optional VAT 10% amount.
-        nds20: Optional VAT 20% amount.
+        nds20: Optional VAT 22% amount.
     """
 
     receipt_date: datetime
