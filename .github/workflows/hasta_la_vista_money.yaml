@@ -97,7 +97,7 @@ jobs:
           GITHUB_WORKFLOW: true
 
       - name: Run codacy-coverage-reporter
-        uses: codacy/codacy-coverage-reporter-action@a38818475bb21847788496e9f0fddaa4e84955ba
+        uses: codacy/codacy-coverage-reporter-action@6904bd01e29ada115135b5eca20125758ccae53b
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           coverage-reports: 'coverage.xml'
