@@ -68,7 +68,7 @@ dev = [
     "mkdocstrings[python]>=0.29.0",
     "mkdocs-material>=9.5.39",
     "mkdocs-render-swagger-plugin>=0.1.2",
-    "pygments>=2.0,<2.19",
+    "pygments>=2.20,<2.21",
     "django-stubs[compatible-mypy]>=5.1.0",
     "types-python-dateutil>=2.9.0.20241003",
 ]
@@ -90,7 +90,7 @@ dev = [
     "mkdocstrings[python]>=0.29.0",
     "mkdocs-material>=9.5.39",
     "mkdocs-render-swagger-plugin>=0.1.2",
-    "pygments>=2.0,<2.19",
+    "pygments>=2.20,<2.21",
     "django-stubs[compatible-mypy]>=5.1.0",
     "types-python-dateutil>=2.9.0.20241003",
     "factory-boy>=3.3.0",
