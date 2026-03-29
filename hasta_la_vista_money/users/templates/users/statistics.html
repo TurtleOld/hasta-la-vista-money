@@ -398,11 +398,10 @@
                 try {
                     if (!chartData.labels || chartData.labels.length === 0) {
                         ctx.parentElement.innerHTML = '<div class="text-center text-gray-500 dark:text-gray-400 py-12"><i class="bi bi-graph-up text-5xl mb-3 block"></i><p class="text-lg">Нет данных для отображения графика</p></div>';
-                        return;
-                    }
+                    } else {
 
-                    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark' || 
-                                   (document.documentElement.classList.contains('dark') || 
+                    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark' ||
+                                   (document.documentElement.classList.contains('dark') ||
                                     window.matchMedia('(prefers-color-scheme: dark)').matches);
 
                     const chart = new Chart(ctx, {
@@ -499,6 +498,7 @@
                             }
                         }
                     });
+                    }
                 } catch (error) {
                     console.error('Ошибка при создании графика:', error);
                 }
@@ -512,20 +512,20 @@
             tabButtons.forEach(button => {
                 button.addEventListener('click', function() {
                     const targetId = this.getAttribute('data-tab-target');
-                    
+
                     tabButtons.forEach(btn => {
                         btn.classList.remove('active', 'bg-white', 'dark:bg-gray-800', 'text-green-600', 'dark:text-green-400', 'border-green-600', 'dark:border-green-400', 'border-b-2');
                         btn.classList.add('text-gray-600', 'dark:text-gray-400');
                     });
-                    
+
                     tabPanes.forEach(pane => {
                         pane.classList.add('hidden');
                         pane.classList.remove('active');
                     });
-                    
+
                     this.classList.add('active', 'bg-white', 'dark:bg-gray-800', 'text-green-600', 'dark:text-green-400', 'border-b-2', 'border-green-600', 'dark:border-green-400');
                     this.classList.remove('text-gray-600', 'dark:text-gray-400');
-                    
+
                     const targetPane = document.getElementById(targetId);
                     if (targetPane) {
                         targetPane.classList.remove('hidden');
@@ -541,7 +541,7 @@
                     const content = document.getElementById(targetId);
                     const icon = this.querySelector('i');
                     const isExpanded = this.getAttribute('aria-expanded') === 'true';
-                    
+
                     if (content) {
                         if (isExpanded) {
                             content.classList.add('hidden');
