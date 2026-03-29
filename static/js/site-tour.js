@@ -87,7 +87,6 @@
             return;
         }
 
-        console.log('[SiteTour] driver instance created successfully');
 
         // Helper function to toggle dropdown menu
         function toggleFinanceDropdown(show = true) {
@@ -660,7 +659,6 @@
 
         // Get current page
         const currentPage = getCurrentPage();
-        console.log('[SiteTour] Current page:', currentPage);
 
         // Validate page name to prevent generic object injection attacks
         // Use only if it's in our whitelist (VALID_PAGES)
@@ -673,7 +671,6 @@
         function isTourGloballyDisabled() {
             try {
                 const disabled = localStorage.getItem('siteTourGloballyDisabled');
-                console.log('[SiteTour] Tour globally disabled:', !!disabled);
                 return !!disabled;
             } catch (error) {
                 console.warn('[SiteTour] localStorage not available:', error);
@@ -685,7 +682,6 @@
         function disableTourGlobally() {
             try {
                 localStorage.setItem('siteTourGloballyDisabled', 'true');
-                console.log('[SiteTour] Tour disabled globally');
             } catch (error) {
                 console.warn('[SiteTour] Could not save to localStorage:', error);
             }
@@ -695,7 +691,6 @@
         function enableTourGlobally() {
             try {
                 localStorage.removeItem('siteTourGloballyDisabled');
-                console.log('[SiteTour] Tour enabled globally');
             } catch (error) {
                 console.warn('[SiteTour] Could not access localStorage:', error);
             }
@@ -742,7 +737,6 @@
                             if (checkbox) {
                                 checkbox.addEventListener('change', () => {
                                     if (checkbox.checked) {
-                                        console.log('[SiteTour] User disabled tour globally');
                                         disableTourGlobally();
                                     }
                                 });
@@ -761,7 +755,6 @@
         function startTour() {
             // Check if tour is globally disabled
             if (isTourGloballyDisabled()) {
-                console.log('[SiteTour] Tour is globally disabled, skipping');
                 return;
             }
 
@@ -769,10 +762,8 @@
             const missingElements = tourSteps.filter(step => !document.querySelector(step.element));
 
             if (missingElements.length > 0) {
-                console.warn('[SiteTour] Some tour elements are missing:', missingElements.map(s => s.element));
                 // Don't start tour if essential elements are missing
                 if (missingElements.length === tourSteps.length) {
-                    console.warn('[SiteTour] All tour elements are missing, skipping tour');
                     return;
                 }
             }
@@ -781,7 +772,6 @@
                 const validSteps = tourSteps.filter(step => document.querySelector(step.element));
                 const enhancedSteps = enhancePopoverWithCheckbox(validSteps);
 
-                console.log('[SiteTour] Starting tour for', currentPage, 'with', enhancedSteps.length, 'steps');
                 driver.setSteps(enhancedSteps);
                 driver.drive(0);
             } catch (error) {
@@ -792,37 +782,29 @@
         // Initialize tour - show on every page load (unless globally disabled)
         function initTour() {
             if (isTourGloballyDisabled()) {
-                console.log('[SiteTour] Tour is globally disabled, not starting');
                 return;
             }
 
-            console.log('[SiteTour] Tour is enabled, scheduling tour start');
             // Show tour after content is loaded
             setTimeout(() => {
                 startTour();
             }, 2500);
         }
 
-        console.log('[SiteTour] Tour initialization setup complete');
-
         // Export functions for manual triggering
         window.SiteTour = {
             start: startTour,
             restart: () => {
-                console.log('[SiteTour] Restart called for page:', validatedPage);
                 startTour();
             },
             enableTour: () => {
-                console.log('[SiteTour] Enable tour called');
                 enableTourGlobally();
                 startTour();
             },
             disableTour: () => {
-                console.log('[SiteTour] Disable tour called');
                 disableTourGlobally();
             },
             restartAll: () => {
-                console.log('[SiteTour] Restart all called - clearing global disable flag');
                 try {
                     enableTourGlobally();
                 } catch (error) {
@@ -833,7 +815,6 @@
             driver: driver,
             currentPage: validatedPage
         };
-        console.log('[SiteTour] window.SiteTour methods exported');
 
         // Initialize on page load
         if (document.readyState === 'loading') {
