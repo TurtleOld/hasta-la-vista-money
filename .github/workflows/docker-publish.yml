@@ -3,7 +3,6 @@ name: Docker
 permissions:
   contents: read
   packages: write
-  id-token: write
 
 on:
   push:
@@ -14,28 +13,30 @@ on:
   pull_request:
     branches:
       - main
+      - '**'
   workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
+  REGISTRY: git.pavlovteam.ru
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
+    runs-on: docker
+    container:
+      image: git.pavlovteam.ru/turtleold/ci-base:3.14
+      credentials:
+        username: ${{ secrets.REGISTRY_USER }}
+        password: ${{ secrets.REGISTRY_TOKEN }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: theme/static_src/package-lock.json
 
@@ -49,60 +50,41 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-          cache: 'pip'
-
       - name: Install uv
-        run: pip install uv==0.7.13
+        run: pip install uv==0.7.13 --break-system-packages
 
       - name: Generate uv.lock
         run: uv lock
 
-      - name: Verify uv.lock exists
-        run: |
-          if [ ! -f uv.lock ]; then
-            echo "Error: uv.lock was not generated"
-            exit 1
-          fi
-          echo "uv.lock generated successfully"
-
-      - name: Install cosign
+      - name: Configure Docker credentials store
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v4.1.1
-        with:
-          cosign-release: 'v2.2.4'
+        run: |
+          mkdir -p ~/.docker
+          echo '{"auths": {}}' > ~/.docker/config.json
+
+      - name: Log into registry
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.REGISTRY_TOKEN }}" | \
+            docker login ${{ env.REGISTRY }} \
+            -u ${{ secrets.REGISTRY_USER }} \
+            --password-stdin
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
+          else
+            TAGS="${IMAGE}:main,${IMAGE}:latest"
+          fi
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         run: |
-          docker buildx create --use --name ci-builder \
-            || docker buildx use ci-builder
-
-      - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4.1.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v6.0.0
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          labels: |
-            org.opencontainers.image.source=https://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
+          docker buildx create --use --name ci-builder || docker buildx use ci-builder
 
       - name: Build Docker image
         run: |
@@ -110,25 +92,15 @@ jobs:
             --load \
             -t placeholder \
             -f docker/production.Dockerfile \
-            $(printf '%s\n' "${{ steps.meta.outputs.labels }}" | sed 's/^/--label /') \
+            --label "org.opencontainers.image.source=https://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
             .
 
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@83bfd93ab480705a7b99a2ed02765137f5ab55ba
-        with:
-          context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          file: docker/production.Dockerfile
-          platforms: linux/amd64,linux/arm64
-
-      - name: Sign the published Docker image
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
-          TAGS: ${{ steps.meta.outputs.tags }}
-          DIGEST: ${{ steps.build-and-push.outputs.digest }}
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+      - name: Push Docker image
+        if: github.event_name != 'pull_request'
+        run: |
+          IFS=',' read -ra TAGS <<< "${{ steps.meta.outputs.tags }}"
+          for TAG in "${TAGS[@]}"; do
+            docker tag placeholder "${TAG}"
+            docker push "${TAG}"
+          done
