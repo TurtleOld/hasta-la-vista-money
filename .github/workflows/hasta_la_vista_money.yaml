@@ -83,9 +83,3 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/github_actions
           REDIS_LOCATION: redis://redis:6379/1
-
-      - name: Run codacy-coverage-reporter
-        uses: codacy/codacy-coverage-reporter-action@6904bd01e29ada115135b5eca20125758ccae53b
-        with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: coverage.xml
