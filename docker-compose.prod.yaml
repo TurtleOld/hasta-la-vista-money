@@ -38,7 +38,7 @@ services:
       retries: 5
 
   hlvm-server:
-    image: ghcr.io/turtleold/hasta-la-vista-money:main
+    image: git.pavlovteam.ru/turtleold/hasta-la-vista-money:latest
     volumes:
       - staticfiles_data:/app/staticfiles
       - media_data:/app/media
@@ -62,7 +62,7 @@ services:
     restart: unless-stopped
 
   celery-worker:
-    image: ghcr.io/turtleold/hasta-la-vista-money:main
+    image: git.pavlovteam.ru/turtleold/hasta-la-vista-money:latest
     entrypoint: ["/app/celery-entrypoint.sh"]
     command: uv run celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
     volumes:
