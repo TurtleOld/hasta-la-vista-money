@@ -40,13 +40,9 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: github_actions
-        ports:
-          - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
       redis:
         image: redis:8-alpine
-        ports:
-          - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
@@ -80,11 +76,13 @@ jobs:
         run: uv run python manage.py migrate
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/github_actions
+          REDIS_LOCATION: redis://redis:6379/1
 
       - name: Run Tests with Coverage
         run: make coverage
         env:
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/github_actions
+          REDIS_LOCATION: redis://redis:6379/1
 
       - name: Run codacy-coverage-reporter
         uses: codacy/codacy-coverage-reporter-action@6904bd01e29ada115135b5eca20125758ccae53b
