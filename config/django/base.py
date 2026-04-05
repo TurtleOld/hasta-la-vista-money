@@ -241,17 +241,6 @@ if IS_TESTING and not config(
             'NAME': BASE_DIR / 'db.sqlite3',
         },
     }
-elif config('GITHUB_WORKFLOW', default=''):
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'github_actions',
-            'USER': 'postgres',
-            'PASSWORD': 'postgres',
-            'HOST': '127.0.0.1',
-            'PORT': '5432',
-        },
-    }
 else:
     database_url = config('DATABASE_URL', default='')
 
