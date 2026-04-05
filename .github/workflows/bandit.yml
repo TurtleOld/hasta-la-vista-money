@@ -1,26 +1,26 @@
 name: Bandit
-
 permissions:
   contents: read
-
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main", "**"]
+    branches: [ "main" ]
   schedule:
     - cron: '34 8 * * 1'
 
 jobs:
   bandit:
-    runs-on: docker
-    container:
-      image: git.pavlovteam.ru/turtleold/ci-base:3.14
-      credentials:
-        username: ${{ secrets.REGISTRY_USER }}
-        password: ${{ secrets.REGISTRY_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
 
-      - name: Run Bandit
-        run: bandit -r . -x .venv,venv,tests -ll --exit-zero
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bandit Scan
+        uses: shundor/python-bandit-scan@ab1d87dfccc5a0ffab88be3aaac6ffe35c10d6cd
+        with:
+          exit_zero: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
