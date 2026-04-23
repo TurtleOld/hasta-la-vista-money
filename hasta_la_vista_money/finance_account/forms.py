@@ -8,6 +8,7 @@ Includes comprehensive validation, user-specific account filtering, and proper
 error handling for financial operations.
 """
 
+from collections.abc import Sequence
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -227,20 +228,96 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         self.account_repository = account_repository
 
         user_accounts = self.account_repository.get_by_user(user)
+        initial_accounts = self._get_default_transfer_accounts(
+            list(user_accounts),
+        )
 
         self.fields['from_account'] = ModelChoiceField(
             label=_('Со счёта:'),
             queryset=user_accounts,
             help_text=_('Выберите счёт, с которого будет списана сумма'),
+            initial=self.initial.get('from_account', initial_accounts[0]),
         )
 
         self.fields['to_account'] = ModelChoiceField(
             label=_('На счёт:'),
             queryset=user_accounts,
             help_text=_('Выберите счёт, на который будет зачислена сумма'),
+            initial=self.initial.get('to_account', initial_accounts[1]),
         )
 
         self.add_bootstrap_classes()
+
+    def _get_default_transfer_accounts(
+        self,
+        accounts: Sequence[Account],
+    ) -> tuple[Account | None, Account | None]:
+        """Return default source and destination accounts for transfer form."""
+        if not accounts:
+            return None, None
+
+        ordered_accounts = sorted(
+            accounts,
+            key=lambda account: (
+                account.created_at is not None,
+                account.created_at,
+            ),
+            reverse=True,
+        )
+        if len(ordered_accounts) == 1:
+            return ordered_accounts[0], None
+
+        from_account = self._get_latest_account_by_types(
+            ordered_accounts,
+            [
+                constants.ACCOUNT_TYPE_DEBIT_CARD,
+                constants.ACCOUNT_TYPE_DEBIT,
+            ],
+        )
+        to_account = self._get_latest_account_by_types(
+            ordered_accounts,
+            [
+                constants.ACCOUNT_TYPE_CREDIT_CARD,
+                constants.ACCOUNT_TYPE_CREDIT,
+            ],
+            exclude_account=from_account,
+        )
+
+        if from_account is None:
+            from_account = ordered_accounts[0]
+
+        if to_account is None:
+            to_account = self._get_latest_account(
+                ordered_accounts,
+                exclude_account=from_account,
+            )
+
+        return from_account, to_account
+
+    def _get_latest_account_by_types(
+        self,
+        accounts: Sequence[Account],
+        account_types: Sequence[str],
+        exclude_account: Account | None = None,
+    ) -> Account | None:
+        """Return the latest created account matching the given types."""
+        for account in accounts:
+            if account == exclude_account:
+                continue
+            if account.type_account in account_types:
+                return account
+        return None
+
+    def _get_latest_account(
+        self,
+        accounts: Sequence[Account],
+        exclude_account: Account | None = None,
+    ) -> Account | None:
+        """Return the latest created account excluding one account if needed."""
+        for account in accounts:
+            if account != exclude_account:
+                return account
+        return None
 
     def clean(self) -> dict[str, Any]:
         """Validate transfer parameters using custom validators.

@@ -188,6 +188,9 @@ INVALID_FILE_FORMAT: Final = _('Неверный формат файла или 
 
 ACCOUNT_TYPE_CREDIT: Final = 'Credit'
 ACCOUNT_TYPE_CREDIT_CARD: Final = 'CreditCard'
+ACCOUNT_TYPE_DEBIT: Final = 'Debit'
+ACCOUNT_TYPE_DEBIT_CARD: Final = 'DebitCard'
+ACCOUNT_TYPE_CASH: Final = 'CASH'
 
 # ============================================================================
 # HTTP Status Codes
