@@ -262,7 +262,12 @@ class TestTransferMoneyAccountForm(TestCase):
     def test_form_initialization_falls_back_to_latest_distinct_accounts(
         self,
     ) -> None:
-        """Test defaults fall back to any two latest distinct accounts."""
+        """Test defaults fall back when no debit accounts are available."""
+        self.account1.type_account = ACCOUNT_TYPE_CREDIT
+        self.account1.save(update_fields=['type_account'])
+        self.account2.type_account = ACCOUNT_TYPE_CREDIT
+        self.account2.save(update_fields=['type_account'])
+
         older_credit = Account.objects.create(
             user=self.user,
             name_account='Older Credit',
