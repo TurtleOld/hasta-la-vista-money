@@ -274,6 +274,9 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
                 constants.ACCOUNT_TYPE_DEBIT,
             ],
         )
+        if from_account is None:
+            from_account = ordered_accounts[0]
+
         to_account = self._get_latest_account_by_types(
             ordered_accounts,
             [
@@ -282,9 +285,6 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             ],
             exclude_account=from_account,
         )
-
-        if from_account is None:
-            from_account = ordered_accounts[0]
 
         if to_account is None:
             to_account = self._get_latest_account(
