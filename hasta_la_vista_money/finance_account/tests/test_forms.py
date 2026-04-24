@@ -7,7 +7,11 @@ from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
+from hasta_la_vista_money.constants import (
+    ACCOUNT_TYPE_CREDIT,
+    ACCOUNT_TYPE_CREDIT_CARD,
+    ACCOUNT_TYPE_DEBIT_CARD,
+)
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -186,7 +190,11 @@ class TestTransferMoneyAccountForm(TestCase):
             account_repository=self.account_repository,
         )
 
-        self.assertEqual(form.fields['from_account'].queryset.count(), 2)  # type: ignore[attr-defined]
+        from_account_queryset = form.fields['from_account'].queryset
+        self.assertEqual(
+            from_account_queryset.count(),
+            2,
+        )
         self.assertIn('amount', form.fields)
         self.assertIn('notes', form.fields)
 
@@ -214,6 +222,90 @@ class TestTransferMoneyAccountForm(TestCase):
 
         self.assertEqual(form.initial['from_account'], self.account1)
         self.assertEqual(form.initial['to_account'], self.account2)
+
+    def test_form_initialization_prefers_latest_debit_and_credit_accounts(
+        self,
+    ) -> None:
+        """Test defaults prefer the latest debit and credit accounts."""
+        credit_account = Account.objects.create(
+            user=self.user,
+            name_account='Credit Account',
+            type_account=ACCOUNT_TYPE_CREDIT,
+            balance=Decimal('100.00'),
+            currency='RUB',
+        )
+        debit_card = Account.objects.create(
+            user=self.user,
+            name_account='Debit Card',
+            type_account=ACCOUNT_TYPE_DEBIT_CARD,
+            balance=Decimal('700.00'),
+            currency='RUB',
+        )
+        credit_card = Account.objects.create(
+            user=self.user,
+            name_account='Credit Card',
+            type_account=ACCOUNT_TYPE_CREDIT_CARD,
+            balance=Decimal('50.00'),
+            currency='RUB',
+        )
+
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+        )
+
+        self.assertEqual(form.fields['from_account'].initial, debit_card)
+        self.assertEqual(form.fields['to_account'].initial, credit_card)
+        self.assertNotEqual(form.fields['from_account'].initial, credit_account)
+
+    def test_form_initialization_falls_back_to_latest_distinct_accounts(
+        self,
+    ) -> None:
+        """Test defaults fall back when no debit accounts are available."""
+        self.account1.type_account = ACCOUNT_TYPE_CREDIT
+        self.account1.save(update_fields=['type_account'])
+        self.account2.type_account = ACCOUNT_TYPE_CREDIT
+        self.account2.save(update_fields=['type_account'])
+
+        older_credit = Account.objects.create(
+            user=self.user,
+            name_account='Older Credit',
+            type_account=ACCOUNT_TYPE_CREDIT,
+            balance=Decimal('200.00'),
+            currency='RUB',
+        )
+        newer_credit = Account.objects.create(
+            user=self.user,
+            name_account='Newest Credit',
+            type_account=ACCOUNT_TYPE_CREDIT,
+            balance=Decimal('100.00'),
+            currency='RUB',
+        )
+
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+        )
+
+        self.assertEqual(form.fields['from_account'].initial, newer_credit)
+        self.assertEqual(form.fields['to_account'].initial, older_credit)
+
+    def test_form_initialization_with_single_account_sets_only_from_account(
+        self,
+    ) -> None:
+        """Test single account user gets only source account by default."""
+        self.account2.delete()
+
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+        )
+
+        self.assertEqual(form.fields['from_account'].initial, self.account1)
+        self.assertIsNone(form.fields['to_account'].initial)
 
     def test_form_validation_valid_data(self) -> None:
         """Test form validation with valid data."""

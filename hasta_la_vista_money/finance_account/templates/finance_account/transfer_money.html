@@ -4,6 +4,38 @@
 {% load comma %}
 
 {% block content %}
+<style nonce="{{ request.csp_nonce }}">
+    .transfer-account-field select {
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        background-image: none !important;
+        padding-right: 3rem !important;
+    }
+
+    .transfer-account-field select::-ms-expand {
+        display: none;
+    }
+
+    .transfer-account-field div.pointer-events-none.absolute.inset-y-0.right-0.flex.items-center.px-2.text-gray-700 {
+        display: none !important;
+    }
+
+    .transfer-account-chevron {
+        position: absolute;
+        top: 3.25rem;
+        right: 1rem;
+        display: flex;
+        align-items: center;
+        color: rgb(107 114 128);
+        transform: translateY(-50%);
+    }
+
+    .dark .transfer-account-chevron,
+    [data-bs-theme='dark'] .transfer-account-chevron {
+        color: rgb(156 163 175);
+    }
+</style>
 <div class="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-8 px-4 sm:px-6 lg:px-8">
     <div class="max-w-2xl mx-auto">
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden backdrop-blur-sm">
@@ -25,7 +57,63 @@
                 <form method="post" action="{% url 'finance_account:transfer_money' %}" class="space-y-5 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
                     {% csrf_token %}
                     {% if form %}
+                    <div class="space-y-1.5{% if form.from_account.errors %} has-error{% endif %}">
+                        <div class="transfer-account-field relative">
+                            {{ form.from_account | as_crispy_field }}
+                            <div class="transfer-account-chevron pointer-events-none">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        {% if form.from_account.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="flex flex-col gap-0.5">
+                                {% for error in form.from_account.errors %}
+                                <span>{{ error }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex justify-center -my-1">
+                        <button type="button" id="swap-transfer-accounts" class="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-all duration-200 hover:bg-blue-100 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:scale-95 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50 dark:focus:ring-offset-gray-800" aria-label="{% translate 'Поменять счета местами' %}">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16h10m0 0-3-3m3 3-3 3M17 8H7m0 0 3-3M7 8l3 3"></path>
+                            </svg>
+                            <span>{% translate 'Поменять местами' %}</span>
+                        </button>
+                    </div>
+
+                    <div class="space-y-1.5{% if form.to_account.errors %} has-error{% endif %}">
+                        <div class="transfer-account-field relative">
+                            {{ form.to_account | as_crispy_field }}
+                            <div class="transfer-account-chevron pointer-events-none">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        {% if form.to_account.errors %}
+                        <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="flex flex-col gap-0.5">
+                                {% for error in form.to_account.errors %}
+                                <span>{{ error }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
                     {% for field in form %}
+                    {% if field.name != 'from_account' and field.name != 'to_account' %}
                     <div class="space-y-1.5{% if field.errors %} has-error{% endif %}">
                         {{ field | as_crispy_field }}
                         {% if field.errors %}
@@ -41,6 +129,7 @@
                         </div>
                         {% endif %}
                     </div>
+                    {% endif %}
                     {% endfor %}
                     {% endif %}
                     <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -62,4 +151,27 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function () {
+        const swapButton = document.getElementById('swap-transfer-accounts');
+        const fromAccount = document.getElementById('id_from_account');
+        const toAccount = document.getElementById('id_to_account');
+
+        if (!swapButton || !fromAccount || !toAccount) {
+            return;
+        }
+
+        swapButton.addEventListener('click', function () {
+            const currentFromValue = fromAccount.value;
+            fromAccount.value = toAccount.value;
+            toAccount.value = currentFromValue;
+
+            fromAccount.dispatchEvent(new Event('change', { bubbles: true }));
+            toAccount.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+</script>
 {% endblock %}
