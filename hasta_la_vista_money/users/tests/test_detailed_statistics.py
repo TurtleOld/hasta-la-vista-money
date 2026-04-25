@@ -1,9 +1,13 @@
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.users.services.cache import (
+    get_user_detailed_statistics_cache_key,
+)
 from hasta_la_vista_money.users.services.detailed_statistics import (
     UserDetailedStatisticsDict,
     get_user_detailed_statistics,
@@ -58,3 +62,26 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertIn('chart_combined', stats)
         self.assertIn('user', stats)
         self.assertIn('credit_cards_data', stats)
+
+    def test_get_user_detailed_statistics_uses_cached_value(self) -> None:
+        container = ApplicationContainer()
+        cache_key = get_user_detailed_statistics_cache_key(self.user.pk)
+        cached_stats: UserDetailedStatisticsDict = {
+            'months_data': [],
+            'top_expense_categories': [],
+            'top_income_categories': [],
+            'receipt_info_by_month': [],
+            'income_expense': [],
+            'transfer_money_log': [],
+            'accounts': [],
+            'balances_by_currency': {},
+            'delta_by_currency': {},
+            'chart_combined': {},
+            'user': self.user,
+            'credit_cards_data': [],
+        }
+        cache.set(cache_key, cached_stats, 600)
+
+        stats = get_user_detailed_statistics(self.user, container=container)
+
+        self.assertEqual(stats, cached_stats)

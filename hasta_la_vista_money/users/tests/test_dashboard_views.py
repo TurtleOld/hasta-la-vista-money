@@ -154,12 +154,42 @@ class DashboardDataViewTest(TestCase):
         request = RequestFactory().get(reverse('users:dashboard_data'))
         request.user = self.user
         setup_container_for_request(request)
-        with patch('hasta_la_vista_money.users.views.cache.delete'):
-            response = DashboardDataView().get(request)  # type: ignore[arg-type]
+        response = DashboardDataView().get(request)  # type: ignore[arg-type]
         self.assertEqual(response.status_code, 500)
         payload = json.loads(response.content.decode())
         self.assertIn('error', payload)
         self.assertIn('traceback', payload)
+
+    @patch('hasta_la_vista_money.users.views.get_user_detailed_statistics')
+    def test_dashboard_data_view_does_not_clear_cached_stats(
+        self,
+        mock_stats: Any,
+    ) -> None:
+        mock_stats.return_value = {
+            'months_data': [],
+            'top_expense_categories': [],
+            'top_income_categories': [],
+            'receipt_info_by_month': [],
+            'income_expense': [],
+            'transfer_money_log': [],
+            'accounts': [],
+            'balances_by_currency': {},
+            'delta_by_currency': {},
+            'chart_combined': {},
+            'user': self.user,
+            'credit_cards_data': [],
+        }
+        request = RequestFactory().get(reverse('users:dashboard_data'))
+        request.user = self.user
+        setup_container_for_request(request)
+
+        with patch(
+            'hasta_la_vista_money.users.views.cache.delete',
+        ) as mock_delete:
+            response = DashboardDataView().get(request)  # type: ignore[arg-type]
+
+        self.assertEqual(response.status_code, 200)
+        mock_delete.assert_not_called()
 
 
 class DashboardWidgetConfigViewTest(TestCase):

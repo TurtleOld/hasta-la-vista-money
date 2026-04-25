@@ -11,6 +11,9 @@ from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.income.repositories.income_repository import (
@@ -105,6 +108,9 @@ class IncomeService:
                 date=income_date,
             )
             self.account_service.refund_to_account(account, amount)
+            transaction.on_commit(
+                lambda: invalidate_user_detailed_statistics_cache(user.pk),
+            )
         return income
 
     def update_income(
@@ -153,7 +159,8 @@ class IncomeService:
                     )
             else:
                 self.account_service.apply_receipt_spend(
-                    old_account, old_amount
+                    old_account,
+                    old_amount,
                 )
                 self.account_service.refund_to_account(account, amount)
 
@@ -162,17 +169,21 @@ class IncomeService:
             income.amount = amount
             date_value = income_date
             if isinstance(date_value, date) and not isinstance(
-                date_value, datetime
+                date_value,
+                datetime,
             ):
                 date_value = timezone.make_aware(
                     datetime.combine(date_value, time.min),
                 )
             elif isinstance(date_value, datetime) and timezone.is_naive(
-                date_value
+                date_value,
             ):
                 date_value = timezone.make_aware(date_value)
             income.date = date_value
             income.save()
+            transaction.on_commit(
+                lambda: invalidate_user_detailed_statistics_cache(user.pk),
+            )
         return income
 
     def delete_income(self, *, user: User, income: Income) -> None:
@@ -194,6 +205,9 @@ class IncomeService:
                 income.amount,
             )
             income.delete()
+            transaction.on_commit(
+                lambda: invalidate_user_detailed_statistics_cache(user.pk),
+            )
 
     def copy_income(self, *, user: User, income_id: int) -> Income:
         """Copy an existing income transaction.
@@ -224,5 +238,8 @@ class IncomeService:
             self.account_service.refund_to_account(
                 new_income.account,
                 new_income.amount,
+            )
+            transaction.on_commit(
+                lambda: invalidate_user_detailed_statistics_cache(user.pk),
             )
         return new_income
