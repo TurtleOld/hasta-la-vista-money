@@ -86,7 +86,7 @@
 | **API** | RESTful API, OpenAPI/Swagger documentation |
 | **Containerization** | Docker, Docker Compose |
 | **Security** | CSP, CSRF, JWT authentication, django-axes |
-| **Monitoring** | Sentry, Django Debug Toolbar |
+| **Monitoring** | Bugsink-compatible error tracking, Django Debug Toolbar |
 | **Localization** | i18n, full Russian/English support |
 
 ---
@@ -142,6 +142,8 @@ The application is configured through environment variables in the `.env` file:
 | `DEBUG` | Debug mode | `false` |
 | `ALLOWED_HOSTS` | Allowed hosts | `localhost,127.0.0.1` |
 | `DATABASE_URL` | PostgreSQL URL (optional) | SQLite |
+| `ERROR_TRACKING_DSN` | DSN for Bugsink-compatible error tracking | - |
+| `ERROR_TRACKING_ENVIRONMENT` | Environment name for error tracking | - |
 | `LANGUAGE_CODE` | Interface language | `en` |
 | `TIME_ZONE` | Timezone | `UTC` |
 
@@ -149,7 +151,7 @@ The application is configured through environment variables in the `.env` file:
 
 - **PostgreSQL**: Recommended for production instead of SQLite
 - **AI for receipts**: OpenAI API integration for automatic receipt recognition
-- **Sentry**: Error monitoring in production
+- **Error tracking**: Bugsink-compatible error monitoring in production via `ERROR_TRACKING_DSN`
 - **Redis**: Caching for improved performance
 
 > 📖 **Full list of variables and configuration examples:** [Configuration Documentation](https://hasta-la-vista-money.readthedocs.io/)
