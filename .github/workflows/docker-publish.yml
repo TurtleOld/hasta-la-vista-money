@@ -32,43 +32,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: theme/static_src/package-lock.json
-
-      - name: Install npm dependencies
-        working-directory: theme/static_src
-        run: npm ci
-
-      - name: Build Tailwind CSS
-        working-directory: theme/static_src
-        run: npm run build
-        env:
-          NODE_ENV: production
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-          cache: 'pip'
-
-      - name: Install uv
-        run: pip install uv==0.7.13
-
-      - name: Generate uv.lock
-        run: uv lock
-
-      - name: Verify uv.lock exists
-        run: |
-          if [ ! -f uv.lock ]; then
-            echo "Error: uv.lock was not generated"
-            exit 1
-          fi
-          echo "uv.lock generated successfully"
-
       - name: Install cosign
         if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@v4.1.1
@@ -110,7 +73,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           file: docker/production.Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
 
       - name: Sign the published Docker image
         if: ${{ github.event_name != 'pull_request' }}
