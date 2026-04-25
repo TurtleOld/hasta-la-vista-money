@@ -78,7 +78,7 @@ services:
       context: ./
       dockerfile: docker/local.Dockerfile
     entrypoint: ["/app/celery-entrypoint.sh"]
-    command: uv run celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
+    command: celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
     volumes:
       - ./:/app
       - media_data:/app/media
@@ -96,7 +96,7 @@ services:
     networks:
       - default
     healthcheck:
-      test: ["CMD-SHELL", "uv run celery -A config inspect ping --destination celery@$$HOSTNAME || exit 1"]
+      test: ["CMD-SHELL", "celery -A config inspect ping --destination celery@$$HOSTNAME || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
