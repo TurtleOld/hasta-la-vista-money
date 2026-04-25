@@ -91,12 +91,17 @@ class PieExpenseCategoryTest(TestCase):
         self.assertIsInstance(charts, list)
 
     def test_pie_expense_category_groups_monthly_parent_totals(self) -> None:
-        parent_category = ExpenseCategory.objects.create(name='Food Parent')
+        parent_category = ExpenseCategory.objects.create(
+            user=self.user,
+            name='Food Parent',
+        )
         groceries_category = ExpenseCategory.objects.create(
+            user=self.user,
             name='Groceries',
             parent_category=parent_category,
         )
         cafe_category = ExpenseCategory.objects.create(
+            user=self.user,
             name='Cafe',
             parent_category=parent_category,
         )
