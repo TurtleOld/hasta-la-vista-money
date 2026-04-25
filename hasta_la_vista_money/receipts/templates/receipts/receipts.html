@@ -110,4 +110,7 @@
 {% endblock %}
 
 {% block extra_js %}
+    {% load static %}
+    {% load word_hash %}
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/receipts-filter.js' %}?v={% word_hash %}"></script>
 {% endblock %}

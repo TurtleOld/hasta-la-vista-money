@@ -219,6 +219,10 @@
 {% endblock %}
 
 {% block extra_js %}
+{% load static %}
+{% load word_hash %}
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/tex-mml-chtml.js' %}?v={% word_hash %}"></script>
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/mathjax.js' %}?v={% word_hash %}"></script>
 <script nonce="{{request.csp_nonce}}">
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.modal-open').forEach(button => {

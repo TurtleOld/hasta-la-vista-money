@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
 from django.db.models import QuerySet, Sum
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
@@ -441,26 +442,32 @@ def _six_months_data(
 ) -> list[MonthDataDict]:
     out = []
 
-    for i in range(constants.STATISTICS_MONTHS_COUNT):
-        m_start, m_end = _month_bounds_for_offset(today, i)
-        exp_sum = _sum_amount_for_period(
+    month_ranges = [
+        _month_bounds_for_offset(today, i)
+        for i in range(constants.STATISTICS_MONTHS_COUNT)
+    ]
+    if month_ranges:
+        period_start = month_ranges[-1][0]
+        period_end = month_ranges[0][1]
+        expense_by_month = _aggregate_amounts_by_month(
             Expense,
             user,
-            m_start,
-            m_end,
-            container,
-            expense_repository=expense_repository,
-            income_repository=income_repository,
+            period_start,
+            period_end,
         )
-        inc_sum = _sum_amount_for_period(
+        income_by_month = _aggregate_amounts_by_month(
             Income,
             user,
-            m_start,
-            m_end,
-            container,
-            expense_repository=expense_repository,
-            income_repository=income_repository,
+            period_start,
+            period_end,
         )
+    else:
+        expense_by_month = {}
+        income_by_month = {}
+
+    for m_start, m_end in month_ranges:
+        exp_sum = expense_by_month.get(m_start, 0.0)
+        inc_sum = income_by_month.get(m_start, 0.0)
         out.append(
             {
                 'month': m_start.strftime('%B %Y'),
@@ -564,6 +571,34 @@ def _calculate_card_date_range(
         ),
     )
     return first_month_start, last_month_end
+
+
+def _aggregate_amounts_by_month(
+    model: type[Expense] | type[Income],
+    user: User,
+    start: date,
+    end: date,
+) -> dict[date, float]:
+    """Aggregate amounts by month for the given period."""
+    start_dt = timezone.make_aware(datetime.combine(start, time.min))
+    end_dt = timezone.make_aware(datetime.combine(end, time.max))
+
+    monthly_totals = (
+        model.objects.filter(
+            user=user,
+            date__range=(start_dt, end_dt),
+        )
+        .annotate(month=TruncMonth('date'))
+        .values('month')
+        .annotate(total=Sum('amount'))
+        .order_by('month')
+    )
+
+    return {
+        item['month'].date(): float(item['total'] or 0)
+        for item in monthly_totals
+        if item['month'] is not None
+    }
 
 
 def _build_expenses_receipts_dicts(
