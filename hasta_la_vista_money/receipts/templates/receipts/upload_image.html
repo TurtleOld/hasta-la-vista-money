@@ -103,3 +103,7 @@
 
 {% include 'receipts/modal/instruction_modal.html' %}
 {% endblock %}
+
+{% block extra_js %}
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/upload.js' %}"></script>
+{% endblock %}

@@ -340,5 +340,11 @@
 {% block extra_js %}
     {% load static %}
     {% load word_hash %}
+    <script nonce="{{request.csp_nonce}}">
+        window.userIsAuthenticated = true;
+    </script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/driver.js' %}?v={% word_hash %}"></script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/site-tour.js' %}?v={% word_hash %}"></script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/tour-controls.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/profile-tabs.js' %}?v={% word_hash %}"></script>
 {% endblock %}

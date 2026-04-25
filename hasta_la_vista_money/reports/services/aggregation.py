@@ -5,8 +5,8 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Sum
-from django.db.models.functions import TruncMonth
+from django.db.models import CharField, F, Sum
+from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
@@ -172,44 +172,81 @@ def pie_expense_category(user: User) -> list[ChartDataDict]:
     Returns:
         List of ChartDataDict with expense category data and drilldown.
     """
-    expense_data: dict[str, dict[str, float]] = defaultdict(
-        lambda: defaultdict(float),
-    )
-    subcategory_data: dict[str, list[SubcategoryDataDict]] = defaultdict(list)
-
-    for expense in Expense.objects.filter(user=user).select_related(
-        'category',
-        'category__parent_category',
-    ):
-        parent_category_name = (
-            expense.category.parent_category.name
-            if expense.category.parent_category
-            else expense.category.name
+    expense_rows = (
+        Expense.objects.filter(user=user)
+        .annotate(
+            month=TruncMonth('date'),
+            parent_category_name=Coalesce(
+                F('category__parent_category__name'),
+                F('category__name'),
+                output_field=CharField(),
+            ),
         )
-        month = expense.date.strftime('%B %Y')
-        amount = float(expense.amount or 0)
-        expense_data[parent_category_name][month] += amount
+        .values(
+            'month',
+            'parent_category_name',
+            'category__name',
+            'category__parent_category',
+        )
+        .annotate(total_amount=Sum('amount'))
+        .order_by('parent_category_name', 'month', 'category__name')
+    )
 
-        if expense.category.parent_category:
-            key = f'{parent_category_name}_{month}'
-            subcategory_data[key].append(
-                {'name': expense.category.name, 'y': amount},
+    grouped_chart_data: dict[str, dict[str, Any]] = {}
+
+    for row in expense_rows:
+        month_value = row['month']
+        parent_category_name = row['parent_category_name']
+
+        if month_value is None or not isinstance(parent_category_name, str):
+            continue
+
+        month_label = month_value.strftime('%B %Y')
+        drilldown_id = f'{parent_category_name}_{month_label}'
+        category_name = row['category__name']
+        amount = float(row['total_amount'] or 0)
+
+        chart_entry = grouped_chart_data.setdefault(
+            parent_category_name,
+            {'data': {}, 'drilldown_series': {}},
+        )
+        chart_entry['data'][month_label] = (
+            chart_entry['data'].get(month_label, 0.0) + amount
+        )
+
+        if row['category__parent_category']:
+            drilldown_series = chart_entry['drilldown_series'].setdefault(
+                drilldown_id,
+                [],
+            )
+            drilldown_series.append(
+                {'name': category_name, 'y': amount},
             )
 
     charts: list[ChartDataDict] = []
-    for parent_category, subcats in expense_data.items():
-        data: list[ChartDataPointDict] = [
-            ChartDataPointDict(name=m, y=v, drilldown=f'{parent_category}_{m}')
-            for m, v in subcats.items()
-        ]
-        drilldown_series: list[DrilldownSeriesDict] = [
-            DrilldownSeriesDict(
-                id=f'{parent_category}_{m}',
-                name=f'Subcategories for {parent_category} in {m}',
-                data=subcategory_data[f'{parent_category}_{m}'],
+    for parent_category, chart_data in grouped_chart_data.items():
+        month_data = chart_data['data']
+        drilldown_data = chart_data['drilldown_series']
+        data = [
+            ChartDataPointDict(
+                name=month_label,
+                y=month_total,
+                drilldown=f'{parent_category}_{month_label}',
             )
-            for m in subcats
+            for month_label, month_total in month_data.items()
         ]
+        drilldown_series: list[DrilldownSeriesDict] = []
+        for drilldown_id, series_data in drilldown_data.items():
+            month_label = drilldown_id.removeprefix(f'{parent_category}_')
+            drilldown_series.append(
+                DrilldownSeriesDict(
+                    id=drilldown_id,
+                    name=(
+                        f'Subcategories for {parent_category} in {month_label}'
+                    ),
+                    data=series_data,
+                ),
+            )
         charts.append(
             ChartDataDict(
                 parent_category=parent_category,

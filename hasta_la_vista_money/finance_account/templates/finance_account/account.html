@@ -2,6 +2,8 @@
 {% load crispy_forms_tags %}
 {% load i18n %}
 {% load comma %}
+{% load static %}
+{% load word_hash %}
 
 {% block title %}
     {% translate 'Управляй финансами семьи грамотно!' %}{% endblock %}
@@ -87,4 +89,9 @@
             </div>
         </div>
     </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/chart.umd.min.js' %}?v={% word_hash %}"></script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/balance_trend_widget.js' %}?v={% word_hash %}"></script>
 {% endblock %}
