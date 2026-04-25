@@ -74,7 +74,6 @@ ENV PATH="/app/.venv/bin:/usr/local/bin:/home/appuser/.local/bin:$PATH"
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appuser /app/manage.py /app/manage.py
 COPY --from=builder --chown=appuser:appuser /app/pyproject.toml /app/pyproject.toml
-COPY --from=builder --chown=appuser:appuser /app/uv.lock /app/uv.lock
 COPY --from=builder --chown=appuser:appuser /app/config /app/config
 COPY --from=builder --chown=appuser:appuser /app/core /app/core
 COPY --from=builder --chown=appuser:appuser /app/hasta_la_vista_money /app/hasta_la_vista_money
