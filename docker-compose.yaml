@@ -40,8 +40,9 @@ services:
   hlvm-server:
     build:
       context: ./
-      dockerfile: docker/production.Dockerfile
+      dockerfile: docker/local.Dockerfile
     volumes:
+      - ./:/app
       - staticfiles_data:/app/staticfiles
       - media_data:/app/media
     ports:
@@ -76,10 +77,11 @@ services:
   celery-worker:
     build:
       context: ./
-      dockerfile: docker/production.Dockerfile
+      dockerfile: docker/local.Dockerfile
     entrypoint: ["/app/celery-entrypoint.sh"]
     command: uv run celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
     volumes:
+      - ./:/app
       - media_data:/app/media
     env_file:
       - .env
