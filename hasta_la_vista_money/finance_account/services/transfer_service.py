@@ -14,6 +14,9 @@ from hasta_la_vista_money.finance_account.validators import (
     validate_positive_amount,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories import (
@@ -72,7 +75,7 @@ class TransferService:
         validate_account_balance(from_account, amount)
 
         if from_account.transfer_money(to_account, amount):
-            return self.transfer_money_log_repository.create_log(
+            transfer_log = self.transfer_money_log_repository.create_log(
                 user=user,
                 from_account=from_account,
                 to_account=to_account,
@@ -80,6 +83,10 @@ class TransferService:
                 exchange_date=exchange_date,
                 notes=notes or '',
             )
+            transaction.on_commit(
+                lambda: invalidate_user_detailed_statistics_cache(user.pk),
+            )
+            return transfer_log
 
         error_msg = 'Transfer failed - insufficient funds or invalid accounts'
         raise ValueError(error_msg)

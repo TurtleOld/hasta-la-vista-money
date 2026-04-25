@@ -53,6 +53,9 @@ from hasta_la_vista_money.receipts.services import (
     paginator_custom_view,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -619,6 +622,7 @@ class ReceiptDeleteView(
                     product.delete()
 
                 receipt.delete()
+                invalidate_user_detailed_statistics_cache(self.request.user.pk)
                 messages.success(
                     self.request,
                     constants.SUCCESS_MESSAGE_DELETE_RECEIPT,

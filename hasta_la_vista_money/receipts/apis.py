@@ -53,6 +53,9 @@ from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
     ReceiptAPIValidator,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 
 @extend_schema(
@@ -652,6 +655,9 @@ class ReceiptDeleteAPIView(APIView):
             )
 
             receipt.delete()
+            transaction.on_commit(
+                lambda: invalidate_user_detailed_statistics_cache(user.pk),
+            )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 

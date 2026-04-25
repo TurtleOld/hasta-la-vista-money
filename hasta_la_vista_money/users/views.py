@@ -825,9 +825,6 @@ class DashboardDataView(LoginRequiredMixin, View):
                 is_visible=True,
             ).order_by('position')
 
-            cache_key = f'user_stats_{user.pk}'
-            cache.delete(cache_key)
-
             stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
                 user,
                 container=request.container,

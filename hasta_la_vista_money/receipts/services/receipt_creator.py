@@ -17,6 +17,9 @@ from core.repositories.protocols import (
 from hasta_la_vista_money.receipts.forms import ReceiptForm
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
@@ -128,6 +131,10 @@ class ReceiptCreatorService:
             for product in created_products:
                 self.receipt_repository.add_product_to_receipt(receipt, product)
 
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(user.pk),
+        )
+
         return receipt
 
     @transaction.atomic
@@ -187,6 +194,10 @@ class ReceiptCreatorService:
                         receipt,
                         product,
                     )
+
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(user.pk),
+        )
 
         return receipt
 
