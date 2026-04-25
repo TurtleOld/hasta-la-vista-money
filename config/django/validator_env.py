@@ -1,7 +1,9 @@
 from os import environ
 
+import structlog
 from decouple import config
-from icecream import ic
+
+logger = structlog.get_logger(__name__)
 
 
 class EnvironmentValidator:
@@ -17,16 +19,25 @@ class EnvironmentValidator:
         valid = True
         if not config('SECRET_KEY', cast=str, default=''):
             valid = False
-            ic('SECRET_KEY is not set, use make secretkey to generate it')
+            logger.warning(
+                'Required environment variable is not set',
+                variable='SECRET_KEY',
+                hint='Use make secretkey to generate it',
+            )
         if not config('ALLOWED_HOSTS', cast=str, default=''):
             valid = False
-            ic(
-                'ALLOWED_HOSTS is not set, set it to a '
-                'comma-separated list of hosts',
+            logger.warning(
+                'Required environment variable is not set',
+                variable='ALLOWED_HOSTS',
+                hint='Set it to a comma-separated list of hosts',
             )
         if not config('DATABASE_URL', cast=str, default=''):
             valid = False
-            ic('DATABASE_URL is not set, set it to a valid database URL')
+            logger.warning(
+                'Required environment variable is not set',
+                variable='DATABASE_URL',
+                hint='Set it to a valid database URL',
+            )
 
         debug_mode = config('DEBUG', default=False, cast=bool)
         allowed_hosts_str = config('ALLOWED_HOSTS', cast=str, default='')
@@ -52,8 +63,10 @@ class EnvironmentValidator:
             )
         ):
             valid = False
-            ic(
-                'REDIS_LOCATION is not set for production, set it to redis://host:port/db',
+            logger.warning(
+                'Production environment variable is not set',
+                variable='REDIS_LOCATION',
+                hint='Set it to redis://host:port/db',
             )
 
         return valid
