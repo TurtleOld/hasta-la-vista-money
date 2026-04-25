@@ -27,6 +27,9 @@ from hasta_la_vista_money.services.views import (
     get_queryset_type_income_expenses,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.expense.repositories import (
@@ -162,6 +165,8 @@ class ExpenseService:
                 expense.amount,
             )
 
+        invalidate_user_detailed_statistics_cache(self.user.pk)
+
         return expense
 
     def update_expense(
@@ -211,6 +216,7 @@ class ExpenseService:
         updated_expense.amount = amount
         updated_expense.account = account
         updated_expense.save()
+        invalidate_user_detailed_statistics_cache(self.user.pk)
 
     def delete_expense(
         self,
@@ -239,6 +245,7 @@ class ExpenseService:
         self.account_service.refund_to_account(account_balance, amount)
         account_balance.save()
         expense.delete()
+        invalidate_user_detailed_statistics_cache(self.user.pk)
 
     def copy_expense(
         self,
@@ -263,6 +270,8 @@ class ExpenseService:
                 valid_expense.account,
                 valid_expense.amount,
             )
+
+        invalidate_user_detailed_statistics_cache(self.user.pk)
 
         return valid_expense
 

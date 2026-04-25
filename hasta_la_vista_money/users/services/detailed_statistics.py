@@ -39,6 +39,9 @@ from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.repositories import ReceiptRepository
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    get_user_detailed_statistics_cache_key,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.services import (
@@ -937,7 +940,7 @@ def get_user_detailed_statistics(
     Returns:
         Словарь с детальной статистикой пользователя
     """
-    cache_key = f'user_stats_{user.pk}'
+    cache_key = get_user_detailed_statistics_cache_key(user.pk)
     cached_stats = cache.get(cache_key)
 
     if cached_stats is not None:

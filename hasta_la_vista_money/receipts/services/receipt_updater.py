@@ -13,6 +13,9 @@ from core.repositories.protocols import (
 from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.repositories.account_repository import (  # noqa: E501
@@ -114,6 +117,9 @@ class ReceiptUpdaterService:
             new_account=new_account_obj,
             old_total_sum=old_total_sum,
             new_total_sum=new_total_sum,
+        )
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(user.pk),
         )
 
         return receipt
