@@ -1,31 +1,25 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:20-alpine AS node-builder
-
-WORKDIR /app
-
-COPY theme/static_src/package.json theme/static_src/package-lock.json theme/static_src/
 
 WORKDIR /app/theme/static_src
 
-RUN npm ci
+COPY theme/static_src/package.json theme/static_src/package-lock.json ./
+
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 COPY theme/static_src/ ./
-
-COPY hasta_la_vista_money/ ../../hasta_la_vista_money/
-COPY config/ ../../config/
-COPY core/ ../../core/
-COPY static/ ../../static/
+COPY hasta_la_vista_money/ /app/hasta_la_vista_money/
+COPY config/ /app/config/
+COPY core/ /app/core/
+COPY static/ /app/static/
 
 RUN npm run build
 
-WORKDIR /app
 
 FROM python:3.13.9-slim AS builder
 
 WORKDIR /app
-
-RUN pip install uv==0.7.13
-
-ENV PATH="/root/.local/bin:$PATH"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -39,20 +33,24 @@ RUN apt-get update && \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml ./
+RUN pip install uv==0.7.13
 
-RUN if [ -f uv.lock ]; then \
-      echo "Using existing uv.lock"; \
-    else \
-      echo "Generating uv.lock..."; \
-      uv lock; \
-    fi
+COPY pyproject.toml uv.lock ./
 
-RUN uv sync --dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --no-install-project
 
-COPY . .
+COPY manage.py ./
+COPY config/ ./config/
+COPY core/ ./core/
+COPY hasta_la_vista_money/ ./hasta_la_vista_money/
+COPY locale/ ./locale/
+COPY theme/ ./theme/
+COPY static/ ./static/
+COPY docker/entrypoint.sh docker/celery-entrypoint.sh ./docker/
 
-COPY --from=node-builder /app/static/css/styles.min.css static/css/styles.min.css
+COPY --from=node-builder /app/static/css/styles.min.css ./static/css/styles.min.css
+
 
 FROM python:3.13.9-slim
 
@@ -71,20 +69,23 @@ RUN apt-get update && \
     pip install uv==0.7.13 && \
     adduser --disabled-password --gecos '' appuser
 
-ENV PATH="/usr/local/bin:/home/appuser/.local/bin:$PATH"
+ENV PATH="/app/.venv/bin:/usr/local/bin:/home/appuser/.local/bin:$PATH"
 
-COPY --from=builder /app /app
-
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
+COPY --from=builder --chown=appuser:appuser /app/manage.py /app/manage.py
+COPY --from=builder --chown=appuser:appuser /app/pyproject.toml /app/pyproject.toml
+COPY --from=builder --chown=appuser:appuser /app/uv.lock /app/uv.lock
+COPY --from=builder --chown=appuser:appuser /app/config /app/config
+COPY --from=builder --chown=appuser:appuser /app/core /app/core
+COPY --from=builder --chown=appuser:appuser /app/hasta_la_vista_money /app/hasta_la_vista_money
+COPY --from=builder --chown=appuser:appuser /app/locale /app/locale
+COPY --from=builder --chown=appuser:appuser /app/theme /app/theme
+COPY --from=builder --chown=appuser:appuser /app/static /app/static
 COPY --from=builder /app/docker/entrypoint.sh /app/entrypoint.sh
 COPY --from=builder /app/docker/celery-entrypoint.sh /app/celery-entrypoint.sh
 
-RUN chown -R appuser:appuser /app && \
-    chmod +x /app/.venv/bin/granian && \
-    chmod +x /app/.venv/bin/python && \
-    sed -i 's/\r$//' /app/entrypoint.sh /app/celery-entrypoint.sh && \
+RUN sed -i 's/\r$//' /app/entrypoint.sh /app/celery-entrypoint.sh && \
     chmod +x /app/entrypoint.sh /app/celery-entrypoint.sh && \
-    test -f /app/entrypoint.sh && \
-    head -1 /app/entrypoint.sh && \
     mkdir -p /app/staticfiles /app/media /app/logs && \
     chown -R appuser:appuser /app/staticfiles /app/media /app/logs && \
     chmod -R 755 /app/staticfiles /app/media /app/logs
@@ -92,4 +93,4 @@ RUN chown -R appuser:appuser /app && \
 USER appuser
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD [".venv/bin/granian", "--interface", "asgi", "config.asgi:application", "--port", "8001", "--host", "0.0.0.0"]
+CMD ["granian", "--interface", "asgi", "config.asgi:application", "--port", "8001", "--host", "0.0.0.0"]
