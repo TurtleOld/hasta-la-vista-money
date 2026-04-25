@@ -10,6 +10,31 @@ on:
       - main
 
 jobs:
+  reviewdog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install ruff
+        uses: astral-sh/ruff-action@d7f6ad639a4c5114cf48e4459cc6fad582915895
+        with:
+          version: '0.12.8'
+
+      - name: Install reviewdog
+        uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f
+        with:
+          reviewdog_version: v0.21.0
+
+      - name: Run reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: reviewdog -conf=.reviewdog.yml
+
   build:
     runs-on: ubuntu-latest
     strategy:

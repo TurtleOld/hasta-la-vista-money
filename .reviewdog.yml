@@ -1,0 +1,9 @@
+runner:
+  ruff:
+    cmd: ruff check . --output-format=rdjson
+    format: rdjson
+    name: ruff
+    reporter: github-pr-review
+    filter_mode: added
+    level: warning
+    fail_on_error: true
