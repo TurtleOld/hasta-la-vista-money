@@ -11,14 +11,14 @@ until nc -z "${DB_HOST}" "${DB_PORT}" 2>/dev/null; do
 done
 
 echo "Database is up - executing migrations"
-uv run python manage.py migrate --noinput
+python manage.py migrate --noinput
 
 echo "Creating staticfiles, media and logs directories with proper permissions"
 mkdir -p /app/staticfiles /app/media /app/logs
 chmod -R 755 /app/staticfiles /app/media /app/logs
 
 echo "Collecting static files"
-uv run python manage.py collectstatic --noinput --clear
+python manage.py collectstatic --noinput --clear
 
 echo "Starting application"
 exec "$@"

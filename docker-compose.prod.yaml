@@ -64,7 +64,7 @@ services:
   celery-worker:
     image: git.pavlovteam.ru/turtleold/hasta-la-vista-money:latest
     entrypoint: ["/app/celery-entrypoint.sh"]
-    command: uv run celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
+    command: celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
     volumes:
       - media_data:/app/media
     env_file:
