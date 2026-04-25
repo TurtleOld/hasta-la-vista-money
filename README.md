@@ -87,7 +87,7 @@
 | **API** | RESTful API, OpenAPI/Swagger документация |
 | **Контейнеризация** | Docker, Docker Compose |
 | **Безопасность** | CSP, CSRF, JWT аутентификация, django-axes |
-| **Мониторинг** | Sentry, Django Debug Toolbar |
+| **Мониторинг** | Bugsink-compatible error tracking, Django Debug Toolbar |
 | **Локализация** | i18n, полная поддержка русского языка |
 
 ---
@@ -144,6 +144,8 @@ docker compose up -d
 | `ALLOWED_HOSTS` | Разрешенные хосты | `localhost,127.0.0.1` |
 | `DATABASE_URL` | URL PostgreSQL (опционально) | SQLite |
 | `REDIS_LOCATION` | URL Redis для кеширования (продакшен) | - |
+| `ERROR_TRACKING_DSN` | DSN для Bugsink-compatible error tracking | - |
+| `ERROR_TRACKING_ENVIRONMENT` | Окружение для error tracking | - |
 | `LANGUAGE_CODE` | Язык интерфейса | `ru-RU` |
 | `TIME_ZONE` | Часовой пояс | `Europe/Moscow` |
 
@@ -151,7 +153,7 @@ docker compose up -d
 
 - **PostgreSQL**: Для production рекомендуется PostgreSQL вместо SQLite
 - **AI для чеков**: Интеграция с OpenAI API для автоматического распознавания чеков
-- **Sentry**: Мониторинг ошибок в production
+- **Error tracking**: Bugsink-compatible мониторинг ошибок в production через `ERROR_TRACKING_DSN`
 
 #### Redis — Кеширование для производительности
 

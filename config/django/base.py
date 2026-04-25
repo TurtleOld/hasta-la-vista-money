@@ -409,7 +409,6 @@ CONTENT_SECURITY_POLICY = {
             *CSP_CDN_URLS,
             *additional_script_src,
         ],
-        'report_uri': [config('SENTRY_ENDPOINT', default='')],
     },
 }
 
@@ -456,16 +455,18 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-# Sentry
-RATE = 0.1
-SENTRY_DSN = config('SENTRY_DSN', default='')
-if SENTRY_DSN:
+# Error tracking
+ERROR_TRACKING_DSN = config('ERROR_TRACKING_DSN', default='')
+if ERROR_TRACKING_DSN:
     sentry_sdk.init(
-        dsn=str(SENTRY_DSN),
+        dsn=str(ERROR_TRACKING_DSN),
         integrations=[DjangoIntegration()],
         auto_session_tracking=False,
-        traces_sample_rate=RATE,
-        environment=str(config('SENTRY_ENVIRONMENT', default='')),
+        traces_sample_rate=0,
+        send_default_pii=True,
+        environment=str(
+            config('ERROR_TRACKING_ENVIRONMENT', default=''),
+        ),
     )
 
 # Rosetta
