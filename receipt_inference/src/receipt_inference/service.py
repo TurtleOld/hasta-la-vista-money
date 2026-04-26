@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from receipt_inference.errors import ReceiptInferenceError
+from receipt_inference.pipeline import ReceiptInferencePipeline
 
 if TYPE_CHECKING:
     from starlette.datastructures import UploadFile
@@ -44,6 +46,7 @@ class ReceiptInferenceService:
 
     def __init__(self, settings: ReceiptInferenceSettings) -> None:
         self._model_path = Path(settings.qwen_model_path)
+        self._pipeline = ReceiptInferencePipeline(settings)
 
     @property
     def model_path_exists(self) -> bool:
@@ -53,8 +56,11 @@ class ReceiptInferenceService:
     async def parse_upload(
         self,
         uploaded_file: UploadFile | None,
+        *,
+        ocr_text_override: str | None = None,
     ) -> dict[str, Any]:
         """Validate the upload and return normalized API response."""
+        started_at = perf_counter()
         payload = await self._read_upload(uploaded_file)
         self._validate_payload(payload)
 
@@ -65,18 +71,26 @@ class ReceiptInferenceService:
                 status_code=503,
             )
 
+        prepared_image = self._pipeline.preprocess(payload.file_bytes)
+        result = self._pipeline.infer(
+            prepared_image,
+            ocr_text_override=ocr_text_override,
+        )
+
         logger.info(
-            'receipt_inference_pipeline_not_ready',
+            'receipt_inference_service_completed',
             file_name=payload.file_name,
             content_type=payload.content_type,
             file_size=payload.size_bytes,
-            qwen_model_path=str(self._model_path),
+            elapsed_ms=round((perf_counter() - started_at) * 1000, 2),
         )
-        raise ReceiptInferenceError(
-            error_code='pipeline_not_ready',
-            message='Receipt OCR/LLM pipeline is not implemented yet.',
-            status_code=501,
-        )
+        return {
+            'data': result.data,
+            'meta': {
+                'ocr_ms': result.ocr_ms,
+                'llm_ms': result.llm_ms,
+            },
+        }
 
     async def _read_upload(
         self,

@@ -19,6 +19,10 @@ class ReceiptInferenceSettings:
     llama_threads: int
     ocr_threads: int
     qwen_model_path: str
+    llama_server_url: str
+    llama_timeout: float
+    max_image_dimension: int
+    jpeg_quality: int
 
 
 def load_settings() -> ReceiptInferenceSettings:
@@ -39,4 +43,11 @@ def load_settings() -> ReceiptInferenceSettings:
             'QWEN_MODEL_PATH',
             '/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf',
         ),
+        llama_server_url=os.getenv(
+            'LLAMA_SERVER_URL',
+            'http://127.0.0.1:8080/v1',
+        ).rstrip('/'),
+        llama_timeout=float(os.getenv('LLAMA_TIMEOUT', '120')),
+        max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '2200')),
+        jpeg_quality=int(os.getenv('JPEG_QUALITY', '92')),
     )

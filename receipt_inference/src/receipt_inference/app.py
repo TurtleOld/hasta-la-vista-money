@@ -91,10 +91,18 @@ async def parse_receipt(request: Request) -> Response:
     try:
         form = await request.form()
         form_file = form.get('file')
+        ocr_text_override = form.get('ocr_text')
         if isinstance(form_file, UploadFile):
             uploaded_file = form_file
 
-        payload = await service.parse_upload(uploaded_file)
+        payload = await service.parse_upload(
+            uploaded_file,
+            ocr_text_override=(
+                str(ocr_text_override)
+                if isinstance(ocr_text_override, str)
+                else None
+            ),
+        )
     except ReceiptInferenceError as exc:
         logger.info(
             'receipt_inference_request_failed',
@@ -126,12 +134,8 @@ async def parse_receipt(request: Request) -> Response:
     return OrjsonResponse(
         {
             'success': True,
-            'data': payload,
-            'meta': {
-                'ocr_ms': 0,
-                'llm_ms': 0,
-                'total_ms': elapsed_ms,
-            },
+            'data': payload['data'],
+            'meta': payload['meta'] | {'total_ms': elapsed_ms},
         },
     )
 
