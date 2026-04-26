@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS llama-builder
+FROM python:3.14-slim AS llama-builder
 
 ARG LLAMA_CPP_REF=master
 
@@ -21,7 +21,7 @@ RUN cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build \
     -DLLAMA_BUILD_SERVER=ON && \
     cmake --build /tmp/llama.cpp/build --target llama-server -j"$(nproc)"
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
