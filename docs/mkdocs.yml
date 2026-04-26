@@ -4,9 +4,10 @@ edit_uri: edit/main/docs/
 docs_dir: docs
 nav:
   - Hasta la Vista, Money:
-    - Quick start:
-      - Installation: index.md
-      - Registration: registration.md
+    - Быстрый старт:
+      - Установка: index.md
+      - Self-hosted: production_self_hosted.md
+      - Регистрация: registration.md
     - Getting Started:
       - User Management:
         - Users Documentation: users/users_documentation.md
