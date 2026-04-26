@@ -5,14 +5,19 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
 
+from django.core.cache import cache
 from django.db.models import CharField, F, Sum
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    get_reports_budget_charts_cache_key,
+)
 
 
 class BudgetChartsDict(TypedDict):
@@ -97,16 +102,12 @@ def unique_aggregate(
     Returns:
         Tuple of (unique_dates, aggregated_amounts) lists.
     """
-    unique_dates: list[str] = []
-    unique_amounts: list[float] = []
-    for idx, d in enumerate(dates):
-        if d not in unique_dates:
-            unique_dates.append(d)
-            unique_amounts.append(amounts[idx])
-        else:
-            i = unique_dates.index(d)
-            unique_amounts[i] += amounts[idx]
-    return unique_dates, unique_amounts
+    aggregated: dict[str, float] = {}
+    for idx, current_date in enumerate(dates):
+        aggregated[current_date] = (
+            aggregated.get(current_date, 0.0) + amounts[idx]
+        )
+    return list(aggregated.keys()), list(aggregated.values())
 
 
 class SubcategoryDataDict(TypedDict):
@@ -378,6 +379,11 @@ def budget_charts(user: User) -> BudgetChartsDict:
     Returns:
         BudgetChartsDict with chart data for expenses, income, and balance.
     """
+    cache_key = get_reports_budget_charts_cache_key(user.pk)
+    cached_charts = cache.get(cache_key)
+    if cached_charts is not None:
+        return cached_charts  # type: ignore[no-any-return]
+
     expense_dates = (
         Expense.objects.filter(user=user)
         .annotate(month=TruncMonth('date'))
@@ -444,7 +450,7 @@ def budget_charts(user: User) -> BudgetChartsDict:
         expense_fact,
     )
 
-    return {
+    charts_data = {
         'chart_labels': chart_labels,
         'chart_income': total_income,
         'chart_expense': total_expense,
@@ -452,3 +458,5 @@ def budget_charts(user: User) -> BudgetChartsDict:
         'pie_labels': pie_labels,
         'pie_values': pie_values,
     }
+    cache.set(cache_key, charts_data, constants.REPORTS_CACHE_TIMEOUT)
+    return charts_data

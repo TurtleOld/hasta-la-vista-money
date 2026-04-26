@@ -37,6 +37,9 @@ from hasta_la_vista_money.expense.protocols.services import (
 )
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 
 class AbstractExpenseView(ABC):
@@ -571,5 +574,7 @@ class ExpenseCategoryDeleteView(
         for depth in range(1, 6):  # Clear cache for depth 1-5
             cache_key = f'category_tree_expense_{self.request.user.pk}_{depth}'
             cache.delete(cache_key)
+
+        invalidate_user_detailed_statistics_cache(self.request.user.pk)
 
         return response

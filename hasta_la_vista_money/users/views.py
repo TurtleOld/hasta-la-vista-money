@@ -1,9 +1,10 @@
 import json
 import logging
 import traceback
+from collections.abc import Mapping
 from decimal import Decimal
 from operator import itemgetter
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
 from dateutil.parser import parse as parse_date
 from django.contrib import messages
@@ -33,7 +34,6 @@ from hasta_la_vista_money.authentication.authentication import (
     clear_auth_cookies,
     set_auth_cookies,
 )
-from hasta_la_vista_money.core.types import RequestWithContainer
 from hasta_la_vista_money.custom_mixin import CustomSuccessURLUserMixin
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import (
@@ -63,8 +63,9 @@ from hasta_la_vista_money.users.services.dashboard_analytics import (
     get_period_comparison,
 )
 from hasta_la_vista_money.users.services.detailed_statistics import (
+    DashboardSummaryStatisticsDict,
     MonthDataDict,
-    UserDetailedStatisticsDict,
+    get_dashboard_summary_statistics,
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.services.export import get_user_export_data
@@ -87,6 +88,8 @@ from hasta_la_vista_money.users.tasks import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from hasta_la_vista_money.core.types import RequestWithContainer
+
 
 class Transaction(TypedDict):
     id: int
@@ -95,10 +98,6 @@ class Transaction(TypedDict):
     amount: str
     category: str
     account: str
-
-
-class AuthRequest(RequestWithContainer):
-    user: User
 
 
 class IndexView(TemplateView):
@@ -120,23 +119,23 @@ class ListUsers(
     template_name = 'users/profile.html'
     context_object_name = 'users'
     no_permission_url = reverse_lazy('login')
-    request: AuthRequest
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        user_update = UpdateUserForm(instance=self.request.user)
+        user = cast('User', self.request.user)
+        user_update = UpdateUserForm(instance=user)
         user_update_pass_form = PasswordChangeForm(
-            user=self.request.user,
+            user=user,
         )
-        container = self.request.container
+        container = cast('RequestWithContainer', self.request).container
         statistics_service = container.users.user_statistics_service()
         user_statistics = statistics_service.get_user_statistics(
-            self.request.user,
+            user,
         )
         context['user_update'] = user_update
         context['user_update_pass_form'] = user_update_pass_form
         context['user_statistics'] = user_statistics
-        context['user'] = self.request.user
+        context['user'] = user
         return context
 
 
@@ -309,11 +308,10 @@ class UpdateUserView(
     template_name = 'users/profile.html'
     form_class = UpdateUserForm
     success_message = constants.SUCCESS_MESSAGE_CHANGED_PROFILE
-    request: AuthRequest
 
     def get_form(self, form_class: Any = None) -> UpdateUserForm:
         form = super().get_form(form_class)
-        form.instance = self.request.user
+        form.instance = cast('User', self.request.user)
         return form
 
     def post(
@@ -405,16 +403,16 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
     """
 
     template_name = 'users/statistics.html'
-    request: RequestWithContainer
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = self.request.user
+        request_with_container = cast('RequestWithContainer', self.request)
         if isinstance(user, User):
             context.update(
                 get_user_detailed_statistics(
                     user,
-                    container=self.request.container,
+                    container=request_with_container.container,
                 ).items(),
             )
         return context
@@ -710,7 +708,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
     def _prepare_serializable_stats(
         self,
-        stats: UserDetailedStatisticsDict,
+        stats: Mapping[str, Any],
     ) -> dict[str, Any]:
         """Prepare statistics for serialization.
 
@@ -806,11 +804,12 @@ class DashboardDataView(LoginRequiredMixin, View):
 
     def get(
         self,
-        request: RequestWithContainer,
+        request: HttpRequest,
         *args: Any,
         **kwargs: Any,
     ) -> JsonResponse:
         try:
+            request_with_container = cast('RequestWithContainer', request)
             user = request.user
             if not isinstance(user, User):
                 return JsonResponse(
@@ -825,9 +824,11 @@ class DashboardDataView(LoginRequiredMixin, View):
                 is_visible=True,
             ).order_by('position')
 
-            stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
-                user,
-                container=request.container,
+            stats: DashboardSummaryStatisticsDict = (
+                get_dashboard_summary_statistics(
+                    user,
+                    container=request_with_container.container,
+                )
             )
 
             serializable_stats = self._prepare_serializable_stats(
@@ -1038,43 +1039,43 @@ class BankStatementUploadView(
         'Банковская выписка загружена и будет обработана в фоновом режиме. '
         'Данные появятся в расходах и доходах в течение нескольких минут.',
     )
-    request: AuthRequest
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Add user to form kwargs."""
         kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
+        kwargs['user'] = cast('User', self.request.user)
         return kwargs
 
     def form_valid(self, form: BankStatementUploadForm) -> HttpResponse:
         """Process uploaded PDF file asynchronously."""
         logger = logging.getLogger(__name__)
+        user = cast('User', self.request.user)
         pdf_file = form.cleaned_data['pdf_file']
         account = form.cleaned_data['account']
 
         try:
             logger.info(
                 'Creating bank statement upload for user %s, account %s',
-                self.request.user.username,
+                user.username,
                 account.name_account,
             )
 
             # Create upload record
             upload = BankStatementUpload.objects.create(
-                user=self.request.user,
+                user=user,
                 account=account,
                 pdf_file=pdf_file,
                 status=BankStatementUpload.Status.PENDING,
             )
 
-            logger.info('Created upload record with id=%d', upload.id)
+            logger.info('Created upload record with id=%d', upload.pk)
 
-            # Start background task
-            task = process_bank_statement_task.delay(upload.id)
+            task_runner = cast('Any', process_bank_statement_task)
+            task = task_runner.delay(upload.pk)
             logger.info('Started background task with id=%s', task.id)
 
             # Store upload ID in session for progress tracking
-            self.request.session['last_upload_id'] = upload.id
+            self.request.session['last_upload_id'] = upload.pk
 
             messages.success(self.request, str(self.success_message))
 
@@ -1092,13 +1093,14 @@ class BankStatementUploadView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add extra context data."""
         context = super().get_context_data(**kwargs)
+        user = cast('User', self.request.user)
         # Check if there's an ongoing upload
         last_upload_id = self.request.session.get('last_upload_id')
         if last_upload_id:
             try:
                 upload = BankStatementUpload.objects.get(
                     id=last_upload_id,
-                    user=self.request.user,
+                    user=user,
                 )
                 # Show progress if not completed
                 if upload.status in [
@@ -1106,7 +1108,7 @@ class BankStatementUploadView(
                     BankStatementUpload.Status.PROCESSING,
                 ]:
                     context['show_progress'] = True
-                    context['upload_id'] = upload.id
+                    context['upload_id'] = upload.pk
                 elif upload.status == BankStatementUpload.Status.COMPLETED:
                     # Clear session if completed
                     self.request.session.pop('last_upload_id', None)

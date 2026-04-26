@@ -9,7 +9,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView
@@ -47,19 +47,23 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
 
     @classmethod
     def transform_data_expense(
-        cls, expense_dataset: Any
+        cls,
+        expense_dataset: Any,
     ) -> tuple[list[str], list[float]]:
         return cls.transform_data(expense_dataset)
 
     @classmethod
     def transform_data_income(
-        cls, income_dataset: Any
+        cls,
+        income_dataset: Any,
     ) -> tuple[list[str], list[float]]:
         return cls.transform_data(income_dataset)
 
     @classmethod
     def unique_data(
-        cls, dates: list[str], amounts: list[float]
+        cls,
+        dates: list[str],
+        amounts: list[float],
     ) -> tuple[list[str], list[float]]:
         return unique_aggregate(dates, amounts)
 
@@ -132,7 +136,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
             Dictionary mapping category_id to month->amount mapping.
         """
         fact_map: dict[int, dict[date, Decimal | int]] = defaultdict(
-            lambda: defaultdict(lambda: 0)
+            lambda: defaultdict(lambda: 0),
         )
         if not months:
             return fact_map
@@ -173,7 +177,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
             Dictionary mapping category_id to month->amount mapping.
         """
         fact_map: dict[int, dict[date, Decimal | int]] = defaultdict(
-            lambda: defaultdict(lambda: 0)
+            lambda: defaultdict(lambda: 0),
         )
         if not months:
             return fact_map
@@ -293,7 +297,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         if isinstance(request.user, AnonymousUser):
             raise TypeError('User must be authenticated')
         charts_data = budget_charts(
-            get_object_or_404(User, username=request.user),
+            cast('User', request.user),
         )
         return cast('dict[str, Any]', charts_data)
 

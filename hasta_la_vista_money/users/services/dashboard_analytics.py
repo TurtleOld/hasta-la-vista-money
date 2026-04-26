@@ -9,13 +9,17 @@ from decimal import Decimal
 from typing import Any, cast
 
 import numpy as np
-from django.db.models import Sum
+from django.core.cache import cache
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    get_period_comparison_cache_key,
+)
 from hasta_la_vista_money.users.utils.date_utils import (
     get_month_start_end,
     get_period_dates,
@@ -113,35 +117,42 @@ def get_period_comparison(
         Keys: 'current', 'previous', 'change_percent'. Each period
         contains: 'start', 'end', 'expenses', 'income', 'savings'.
     """
+    cache_key = get_period_comparison_cache_key(user.pk, period_type)
+    cached_data = cache.get(cache_key)
+    if cached_data is not None:
+        return cached_data  # type: ignore[no-any-return]
+
     period_dates = get_period_dates(period_type=period_type)
     current_start_dt = period_dates['current_start']
     today_dt = period_dates['current_end']
     previous_start_dt = period_dates['previous_start']
     previous_end_dt = period_dates['previous_end']
 
-    current_expenses = Expense.objects.filter(
-        user=user,
-        date__gte=current_start_dt,
-        date__lte=today_dt,
-    ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
+    expense_aggregates = Expense.objects.filter(user=user).aggregate(
+        current_total=Sum(
+            'amount',
+            filter=Q(date__gte=current_start_dt, date__lte=today_dt),
+        ),
+        previous_total=Sum(
+            'amount',
+            filter=Q(date__gte=previous_start_dt, date__lte=previous_end_dt),
+        ),
+    )
+    income_aggregates = Income.objects.filter(user=user).aggregate(
+        current_total=Sum(
+            'amount',
+            filter=Q(date__gte=current_start_dt, date__lte=today_dt),
+        ),
+        previous_total=Sum(
+            'amount',
+            filter=Q(date__gte=previous_start_dt, date__lte=previous_end_dt),
+        ),
+    )
 
-    previous_expenses = Expense.objects.filter(
-        user=user,
-        date__gte=previous_start_dt,
-        date__lte=previous_end_dt,
-    ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
-
-    current_income = Income.objects.filter(
-        user=user,
-        date__gte=current_start_dt,
-        date__lte=today_dt,
-    ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
-
-    previous_income = Income.objects.filter(
-        user=user,
-        date__gte=previous_start_dt,
-        date__lte=previous_end_dt,
-    ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
+    current_expenses = expense_aggregates['current_total'] or Decimal(0)
+    previous_expenses = expense_aggregates['previous_total'] or Decimal(0)
+    current_income = income_aggregates['current_total'] or Decimal(0)
+    previous_income = income_aggregates['previous_total'] or Decimal(0)
 
     expenses_change_percent = (
         float((current_expenses - previous_expenses) / previous_expenses * 100)
@@ -165,7 +176,7 @@ def get_period_comparison(
 
     today = timezone.now().date()
 
-    return {
+    result = {
         'current': {
             'start': period_dates['current_start'].date().isoformat(),
             'end': today.isoformat(),
@@ -186,6 +197,8 @@ def get_period_comparison(
             'savings': savings_change_percent,
         },
     }
+    cache.set(cache_key, result, constants.DASHBOARD_COMPARISON_CACHE_TIMEOUT)
+    return result
 
 
 def get_drill_down_data(
