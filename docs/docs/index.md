@@ -1,51 +1,61 @@
-# Getting started
+# Начало работы
 [![hasta-la-vista-money](https://github.com/TurtleOld/hasta-la-vista-money/actions/workflows/hasta_la_vista_money.yaml/badge.svg)](https://github.com/TurtleOld/hasta-la-vista-money/actions/workflows/hasta_la_vista_money.yaml)  
 
-Welcome to the documentation page of the project **Hasta La Vista, Money**!
+Добро пожаловать в документацию проекта **Hasta La Vista, Money**.
 
-### Disclaimer:
-The Hasta La Vista, Money project is currently under active development, so be aware of potential bugs and future changes.
+### Важно
+
+Проект Hasta La Vista, Money находится в активной разработке, поэтому возможны ошибки и дальнейшие изменения.
 ___
-Hasta La Vista, Money is a home accounting project designed to efficiently manage family expenses and income. Additionally, the app provides an easy way to enter purchase data manually.
+Hasta La Vista, Money - это проект домашней бухгалтерии, предназначенный для удобного учета семейных доходов и расходов. Кроме того, приложение позволяет быстро вносить данные о покупках вручную.
 
 
-The application is deployed on your own hosting using [Docker](https://docs.docker.com/desktop/setup/install/linux/), instructions below.
+Приложение разворачивается на собственной инфраструктуре с использованием [Docker](https://docs.docker.com/desktop/setup/install/linux/). Инструкция приведена ниже.
 
-## Installation  
+## Установка
 
-The application is deployed using [Docker](https://docs.docker.com/desktop/setup/install/linux/). You can deploy it on your local machine or a server.
+Приложение разворачивается с использованием [Docker](https://docs.docker.com/desktop/setup/install/linux/). Развертывание возможно как на локальной машине, так и на сервере.
 ___
 
-In the directory where the project files will reside, create a _.env_ file and populate it with the following details:
+В каталоге, где будут размещены файлы проекта, создайте файл `.env` и заполните его следующими значениями:
 
-SECRET_KEY - Key for the settings.py file. You can generate the key using the command - ```bash
+`SECRET_KEY` - ключ для `settings.py`. Его можно сгенерировать командой:
+
+```bash
 base64 /dev/urandom | head -c50
 ```
 
 > SECRET_KEY=
 
-DEBUG - Debugging activation. Do not enable on a production server.
-Set one of the following values: true, 1, yes.
+`DEBUG` - включает режим отладки. На production-сервере включать не следует.
+Допустимые значения: `true`, `1`, `yes`.
 
 > DEBUG=
 
-DATABASE_URL - Database connection URL  
-postgres://username:password@name or IP server:port/name_database
+`DATABASE_URL` - URL подключения к базе данных.
+
+Пример:
+
+`postgres://username:password@hostname-or-ip:port/database_name`
 
 > DATABASE_URL=
 
-ALLOWED_HOSTS - List of allowed hosts. Example 'localhost',
-'127.0.0.1'. By default, hosts - localhost, 127.0.0.1
+`ALLOWED_HOSTS` - список разрешенных хостов.
+
+Пример: `localhost,127.0.0.1`.
 
 > ALLOWED_HOSTS=  
 
 ___
 
-Download the [docker-compose.yaml](https://github.com/TurtleOld/hasta-la-vista-money/releases/download/v1.4.0/docker-compose.yaml) file and place it in your directory. This file is a sample and serves as a basic template for launching the application. Feel free to modify it as you see fit.
+Скачайте файл [docker-compose.yaml](https://github.com/TurtleOld/hasta-la-vista-money/releases/download/v1.4.0/docker-compose.yaml) и поместите его в рабочий каталог. Этот файл является примером и служит базовым шаблоном для запуска приложения. При необходимости измените его под свою среду.
 
-Next, start the application using the command below:
+Для production-развертывания при самостоятельном размещении используйте отдельный чек-лист и руководство по минимальному набору переменных: [Self-hosted production](production_self_hosted.md).
+
+После этого запустите приложение командой:
 ```bash
 docker compose up -d
 ```
-The application will launch in the background. If there are no errors after running the command, open your browser and go to http://127.0.0.1:8090.  
-Upon the first launch of the website, a registration page will open for creating an administrator account.
+Приложение будет запущено в фоновом режиме. Если после выполнения команды ошибок нет, откройте браузер и перейдите по адресу `http://127.0.0.1:8090`.
+
+При первом запуске сайта откроется страница регистрации для создания учетной записи администратора.
