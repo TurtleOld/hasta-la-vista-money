@@ -37,10 +37,24 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/github_actions
+      REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
+      ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
+      REDIS_LOCATION: redis://localhost:6379/1
+      ALLOWED_HOSTS: localhost,127.0.0.1,host.docker.internal
+      CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
+      DEBUG: 'false'
+      SECURE_SSL_REDIRECT: 'true'
+      SESSION_COOKIE_SECURE: 'true'
+      CSRF_COOKIE_SECURE: 'true'
+      GITHUB_WORKFLOW: true
+      CI: true
     strategy:
       max-parallel: 4
       matrix:
-        python-version: [ 3.11, 3.12, 3.13 ]
+        python-version: [ '3.12', '3.13' ]
 
     services:
       postgres:
@@ -63,7 +77,7 @@ jobs:
       - uses: actions/checkout@v6.0.2
       - uses: actions/setup-python@v6.2.0
         with:
-          python-version: '3.14.4'
+          python-version: ${{ matrix.python-version }}
 
       - name: Setup uv and Handle Its Cache
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
@@ -87,37 +101,103 @@ jobs:
 
       - name: Check migrations are up-to-date
         run: uv run python manage.py makemigrations --check --dry-run
-        env:
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
-          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
-          REDIS_LOCATION: redis://localhost:6379/1
-          GITHUB_WORKFLOW: true
+
+      - name: Check migrations are reversible
+        run: uv run python .github/scripts/check_migration_reversibility.py
 
       - name: Run check
         run: uv run python manage.py check
-        env:
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
-          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
-          REDIS_LOCATION: redis://localhost:6379/1
-          GITHUB_WORKFLOW: true
+
+      - name: Run deploy check
+        run: >-
+          uv run python manage.py check --deploy --tag security
+          --fail-level WARNING
+          --settings=config.django.prod
 
       - name: Run migrations
         run: uv run python manage.py migrate
-        env:
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
-          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
-          REDIS_LOCATION: redis://localhost:6379/1
-          GITHUB_WORKFLOW: true
 
       - name: Run Tests with Coverage
         run: make coverage
+
+  production-image:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/github_actions
+      REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
+      ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
+      REDIS_LOCATION: redis://localhost:6379/1
+      ALLOWED_HOSTS: localhost,127.0.0.1,host.docker.internal
+      CSRF_TRUSTED_ORIGINS: http://localhost,http://127.0.0.1
+      DEBUG: 'false'
+      SECURE_SSL_REDIRECT: 'true'
+      SESSION_COOKIE_SECURE: 'true'
+      CSRF_COOKIE_SECURE: 'true'
+      DJANGO_SETTINGS_MODULE: config.django.prod
+      GITHUB_WORKFLOW: true
+      CI: true
+
+    services:
+      postgres:
+        image: postgres:18
         env:
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/github_actions
-          REFRESH_TOKEN_LIFETIME: ${{ secrets.REFRESH_TOKEN_LIFETIME }}
-          ACCESS_TOKEN_LIFETIME: ${{ secrets.ACCESS_TOKEN_LIFETIME }}
-          REDIS_LOCATION: redis://localhost:6379/1
-          GITHUB_WORKFLOW: true
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: github_actions
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.0.0
+
+      - name: Build production image
+        run: >-
+          docker buildx build --file docker/production.Dockerfile --load
+          --tag hlvm-prod-ci:${{ github.sha }} .
+
+      - name: Smoke test production container startup
+        run: |
+          docker run -d \
+            --name hlvm-prod-ci \
+            --network host \
+            -e SECRET_KEY \
+            -e DATABASE_URL \
+            -e REFRESH_TOKEN_LIFETIME \
+            -e ACCESS_TOKEN_LIFETIME \
+            -e REDIS_LOCATION \
+            -e ALLOWED_HOSTS \
+            -e CSRF_TRUSTED_ORIGINS \
+            -e DJANGO_SETTINGS_MODULE \
+            -e GITHUB_WORKFLOW \
+            -e CI \
+            hlvm-prod-ci:${{ github.sha }}
+
+          for attempt in $(seq 1 30); do
+            if nc -z 127.0.0.1 8001; then
+              exit 0
+            fi
+
+            if ! docker ps --format '{{.Names}}' | grep -qx 'hlvm-prod-ci'; then
+              break
+            fi
+
+            sleep 2
+          done
+
+          docker logs hlvm-prod-ci
+          exit 1
+
+      - name: Cleanup production smoke container
+        if: always()
+        run: docker rm -f hlvm-prod-ci || true
