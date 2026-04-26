@@ -121,6 +121,8 @@ docker compose up -d
 
 > 💡 **Совет:** При первом запуске приложение автоматически создаст SQLite базу данных. Для production рекомендуется использовать PostgreSQL.
 
+> 🔒 **Важно:** Блок выше описывает быстрый локальный/self-hosted запуск, а не production minimum. Для production self-hosted используйте отдельное руководство: [docs/docs/production_self_hosted.md](docs/docs/production_self_hosted.md)
+
 ### Первые шаги
 1. Зарегистрируйте аккаунт администратора
 2. Создайте свой первый финансовый счет
@@ -141,19 +143,48 @@ docker compose up -d
 |-----------|----------|----------------------|
 | `SECRET_KEY` | Секретный ключ Django (обязательно) | - |
 | `DEBUG` | Режим отладки | `false` |
-| `ALLOWED_HOSTS` | Разрешенные хосты | `localhost,127.0.0.1` |
-| `DATABASE_URL` | URL PostgreSQL (опционально) | SQLite |
-| `REDIS_LOCATION` | URL Redis для кеширования (продакшен) | - |
-| `ERROR_TRACKING_DSN` | DSN для Bugsink-compatible error tracking | - |
-| `ERROR_TRACKING_ENVIRONMENT` | Окружение для error tracking | - |
+| `ALLOWED_HOSTS` | Разрешенные production-хосты | - |
+| `CSRF_TRUSTED_ORIGINS` | Доверенные HTTPS-источники для CSRF | - |
+| `DATABASE_URL` | URL PostgreSQL для production-окружения | - |
+| `REDIS_LOCATION` | URL Redis для кеширования, сессий и Celery в production | - |
+| `ERROR_TRACKING_DSN` | DSN для Sentry-compatible мониторинга ошибок | - |
+| `ERROR_TRACKING_ENVIRONMENT` | Окружение для мониторинга ошибок | `production` |
+| `SESSION_COOKIE_SECURE` | Флаг `Secure` для session cookie | `true` |
+| `SESSION_COOKIE_HTTPONLY` | Флаг `HttpOnly` для session cookie | `true` |
+| `SESSION_COOKIE_SAMESITE` | Политика `SameSite` для session cookie | `Lax` |
+| `CSRF_COOKIE_SECURE` | Флаг `Secure` для CSRF cookie | `true` |
+| `SECURE_SSL_REDIRECT` | Принудительное перенаправление на HTTPS | `true` |
+| `SECURE_HSTS_SECONDS` | Значение `max-age` для HSTS | `31536000` |
+| `SECURE_HSTS_INCLUDE_SUBDOMAINS` | HSTS для поддоменов | `true` |
+| `SECURE_HSTS_PRELOAD` | Предзагрузка HSTS | `true` |
 | `LANGUAGE_CODE` | Язык интерфейса | `ru-RU` |
 | `TIME_ZONE` | Часовой пояс | `Europe/Moscow` |
 
 ### Дополнительные возможности
 
-- **PostgreSQL**: Для production рекомендуется PostgreSQL вместо SQLite
+- **PostgreSQL**: Для production-развертывания при самостоятельном размещении требуется PostgreSQL вместо SQLite
 - **AI для чеков**: Интеграция с OpenAI API для автоматического распознавания чеков
-- **Error tracking**: Bugsink-compatible мониторинг ошибок в production через `ERROR_TRACKING_DSN`
+- **Мониторинг ошибок**: Sentry-compatible мониторинг ошибок в production через `ERROR_TRACKING_DSN`
+
+### Минимум для production при самостоятельном размещении
+
+Для `docker-compose.prod.yaml` минимальный набор production-переменных включает:
+
+- `SECRET_KEY`
+- `DJANGO_SETTINGS_MODULE=config.django.prod`
+- `DEBUG=false`
+- `ALLOWED_HOSTS`
+- `BASE_URL`
+- `CSRF_TRUSTED_ORIGINS`
+- `REDIS_LOCATION`
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` для встроенного PostgreSQL в `docker-compose.prod.yaml`
+- `DATABASE_URL` для внешней PostgreSQL
+- переменные cookie и transport security: `SESSION_COOKIE_SECURE`, `SESSION_COOKIE_HTTPONLY`, `SESSION_COOKIE_SAMESITE`, `CSRF_COOKIE_SECURE`, `SECURE_SSL_REDIRECT`, `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD`
+- `ERROR_TRACKING_DSN` и `ERROR_TRACKING_ENVIRONMENT` для мониторинга production-окружения
+
+Секреты не должны храниться в репозитории или поддерживаться вручную в локальном `.env` на сервере без контроля изменений. Для production-развертывания при самостоятельном размещении `.env` должен формироваться на этапе деплоя из CI/CD secrets, менеджера секретов или зашифрованной системы управления конфигурацией.
+
+Подробный чек-лист production-развертывания: [docs/docs/production_self_hosted.md](docs/docs/production_self_hosted.md)
 
 #### Redis — Кеширование для производительности
 
