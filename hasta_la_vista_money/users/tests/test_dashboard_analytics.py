@@ -10,7 +10,10 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from hasta_la_vista_money.expense.models import ExpenseCategory
@@ -121,6 +124,7 @@ class GetPeriodComparisonTest(TestCase):
             raise ValueError(msg)
         self.assertIsInstance(user, User)
         self.user: UserType = user
+        cache.clear()
 
     def test_get_period_comparison_month(self) -> None:
         """Test period comparison for month."""
@@ -146,6 +150,22 @@ class GetPeriodComparisonTest(TestCase):
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
+
+    def test_get_period_comparison_uses_two_aggregate_queries(self) -> None:
+        with CaptureQueriesContext(connection) as queries:
+            result = get_period_comparison(self.user, 'month')
+
+        self.assertIn('current', result)
+        self.assertLessEqual(len(queries), 2)
+
+    def test_get_period_comparison_uses_cache(self) -> None:
+        get_period_comparison(self.user, 'quarter')
+
+        with CaptureQueriesContext(connection) as queries:
+            cached_result = get_period_comparison(self.user, 'quarter')
+
+        self.assertIn('current', cached_result)
+        self.assertEqual(len(queries), 0)
 
 
 class GetDrillDownDataTest(TestCase):

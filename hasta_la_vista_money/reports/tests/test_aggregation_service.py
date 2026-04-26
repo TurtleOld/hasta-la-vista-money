@@ -2,7 +2,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import ClassVar
 
+from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from hasta_la_vista_money.budget.models import DateList
@@ -161,6 +164,7 @@ class BudgetChartsTest(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
         DateList.objects.create(user=self.user, date=date(2025, 1, 1))
+        cache.clear()
 
     def test_budget_charts(self) -> None:
         charts_data = budget_charts(self.user)
@@ -171,3 +175,12 @@ class BudgetChartsTest(TestCase):
         self.assertIn('chart_balance', charts_data)
         self.assertIn('pie_labels', charts_data)
         self.assertIn('pie_values', charts_data)
+
+    def test_budget_charts_uses_cache(self) -> None:
+        budget_charts(self.user)
+
+        with CaptureQueriesContext(connection) as queries:
+            charts_data = budget_charts(self.user)
+
+        self.assertIn('chart_labels', charts_data)
+        self.assertEqual(len(queries), 0)

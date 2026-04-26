@@ -6,11 +6,13 @@ including dataset collection, data transformation, and chart preparation.
 
 from datetime import date
 from decimal import Decimal
-from typing import ClassVar
+from typing import Any, ClassVar
 from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
+from django.db import connection
 from django.test import RequestFactory, TestCase
+from django.test.utils import CaptureQueriesContext
 
 from hasta_la_vista_money.expense.models import ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
@@ -174,7 +176,7 @@ class ReportViewTest(TestCase):
         if category:
             months = [date(2025, 1, 1)]
             fact_map: dict[int, dict[date, Decimal | int]] = {
-                category.pk: {months[0]: Decimal('100.00')}
+                category.pk: {months[0]: Decimal('100.00')},
             }
             totals = view._calculate_totals([category], months, fact_map)
             self.assertIsInstance(totals, list)
@@ -187,10 +189,12 @@ class ReportViewTest(TestCase):
         if category:
             months = [date(2025, 1, 1)]
             fact_map: dict[int, dict[date, Decimal | int]] = {
-                category.pk: {months[0]: Decimal('100.00')}
+                category.pk: {months[0]: Decimal('100.00')},
             }
             totals = view._calculate_category_totals(
-                [category], months, fact_map
+                [category],
+                months,
+                fact_map,
             )
             self.assertIsInstance(totals, dict)
             self.assertIn(category.pk, totals)
@@ -202,10 +206,12 @@ class ReportViewTest(TestCase):
         if category:
             months = [date(2025, 1, 1)]
             fact_map: dict[int, dict[date, Decimal | int]] = {
-                category.pk: {months[0]: Decimal('100.00')}
+                category.pk: {months[0]: Decimal('100.00')},
             }
             labels, values = view._calculate_pie_data(
-                [category], months, fact_map
+                [category],
+                months,
+                fact_map,
             )
             self.assertIsInstance(labels, list)
             self.assertIsInstance(values, list)
@@ -225,6 +231,24 @@ class ReportViewTest(TestCase):
         view.request = request
         charts_data = view.prepare_budget_charts(request)
         self.assertIsInstance(charts_data, dict)
+
+    @patch('hasta_la_vista_money.reports.views.budget_charts')
+    def test_prepare_budget_charts_avoids_extra_user_lookup(
+        self,
+        mock_budget_charts: Any,
+    ) -> None:
+        request = self.factory.get('/')
+        request.user = self.user
+        view = ReportView()
+        view.request = request
+        mock_budget_charts.return_value = {}
+
+        with CaptureQueriesContext(connection) as queries:
+            charts_data = view.prepare_budget_charts(request)
+
+        self.assertEqual(charts_data, {})
+        self.assertEqual(len(queries), 0)
+        mock_budget_charts.assert_called_once_with(self.user)
 
     def test_prepare_budget_charts_anonymous_user(self) -> None:
         """Test that preparing budget charts for anonymous user raises error."""
