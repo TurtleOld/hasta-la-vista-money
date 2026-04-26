@@ -2,7 +2,7 @@ name: hlvm-prod
 
 services:
   db:
-    image: postgres:18
+    image: postgres:18.0
     volumes:
       - postgres_data:/var/lib/postgresql
     env_file:
@@ -23,7 +23,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:latest
+    image: redis:8.0.3-alpine
     volumes:
       - redis_data:/data
     ports:
@@ -83,7 +83,7 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.29.1-alpine
     ports:
       - "80:80"
       - "443:443"
