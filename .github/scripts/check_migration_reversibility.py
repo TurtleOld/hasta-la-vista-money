@@ -92,7 +92,7 @@ def build_temp_database_settings(database_path: str) -> dict[str, Any]:
 def create_temp_connection(database_path: str):
     settings_dict = build_temp_database_settings(database_path)
     backend = load_backend(settings_dict['ENGINE'])
-    return backend.DatabaseWrapper(settings_dict, 'migration_check')
+    return backend.DatabaseWrapper(settings_dict, 'default')
 
 
 def migrate_target(
@@ -101,7 +101,6 @@ def migrate_target(
     migration_name: str | None,
 ) -> None:
     connection = create_temp_connection(database_path)
-
     try:
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
