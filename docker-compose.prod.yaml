@@ -2,7 +2,7 @@ name: hlvm-prod
 
 services:
   db:
-    image: postgres:18.0
+    image: postgres:18.3
     volumes:
       - postgres_data:/var/lib/postgresql
     env_file:
