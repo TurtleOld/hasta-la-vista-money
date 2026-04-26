@@ -140,6 +140,17 @@ jobs:
 
   production-image:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - name: hlvm-prod-ci
+            dockerfile: docker/production.Dockerfile
+            smoke_test: true
+            port: 8001
+          - name: receipt-inference-ci
+            dockerfile: receipt_inference/Dockerfile
+            smoke_test: false
+            port: 8010
     env:
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/github_actions
@@ -181,13 +192,14 @@ jobs:
 
       - name: Build production image
         run: >-
-          docker buildx build --file docker/production.Dockerfile --load
-          --tag hlvm-prod-ci:${{ github.sha }} .
+          docker buildx build --file ${{ matrix.image.dockerfile }} --load
+          --tag ${{ matrix.image.name }}:${{ github.sha }} .
 
       - name: Smoke test production container startup
+        if: ${{ matrix.image.smoke_test }}
         run: |
           docker run -d \
-            --name hlvm-prod-ci \
+            --name ${{ matrix.image.name }} \
             --network host \
             -e SECRET_KEY \
             -e DATABASE_URL \
@@ -199,23 +211,23 @@ jobs:
             -e DJANGO_SETTINGS_MODULE \
             -e GITHUB_WORKFLOW \
             -e CI \
-            hlvm-prod-ci:${{ github.sha }}
+            ${{ matrix.image.name }}:${{ github.sha }}
 
           for attempt in $(seq 1 30); do
-            if nc -z 127.0.0.1 8001; then
+            if nc -z 127.0.0.1 ${{ matrix.image.port }}; then
               exit 0
             fi
 
-            if ! docker ps --format '{{.Names}}' | grep -qx 'hlvm-prod-ci'; then
+            if ! docker ps --format '{{.Names}}' | grep -qx '${{ matrix.image.name }}'; then
               break
             fi
 
             sleep 2
           done
 
-          docker logs hlvm-prod-ci
+          docker logs ${{ matrix.image.name }}
           exit 1
 
       - name: Cleanup production smoke container
         if: always()
-        run: docker rm -f hlvm-prod-ci || true
+        run: docker rm -f ${{ matrix.image.name }} || true
