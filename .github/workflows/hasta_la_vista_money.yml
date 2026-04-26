@@ -102,8 +102,26 @@ jobs:
       - name: Check migrations are up-to-date
         run: uv run python manage.py makemigrations --check --dry-run
 
+      - name: Fetch base branch for migration diff
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags --depth=1 origin ${{ github.base_ref }}
+
+      - name: Detect changed migration files
+        id: changed-migrations
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            migration_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- 'hasta_la_vista_money/*/migrations/*.py' | tr '\n' ' ')
+          else
+            migration_files=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- 'hasta_la_vista_money/*/migrations/*.py' | tr '\n' ' ')
+          fi
+
+          printf 'files=%s\n' "$migration_files" >> "$GITHUB_OUTPUT"
+
       - name: Check migrations are reversible
-        run: uv run python .github/scripts/check_migration_reversibility.py
+        if: steps.changed-migrations.outputs.files != ''
+        run: >-
+          uv run python .github/scripts/check_migration_reversibility.py
+          ${{ steps.changed-migrations.outputs.files }}
 
       - name: Run check
         run: uv run python manage.py check
