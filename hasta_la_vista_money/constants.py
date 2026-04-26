@@ -334,6 +334,9 @@ TRANSFER_MONEY_LOG_LIMIT: Final = 10
 RECEIPT_RANK_LIMIT: Final = 10
 RECENT_RECEIPTS_LIMIT: Final = 20
 TRANSFER_LOG_LIMIT: Final = 20
+DASHBOARD_CACHE_TIMEOUT: Final = 300
+DASHBOARD_COMPARISON_CACHE_TIMEOUT: Final = 120
+REPORTS_CACHE_TIMEOUT: Final = 300
 
 # ============================================================================
 # Statistics Constants

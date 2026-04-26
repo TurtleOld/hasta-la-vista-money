@@ -92,4 +92,4 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh /app/celery-entrypoint.sh && \
 USER appuser
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["granian", "--interface", "asgi", "config.asgi:application", "--port", "8001", "--host", "0.0.0.0"]
+CMD granian --interface asgi config.asgi:application --port 8001 --host 0.0.0.0 --workers ${GRANIAN_WORKERS:-2} --runtime-threads ${GRANIAN_RUNTIME_THREADS:-${GRANIAN_THREADS:-1}} --blocking-threads ${GRANIAN_BLOCKING_THREADS:-1}

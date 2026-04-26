@@ -10,7 +10,10 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
+from django.db import connection
 from django.test import RequestFactory, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from core.test_helpers import setup_container_for_request
@@ -145,7 +148,7 @@ class DashboardDataViewTest(TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(payload, {'error': 'User not authenticated'})
 
-    @patch('hasta_la_vista_money.users.views.get_user_detailed_statistics')
+    @patch('hasta_la_vista_money.users.views.get_dashboard_summary_statistics')
     def test_dashboard_data_view_handles_error(
         self,
         mock_stats: Any,
@@ -160,7 +163,7 @@ class DashboardDataViewTest(TestCase):
         self.assertIn('error', payload)
         self.assertIn('traceback', payload)
 
-    @patch('hasta_la_vista_money.users.views.get_user_detailed_statistics')
+    @patch('hasta_la_vista_money.users.views.get_dashboard_summary_statistics')
     def test_dashboard_data_view_does_not_clear_cached_stats(
         self,
         mock_stats: Any,
@@ -190,6 +193,23 @@ class DashboardDataViewTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         mock_delete.assert_not_called()
+
+    def test_dashboard_data_view_reuses_cached_summary(self) -> None:
+        cache.clear()
+        self.client.force_login(self.user)
+
+        with CaptureQueriesContext(connection) as first_request_queries:
+            first_response = self.client.get(reverse('users:dashboard_data'))
+
+        with CaptureQueriesContext(connection) as second_request_queries:
+            second_response = self.client.get(reverse('users:dashboard_data'))
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertLess(
+            len(second_request_queries),
+            len(first_request_queries),
+        )
 
 
 class DashboardWidgetConfigViewTest(TestCase):

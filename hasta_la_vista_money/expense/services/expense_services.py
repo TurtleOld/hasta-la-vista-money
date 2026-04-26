@@ -437,6 +437,8 @@ class ExpenseCategoryService:
             cache_key = f'category_tree_expense_{self.user.pk}_{depth}'
             cache.delete(cache_key)
 
+        invalidate_user_detailed_statistics_cache(self.user.pk)
+
         return new_category
 
     def update_category(
@@ -461,6 +463,8 @@ class ExpenseCategoryService:
         for depth in range(1, 6):  # Clear cache for depth 1-5
             cache_key = f'category_tree_expense_{self.user.pk}_{depth}'
             cache.delete(cache_key)
+
+        invalidate_user_detailed_statistics_cache(self.user.pk)
 
         return category
 

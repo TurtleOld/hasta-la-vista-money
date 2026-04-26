@@ -41,6 +41,7 @@ from hasta_la_vista_money.receipts.repositories import ReceiptRepository
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
+    get_dashboard_summary_cache_key,
     get_user_detailed_statistics_cache_key,
 )
 
@@ -224,6 +225,13 @@ class IncomeExpenseDict(TypedDict):
     type: str
 
 
+class DashboardSummaryStatisticsDict(TypedDict):
+    """Lean dashboard payload for the SPA widgets."""
+
+    months_data: list[MonthDataDict]
+    top_expense_categories: list[dict[str, Any]]
+
+
 class UserDetailedStatisticsDict(TypedDict):
     """User detailed statistics.
 
@@ -373,19 +381,15 @@ def _build_chart(
 
     exp_dates, exp_amts = _dates_amounts(exp_ds)
     inc_dates, inc_amts = _dates_amounts(inc_ds)
+    exp_map = dict(zip(exp_dates, exp_amts, strict=False))
+    inc_map = dict(zip(inc_dates, inc_amts, strict=False))
 
     all_dates = sorted(set(exp_dates + inc_dates))
     if not all_dates:
         return {'labels': [], 'expense_data': [], 'income_data': []}
 
-    exp_series = [
-        exp_amts[exp_dates.index(d)] if d in exp_dates else constants.ZERO
-        for d in all_dates
-    ]
-    inc_series = [
-        inc_amts[inc_dates.index(d)] if d in inc_dates else constants.ZERO
-        for d in all_dates
-    ]
+    exp_series = [exp_map.get(d, constants.ZERO) for d in all_dates]
+    inc_series = [inc_map.get(d, constants.ZERO) for d in all_dates]
 
     if len(all_dates) == constants.ONE:
         d = date.fromisoformat(all_dates[0])
@@ -402,6 +406,48 @@ def _build_chart(
         'expense_data': exp_series,
         'income_data': inc_series,
     }
+
+
+def get_dashboard_summary_statistics(
+    user: User,
+    container: 'ApplicationContainer',
+) -> DashboardSummaryStatisticsDict:
+    """Return the dashboard widget payload without heavyweight sections."""
+    cache_key = get_dashboard_summary_cache_key(user.pk)
+    cached_stats = cache.get(cache_key)
+
+    if cached_stats is not None:
+        return cached_stats  # type: ignore[no-any-return]
+
+    expense_repository = container.expense.expense_repository()
+    income_repository = container.income.income_repository()
+
+    now = timezone.now()
+    today = now.date()
+    year_start = today.replace(month=1, day=1)
+
+    stats: DashboardSummaryStatisticsDict = {
+        'months_data': _six_months_data(
+            user,
+            today,
+            container,
+            expense_repository,
+            income_repository,
+        ),
+        'top_expense_categories': list(
+            _top_categories_qs(
+                Expense,
+                user,
+                year_start,
+                container,
+                expense_repository,
+                income_repository,
+            ),
+        ),
+    }
+
+    cache.set(cache_key, stats, constants.DASHBOARD_CACHE_TIMEOUT)
+    return stats
 
 
 def _balances_and_delta(

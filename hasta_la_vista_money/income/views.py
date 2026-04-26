@@ -42,6 +42,9 @@ from hasta_la_vista_money.income.mixins import IncomeFormQuerysetMixin
 from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 INCOME_LIST_URL_NAME = 'income:list'
 
@@ -536,6 +539,8 @@ class IncomeCategoryCreateView(
             cache_key = f'category_tree_income_{user.pk}_{depth}'
             cache.delete(cache_key)
 
+        invalidate_user_detailed_statistics_cache(user.pk)
+
         messages.success(
             self.request,
             _('Category "%(name)s" was successfully added!')
@@ -615,6 +620,8 @@ class IncomeCategoryUpdateView(
             cache_key = f'category_tree_income_{user.pk}_{depth}'
             cache.delete(cache_key)
 
+        invalidate_user_detailed_statistics_cache(user.pk)
+
         messages.success(
             self.request,
             _('Category "%(name)s" was successfully updated!')
@@ -664,5 +671,7 @@ class IncomeCategoryDeleteView(
         for depth in range(1, 6):  # Clear cache for depth 1-5
             cache_key = f'category_tree_income_{user.pk}_{depth}'
             cache.delete(cache_key)
+
+        invalidate_user_detailed_statistics_cache(user.pk)
 
         return response
