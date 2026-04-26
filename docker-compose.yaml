@@ -123,6 +123,9 @@ services:
       QWEN_MODEL_PATH: ${QWEN_MODEL_PATH:-/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf}
       MAX_IMAGE_DIMENSION: ${MAX_IMAGE_DIMENSION:-2200}
       JPEG_QUALITY: ${JPEG_QUALITY:-92}
+      OCR_LANGUAGE: ${OCR_LANGUAGE:-ru}
+      OCR_MIN_CONFIDENCE: ${OCR_MIN_CONFIDENCE:-0.5}
+      OCR_USE_ANGLE_CLS: ${OCR_USE_ANGLE_CLS:-true}
     volumes:
       - ./receipt_inference:/app/receipt_inference
       - ${RECEIPT_INFERENCE_MODELS_PATH:-./models/receipt-inference}:/models:ro
