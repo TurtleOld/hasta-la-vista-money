@@ -198,7 +198,7 @@ class PaddleOCRBackend:
                 continue
             text_meta = entry[1]
             if (
-                not isinstance(text_meta, (list, tuple))
+                not isinstance(text_meta, list | tuple)
                 or len(text_meta) < MIN_OCR_ENTRY_PARTS
             ):
                 continue
