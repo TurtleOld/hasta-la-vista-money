@@ -196,6 +196,7 @@ class DashboardDataViewTest(TestCase):
 
     def test_dashboard_data_view_reuses_cached_summary(self) -> None:
         cache.clear()
+        self.client.force_login(self.user)
 
         with CaptureQueriesContext(connection) as first_request_queries:
             first_response = self.client.get(reverse('users:dashboard_data'))
