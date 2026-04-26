@@ -46,6 +46,8 @@ services:
       - "8001:8001"
     env_file:
       - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
     depends_on:
       db:
         condition: service_healthy
@@ -69,6 +71,8 @@ services:
       - media_data:/app/media
     env_file:
       - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
     depends_on:
       db:
         condition: service_healthy
