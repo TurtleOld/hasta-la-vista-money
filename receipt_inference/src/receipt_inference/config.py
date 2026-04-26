@@ -23,6 +23,9 @@ class ReceiptInferenceSettings:
     llama_timeout: float
     max_image_dimension: int
     jpeg_quality: int
+    ocr_language: str
+    ocr_min_confidence: float
+    ocr_use_angle_cls: bool
 
 
 def load_settings() -> ReceiptInferenceSettings:
@@ -50,4 +53,9 @@ def load_settings() -> ReceiptInferenceSettings:
         llama_timeout=float(os.getenv('LLAMA_TIMEOUT', '120')),
         max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '2200')),
         jpeg_quality=int(os.getenv('JPEG_QUALITY', '92')),
+        ocr_language=os.getenv('OCR_LANGUAGE', 'ru'),
+        ocr_min_confidence=float(os.getenv('OCR_MIN_CONFIDENCE', '0.5')),
+        ocr_use_angle_cls=(
+            os.getenv('OCR_USE_ANGLE_CLS', 'true').strip().lower() == 'true'
+        ),
     )

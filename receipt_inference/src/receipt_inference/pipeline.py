@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from importlib import import_module
 from io import BytesIO
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
 import httpx
+import numpy as np
 import structlog
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 QWEN_MODEL_NAME = 'Qwen2.5-3B-Instruct-Q5_K_M'
+MIN_OCR_ENTRY_PARTS = 2
 JSON_BLOCK_PATTERN = re.compile(
     r'```(?:json)?\s*(\{.*?\})\s*```',
     re.DOTALL,
@@ -106,6 +109,98 @@ class StubOCRBackend:
             message='PaddleOCR backend is not implemented yet.',
             status_code=501,
         )
+
+
+class PaddleOCRBackend:
+    """CPU OCR backend powered by PaddleOCR."""
+
+    def __init__(self, settings: ReceiptInferenceSettings) -> None:
+        self._settings = settings
+        self._ocr_instance: Any | None = None
+
+    def extract(self, prepared_image: PreparedImage) -> OCRResult:
+        """Extract ordered text lines from the prepared receipt image."""
+        ocr = self._get_ocr_instance()
+        image_array = np.array(Image.open(BytesIO(prepared_image.image_bytes)))
+
+        try:
+            result = ocr.ocr(image_array, cls=self._settings.ocr_use_angle_cls)
+        except Exception as exc:
+            raise ReceiptInferenceError(
+                error_code='ocr_failed',
+                message='PaddleOCR failed to process the receipt image.',
+                status_code=502,
+            ) from exc
+
+        lines = self._extract_lines(result)
+        filtered_lines = [
+            text
+            for text, confidence in lines
+            if text and confidence >= self._settings.ocr_min_confidence
+        ]
+        text = '\n'.join(filtered_lines).strip()
+        return OCRResult(text=text, line_count=len(filtered_lines))
+
+    def _get_ocr_instance(self) -> Any:
+        """Create PaddleOCR lazily so startup stays lightweight."""
+        if self._ocr_instance is not None:
+            return self._ocr_instance
+
+        try:
+            paddleocr_module = import_module('paddleocr')
+            paddleocr_cls = paddleocr_module.PaddleOCR
+        except ImportError as exc:
+            raise ReceiptInferenceError(
+                error_code='ocr_unavailable',
+                message='PaddleOCR dependencies are not installed.',
+                status_code=503,
+            ) from exc
+
+        try:
+            self._ocr_instance = paddleocr_cls(
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=self._settings.ocr_use_angle_cls,
+                lang=self._settings.ocr_language,
+                use_gpu=False,
+                show_log=False,
+                cpu_threads=self._settings.ocr_threads,
+            )
+        except Exception as exc:
+            raise ReceiptInferenceError(
+                error_code='ocr_unavailable',
+                message='Failed to initialize PaddleOCR backend.',
+                status_code=503,
+            ) from exc
+        return self._ocr_instance
+
+    def _extract_lines(self, result: Any) -> list[tuple[str, float]]:
+        """Normalize PaddleOCR output into ordered text lines."""
+        if not isinstance(result, list) or not result:
+            return []
+
+        # PaddleOCR commonly returns [[line1, line2, ...]] for a single image.
+        first_page = result[0] if isinstance(result[0], list) else result
+        if not isinstance(first_page, list):
+            return []
+
+        lines: list[tuple[str, float]] = []
+        for entry in first_page:
+            if not isinstance(entry, list) or len(entry) < MIN_OCR_ENTRY_PARTS:
+                continue
+            text_meta = entry[1]
+            if (
+                not isinstance(text_meta, (list, tuple))
+                or len(text_meta) < MIN_OCR_ENTRY_PARTS
+            ):
+                continue
+            text = str(text_meta[0]).strip()
+            try:
+                confidence = float(text_meta[1])
+            except (TypeError, ValueError):
+                confidence = 0.0
+            lines.append((text, confidence))
+        return lines
 
 
 class PromptBuilder:
@@ -351,7 +446,7 @@ class ReceiptInferencePipeline:
 
     def __init__(self, settings: ReceiptInferenceSettings) -> None:
         self._preprocessor = ImagePreprocessor(settings)
-        self._ocr_backend = StubOCRBackend()
+        self._ocr_backend = PaddleOCRBackend(settings)
         self._llm_backend = LlamaServerBackend(settings)
         self._normalizer = StructuredReceiptNormalizer()
 
