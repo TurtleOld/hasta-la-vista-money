@@ -6,7 +6,10 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "granian>=2.3.4",
     "httpx>=0.28.0",
+    "numpy>=2.2.0",
     "orjson>=3.11.0",
+    "paddleocr>=3.2.0",
+    "paddlepaddle>=3.1.0",
     "Pillow>=11.0.0",
     "starlette>=0.48.0",
     "structlog>=25.4.0",
