@@ -157,9 +157,6 @@ known-first-party = ["hasta_la_vista_money"]
 "**/forms.py" = [
   "RUF012", # Django Meta classes don't support ClassVar
 ]
-".github/scripts/check_migration_reversibility.py" = [
-  "S603", # subprocess args are fixed for CI migration rollback checks
-]
 "hasta_la_vista_money/finance_account/models.py" = [
   "PLC0415",
 ]

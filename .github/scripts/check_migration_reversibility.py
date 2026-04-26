@@ -2,17 +2,15 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import django
-from django.db import connections
+from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.loader import MigrationLoader
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MANAGE_PY = PROJECT_ROOT / 'manage.py'
+from django.db.utils import load_backend
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,7 +31,7 @@ def to_migration_key(migration_path: str) -> tuple[str, str]:
 def get_previous_migration(
     loader: MigrationLoader,
     migration_key: tuple[str, str],
-) -> str:
+) -> str | None:
     migration = loader.disk_migrations[migration_key]
     same_app_dependencies = [
         dependency_name
@@ -42,7 +40,7 @@ def get_previous_migration(
     ]
 
     if not same_app_dependencies:
-        return 'zero'
+        return None
 
     if len(same_app_dependencies) > 1:
         msg = (
@@ -55,44 +53,61 @@ def get_previous_migration(
     return same_app_dependencies[0]
 
 
-def run_manage_command(
-    env: dict[str, str],
-    app_label: str,
-    migration_name: str,
-) -> tuple[bool, str]:
-    # The command is fixed; only app and migration identifiers vary.
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(MANAGE_PY),
-            'migrate',
-            app_label,
-            migration_name,
-            '--noinput',
-        ],
-        cwd=PROJECT_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    output = f'{result.stdout}{result.stderr}'
-    return result.returncode == 0, output
-
-
-def build_temp_env(database_path: str) -> dict[str, str]:
-    env = os.environ.copy()
-    env.setdefault(
+def configure_environment_defaults() -> None:
+    os.environ.setdefault(
         'SECRET_KEY',
         '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
     )
-    env.setdefault('ALLOWED_HOSTS', 'localhost,127.0.0.1')
-    env.setdefault('ACCESS_TOKEN_LIFETIME', '60')
-    env.setdefault('REFRESH_TOKEN_LIFETIME', '7')
-    env.setdefault('REDIS_LOCATION', 'redis://localhost:6379/1')
-    env['DATABASE_URL'] = f'sqlite:///{database_path}'
-    env['CI'] = 'true'
-    return env
+    os.environ.setdefault('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+    os.environ.setdefault('ACCESS_TOKEN_LIFETIME', '60')
+    os.environ.setdefault('REFRESH_TOKEN_LIFETIME', '7')
+    os.environ.setdefault('REDIS_LOCATION', 'redis://localhost:6379/1')
+    os.environ.setdefault('CI', 'true')
+
+
+def build_temp_database_settings(database_path: str) -> dict[str, Any]:
+    return {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': database_path,
+        'ATOMIC_REQUESTS': False,
+        'AUTOCOMMIT': True,
+        'CONN_MAX_AGE': 0,
+        'CONN_HEALTH_CHECKS': False,
+        'OPTIONS': {},
+        'TIME_ZONE': None,
+        'USER': '',
+        'PASSWORD': '',
+        'HOST': '',
+        'PORT': '',
+        'TEST': {
+            'CHARSET': None,
+            'COLLATION': None,
+            'MIGRATE': True,
+            'MIRROR': None,
+            'NAME': None,
+        },
+    }
+
+
+def create_temp_connection(database_path: str):
+    settings_dict = build_temp_database_settings(database_path)
+    backend = load_backend(settings_dict['ENGINE'])
+    return backend.DatabaseWrapper(settings_dict, 'migration_check')
+
+
+def migrate_target(
+    database_path: str,
+    app_label: str,
+    migration_name: str | None,
+) -> None:
+    connection = create_temp_connection(database_path)
+
+    try:
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate([(app_label, migration_name)])
+    finally:
+        connection.close()
 
 
 def main() -> int:
@@ -107,9 +122,15 @@ def main() -> int:
         sys.stdout.write('No changed migration files to verify.\n')
         return 0
 
+    configure_environment_defaults()
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.django.base')
     django.setup()
-    loader = MigrationLoader(connections['default'], ignore_no_migrations=True)
+
+    loader_connection = create_temp_connection(':memory:')
+    try:
+        loader = MigrationLoader(loader_connection, ignore_no_migrations=True)
+    finally:
+        loader_connection.close()
 
     failures: list[str] = []
 
@@ -124,29 +145,24 @@ def main() -> int:
             prefix='hlvm-migration-check-',
         ) as temp_dir:
             database_path = str(Path(temp_dir) / 'db.sqlite3')
-            env = build_temp_env(database_path)
 
-            migrated, migrate_output = run_manage_command(
-                env,
-                app_label,
-                migration_name,
-            )
-            if not migrated:
+            try:
+                migrate_target(database_path, app_label, migration_name)
+            except Exception as exc:
                 failures.append(
                     f'{app_label}.{migration_name}: apply failed\n'
-                    f'{migrate_output}',
+                    f'{type(exc).__name__}: {exc}',
                 )
                 continue
 
-            rolled_back, rollback_output = run_manage_command(
-                env,
-                app_label,
-                previous_migration,
-            )
-            if not rolled_back:
+            try:
+                migrate_target(database_path, app_label, previous_migration)
+            except Exception as exc:
+                rollback_target = previous_migration or 'zero'
                 failures.append(
                     f'{app_label}.{migration_name}: rollback to '
-                    f'{previous_migration} failed\n{rollback_output}',
+                    f'{rollback_target} failed\n'
+                    f'{type(exc).__name__}: {exc}',
                 )
 
     if failures:
