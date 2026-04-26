@@ -4,13 +4,14 @@ import argparse
 import os
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import django
+from django.db import connections
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.loader import MigrationLoader
-from django.db.utils import load_backend
 
 
 def parse_args() -> argparse.Namespace:
@@ -89,10 +90,29 @@ def build_temp_database_settings(database_path: str) -> dict[str, Any]:
     }
 
 
-def create_temp_connection(database_path: str):
-    settings_dict = build_temp_database_settings(database_path)
-    backend = load_backend(settings_dict['ENGINE'])
-    return backend.DatabaseWrapper(settings_dict, 'default')
+def cleanup_default_connection() -> None:
+    connections.close_all()
+    connections.__dict__.pop('settings', None)
+    if hasattr(connections._connections, 'default'):
+        delattr(connections._connections, 'default')
+
+
+@contextmanager
+def temporary_default_connection(database_path: str):
+    database_settings = {'default': build_temp_database_settings(database_path)}
+    previous_settings = connections._settings
+    connection = None
+
+    try:
+        connections._settings = database_settings
+        cleanup_default_connection()
+        connection = connections['default']
+        yield connection
+    finally:
+        if connection is not None:
+            connection.close()
+        connections._settings = previous_settings
+        cleanup_default_connection()
 
 
 def migrate_target(
@@ -100,13 +120,10 @@ def migrate_target(
     app_label: str,
     migration_name: str | None,
 ) -> None:
-    connection = create_temp_connection(database_path)
-    try:
+    with temporary_default_connection(database_path) as connection:
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
         executor.migrate([(app_label, migration_name)])
-    finally:
-        connection.close()
 
 
 def main() -> int:
@@ -125,11 +142,8 @@ def main() -> int:
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.django.base')
     django.setup()
 
-    loader_connection = create_temp_connection(':memory:')
-    try:
+    with temporary_default_connection(':memory:') as loader_connection:
         loader = MigrationLoader(loader_connection, ignore_no_migrations=True)
-    finally:
-        loader_connection.close()
 
     failures: list[str] = []
 
