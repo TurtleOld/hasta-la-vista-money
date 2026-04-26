@@ -118,6 +118,14 @@ class PaddleOCRBackend:
         self._settings = settings
         self._ocr_instance: Any | None = None
 
+    def is_available(self) -> bool:
+        """Return whether PaddleOCR dependencies are importable."""
+        try:
+            import_module('paddleocr')
+        except ImportError:
+            return False
+        return True
+
     def extract(self, prepared_image: PreparedImage) -> OCRResult:
         """Extract ordered text lines from the prepared receipt image."""
         ocr = self._get_ocr_instance()
@@ -239,6 +247,31 @@ class LlamaServerBackend:
         self._base_url = settings.llama_server_url
         self._timeout = settings.llama_timeout
         self._prompt_builder = PromptBuilder()
+        self._model_alias = settings.llama_model_alias
+
+    def is_reachable(self) -> bool:
+        """Check whether llama-server responds on its OpenAI endpoint."""
+        try:
+            with httpx.Client(timeout=min(self._timeout, 5.0)) as client:
+                response = client.get(f'{self._base_url}/models')
+            if not response.is_success:
+                return False
+            payload = response.json()
+        except (httpx.HTTPError, ValueError, TypeError):
+            return False
+
+        if not isinstance(payload, dict):
+            return False
+        models = payload.get('data')
+        if not isinstance(models, list):
+            return False
+
+        for model in models:
+            if not isinstance(model, dict):
+                continue
+            if str(model.get('id', '')).strip() == self._model_alias:
+                return True
+        return bool(models)
 
     def extract(self, ocr_result: OCRResult) -> str:
         """Send OCR text to llama-server and return raw model output."""
@@ -449,6 +482,13 @@ class ReceiptInferencePipeline:
         self._ocr_backend = PaddleOCRBackend(settings)
         self._llm_backend = LlamaServerBackend(settings)
         self._normalizer = StructuredReceiptNormalizer()
+
+    def readiness_status(self) -> dict[str, bool]:
+        """Report pipeline dependency readiness."""
+        return {
+            'ocr_backend_available': self._ocr_backend.is_available(),
+            'llama_server_reachable': self._llm_backend.is_reachable(),
+        }
 
     def preprocess(self, image_bytes: bytes) -> PreparedImage:
         """Preprocess image bytes before OCR."""

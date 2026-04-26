@@ -53,6 +53,14 @@ class ReceiptInferenceService:
         """Whether the configured local Qwen model exists."""
         return self._model_path.exists()
 
+    def readiness_status(self) -> dict[str, bool]:
+        """Return dependency readiness for health endpoints."""
+        pipeline_status = self._pipeline.readiness_status()
+        return {
+            'model_path_exists': self.model_path_exists,
+            **pipeline_status,
+        }
+
     async def parse_upload(
         self,
         uploaded_file: UploadFile | None,

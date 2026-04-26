@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+HTTP_OK = 200
+
 
 class OrjsonResponse(JSONResponse):
     """JSON response rendered with orjson."""
@@ -45,6 +47,12 @@ def _serialize_settings(settings: ReceiptInferenceSettings) -> dict[str, Any]:
         'llama_threads': settings.llama_threads,
         'ocr_threads': settings.ocr_threads,
         'qwen_model_path': settings.qwen_model_path,
+        'llama_server_url': settings.llama_server_url,
+        'llama_port': settings.llama_port,
+        'llama_context_size': settings.llama_context_size,
+        'llama_batch_size': settings.llama_batch_size,
+        'llama_parallel': settings.llama_parallel,
+        'llama_model_alias': settings.llama_model_alias,
     }
 
 
@@ -72,13 +80,16 @@ async def readiness(request: Request) -> Response:
     """Return readiness details for orchestration and debugging."""
     settings: ReceiptInferenceSettings = request.app.state.settings
     service: ReceiptInferenceService = request.app.state.service
+    readiness = service.readiness_status()
+    status_code = HTTP_OK if all(readiness.values()) else 503
     return OrjsonResponse(
         {
-            'status': 'ready',
+            'status': 'ready' if status_code == HTTP_OK else 'degraded',
             'service': 'receipt-inference',
-            'model_path_exists': service.model_path_exists,
+            **readiness,
             'settings': _serialize_settings(settings),
         },
+        status_code=status_code,
     )
 
 

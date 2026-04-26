@@ -21,6 +21,11 @@ class ReceiptInferenceSettings:
     qwen_model_path: str
     llama_server_url: str
     llama_timeout: float
+    llama_port: int
+    llama_context_size: int
+    llama_batch_size: int
+    llama_parallel: int
+    llama_model_alias: str
     max_image_dimension: int
     jpeg_quality: int
     ocr_language: str
@@ -51,6 +56,14 @@ def load_settings() -> ReceiptInferenceSettings:
             'http://127.0.0.1:8080/v1',
         ).rstrip('/'),
         llama_timeout=float(os.getenv('LLAMA_TIMEOUT', '120')),
+        llama_port=int(os.getenv('LLAMA_PORT', '8080')),
+        llama_context_size=int(os.getenv('LLAMA_CONTEXT_SIZE', '8192')),
+        llama_batch_size=int(os.getenv('LLAMA_BATCH_SIZE', '1024')),
+        llama_parallel=int(os.getenv('LLAMA_PARALLEL', '1')),
+        llama_model_alias=os.getenv(
+            'LLAMA_MODEL_ALIAS',
+            'Qwen2.5-3B-Instruct-Q5_K_M',
+        ),
         max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '2200')),
         jpeg_quality=int(os.getenv('JPEG_QUALITY', '92')),
         ocr_language=os.getenv('OCR_LANGUAGE', 'ru'),
