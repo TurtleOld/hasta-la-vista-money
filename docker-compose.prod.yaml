@@ -99,6 +99,11 @@ services:
       OCR_THREADS: ${OCR_THREADS:-1}
       LLAMA_SERVER_URL: ${LLAMA_SERVER_URL:-http://127.0.0.1:8080/v1}
       LLAMA_TIMEOUT: ${LLAMA_TIMEOUT:-120}
+      LLAMA_PORT: ${LLAMA_PORT:-8080}
+      LLAMA_CONTEXT_SIZE: ${LLAMA_CONTEXT_SIZE:-8192}
+      LLAMA_BATCH_SIZE: ${LLAMA_BATCH_SIZE:-1024}
+      LLAMA_PARALLEL: ${LLAMA_PARALLEL:-1}
+      LLAMA_MODEL_ALIAS: ${LLAMA_MODEL_ALIAS:-Qwen2.5-3B-Instruct-Q5_K_M}
       QWEN_MODEL_PATH: ${QWEN_MODEL_PATH:-/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf}
       MAX_IMAGE_DIMENSION: ${MAX_IMAGE_DIMENSION:-2200}
       JPEG_QUALITY: ${JPEG_QUALITY:-92}
@@ -110,11 +115,11 @@ services:
     networks:
       - default
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('localhost',8010),5); s.close()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/ready', timeout=5).read()"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 120s
     cpus: 1.5
     mem_limit: 4g
     restart: unless-stopped
