@@ -29,6 +29,11 @@ def _is_testing() -> bool:
 
 IS_TESTING = _is_testing()
 
+
+def split_env_list(value: str) -> list[str]:
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
 # Security settings
 if (
     'collectstatic' not in sys.argv
@@ -44,11 +49,9 @@ BASE_URL = config('BASE_URL', default='http://127.0.0.1:8000/')
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 allowed_hosts = str(config('ALLOWED_HOSTS', default=''))
-ALLOWED_HOSTS = allowed_hosts.split(',') if allowed_hosts else []
+ALLOWED_HOSTS = split_env_list(allowed_hosts)
 csrf_trusted_origins = str(config('CSRF_TRUSTED_ORIGINS', default=''))
-CSRF_TRUSTED_ORIGINS = (
-    csrf_trusted_origins.split(',') if csrf_trusted_origins else []
-)
+CSRF_TRUSTED_ORIGINS = split_env_list(csrf_trusted_origins)
 INTERNAL_IPS = [config('LOCAL_IPS', default='127.0.0.1')]
 
 # Application definition
@@ -182,9 +185,7 @@ if DEBUG:
 else:
     redis_location = config('REDIS_LOCATION', cast=str, default='')
     allowed_hosts_str = str(config('ALLOWED_HOSTS', default=''))
-    allowed_hosts_list = [
-        host.strip() for host in allowed_hosts_str.split(',') if host.strip()
-    ]
+    allowed_hosts_list = split_env_list(allowed_hosts_str)
     normalized_hosts = [
         host.lower().split(':', 1)[0] for host in allowed_hosts_list
     ]

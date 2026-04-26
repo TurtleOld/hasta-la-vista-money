@@ -5,22 +5,28 @@ from decouple import config
 
 from config.django.base import *  # noqa: F403
 
-allowed_hosts = str(config('ALLOWED_HOSTS', default=''))
-ALLOWED_HOSTS = (
-    allowed_hosts.split()
-    if allowed_hosts
-    else [
-        '127.0.0.1',
-        'localhost',
-    ]
-)
-
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
 SECURE_CONTENT_TYPE_NOSNIFF = config(
     'SECURE_CONTENT_TYPE_NOSNIFF',
+    default=True,
+    cast=bool,
+)
+SECURE_HSTS_SECONDS = config(
+    'SECURE_HSTS_SECONDS',
+    default=31536000,
+    cast=int,
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config(
+    'SECURE_HSTS_INCLUDE_SUBDOMAINS',
+    default=True,
+    cast=bool,
+)
+SECURE_HSTS_PRELOAD = config(
+    'SECURE_HSTS_PRELOAD',
     default=True,
     cast=bool,
 )
