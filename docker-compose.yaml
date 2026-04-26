@@ -58,6 +58,8 @@ services:
       ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
       ERROR_TRACKING_ENVIRONMENT: ${ERROR_TRACKING_ENVIRONMENT:-development}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
+      RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-}
+      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-120}
     depends_on:
       db:
         condition: service_healthy
@@ -88,6 +90,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
       SECRET_KEY: ${SECRET_KEY:-change_me}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
+      RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-}
+      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-120}
     depends_on:
       db:
         condition: service_healthy
@@ -101,6 +105,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
+
+  receipt-inference:
+    build:
+      context: ./
+      dockerfile: receipt_inference/Dockerfile
+    environment:
+      RECEIPT_INFERENCE_HOST: ${RECEIPT_INFERENCE_HOST:-0.0.0.0}
+      RECEIPT_INFERENCE_PORT: ${RECEIPT_INFERENCE_PORT:-8010}
+      RECEIPT_INFERENCE_LOG_LEVEL: ${RECEIPT_INFERENCE_LOG_LEVEL:-debug}
+      RECEIPT_INFERENCE_MAX_CONCURRENCY: ${RECEIPT_INFERENCE_MAX_CONCURRENCY:-1}
+      LLAMA_THREADS: ${LLAMA_THREADS:-2}
+      OCR_THREADS: ${OCR_THREADS:-1}
+      QWEN_MODEL_PATH: ${QWEN_MODEL_PATH:-/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf}
+    volumes:
+      - ./receipt_inference:/app/receipt_inference
+      - ${RECEIPT_INFERENCE_MODELS_PATH:-./models/receipt-inference}:/models:ro
+    ports:
+      - "8010:8010"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('localhost',8010),5); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
 
   nginx:
