@@ -1,8 +1,8 @@
-"""AI prompt and utilities for extracting receipt data from images.
+"""Utilities for extracting receipt data from images.
 
 This module provides functions for:
-- image_to_base64: encoding image file to data URL
-- analyze_image_with_ai: extracting receipt data from image using configured AI provider
+- image_to_base64: legacy image encoding helper
+- analyze_image_with_ai: extracting receipt data using configured backend
 - paginator_custom_view: pagination utility
 """
 
@@ -23,6 +23,10 @@ from hasta_la_vista_money.receipts.services.ai_providers import (
     ModelUnavailableError,
     RateLimitExceededError,
     get_ai_provider,
+)
+from hasta_la_vista_money.receipts.services.receipt_inference_client import (
+    analyze_image_with_receipt_inference,
+    should_use_receipt_inference,
 )
 
 T = TypeVar('T')
@@ -101,10 +105,11 @@ def analyze_image_with_ai(
     image_base64: UploadedFile,
     user_id: int | None = None,
 ) -> str:
-    """Extract receipt data from image using configured AI provider.
+    """Extract receipt data from image using configured backend.
 
-    The provider is selected via AI_PROVIDER env var ('openai' or 'anthropic').
-    Includes rate limiting and retry logic delegated to the provider.
+    Prefers the internal receipt inference service when
+    ``RECEIPT_INFERENCE_URL`` is configured. Otherwise falls back to the
+    legacy OpenAI-compatible provider.
 
     Args:
         image_base64: Uploaded receipt image file.
@@ -120,6 +125,10 @@ def analyze_image_with_ai(
         TypeError: If AI response doesn't contain content.
     """
     check_ai_rate_limit(user_id)
+
+    if should_use_receipt_inference():
+        return analyze_image_with_receipt_inference(image_base64)
+
     provider = get_ai_provider()
     return provider.analyze(image_base64)
 
