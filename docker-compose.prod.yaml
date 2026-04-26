@@ -97,7 +97,11 @@ services:
       RECEIPT_INFERENCE_MAX_CONCURRENCY: ${RECEIPT_INFERENCE_MAX_CONCURRENCY:-1}
       LLAMA_THREADS: ${LLAMA_THREADS:-2}
       OCR_THREADS: ${OCR_THREADS:-1}
+      LLAMA_SERVER_URL: ${LLAMA_SERVER_URL:-http://127.0.0.1:8080/v1}
+      LLAMA_TIMEOUT: ${LLAMA_TIMEOUT:-120}
       QWEN_MODEL_PATH: ${QWEN_MODEL_PATH:-/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf}
+      MAX_IMAGE_DIMENSION: ${MAX_IMAGE_DIMENSION:-2200}
+      JPEG_QUALITY: ${JPEG_QUALITY:-92}
     volumes:
       - ${RECEIPT_INFERENCE_MODELS_PATH:-/opt/docker/hlvm/receipt-inference/models}:/models:ro
     networks:
