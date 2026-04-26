@@ -83,7 +83,7 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:1.29.1-alpine
+    image: nginx:1.30.0-alpine
     ports:
       - "80:80"
       - "443:443"
