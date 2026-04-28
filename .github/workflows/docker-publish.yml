@@ -31,8 +31,12 @@ jobs:
         image:
           - image_name: ${{ github.repository }}
             dockerfile: docker/production.Dockerfile
-          - image_name: turtleold/hasta-la-vista-money-receipt-inference
+            latest_tag: latest
+            tag_prefix: ""
+          - image_name: ${{ github.repository }}
             dockerfile: receipt_inference/Dockerfile
+            latest_tag: receipt-inference-latest
+            tag_prefix: receipt-inference-
 
     steps:
       - name: Checkout repository
@@ -61,12 +65,12 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ matrix.image.image_name }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch,prefix=${{ matrix.image.tag_prefix }}
+            type=ref,event=pr,prefix=${{ matrix.image.tag_prefix }}pr-
+            type=semver,pattern=${{ matrix.image.tag_prefix }}{{version}}
+            type=semver,pattern=${{ matrix.image.tag_prefix }}{{major}}.{{minor}}
+            type=sha,prefix=${{ matrix.image.tag_prefix }}sha-,format=short
+            type=raw,value=${{ matrix.image.latest_tag }},enable={{is_default_branch}}
 
       - name: Build and push Docker image
         id: build-and-push

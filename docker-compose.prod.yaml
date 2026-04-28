@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
 
   receipt-inference:
-    image: ghcr.io/turtleold/hasta-la-vista-money-receipt-inference:main
+    image: ghcr.io/turtleold/hasta-la-vista-money:receipt-inference-main
     environment:
       RECEIPT_INFERENCE_HOST: ${RECEIPT_INFERENCE_HOST:-0.0.0.0}
       RECEIPT_INFERENCE_PORT: ${RECEIPT_INFERENCE_PORT:-8010}
