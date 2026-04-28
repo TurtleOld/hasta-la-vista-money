@@ -33,7 +33,7 @@ jobs:
             dockerfile: docker/production.Dockerfile
             latest_tag: latest
             tag_prefix: ""
-            platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+            platforms: linux/amd64
           - image_name: ${{ github.repository }}
             dockerfile: receipt_inference/Dockerfile
             latest_tag: receipt-inference-latest
