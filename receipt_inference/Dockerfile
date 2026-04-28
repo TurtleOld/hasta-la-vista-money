@@ -15,6 +15,7 @@ RUN apt-get update && \
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 ENV PATH="/opt/venv/bin:/usr/local/bin:/home/appuser/.local/bin:$PATH"
+ENV PYTHONPATH="/app/receipt_inference/src"
 
 WORKDIR /app/receipt_inference
 
@@ -32,6 +33,7 @@ RUN --mount=type=cache,target=/tmp/uv-cache,uid=1000,gid=1000 \
 COPY --chown=appuser:appuser receipt_inference/ ./
 
 ENV PYTHONFAULTHANDLER=1 \
+    PYTHONPATH=/app/receipt_inference/src \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
