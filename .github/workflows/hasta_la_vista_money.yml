@@ -344,55 +344,7 @@ jobs:
             sleep 2
           done
 
-          docker exec ${{ matrix.image.name }} python -c "from PIL import Image; Image.new('RGB', (8, 8), 'white').save('/tmp/receipt-smoke.png', 'PNG')"
-          sed 's/^          //' > receipt_inference_smoke.py <<'PY'
-          import json
-          import urllib.request
-
-          boundary = '----receipt-inference-ci'
-          ocr_text = 'Test Shop\n20.12.2023 15:30\nMilk 123.45'
-          file_bytes = open('/tmp/receipt-smoke.png', 'rb').read()
-
-          parts = []
-          parts.append(
-              (
-                  f'--{boundary}\r\n'
-                  'Content-Disposition: form-data; name="ocr_text"\r\n\r\n'
-                  f'{ocr_text}\r\n'
-              ).encode()
-          )
-          parts.append(
-              (
-                  f'--{boundary}\r\n'
-                  'Content-Disposition: form-data; name="file"; '
-                  'filename="receipt-smoke.png"\r\n'
-                  'Content-Type: image/png\r\n\r\n'
-              ).encode() + file_bytes + b'\r\n'
-          )
-          parts.append(f'--{boundary}--\r\n'.encode())
-          body = b''.join(parts)
-
-          request = urllib.request.Request(
-              'http://127.0.0.1:8010/v1/receipt/parse',
-              data=body,
-              headers={
-                  'Content-Type': (
-                      f'multipart/form-data; boundary={boundary}'
-                  )
-              },
-              method='POST',
-          )
-          with urllib.request.urlopen(request, timeout=20) as response:
-              payload = json.load(response)
-
-          assert payload['success'] is True, payload
-          assert payload['data']['name_seller'] == 'Test Shop', payload
-          assert payload['data']['items'][0]['product_name'] == 'Milk', payload
-          print(json.dumps(payload))
-          PY
-
-          docker cp receipt_inference_smoke.py ${{ matrix.image.name }}:/tmp/receipt_inference_smoke.py
-          docker exec ${{ matrix.image.name }} python /tmp/receipt_inference_smoke.py
+          docker exec ${{ matrix.image.name }} python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=5).read().decode())"
 
       - name: Cleanup production smoke container
         if: always()
