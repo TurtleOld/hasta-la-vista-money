@@ -344,7 +344,7 @@ jobs:
             sleep 2
           done
 
-          python3 -c "import base64, pathlib; pathlib.Path('receipt-smoke.png').write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sotWZYAAAAASUVORK5CYII='))"
+          docker exec ${{ matrix.image.name }} python -c "from PIL import Image; Image.new('RGB', (8, 8), 'white').save('/tmp/receipt-smoke.png', 'PNG')"
           sed 's/^          //' > receipt_inference_smoke.py <<'PY'
           import json
           import urllib.request
@@ -391,7 +391,6 @@ jobs:
           print(json.dumps(payload))
           PY
 
-          docker cp receipt-smoke.png ${{ matrix.image.name }}:/tmp/receipt-smoke.png
           docker cp receipt_inference_smoke.py ${{ matrix.image.name }}:/tmp/receipt_inference_smoke.py
           docker exec ${{ matrix.image.name }} python /tmp/receipt_inference_smoke.py
 
