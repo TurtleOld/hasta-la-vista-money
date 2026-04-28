@@ -26,6 +26,7 @@ class ReceiptInferenceSettings:
     ocr_language: str
     ocr_min_confidence: float
     ocr_use_angle_cls: bool
+    ocr_readiness_required: bool
 
 
 def load_settings() -> ReceiptInferenceSettings:
@@ -57,5 +58,9 @@ def load_settings() -> ReceiptInferenceSettings:
         ocr_min_confidence=float(os.getenv('OCR_MIN_CONFIDENCE', '0.5')),
         ocr_use_angle_cls=(
             os.getenv('OCR_USE_ANGLE_CLS', 'true').strip().lower() == 'true'
+        ),
+        ocr_readiness_required=(
+            os.getenv('OCR_READINESS_REQUIRED', 'true').strip().lower()
+            == 'true'
         ),
     )

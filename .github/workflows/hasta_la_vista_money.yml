@@ -318,6 +318,7 @@ jobs:
             -e RECEIPT_INFERENCE_HOST=0.0.0.0 \
             -e RECEIPT_INFERENCE_PORT=8010 \
             -e LLAMA_SERVER_URL=http://receipt-llm:8080/v1 \
+            -e OCR_READINESS_REQUIRED=false \
             -e LLAMA_MODEL_ALIAS=Qwen2.5-3B-Instruct-Q5_K_M \
             ${{ matrix.image.name }}:${{ github.sha }}
 
