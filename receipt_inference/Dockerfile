@@ -1,32 +1,8 @@
-FROM python:3.14-slim AS llama-builder
-
-ARG LLAMA_CPP_REF=master
+FROM python:3.12-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
-    cmake \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /tmp
-
-RUN git clone --depth 1 --branch "$LLAMA_CPP_REF" \
-    https://github.com/ggml-org/llama.cpp.git
-
-RUN cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build \
-    -DBUILD_SHARED_LIBS=OFF \
-    -DGGML_NATIVE=OFF \
-    -DGGML_OPENMP=ON \
-    -DLLAMA_BUILD_SERVER=ON && \
-    cmake --build /tmp/llama.cpp/build --target llama-server -j"$(nproc)"
-
-FROM python:3.14-slim
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
@@ -45,8 +21,6 @@ WORKDIR /app/receipt_inference
 RUN mkdir -p /opt/venv /models && \
     chown -R appuser:appuser /app /opt/venv /models
 
-COPY --from=llama-builder /tmp/llama.cpp/build/bin/llama-server /usr/local/bin/llama-server
-
 COPY --chown=appuser:appuser receipt_inference/pyproject.toml ./pyproject.toml
 
 USER appuser
@@ -57,11 +31,8 @@ RUN --mount=type=cache,target=/tmp/uv-cache,uid=1000,gid=1000 \
 
 COPY --chown=appuser:appuser receipt_inference/ ./
 
-RUN chmod +x /app/receipt_inference/entrypoint.sh
-
-ENV LLAMA_SERVER_URL=http://127.0.0.1:8080/v1 \
-    PYTHONFAULTHANDLER=1 \
+ENV PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-ENTRYPOINT ["/app/receipt_inference/entrypoint.sh"]
+CMD ["granian", "--interface", "asgi", "receipt_inference.app:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1", "--runtime-threads", "1", "--blocking-threads", "1"]

@@ -97,21 +97,17 @@ services:
       RECEIPT_INFERENCE_MAX_CONCURRENCY: ${RECEIPT_INFERENCE_MAX_CONCURRENCY:-1}
       LLAMA_THREADS: ${LLAMA_THREADS:-2}
       OCR_THREADS: ${OCR_THREADS:-1}
-      LLAMA_SERVER_URL: ${LLAMA_SERVER_URL:-http://127.0.0.1:8080/v1}
+      LLAMA_SERVER_URL: ${LLAMA_SERVER_URL:-http://receipt-llm:8080/v1}
       LLAMA_TIMEOUT: ${LLAMA_TIMEOUT:-120}
-      LLAMA_PORT: ${LLAMA_PORT:-8080}
-      LLAMA_CONTEXT_SIZE: ${LLAMA_CONTEXT_SIZE:-8192}
-      LLAMA_BATCH_SIZE: ${LLAMA_BATCH_SIZE:-1024}
-      LLAMA_PARALLEL: ${LLAMA_PARALLEL:-1}
       LLAMA_MODEL_ALIAS: ${LLAMA_MODEL_ALIAS:-Qwen2.5-3B-Instruct-Q5_K_M}
-      QWEN_MODEL_PATH: ${QWEN_MODEL_PATH:-/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf}
       MAX_IMAGE_DIMENSION: ${MAX_IMAGE_DIMENSION:-2200}
       JPEG_QUALITY: ${JPEG_QUALITY:-92}
       OCR_LANGUAGE: ${OCR_LANGUAGE:-ru}
       OCR_MIN_CONFIDENCE: ${OCR_MIN_CONFIDENCE:-0.5}
       OCR_USE_ANGLE_CLS: ${OCR_USE_ANGLE_CLS:-true}
-    volumes:
-      - ${RECEIPT_INFERENCE_MODELS_PATH:-/opt/docker/hlvm/receipt-inference/models}:/models:ro
+    depends_on:
+      receipt-llm:
+        condition: service_started
     networks:
       - default
     healthcheck:
@@ -120,6 +116,29 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s
+    cpus: 1.5
+    mem_limit: 4g
+    restart: unless-stopped
+
+  receipt-llm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command:
+      - -m
+      - ${QWEN_MODEL_PATH:-/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf}
+      - -t
+      - ${LLAMA_THREADS:-2}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -c
+      - ${LLAMA_CONTEXT_SIZE:-8192}
+      - -np
+      - ${LLAMA_PARALLEL:-1}
+    volumes:
+      - ${RECEIPT_INFERENCE_MODELS_PATH:-/opt/docker/hlvm/receipt-inference/models}:/models:ro
+    networks:
+      - default
     cpus: 1.5
     mem_limit: 4g
     restart: unless-stopped
