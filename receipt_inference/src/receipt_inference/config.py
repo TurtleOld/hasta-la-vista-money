@@ -27,6 +27,7 @@ class ReceiptInferenceSettings:
     ocr_min_confidence: float
     ocr_use_angle_cls: bool
     ocr_readiness_required: bool
+    llama_readiness_required: bool
 
 
 def load_settings() -> ReceiptInferenceSettings:
@@ -61,6 +62,10 @@ def load_settings() -> ReceiptInferenceSettings:
         ),
         ocr_readiness_required=(
             os.getenv('OCR_READINESS_REQUIRED', 'true').strip().lower()
+            == 'true'
+        ),
+        llama_readiness_required=(
+            os.getenv('LLAMA_READINESS_REQUIRED', 'true').strip().lower()
             == 'true'
         ),
     )

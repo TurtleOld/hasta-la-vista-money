@@ -492,7 +492,11 @@ class ReceiptInferencePipeline:
                 if self._settings.ocr_readiness_required
                 else True
             ),
-            'llama_server_reachable': self._llm_backend.is_reachable(),
+            'llama_server_reachable': (
+                self._llm_backend.is_reachable()
+                if self._settings.llama_readiness_required
+                else True
+            ),
         }
 
     def preprocess(self, image_bytes: bytes) -> PreparedImage:
