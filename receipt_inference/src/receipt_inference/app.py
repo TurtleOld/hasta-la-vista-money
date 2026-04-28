@@ -46,12 +46,7 @@ def _serialize_settings(settings: ReceiptInferenceSettings) -> dict[str, Any]:
         'max_concurrency': settings.max_concurrency,
         'llama_threads': settings.llama_threads,
         'ocr_threads': settings.ocr_threads,
-        'qwen_model_path': settings.qwen_model_path,
         'llama_server_url': settings.llama_server_url,
-        'llama_port': settings.llama_port,
-        'llama_context_size': settings.llama_context_size,
-        'llama_batch_size': settings.llama_batch_size,
-        'llama_parallel': settings.llama_parallel,
         'llama_model_alias': settings.llama_model_alias,
     }
 
@@ -66,7 +61,7 @@ async def lifespan(app: Starlette) -> AsyncIterator[None]:
     logger.info(
         'receipt_inference_startup',
         settings=_serialize_settings(settings),
-        model_path_exists=service.model_path_exists,
+        readiness=service.readiness_status(),
     )
     yield
 

@@ -478,6 +478,7 @@ class ReceiptInferencePipeline:
     """Coordinates preprocessing, OCR, LLM extraction, and normalization."""
 
     def __init__(self, settings: ReceiptInferenceSettings) -> None:
+        self._settings = settings
         self._preprocessor = ImagePreprocessor(settings)
         self._ocr_backend = PaddleOCRBackend(settings)
         self._llm_backend = LlamaServerBackend(settings)
@@ -486,8 +487,16 @@ class ReceiptInferencePipeline:
     def readiness_status(self) -> dict[str, bool]:
         """Report pipeline dependency readiness."""
         return {
-            'ocr_backend_available': self._ocr_backend.is_available(),
-            'llama_server_reachable': self._llm_backend.is_reachable(),
+            'ocr_backend_available': (
+                self._ocr_backend.is_available()
+                if self._settings.ocr_readiness_required
+                else True
+            ),
+            'llama_server_reachable': (
+                self._llm_backend.is_reachable()
+                if self._settings.llama_readiness_required
+                else True
+            ),
         }
 
     def preprocess(self, image_bytes: bytes) -> PreparedImage:

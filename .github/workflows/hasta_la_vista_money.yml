@@ -145,11 +145,11 @@ jobs:
         image:
           - name: hlvm-prod-ci
             dockerfile: docker/production.Dockerfile
-            smoke_test: true
+            smoke_test: django
             port: 8001
           - name: receipt-inference-ci
             dockerfile: receipt_inference/Dockerfile
-            smoke_test: false
+            smoke_test: receipt-inference
             port: 8010
     env:
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
@@ -196,7 +196,7 @@ jobs:
           --tag ${{ matrix.image.name }}:${{ github.sha }} .
 
       - name: Smoke test production container startup
-        if: ${{ matrix.image.smoke_test }}
+        if: ${{ matrix.image.smoke_test == 'django' }}
         run: |
           docker run -d \
             --name ${{ matrix.image.name }} \
@@ -228,6 +228,127 @@ jobs:
           docker logs ${{ matrix.image.name }}
           exit 1
 
+      - name: Smoke test receipt-inference runtime
+        if: ${{ matrix.image.smoke_test == 'receipt-inference' }}
+        run: |
+          docker network create receipt-inference-ci
+
+          sed 's/^          //' > receipt_llm_mock.py <<'PY'
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          import json
+
+          MODELS = {
+              'object': 'list',
+              'data': [
+                  {'id': 'Qwen2.5-3B-Instruct-Q5_K_M', 'object': 'model'},
+              ],
+          }
+
+          CHAT_RESPONSE = {
+              'id': 'chatcmpl-mock',
+              'object': 'chat.completion',
+              'choices': [
+                  {
+                      'index': 0,
+                      'message': {
+                          'role': 'assistant',
+                          'content': json.dumps({
+                              'name_seller': 'Test Shop',
+                              'retail_place_address': 'Lenina 1',
+                              'retail_place': 'Test Shop',
+                              'total_sum': '123.45',
+                              'operation_type': 1,
+                              'receipt_date': '20.12.2023 15:30',
+                              'number_receipt': '12345',
+                              'nds10': '0',
+                              'nds20': '20.57',
+                              'items': [
+                                  {
+                                      'product_name': 'Milk',
+                                      'category': 'Dairy',
+                                      'price': '123.45',
+                                      'quantity': '1',
+                                      'amount': '123.45',
+                                  }
+                              ],
+                          }),
+                      },
+                      'finish_reason': 'stop',
+                  }
+              ],
+          }
+
+          class Handler(BaseHTTPRequestHandler):
+              def _send(self, payload, status=200):
+                  body = json.dumps(payload).encode()
+                  self.send_response(status)
+                  self.send_header('Content-Type', 'application/json')
+                  self.send_header('Content-Length', str(len(body)))
+                  self.end_headers()
+                  self.wfile.write(body)
+
+              def do_GET(self):
+                  if self.path == '/v1/models':
+                      self._send(MODELS)
+                      return
+                  self._send({'error': 'not found'}, 404)
+
+              def do_POST(self):
+                  if self.path == '/v1/chat/completions':
+                      self._send(CHAT_RESPONSE)
+                      return
+                  self._send({'error': 'not found'}, 404)
+
+              def log_message(self, *args):
+                  return
+
+          HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
+          PY
+
+          docker run -d \
+            --name receipt-llm \
+            --network receipt-inference-ci \
+            -v "$PWD/receipt_llm_mock.py:/mock.py:ro" \
+            python:3.12-alpine \
+            sh -c "python /mock.py"
+
+          docker run -d \
+            --name ${{ matrix.image.name }} \
+            --network receipt-inference-ci \
+            -e RECEIPT_INFERENCE_HOST=0.0.0.0 \
+            -e RECEIPT_INFERENCE_PORT=8010 \
+            -e LLAMA_SERVER_URL=http://receipt-llm:8080/v1 \
+            -e OCR_READINESS_REQUIRED=false \
+            -e LLAMA_READINESS_REQUIRED=false \
+            -e LLAMA_MODEL_ALIAS=Qwen2.5-3B-Instruct-Q5_K_M \
+            ${{ matrix.image.name }}:${{ github.sha }}
+
+          for attempt in $(seq 1 60); do
+            if docker exec ${{ matrix.image.name }} python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/ready', timeout=5).read()"; then
+              break
+            fi
+
+            if ! docker ps --format '{{.Names}}' | grep -qx '${{ matrix.image.name }}'; then
+              echo 'receipt-inference container exited early'
+              docker logs ${{ matrix.image.name }}
+              exit 1
+            fi
+
+            if [ "$attempt" -eq 60 ]; then
+              echo 'timed out waiting for receipt-inference readiness'
+              docker logs receipt-llm
+              docker logs ${{ matrix.image.name }}
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker exec ${{ matrix.image.name }} python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=5).read().decode())"
+
       - name: Cleanup production smoke container
         if: always()
-        run: docker rm -f ${{ matrix.image.name }} || true
+        run: |
+          docker rm -f receipt-llm || true
+          docker rm -f ${{ matrix.image.name }} || true
+          docker network rm receipt-inference-ci || true
