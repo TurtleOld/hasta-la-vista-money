@@ -18,13 +18,8 @@ class ReceiptInferenceSettings:
     max_concurrency: int
     llama_threads: int
     ocr_threads: int
-    qwen_model_path: str
     llama_server_url: str
     llama_timeout: float
-    llama_port: int
-    llama_context_size: int
-    llama_batch_size: int
-    llama_parallel: int
     llama_model_alias: str
     max_image_dimension: int
     jpeg_quality: int
@@ -47,19 +42,11 @@ def load_settings() -> ReceiptInferenceSettings:
         ),
         llama_threads=int(os.getenv('LLAMA_THREADS', '2')),
         ocr_threads=int(os.getenv('OCR_THREADS', '1')),
-        qwen_model_path=os.getenv(
-            'QWEN_MODEL_PATH',
-            '/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf',
-        ),
         llama_server_url=os.getenv(
             'LLAMA_SERVER_URL',
             'http://127.0.0.1:8080/v1',
         ).rstrip('/'),
         llama_timeout=float(os.getenv('LLAMA_TIMEOUT', '120')),
-        llama_port=int(os.getenv('LLAMA_PORT', '8080')),
-        llama_context_size=int(os.getenv('LLAMA_CONTEXT_SIZE', '8192')),
-        llama_batch_size=int(os.getenv('LLAMA_BATCH_SIZE', '1024')),
-        llama_parallel=int(os.getenv('LLAMA_PARALLEL', '1')),
         llama_model_alias=os.getenv(
             'LLAMA_MODEL_ALIAS',
             'Qwen2.5-3B-Instruct-Q5_K_M',

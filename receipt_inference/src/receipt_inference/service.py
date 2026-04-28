@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
@@ -45,21 +44,11 @@ class ReceiptInferenceService:
     """Validate receipt uploads and run the inference pipeline."""
 
     def __init__(self, settings: ReceiptInferenceSettings) -> None:
-        self._model_path = Path(settings.qwen_model_path)
         self._pipeline = ReceiptInferencePipeline(settings)
-
-    @property
-    def model_path_exists(self) -> bool:
-        """Whether the configured local Qwen model exists."""
-        return self._model_path.exists()
 
     def readiness_status(self) -> dict[str, bool]:
         """Return dependency readiness for health endpoints."""
-        pipeline_status = self._pipeline.readiness_status()
-        return {
-            'model_path_exists': self.model_path_exists,
-            **pipeline_status,
-        }
+        return self._pipeline.readiness_status()
 
     async def parse_upload(
         self,
@@ -71,13 +60,6 @@ class ReceiptInferenceService:
         started_at = perf_counter()
         payload = await self._read_upload(uploaded_file)
         self._validate_payload(payload)
-
-        if not self.model_path_exists:
-            raise ReceiptInferenceError(
-                error_code='model_unavailable',
-                message='Configured Qwen model file was not found.',
-                status_code=503,
-            )
 
         prepared_image = self._pipeline.preprocess(payload.file_bytes)
         result = self._pipeline.infer(
