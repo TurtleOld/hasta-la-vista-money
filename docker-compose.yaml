@@ -111,6 +111,7 @@ services:
     build:
       context: ./
       dockerfile: receipt_inference/Dockerfile
+    image: ghcr.io/turtleold/hasta-la-vista-money:receipt-inference-main
     environment:
       RECEIPT_INFERENCE_HOST: ${RECEIPT_INFERENCE_HOST:-0.0.0.0}
       RECEIPT_INFERENCE_PORT: ${RECEIPT_INFERENCE_PORT:-8010}
