@@ -30,7 +30,7 @@ class TestAddAccountForm(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
     def test_form_initialization(self) -> None:
@@ -160,7 +160,7 @@ class TestTransferMoneyAccountForm(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.account1 = Account.objects.create(
             user=self.user,
@@ -424,7 +424,7 @@ class TestTransferMoneyAccountForm(TestCase):
         """Test form validation with invalid account."""
         other_user = User.objects.create_user(
             username='otheruser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         other_account = Account.objects.create(
             user=other_user,

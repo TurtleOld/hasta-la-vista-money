@@ -789,7 +789,7 @@ class TestValidatorsRefactored(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.account1 = Account.objects.create(
             user=self.user,
@@ -873,7 +873,7 @@ class TestAddAccountFormRefactored(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
     def test_form_initialization(self) -> None:
@@ -956,7 +956,7 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.account1 = Account.objects.create(
             user=self.user,

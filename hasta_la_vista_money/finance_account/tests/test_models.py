@@ -28,7 +28,7 @@ class TestAccountModel(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
     def test_account_creation(self) -> None:
@@ -241,7 +241,7 @@ class TestTransferMoneyLogModel(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.account1 = Account.objects.create(
             user=self.user,
@@ -336,11 +336,11 @@ class TestAccountManagers(TestCase):
         """Set up test data."""
         self.user1 = User.objects.create_user(
             username='user1',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.user2 = User.objects.create_user(
             username='user2',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
         self.account1 = Account.objects.create(
@@ -368,7 +368,7 @@ class TestAccountManagers(TestCase):
         """Test by_user manager with user having no accounts."""
         user3 = User.objects.create_user(
             username='user3',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
         user3_accounts = Account.objects.by_user(user3)

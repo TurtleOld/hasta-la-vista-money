@@ -95,7 +95,7 @@ class TestValidateAccountBalance(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.account = Account.objects.create(
             user=self.user,
@@ -156,7 +156,7 @@ class TestValidateDifferentAccounts(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.account1 = Account.objects.create(
             user=self.user,

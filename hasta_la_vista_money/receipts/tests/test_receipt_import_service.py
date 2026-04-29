@@ -37,7 +37,7 @@ class ReceiptImportServiceTests(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(
             username='tester',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='t@example.com',
         )
         self.account = Account.objects.create(
@@ -89,7 +89,7 @@ class ReceiptImportServiceTests(TestCase):
             ],
         }
 
-        def fake_analyze(_, user_id=None):  # noqa: ARG001
+        def fake_analyze(_, _user_id=None):
             return json.dumps(data)
 
         old_fn = receipts_services.analyze_image_with_ai

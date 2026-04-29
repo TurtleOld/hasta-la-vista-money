@@ -21,7 +21,7 @@ class BudgetModelTest(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='testuser',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
         )
         self.date = date(2024, 1, 1)
         self.datelist = DateList.objects.create(user=self.user, date=self.date)
@@ -67,7 +67,7 @@ class BudgetViewsTest(TestCase):
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
         )
         self.client.force_login(self.user)
         self.date = date(2024, 1, 1)
@@ -127,7 +127,7 @@ class BudgetViewsTest(TestCase):
         self.client.logout()
         user2 = User.objects.create_user(
             username='user2',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
         )
         self.client.force_login(user2)
         response = self.client.get(reverse('budget:list'))
