@@ -105,7 +105,7 @@ class TestAccountCreateView(TestCase):
         self.factory = RequestFactory()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
     def test_account_create_view_get(self) -> None:
