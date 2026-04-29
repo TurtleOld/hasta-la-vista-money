@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-QWEN_MODEL_NAME = 'Qwen2.5-3B-Instruct-Q5_K_M'
 MIN_OCR_ENTRY_PARTS = 2
 JSON_BLOCK_PATTERN = re.compile(
     r'```(?:json)?\s*(\{.*?\})\s*```',
@@ -321,7 +320,7 @@ class LlamaServerBackend:
         """Send OCR text to llama-server and return raw model output."""
         messages = self._prompt_builder.build_messages(ocr_result.text)
         payload = {
-            'model': QWEN_MODEL_NAME,
+            'model': self._model_alias,
             'temperature': 0,
             'messages': messages,
         }
@@ -351,6 +350,18 @@ class LlamaServerBackend:
                 status_code=504,
             ) from exc
         except httpx.HTTPError as exc:
+            response = getattr(exc, 'response', None)
+            logger.warning(
+                'receipt_inference_llm_request_failed',
+                error_type=type(exc).__name__,
+                error=str(exc),
+                status_code=(
+                    response.status_code if response is not None else None
+                ),
+                response_text=(
+                    response.text[:1000] if response is not None else None
+                ),
+            )
             raise ReceiptInferenceError(
                 error_code='llm_unavailable',
                 message='Llama server is unavailable for receipt parsing.',
