@@ -170,7 +170,7 @@ class PaddleOCRBackend:
                 use_doc_unwarping=False,
                 use_textline_orientation=self._settings.ocr_use_angle_cls,
                 lang=self._settings.ocr_language,
-                show_log=False,
+                device='cpu',
                 cpu_threads=self._settings.ocr_threads,
             )
         except Exception as exc:
