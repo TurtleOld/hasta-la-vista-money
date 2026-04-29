@@ -5,7 +5,9 @@
   "automerge": false,
   "prCreation": "immediate",
   "rebaseWhen": "conflicted",
-  "baseBranches": ["$default"],
+  "baseBranchPatterns": [
+    "$default"
+  ],
   "dependencyDashboard": true,
   "minimumReleaseAge": "3 days",
   "schedule": ["before 6am on monday"],
