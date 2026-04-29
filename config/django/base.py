@@ -113,7 +113,6 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.locale.LocaleMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -125,6 +124,9 @@ MIDDLEWARE = [
     'hasta_la_vista_money.compressor_middleware.CompressorNonceMiddleware',
     'django_structlog.middlewares.RequestMiddleware',
 ]
+
+if not DEBUG:
+    MIDDLEWARE.insert(4, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 
 if not IS_TESTING:

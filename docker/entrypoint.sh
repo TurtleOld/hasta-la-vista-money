@@ -17,6 +17,13 @@ echo "Creating staticfiles, media and logs directories with proper permissions"
 mkdir -p /app/staticfiles /app/media /app/logs
 chmod -R 755 /app/staticfiles /app/media /app/logs
 
+if [ -d /app/nginx-runtime ] && [ -f /app/nginx/nginx.conf ]; then
+    echo "Copying nginx configuration to shared volume"
+    mkdir -p /app/nginx-runtime
+    cp /app/nginx/nginx.conf /app/nginx-runtime/nginx.conf
+    chmod 644 /app/nginx-runtime/nginx.conf
+fi
+
 echo "Collecting static files"
 python manage.py collectstatic --noinput --clear
 
