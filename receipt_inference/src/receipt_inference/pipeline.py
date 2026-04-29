@@ -170,7 +170,6 @@ class PaddleOCRBackend:
                 use_doc_unwarping=False,
                 use_textline_orientation=self._settings.ocr_use_angle_cls,
                 lang=self._settings.ocr_language,
-                use_gpu=False,
                 show_log=False,
                 cpu_threads=self._settings.ocr_threads,
             )
