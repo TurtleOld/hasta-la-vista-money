@@ -156,6 +156,8 @@ services:
       - ${LLAMA_CONTEXT_SIZE:-8192}
       - -np
       - ${LLAMA_PARALLEL:-1}
+      - --alias
+      - ${LLAMA_MODEL_ALIAS:-Qwen2.5-3B-Instruct-Q5_K_M}
     volumes:
       - ${RECEIPT_INFERENCE_MODELS_PATH:-./models/receipt-inference}:/models:ro
     ports:
