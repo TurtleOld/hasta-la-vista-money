@@ -40,7 +40,7 @@ class ReceiptInferenceClient:
         self._base_url = get_receipt_inference_url()
         self._timeout = config(
             'RECEIPT_INFERENCE_TIMEOUT',
-            default=120.0,
+            default=300.0,
             cast=float,
         )
 

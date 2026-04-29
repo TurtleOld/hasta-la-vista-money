@@ -291,6 +291,7 @@ class LlamaServerBackend:
     def __init__(self, settings: ReceiptInferenceSettings) -> None:
         self._base_url = settings.llama_server_url
         self._timeout = settings.llama_timeout
+        self._max_tokens = settings.llama_max_tokens
         self._prompt_builder = PromptBuilder()
         self._model_alias = settings.llama_model_alias
 
@@ -324,6 +325,7 @@ class LlamaServerBackend:
         payload = {
             'model': self._model_alias,
             'temperature': 0,
+            'max_tokens': self._max_tokens,
             'messages': messages,
         }
 
