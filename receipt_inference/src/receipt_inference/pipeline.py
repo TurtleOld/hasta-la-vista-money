@@ -132,8 +132,13 @@ class PaddleOCRBackend:
         image_array = np.array(Image.open(BytesIO(prepared_image.image_bytes)))
 
         try:
-            result = ocr.ocr(image_array, cls=self._settings.ocr_use_angle_cls)
+            result = ocr.predict(image_array)
         except Exception as exc:
+            logger.warning(
+                'receipt_inference_ocr_processing_failed',
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
             raise ReceiptInferenceError(
                 error_code='ocr_failed',
                 message='PaddleOCR failed to process the receipt image.',
@@ -186,6 +191,10 @@ class PaddleOCRBackend:
         if not isinstance(result, list) or not result:
             return []
 
+        structured_lines = self._extract_structured_lines(result)
+        if structured_lines:
+            return structured_lines
+
         # PaddleOCR commonly returns [[line1, line2, ...]] for a single image.
         first_page = result[0] if isinstance(result[0], list) else result
         if not isinstance(first_page, list):
@@ -208,6 +217,39 @@ class PaddleOCRBackend:
                 confidence = 0.0
             lines.append((text, confidence))
         return lines
+
+    def _extract_structured_lines(
+        self,
+        result: list[Any],
+    ) -> list[tuple[str, float]]:
+        """Handle PaddleOCR 3.x object/dict-style prediction results."""
+        first_result = result[0]
+        texts = self._get_result_field(first_result, 'rec_texts')
+        scores = self._get_result_field(first_result, 'rec_scores')
+        if not isinstance(texts, list):
+            return []
+
+        normalized_scores = scores if isinstance(scores, list) else []
+        lines: list[tuple[str, float]] = []
+        for index, raw_text in enumerate(texts):
+            text = str(raw_text).strip()
+            raw_score = (
+                normalized_scores[index]
+                if index < len(normalized_scores)
+                else 0.0
+            )
+            try:
+                confidence = float(raw_score)
+            except (TypeError, ValueError):
+                confidence = 0.0
+            lines.append((text, confidence))
+        return lines
+
+    def _get_result_field(self, result: Any, field_name: str) -> Any:
+        """Read a field from dict-like or object-like PaddleOCR results."""
+        if isinstance(result, dict):
+            return result.get(field_name)
+        return getattr(result, field_name, None)
 
 
 class PromptBuilder:
