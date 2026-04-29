@@ -23,15 +23,15 @@ class TestGroupAccountMixin(TestCase):
         """Set up test data."""
         self.user1 = User.objects.create_user(
             username='user1',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.user2 = User.objects.create_user(
             username='user2',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.user3 = User.objects.create_user(
             username='user3',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
         self.group = Group.objects.create(name='Test Group')
@@ -147,7 +147,7 @@ class TestGroupAccountMixin(TestCase):
         """Test get_accounts method for user with no accounts."""
         user4 = User.objects.create_user(
             username='user4',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
         mixin = GroupAccountMixin()
