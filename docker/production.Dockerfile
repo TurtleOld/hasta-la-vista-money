@@ -47,6 +47,7 @@ COPY hasta_la_vista_money/ ./hasta_la_vista_money/
 COPY locale/ ./locale/
 COPY theme/ ./theme/
 COPY static/ ./static/
+COPY nginx/ ./nginx/
 COPY docker/entrypoint.sh docker/celery-entrypoint.sh ./docker/
 
 COPY --from=node-builder /app/static/css/styles.min.css ./static/css/styles.min.css
@@ -80,14 +81,15 @@ COPY --from=builder --chown=appuser:appuser /app/hasta_la_vista_money /app/hasta
 COPY --from=builder --chown=appuser:appuser /app/locale /app/locale
 COPY --from=builder --chown=appuser:appuser /app/theme /app/theme
 COPY --from=builder --chown=appuser:appuser /app/static /app/static
+COPY --from=builder --chown=appuser:appuser /app/nginx /app/nginx
 COPY --from=builder /app/docker/entrypoint.sh /app/entrypoint.sh
 COPY --from=builder /app/docker/celery-entrypoint.sh /app/celery-entrypoint.sh
 
 RUN sed -i 's/\r$//' /app/entrypoint.sh /app/celery-entrypoint.sh && \
     chmod +x /app/entrypoint.sh /app/celery-entrypoint.sh && \
-    mkdir -p /app/staticfiles /app/media /app/logs && \
-    chown -R appuser:appuser /app/staticfiles /app/media /app/logs && \
-    chmod -R 755 /app/staticfiles /app/media /app/logs
+    mkdir -p /app/staticfiles /app/media /app/logs /app/nginx-runtime && \
+    chown -R appuser:appuser /app/staticfiles /app/media /app/logs /app/nginx-runtime && \
+    chmod -R 755 /app/staticfiles /app/media /app/logs /app/nginx-runtime
 
 USER appuser
 
