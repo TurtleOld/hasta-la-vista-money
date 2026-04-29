@@ -171,11 +171,14 @@ class PaddleOCRBackend:
 
         try:
             self._ocr_instance = paddleocr_cls(
+                text_detection_model_name='PP-OCRv5_mobile_det',
                 use_doc_orientation_classify=False,
                 use_doc_unwarping=False,
                 use_textline_orientation=self._settings.ocr_use_angle_cls,
                 lang=self._settings.ocr_language,
                 device='cpu',
+                enable_hpi=False,
+                enable_mkldnn=False,
                 cpu_threads=self._settings.ocr_threads,
             )
         except Exception as exc:
