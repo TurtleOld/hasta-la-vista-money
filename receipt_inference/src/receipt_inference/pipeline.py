@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from importlib import import_module
 from io import BytesIO
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 MIN_OCR_ENTRY_PARTS = 2
+LLM_CONNECT_RETRY_COUNT = 3
+LLM_CONNECT_RETRY_DELAY_SECONDS = 2.0
 JSON_BLOCK_PATTERN = re.compile(
     r'```(?:json)?\s*(\{.*?\})\s*```',
     re.DOTALL,
@@ -326,11 +328,7 @@ class LlamaServerBackend:
         }
 
         try:
-            with httpx.Client(timeout=self._timeout) as client:
-                response = client.post(
-                    f'{self._base_url}/chat/completions',
-                    json=payload,
-                )
+            response = self._post_chat_completion(payload)
             response.raise_for_status()
             data = response.json()
             content = data['choices'][0]['message']['content']
@@ -373,6 +371,26 @@ class LlamaServerBackend:
                 message='Llama server returned an invalid receipt payload.',
                 status_code=502,
             ) from exc
+
+    def _post_chat_completion(self, payload: dict[str, Any]) -> httpx.Response:
+        """Post a chat completion request with short connect retries."""
+        last_error: httpx.ConnectError | None = None
+        for attempt in range(LLM_CONNECT_RETRY_COUNT):
+            try:
+                with httpx.Client(timeout=self._timeout) as client:
+                    return client.post(
+                        f'{self._base_url}/chat/completions',
+                        json=payload,
+                    )
+            except httpx.ConnectError as exc:
+                last_error = exc
+                if attempt + 1 == LLM_CONNECT_RETRY_COUNT:
+                    break
+                sleep(LLM_CONNECT_RETRY_DELAY_SECONDS)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError('Failed to call llama-server chat completions.')
 
 
 class StructuredReceiptNormalizer:

@@ -108,7 +108,7 @@ services:
       OCR_USE_ANGLE_CLS: ${OCR_USE_ANGLE_CLS:-true}
     depends_on:
       receipt-llm:
-        condition: service_started
+        condition: service_healthy
     networks:
       - default
     healthcheck:
@@ -142,6 +142,12 @@ services:
       - ${RECEIPT_INFERENCE_MODELS_PATH:-/opt/docker/hlvm/receipt-inference/models}:/models:ro
     networks:
       - default
+    healthcheck:
+      test: ["CMD-SHELL", "(wget -q -O- http://127.0.0.1:8080/v1/models || curl -fsS http://127.0.0.1:8080/v1/models) >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     cpus: 1.5
     mem_limit: 4g
     restart: unless-stopped
