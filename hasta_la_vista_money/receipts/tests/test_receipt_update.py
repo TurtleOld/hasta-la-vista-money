@@ -22,7 +22,7 @@ class ReceiptUpdateViewTest(TestCase):
         self.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
             is_active=True,
             is_superuser=True,
         )
@@ -300,7 +300,7 @@ class ReceiptUpdateViewTest(TestCase):
         other_user = User.objects.create_user(
             username='otheruser',
             email='other@example.com',
-            password='otherpass123',
+            password='otherpass123',  # nosec B106: test-only password
         )
 
         other_receipt = Receipt.objects.create(

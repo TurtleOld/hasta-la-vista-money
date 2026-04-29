@@ -23,7 +23,7 @@ class LoginRateThrottleTestCase(TestCase):
         self.factory = APIRequestFactory()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
     def test_scope_attribute(self) -> None:
@@ -106,7 +106,7 @@ class AnonLoginRateThrottleTestCase(TestCase):
         self.factory = APIRequestFactory()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
 
     def test_scope_attribute(self) -> None:

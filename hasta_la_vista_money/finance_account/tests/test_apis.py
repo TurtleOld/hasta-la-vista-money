@@ -19,7 +19,7 @@ class TestAccountAPI(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         self.refresh = RefreshToken.for_user(self.user)
         self.access_token = str(self.refresh.access_token)
@@ -122,7 +122,7 @@ class TestAccountAPI(TestCase):
         """Test account API filtering by user."""
         other_user = User.objects.create_user(
             username='otheruser',
-            password='testpass123',
+            password='testpass123',  # nosec B106: test-only password
         )
         Account.objects.create(
             user=other_user,
