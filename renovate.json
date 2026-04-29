@@ -2,15 +2,33 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
   "semanticCommitScope": "deps",
-  "automerge": true,
-  "automergeType": "pr",
+  "automerge": false,
   "prCreation": "immediate",
-  "ignorePresets": [":ignoreModulesAndTests"],
-  "ignorePaths": ["**/node_modules/**", "**/__fixtures__/**", "test/**", "**/migrations/**", "**/*.Dockerfile", "**/.git"],
   "rebaseWhen": "conflicted",
   "baseBranches": ["$default"],
-  "dependencyDashboard": false,
+  "dependencyDashboard": true,
+  "minimumReleaseAge": "3 days",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "labels": ["dependencies", "renovate"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
   "packageRules": [
+    {
+      "matchUpdateTypes": ["major", "minor"],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": ["django", "python", "postgres", "redis"],
+      "automerge": false
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "digest"],
+      "automerge": true
+    },
     {
       "matchFileNames": [".github/workflows/hasta_la_vista_money.yaml"],
       "matchCurrentVersion": "3.13.7",
@@ -19,9 +37,7 @@
     },
     {
       "matchFileNames": [".github/workflows/hasta_la_vista_money.yaml"],
-      "matchPackageNames": [
-        "postgres"
-      ],
+      "matchPackageNames": ["postgres"],
       "matchCurrentVersion": "17",
       "enabled": false
     }
