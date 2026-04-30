@@ -59,7 +59,7 @@ services:
       ERROR_TRACKING_ENVIRONMENT: ${ERROR_TRACKING_ENVIRONMENT:-development}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
       RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-}
-      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-120}
+      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-300}
     depends_on:
       db:
         condition: service_healthy
@@ -91,7 +91,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change_me}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
       RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-}
-      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-120}
+      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-300}
     depends_on:
       db:
         condition: service_healthy
@@ -120,7 +120,8 @@ services:
       LLAMA_THREADS: ${LLAMA_THREADS:-2}
       OCR_THREADS: ${OCR_THREADS:-1}
       LLAMA_SERVER_URL: ${LLAMA_SERVER_URL:-http://receipt-llm:8080/v1}
-      LLAMA_TIMEOUT: ${LLAMA_TIMEOUT:-120}
+      LLAMA_TIMEOUT: ${LLAMA_TIMEOUT:-300}
+      LLAMA_MAX_TOKENS: ${LLAMA_MAX_TOKENS:-768}
       LLAMA_MODEL_ALIAS: ${LLAMA_MODEL_ALIAS:-Qwen2.5-3B-Instruct-Q5_K_M}
       MAX_IMAGE_DIMENSION: ${MAX_IMAGE_DIMENSION:-2200}
       JPEG_QUALITY: ${JPEG_QUALITY:-92}
@@ -132,7 +133,8 @@ services:
     ports:
       - "8010:8010"
     depends_on:
-      - receipt-llm
+      receipt-llm:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/ready', timeout=5).read()"]
       interval: 30s
@@ -162,6 +164,12 @@ services:
       - ${RECEIPT_INFERENCE_MODELS_PATH:-./models/receipt-inference}:/models:ro
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "(wget -q -O- http://127.0.0.1:8080/v1/models || curl -fsS http://127.0.0.1:8080/v1/models) >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
 
   nginx:

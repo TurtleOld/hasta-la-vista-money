@@ -51,7 +51,7 @@ services:
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-hlvm}}
       RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-}
-      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-120}
+      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-300}
     depends_on:
       db:
         condition: service_healthy
@@ -79,7 +79,7 @@ services:
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-hlvm}}
       RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-}
-      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-120}
+      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-300}
     depends_on:
       db:
         condition: service_healthy
@@ -99,7 +99,8 @@ services:
       LLAMA_THREADS: ${LLAMA_THREADS:-2}
       OCR_THREADS: ${OCR_THREADS:-1}
       LLAMA_SERVER_URL: ${LLAMA_SERVER_URL:-http://receipt-llm:8080/v1}
-      LLAMA_TIMEOUT: ${LLAMA_TIMEOUT:-120}
+      LLAMA_TIMEOUT: ${LLAMA_TIMEOUT:-300}
+      LLAMA_MAX_TOKENS: ${LLAMA_MAX_TOKENS:-768}
       LLAMA_MODEL_ALIAS: ${LLAMA_MODEL_ALIAS:-Qwen2.5-3B-Instruct-Q5_K_M}
       MAX_IMAGE_DIMENSION: ${MAX_IMAGE_DIMENSION:-2200}
       JPEG_QUALITY: ${JPEG_QUALITY:-92}
@@ -108,7 +109,7 @@ services:
       OCR_USE_ANGLE_CLS: ${OCR_USE_ANGLE_CLS:-true}
     depends_on:
       receipt-llm:
-        condition: service_started
+        condition: service_healthy
     networks:
       - default
     healthcheck:
@@ -142,6 +143,12 @@ services:
       - ${RECEIPT_INFERENCE_MODELS_PATH:-/opt/docker/hlvm/receipt-inference/models}:/models:ro
     networks:
       - default
+    healthcheck:
+      test: ["CMD-SHELL", "(wget -q -O- http://127.0.0.1:8080/v1/models || curl -fsS http://127.0.0.1:8080/v1/models) >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     cpus: 1.5
     mem_limit: 4g
     restart: unless-stopped
