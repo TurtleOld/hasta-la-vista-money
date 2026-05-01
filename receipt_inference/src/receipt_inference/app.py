@@ -53,15 +53,29 @@ def _serialize_settings(settings: ReceiptInferenceSettings) -> dict[str, Any]:
 
 @asynccontextmanager
 async def lifespan(app: Starlette) -> AsyncIterator[None]:
-    """Load static configuration and perform lightweight startup checks."""
+    """Load configuration and warm up runtime dependencies."""
     settings = load_settings()
     service = ReceiptInferenceService(settings)
+    warmup_started_at = perf_counter()
+
+    try:
+        service.warmup()
+    except ReceiptInferenceError:
+        if settings.ocr_readiness_required:
+            raise
+        logger.warning(
+            'receipt_inference_warmup_skipped',
+            reason='ocr_readiness_not_required',
+            exc_info=True,
+        )
+
     app.state.settings = settings
     app.state.service = service
     logger.info(
         'receipt_inference_startup',
         settings=_serialize_settings(settings),
         readiness=service.readiness_status(),
+        warmup_ms=round((perf_counter() - warmup_started_at) * 1000, 2),
     )
     yield
 

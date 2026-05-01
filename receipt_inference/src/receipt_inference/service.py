@@ -50,6 +50,10 @@ class ReceiptInferenceService:
         """Return dependency readiness for health endpoints."""
         return self._pipeline.readiness_status()
 
+    def warmup(self) -> None:
+        """Warm up heavy inference dependencies at startup."""
+        self._pipeline.warmup()
+
     async def parse_upload(
         self,
         uploaded_file: UploadFile | None,

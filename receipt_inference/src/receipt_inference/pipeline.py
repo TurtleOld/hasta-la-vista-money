@@ -127,6 +127,10 @@ class PaddleOCRBackend:
             return False
         return True
 
+    def warmup(self) -> None:
+        """Load the OCR model ahead of the first real receipt request."""
+        self._get_ocr_instance()
+
     def extract(self, prepared_image: PreparedImage) -> OCRResult:
         """Extract ordered text lines from the prepared receipt image."""
         ocr = self._get_ocr_instance()
@@ -156,7 +160,7 @@ class PaddleOCRBackend:
         return OCRResult(text=text, line_count=len(filtered_lines))
 
     def _get_ocr_instance(self) -> Any:
-        """Create PaddleOCR lazily so startup stays lightweight."""
+        """Create PaddleOCR lazily and reuse it across requests."""
         if self._ocr_instance is not None:
             return self._ocr_instance
 
@@ -573,6 +577,10 @@ class ReceiptInferencePipeline:
                 else True
             ),
         }
+
+    def warmup(self) -> None:
+        """Warm up heavy runtime dependencies during service startup."""
+        self._ocr_backend.warmup()
 
     def preprocess(self, image_bytes: bytes) -> PreparedImage:
         """Preprocess image bytes before OCR."""
