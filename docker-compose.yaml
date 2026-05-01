@@ -117,8 +117,8 @@ services:
       RECEIPT_INFERENCE_PORT: ${RECEIPT_INFERENCE_PORT:-8010}
       RECEIPT_INFERENCE_LOG_LEVEL: ${RECEIPT_INFERENCE_LOG_LEVEL:-debug}
       RECEIPT_INFERENCE_MAX_CONCURRENCY: ${RECEIPT_INFERENCE_MAX_CONCURRENCY:-1}
-      LLAMA_THREADS: ${LLAMA_THREADS:-2}
-      OCR_THREADS: ${OCR_THREADS:-1}
+      LLAMA_THREADS: ${LLAMA_THREADS:-4}
+      OCR_THREADS: ${OCR_THREADS:-2}
       LLAMA_SERVER_URL: ${LLAMA_SERVER_URL:-http://receipt-llm:8080/v1}
       LLAMA_TIMEOUT: ${LLAMA_TIMEOUT:-300}
       LLAMA_MAX_TOKENS: ${LLAMA_MAX_TOKENS:-768}
@@ -149,7 +149,7 @@ services:
       - -m
       - ${QWEN_MODEL_PATH:-/models/qwen/qwen2.5-3b-instruct-q5_k_m.gguf}
       - -t
-      - ${LLAMA_THREADS:-2}
+      - ${LLAMA_THREADS:-4}
       - --host
       - 0.0.0.0
       - --port

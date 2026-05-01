@@ -43,8 +43,8 @@ def load_settings() -> ReceiptInferenceSettings:
         max_concurrency=int(
             os.getenv('RECEIPT_INFERENCE_MAX_CONCURRENCY', '1'),
         ),
-        llama_threads=int(os.getenv('LLAMA_THREADS', '2')),
-        ocr_threads=int(os.getenv('OCR_THREADS', '1')),
+        llama_threads=int(os.getenv('LLAMA_THREADS', '4')),
+        ocr_threads=int(os.getenv('OCR_THREADS', '2')),
         llama_server_url=os.getenv(
             'LLAMA_SERVER_URL',
             'http://127.0.0.1:8080/v1',
