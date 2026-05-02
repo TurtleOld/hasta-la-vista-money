@@ -320,7 +320,9 @@ class PromptBuilder:
             'Ты извлекаешь структурированные данные из OCR-текста '
             'кассового чека. OCR может содержать ошибки, дубли, переносы '
             'строк и лишние символы. Верни только корректный JSON без '
-            'пояснений. Не выдумывай отсутствующие значения. '
+            'пояснений, markdown-блоков и комментариев. '
+            'Ответ должен начинаться с "{" и заканчиваться "}". '
+            'Не выдумывай отсутствующие значения. '
             'Повторяющиеся товары не объединяй.'
         )
         user_prompt = (
@@ -527,12 +529,16 @@ class StructuredReceiptNormalizer:
     def _parse_json(self, raw_output: str) -> dict[str, Any]:
         """Extract JSON object from a raw LLM response."""
         raw_output = raw_output.strip()
-        match = JSON_BLOCK_PATTERN.search(raw_output)
-        json_text = match.group(1) if match else raw_output
+        json_text = self._extract_json_text(raw_output)
 
         try:
             payload = json.loads(json_text)
         except json.JSONDecodeError as exc:
+            logger.warning(
+                'receipt_inference_invalid_json_response',
+                response_preview=raw_output[:2000],
+                extracted_preview=json_text[:2000],
+            )
             raise ReceiptInferenceError(
                 error_code='invalid_json',
                 message='Receipt LLM response is not valid JSON.',
@@ -546,6 +552,57 @@ class StructuredReceiptNormalizer:
                 status_code=422,
             )
         return payload
+
+    def _extract_json_text(self, raw_output: str) -> str:
+        """Extract the most likely JSON object from a noisy LLM response."""
+        match = JSON_BLOCK_PATTERN.search(raw_output)
+        if match:
+            return match.group(1).strip()
+
+        start_index = raw_output.find('{')
+        if start_index == -1:
+            return raw_output
+
+        extracted = self._extract_balanced_json_object(raw_output, start_index)
+        return extracted.strip()
+
+    def _extract_balanced_json_object(
+        self,
+        raw_output: str,
+        start_index: int,
+    ) -> str:
+        """Extract a balanced JSON object starting at the given index."""
+        depth = 0
+        in_string = False
+        escape_next = False
+
+        for index in range(start_index, len(raw_output)):
+            char = raw_output[index]
+            if escape_next:
+                escape_next = False
+                continue
+
+            if in_string and char == '\\':
+                escape_next = True
+                continue
+
+            if char == '"':
+                in_string = not in_string
+                continue
+
+            if in_string:
+                continue
+
+            if char == '{':
+                depth += 1
+                continue
+
+            if char == '}':
+                depth -= 1
+                if depth == 0:
+                    return raw_output[start_index : index + 1]
+
+        return raw_output[start_index:]
 
     def _normalize_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """Normalize a single receipt item."""
