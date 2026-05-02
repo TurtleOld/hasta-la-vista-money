@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 HTTP_RATE_LIMIT = 429
+HTTP_CONNECT_TIMEOUT = 10.0
+HTTP_WRITE_TIMEOUT = 60.0
+HTTP_POOL_TIMEOUT = 60.0
 
 
 def get_receipt_inference_url() -> str:
@@ -40,8 +43,17 @@ class ReceiptInferenceClient:
         self._base_url = get_receipt_inference_url()
         self._timeout = config(
             'RECEIPT_INFERENCE_TIMEOUT',
-            default=300.0,
+            default=420.0,
             cast=float,
+        )
+
+    def _build_timeout(self) -> httpx.Timeout:
+        """Use an extended read timeout for long-running inference."""
+        return httpx.Timeout(
+            connect=HTTP_CONNECT_TIMEOUT,
+            read=self._timeout,
+            write=HTTP_WRITE_TIMEOUT,
+            pool=HTTP_POOL_TIMEOUT,
         )
 
     def _parse_error_response(self, response: httpx.Response) -> str:
@@ -136,7 +148,7 @@ class ReceiptInferenceClient:
         )
 
         try:
-            with httpx.Client(timeout=self._timeout) as client:
+            with httpx.Client(timeout=self._build_timeout()) as client:
                 response = client.post(
                     f'{self._base_url}/v1/receipt/parse',
                     files=files,

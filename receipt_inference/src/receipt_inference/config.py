@@ -49,8 +49,8 @@ def load_settings() -> ReceiptInferenceSettings:
             'LLAMA_SERVER_URL',
             'http://127.0.0.1:8080/v1',
         ).rstrip('/'),
-        llama_timeout=float(os.getenv('LLAMA_TIMEOUT', '300')),
-        llama_max_tokens=int(os.getenv('LLAMA_MAX_TOKENS', '768')),
+        llama_timeout=float(os.getenv('LLAMA_TIMEOUT', '360')),
+        llama_max_tokens=int(os.getenv('LLAMA_MAX_TOKENS', '384')),
         llama_model_alias=os.getenv(
             'LLAMA_MODEL_ALIAS',
             'Qwen2.5-3B-Instruct-Q5_K_M',

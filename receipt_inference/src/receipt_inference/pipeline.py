@@ -29,6 +29,9 @@ JSON_BLOCK_PATTERN = re.compile(
     r'```(?:json)?\s*(\{.*?\})\s*```',
     re.DOTALL,
 )
+HTTP_CONNECT_TIMEOUT = 10.0
+HTTP_WRITE_TIMEOUT = 60.0
+HTTP_POOL_TIMEOUT = 60.0
 
 
 @dataclass(frozen=True)
@@ -323,6 +326,15 @@ class LlamaServerBackend:
                 return True
         return bool(models)
 
+    def _build_timeout(self) -> httpx.Timeout:
+        """Use a generous read timeout for local llama generation."""
+        return httpx.Timeout(
+            connect=HTTP_CONNECT_TIMEOUT,
+            read=self._timeout,
+            write=HTTP_WRITE_TIMEOUT,
+            pool=HTTP_POOL_TIMEOUT,
+        )
+
     def extract(self, ocr_result: OCRResult) -> str:
         """Send OCR text to llama-server and return raw model output."""
         messages = self._prompt_builder.build_messages(ocr_result.text)
@@ -332,6 +344,14 @@ class LlamaServerBackend:
             'max_tokens': self._max_tokens,
             'messages': messages,
         }
+        logger.info(
+            'receipt_inference_llm_request_started',
+            model_alias=self._model_alias,
+            timeout=self._timeout,
+            max_tokens=self._max_tokens,
+            ocr_line_count=ocr_result.line_count,
+            ocr_text_length=len(ocr_result.text),
+        )
 
         try:
             response = self._post_chat_completion(payload)
@@ -344,6 +364,11 @@ class LlamaServerBackend:
                     message='Llama server returned an empty receipt response.',
                     status_code=502,
                 )
+            logger.info(
+                'receipt_inference_llm_request_completed',
+                model_alias=self._model_alias,
+                response_length=len(str(content)),
+            )
             return str(content)
         except ReceiptInferenceError:
             raise
@@ -383,7 +408,7 @@ class LlamaServerBackend:
         last_error: httpx.ConnectError | None = None
         for attempt in range(LLM_CONNECT_RETRY_COUNT):
             try:
-                with httpx.Client(timeout=self._timeout) as client:
+                with httpx.Client(timeout=self._build_timeout()) as client:
                     return client.post(
                         f'{self._base_url}/chat/completions',
                         json=payload,
