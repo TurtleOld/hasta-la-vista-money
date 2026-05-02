@@ -23,9 +23,12 @@ class ReceiptInferenceSettings:
     llama_max_tokens: int
     llama_model_alias: str
     max_image_dimension: int
+    min_ocr_image_width: int
     jpeg_quality: int
     ocr_language: str
     ocr_min_confidence: float
+    ocr_detection_model_name: str
+    ocr_recognition_model_name: str
     ocr_use_angle_cls: bool
     ocr_readiness_required: bool
     llama_readiness_required: bool
@@ -55,10 +58,19 @@ def load_settings() -> ReceiptInferenceSettings:
             'LLAMA_MODEL_ALIAS',
             'Qwen2.5-3B-Instruct-Q5_K_M',
         ),
-        max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '2200')),
-        jpeg_quality=int(os.getenv('JPEG_QUALITY', '92')),
+        max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '2800')),
+        min_ocr_image_width=int(os.getenv('MIN_OCR_IMAGE_WIDTH', '1200')),
+        jpeg_quality=int(os.getenv('JPEG_QUALITY', '95')),
         ocr_language=os.getenv('OCR_LANGUAGE', 'ru'),
         ocr_min_confidence=float(os.getenv('OCR_MIN_CONFIDENCE', '0.5')),
+        ocr_detection_model_name=os.getenv(
+            'OCR_DETECTION_MODEL_NAME',
+            'PP-OCRv5_server_det',
+        ),
+        ocr_recognition_model_name=os.getenv(
+            'OCR_RECOGNITION_MODEL_NAME',
+            'PP-OCRv5_server_rec',
+        ),
         ocr_use_angle_cls=(
             os.getenv('OCR_USE_ANGLE_CLS', 'true').strip().lower() == 'true'
         ),
