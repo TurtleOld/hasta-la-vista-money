@@ -54,6 +54,10 @@ class ReceiptInferenceService:
         """Warm up heavy inference dependencies at startup."""
         self._pipeline.warmup()
 
+    def close(self) -> None:
+        """Release inference pipeline resources."""
+        self._pipeline.close()
+
     async def parse_upload(
         self,
         uploaded_file: UploadFile | None,

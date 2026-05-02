@@ -30,6 +30,8 @@ class ReceiptInferenceSettings:
     ocr_detection_model_name: str
     ocr_recognition_model_name: str
     ocr_use_angle_cls: bool
+    ocr_enable_mkldnn: bool
+    optimize_jpeg: bool
     ocr_readiness_required: bool
     llama_readiness_required: bool
 
@@ -53,14 +55,14 @@ def load_settings() -> ReceiptInferenceSettings:
             'http://127.0.0.1:8080/v1',
         ).rstrip('/'),
         llama_timeout=float(os.getenv('LLAMA_TIMEOUT', '360')),
-        llama_max_tokens=int(os.getenv('LLAMA_MAX_TOKENS', '384')),
+        llama_max_tokens=int(os.getenv('LLAMA_MAX_TOKENS', '256')),
         llama_model_alias=os.getenv(
             'LLAMA_MODEL_ALIAS',
             'Qwen2.5-3B-Instruct-Q5_K_M',
         ),
-        max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '2400')),
-        min_ocr_image_width=int(os.getenv('MIN_OCR_IMAGE_WIDTH', '1000')),
-        jpeg_quality=int(os.getenv('JPEG_QUALITY', '95')),
+        max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '1600')),
+        min_ocr_image_width=int(os.getenv('MIN_OCR_IMAGE_WIDTH', '768')),
+        jpeg_quality=int(os.getenv('JPEG_QUALITY', '85')),
         ocr_language=os.getenv('OCR_LANGUAGE', 'ru'),
         ocr_min_confidence=float(os.getenv('OCR_MIN_CONFIDENCE', '0.5')),
         ocr_detection_model_name=os.getenv(
@@ -73,6 +75,12 @@ def load_settings() -> ReceiptInferenceSettings:
         ).strip(),
         ocr_use_angle_cls=(
             os.getenv('OCR_USE_ANGLE_CLS', 'false').strip().lower() == 'true'
+        ),
+        ocr_enable_mkldnn=(
+            os.getenv('OCR_ENABLE_MKLDNN', 'true').strip().lower() == 'true'
+        ),
+        optimize_jpeg=(
+            os.getenv('OPTIMIZE_JPEG', 'false').strip().lower() == 'true'
         ),
         ocr_readiness_required=(
             os.getenv('OCR_READINESS_REQUIRED', 'true').strip().lower()

@@ -38,6 +38,16 @@ JSON_BLOCK_PATTERN = re.compile(
 HTTP_CONNECT_TIMEOUT = 10.0
 HTTP_WRITE_TIMEOUT = 60.0
 HTTP_POOL_TIMEOUT = 60.0
+WILDBERRIES_SELLER_NAME = 'ООО "РВБ"'
+WILDBERRIES_MARKERS = (
+    'wildberries',
+    'wb.ru',
+    'wailberries',
+    'вайлдберриз',
+    'вайлдберрис',
+    'ооо "рвб"',
+    'ооо рвб',
+)
 
 
 @dataclass(frozen=True)
@@ -74,6 +84,7 @@ class ImagePreprocessor:
         self._max_dimension = settings.max_image_dimension
         self._min_ocr_image_width = settings.min_ocr_image_width
         self._jpeg_quality = settings.jpeg_quality
+        self._optimize_jpeg = settings.optimize_jpeg
 
     def _upscale_for_ocr(self, image: Image.Image) -> Image.Image:
         """Upscale narrow receipts so small text is easier to detect."""
@@ -118,7 +129,7 @@ class ImagePreprocessor:
                     buffer,
                     format='JPEG',
                     quality=self._jpeg_quality,
-                    optimize=True,
+                    optimize=self._optimize_jpeg,
                 )
                 normalized_bytes = buffer.getvalue()
         except UnidentifiedImageError as exc:
@@ -338,7 +349,9 @@ class PromptBuilder:
             'пояснений, markdown-блоков и комментариев. '
             'Ответ должен начинаться с "{" и заканчиваться "}". '
             'Не выдумывай отсутствующие значения. '
-            'Повторяющиеся товары не объединяй.'
+            'Повторяющиеся товары не объединяй. '
+            'name_seller — это юридический продавец из шапки чека, '
+            'а не бренд или название товара.'
         )
         user_prompt = (
             'Преобразуй OCR-текст кассового чека в JSON с ключами '
@@ -366,6 +379,7 @@ class LlamaServerBackend:
         self._max_tokens = settings.llama_max_tokens
         self._prompt_builder = PromptBuilder()
         self._model_alias = settings.llama_model_alias
+        self._client = httpx.Client(timeout=self._build_timeout())
 
     def is_reachable(self) -> bool:
         """Check whether llama-server responds on its OpenAI endpoint."""
@@ -391,6 +405,10 @@ class LlamaServerBackend:
                 return True
         return bool(models)
 
+    def close(self) -> None:
+        """Close reusable HTTP resources."""
+        self._client.close()
+
     def _build_timeout(self) -> httpx.Timeout:
         """Use a generous read timeout for local llama generation."""
         return httpx.Timeout(
@@ -407,6 +425,8 @@ class LlamaServerBackend:
             'model': self._model_alias,
             'temperature': 0,
             'max_tokens': self._max_tokens,
+            'response_format': {'type': 'json_object'},
+            'cache_prompt': True,
             'messages': messages,
         }
         logger.info(
@@ -473,11 +493,10 @@ class LlamaServerBackend:
         last_error: httpx.ConnectError | None = None
         for attempt in range(LLM_CONNECT_RETRY_COUNT):
             try:
-                with httpx.Client(timeout=self._build_timeout()) as client:
-                    return client.post(
-                        f'{self._base_url}/chat/completions',
-                        json=payload,
-                    )
+                return self._client.post(
+                    f'{self._base_url}/chat/completions',
+                    json=payload,
+                )
             except httpx.ConnectError as exc:
                 last_error = exc
                 if attempt + 1 == LLM_CONNECT_RETRY_COUNT:
@@ -492,7 +511,12 @@ class LlamaServerBackend:
 class StructuredReceiptNormalizer:
     """Convert raw LLM output into project receipt JSON schema."""
 
-    def normalize(self, raw_output: str) -> dict[str, Any]:
+    def normalize(
+        self,
+        raw_output: str,
+        *,
+        ocr_text: str = '',
+    ) -> dict[str, Any]:
         """Parse and sanitize model output into receipt JSON."""
         payload = self._parse_json(raw_output)
         items = payload.get('items')
@@ -515,7 +539,7 @@ class StructuredReceiptNormalizer:
                 status_code=422,
             )
 
-        return {
+        normalized = {
             'name_seller': self._normalize_text(
                 payload.get('name_seller'),
                 default='Неизвестный продавец',
@@ -540,6 +564,8 @@ class StructuredReceiptNormalizer:
             'nds20': self._normalize_decimal_string(payload.get('nds20', '0')),
             'items': normalized_items,
         }
+        self._apply_marketplace_corrections(normalized, ocr_text)
+        return normalized
 
     def _parse_json(self, raw_output: str) -> dict[str, Any]:
         """Extract JSON object from a raw LLM response."""
@@ -618,6 +644,38 @@ class StructuredReceiptNormalizer:
                     return raw_output[start_index : index + 1]
 
         return raw_output[start_index:]
+
+    def _apply_marketplace_corrections(
+        self,
+        receipt_data: dict[str, Any],
+        ocr_text: str,
+    ) -> None:
+        """Correct common marketplace fields deterministically."""
+        haystack = self._build_marketplace_haystack(receipt_data, ocr_text)
+        if self._contains_any_marker(haystack, WILDBERRIES_MARKERS):
+            receipt_data['name_seller'] = WILDBERRIES_SELLER_NAME
+
+    def _build_marketplace_haystack(
+        self,
+        receipt_data: dict[str, Any],
+        ocr_text: str,
+    ) -> str:
+        """Build normalized text used for marketplace detection."""
+        fields = [
+            ocr_text,
+            str(receipt_data.get('name_seller') or ''),
+            str(receipt_data.get('retail_place') or ''),
+            str(receipt_data.get('retail_place_address') or ''),
+        ]
+        return ' '.join(fields).casefold()
+
+    def _contains_any_marker(
+        self,
+        haystack: str,
+        markers: tuple[str, ...],
+    ) -> bool:
+        """Return whether any normalized marker exists in the text."""
+        return any(marker.casefold() in haystack for marker in markers)
 
     def _normalize_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """Normalize a single receipt item."""
@@ -727,6 +785,10 @@ class ReceiptInferencePipeline:
         """Warm up heavy runtime dependencies during service startup."""
         self._ocr_backend.warmup()
 
+    def close(self) -> None:
+        """Release reusable backend resources."""
+        self._llm_backend.close()
+
     def preprocess(self, image_bytes: bytes) -> PreparedImage:
         """Preprocess image bytes before OCR."""
         return self._preprocessor.prepare(image_bytes)
@@ -758,7 +820,10 @@ class ReceiptInferencePipeline:
         llm_started_at = perf_counter()
         raw_output = self._llm_backend.extract(ocr_result)
         llm_ms = round((perf_counter() - llm_started_at) * 1000, 2)
-        normalized = self._normalizer.normalize(raw_output)
+        normalized = self._normalizer.normalize(
+            raw_output,
+            ocr_text=ocr_result.text,
+        )
 
         logger.info(
             'receipt_inference_pipeline_completed',
