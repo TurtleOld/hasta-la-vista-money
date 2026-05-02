@@ -38,6 +38,16 @@ JSON_BLOCK_PATTERN = re.compile(
 HTTP_CONNECT_TIMEOUT = 10.0
 HTTP_WRITE_TIMEOUT = 60.0
 HTTP_POOL_TIMEOUT = 60.0
+WILDBERRIES_SELLER_NAME = 'ООО "РВБ"'
+WILDBERRIES_MARKERS = (
+    'wildberries',
+    'wb.ru',
+    'wailberries',
+    'вайлдберриз',
+    'вайлдберрис',
+    'ооо "рвб"',
+    'ооо рвб',
+)
 
 
 @dataclass(frozen=True)
@@ -323,7 +333,9 @@ class PromptBuilder:
             'пояснений, markdown-блоков и комментариев. '
             'Ответ должен начинаться с "{" и заканчиваться "}". '
             'Не выдумывай отсутствующие значения. '
-            'Повторяющиеся товары не объединяй.'
+            'Повторяющиеся товары не объединяй. '
+            'name_seller — это юридический продавец из шапки чека, '
+            'а не бренд или название товара.'
         )
         user_prompt = (
             'Преобразуй OCR-текст кассового чека в JSON с ключами '
@@ -477,7 +489,12 @@ class LlamaServerBackend:
 class StructuredReceiptNormalizer:
     """Convert raw LLM output into project receipt JSON schema."""
 
-    def normalize(self, raw_output: str) -> dict[str, Any]:
+    def normalize(
+        self,
+        raw_output: str,
+        *,
+        ocr_text: str = '',
+    ) -> dict[str, Any]:
         """Parse and sanitize model output into receipt JSON."""
         payload = self._parse_json(raw_output)
         items = payload.get('items')
@@ -500,7 +517,7 @@ class StructuredReceiptNormalizer:
                 status_code=422,
             )
 
-        return {
+        normalized = {
             'name_seller': self._normalize_text(
                 payload.get('name_seller'),
                 default='Неизвестный продавец',
@@ -525,6 +542,8 @@ class StructuredReceiptNormalizer:
             'nds20': self._normalize_decimal_string(payload.get('nds20', '0')),
             'items': normalized_items,
         }
+        self._apply_marketplace_corrections(normalized, ocr_text)
+        return normalized
 
     def _parse_json(self, raw_output: str) -> dict[str, Any]:
         """Extract JSON object from a raw LLM response."""
@@ -603,6 +622,38 @@ class StructuredReceiptNormalizer:
                     return raw_output[start_index : index + 1]
 
         return raw_output[start_index:]
+
+    def _apply_marketplace_corrections(
+        self,
+        receipt_data: dict[str, Any],
+        ocr_text: str,
+    ) -> None:
+        """Correct common marketplace fields deterministically."""
+        haystack = self._build_marketplace_haystack(receipt_data, ocr_text)
+        if self._contains_any_marker(haystack, WILDBERRIES_MARKERS):
+            receipt_data['name_seller'] = WILDBERRIES_SELLER_NAME
+
+    def _build_marketplace_haystack(
+        self,
+        receipt_data: dict[str, Any],
+        ocr_text: str,
+    ) -> str:
+        """Build normalized text used for marketplace detection."""
+        fields = [
+            ocr_text,
+            str(receipt_data.get('name_seller') or ''),
+            str(receipt_data.get('retail_place') or ''),
+            str(receipt_data.get('retail_place_address') or ''),
+        ]
+        return ' '.join(fields).casefold()
+
+    def _contains_any_marker(
+        self,
+        haystack: str,
+        markers: tuple[str, ...],
+    ) -> bool:
+        """Return whether any normalized marker exists in the text."""
+        return any(marker.casefold() in haystack for marker in markers)
 
     def _normalize_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """Normalize a single receipt item."""
@@ -743,7 +794,10 @@ class ReceiptInferencePipeline:
         llm_started_at = perf_counter()
         raw_output = self._llm_backend.extract(ocr_result)
         llm_ms = round((perf_counter() - llm_started_at) * 1000, 2)
-        normalized = self._normalizer.normalize(raw_output)
+        normalized = self._normalizer.normalize(
+            raw_output,
+            ocr_text=ocr_result.text,
+        )
 
         logger.info(
             'receipt_inference_pipeline_completed',
