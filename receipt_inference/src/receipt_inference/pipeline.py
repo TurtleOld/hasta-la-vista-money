@@ -214,6 +214,12 @@ class PaddleOCRBackend:
             if text and confidence >= self._settings.ocr_min_confidence
         ]
         text = '\n'.join(filtered_lines).strip()
+        logger.info(
+            'receipt_inference_ocr_completed',
+            line_count=len(filtered_lines),
+            text_length=len(text),
+            text_preview=text[:2000],
+        )
         return OCRResult(text=text, line_count=len(filtered_lines))
 
     def _get_ocr_instance(self) -> Any:
@@ -232,22 +238,18 @@ class PaddleOCRBackend:
             ) from exc
 
         try:
-            self._ocr_instance = paddleocr_cls(
-                text_detection_model_name=(
-                    self._settings.ocr_detection_model_name
-                ),
-                text_recognition_model_name=(
-                    self._settings.ocr_recognition_model_name
-                ),
-                use_doc_orientation_classify=False,
-                use_doc_unwarping=False,
-                use_textline_orientation=self._settings.ocr_use_angle_cls,
-                lang=self._settings.ocr_language,
-                device='cpu',
-                enable_hpi=False,
-                enable_mkldnn=self._settings.ocr_enable_mkldnn,
-                cpu_threads=self._settings.ocr_threads,
-            )
+            ocr_kwargs: dict[str, Any] = {
+                'use_doc_orientation_classify': False,
+                'use_doc_unwarping': False,
+                'use_textline_orientation': self._settings.ocr_use_angle_cls,
+                'lang': self._settings.ocr_language,
+                'device': 'cpu',
+                'enable_hpi': False,
+                'enable_mkldnn': False,
+                'cpu_threads': self._settings.ocr_threads,
+            }
+            ocr_kwargs.update(self._get_explicit_model_kwargs())
+            self._ocr_instance = paddleocr_cls(**ocr_kwargs)
         except Exception as exc:
             raise ReceiptInferenceError(
                 error_code='ocr_unavailable',
@@ -255,6 +257,19 @@ class PaddleOCRBackend:
                 status_code=503,
             ) from exc
         return self._ocr_instance
+
+    def _get_explicit_model_kwargs(self) -> dict[str, str]:
+        """Return explicit model overrides only when configured."""
+        model_kwargs: dict[str, str] = {}
+        if self._settings.ocr_detection_model_name:
+            model_kwargs['text_detection_model_name'] = (
+                self._settings.ocr_detection_model_name
+            )
+        if self._settings.ocr_recognition_model_name:
+            model_kwargs['text_recognition_model_name'] = (
+                self._settings.ocr_recognition_model_name
+            )
+        return model_kwargs
 
     def _extract_lines(self, result: Any) -> list[tuple[str, float]]:
         """Normalize PaddleOCR output into ordered text lines."""

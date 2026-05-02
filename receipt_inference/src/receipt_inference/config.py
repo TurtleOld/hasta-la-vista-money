@@ -67,12 +67,12 @@ def load_settings() -> ReceiptInferenceSettings:
         ocr_min_confidence=float(os.getenv('OCR_MIN_CONFIDENCE', '0.5')),
         ocr_detection_model_name=os.getenv(
             'OCR_DETECTION_MODEL_NAME',
-            'PP-OCRv5_mobile_det',
-        ),
+            '',
+        ).strip(),
         ocr_recognition_model_name=os.getenv(
             'OCR_RECOGNITION_MODEL_NAME',
-            'PP-OCRv5_mobile_rec',
-        ),
+            '',
+        ).strip(),
         ocr_use_angle_cls=(
             os.getenv('OCR_USE_ANGLE_CLS', 'false').strip().lower() == 'true'
         ),
