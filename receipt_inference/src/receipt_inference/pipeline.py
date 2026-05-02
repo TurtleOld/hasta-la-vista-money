@@ -170,6 +170,16 @@ class PaddleOCRBackend:
     def extract(self, prepared_image: PreparedImage) -> OCRResult:
         """Extract ordered text lines from the prepared receipt image."""
         ocr = self._get_ocr_instance()
+        logger.info(
+            'receipt_inference_ocr_started',
+            image_width=prepared_image.width,
+            image_height=prepared_image.height,
+            media_type=prepared_image.media_type,
+            image_size=len(prepared_image.image_bytes),
+            detection_model=self._settings.ocr_detection_model_name,
+            recognition_model=self._settings.ocr_recognition_model_name,
+            use_angle_cls=self._settings.ocr_use_angle_cls,
+        )
         image_array = np.array(Image.open(BytesIO(prepared_image.image_bytes)))
 
         try:
