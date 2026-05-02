@@ -48,10 +48,14 @@ def _serialize_settings(settings: ReceiptInferenceSettings) -> dict[str, Any]:
         'ocr_threads': settings.ocr_threads,
         'llama_server_url': settings.llama_server_url,
         'llama_model_alias': settings.llama_model_alias,
+        'llama_max_tokens': settings.llama_max_tokens,
         'max_image_dimension': settings.max_image_dimension,
         'min_ocr_image_width': settings.min_ocr_image_width,
+        'jpeg_quality': settings.jpeg_quality,
         'ocr_detection_model_name': settings.ocr_detection_model_name,
         'ocr_recognition_model_name': settings.ocr_recognition_model_name,
+        'ocr_enable_mkldnn': settings.ocr_enable_mkldnn,
+        'optimize_jpeg': settings.optimize_jpeg,
     }
 
 
@@ -81,7 +85,10 @@ async def lifespan(app: Starlette) -> AsyncIterator[None]:
         readiness=service.readiness_status(),
         warmup_ms=round((perf_counter() - warmup_started_at) * 1000, 2),
     )
-    yield
+    try:
+        yield
+    finally:
+        service.close()
 
 
 async def health(_: Request) -> Response:

@@ -84,6 +84,7 @@ class ImagePreprocessor:
         self._max_dimension = settings.max_image_dimension
         self._min_ocr_image_width = settings.min_ocr_image_width
         self._jpeg_quality = settings.jpeg_quality
+        self._optimize_jpeg = settings.optimize_jpeg
 
     def _upscale_for_ocr(self, image: Image.Image) -> Image.Image:
         """Upscale narrow receipts so small text is easier to detect."""
@@ -128,7 +129,7 @@ class ImagePreprocessor:
                     buffer,
                     format='JPEG',
                     quality=self._jpeg_quality,
-                    optimize=True,
+                    optimize=self._optimize_jpeg,
                 )
                 normalized_bytes = buffer.getvalue()
         except UnidentifiedImageError as exc:
@@ -244,7 +245,7 @@ class PaddleOCRBackend:
                 lang=self._settings.ocr_language,
                 device='cpu',
                 enable_hpi=False,
-                enable_mkldnn=False,
+                enable_mkldnn=self._settings.ocr_enable_mkldnn,
                 cpu_threads=self._settings.ocr_threads,
             )
         except Exception as exc:
@@ -363,6 +364,7 @@ class LlamaServerBackend:
         self._max_tokens = settings.llama_max_tokens
         self._prompt_builder = PromptBuilder()
         self._model_alias = settings.llama_model_alias
+        self._client = httpx.Client(timeout=self._build_timeout())
 
     def is_reachable(self) -> bool:
         """Check whether llama-server responds on its OpenAI endpoint."""
@@ -388,6 +390,10 @@ class LlamaServerBackend:
                 return True
         return bool(models)
 
+    def close(self) -> None:
+        """Close reusable HTTP resources."""
+        self._client.close()
+
     def _build_timeout(self) -> httpx.Timeout:
         """Use a generous read timeout for local llama generation."""
         return httpx.Timeout(
@@ -404,6 +410,8 @@ class LlamaServerBackend:
             'model': self._model_alias,
             'temperature': 0,
             'max_tokens': self._max_tokens,
+            'response_format': {'type': 'json_object'},
+            'cache_prompt': True,
             'messages': messages,
         }
         logger.info(
@@ -470,11 +478,10 @@ class LlamaServerBackend:
         last_error: httpx.ConnectError | None = None
         for attempt in range(LLM_CONNECT_RETRY_COUNT):
             try:
-                with httpx.Client(timeout=self._build_timeout()) as client:
-                    return client.post(
-                        f'{self._base_url}/chat/completions',
-                        json=payload,
-                    )
+                return self._client.post(
+                    f'{self._base_url}/chat/completions',
+                    json=payload,
+                )
             except httpx.ConnectError as exc:
                 last_error = exc
                 if attempt + 1 == LLM_CONNECT_RETRY_COUNT:
@@ -762,6 +769,10 @@ class ReceiptInferencePipeline:
     def warmup(self) -> None:
         """Warm up heavy runtime dependencies during service startup."""
         self._ocr_backend.warmup()
+
+    def close(self) -> None:
+        """Release reusable backend resources."""
+        self._llm_backend.close()
 
     def preprocess(self, image_bytes: bytes) -> PreparedImage:
         """Preprocess image bytes before OCR."""
