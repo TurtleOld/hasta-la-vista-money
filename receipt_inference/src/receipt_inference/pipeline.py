@@ -13,7 +13,13 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import numpy as np
 import structlog
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import (
+    Image,
+    ImageEnhance,
+    ImageFilter,
+    ImageOps,
+    UnidentifiedImageError,
+)
 
 from receipt_inference.errors import ReceiptInferenceError
 
@@ -66,7 +72,32 @@ class ImagePreprocessor:
 
     def __init__(self, settings: ReceiptInferenceSettings) -> None:
         self._max_dimension = settings.max_image_dimension
+        self._min_ocr_image_width = settings.min_ocr_image_width
         self._jpeg_quality = settings.jpeg_quality
+
+    def _upscale_for_ocr(self, image: Image.Image) -> Image.Image:
+        """Upscale narrow receipts so small text is easier to detect."""
+        width, height = image.size
+        if width >= self._min_ocr_image_width or width == 0:
+            return image
+
+        scale = self._min_ocr_image_width / width
+        resized_width = round(width * scale)
+        resized_height = round(height * scale)
+        return image.resize(
+            (resized_width, resized_height),
+            Image.Resampling.LANCZOS,
+        )
+
+    def _enhance_for_ocr(self, image: Image.Image) -> Image.Image:
+        """Boost contrast and edge sharpness for receipt text."""
+        grayscale = ImageOps.grayscale(image)
+        contrasted = ImageOps.autocontrast(grayscale, cutoff=1)
+        contrasted = ImageEnhance.Contrast(contrasted).enhance(1.15)
+        sharpened = contrasted.filter(
+            ImageFilter.UnsharpMask(radius=1.5, percent=175, threshold=3),
+        )
+        return sharpened.convert('RGB')
 
     def prepare(self, image_bytes: bytes) -> PreparedImage:
         """Validate and normalize an uploaded receipt image."""
@@ -78,6 +109,8 @@ class ImagePreprocessor:
                     (self._max_dimension, self._max_dimension),
                     Image.Resampling.LANCZOS,
                 )
+                normalized_image = self._upscale_for_ocr(normalized_image)
+                normalized_image = self._enhance_for_ocr(normalized_image)
                 width, height = normalized_image.size
 
                 buffer = BytesIO()
@@ -179,7 +212,12 @@ class PaddleOCRBackend:
 
         try:
             self._ocr_instance = paddleocr_cls(
-                text_detection_model_name='PP-OCRv5_mobile_det',
+                text_detection_model_name=(
+                    self._settings.ocr_detection_model_name
+                ),
+                text_recognition_model_name=(
+                    self._settings.ocr_recognition_model_name
+                ),
                 use_doc_orientation_classify=False,
                 use_doc_unwarping=False,
                 use_textline_orientation=self._settings.ocr_use_angle_cls,
