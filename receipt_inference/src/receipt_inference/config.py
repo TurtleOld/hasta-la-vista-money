@@ -58,21 +58,21 @@ def load_settings() -> ReceiptInferenceSettings:
             'LLAMA_MODEL_ALIAS',
             'Qwen2.5-3B-Instruct-Q5_K_M',
         ),
-        max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '2800')),
-        min_ocr_image_width=int(os.getenv('MIN_OCR_IMAGE_WIDTH', '1200')),
+        max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '2400')),
+        min_ocr_image_width=int(os.getenv('MIN_OCR_IMAGE_WIDTH', '1000')),
         jpeg_quality=int(os.getenv('JPEG_QUALITY', '95')),
         ocr_language=os.getenv('OCR_LANGUAGE', 'ru'),
         ocr_min_confidence=float(os.getenv('OCR_MIN_CONFIDENCE', '0.5')),
         ocr_detection_model_name=os.getenv(
             'OCR_DETECTION_MODEL_NAME',
-            'PP-OCRv5_server_det',
+            'PP-OCRv5_mobile_det',
         ),
         ocr_recognition_model_name=os.getenv(
             'OCR_RECOGNITION_MODEL_NAME',
             'PP-OCRv5_server_rec',
         ),
         ocr_use_angle_cls=(
-            os.getenv('OCR_USE_ANGLE_CLS', 'true').strip().lower() == 'true'
+            os.getenv('OCR_USE_ANGLE_CLS', 'false').strip().lower() == 'true'
         ),
         ocr_readiness_required=(
             os.getenv('OCR_READINESS_REQUIRED', 'true').strip().lower()
