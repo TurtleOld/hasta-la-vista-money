@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from dependency_injector import providers
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse_lazy
@@ -964,6 +965,7 @@ class TestReviewPendingReceiptView(TestCase):
         )
 
         data = {
+            'account': str(self.account.pk),
             'receipt_date': '2023-05-20T14:30',
             'name_seller': 'Обновленный продавец',
             'retail_place': 'Магазин',
@@ -1024,6 +1026,7 @@ class TestReviewPendingReceiptView(TestCase):
         )
 
         data = {
+            'account': str(self.account.pk),
             'receipt_date': '2023-05-20T14:30',
             'name_seller': 'Обновленный продавец',
             'retail_place': 'Магазин',
@@ -1091,6 +1094,62 @@ class TestReviewPendingReceiptView(TestCase):
         form = response.context['form']
         self.assertFalse(form.is_valid())
         self.assertIn('receipt_date', form.errors)
+
+    def test_review_pending_receipt_view_insufficient_funds(self) -> None:
+        self.client.force_login(self.user)
+        self.mock_account_service.apply_receipt_spend.side_effect = (
+            ValidationError('Недостаточно средств на счете')
+        )
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': self.pending_receipt.pk},
+        )
+
+        data = {
+            'account': str(self.account.pk),
+            'receipt_date': '2023-05-20T14:30',
+            'name_seller': 'Обновленный продавец',
+            'retail_place': 'Магазин',
+            'retail_place_address': 'Адрес магазина',
+            'number_receipt': '54321',
+            'total_sum': '150.00',
+            'nds10': '',
+            'nds20': '',
+            'operation_type': '1',
+            'form-TOTAL_FORMS': '2',
+            'form-INITIAL_FORMS': '0',
+            'form-MIN_NUM_FORMS': '0',
+            'form-MAX_NUM_FORMS': '1000',
+            'form-0-product_name': 'Товар 1',
+            'form-0-category': 'Продукты',
+            'form-0-price': '50.00',
+            'form-0-quantity': '2',
+            'form-0-amount': '100.00',
+            'form-0-nds_type': '',
+            'form-0-nds_sum': '',
+            'form-1-product_name': 'Товар 2',
+            'form-1-category': 'Напитки',
+            'form-1-price': '50.00',
+            'form-1-quantity': '1',
+            'form-1-amount': '50.00',
+            'form-1-nds_type': '',
+            'form-1-nds_sum': '',
+            'save': 'Сохранить',
+        }
+
+        response = self.client.post(url, data)
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'Недостаточно средств на счете')
+        self.assertTrue(
+            PendingReceipt.objects.filter(pk=self.pending_receipt.pk).exists(),
+        )
+        self.assertFalse(
+            Receipt.objects.filter(
+                user=self.user,
+                number_receipt=54321,
+            ).exists(),
+        )
 
 
 class TestProductByMonthView(TestCase):
