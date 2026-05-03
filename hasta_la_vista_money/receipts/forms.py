@@ -408,6 +408,12 @@ class UploadImageForm(Form):
 class PendingReceiptReviewForm(Form):
     """Form for reviewing and editing pending receipt data."""
 
+    account = ModelChoiceField(
+        queryset=Account.objects.none(),
+        label=_('Счёт списания'),
+        widget=Select(attrs={'class': _SELECT_CLASSES}),
+        required=True,
+    )
     receipt_date = DateTimeField(
         label=_('Дата и время чека'),
         widget=DateTimeInput(
@@ -480,6 +486,8 @@ class PendingReceiptReviewForm(Form):
         self,
         receipt_data: dict[str, Any],
         *args: Any,
+        user: User | None = None,
+        account: Account | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize form with receipt data.
@@ -487,9 +495,15 @@ class PendingReceiptReviewForm(Form):
         Args:
             receipt_data: Dictionary with receipt data.
             *args: Positional arguments.
+            user: User whose accounts can be selected.
+            account: Currently selected account.
             **kwargs: Keyword arguments.
         """
         super().__init__(*args, **kwargs)
+        if user is not None:
+            self.fields['account'].queryset = Account.objects.filter(user=user)
+        if account is not None:
+            self.fields['account'].initial = account
         if receipt_data:
             receipt_date_str = receipt_data.get('receipt_date', '')
             if receipt_date_str:
