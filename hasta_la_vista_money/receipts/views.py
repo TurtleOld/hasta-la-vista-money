@@ -6,6 +6,7 @@ import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import ValidationError
 from django.db.models import Count, ProtectedError, QuerySet, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
@@ -65,6 +66,17 @@ from hasta_la_vista_money.users.services.cache import (
 )
 
 logger = structlog.get_logger(__name__)
+_INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
+
+
+def _validation_error_message(error: ValidationError) -> str:
+    """Return a readable message from Django ValidationError."""
+    for validation_error in getattr(error, 'error_list', ()):
+        if validation_error.code == _INSUFFICIENT_FUNDS_CODE:
+            return str(_('Недостаточно средств на счете'))
+    if error.messages:
+        return ' '.join(str(message) for message in error.messages)
+    return str(_('Ошибка проверки данных.'))
 
 
 class BaseView:
@@ -985,6 +997,8 @@ class ReviewPendingReceiptView(
         kwargs = super().get_form_kwargs()
         pending_receipt = self.get_pending_receipt()
         kwargs['receipt_data'] = pending_receipt.receipt_data
+        kwargs['user'] = self.request.user
+        kwargs['account'] = pending_receipt.account
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -1053,6 +1067,7 @@ class ReviewPendingReceiptView(
             pending_receipt_service.update_pending_receipt(
                 pending_receipt=pending_receipt,
                 receipt_data=receipt_data,
+                account=form.cleaned_data['account'],
             )
         )
 
@@ -1066,6 +1081,15 @@ class ReviewPendingReceiptView(
                     _('Чек успешно сохранён!'),
                 )
                 return redirect('receipts:list')
+            except ValidationError as error:
+                error_message = _validation_error_message(error)
+                logger.warning(
+                    'pending_receipt_validation_failed',
+                    error=error_message,
+                )
+                form.add_error(None, error_message)
+                messages.error(request, error_message)
+                return self.form_invalid(form)
             except Exception as e:
                 logger.exception('Error saving receipt', error=e)
                 messages.error(

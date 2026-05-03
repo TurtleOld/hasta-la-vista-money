@@ -239,18 +239,24 @@ class PendingReceiptService:
         *,
         pending_receipt: PendingReceipt,
         receipt_data: dict[str, Any],
+        account: Account | None = None,
     ) -> PendingReceipt:
         """Update receipt_data on a ready pending receipt during review.
 
         Args:
             pending_receipt: PendingReceipt instance to update.
             receipt_data: Updated receipt data dictionary.
+            account: Account selected for final receipt saving.
 
         Returns:
             Updated PendingReceipt instance.
         """
         pending_receipt.receipt_data = receipt_data
-        pending_receipt.save(update_fields=['receipt_data'])
+        update_fields = ['receipt_data']
+        if account is not None:
+            pending_receipt.account = account
+            update_fields.append('account')
+        pending_receipt.save(update_fields=update_fields)
         return pending_receipt
 
     def create_pending_receipt(
