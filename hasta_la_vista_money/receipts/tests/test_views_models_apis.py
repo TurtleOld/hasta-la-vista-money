@@ -740,34 +740,17 @@ class TestUploadImageView(TestCase):
         response = self.client.get(url)
         self.assertRedirects(response, '/login/?next=/receipts/upload/')
 
-    @patch('hasta_la_vista_money.receipts.views.analyze_image_with_ai')
+    @patch('hasta_la_vista_money.receipts.views.process_pending_receipt')
     def test_upload_image_view_post(
         self,
-        mock_analyze: Mock,
+        mock_task: Mock,
     ) -> None:
         Receipt.objects.filter(
             user=self.user,
             number_receipt=12345,
         ).delete()
         PendingReceipt.objects.filter(user=self.user).delete()
-
-        mock_analyze.return_value = json.dumps(
-            {
-                'name_seller': 'Тестовый продавец',
-                'total_sum': '100.00',
-                'number_receipt': '12345',
-                'receipt_date': '16.05.2023 19:35',
-                'items': [
-                    {
-                        'product_name': 'Тестовый продукт',
-                        'price': '50.00',
-                        'quantity': '2',
-                        'amount': '100.00',
-                        'category': 'Продукты',
-                    },
-                ],
-            },
-        )
+        mock_task.delay.return_value = MagicMock(id='task-id')
 
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:upload')
@@ -794,13 +777,12 @@ class TestUploadImageView(TestCase):
         self.assertIsNotNone(pending_receipt)
         if pending_receipt is not None:
             self.assertEqual(pending_receipt.account.pk, self.account.pk)
-            self.assertEqual(
-                pending_receipt.receipt_data['total_sum'],
-                '100.00',
-            )
+            self.assertEqual(pending_receipt.status, 'processing')
+            self.assertEqual(pending_receipt.task_id, 'task-id')
+            mock_task.delay.assert_called_once_with(pending_receipt.pk)
 
         redirect_location = response.get('Location', '')  # type: ignore[call-overload]
-        self.assertIn('/receipts/review/', redirect_location)
+        self.assertEqual(redirect_location, '/receipts/')
 
 
 class TestReviewPendingReceiptView(TestCase):
@@ -909,6 +891,7 @@ class TestReviewPendingReceiptView(TestCase):
             account=self.account,
             receipt_data=self.receipt_data,
             expires_at=timezone.now() + timedelta(hours=24),
+            status='ready',
         )
 
     def tearDown(self) -> None:
@@ -960,6 +943,7 @@ class TestReviewPendingReceiptView(TestCase):
             account=self.account,
             receipt_data=self.receipt_data,
             expires_at=timezone.now() - timedelta(hours=1),
+            status='ready',
         )
         self.client.force_login(self.user)
         url = reverse_lazy(

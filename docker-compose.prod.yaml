@@ -37,6 +37,22 @@ services:
       timeout: 5s
       retries: 5
 
+  migrator:
+    image: ghcr.io/turtleold/hasta-la-vista-money:main
+    entrypoint: []
+    command: ["/app/.venv/bin/python", "manage.py", "migrate", "--noinput"]
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-hlvm}}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
+    restart: "no"
+
   hlvm-server:
     image: ghcr.io/turtleold/hasta-la-vista-money:main
     volumes:
@@ -57,6 +73,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     networks:
       - default
     healthcheck:
@@ -85,6 +103,28 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    networks:
+      - default
+    restart: unless-stopped
+
+  celery-beat:
+    image: ghcr.io/turtleold/hasta-la-vista-money:main
+    entrypoint: ["/app/celery-entrypoint.sh"]
+    command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-hlvm}}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     networks:
       - default
     restart: unless-stopped

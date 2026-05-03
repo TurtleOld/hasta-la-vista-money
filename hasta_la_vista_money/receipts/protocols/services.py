@@ -92,9 +92,53 @@ class ReceiptImportServiceProtocol(Protocol):
 class PendingReceiptServiceProtocol(Protocol):
     """Protocol for pending receipt service interface.
 
-    Defines the contract for managing pending receipts before
-    final confirmation.
+    Defines the contract for managing pending receipts across the
+    background-processing lifecycle (upload → processing → ready/failed →
+    review/save) and for deduplicating uploads by image hash.
     """
+
+    def find_duplicate(
+        self,
+        *,
+        user: User,
+        image_hash: str,
+    ) -> Any | None: ...
+
+    def create_processing_job(
+        self,
+        *,
+        user: User,
+        account: Account,
+        image_file: Any,
+        image_hash: str,
+    ) -> PendingReceipt: ...
+
+    def attach_task_id(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        task_id: str,
+    ) -> None: ...
+
+    def mark_ready(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        receipt_data: dict[str, Any],
+    ) -> PendingReceipt: ...
+
+    def mark_failed(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        error_message: str,
+    ) -> PendingReceipt: ...
+
+    def reset_for_retry(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+    ) -> PendingReceipt: ...
 
     def create_pending_receipt(
         self,
@@ -116,3 +160,9 @@ class PendingReceiptServiceProtocol(Protocol):
         *,
         pending_receipt: PendingReceipt,
     ) -> Receipt: ...
+
+    def delete_with_file(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+    ) -> None: ...

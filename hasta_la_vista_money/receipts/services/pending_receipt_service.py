@@ -1,4 +1,6 @@
-from datetime import datetime, timedelta
+import hashlib
+from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -8,13 +10,61 @@ from django.utils.translation import gettext_lazy as _
 
 from core.repositories.protocols import ReceiptRepositoryProtocol
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.receipts.models import PendingReceipt, Receipt
+from hasta_la_vista_money.receipts.models import (
+    PendingReceipt,
+    PendingReceiptStatus,
+    Receipt,
+    ReceiptImageHash,
+)
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
     ReceiptCreatorService,
     SellerCreateData,
 )
 from hasta_la_vista_money.users.models import User
+
+_HASH_CHUNK_SIZE = 64 * 1024
+
+
+@dataclass(frozen=True)
+class DuplicateImageMatch:
+    """Result describing where a duplicate upload was found.
+
+    Attributes:
+        kind: ``'pending'`` if matched a PendingReceipt, ``'receipt'`` if a
+            saved Receipt was matched via ReceiptImageHash.
+        pending: Matched PendingReceipt instance, when ``kind == 'pending'``.
+        receipt: Matched Receipt instance, when ``kind == 'receipt'``.
+    """
+
+    kind: str
+    pending: PendingReceipt | None = None
+    receipt: Receipt | None = None
+
+
+def compute_image_hash(file_obj: Any) -> str:
+    """Compute SHA-256 hex digest of an uploaded file in streaming mode.
+
+    Args:
+        file_obj: Django UploadedFile or any object with ``chunks`` /
+            ``read`` and ``seek`` interface.
+
+    Returns:
+        Lowercase 64-char hex digest of the file contents.
+    """
+    digest = hashlib.sha256()
+    if hasattr(file_obj, 'chunks'):
+        for chunk in file_obj.chunks(chunk_size=_HASH_CHUNK_SIZE):
+            digest.update(chunk)
+    else:
+        while True:
+            chunk = file_obj.read(_HASH_CHUNK_SIZE)
+            if not chunk:
+                break
+            digest.update(chunk)
+    if hasattr(file_obj, 'seek'):
+        file_obj.seek(0)
+    return digest.hexdigest()
 
 
 class PendingReceiptService:
@@ -34,30 +84,155 @@ class PendingReceiptService:
         self.receipt_creator_service = receipt_creator_service
         self.receipt_repository = receipt_repository
 
-    def create_pending_receipt(
+    def find_duplicate(
+        self,
+        *,
+        user: User,
+        image_hash: str,
+    ) -> DuplicateImageMatch | None:
+        """Locate an existing pending or saved receipt for the same image.
+
+        Looks at PendingReceipts in non-failed states (failed entries do not
+        block re-uploading, by design) and at the persistent ReceiptImageHash
+        records for finalized receipts.
+
+        Args:
+            user: User attempting the upload.
+            image_hash: SHA-256 hex digest of the uploaded image.
+
+        Returns:
+            DuplicateImageMatch describing the match, or None.
+        """
+        active_statuses = [
+            PendingReceiptStatus.PROCESSING,
+            PendingReceiptStatus.READY,
+        ]
+        pending = (
+            PendingReceipt.objects.filter(
+                user=user,
+                image_hash=image_hash,
+                status__in=active_statuses,
+            )
+            .order_by('-created_at')
+            .first()
+        )
+        if pending is not None:
+            return DuplicateImageMatch(kind='pending', pending=pending)
+
+        hash_record = (
+            ReceiptImageHash.objects.filter(user=user, image_hash=image_hash)
+            .select_related('receipt')
+            .first()
+        )
+        if hash_record is not None:
+            return DuplicateImageMatch(
+                kind='receipt',
+                receipt=hash_record.receipt,
+            )
+        return None
+
+    def create_processing_job(
         self,
         *,
         user: User,
         account: Account,
-        receipt_data: dict[str, Any],
+        image_file: Any,
+        image_hash: str,
     ) -> PendingReceipt:
-        """Create a pending receipt from recognition data.
+        """Persist a new PendingReceipt in ``processing`` state with the file.
 
         Args:
-            user: User who uploaded the receipt.
-            account: Account to charge for the receipt.
-            receipt_data: Dictionary with receipt data from AI recognition.
+            user: Owner of the receipt.
+            account: Account that will be charged for the receipt.
+            image_file: Uploaded image file.
+            image_hash: Pre-computed SHA-256 hex digest of the file.
 
         Returns:
-            Created PendingReceipt instance.
+            Newly created PendingReceipt.
         """
-        expires_at = timezone.now() + timedelta(hours=24)
         return PendingReceipt.objects.create(
             user=user,
             account=account,
-            receipt_data=receipt_data,
-            expires_at=expires_at,
+            status=PendingReceiptStatus.PROCESSING,
+            image_file=image_file,
+            image_hash=image_hash,
         )
+
+    def attach_task_id(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        task_id: str,
+    ) -> None:
+        """Persist the Celery task identifier on the pending receipt.
+
+        Args:
+            pending_receipt: Pending receipt being processed.
+            task_id: Celery task UUID.
+        """
+        pending_receipt.task_id = task_id
+        pending_receipt.save(update_fields=['task_id'])
+
+    def mark_ready(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        receipt_data: dict[str, Any],
+    ) -> PendingReceipt:
+        """Transition a pending receipt to ``ready`` with parsed data.
+
+        Args:
+            pending_receipt: Pending receipt being updated.
+            receipt_data: Parsed receipt data dictionary.
+
+        Returns:
+            Updated PendingReceipt instance.
+        """
+        pending_receipt.receipt_data = receipt_data
+        pending_receipt.status = PendingReceiptStatus.READY
+        pending_receipt.error_message = ''
+        pending_receipt.save(
+            update_fields=['receipt_data', 'status', 'error_message'],
+        )
+        return pending_receipt
+
+    def mark_failed(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        error_message: str,
+    ) -> PendingReceipt:
+        """Transition a pending receipt to ``failed`` with a reason.
+
+        Args:
+            pending_receipt: Pending receipt being updated.
+            error_message: Human-readable failure reason.
+
+        Returns:
+            Updated PendingReceipt instance.
+        """
+        pending_receipt.status = PendingReceiptStatus.FAILED
+        pending_receipt.error_message = error_message
+        pending_receipt.save(update_fields=['status', 'error_message'])
+        return pending_receipt
+
+    def reset_for_retry(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+    ) -> PendingReceipt:
+        """Move a failed pending receipt back to ``processing`` state.
+
+        Args:
+            pending_receipt: Failed pending receipt to retry.
+
+        Returns:
+            Updated PendingReceipt instance.
+        """
+        pending_receipt.status = PendingReceiptStatus.PROCESSING
+        pending_receipt.error_message = ''
+        pending_receipt.save(update_fields=['status', 'error_message'])
+        return pending_receipt
 
     def update_pending_receipt(
         self,
@@ -65,7 +240,7 @@ class PendingReceiptService:
         pending_receipt: PendingReceipt,
         receipt_data: dict[str, Any],
     ) -> PendingReceipt:
-        """Update pending receipt data.
+        """Update receipt_data on a ready pending receipt during review.
 
         Args:
             pending_receipt: PendingReceipt instance to update.
@@ -78,13 +253,40 @@ class PendingReceiptService:
         pending_receipt.save(update_fields=['receipt_data'])
         return pending_receipt
 
+    def create_pending_receipt(
+        self,
+        *,
+        user: User,
+        account: Account,
+        receipt_data: dict[str, Any],
+    ) -> PendingReceipt:
+        """Create a ready pending receipt directly from recognized data.
+
+        Kept for backward compatibility with callers that already have parsed
+        data (e.g. tests). Status is set to ``ready``.
+
+        Args:
+            user: User who uploaded the receipt.
+            account: Account to charge for the receipt.
+            receipt_data: Dictionary with receipt data from AI recognition.
+
+        Returns:
+            Created PendingReceipt instance.
+        """
+        return PendingReceipt.objects.create(
+            user=user,
+            account=account,
+            receipt_data=receipt_data,
+            status=PendingReceiptStatus.READY,
+        )
+
     @transaction.atomic
     def convert_to_receipt(
         self,
         *,
         pending_receipt: PendingReceipt,
     ) -> Receipt:
-        """Convert pending receipt to final Receipt.
+        """Convert pending receipt to final Receipt and persist its image hash.
 
         Args:
             pending_receipt: PendingReceipt instance to convert.
@@ -95,7 +297,7 @@ class PendingReceiptService:
         Raises:
             ValueError: If receipt data is invalid.
         """
-        receipt_data = pending_receipt.receipt_data
+        receipt_data = pending_receipt.receipt_data or {}
         user = pending_receipt.user
         account = pending_receipt.account
 
@@ -131,8 +333,26 @@ class PendingReceiptService:
             products_data=receipt_data.get('items', []),
         )
 
-        pending_receipt.delete()
+        if pending_receipt.image_hash:
+            ReceiptImageHash.objects.update_or_create(
+                user=user,
+                image_hash=pending_receipt.image_hash,
+                defaults={'receipt': receipt},
+            )
+
+        self.delete_with_file(pending_receipt=pending_receipt)
         return receipt
+
+    def delete_with_file(self, *, pending_receipt: PendingReceipt) -> None:
+        """Delete pending receipt and remove the underlying image from disk.
+
+        Args:
+            pending_receipt: Pending receipt to delete.
+        """
+        image_field = pending_receipt.image_file
+        if image_field and image_field.name:
+            image_field.delete(save=False)
+        pending_receipt.delete()
 
     def _parse_receipt_date(self, date_str: str) -> datetime:
         """Parse receipt date string to datetime.
@@ -208,3 +428,10 @@ class PendingReceiptService:
         if value is None:
             return None
         return Decimal(str(value))
+
+
+__all__ = [
+    'DuplicateImageMatch',
+    'PendingReceiptService',
+    'compute_image_hash',
+]

@@ -1,0 +1,477 @@
+"""Tests for the background receipt processing flow.
+
+Covers PendingReceiptService new methods, the Celery task, and the upload /
+retry / counter views. Inference is always mocked — no network calls.
+"""
+
+import io
+import json
+from typing import Any, Self
+from unittest import mock
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from config.containers import ApplicationContainer
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.receipts.models import (
+    PendingReceipt,
+    PendingReceiptStatus,
+    Receipt,
+    ReceiptImageHash,
+    Seller,
+)
+from hasta_la_vista_money.receipts.services.pending_receipt_service import (
+    PendingReceiptService,
+    compute_image_hash,
+)
+from hasta_la_vista_money.receipts.services.receipt_inference_client import (
+    ReceiptInferenceClient,
+    resolve_upload_content_type,
+)
+from hasta_la_vista_money.receipts.tasks import (
+    cleanup_stale_pending_receipts,
+    process_pending_receipt,
+)
+from hasta_la_vista_money.users.models import User
+
+
+def _fake_payload() -> dict[str, Any]:
+    return {
+        'name_seller': 'Shop',
+        'retail_place_address': 'Address',
+        'retail_place': 'Place',
+        'total_sum': 100.0,
+        'operation_type': 1,
+        'receipt_date': timezone.now().strftime('%d.%m.%Y %H:%M'),
+        'number_receipt': 42,
+        'nds10': 0,
+        'nds20': 0,
+        'items': [
+            {
+                'product_name': 'Item',
+                'category': 'Misc',
+                'price': 100.0,
+                'quantity': 1,
+                'amount': 100.0,
+            },
+        ],
+    }
+
+
+class PendingReceiptServiceHashTests(TestCase):
+    """Hash computation and duplicate detection."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='hash-user',
+            password='pass',
+            email='h@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.service: PendingReceiptService = (
+            ApplicationContainer().receipts.pending_receipt_service()
+        )
+
+    def test_compute_image_hash_is_deterministic(self) -> None:
+        upload = SimpleUploadedFile(
+            'a.jpg',
+            io.BytesIO(b'same-bytes').getvalue(),
+            content_type='image/jpeg',
+        )
+        first = compute_image_hash(upload)
+        second = compute_image_hash(upload)
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 64)
+
+    def test_find_duplicate_pending_returns_existing_processing(self) -> None:
+        upload = SimpleUploadedFile(
+            'a.jpg',
+            b'pending-bytes',
+            content_type='image/jpeg',
+        )
+        image_hash = compute_image_hash(upload)
+        self.service.create_processing_job(
+            user=self.user,
+            account=self.account,
+            image_file=upload,
+            image_hash=image_hash,
+        )
+
+        match = self.service.find_duplicate(
+            user=self.user,
+            image_hash=image_hash,
+        )
+        self.assertIsNotNone(match)
+        assert match is not None
+        self.assertEqual(match.kind, 'pending')
+
+    def test_failed_pending_does_not_block_reupload(self) -> None:
+        upload = SimpleUploadedFile(
+            'a.jpg',
+            b'bytes',
+            content_type='image/jpeg',
+        )
+        image_hash = compute_image_hash(upload)
+        pending = self.service.create_processing_job(
+            user=self.user,
+            account=self.account,
+            image_file=upload,
+            image_hash=image_hash,
+        )
+        self.service.mark_failed(
+            pending_receipt=pending,
+            error_message='boom',
+        )
+
+        match = self.service.find_duplicate(
+            user=self.user,
+            image_hash=image_hash,
+        )
+        self.assertIsNone(match)
+
+
+class ProcessPendingReceiptTaskTests(TestCase):
+    """The Celery task transitions state and never raises out."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='task-user',
+            password='pass',
+            email='task@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.service: PendingReceiptService = (
+            ApplicationContainer().receipts.pending_receipt_service()
+        )
+
+    def _create_pending(self) -> PendingReceipt:
+        upload = SimpleUploadedFile(
+            'r.jpg',
+            b'image-bytes',
+            content_type='image/jpeg',
+        )
+        return self.service.create_processing_job(
+            user=self.user,
+            account=self.account,
+            image_file=upload,
+            image_hash=compute_image_hash(upload),
+        )
+
+    def test_task_marks_ready_on_success(self) -> None:
+        pending = self._create_pending()
+        with mock.patch(
+            'hasta_la_vista_money.receipts.tasks.analyze_image_with_ai',
+            return_value=json.dumps(_fake_payload()),
+        ):
+            process_pending_receipt(pending.pk)
+
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, PendingReceiptStatus.READY)
+        self.assertEqual(pending.error_message, '')
+        self.assertEqual(pending.receipt_data['name_seller'], 'Shop')
+
+    def test_task_marks_failed_on_invalid_json(self) -> None:
+        pending = self._create_pending()
+        with mock.patch(
+            'hasta_la_vista_money.receipts.tasks.analyze_image_with_ai',
+            return_value='not json at all',
+        ):
+            process_pending_receipt(pending.pk)
+
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, PendingReceiptStatus.FAILED)
+        self.assertNotEqual(pending.error_message, '')
+
+    def test_cleanup_purges_expired_rows(self) -> None:
+        pending = self._create_pending()
+        PendingReceipt.objects.filter(pk=pending.pk).update(
+            expires_at=timezone.now() - timezone.timedelta(hours=1),
+        )
+        result = cleanup_stale_pending_receipts()
+        self.assertEqual(result['purged'], 1)
+        self.assertFalse(
+            PendingReceipt.objects.filter(pk=pending.pk).exists(),
+        )
+
+
+class ReceiptInferenceClientContentTypeTests(TestCase):
+    """Persisted pending files keep a supported MIME type for inference."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='inference-user',
+            password='pass',
+            email='inference@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.service: PendingReceiptService = (
+            ApplicationContainer().receipts.pending_receipt_service()
+        )
+
+    def _create_png_pending(self) -> PendingReceipt:
+        upload = SimpleUploadedFile(
+            'image.png',
+            b'png-bytes',
+            content_type='image/png',
+        )
+        return self.service.create_processing_job(
+            user=self.user,
+            account=self.account,
+            image_file=upload,
+            image_hash=compute_image_hash(upload),
+        )
+
+    def test_resolves_content_type_from_persisted_file_name(self) -> None:
+        pending = self._create_png_pending()
+        pending.refresh_from_db()
+
+        with pending.image_file.open('rb') as image_fp:
+            self.assertEqual(
+                resolve_upload_content_type(image_fp),
+                'image/png',
+            )
+
+    def test_analyze_sends_inferred_content_type_for_persisted_file(
+        self,
+    ) -> None:
+        pending = self._create_png_pending()
+        pending.refresh_from_db()
+        post_calls: list[dict[str, Any]] = []
+
+        class FakeHTTPClient:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                pass
+
+            def __enter__(self) -> Self:
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                pass
+
+            def post(
+                self,
+                url: str,
+                files: dict[str, tuple[str, bytes, str]],
+            ) -> mock.Mock:
+                post_calls.append({'url': url, 'files': files})
+                response = mock.Mock()
+                response.is_success = True
+                response.json.return_value = {
+                    'success': True,
+                    'data': _fake_payload(),
+                }
+                return response
+
+        client = ReceiptInferenceClient()
+        client._base_url = 'http://receipt-inference'
+        with (
+            mock.patch(
+                'hasta_la_vista_money.receipts.services.'
+                'receipt_inference_client.httpx.Client',
+                FakeHTTPClient,
+            ),
+            pending.image_file.open('rb') as image_fp,
+        ):
+            raw = client.analyze(image_fp)
+
+        self.assertEqual(json.loads(raw)['name_seller'], 'Shop')
+        self.assertEqual(post_calls[0]['files']['file'][2], 'image/png')
+
+
+class UploadImageViewTests(TestCase):
+    """The view enqueues a task and redirects to the list — no inference."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='upload-user',
+            password='pass',
+            email='upload@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_upload_creates_processing_pending_and_dispatches(self) -> None:
+        upload = SimpleUploadedFile(
+            'r.jpg',
+            b'sample-bytes',
+            content_type='image/jpeg',
+        )
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+        ) as task_mock:
+            task_mock.delay.return_value = mock.Mock(id='task-id-1')
+            response = self.client.post(
+                reverse('receipts:upload'),
+                {'file': upload, 'account': self.account.pk},
+            )
+
+        self.assertRedirects(response, reverse('receipts:list'))
+        pending = PendingReceipt.objects.get(user=self.user)
+        self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
+        self.assertEqual(pending.task_id, 'task-id-1')
+        task_mock.delay.assert_called_once_with(pending.pk)
+
+    def test_upload_rejects_duplicate_against_saved_receipt(self) -> None:
+        upload = SimpleUploadedFile(
+            'r.jpg',
+            b'dup-bytes',
+            content_type='image/jpeg',
+        )
+        image_hash = compute_image_hash(upload)
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller='S',
+        )
+        receipt = Receipt.objects.create(
+            receipt_date=timezone.now(),
+            user=self.user,
+            account=self.account,
+            seller=seller,
+            total_sum=10,
+        )
+        ReceiptImageHash.objects.create(
+            user=self.user,
+            receipt=receipt,
+            image_hash=image_hash,
+        )
+
+        upload_again = SimpleUploadedFile(
+            'r.jpg',
+            b'dup-bytes',
+            content_type='image/jpeg',
+        )
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+        ) as task_mock:
+            response = self.client.post(
+                reverse('receipts:upload'),
+                {'file': upload_again, 'account': self.account.pk},
+            )
+
+        self.assertRedirects(response, reverse('receipts:list'))
+        self.assertFalse(
+            PendingReceipt.objects.filter(user=self.user).exists(),
+        )
+        task_mock.delay.assert_not_called()
+
+
+class PendingCounterViewTests(TestCase):
+    """Counter endpoint returns the live processing count for the user."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='counter-user',
+            password='pass',
+            email='c@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_counter_reflects_processing_count(self) -> None:
+        service: PendingReceiptService = (
+            ApplicationContainer().receipts.pending_receipt_service()
+        )
+        for index in range(2):
+            upload = SimpleUploadedFile(
+                f'r{index}.jpg',
+                f'bytes-{index}'.encode(),
+                content_type='image/jpeg',
+            )
+            service.create_processing_job(
+                user=self.user,
+                account=self.account,
+                image_file=upload,
+                image_hash=compute_image_hash(upload),
+            )
+
+        response = self.client.get(reverse('receipts:pending_counter'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '2')
+
+    def test_counter_empty_renders_no_badge(self) -> None:
+        response = self.client.get(reverse('receipts:pending_counter'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'animate-spin')
+
+
+class PendingRetryViewTests(TestCase):
+    """Retry view re-queues a failed pending row using the saved file."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='retry-user',
+            password='pass',
+            email='r@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_retry_resets_failed_pending(self) -> None:
+        service: PendingReceiptService = (
+            ApplicationContainer().receipts.pending_receipt_service()
+        )
+        upload = SimpleUploadedFile(
+            'r.jpg',
+            b'bytes',
+            content_type='image/jpeg',
+        )
+        pending = service.create_processing_job(
+            user=self.user,
+            account=self.account,
+            image_file=upload,
+            image_hash=compute_image_hash(upload),
+        )
+        service.mark_failed(
+            pending_receipt=pending,
+            error_message='nope',
+        )
+
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+        ) as task_mock:
+            task_mock.delay.return_value = mock.Mock(id='task-id-2')
+            response = self.client.post(
+                reverse('receipts:pending_retry', args=[pending.pk]),
+            )
+
+        self.assertRedirects(response, reverse('receipts:list'))
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
+        self.assertEqual(pending.error_message, '')
+        task_mock.delay.assert_called_once_with(pending.pk)

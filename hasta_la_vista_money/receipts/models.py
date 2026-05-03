@@ -476,18 +476,34 @@ class Receipt(models.Model):
         return str(reverse_lazy('receipts:update', args=[self.pk]))
 
 
-class PendingReceipt(models.Model):
-    """Model for temporarily storing receipt data before final confirmation.
+class PendingReceiptStatus(models.TextChoices):
+    """Lifecycle states for a pending receipt processed in background."""
 
-    Stores receipt data from AI recognition in JSON format,
-    allowing users to review and edit before saving to Receipt model.
+    PROCESSING = 'processing', _('В обработке')
+    READY = 'ready', _('Готов к проверке')
+    FAILED = 'failed', _('Ошибка обработки')
+
+
+class PendingReceipt(models.Model):
+    """Model for receipts being processed in background or awaiting review.
+
+    Holds the uploaded image and lifecycle state while a Celery worker
+    extracts data via the receipt inference service. After successful
+    recognition the parsed data lives in ``receipt_data`` until the user
+    confirms and converts the entry into a final Receipt.
 
     Attributes:
         user: Foreign key to the User who uploaded the receipt.
         account: Foreign key to the Account used for this receipt.
-        receipt_data: JSON field containing all receipt data.
-        created_at: Timestamp when the pending receipt was created.
-        expires_at: Timestamp when the pending receipt expires.
+        status: Lifecycle status (processing, ready, failed).
+        image_file: Source image stored in MEDIA_ROOT for background processing
+            and retries; deleted on conversion or manual removal.
+        image_hash: SHA-256 hex digest of the source image for deduplication.
+        receipt_data: JSON with parsed receipt data, populated on success.
+        error_message: Human-readable error reason when status is ``failed``.
+        task_id: Celery task identifier for the latest processing attempt.
+        created_at: Timestamp of the original upload.
+        expires_at: Timestamp after which the entry is purged by Celery Beat.
     """
 
     user = models.ForeignKey(
@@ -500,9 +516,41 @@ class PendingReceipt(models.Model):
         on_delete=models.CASCADE,
         related_name='pending_receipts',
     )
+    status = models.CharField(
+        max_length=20,
+        choices=PendingReceiptStatus.choices,
+        default=PendingReceiptStatus.PROCESSING,
+        verbose_name=_('Статус'),
+    )
+    image_file = models.FileField(
+        upload_to='pending_receipts/',
+        null=True,
+        blank=True,
+        verbose_name=_('Файл изображения'),
+    )
+    image_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name=_('Хеш файла изображения'),
+        help_text=_('SHA-256 hex digest для дедупликации загрузок'),
+    )
     receipt_data = models.JSONField(
+        null=True,
+        blank=True,
         verbose_name=_('Данные чека'),
         help_text=_('JSON данные чека для редактирования'),
+    )
+    error_message = models.TextField(
+        blank=True,
+        default='',
+        verbose_name=_('Сообщение об ошибке'),
+    )
+    task_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name=_('Идентификатор задачи Celery'),
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -514,12 +562,7 @@ class PendingReceipt(models.Model):
     )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Override save to set expires_at if not provided.
-
-        Args:
-            *args: Positional arguments.
-            **kwargs: Keyword arguments.
-        """
+        """Override save to set expires_at if not provided."""
         if not self.expires_at:
             self.expires_at = timezone.now() + timedelta(
                 hours=settings.PENDING_RECEIPT_EXPIRY_HOURS,
@@ -530,22 +573,66 @@ class PendingReceipt(models.Model):
         ordering: ClassVar[list[str]] = ['-created_at']
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['user', 'image_hash']),
             models.Index(fields=['expires_at']),
         ]
         verbose_name = _('Временный чек')
         verbose_name_plural = _('Временные чеки')
 
     def __str__(self) -> str:
-        """Return string representation of the pending receipt.
-
-        Returns:
-            str: Pending receipt identifier.
-        """
-        seller_name = self.receipt_data.get(
-            'name_seller',
-            'Неизвестный продавец',
-        )
+        """Return string representation of the pending receipt."""
+        if self.receipt_data:
+            seller_name = self.receipt_data.get(
+                'name_seller',
+                'Неизвестный продавец',
+            )
+        else:
+            seller_name = str(self.get_status_display())
         return f'{seller_name} - {self.created_at.strftime("%d.%m.%Y %H:%M")}'
+
+
+class ReceiptImageHash(models.Model):
+    """Persistent record of an image hash for a saved receipt.
+
+    Lets the upload flow detect duplicate uploads even after the source
+    file has been removed from disk on successful conversion.
+
+    Attributes:
+        user: Owner of the receipt.
+        receipt: The saved receipt this hash belongs to.
+        image_hash: SHA-256 hex digest of the original uploaded image.
+        created_at: Timestamp the record was stored.
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='receipt_image_hashes',
+    )
+    receipt = models.OneToOneField(
+        Receipt,
+        on_delete=models.CASCADE,
+        related_name='image_hash_record',
+    )
+    image_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['user', 'image_hash'],
+                name='uniq_user_image_hash',
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=['user', 'image_hash']),
+        ]
+        verbose_name = _('Хеш изображения чека')
+        verbose_name_plural = _('Хеши изображений чеков')
+
+    def __str__(self) -> str:
+        return f'{self.image_hash} → receipt #{self.receipt_id}'
 
     def get_absolute_url(self) -> str:
         """Get absolute URL for pending receipt review.

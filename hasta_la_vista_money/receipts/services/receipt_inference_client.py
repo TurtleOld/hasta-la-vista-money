@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -24,6 +25,10 @@ HTTP_RATE_LIMIT = 429
 HTTP_CONNECT_TIMEOUT = 10.0
 HTTP_WRITE_TIMEOUT = 60.0
 HTTP_POOL_TIMEOUT = 60.0
+DEFAULT_CONTENT_TYPE = 'application/octet-stream'
+ALLOWED_IMAGE_CONTENT_TYPES = frozenset(
+    {'image/jpeg', 'image/png', 'image/webp'},
+)
 
 
 def get_receipt_inference_url() -> str:
@@ -34,6 +39,22 @@ def get_receipt_inference_url() -> str:
 def should_use_receipt_inference() -> bool:
     """Check whether the internal receipt inference service is configured."""
     return bool(get_receipt_inference_url())
+
+
+def resolve_upload_content_type(uploaded_file: UploadedFile) -> str:
+    """Return a supported image MIME type for a live or persisted upload."""
+    raw_content_type = str(
+        getattr(uploaded_file, 'content_type', '') or '',
+    ).strip()
+    if raw_content_type in ALLOWED_IMAGE_CONTENT_TYPES:
+        return raw_content_type
+
+    file_name = str(getattr(uploaded_file, 'name', '') or '')
+    guessed_content_type, _encoding = mimetypes.guess_type(file_name)
+    if guessed_content_type in ALLOWED_IMAGE_CONTENT_TYPES:
+        return guessed_content_type
+
+    return raw_content_type or DEFAULT_CONTENT_TYPE
 
 
 class ReceiptInferenceClient:
@@ -127,15 +148,12 @@ class ReceiptInferenceClient:
 
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
+        content_type = resolve_upload_content_type(uploaded_file)
         files = {
             'file': (
                 uploaded_file.name,
                 file_bytes,
-                getattr(
-                    uploaded_file,
-                    'content_type',
-                    'application/octet-stream',
-                ),
+                content_type,
             ),
         }
 
@@ -144,6 +162,7 @@ class ReceiptInferenceClient:
             base_url=self._base_url,
             file_name=uploaded_file.name,
             file_size=len(file_bytes),
+            content_type=content_type,
             timeout=self._timeout,
         )
 
