@@ -86,6 +86,7 @@ THIRD_PARTY_APPS = [
     'django_structlog',
     'tailwind',
     'theme',
+    'django_celery_beat',
 ]
 
 
