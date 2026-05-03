@@ -3,6 +3,9 @@
 {% load i18n %}
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+    {% for pending in pending_receipts %}
+        {% include 'receipts/_pending_card.html' with pending=pending %}
+    {% endfor %}
     {% for receipt in receipts %}
     <div class="group">
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-md hover:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden h-full transition-all duration-300 hover:-translate-y-1 {% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %}ring-2 ring-blue-300 dark:ring-blue-700{% endif %} animate-[fadeInUp_0.3s_ease-out]">

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from django.forms import ModelChoiceField
 from django.forms import Form
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -27,6 +27,7 @@ from django.views.generic import (
     DetailView,
     FormView,
     ListView,
+    View,
 )
 from django_stubs_ext import StrOrPromise
 
@@ -47,11 +48,17 @@ from hasta_la_vista_money.receipts.forms import (
     SellerForm,
     UploadImageForm,
 )
-from hasta_la_vista_money.receipts.models import PendingReceipt, Receipt, Seller
-from hasta_la_vista_money.receipts.services import (
-    analyze_image_with_ai,
-    paginator_custom_view,
+from hasta_la_vista_money.receipts.models import (
+    PendingReceipt,
+    PendingReceiptStatus,
+    Receipt,
+    Seller,
 )
+from hasta_la_vista_money.receipts.services import paginator_custom_view
+from hasta_la_vista_money.receipts.services.pending_receipt_service import (
+    compute_image_hash,
+)
+from hasta_la_vista_money.receipts.tasks import process_pending_receipt
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
@@ -206,6 +213,14 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         context['product_formset'] = product_formset
         context['receipt_info_by_month'] = pages_receipt_table
         context['user_groups'] = user.groups.all()
+        context['pending_receipts'] = (
+            PendingReceipt.objects.filter(
+                user=request.user,
+                expires_at__gt=timezone.now(),
+            )
+            .select_related('account')
+            .order_by('-created_at')
+        )
 
         return context
 
@@ -712,6 +727,14 @@ class UploadImageView(
     FormView[UploadImageForm],
     FormErrorHandlingMixin,
 ):
+    """Accept a receipt image and enqueue background processing.
+
+    The view does not block on inference: it computes the file hash, rejects
+    duplicates, persists a PendingReceipt + the image, dispatches the Celery
+    task and redirects the user back to the receipts list. The background
+    worker transitions the row to ``ready`` (or ``failed``) on its own.
+    """
+
     template_name = 'receipts/upload_image.html'
     form_class: type[UploadImageForm] = UploadImageForm
     success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))  # type: ignore[misc]
@@ -722,60 +745,56 @@ class UploadImageView(
         return kwargs
 
     def form_valid(self, form: UploadImageForm) -> HttpResponse:
+        request = cast('RequestWithContainer', self.request)
+        user = cast('User', request.user)
+        account = form.cleaned_data.get('account')
+        if account is None:
+            messages.error(request, constants.INVALID_FILE_FORMAT)
+            return super().form_invalid(form)
+
+        uploaded_file = self._get_uploaded_file()
+        image_hash = compute_image_hash(uploaded_file)
+
+        pending_receipt_service = (
+            request.container.receipts.pending_receipt_service()
+        )
+
+        duplicate = pending_receipt_service.find_duplicate(
+            user=user,
+            image_hash=image_hash,
+        )
+        if duplicate is not None:
+            return self._handle_duplicate(duplicate)
+
         try:
-            uploaded_file = self._get_uploaded_file()
-            request = cast('RequestWithContainer', self.request)
-            user = cast('User', request.user)
-            account = form.cleaned_data.get('account')
-            if account is None:
-                messages.error(request, constants.INVALID_FILE_FORMAT)
-                return super().form_invalid(form)
-
-            receipt_import_service = (
-                request.container.receipts.receipt_import_service()
-            )
-            pending_receipt_service = (
-                request.container.receipts.pending_receipt_service()
-            )
-
-            receipt_data = receipt_import_service.extract_receipt_data(
-                user=user,
-                uploaded_file=uploaded_file,
-                image_analysis_function=analyze_image_with_ai,
-            )
-
-            if receipt_data is None:
-                return self.handle_form_error_with_message(
-                    form,
-                    ValueError(constants.ERROR_PROCESSING_RECEIPT),
-                    constants.ERROR_PROCESSING_RECEIPT,
-                )
-
-            pending_receipt = pending_receipt_service.create_pending_receipt(
+            pending_receipt = pending_receipt_service.create_processing_job(
                 user=user,
                 account=account,
-                receipt_data=receipt_data,
+                image_file=uploaded_file,
+                image_hash=image_hash,
             )
-
-            messages.success(
-                request,
-                _('Чек успешно распознан! Проверьте данные перед сохранением.'),
-            )
-            return redirect('receipts:review', pk=pending_receipt.pk)
-        except ValueError as e:
-            logger.exception('Error processing receipt', error=e)
+        except Exception as exc:
+            logger.exception('Error queuing receipt for processing', error=exc)
             return self.handle_form_error_with_message(
                 form,
-                e,
-                constants.INVALID_FILE_FORMAT,
-            )
-        except Exception as e:
-            logger.exception('Error processing receipt', error=e)
-            return self.handle_form_error_with_message(
-                form,
-                e,
+                exc,
                 constants.ERROR_PROCESSING_RECEIPT,
             )
+
+        async_result = process_pending_receipt.delay(pending_receipt.pk)
+        pending_receipt_service.attach_task_id(
+            pending_receipt=pending_receipt,
+            task_id=async_result.id,
+        )
+
+        messages.success(
+            request,
+            _(
+                'Чек поставлен в обработку. '
+                'Когда распознавание завершится, он появится в списке.',
+            ),
+        )
+        return redirect('receipts:list')
 
     def _get_uploaded_file(self) -> Any:
         """Extract uploaded file from request."""
@@ -783,6 +802,113 @@ class UploadImageView(
         if isinstance(uploaded_file, list):
             uploaded_file = uploaded_file[0]
         return uploaded_file
+
+    def _handle_duplicate(self, duplicate: Any) -> HttpResponse:
+        """Show a duplicate-upload message and redirect to receipts list."""
+        if duplicate.kind == 'pending':
+            messages.warning(
+                self.request,
+                _(
+                    'Этот чек уже загружен и сейчас обрабатывается '
+                    'либо ожидает проверки.',
+                ),
+            )
+        else:
+            messages.warning(
+                self.request,
+                _('Этот чек уже сохранён ранее.'),
+            )
+        return redirect('receipts:list')
+
+
+class PendingReceiptRetryView(LoginRequiredMixin, View):
+    """Re-enqueue a failed pending receipt without re-uploading the file."""
+
+    http_method_names: ClassVar[list[str]] = ['post']
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        pending = get_object_or_404(
+            PendingReceipt,
+            pk=kwargs.get('pk'),
+            user=request.user,
+        )
+        if pending.status != PendingReceiptStatus.FAILED:
+            messages.error(
+                request,
+                _('Повторная обработка возможна только для упавших чеков.'),
+            )
+            return redirect('receipts:list')
+        if not pending.image_file:
+            messages.error(
+                request,
+                _('Файл чека больше не доступен. Загрузите чек заново.'),
+            )
+            return redirect('receipts:list')
+
+        container_request = cast('RequestWithContainer', request)
+        service = container_request.container.receipts.pending_receipt_service()
+        service.reset_for_retry(pending_receipt=pending)
+        async_result = process_pending_receipt.delay(pending.pk)
+        service.attach_task_id(
+            pending_receipt=pending,
+            task_id=async_result.id,
+        )
+        messages.success(
+            request,
+            _('Чек снова поставлен в обработку.'),
+        )
+        return redirect('receipts:list')
+
+
+class PendingReceiptDeleteView(LoginRequiredMixin, View):
+    """Delete a pending receipt entry along with its stored image."""
+
+    http_method_names: ClassVar[list[str]] = ['post']
+
+    def post(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        pending = get_object_or_404(
+            PendingReceipt,
+            pk=kwargs.get('pk'),
+            user=request.user,
+        )
+        container_request = cast('RequestWithContainer', request)
+        service = container_request.container.receipts.pending_receipt_service()
+        service.delete_with_file(pending_receipt=pending)
+        messages.success(request, _('Запись удалена.'))
+        return redirect('receipts:list')
+
+
+class PendingReceiptCounterView(LoginRequiredMixin, View):
+    """Return the count of receipts currently being processed.
+
+    Used by an HTMX poller next to the upload button so the user sees how
+    many uploads are still in flight without reloading the page.
+    """
+
+    http_method_names: ClassVar[list[str]] = ['get']
+    template_name = 'receipts/_pending_counter.html'
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        count = PendingReceipt.objects.filter(
+            user=request.user,
+            status=PendingReceiptStatus.PROCESSING,
+        ).count()
+        return render(request, self.template_name, {'count': count})
 
 
 class ReviewPendingReceiptView(
@@ -830,6 +956,15 @@ class ReviewPendingReceiptView(
             )
             pending_receipt.delete()
             return redirect('receipts:upload')
+        if pending_receipt.status != PendingReceiptStatus.READY:
+            messages.error(
+                request,
+                _(
+                    'Этот чек ещё не готов к проверке. '
+                    'Дождитесь окончания обработки.',
+                ),
+            )
+            return redirect('receipts:list')
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_class(self) -> type[Form]:

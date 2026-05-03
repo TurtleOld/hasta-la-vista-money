@@ -1,32 +1,11 @@
 (function () {
-    function formatSize(bytes) {
-        const numBytes = Number(bytes);
-        if (!Number.isFinite(numBytes) || numBytes <= 0) {
-            return '0 Б';
-        }
-
-        const k = 1024;
-        const units = Object.freeze(['Б', 'КБ', 'МБ', 'ГБ']);
-        const i = Math.min(Math.floor(Math.log(numBytes) / Math.log(k)), units.length - 1);
-        const value = Math.round((numBytes / (k ** i)) * 100) / 100;
-        const unitIndex = Math.max(0, Math.min(i, units.length - 1));
-        const safeIndex = (Number.isSafeInteger(unitIndex) && unitIndex >= 0 && unitIndex < units.length)
-            ? unitIndex
-            : 0;
-        const unitValue = units.at(safeIndex);
-        const unit = typeof unitValue === 'string' ? unitValue : 'Б';
-        return String(value) + ' ' + unit;
-    }
-
     function fileLooksLikeImage(file) {
         if (!file) {
             return false;
         }
-
         if (file.type === 'image/jpeg' || file.type === 'image/png') {
             return true;
         }
-
         const name = (file.name || '').toLowerCase();
         return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
     }
@@ -34,32 +13,16 @@
     function initReceiptImageUpload() {
         const uploadZone = document.getElementById('upload-zone');
         const fileInput = document.getElementById('file-input');
-        const preview = document.getElementById('preview');
-        const previewImage = document.getElementById('preview-image');
-        const previewFilename = document.getElementById('preview-filename');
-        const previewFilesize = document.getElementById('preview-filesize');
-        const removePreview = document.getElementById('remove-preview');
         const submitBtn = document.getElementById('submitBtn');
         const form = document.getElementById('uploadForm');
-        const loadingIcon = document.getElementById('loadingIcon');
-        const buttonText = document.getElementById('buttonText');
         const errorBox = document.getElementById('upload-error');
+        const fileNameLabel = document.getElementById('selected-file-name');
 
         if (!uploadZone || !fileInput || !submitBtn || !form) {
             return;
         }
 
-        if (loadingIcon) {
-            loadingIcon.style.display = 'none';
-            loadingIcon.classList.add('hidden');
-        }
-        if (buttonText) {
-            buttonText.style.display = 'inline-flex';
-            buttonText.classList.remove('hidden');
-        }
-
         const maxSize = 5 * 1024 * 1024;
-        let objectUrl = null;
 
         const dragActiveClasses = [
             'border-blue-400',
@@ -102,164 +65,86 @@
             }
         }
 
-        function setLoading(isLoading) {
-            if (!loadingIcon || !buttonText) {
-                return;
-            }
-            if (isLoading) {
-                buttonText.style.display = 'none';
-                loadingIcon.style.display = 'inline-flex';
-                loadingIcon.classList.remove('hidden');
-            } else {
-                buttonText.style.display = 'inline-flex';
-                loadingIcon.style.display = 'none';
-                loadingIcon.classList.add('hidden');
-            }
-        }
-
-        function revokeObjectUrl() {
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-                objectUrl = null;
-            }
-        }
-
-        function setPreview(file) {
-            if (!preview || !previewImage) {
-                return;
-            }
-
-            revokeObjectUrl();
-            const safeMime = (file.type && file.type.startsWith('image/')) ? file.type : 'image/jpeg';
-            const safeBlob = new Blob([file], { type: safeMime });
-            objectUrl = URL.createObjectURL(safeBlob);
-            previewImage.src = objectUrl;
-            preview.classList.remove('hidden');
-
-            if (previewFilename) {
-                previewFilename.textContent = file.name || '';
-            }
-            if (previewFilesize) {
-                previewFilesize.textContent = formatSize(file.size);
-            }
-        }
-
-        function resetPreview() {
-            revokeObjectUrl();
-
-            if (preview) {
-                preview.classList.add('hidden');
-            }
-            if (previewImage) {
-                previewImage.removeAttribute('src');
-            }
-            if (previewFilename) {
-                previewFilename.textContent = '';
-            }
-            if (previewFilesize) {
-                previewFilesize.textContent = '';
-            }
-
-            fileInput.value = '';
-            submitBtn.disabled = true;
-            setLoading(false);
-            clearError();
-        }
-
-        function setFile(file) {
-            clearError();
-
-            if (!fileLooksLikeImage(file)) {
-                resetPreview();
-                setError('Разрешены только файлы форматов: JPG, JPEG или PNG');
-                return;
-            }
-
-            if (file.size > maxSize) {
-                resetPreview();
-                setError('Размер файла не должен превышать 5 МБ');
-                return;
-            }
-
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            fileInput.files = dt.files;
-
-            setPreview(file);
-            submitBtn.disabled = false;
-            setZoneClasses(null);
-        }
-
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            setZoneClasses('drag');
-        });
-
-        uploadZone.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            setZoneClasses(null);
-        });
-
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            setZoneClasses(null);
-            const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
-            if (files.length > 0) {
-                setFile(files[0]);
-            }
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            const files = e.target && e.target.files ? Array.from(e.target.files) : [];
-            if (files.length > 0) {
-                setFile(files[0]);
-            } else {
-                resetPreview();
-            }
-        });
-
-        document.addEventListener('paste', (e) => {
-            const items = e.clipboardData && e.clipboardData.items ? Array.from(e.clipboardData.items) : [];
-            for (const item of items) {
-                if (item && item.type && item.type.indexOf('image') !== -1) {
-                    const file = item.getAsFile();
-                    if (file) {
-                        setFile(file);
-                    }
-                    break;
+        function applyFile(file) {
+            if (!file) {
+                submitBtn.disabled = true;
+                if (fileNameLabel) {
+                    fileNameLabel.textContent = '';
                 }
-            }
-        });
-
-        if (removePreview) {
-            removePreview.addEventListener('click', () => {
-                resetPreview();
-            });
-        }
-
-        form.addEventListener('submit', (e) => {
-            if (!fileInput.files || fileInput.files.length === 0) {
-                e.preventDefault();
-                setError('Пожалуйста, выберите изображение для загрузки');
-                setLoading(false);
                 return;
             }
-            submitBtn.disabled = true;
-            setLoading(true);
+            if (!fileLooksLikeImage(file)) {
+                setError('Поддерживаются только JPG, JPEG или PNG.');
+                submitBtn.disabled = true;
+                fileInput.value = '';
+                return;
+            }
+            if (file.size > maxSize) {
+                setError('Размер файла не должен превышать 5 МБ.');
+                submitBtn.disabled = true;
+                fileInput.value = '';
+                return;
+            }
+            clearError();
+            submitBtn.disabled = false;
+            if (fileNameLabel) {
+                fileNameLabel.textContent = file.name;
+            }
+        }
+
+        fileInput.addEventListener('change', function (event) {
+            const target = event.target;
+            applyFile(target && target.files ? target.files[0] : null);
         });
 
-        setLoading(false);
+        ['dragenter', 'dragover'].forEach(function (eventName) {
+            uploadZone.addEventListener(eventName, function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                setZoneClasses('drag');
+            });
+        });
 
-        window.addEventListener('load', () => {
-            setLoading(false);
+        ['dragleave', 'drop'].forEach(function (eventName) {
+            uploadZone.addEventListener(eventName, function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (eventName === 'dragleave') {
+                    setZoneClasses(null);
+                }
+            });
+        });
+
+        uploadZone.addEventListener('drop', function (event) {
+            const dt = event.dataTransfer;
+            if (!dt || !dt.files || !dt.files.length) {
+                return;
+            }
+            const file = dt.files[0];
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            fileInput.files = transfer.files;
+            applyFile(file);
+        });
+
+        document.addEventListener('paste', function (event) {
+            if (!event.clipboardData || !event.clipboardData.files || !event.clipboardData.files.length) {
+                return;
+            }
+            const file = event.clipboardData.files[0];
+            if (!fileLooksLikeImage(file)) {
+                return;
+            }
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            fileInput.files = transfer.files;
+            applyFile(file);
         });
     }
 
-    if (typeof document !== 'undefined') {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initReceiptImageUpload);
-        } else {
-            initReceiptImageUpload();
-        }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initReceiptImageUpload);
+    } else {
+        initReceiptImageUpload();
     }
 })();

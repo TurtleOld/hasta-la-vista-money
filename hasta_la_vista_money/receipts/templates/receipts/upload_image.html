@@ -12,7 +12,7 @@
             {% translate 'Загрузка чека' %}
         </h1>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            {% translate 'Загрузите фото чека, выберите счёт и отправьте на распознавание.' %}
+            {% translate 'Загрузите фото чека и выберите счёт. Распознавание занимает до двух минут и идёт в фоне — можно сразу закрыть страницу.' %}
         </p>
         <label for="instruction-modal-toggle" class="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer transition-colors" onclick="if(document.getElementById('mobileMenuState')) document.getElementById('mobileMenuState').checked = false;">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
@@ -37,9 +37,7 @@
                             <p class="text-sm text-gray-600 dark:text-gray-300">
                                 {% translate 'JPG, JPEG или PNG, до 5 МБ' %}
                             </p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">
-                                {% translate 'Также можно вставить изображение из буфера обмена (Ctrl+V)' %}
-                            </p>
+                            <p id="selected-file-name" class="text-xs text-gray-500 dark:text-gray-400"></p>
                         </div>
                     </div>
                 </label>
@@ -47,29 +45,6 @@
                 <input type="file" name="file" id="file-input" class="hidden" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
 
                 <div id="upload-error" class="hidden rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-800 dark:text-red-200"></div>
-
-                <div id="preview" class="hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                    <div class="flex items-start gap-4">
-                        <div class="h-24 w-24 flex-none overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
-                            <img id="preview-image" class="h-full w-full object-contain" loading="eager" alt="{% translate 'Предварительный просмотр чека' %}">
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <p id="preview-filename" class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"></p>
-                                    <p id="preview-filesize" class="mt-1 text-xs text-gray-500 dark:text-gray-400"></p>
-                                </div>
-                                <button type="button" id="remove-preview" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    <i class="bi bi-trash"></i>
-                                    {% translate 'Удалить' %}
-                                </button>
-                            </div>
-                            <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                                {% translate 'Проверьте, что чек снят без бликов и обрезанных краёв — так распознавание будет точнее.' %}
-                            </p>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div class="space-y-1">
@@ -83,18 +58,14 @@
 
             <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <button type="submit" id="submitBtn" disabled class="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60">
-                    <span id="buttonText" class="inline-flex items-center gap-2">
-                        <i class="bi bi-check2-circle"></i>
-                        <span>{% translate 'Загрузить' %}</span>
-                    </span>
-                    <span id="loadingIcon" class="hidden inline-flex items-center gap-2 text-sm font-medium">
-                        <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
-                        {% translate 'Загрузка...' %}
+                    <span class="inline-flex items-center gap-2">
+                        <i class="bi bi-cloud-upload"></i>
+                        <span>{% translate 'Поставить в обработку' %}</span>
                     </span>
                 </button>
 
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                    {% translate 'После загрузки вы сможете проверить позиции и суммы перед сохранением.' %}
+                    {% translate 'Когда чек будет распознан, он появится в списке. Если что-то пошло не так — рядом будет показана причина.' %}
                 </p>
             </div>
         </form>
