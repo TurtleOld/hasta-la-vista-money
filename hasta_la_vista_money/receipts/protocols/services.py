@@ -153,6 +153,7 @@ class PendingReceiptServiceProtocol(Protocol):
         *,
         pending_receipt: PendingReceipt,
         receipt_data: dict[str, Any],
+        account: Account | None = None,
     ) -> PendingReceipt: ...
 
     def convert_to_receipt(
