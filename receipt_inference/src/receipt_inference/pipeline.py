@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from html import unescape
 from importlib import import_module
 from io import BytesIO
+from tempfile import NamedTemporaryFile
 from time import perf_counter, sleep
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +31,9 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 MIN_OCR_ENTRY_PARTS = 2
+KEY_VALUE_PAIR_CELLS = 2
+FOUR_COLUMN_ROW_CELLS = 4
+MIN_SELLER_LINE_LENGTH = 3
 LLM_CONNECT_RETRY_COUNT = 3
 LLM_CONNECT_RETRY_DELAY_SECONDS = 2.0
 JSON_BLOCK_PATTERN = re.compile(
@@ -47,6 +52,26 @@ WILDBERRIES_MARKERS = (
     'вайлдберрис',
     'ооо "рвб"',
     'ооо рвб',
+)
+LEGAL_ENTITY_PREFIXES = (
+    'общество с ограниченной ответственностью',
+    'акционерное общество',
+    'публичное акционерное общество',
+    'непубличное акционерное общество',
+    'индивидуальный предприниматель',
+    'ооо',
+    'ао',
+    'пао',
+    'нао',
+    'ип',
+)
+GENERIC_RECEIPT_LINES = (
+    'кассовый',
+    'кассовый чек',
+    'чек',
+    'приход',
+    'расход',
+    'возврат',
 )
 
 
@@ -75,6 +100,14 @@ class InferenceResult:
     data: dict[str, Any]
     ocr_ms: float
     llm_ms: float
+
+
+@dataclass(frozen=True)
+class PaddleOCRVLResult:
+    """Raw PaddleOCR-VL output and extracted text for diagnostics."""
+
+    raw_output: str
+    extracted_text: str
 
 
 class ImagePreprocessor:
@@ -508,6 +541,882 @@ class LlamaServerBackend:
         raise RuntimeError('Failed to call llama-server chat completions.')
 
 
+class PaddleOCRVLBackend:
+    """Receipt extraction backend powered by PaddleOCR-VL."""
+
+    def __init__(self, settings: ReceiptInferenceSettings) -> None:
+        self._settings = settings
+        self._pipeline: Any | None = None
+
+    def is_available(self) -> bool:
+        """Return whether PaddleOCR-VL dependencies are importable."""
+        try:
+            paddleocr_module = import_module('paddleocr')
+        except ImportError:
+            return False
+        return hasattr(paddleocr_module, 'PaddleOCRVL')
+
+    def warmup(self) -> None:
+        """Load PaddleOCR-VL before the first real receipt request."""
+        self._get_pipeline()
+
+    def extract(self, prepared_image: PreparedImage) -> PaddleOCRVLResult:
+        """Run PaddleOCR-VL and return a receipt-shaped JSON payload."""
+        pipeline = self._get_pipeline()
+        logger.info(
+            'receipt_inference_paddleocr_vl_started',
+            image_width=prepared_image.width,
+            image_height=prepared_image.height,
+            media_type=prepared_image.media_type,
+            image_size=len(prepared_image.image_bytes),
+            model_name=self._settings.paddleocr_vl_model_name,
+        )
+
+        try:
+            with NamedTemporaryFile(suffix='.jpg') as image_file:
+                image_file.write(prepared_image.image_bytes)
+                image_file.flush()
+                result = pipeline.predict(
+                    image_file.name,
+                    use_layout_detection=True,
+                    use_ocr_for_image_block=True,
+                    format_block_content=True,
+                    max_new_tokens=1024,
+                )
+        except Exception as exc:
+            logger.warning(
+                'receipt_inference_paddleocr_vl_failed',
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise ReceiptInferenceError(
+                error_code='paddleocr_vl_failed',
+                message='PaddleOCR-VL failed to process the receipt image.',
+                status_code=502,
+            ) from exc
+
+        raw_json = self._build_structured_payload(result)
+        extracted_text = self._extract_text(result).strip()
+        raw_output = raw_json or self._build_fallback_payload(extracted_text)
+        logger.info(
+            'receipt_inference_paddleocr_vl_completed',
+            text_length=len(extracted_text),
+            text_preview=extracted_text[:2000],
+            used_structured_payload=bool(raw_json),
+        )
+        return PaddleOCRVLResult(
+            raw_output=raw_output,
+            extracted_text=extracted_text,
+        )
+
+    def _get_pipeline(self) -> Any:
+        """Create PaddleOCR-VL lazily and reuse it across requests."""
+        if self._pipeline is not None:
+            return self._pipeline
+
+        try:
+            paddleocr_module = import_module('paddleocr')
+            paddleocr_vl_cls = paddleocr_module.PaddleOCRVL
+        except (ImportError, AttributeError) as exc:
+            raise ReceiptInferenceError(
+                error_code='paddleocr_vl_unavailable',
+                message='PaddleOCR-VL dependencies are not installed.',
+                status_code=503,
+            ) from exc
+
+        try:
+            kwargs: dict[str, Any] = {'device': 'cpu'}
+            if self._settings.paddleocr_vl_model_name:
+                kwargs['vl_rec_model_name'] = (
+                    self._settings.paddleocr_vl_model_name
+                )
+            self._pipeline = paddleocr_vl_cls(**kwargs)
+        except Exception as exc:
+            raise ReceiptInferenceError(
+                error_code='paddleocr_vl_unavailable',
+                message='Failed to initialize PaddleOCR-VL backend.',
+                status_code=503,
+            ) from exc
+        return self._pipeline
+
+    def _build_structured_payload(self, value: Any) -> str | None:
+        """Build a receipt payload from JSON, tables, or OCR text."""
+        for text in self._iter_text_values(value):
+            stripped = text.strip()
+            if not stripped:
+                continue
+            json_match = JSON_BLOCK_PATTERN.search(stripped)
+            candidate = json_match.group(1) if json_match else stripped
+            if not candidate.startswith('{'):
+                continue
+            try:
+                payload = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict) and 'items' in payload:
+                return json.dumps(payload, ensure_ascii=False)
+
+        result_data = self._extract_result_data(value)
+        parsing_blocks = result_data.get('parsing_res_list')
+        if isinstance(parsing_blocks, list):
+            payload = self._build_payload_from_blocks(parsing_blocks)
+            if payload is not None:
+                return json.dumps(payload, ensure_ascii=False)
+        return None
+
+    def _extract_result_data(self, value: Any) -> dict[str, Any]:
+        """Return the JSON payload from the first PaddleOCR-VL result."""
+        if isinstance(value, list | tuple):
+            if not value:
+                return {}
+            return self._extract_result_data(value[0])
+
+        json_payload = getattr(value, 'json', None)
+        if isinstance(json_payload, dict):
+            result_data = json_payload.get('res')
+            return (
+                result_data if isinstance(result_data, dict) else json_payload
+            )
+
+        if isinstance(value, dict):
+            result_data = value.get('res')
+            return result_data if isinstance(result_data, dict) else value
+        return {}
+
+    def _build_payload_from_blocks(
+        self,
+        blocks: list[Any],
+    ) -> dict[str, Any] | None:
+        """Convert PaddleOCR-VL layout blocks into receipt JSON."""
+        title_text, combined_text, metadata, payload = (
+            self._collect_payload_parts(blocks)
+        )
+        self._apply_common_payload_fields(
+            payload,
+            title_text=title_text,
+            combined_text=combined_text,
+            metadata=metadata,
+        )
+        if not payload['items']:
+            payload['items'] = self._extract_items_from_text(combined_text)
+        if not payload['items']:
+            return None
+        return payload
+
+    def _collect_payload_parts(
+        self,
+        blocks: list[Any],
+    ) -> tuple[str, str, dict[str, str], dict[str, Any]]:
+        """Collect title, text, metadata, and partial payload from blocks."""
+        title_text = ''
+        combined_text_parts: list[str] = []
+        payload: dict[str, Any] = {
+            'name_seller': '',
+            'retail_place_address': None,
+            'retail_place': None,
+            'total_sum': '0.00',
+            'operation_type': 1,
+            'receipt_date': self._extract_receipt_date(''),
+            'number_receipt': None,
+            'nds10': '0',
+            'nds20': '0',
+            'items': [],
+        }
+        metadata: dict[str, str] = {}
+
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            label = str(block.get('block_label', '')).strip().lower()
+            content = self._clean_block_content(block.get('block_content'))
+            if content:
+                combined_text_parts.append(content)
+            if label == 'doc_title' and not title_text:
+                title_text = content
+            if label == 'table':
+                table_data = self._parse_receipt_table(
+                    str(block.get('block_content', '')),
+                )
+                if table_data['items']:
+                    payload['items'] = table_data['items']
+                metadata.update(table_data['metadata'])
+                if table_data['total_sum'] != '0.00':
+                    payload['total_sum'] = table_data['total_sum']
+
+        combined_text = '\n'.join(part for part in combined_text_parts if part)
+        text_metadata = self._extract_metadata_from_text(combined_text)
+        metadata = text_metadata | metadata
+        return title_text, combined_text, metadata, payload
+
+    def _apply_common_payload_fields(
+        self,
+        payload: dict[str, Any],
+        *,
+        title_text: str,
+        combined_text: str,
+        metadata: dict[str, str],
+    ) -> None:
+        """Fill common receipt fields from text and metadata."""
+        payload['operation_type'] = self._extract_operation_type(
+            f'{title_text}\n{combined_text}',
+        )
+        payload['name_seller'] = self._extract_legal_entity_name(combined_text)
+        if not payload['name_seller']:
+            payload['name_seller'] = self._extract_seller_name_from_title(
+                title_text,
+            )
+        if not payload['name_seller']:
+            payload['name_seller'] = self._extract_seller_name(combined_text)
+
+        payload['retail_place'] = self._get_metadata_value(
+            metadata,
+            ('Место расчетов', 'Торговая точка', 'Место продажи'),
+        )
+        if not payload['retail_place']:
+            payload['retail_place'] = self._extract_url_like_value(
+                combined_text,
+            )
+        payload['retail_place_address'] = self._get_metadata_value(
+            metadata,
+            (
+                'Адрес расчетов',
+                'Адрес торговой точки',
+                'Адрес',
+                'Адрес места расчетов',
+            ),
+        )
+        payload['receipt_date'] = self._extract_receipt_date(
+            self._get_metadata_value(metadata, ('Дата/Время', 'Дата время'))
+            or combined_text,
+        )
+        payload['number_receipt'] = self._extract_receipt_number(
+            metadata,
+            combined_text,
+        )
+        payload['nds10'] = self._extract_tax_amount(
+            self._get_tax_source(metadata, combined_text),
+            ('10',),
+        )
+        payload['nds20'] = self._extract_tax_amount(
+            self._get_tax_source(metadata, combined_text),
+            ('20', '22', '122'),
+        )
+        if payload['total_sum'] == '0.00':
+            payload['total_sum'] = self._extract_total_sum(combined_text)
+
+    def _parse_receipt_table(self, table_html: str) -> dict[str, Any]:
+        """Extract line items and metadata from PaddleOCR-VL table HTML."""
+        rows = self._extract_html_rows(table_html)
+        items: list[dict[str, str]] = []
+        metadata: dict[str, str] = {}
+        total_sum = '0.00'
+        pending_name: str | None = None
+        for row in rows:
+            non_empty = [cell for cell in row if cell]
+            if not non_empty:
+                continue
+            if self._is_table_header_row(non_empty):
+                continue
+            if len(non_empty) == 1 and not self._is_metadata_label(
+                non_empty[0],
+            ):
+                pending_name = non_empty[0]
+                continue
+            if self._looks_like_item_row(row, pending_name):
+                item = self._build_item_from_row(row, pending_name)
+                if item is not None:
+                    items.append(item)
+                    pending_name = None
+                continue
+            if self._is_total_row(non_empty):
+                if self._looks_like_amount(non_empty[-1]):
+                    total_sum = self._normalize_amount_text(non_empty[-1])
+                continue
+            metadata.update(self._extract_metadata_from_row(row))
+            pending_name = None
+        return {
+            'items': items,
+            'metadata': metadata,
+            'total_sum': total_sum,
+        }
+
+    def _extract_html_rows(self, table_html: str) -> list[list[str]]:
+        """Parse simple HTML table rows produced by PaddleOCR-VL."""
+        rows: list[list[str]] = []
+        for row_html in re.findall(
+            r'<tr[^>]*>(.*?)</tr>',
+            table_html,
+            re.DOTALL,
+        ):
+            cells = [
+                self._clean_block_content(self._strip_tags(cell_html))
+                for cell_html in re.findall(
+                    r'<t[dh][^>]*>(.*?)</t[dh]>',
+                    row_html,
+                    re.DOTALL,
+                )
+            ]
+            rows.append(cells)
+        return rows
+
+    def _strip_tags(self, value: str) -> str:
+        """Remove HTML tags and decode entities."""
+        return unescape(re.sub(r'<[^>]+>', ' ', value))
+
+    def _clean_block_content(self, value: Any) -> str:
+        """Normalize OCR/VL block content into plain text."""
+        text = str(value or '')
+        text = self._strip_tags(text)
+        text = re.sub(r'^[#*\s]+', '', text)
+        return re.sub(r'\s+', ' ', text).strip()
+
+    def _is_table_header_row(self, cells: list[str]) -> bool:
+        """Return whether the row is the items header row."""
+        header = ' '.join(cell.lower() for cell in cells)
+        return (
+            'предмет расчета' in header
+            and 'цена' in header
+            and 'кол-во' in header
+        )
+
+    def _looks_like_item_row(
+        self,
+        cells: list[str],
+        pending_name: str | None,
+    ) -> bool:
+        """Return whether a table row looks like an item row."""
+        return self._build_item_from_row(cells, pending_name) is not None
+
+    def _build_item_from_row(
+        self,
+        cells: list[str],
+        pending_name: str | None,
+    ) -> dict[str, str] | None:
+        """Build a normalized item payload from a parsed row."""
+        amount = self._extract_row_amount(cells)
+        price, quantity = self._extract_row_price_quantity(cells)
+        name = self._extract_row_item_name(cells, pending_name)
+        if not name or amount is None or price is None or quantity is None:
+            return None
+        return {
+            'product_name': re.sub(r'^\d+[.)]?\s*', '', name).strip(),
+            'category': 'Другое',
+            'price': price,
+            'quantity': quantity,
+            'amount': amount,
+        }
+
+    def _extract_row_item_name(
+        self,
+        cells: list[str],
+        pending_name: str | None,
+    ) -> str | None:
+        """Extract an item name from a table row."""
+        if pending_name:
+            return pending_name
+        for cell in cells:
+            normalized = cell.strip()
+            if not normalized or self._is_metadata_label(normalized):
+                continue
+            if self._looks_like_amount(normalized):
+                continue
+            if self._looks_like_quantity(normalized):
+                continue
+            if self._extract_price_quantity_pair(normalized) is not None:
+                continue
+            return normalized
+        return None
+
+    def _extract_row_amount(self, cells: list[str]) -> str | None:
+        """Extract the total amount column from a row."""
+        for cell in reversed(cells):
+            if self._looks_like_amount(cell):
+                return self._normalize_amount_text(cell)
+        return None
+
+    def _extract_row_price_quantity(
+        self,
+        cells: list[str],
+    ) -> tuple[str | None, str | None]:
+        """Extract price and quantity from standard or compact row cells."""
+        if (
+            len(cells) >= FOUR_COLUMN_ROW_CELLS
+            and self._looks_like_amount(cells[1])
+            and self._looks_like_quantity(cells[2])
+            and self._looks_like_amount(cells[3])
+        ):
+            return (
+                self._normalize_amount_text(cells[1]),
+                self._normalize_quantity_text(cells[2]),
+            )
+
+        for cell in cells:
+            pair = self._extract_price_quantity_pair(cell)
+            if pair is not None:
+                return pair
+
+        amount_cells = [cell for cell in cells if self._looks_like_amount(cell)]
+        quantity_cells = [
+            cell for cell in cells if self._looks_like_quantity(cell)
+        ]
+        if len(amount_cells) >= KEY_VALUE_PAIR_CELLS and quantity_cells:
+            return (
+                self._normalize_amount_text(amount_cells[0]),
+                self._normalize_quantity_text(quantity_cells[0]),
+            )
+        return (None, None)
+
+    def _extract_price_quantity_pair(
+        self,
+        value: str,
+    ) -> tuple[str, str] | None:
+        """Parse compact item notation like `59.99*1`."""
+        match = re.fullmatch(
+            r'(\d+[\d\s]*[,.]\d{2})\s*[*xх]\s*(\d+(?:[,.]\d+)?)',
+            value.strip(),
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return None
+        return (
+            self._normalize_amount_text(match.group(1)),
+            self._normalize_quantity_text(match.group(2)),
+        )
+
+    def _is_total_row(self, cells: list[str]) -> bool:
+        """Return whether the row contains the overall receipt total."""
+        label = cells[0].lower()
+        return label.startswith('итог') or 'к оплате' in label
+
+    def _extract_metadata_from_row(self, cells: list[str]) -> dict[str, str]:
+        """Convert a non-item table row into key-value metadata."""
+        non_empty = [cell for cell in cells if cell]
+        if len(non_empty) == KEY_VALUE_PAIR_CELLS:
+            return {self._normalize_metadata_key(non_empty[0]): non_empty[1]}
+        if len(non_empty) == FOUR_COLUMN_ROW_CELLS:
+            return {
+                self._normalize_metadata_key(non_empty[0]): non_empty[1],
+                self._normalize_metadata_key(non_empty[2]): non_empty[3],
+            }
+        return {}
+
+    def _normalize_metadata_key(self, value: str) -> str:
+        """Normalize metadata keys for later lookup."""
+        return value.strip().rstrip(':')
+
+    def _extract_metadata_from_text(self, text: str) -> dict[str, str]:
+        """Extract simple key-value receipt metadata from plain OCR text."""
+        metadata: dict[str, str] = {}
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            if ':' in line:
+                key, _, value = line.partition(':')
+                key = self._normalize_metadata_key(key)
+                value = value.strip()
+                if not value and index + 1 < len(lines):
+                    next_line = lines[index + 1].strip()
+                    if next_line and not self._looks_like_metadata_only_key(
+                        next_line,
+                    ):
+                        value = next_line
+                        index += 1
+                if key and value:
+                    metadata[key] = value
+            elif self._looks_like_metadata_only_key(line) and index + 1 < len(
+                lines,
+            ):
+                metadata[self._normalize_metadata_key(line)] = lines[
+                    index + 1
+                ].strip()
+                index += 1
+            index += 1
+        return metadata
+
+    def _looks_like_metadata_only_key(self, value: str) -> bool:
+        """Return whether a line looks like a standalone metadata key."""
+        normalized = value.casefold().strip(' :.-')
+        keys = (
+            'дата/время',
+            'дата время',
+            'чек №',
+            'фд №',
+            'версия ффд',
+            'фн',
+            'рн ккт',
+            'фп',
+            'кассир',
+            'место расчетов',
+            'адрес расчетов',
+            'инн',
+            'торговая точка',
+            'адрес места расчетов',
+        )
+        return normalized in keys
+
+    def _is_metadata_label(self, value: str) -> bool:
+        """Return whether a row label looks like metadata, not an item."""
+        normalized = value.lower().strip()
+        return normalized.startswith(
+            (
+                'итог',
+                'подытог',
+                'наличные',
+                'безналичные',
+                'предоплата',
+                'скидка',
+                'округление',
+                'принято',
+                'сдача',
+                'инн',
+                '№',
+                'чек №',
+                'дата/время',
+                'версия ффд',
+                'фн',
+                'фп',
+                'рн ккт',
+                'кассир',
+                'место расчетов',
+                'адрес расчетов',
+                'ндс',
+                'нас ',
+                'сумма нас',
+            ),
+        )
+
+    def _looks_like_amount(self, value: str) -> bool:
+        """Return whether text looks like a money amount."""
+        return bool(re.fullmatch(r'\d+[\d\s]*[,.]\d{2}', value.strip()))
+
+    def _looks_like_quantity(self, value: str) -> bool:
+        """Return whether text looks like a quantity."""
+        return bool(re.fullmatch(r'\d+(?:[,.]\d+)?', value.strip()))
+
+    def _normalize_amount_text(self, value: str) -> str:
+        """Normalize a money amount into decimal-string format."""
+        return value.replace(' ', '').replace(',', '.')
+
+    def _normalize_quantity_text(self, value: str) -> str:
+        """Normalize quantity while preserving integral values."""
+        normalized = value.replace(' ', '').replace(',', '.')
+        return normalized.removesuffix('.0')
+
+    def _extract_operation_type(self, text: str) -> int:
+        """Map receipt text to purchase or refund operation type."""
+        lowered = text.lower()
+        if 'возврат' in lowered or 'расход' in lowered:
+            return 2
+        return 1
+
+    def _extract_seller_name_from_title(self, text: str) -> str:
+        """Extract seller name from the document title block."""
+        if not text:
+            return ''
+        cleaned = re.sub(
+            r'\b(кассовый чек|приход|расход|возврат|чек)\b',
+            ' ',
+            text,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip(' -')
+        if self._is_generic_receipt_line(cleaned):
+            return ''
+        return cleaned[:255]
+
+    def _extract_legal_entity_name(self, text: str) -> str:
+        """Extract seller legal entity from OCR text when available."""
+        flattened = re.sub(r'\s+', ' ', text).strip()
+        patterns = (
+            r'(?:общество с ограниченной ответственностью|'
+            r'акционерное общество|'
+            r'публичное акционерное общество|'
+            r'непубличное акционерное общество)\s+"[^"]+"',
+            r'(?:ООО|АО|ПАО|НАО)\s+"[^"]+"',
+            r'ИП\s+[А-ЯA-ZЁ][^\n,]{3,120}',
+        )
+        for pattern in patterns:
+            match = re.search(pattern, flattened, flags=re.IGNORECASE)
+            if match:
+                return self._normalize_legal_entity_name(match.group(0))
+
+        for line in text.splitlines():
+            normalized = self._clean_block_content(line)
+            if not normalized:
+                continue
+            lowered = normalized.casefold()
+            if any(
+                lowered.startswith(prefix) for prefix in LEGAL_ENTITY_PREFIXES
+            ):
+                return self._normalize_legal_entity_name(normalized)
+        return ''
+
+    def _normalize_legal_entity_name(self, value: str) -> str:
+        """Normalize common legal entity names to readable casing."""
+        normalized = re.sub(r'\s+', ' ', value).strip(' ,.-')
+        replacements = {
+            'общество с ограниченной ответственностью': (
+                'Общество с ограниченной ответственностью'
+            ),
+            'акционерное общество': 'Акционерное общество',
+            'публичное акционерное общество': 'Публичное акционерное общество',
+            'непубличное акционерное общество': (
+                'Непубличное акционерное общество'
+            ),
+            'ооо': 'ООО',
+            'ао': 'АО',
+            'пао': 'ПАО',
+            'нао': 'НАО',
+            'ип': 'ИП',
+        }
+        for source, target in replacements.items():
+            normalized = re.sub(
+                rf'^{source}\b',
+                target,
+                normalized,
+                flags=re.IGNORECASE,
+            )
+        return normalized[:255]
+
+    def _is_generic_receipt_line(self, value: str) -> bool:
+        """Return whether a line is a generic non-seller receipt heading."""
+        lowered = value.casefold().strip(' :.-')
+        return lowered in GENERIC_RECEIPT_LINES
+
+    def _get_metadata_value(
+        self,
+        metadata: dict[str, str],
+        keys: tuple[str, ...],
+    ) -> str | None:
+        """Return the first matching metadata value by key."""
+        for key in keys:
+            for meta_key, meta_value in metadata.items():
+                if meta_key.lower() == key.lower():
+                    return meta_value.strip()
+        return None
+
+    def _extract_receipt_number(
+        self,
+        metadata: dict[str, str],
+        text: str,
+    ) -> int | None:
+        """Extract the receipt number from metadata or OCR text."""
+        value = self._get_metadata_value(
+            metadata,
+            ('Чек №', 'Чек N', 'Чек № '),
+        )
+        if value and value.strip().isdigit():
+            return int(value.strip())
+        source = value or text
+        match = re.search(
+            r'чек\s*[№n]?\s*[:.]?\s*(\d+)',
+            source,
+            re.IGNORECASE,
+        )
+        return int(match.group(1)) if match else None
+
+    def _extract_url_like_value(self, text: str) -> str | None:
+        """Extract a URL or host-like value from OCR text."""
+        match = re.search(
+            r'(https?://[^\s]+|(?:www\.)?[a-z0-9-]+\.[a-z]{2,}(?:/[^\s]*)?)',
+            text,
+            flags=re.IGNORECASE,
+        )
+        return match.group(1) if match else None
+
+    def _get_tax_source(self, metadata: dict[str, str], text: str) -> str:
+        """Join metadata and OCR text for tax extraction."""
+        parts = [text]
+        parts.extend(f'{key} {value}' for key, value in metadata.items())
+        return '\n'.join(parts)
+
+    def _extract_tax_amount(self, text: str, rates: tuple[str, ...]) -> str:
+        """Extract VAT amount for the provided tax rates."""
+        flattened = re.sub(r'\s+', ' ', text).strip()
+        for rate in rates:
+            patterns = (
+                rf'ндс[^\n]*{rate}%?[^\d]{{0,40}}(\d+[\d\s]*[,.]\d{{2}})',
+                rf'{rate}%?[^\d]{{0,20}}ндс[^\d]{{0,40}}(\d+[\d\s]*[,.]\d{{2}})',
+                rf'ставк\w*\s*{rate}%?[^\d]{{0,40}}(\d+[\d\s]*[,.]\d{{2}})',
+            )
+            for pattern in patterns:
+                match = re.search(pattern, text, flags=re.IGNORECASE)
+                if match:
+                    return self._normalize_amount_text(match.group(1))
+                match = re.search(pattern, flattened, flags=re.IGNORECASE)
+                if match:
+                    return self._normalize_amount_text(match.group(1))
+        if 'ндс не облагается' in flattened.casefold():
+            return '0'
+        return '0'
+
+    def _extract_items_from_text(self, text: str) -> list[dict[str, str]]:
+        """Fallback item parser for plain OCR text receipts."""
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        items: list[dict[str, str]] = []
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            if not re.match(r'^\d+[.)]?', line):
+                index += 1
+                continue
+
+            name_parts = [re.sub(r'^\d+[.)]?\s*', '', line).strip()]
+            price = quantity = amount = None
+            look_ahead = index + 1
+            while look_ahead < len(lines):
+                current = lines[look_ahead]
+                if self._looks_like_amount(current) and price is None:
+                    price = self._normalize_amount_text(current)
+                elif (
+                    self._looks_like_quantity(current)
+                    and price is not None
+                    and quantity is None
+                ):
+                    quantity = self._normalize_quantity_text(current)
+                elif (
+                    self._looks_like_amount(current)
+                    and quantity is not None
+                    and amount is None
+                ):
+                    amount = self._normalize_amount_text(current)
+                    break
+                elif not self._is_metadata_label(current):
+                    name_parts.append(current)
+                look_ahead += 1
+
+            if price and quantity and amount:
+                items.append(
+                    {
+                        'product_name': ' '.join(
+                            part for part in name_parts if part
+                        ),
+                        'category': 'Другое',
+                        'price': price,
+                        'quantity': quantity,
+                        'amount': amount,
+                    },
+                )
+            index = look_ahead + 1
+        return items
+
+    def _extract_text(self, value: Any) -> str:
+        """Flatten useful textual PaddleOCR-VL output into plain text."""
+        lines = [text.strip() for text in self._iter_text_values(value)]
+        return '\n'.join(line for line in lines if line)
+
+    def _iter_text_values(self, value: Any) -> list[str]:
+        """Collect text-like fields from nested PaddleOCR-VL results."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, bytes):
+            return [value.decode(errors='ignore')]
+        if isinstance(value, dict):
+            return self._iter_mapping_text_values(value)
+        if isinstance(value, list | tuple):
+            return self._iter_sequence_text_values(value)
+        return self._iter_object_text_values(value)
+
+    def _iter_mapping_text_values(self, value: dict[Any, Any]) -> list[str]:
+        """Collect text-like fields from a mapping."""
+        values = []
+        for key, item in value.items():
+            is_text_key = key in {'text', 'content', 'markdown', 'html', 'json'}
+            is_nested = isinstance(item, dict | list | tuple)
+            if is_text_key or is_nested:
+                values.extend(self._iter_text_values(item))
+        return values
+
+    def _iter_sequence_text_values(
+        self,
+        value: list[Any] | tuple[Any, ...],
+    ) -> list[str]:
+        """Collect text-like fields from a sequence."""
+        values = []
+        for item in value:
+            values.extend(self._iter_text_values(item))
+        return values
+
+    def _iter_object_text_values(self, value: Any) -> list[str]:
+        """Collect text-like fields from object attributes."""
+        values = []
+        for attr_name in ('text', 'content', 'markdown', 'json'):
+            attr = getattr(value, attr_name, None)
+            if attr is not None:
+                values.extend(self._iter_text_values(attr))
+        return values
+
+    def _build_fallback_payload(self, text: str) -> str:
+        """Build a minimal valid receipt payload when VL returns text only."""
+        total_sum = self._extract_total_sum(text)
+        payload = {
+            'name_seller': self._extract_seller_name(text),
+            'retail_place_address': None,
+            'retail_place': None,
+            'total_sum': total_sum,
+            'operation_type': 1,
+            'receipt_date': self._extract_receipt_date(text),
+            'number_receipt': None,
+            'nds10': '0',
+            'nds20': '0',
+            'items': [
+                {
+                    'product_name': 'Позиции из чека',
+                    'category': 'Другое',
+                    'price': total_sum,
+                    'quantity': '1',
+                    'amount': total_sum,
+                },
+            ],
+        }
+        return json.dumps(payload, ensure_ascii=False)
+
+    def _extract_seller_name(self, text: str) -> str:
+        """Use the first meaningful line as a local fallback seller name."""
+        for line in text.splitlines():
+            normalized = line.strip(' :-\t')
+            if len(
+                normalized,
+            ) >= MIN_SELLER_LINE_LENGTH and not self._is_generic_receipt_line(
+                normalized,
+            ):
+                return normalized[:255]
+        return 'Неизвестный продавец'
+
+    def _extract_receipt_date(self, text: str) -> str:
+        """Extract DD.MM.YYYY HH:MM from VL text or use a stable fallback."""
+        match = re.search(
+            r'(\d{2}\.\d{2}\.\d{4})\D{1,5}(\d{2}:\d{2})',
+            text,
+        )
+        if match:
+            return f'{match.group(1)} {match.group(2)}'
+        return '01.01.1970 00:00'
+
+    def _extract_total_sum(self, text: str) -> str:
+        """Extract a plausible total amount from VL text."""
+        amount_pattern = r'(\d+[\s\d]*[,.]\d{2})'
+        for marker in ('итог', 'к оплате', 'сумма', 'total'):
+            match = re.search(
+                rf'{marker}[^\d]{{0,30}}{amount_pattern}',
+                text,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                return match.group(1).replace(' ', '').replace(',', '.')
+
+        amounts = [
+            float(match.replace(' ', '').replace(',', '.'))
+            for match in re.findall(amount_pattern, text)
+        ]
+        if amounts:
+            return f'{max(amounts):.2f}'
+        return '0.00'
+
+
 class StructuredReceiptNormalizer:
     """Convert raw LLM output into project receipt JSON schema."""
 
@@ -703,6 +1612,8 @@ class StructuredReceiptNormalizer:
         if value is None:
             return None
         text = str(value).strip()
+        if text in {'-', '--', '---'}:
+            return None
         return text or None
 
     def _normalize_decimal_string(self, value: Any) -> str:
@@ -762,12 +1673,30 @@ class ReceiptInferencePipeline:
     def __init__(self, settings: ReceiptInferenceSettings) -> None:
         self._settings = settings
         self._preprocessor = ImagePreprocessor(settings)
-        self._ocr_backend = PaddleOCRBackend(settings)
-        self._llm_backend = LlamaServerBackend(settings)
+        self._ocr_backend: PaddleOCRBackend | None = None
+        self._llm_backend: LlamaServerBackend | None = None
+        self._paddleocr_vl_backend: PaddleOCRVLBackend | None = None
+        if settings.inference_backend == 'paddleocr_vl':
+            self._paddleocr_vl_backend = PaddleOCRVLBackend(settings)
+        else:
+            self._ocr_backend = PaddleOCRBackend(settings)
+            self._llm_backend = LlamaServerBackend(settings)
         self._normalizer = StructuredReceiptNormalizer()
 
     def readiness_status(self) -> dict[str, bool]:
         """Report pipeline dependency readiness."""
+        if self._paddleocr_vl_backend is not None:
+            return {
+                'paddleocr_vl_backend_available': (
+                    self._paddleocr_vl_backend.is_available()
+                    if self._settings.ocr_readiness_required
+                    else True
+                ),
+            }
+
+        if self._ocr_backend is None or self._llm_backend is None:
+            return {'pipeline_configured': False}
+
         return {
             'ocr_backend_available': (
                 self._ocr_backend.is_available()
@@ -783,11 +1712,16 @@ class ReceiptInferencePipeline:
 
     def warmup(self) -> None:
         """Warm up heavy runtime dependencies during service startup."""
-        self._ocr_backend.warmup()
+        if self._paddleocr_vl_backend is not None:
+            self._paddleocr_vl_backend.warmup()
+            return
+        if self._ocr_backend is not None:
+            self._ocr_backend.warmup()
 
     def close(self) -> None:
         """Release reusable backend resources."""
-        self._llm_backend.close()
+        if self._llm_backend is not None:
+            self._llm_backend.close()
 
     def preprocess(self, image_bytes: bytes) -> PreparedImage:
         """Preprocess image bytes before OCR."""
@@ -800,6 +1734,38 @@ class ReceiptInferencePipeline:
         ocr_text_override: str | None = None,
     ) -> InferenceResult:
         """Run the OCR -> LLM -> normalization pipeline."""
+        if self._paddleocr_vl_backend is not None:
+            extraction_started_at = perf_counter()
+            if ocr_text_override is not None:
+                vl_result = PaddleOCRVLResult(
+                    raw_output=ocr_text_override.strip(),
+                    extracted_text=ocr_text_override.strip(),
+                )
+            else:
+                vl_result = self._paddleocr_vl_backend.extract(prepared_image)
+            extraction_ms = round(
+                (perf_counter() - extraction_started_at) * 1000,
+                2,
+            )
+            normalized = self._normalizer.normalize(
+                vl_result.raw_output,
+                ocr_text=vl_result.extracted_text,
+            )
+            logger.info(
+                'receipt_inference_pipeline_completed',
+                image_width=prepared_image.width,
+                image_height=prepared_image.height,
+                ocr_line_count=len(vl_result.extracted_text.splitlines()),
+                ocr_ms=extraction_ms,
+                llm_ms=0,
+                item_count=len(normalized['items']),
+            )
+            return InferenceResult(
+                data=normalized,
+                ocr_ms=extraction_ms,
+                llm_ms=0,
+            )
+
         ocr_started_at = perf_counter()
         if ocr_text_override is not None:
             ocr_result = OCRResult(
@@ -807,6 +1773,12 @@ class ReceiptInferencePipeline:
                 line_count=len(ocr_text_override.splitlines()),
             )
         else:
+            if self._ocr_backend is None:
+                raise ReceiptInferenceError(
+                    error_code='ocr_unavailable',
+                    message='OCR backend is not configured.',
+                    status_code=503,
+                )
             ocr_result = self._ocr_backend.extract(prepared_image)
         ocr_ms = round((perf_counter() - ocr_started_at) * 1000, 2)
 
@@ -815,6 +1787,13 @@ class ReceiptInferencePipeline:
                 error_code='ocr_empty_result',
                 message='OCR did not extract any receipt text.',
                 status_code=422,
+            )
+
+        if self._llm_backend is None:
+            raise ReceiptInferenceError(
+                error_code='llm_unavailable',
+                message='Llama server backend is not configured.',
+                status_code=503,
             )
 
         llm_started_at = perf_counter()

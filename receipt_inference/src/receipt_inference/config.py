@@ -34,6 +34,8 @@ class ReceiptInferenceSettings:
     optimize_jpeg: bool
     ocr_readiness_required: bool
     llama_readiness_required: bool
+    inference_backend: str
+    paddleocr_vl_model_name: str
 
 
 def load_settings() -> ReceiptInferenceSettings:
@@ -90,4 +92,14 @@ def load_settings() -> ReceiptInferenceSettings:
             os.getenv('LLAMA_READINESS_REQUIRED', 'true').strip().lower()
             == 'true'
         ),
+        inference_backend=os.getenv(
+            'RECEIPT_INFERENCE_BACKEND',
+            'llama',
+        )
+        .strip()
+        .lower(),
+        paddleocr_vl_model_name=os.getenv(
+            'PADDLEOCR_VL_MODEL_NAME',
+            '',
+        ).strip(),
     )

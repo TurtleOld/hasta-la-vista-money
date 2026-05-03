@@ -19,8 +19,12 @@ ENV PYTHONPATH="/app/receipt_inference/src"
 
 WORKDIR /app/receipt_inference
 
-RUN mkdir -p /opt/venv /models && \
-    chown -R appuser:appuser /app /opt/venv /models
+RUN mkdir -p /opt/venv /models /home/appuser/.paddlex && \
+    chown -R appuser:appuser \
+        /app \
+        /opt/venv \
+        /models \
+        /home/appuser/.paddlex
 
 COPY --chown=appuser:appuser receipt_inference/pyproject.toml ./pyproject.toml
 

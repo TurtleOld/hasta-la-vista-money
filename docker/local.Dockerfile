@@ -14,6 +14,7 @@ RUN apt-get update && \
     libsm6 \
     libxext6 \
     libxrender1 \
+    netcat-openbsd \
     tk \
     && rm -rf /var/lib/apt/lists/* \
     && pip install uv==0.7.13 \
