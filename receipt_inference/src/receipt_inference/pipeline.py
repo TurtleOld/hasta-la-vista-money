@@ -53,6 +53,13 @@ WILDBERRIES_MARKERS = (
     'ооо "рвб"',
     'ооо рвб',
 )
+OZON_SELLER_NAME = 'Общество с ограниченной ответственностью "ИНТЕРНЕТ РЕШЕНИЯ"'
+OZON_MARKERS = (
+    'ozon.ru',
+    'озон',
+    'ооо "интернет решения"',
+    'интернет решения',
+)
 LEGAL_ENTITY_PREFIXES = (
     'общество с ограниченной ответственностью',
     'акционерное общество',
@@ -384,7 +391,11 @@ class PromptBuilder:
             'Не выдумывай отсутствующие значения. '
             'Повторяющиеся товары не объединяй. '
             'name_seller — это юридический продавец из шапки чека, '
-            'а не бренд или название товара.'
+            'а не тип документа, бренд или название товара. Для Ozon это '
+            'обычно ООО/Общество с ограниченной ответственностью '
+            '"ИНТЕРНЕТ РЕШЕНИЯ". retail_place бери из строки '
+            '"Место расчетов", retail_place_address — из строки '
+            '"Адрес расчетов". Не используй "КАССОВЫЙ ЧЕК" как продавца.'
         )
         user_prompt = (
             'Преобразуй OCR-текст кассового чека в JSON с ключами '
@@ -394,7 +405,9 @@ class PromptBuilder:
             'operation_type: 1 для покупки, 2 для возврата. '
             'Каждый товар в items должен содержать product_name, category, '
             'price, quantity, amount. Если товара несколько с одинаковым '
-            'названием, верни их отдельными элементами.\n\n'
+            'названием, верни их отдельными элементами. Позиции находятся '
+            'только в табличной части до блока ИТОГ; строки ИНН поставщика '
+            'и НДС относятся к предыдущей позиции и не являются товарами.\n\n'
             f'OCR_TEXT:\n{ocr_text}'
         )
         return [
@@ -728,7 +741,7 @@ class PaddleOCRVLBackend:
             if not isinstance(block, dict):
                 continue
             label = str(block.get('block_label', '')).strip().lower()
-            content = self._clean_block_content(block.get('block_content'))
+            content = self._clean_text_content(block.get('block_content'))
             if content:
                 combined_text_parts.append(content)
             if label == 'doc_title' and not title_text:
@@ -869,6 +882,25 @@ class PaddleOCRVLBackend:
         text = self._strip_tags(text)
         text = re.sub(r'^[#*\s]+', '', text)
         return re.sub(r'\s+', ' ', text).strip()
+
+    def _clean_text_content(self, value: Any) -> str:
+        """Normalize OCR/VL text while preserving meaningful line breaks."""
+        text = str(value or '')
+        text = re.sub(r'<\s*br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(
+            r'</\s*(?:p|tr|li|div|h\d)\s*>',
+            '\n',
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = self._strip_tags(text)
+        lines = []
+        for line in text.splitlines():
+            cleaned = re.sub(r'^[#*\s]+', '', line)
+            cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+            if cleaned:
+                lines.append(cleaned)
+        return '\n'.join(lines)
 
     def _is_table_header_row(self, cells: list[str]) -> bool:
         """Return whether the row is the items header row."""
@@ -1032,6 +1064,30 @@ class PaddleOCRVLBackend:
                 ].strip()
                 index += 1
             index += 1
+        for key, value in self._extract_inline_metadata(text).items():
+            metadata.setdefault(key, value)
+        return metadata
+
+    def _extract_inline_metadata(self, text: str) -> dict[str, str]:
+        """Extract key-value metadata when OCR flattens labels into text."""
+        metadata: dict[str, str] = {}
+        flattened = re.sub(r'\s+', ' ', text).strip()
+        key_pattern = (
+            r'Дата/Время|Дата время|Чек №|ФД №|Версия ФФД|ФН|РН ККТ|ФП|'
+            r'Кассир|Место расчетов|Адрес расчетов|Адрес места расчетов|'
+            r'Торговая точка|Адрес торговой точки|ИНН'
+        )
+        pattern = re.compile(
+            rf'(?P<key>{key_pattern})\s*:?\s*'
+            rf'(?P<value>.*?)'
+            rf'(?=\s+(?:{key_pattern})\s*:?|$)',
+            flags=re.IGNORECASE,
+        )
+        for match in pattern.finditer(flattened):
+            key = self._normalize_metadata_key(match.group('key'))
+            value = match.group('value').strip(' :;,.')
+            if key and value:
+                metadata.setdefault(key, value)
         return metadata
 
     def _looks_like_metadata_only_key(self, value: str) -> bool:
@@ -1096,7 +1152,7 @@ class PaddleOCRVLBackend:
 
     def _normalize_amount_text(self, value: str) -> str:
         """Normalize a money amount into decimal-string format."""
-        return value.replace(' ', '').replace(',', '.')
+        return value.replace(' ', '').replace('\xa0', '').replace(',', '.')
 
     def _normalize_quantity_text(self, value: str) -> str:
         """Normalize quantity while preserving integral values."""
@@ -1233,23 +1289,55 @@ class PaddleOCRVLBackend:
 
     def _extract_tax_amount(self, text: str, rates: tuple[str, ...]) -> str:
         """Extract VAT amount for the provided tax rates."""
-        flattened = re.sub(r'\s+', ' ', text).strip()
+        tax_lines = self._extract_tax_lines(text)
         for rate in rates:
             patterns = (
-                rf'ндс[^\n]*{rate}%?[^\d]{{0,40}}(\d+[\d\s]*[,.]\d{{2}})',
-                rf'{rate}%?[^\d]{{0,20}}ндс[^\d]{{0,40}}(\d+[\d\s]*[,.]\d{{2}})',
-                rf'ставк\w*\s*{rate}%?[^\d]{{0,40}}(\d+[\d\s]*[,.]\d{{2}})',
+                rf'ндс[^\n]*{rate}%?[^\d]{{0,40}}'
+                rf'(\d+[\d\s]*[,.]\d{{2}})',
+                rf'{rate}%?[^\d]{{0,20}}ндс[^\d]{{0,40}}'
+                rf'(\d+[\d\s]*[,.]\d{{2}})',
+                rf'ставк\w*\s*{rate}%?[^\d]{{0,40}}'
+                rf'(\d+[\d\s]*[,.]\d{{2}})',
             )
-            for pattern in patterns:
-                match = re.search(pattern, text, flags=re.IGNORECASE)
-                if match:
-                    return self._normalize_amount_text(match.group(1))
-                match = re.search(pattern, flattened, flags=re.IGNORECASE)
-                if match:
-                    return self._normalize_amount_text(match.group(1))
-        if 'ндс не облагается' in flattened.casefold():
-            return '0'
+            for line in tax_lines:
+                if 'не облагается' in line.casefold():
+                    continue
+                if amount := self._match_tax_line(line, patterns):
+                    return amount
         return '0'
+
+    def _extract_tax_lines(self, text: str) -> list[str]:
+        """Return only OCR lines that explicitly mention VAT/tax rate."""
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        tax_lines: list[str] = []
+        for index, line in enumerate(lines):
+            if not self._line_mentions_tax(line):
+                continue
+            tax_line = re.sub(r'\s+', ' ', line)
+            has_next_amount = index + 1 < len(
+                lines,
+            ) and self._looks_like_amount(lines[index + 1])
+            if has_next_amount:
+                tax_line = f'{tax_line} {lines[index + 1]}'
+            tax_lines.append(tax_line)
+        return tax_lines
+
+    def _line_mentions_tax(self, line: str) -> bool:
+        """Return whether a line is likely about VAT rather than item price."""
+        lowered = line.casefold()
+        return 'ндс' in lowered or re.search(r'ставк\w*\s*\d+%?', lowered)
+
+    def _match_tax_line(
+        self,
+        line: str,
+        patterns: tuple[str, ...],
+    ) -> str | None:
+        """Return the first VAT amount matched in a single tax line."""
+        for pattern in patterns:
+            match = re.search(pattern, line, flags=re.IGNORECASE)
+            if match:
+                return self._normalize_amount_text(match.group(1))
+        return None
 
     def _extract_items_from_text(self, text: str) -> list[dict[str, str]]:
         """Fallback item parser for plain OCR text receipts."""
@@ -1258,48 +1346,110 @@ class PaddleOCRVLBackend:
         index = 0
         while index < len(lines):
             line = lines[index]
-            if not re.match(r'^\d+[.)]?', line):
+            if not self._looks_like_numbered_item_start(line):
                 index += 1
                 continue
 
-            name_parts = [re.sub(r'^\d+[.)]?\s*', '', line).strip()]
-            price = quantity = amount = None
+            block_lines = [line]
             look_ahead = index + 1
             while look_ahead < len(lines):
                 current = lines[look_ahead]
-                if self._looks_like_amount(current) and price is None:
-                    price = self._normalize_amount_text(current)
-                elif (
-                    self._looks_like_quantity(current)
-                    and price is not None
-                    and quantity is None
-                ):
-                    quantity = self._normalize_quantity_text(current)
-                elif (
-                    self._looks_like_amount(current)
-                    and quantity is not None
-                    and amount is None
-                ):
-                    amount = self._normalize_amount_text(current)
+                if self._looks_like_numbered_item_start(current):
                     break
-                elif not self._is_metadata_label(current):
-                    name_parts.append(current)
+                if self._is_total_or_payment_line(current):
+                    break
+                block_lines.append(current)
                 look_ahead += 1
 
-            if price and quantity and amount:
-                items.append(
-                    {
-                        'product_name': ' '.join(
-                            part for part in name_parts if part
-                        ),
-                        'category': 'Другое',
-                        'price': price,
-                        'quantity': quantity,
-                        'amount': amount,
-                    },
-                )
-            index = look_ahead + 1
+            item = self._build_item_from_text_block(block_lines)
+            if item is not None:
+                items.append(item)
+            index = look_ahead
         return items
+
+    def _build_item_from_text_block(
+        self,
+        block_lines: list[str],
+    ) -> dict[str, str] | None:
+        """Build an item from OCR lines belonging to one numbered position."""
+        if not block_lines:
+            return None
+        first_line = re.sub(r'^\d+[.)]\s*', '', block_lines[0]).strip()
+        money_pattern = (
+            r'\d{1,3}(?:[ \u00a0]\d{3})*[,.]\d{2}|'
+            r'\d+[,.]\d{2}'
+        )
+        all_text = ' '.join(block_lines)
+        amounts = [
+            amount
+            for line in block_lines
+            for amount in re.findall(money_pattern, line)
+        ]
+        if len(amounts) < KEY_VALUE_PAIR_CELLS:
+            return None
+
+        first_amount = re.search(money_pattern, first_line)
+        if first_amount:
+            name_parts = [first_line[: first_amount.start()].strip()]
+        else:
+            name_parts = [first_line]
+
+        for line in block_lines[1:]:
+            if re.search(money_pattern, line):
+                break
+            if self._is_metadata_label(
+                line,
+            ) or self._is_supplier_or_tax_line(line):
+                continue
+            name_parts.append(line.strip())
+
+        name = ' '.join(part for part in name_parts if part).strip()
+        if not name:
+            return None
+
+        price = self._normalize_amount_text(amounts[0])
+        amount = self._normalize_amount_text(amounts[-1])
+        quantity = self._extract_quantity_between_amounts(all_text, amounts)
+        return {
+            'product_name': name[:255],
+            'category': 'Другое',
+            'price': price,
+            'quantity': quantity,
+            'amount': amount,
+        }
+
+    def _extract_quantity_between_amounts(
+        self,
+        text: str,
+        amounts: list[str],
+    ) -> str:
+        """Extract quantity from the text between price and line amount."""
+        if len(amounts) < KEY_VALUE_PAIR_CELLS:
+            return '1'
+        start = text.find(amounts[0]) + len(amounts[0])
+        end = text.rfind(amounts[-1])
+        if start >= end:
+            return '1'
+        match = re.search(r'\b\d+(?:[,.]\d+)?\b', text[start:end])
+        if match:
+            return self._normalize_quantity_text(match.group(0))
+        return '1'
+
+    def _looks_like_numbered_item_start(self, value: str) -> bool:
+        """Return whether a line starts a numbered receipt item."""
+        return bool(re.match(r'^\d+[.)]\s+', value.strip()))
+
+    def _is_total_or_payment_line(self, value: str) -> bool:
+        """Return whether a line starts the totals/payment section."""
+        normalized = value.casefold().strip(' :.-')
+        return normalized.startswith(
+            ('итог', 'наличные', 'безналичные', 'предоплата'),
+        )
+
+    def _is_supplier_or_tax_line(self, value: str) -> bool:
+        """Return whether a line is item metadata rather than item name."""
+        normalized = value.casefold().strip()
+        return normalized.startswith(('инн поставщика', 'ндс'))
 
     def _extract_text(self, value: Any) -> str:
         """Flatten useful textual PaddleOCR-VL output into plain text."""
@@ -1563,6 +1713,14 @@ class StructuredReceiptNormalizer:
         haystack = self._build_marketplace_haystack(receipt_data, ocr_text)
         if self._contains_any_marker(haystack, WILDBERRIES_MARKERS):
             receipt_data['name_seller'] = WILDBERRIES_SELLER_NAME
+        if self._contains_any_marker(haystack, OZON_MARKERS):
+            receipt_data['name_seller'] = self._extract_ozon_seller_name(
+                ocr_text,
+            )
+            receipt_data['retail_place'] = 'ozon.ru'
+            address = self._extract_ozon_retail_address(ocr_text)
+            if address:
+                receipt_data['retail_place_address'] = address
 
     def _build_marketplace_haystack(
         self,
@@ -1585,6 +1743,39 @@ class StructuredReceiptNormalizer:
     ) -> bool:
         """Return whether any normalized marker exists in the text."""
         return any(marker.casefold() in haystack for marker in markers)
+
+    def _extract_ozon_seller_name(self, ocr_text: str) -> str:
+        """Extract Ozon legal seller name from OCR text when present."""
+        flattened = re.sub(r'\s+', ' ', ocr_text).strip()
+        match = re.search(
+            r'общество с ограниченной ответственностью\s+"[^"]+"',
+            flattened,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            value = re.sub(r'\s+', ' ', match.group(0)).strip()
+            return re.sub(
+                r'^общество с ограниченной ответственностью\b',
+                'Общество с ограниченной ответственностью',
+                value,
+                flags=re.IGNORECASE,
+            )[:255]
+        return OZON_SELLER_NAME
+
+    def _extract_ozon_retail_address(self, ocr_text: str) -> str | None:
+        """Extract Ozon settlement address without fiscal metadata tail."""
+        match = re.search(
+            r'адрес\s+расчетов\s*:?\s*(.+?)'
+            r'(?=\n(?:дата|фд|версия|фн|рн|фп|кассир)\b|$)',
+            ocr_text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not match:
+            return None
+        address = re.sub(r'\s+', ' ', match.group(1)).strip(' :;,.')
+        if not address or address.casefold().startswith(('дата', 'фд')):
+            return None
+        return address[:255]
 
     def _normalize_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """Normalize a single receipt item."""
