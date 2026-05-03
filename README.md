@@ -4,7 +4,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/TurtleOld/hasta-la-vista-money)
 [![Lines of Code](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=code)](https://sloc.xyz/github/hlvm-app/hasta-la-vista-money/?category=code)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Django](https://img.shields.io/badge/Django-6.0-green.svg)](https://www.djangoproject.com/)
 
 **[🇺🇸 English version](ENGLISH.md)** | **[📚 Документация](https://hasta-la-vista-money.readthedocs.io/)**
@@ -81,14 +81,14 @@
 
 | Компонент | Технологии |
 |-----------|-----------|
-| **Backend** | Django 5.2, Python 3.12, Django REST Framework |
-| **Frontend** | Bootstrap 5, Chart.js, jQuery, HTMX |
-| **База данных** | PostgreSQL, SQLite (для разработки) |
-| **Кеширование** | Redis (продакшен), LocMemCache (разработка) |
-| **API** | RESTful API, OpenAPI/Swagger документация |
-| **Контейнеризация** | Docker, Docker Compose |
+| **Backend** | Django 6.0, Python 3.12.7+ (Docker: Python 3.13), Django REST Framework, Celery |
+| **Frontend** | Tailwind CSS 4, DaisyUI, Chart.js, jQuery, HTMX |
+| **База данных** | PostgreSQL, SQLite (локальный fallback без `DATABASE_URL`/`POSTGRES_*`) |
+| **Кеширование и очереди** | Redis, django-redis, django-celery-beat, LocMemCache для локального fallback |
+| **API** | RESTful API, OpenAPI schema, Swagger UI |
+| **Контейнеризация** | Docker, Docker Compose, Nginx, отдельный OCR/LLM-сервис для чеков |
 | **Безопасность** | CSP, CSRF, JWT аутентификация, django-axes |
-| **Мониторинг** | Bugsink-compatible error tracking, Django Debug Toolbar |
+| **Мониторинг** | Sentry-compatible error tracking, django-structlog, Django Debug Toolbar |
 | **Локализация** | i18n, полная поддержка русского языка |
 
 ---
@@ -97,8 +97,8 @@
 
 ### Минимальные требования
 - Docker и Docker Compose
-- 1 ГБ свободного места на диске
-- 512 МБ оперативной памяти
+- Несколько ГБ свободного места для Docker-образов, PostgreSQL/Redis и OCR-моделей
+- От 4 ГБ оперативной памяти для локального Docker-запуска; production OCR/LLM-сервисы требуют больше ресурсов
 
 ### Установка за 3 шага
 
@@ -107,24 +107,27 @@
 git clone https://github.com/TurtleOld/hasta-la-vista-money.git
 cd hasta-la-vista-money
 
-# 2. Создайте файл .env с минимальными настройками
+# 2. Создайте файл .env с минимальными локальными настройками
 cat > .env << EOF
 SECRET_KEY=$(openssl rand -base64 50)
 DEBUG=false
 ALLOWED_HOSTS=localhost,127.0.0.1
+BASE_URL=http://127.0.0.1:8090
+CSRF_TRUSTED_ORIGINS=http://127.0.0.1:8090,http://localhost:8090
 EOF
 
 # 3. Запустите приложение
 docker compose up -d
 ```
 
-**Готово!** Откройте браузер и перейдите по адресу [http://127.0.0.1:8090](http://127.0.0.1:8090)
+**Готово!** После сборки и запуска контейнеров откройте браузер и перейдите по адресу [http://127.0.0.1:8090](http://127.0.0.1:8090)
 
-> 💡 **Совет:** При первом запуске приложение автоматически создаст SQLite базу данных. Для production рекомендуется использовать PostgreSQL.
+> 💡 **Совет:** Стандартный `docker-compose.yaml` поднимает PostgreSQL, Redis, Celery worker/beat, веб-приложение, Nginx и сервис распознавания чеков. SQLite используется только как fallback при прямом локальном запуске без `DATABASE_URL` и `POSTGRES_*`.
 
 > 🔒 **Важно:** Блок выше описывает быстрый локальный/self-hosted запуск, а не production minimum. Для production self-hosted используйте отдельное руководство: [docs/docs/production_self_hosted.md](docs/docs/production_self_hosted.md)
 
 ### Первые шаги
+
 1. Зарегистрируйте аккаунт администратора
 2. Создайте свой первый финансовый счет
 3. Добавьте категории доходов и расходов
@@ -143,28 +146,40 @@ docker compose up -d
 | Переменная | Описание | Значение по умолчанию |
 |-----------|----------|----------------------|
 | `SECRET_KEY` | Секретный ключ Django (обязательно) | - |
+| `DJANGO_SETTINGS_MODULE` | Модуль настроек Django; для production используйте `config.django.prod` | `config.django.base` |
 | `DEBUG` | Режим отладки | `false` |
 | `ALLOWED_HOSTS` | Разрешенные production-хосты | - |
+| `BASE_URL` | Базовый URL приложения | `http://127.0.0.1:8000/` |
 | `CSRF_TRUSTED_ORIGINS` | Доверенные HTTPS-источники для CSRF | - |
-| `DATABASE_URL` | URL PostgreSQL для production-окружения | - |
+| `DATABASE_URL` | URL внешней PostgreSQL, если не используется встроенный `db` из Compose | - |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Параметры встроенной PostgreSQL в `docker-compose.prod.yaml` | `hlvm`, `postgres`, `postgres` |
 | `REDIS_LOCATION` | URL Redis для кеширования, сессий и Celery в production | - |
 | `ERROR_TRACKING_DSN` | DSN для Sentry-compatible мониторинга ошибок | - |
 | `ERROR_TRACKING_ENVIRONMENT` | Окружение для мониторинга ошибок | `production` |
 | `SESSION_COOKIE_SECURE` | Флаг `Secure` для session cookie | `true` |
 | `SESSION_COOKIE_HTTPONLY` | Флаг `HttpOnly` для session cookie | `true` |
 | `SESSION_COOKIE_SAMESITE` | Политика `SameSite` для session cookie | `Lax` |
+| `SESSION_COOKIE_AGE` | Время жизни session cookie в секундах | `31536000` |
 | `CSRF_COOKIE_SECURE` | Флаг `Secure` для CSRF cookie | `true` |
 | `SECURE_SSL_REDIRECT` | Принудительное перенаправление на HTTPS | `true` |
+| `SECURE_CONTENT_TYPE_NOSNIFF` | Заголовок защиты от MIME-sniffing | `true` |
 | `SECURE_HSTS_SECONDS` | Значение `max-age` для HSTS | `31536000` |
 | `SECURE_HSTS_INCLUDE_SUBDOMAINS` | HSTS для поддоменов | `true` |
 | `SECURE_HSTS_PRELOAD` | Предзагрузка HSTS | `true` |
+| `ACCESS_TOKEN_LIFETIME` | Время жизни JWT access token в минутах | `60` |
+| `REFRESH_TOKEN_LIFETIME` | Время жизни JWT refresh token в днях | `7` |
 | `LANGUAGE_CODE` | Язык интерфейса | `ru-RU` |
 | `TIME_ZONE` | Часовой пояс | `Europe/Moscow` |
+| `RECEIPT_INFERENCE_URL` | URL внутреннего сервиса OCR/LLM для чеков | `http://receipt-inference:8010` |
+| `RECEIPT_INFERENCE_TIMEOUT` | Таймаут обработки чеков в секундах | `420` |
+| `API_KEY`, `API_MODEL`, `API_BASE_URL`, `API_TIMEOUT` | Fallback для OpenAI-compatible API, если не используется `RECEIPT_INFERENCE_URL` | - |
+| `AI_RATE_LIMIT_PER_USER`, `AI_RATE_LIMIT_GLOBAL`, `AI_RATE_LIMIT_WINDOW` | Лимиты AI-обработки чеков | `10`, `100`, `60` |
 
 ### Дополнительные возможности
 
-- **PostgreSQL**: Для production-развертывания при самостоятельном размещении требуется PostgreSQL вместо SQLite
-- **AI для чеков**: Интеграция с OpenAI API для автоматического распознавания чеков
+- **PostgreSQL**: Docker Compose поднимает PostgreSQL по умолчанию; SQLite остается fallback для прямого локального запуска
+- **Redis и Celery**: Redis используется для кеша, сессий, rate limiting, django-axes и брокера/результатов Celery
+- **AI для чеков**: Внутренний `receipt-inference` сервис выполняет OCR/LLM-обработку; при отсутствии `RECEIPT_INFERENCE_URL` доступен fallback на OpenAI-compatible API
 - **Мониторинг ошибок**: Sentry-compatible мониторинг ошибок в production через `ERROR_TRACKING_DSN`
 
 ### Минимум для production при самостоятельном размещении
@@ -179,9 +194,10 @@ docker compose up -d
 - `CSRF_TRUSTED_ORIGINS`
 - `REDIS_LOCATION`
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` для встроенного PostgreSQL в `docker-compose.prod.yaml`
-- `DATABASE_URL` для внешней PostgreSQL
-- переменные cookie и transport security: `SESSION_COOKIE_SECURE`, `SESSION_COOKIE_HTTPONLY`, `SESSION_COOKIE_SAMESITE`, `CSRF_COOKIE_SECURE`, `SECURE_SSL_REDIRECT`, `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD`
-- `ERROR_TRACKING_DSN` и `ERROR_TRACKING_ENVIRONMENT` для мониторинга production-окружения
+- `DATABASE_URL`, если используется внешняя PostgreSQL вместо встроенного сервиса `db`
+- переменные cookie и transport security: `SESSION_COOKIE_SECURE`, `SESSION_COOKIE_HTTPONLY`, `SESSION_COOKIE_SAMESITE`, `CSRF_COOKIE_SECURE`, `SECURE_SSL_REDIRECT`, `SECURE_CONTENT_TYPE_NOSNIFF`, `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD`
+- `RECEIPT_INFERENCE_URL`, `RECEIPT_INFERENCE_TIMEOUT` и параметры `LLAMA_*`/`OCR_*`, если включена обработка чеков через bundled inference services
+- `ERROR_TRACKING_DSN` и `ERROR_TRACKING_ENVIRONMENT`, если используется мониторинг production-окружения
 
 Секреты не должны храниться в репозитории или поддерживаться вручную в локальном `.env` на сервере без контроля изменений. Для production-развертывания при самостоятельном размещении `.env` должен формироваться на этапе деплоя из CI/CD secrets, менеджера секретов или зашифрованной системы управления конфигурацией.
 
@@ -189,15 +205,17 @@ docker compose up -d
 
 #### Redis — Кеширование для производительности
 
-Redis используется в продакшене для кеширования и повышения производительности:
+Redis используется в продакшене для кеширования, сессий и фоновых задач:
 
 **Что кешируется:**
+
 - Дерево категорий (TTL: 5 минут)
 - Статистика пользователя (TTL: 10 минут)
 - Список финансовых счетов (TTL: 5 минут)
 - Сессии пользователей
 - Rate limiting для API
 - Защита от брутфорса (django-axes)
+- Брокер и backend результатов Celery
 
 **Настройка для продакшена:**
 
@@ -241,7 +259,7 @@ docker exec -it hlvm-prod-redis-1 redis-cli KEYS "hlvm:*"
 - ✅ Валидация всех входных данных
 - ✅ Защита от SQL-инъекций через Django ORM
 - ✅ Rate limiting для API (django-axes)
-- ✅ Безопасное хранение паролей (bcrypt)
+- ✅ Безопасное хранение паролей через password hashers Django
 - ✅ Docker контейнеры работают от непривилегированного пользователя (appuser)
 - ✅ Минимальные права доступа к файлам и директориям
 - ✅ Права доступа настроены для статических файлов и логов
@@ -255,6 +273,12 @@ docker exec -it hlvm-prod-redis-1 redis-cli KEYS "hlvm:*"
 - 📖 [Руководство пользователя](https://hasta-la-vista-money.readthedocs.io/) — начало работы, функции, примеры использования
 - 🛠 [Руководство разработчика](https://hasta-la-vista-money.readthedocs.io/contribute/) — архитектура, разработка, тестирование
 - 🔌 [API документация](https://hasta-la-vista-money.readthedocs.io/api/) — REST API, эндпоинты, примеры запросов
+
+В запущенном приложении также доступны:
+
+- OpenAPI schema: `/api/schema/`
+- Swagger UI: `/api/schema/swagger-ui/`
+- Экспорт схемы в документацию: `make export-api-schema`
 
 ---
 
@@ -280,11 +304,10 @@ git clone https://github.com/YOUR_USERNAME/hasta-la-vista-money.git
 git checkout -b feature/amazing-feature
 
 # 3. Установите зависимости для разработки
-# uv.lock будет автоматически сгенерирован, если его нет
-uv sync --dev
+make install
 
 # 4. Внесите изменения и протестируйте
-uv run pytest
+make test
 
 # 5. Создайте Pull Request
 ```
@@ -295,7 +318,7 @@ uv run pytest
 
 - **В GitHub Actions:** при сборке Docker образов
 - **В Docker:** если файл отсутствует, он создается автоматически
-- **Локальная разработка:** генерируется командой `uv sync --dev`
+- **Локальная разработка:** генерируется командой `make install` или `uv sync --dev`
 
 Причины такого подхода:
 - ✅ Избежание конфликтов при работе в команде
@@ -306,7 +329,7 @@ uv run pytest
 **Для локальной разработки:**
 ```bash
 # При первом запуске генерируется uv.lock автоматически
-uv sync --dev
+make install
 
 # Если нужно обновить зависимости:
 uv lock --upgrade
