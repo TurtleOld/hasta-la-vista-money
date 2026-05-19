@@ -104,9 +104,18 @@ class TestReceipt(TestCase):
 
     def test_receipt_delete(self) -> None:
         self.client.force_login(self.user)
+        initial_balance = self.account.balance
+        receipt_total_sum = self.receipt.total_sum
         url = reverse_lazy('receipts:delete', kwargs={'pk': self.receipt.pk})
         response = self.client.post(url)
         self.assertEqual(response.status_code, constants.REDIRECTS)
+        self.assertFalse(Receipt.objects.filter(pk=self.receipt.pk).exists())
+
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.balance,
+            initial_balance + receipt_total_sum,
+        )
 
     def test_receipt_list_unauthorized(self) -> None:
         response = self.client.get(reverse_lazy('receipts:list'))

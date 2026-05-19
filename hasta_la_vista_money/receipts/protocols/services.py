@@ -71,6 +71,13 @@ class ReceiptUpdaterServiceProtocol(Protocol):
 
 
 @runtime_checkable
+class ReceiptDeleterServiceProtocol(Protocol):
+    """Protocol for receipt deletion service interface."""
+
+    def delete_receipt(self, *, user: User, receipt: Receipt) -> None: ...
+
+
+@runtime_checkable
 class ReceiptImportServiceProtocol(Protocol):
     """Protocol for receipt import service interface.
 

@@ -3,6 +3,7 @@ from dependency_injector import containers, providers
 from hasta_la_vista_money.receipts.protocols.services import (
     PendingReceiptServiceProtocol,
     ReceiptCreatorServiceProtocol,
+    ReceiptDeleterServiceProtocol,
     ReceiptImportServiceProtocol,
     ReceiptUpdaterServiceProtocol,
 )
@@ -16,6 +17,9 @@ from hasta_la_vista_money.receipts.services.pending_receipt_service import (
 )
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreatorService,
+)
+from hasta_la_vista_money.receipts.services.receipt_deleter import (
+    ReceiptDeleterService,
 )
 from hasta_la_vista_money.receipts.services.receipt_import import (
     ReceiptImportService,
@@ -59,6 +63,12 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         product_repository=product_repository,
         receipt_repository=receipt_repository,
         seller_repository=seller_repository,
+    )
+    receipt_deleter_service: providers.Factory[
+        ReceiptDeleterServiceProtocol
+    ] = providers.Factory(
+        ReceiptDeleterService,
+        account_service=core.account_service,
     )
     pending_receipt_service: providers.Factory[
         PendingReceiptServiceProtocol
