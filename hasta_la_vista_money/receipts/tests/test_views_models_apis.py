@@ -630,12 +630,11 @@ class TestServices(TestCase):
         self.assertIn('ZmFrZS1pbWFnZS1jb250ZW50', result)
 
     @patch(
-        'hasta_la_vista_money.receipts.services.receipt_ai_prompt.get_ai_provider',
+        'hasta_la_vista_money.receipts.services.receipt_ai_prompt.'
+        'analyze_image_with_receipt_inference',
     )
-    def test_analyze_image_with_ai(self, mock_get_provider: Mock) -> None:
-        mock_provider = Mock()
-        mock_provider.analyze.return_value = '{"test": "data"}'
-        mock_get_provider.return_value = mock_provider
+    def test_analyze_image_with_ai(self, mock_inference: Mock) -> None:
+        mock_inference.return_value = '{"test": "data"}'
 
         test_file = SimpleUploadedFile(
             'test.jpg',
@@ -646,15 +645,14 @@ class TestServices(TestCase):
         result = analyze_image_with_ai(test_file)
         self.assertEqual(result, '{"test": "data"}')
 
-        mock_provider.analyze.assert_called_once_with(test_file)
+        mock_inference.assert_called_once_with(test_file)
 
     @patch(
-        'hasta_la_vista_money.receipts.services.receipt_ai_prompt.get_ai_provider',
+        'hasta_la_vista_money.receipts.services.receipt_ai_prompt.'
+        'analyze_image_with_receipt_inference',
     )
-    def test_analyze_image_with_ai_error(self, mock_get_provider: Mock) -> None:
-        mock_provider = Mock()
-        mock_provider.analyze.side_effect = RuntimeError('API Error')
-        mock_get_provider.return_value = mock_provider
+    def test_analyze_image_with_ai_error(self, mock_inference: Mock) -> None:
+        mock_inference.side_effect = RuntimeError('Inference Error')
 
         test_file = SimpleUploadedFile(
             'test.jpg',

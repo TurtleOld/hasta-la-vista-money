@@ -88,7 +88,7 @@
 | **API** | RESTful API, OpenAPI schema, Swagger UI |
 | **Контейнеризация** | Docker, Docker Compose, Nginx, отдельный OCR/LLM-сервис для чеков |
 | **Безопасность** | CSP, CSRF, JWT аутентификация, django-axes |
-| **Мониторинг** | Sentry-compatible error tracking, django-structlog, Django Debug Toolbar |
+| **Мониторинг** | django-structlog, файловые/stdout-логи, Django Debug Toolbar |
 | **Локализация** | i18n, полная поддержка русского языка |
 
 ---
@@ -154,8 +154,6 @@ docker compose up -d
 | `DATABASE_URL` | URL внешней PostgreSQL, если не используется встроенный `db` из Compose | - |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Параметры встроенной PostgreSQL в `docker-compose.prod.yaml` | `hlvm`, `postgres`, `postgres` |
 | `REDIS_LOCATION` | URL Redis для кеширования, сессий и Celery в production | - |
-| `ERROR_TRACKING_DSN` | DSN для Sentry-compatible мониторинга ошибок | - |
-| `ERROR_TRACKING_ENVIRONMENT` | Окружение для мониторинга ошибок | `production` |
 | `SESSION_COOKIE_SECURE` | Флаг `Secure` для session cookie | `true` |
 | `SESSION_COOKIE_HTTPONLY` | Флаг `HttpOnly` для session cookie | `true` |
 | `SESSION_COOKIE_SAMESITE` | Политика `SameSite` для session cookie | `Lax` |
@@ -172,15 +170,14 @@ docker compose up -d
 | `TIME_ZONE` | Часовой пояс | `Europe/Moscow` |
 | `RECEIPT_INFERENCE_URL` | URL внутреннего сервиса OCR/LLM для чеков | `http://receipt-inference:8010` |
 | `RECEIPT_INFERENCE_TIMEOUT` | Таймаут обработки чеков в секундах | `420` |
-| `API_KEY`, `API_MODEL`, `API_BASE_URL`, `API_TIMEOUT` | Fallback для OpenAI-compatible API, если не используется `RECEIPT_INFERENCE_URL` | - |
 | `AI_RATE_LIMIT_PER_USER`, `AI_RATE_LIMIT_GLOBAL`, `AI_RATE_LIMIT_WINDOW` | Лимиты AI-обработки чеков | `10`, `100`, `60` |
 
 ### Дополнительные возможности
 
 - **PostgreSQL**: Docker Compose поднимает PostgreSQL по умолчанию; SQLite остается fallback для прямого локального запуска
 - **Redis и Celery**: Redis используется для кеша, сессий, rate limiting, django-axes и брокера/результатов Celery
-- **AI для чеков**: Внутренний `receipt-inference` сервис выполняет OCR/LLM-обработку; при отсутствии `RECEIPT_INFERENCE_URL` доступен fallback на OpenAI-compatible API
-- **Мониторинг ошибок**: Sentry-compatible мониторинг ошибок в production через `ERROR_TRACKING_DSN`
+- **AI для чеков**: Внутренний `receipt-inference` сервис выполняет OCR/LLM-обработку без внешнего LLM fallback
+- **Мониторинг ошибок**: структурированные логи через `django-structlog` без внешних observability-сервисов
 
 ### Минимум для production при самостоятельном размещении
 
@@ -197,7 +194,6 @@ docker compose up -d
 - `DATABASE_URL`, если используется внешняя PostgreSQL вместо встроенного сервиса `db`
 - переменные cookie и transport security: `SESSION_COOKIE_SECURE`, `SESSION_COOKIE_HTTPONLY`, `SESSION_COOKIE_SAMESITE`, `CSRF_COOKIE_SECURE`, `SECURE_SSL_REDIRECT`, `SECURE_CONTENT_TYPE_NOSNIFF`, `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD`
 - `RECEIPT_INFERENCE_URL`, `RECEIPT_INFERENCE_TIMEOUT` и параметры `LLAMA_*`/`OCR_*`, если включена обработка чеков через bundled inference services
-- `ERROR_TRACKING_DSN` и `ERROR_TRACKING_ENVIRONMENT`, если используется мониторинг production-окружения
 
 Секреты не должны храниться в репозитории или поддерживаться вручную в локальном `.env` на сервере без контроля изменений. Для production-развертывания при самостоятельном размещении `.env` должен формироваться на этапе деплоя из CI/CD secrets, менеджера секретов или зашифрованной системы управления конфигурацией.
 

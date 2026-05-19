@@ -8,39 +8,18 @@
 
 ### Используемые технологии
 
-- **OpenAI GPT-4o** - основная модель для распознавания
-- **Vision API** - анализ изображений
+- **Локальный receipt-inference** - основной сервис распознавания
+- **PaddleOCR-VL + локальный LLM** - анализ изображений и нормализация данных
 - **JSON парсинг** - структурированный вывод данных
-- **Base64 кодирование** - передача изображений
+- **HTTP multipart upload** - передача изображений во внутренний сервис
 
 ### Архитектура системы
 
 ```python
 def analyze_image_with_ai(image_base64: UploadedFile):
     """Основная функция обработки изображения"""
-    client = OpenAI(
-        base_url=os.environ.get('API_BASE_URL'),
-        api_key=os.environ.get('API_KEY')
-    )
-    
-    response = client.chat.completions.create(
-        model=os.environ.get('API_MODEL', 'openai/gpt-4o'),
-        temperature=0.6,
-        messages=[
-            {
-                'role': 'system',
-                'content': 'Системный промпт для извлечения данных'
-            },
-            {
-                'role': 'user',
-                'content': [
-                    {'type': 'text', 'text': 'Инструкции по обработке'},
-                    {'type': 'image_url', 'image_url': {'url': image_base64}}
-                ]
-            }
-        ]
-    )
-    return response.choices[0].message.content
+    check_ai_rate_limit(user_id)
+    return analyze_image_with_receipt_inference(image_base64)
 ```
 
 ## Процесс обработки
@@ -66,12 +45,16 @@ def image_to_base64(uploaded_file) -> str:
 
 ### Шаг 3: ИИ-обработка
 
-Система отправляет изображение в ИИ-модель с детальными инструкциями:
+Система отправляет изображение во внутренний сервис `receipt-inference`,
+который выполняет OCR и возвращает нормализованный JSON:
 
 ```json
 {
-  "role": "system",
-  "content": "Вы — помощник, который помогает извлекать данные с кассовых чеков. Ваша задача — проанализировать изображение и вернуть JSON без дополнительного текста."
+  "success": true,
+  "data": {
+    "total_sum": "335.00",
+    "items": []
+  }
 }
 ```
 
@@ -243,21 +226,16 @@ def clean_json_response(text):
 ### Переменные окружения
 
 ```bash
-# API настройки
-API_BASE_URL=https://models.github.ai/inference
-API_KEY=your_api_key_here
-API_MODEL=openai/gpt-4o
-
-# Параметры обработки
-TEMPERATURE=0.6
-MAX_TOKENS=4000
+# Внутренний сервис распознавания чеков
+RECEIPT_INFERENCE_URL=http://receipt-inference:8010
+RECEIPT_INFERENCE_TIMEOUT=420
 ```
 
 ### Параметры модели
 
-- **Temperature: 0.6** - баланс между креативностью и точностью
-- **Max tokens: 4000** - максимальная длина ответа
-- **System prompt** - детальные инструкции для модели
+- **RECEIPT_INFERENCE_URL** - базовый URL внутреннего сервиса
+- **RECEIPT_INFERENCE_TIMEOUT** - таймаут долгой OCR/LLM-обработки
+- **AI_RATE_LIMIT_*** - лимиты запросов к локальному inference
 
 ## Обработка ошибок
 
