@@ -61,9 +61,6 @@ from hasta_la_vista_money.receipts.services.pending_receipt_service import (
 )
 from hasta_la_vista_money.receipts.tasks import process_pending_receipt
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.cache import (
-    invalidate_user_detailed_statistics_cache,
-)
 
 logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
@@ -530,57 +527,6 @@ class ReceiptUpdateView(
 
         return self.render_to_response(context)
 
-    def update_account_balance(
-        self,
-        old_account: Account,
-        new_account: Account,
-        old_total_sum: Decimal,
-        new_total_sum: Decimal,
-    ) -> None:
-        """
-        Обновляет баланс счёта при изменении суммы чека.
-
-        Логика:
-        1. Если счёт не изменился:
-           - Вычисляем разницу между старой и новой суммой
-           - Если сумма увеличилась → уменьшаем баланс на разницу
-           - Если сумма уменьшилась → увеличиваем баланс на разницу
-        2. Если счёт изменился:
-           - Возвращаем старую сумму на старый счёт
-           - Списываем новую сумму с нового счёта
-        """
-
-        # Примечание: проверку владельца счёта опускаем, так как доступ к чеку
-        # и валидные queryset'ы аккаунтов уже ограничивают пользователя выше.
-
-        request = cast('RequestWithContainer', self.request)
-        account_repository = (
-            request.container.finance_account.account_repository()
-        )
-        try:
-            old_account_obj = account_repository.get_by_id(old_account.pk)
-            new_account_obj = account_repository.get_by_id(new_account.pk)
-
-            if old_account.pk == new_account.pk:
-                difference = new_total_sum - old_total_sum
-                if difference > 0:
-                    old_account_obj.balance -= difference
-                else:
-                    old_account_obj.balance += abs(difference)
-                old_account_obj.save()
-            else:
-                old_account_obj.balance += old_total_sum
-                old_account_obj.save()
-
-                new_account_obj.balance -= new_total_sum
-                new_account_obj.save()
-
-        except Account.DoesNotExist:
-            logger.exception(
-                'Account not found during receipt update',
-                error=str(self.request.user),
-            )
-
 
 class ReceiptDetailView(
     LoginRequiredMixin,
@@ -636,25 +582,21 @@ class ReceiptDeleteView(
         **kwargs: object,
     ) -> HttpResponse:
         receipt = self.get_object()
-        account = receipt.account
-        amount = receipt.total_sum
-        account_balance = get_object_or_404(Account, pk=account.pk)
+        request_with_container = cast('RequestWithContainer', request)
+        receipt_deleter_service = (
+            request_with_container.container.receipts.receipt_deleter_service()
+        )
 
         try:
-            if account_balance.user == self.request.user:
-                account_balance.balance += amount
-                account_balance.save()
-
-                for product in receipt.product.all():
-                    product.delete()
-
-                receipt.delete()
-                invalidate_user_detailed_statistics_cache(self.request.user.pk)
-                messages.success(
-                    self.request,
-                    constants.SUCCESS_MESSAGE_DELETE_RECEIPT,
-                )
-                return redirect(str(self.success_url))
+            receipt_deleter_service.delete_receipt(
+                user=cast('User', self.request.user),
+                receipt=receipt,
+            )
+            messages.success(
+                self.request,
+                constants.SUCCESS_MESSAGE_DELETE_RECEIPT,
+            )
+            return redirect(str(self.success_url))
         except ProtectedError:
             messages.error(
                 self.request,
