@@ -533,13 +533,22 @@ function initIncomePage() {
     }
 
     function initIncomeTable() {
+        const getListFilters = function () {
+            const searchParams = new URLSearchParams(window.location.search);
+            return {
+                date_after: searchParams.get('date_after') || '',
+                date_before: searchParams.get('date_before') || '',
+            };
+        };
+
         try {
             console.log('Инициализация Tabulator для income, элемент найден:', !!table);
             window.incomeTabulator = new Tabulator('#income-table', {
                 ajaxURL: '/api/income/data/',
                 ajaxParams: function () {
                     return {
-                        group_id: getGroupId()
+                        group_id: getGroupId(),
+                        ...getListFilters()
                     };
                 },
                 pagination: true,
@@ -550,6 +559,13 @@ function initIncomePage() {
                         const groupId = getGroupId();
                         if (groupId) {
                             u.searchParams.set('group_id', groupId);
+                        }
+                        const filters = getListFilters();
+                        if (filters.date_after) {
+                            u.searchParams.set('date_after', filters.date_after);
+                        }
+                        if (filters.date_before) {
+                            u.searchParams.set('date_before', filters.date_before);
                         }
                         if (params && params.page) {
                             u.searchParams.set('page', params.page);
@@ -750,7 +766,10 @@ function initIncomePage() {
         const groupSelect = document.getElementById('income-group-select');
         if (groupSelect) {
             groupSelect.addEventListener('change', function () {
-                window.incomeTabulator.setData('/api/income/data/', { group_id: getGroupId() });
+                window.incomeTabulator.setData('/api/income/data/', {
+                    group_id: getGroupId(),
+                    ...getListFilters()
+                });
             });
         }
 

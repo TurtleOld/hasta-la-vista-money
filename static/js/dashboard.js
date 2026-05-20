@@ -139,6 +139,21 @@ class DashboardManager {
         return url.toString();
     }
 
+    _buildNavigationURL(path, params) {
+        const url = new URL(String(path || ''), window.location.origin);
+        if (url.origin !== window.location.origin) {
+            throw new Error('Cross-origin navigation blocked');
+        }
+
+        if (params && typeof params === 'object') {
+            for (const [k, v] of Object.entries(params)) {
+                if (v == null || v === '') continue;
+                url.searchParams.set(k, String(v));
+            }
+        }
+        return url.toString();
+    }
+
     async _safeFetch(relativePath, urlParams = null, fetchOptions = {}) {
         const validatedUrl = this._buildURL(relativePath, urlParams);
         return window.fetch(validatedUrl, fetchOptions);
@@ -248,6 +263,7 @@ class DashboardManager {
             this.analyticsData = data.analytics || {};
             this.comparisonData = data.comparison || {};
             this.recentTransactions = data.recent_transactions || [];
+            this.clickThrough = data.click_through || {};
 
             this.renderWidgets();
         } catch (error) {
@@ -460,7 +476,7 @@ class DashboardManager {
         }
 
         const chart = initChart(containerId, config);
-        window.addDrillDownHandler?.(chart, (params) => this.handleDrillDown('expense', params));
+        window.addDrillDownHandler?.(chart, (params) => this.openPeriodList('expense', params));
         return chart;
     }
 
@@ -474,7 +490,9 @@ class DashboardManager {
 
         config.xAxis.data = labels;
         config.series[0].data = income;
-        return initChart(containerId, config);
+        const chart = initChart(containerId, config);
+        window.addDrillDownHandler?.(chart, (params) => this.openPeriodList('income', params));
+        return chart;
     }
 
     renderComparisonChart(widget, containerId, initChart, chartConfigs) {
@@ -531,7 +549,7 @@ class DashboardManager {
         }));
 
         const chart = initChart(containerId, config);
-        window.addDrillDownHandler?.(chart, (params) => this.handleDrillDown('expense', params));
+        window.addDrillDownHandler?.(chart, (params) => this.openCategoryList(params));
         return chart;
     }
 
@@ -652,6 +670,40 @@ class DashboardManager {
         } catch (error) {
             console.error('Error loading drill-down data:', error);
         }
+    }
+
+    openPeriodList(type, params) {
+        const month = this.findMonthByLabel(params?.name || params?.axisValue);
+        if (!month?.month_start || !month?.month_end) return;
+
+        const basePath = type === 'income'
+            ? this.clickThrough?.income_list_url
+            : this.clickThrough?.expense_list_url;
+        if (!basePath) return;
+
+        window.location.href = this._buildNavigationURL(basePath, {
+            date_after: month.month_start,
+            date_before: month.month_end,
+        });
+    }
+
+    openCategoryList(params) {
+        const categoryName = params?.name;
+        const categories = this.analyticsData?.stats?.top_expense_categories || [];
+        const category = categories.find((item) => item.category__name === categoryName);
+        const categoryId = category?.category__id;
+        const basePath = this.clickThrough?.expense_list_url;
+        if (!basePath || !categoryId) return;
+
+        window.location.href = this._buildNavigationURL(basePath, {
+            category: categoryId,
+        });
+    }
+
+    findMonthByLabel(label) {
+        if (!label) return null;
+        const months = this.analyticsData?.stats?.months_data || [];
+        return months.find((month) => month.month === label) || null;
     }
 
     updateChartWithDrillDown(chartIndex, drillData) {
