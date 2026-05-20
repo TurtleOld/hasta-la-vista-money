@@ -16,7 +16,7 @@
 - **Кеширование**: Redis (продакшен), LocMemCache (разработка)
 - **Аутентификация**: JWT (djangorestframework-simplejwt)
 - **Dependency Injection**: dependency-injector
-- **AI**: OpenAI API для обработки чеков
+- **AI**: локальный `receipt-inference` для обработки чеков
 - **Frontend**: Bootstrap 5, Chart.js, jQuery, HTMX
 
 ---
@@ -93,7 +93,7 @@ class ExpenseService:
     ):
         self.expense_repository = expense_repository
         self.account_service = account_service
-    
+
     def create_expense(self, data: dict) -> Expense:
         # Бизнес-логика создания расхода
         pass
@@ -183,7 +183,7 @@ class MyServiceProtocol(Protocol):
 class MyService:
     def __init__(self, repository: MyRepository):
         self.repository = repository
-    
+
     def do_something(self, data: dict) -> Result:
         # Логика
         pass
@@ -193,7 +193,7 @@ class MyService:
 ```python
 class MyContainer(containers.DeclarativeContainer):
     my_repository = providers.Singleton(MyRepository)
-    
+
     my_service: providers.Factory[MyServiceProtocol] = providers.Factory(
         MyService,
         repository=my_repository,
@@ -207,7 +207,7 @@ class MyContainer(containers.DeclarativeContainer):
 class MyAPIView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
-    
+
     def get(self, request):
         container = request.container
         service = container.my_app.my_service()
@@ -220,7 +220,7 @@ class MyAPIView(APIView):
 path('api/my-endpoint/', MyAPIView.as_view(), name='my_endpoint'),
 ```
 
-**Важно:** 
+**Важно:**
 - Все API должны быть через DRF, не через function-based views
 - Используйте версионирование: `/api/v1/...`
 - Всегда добавляйте аутентификацию и throttling
@@ -232,7 +232,7 @@ class MyModel(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
@@ -532,7 +532,7 @@ class MyFeatureService:
         repository: MyFeatureRepository,
     ):
         self.repository = repository
-    
+
     def process(self, data: dict) -> Result:
         # Бизнес-логика
         return result
@@ -540,7 +540,7 @@ class MyFeatureService:
 # 5. Контейнер (app/containers.py)
 class MyAppContainer(containers.DeclarativeContainer):
     my_feature_repository = providers.Singleton(MyFeatureRepository)
-    
+
     my_feature_service: providers.Factory[MyFeatureServiceProtocol] = (
         providers.Factory(
             MyFeatureService,
@@ -552,7 +552,7 @@ class MyAppContainer(containers.DeclarativeContainer):
 class MyFeatureAPIView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
-    
+
     def post(self, request):
         container = request.container
         service = container.my_app.my_feature_service()

@@ -45,8 +45,6 @@ production-развертывания при самостоятельном ра
 | `SECURE_HSTS_SECONDS` | Да | Значение по умолчанию `31536000`. Уменьшайте только при осторожном поэтапном включении HSTS. |
 | `SECURE_HSTS_INCLUDE_SUBDOMAINS` | Да | Сохраняйте `true`, если все поддомены готовы к работе только по HTTPS. |
 | `SECURE_HSTS_PRELOAD` | Да | Сохраняйте `true` только если вы намерены выполнить требования preload-списка. |
-| `ERROR_TRACKING_DSN` | Рекомендуется | Sentry-compatible DSN. Настоятельно рекомендуется для диагностики production-сбоев. |
-| `ERROR_TRACKING_ENVIRONMENT` | Рекомендуется | Обычно `production`. |
 
 Следующие переменные обязательны при использовании встроенного Postgres-сервиса
 из `docker-compose.prod.yaml`. В этом режиме `docker compose` автоматически
@@ -81,8 +79,6 @@ SECURE_CONTENT_TYPE_NOSNIFF=true
 SECURE_HSTS_SECONDS=31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS=true
 SECURE_HSTS_PRELOAD=true
-ERROR_TRACKING_DSN=
-ERROR_TRACKING_ENVIRONMENT=production
 ```
 
 Для внешнего экземпляра PostgreSQL используйте:
@@ -108,9 +104,8 @@ DATABASE_URL=postgresql://hlvm:replace-with-db-password@db.example.com:5432/hlvm
 13. Сохраняйте `SESSION_COOKIE_HTTPONLY=true` и отдельно проверьте `SESSION_COOKIE_SAMESITE`, прежде чем менять его.
 14. Сохраняйте `SECURE_SSL_REDIRECT=true`, если только TLS не завершается выше по цепочке и это не проверено отдельно.
 15. Проверьте `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS` и `SECURE_HSTS_PRELOAD` перед публичным запуском.
-16. Настройте `ERROR_TRACKING_DSN` и `ERROR_TRACKING_ENVIRONMENT` для наблюдаемости production-окружения.
-17. Запустите стек командой `docker compose -f docker-compose.prod.yaml up -d`.
-18. Убедитесь, что контейнеры находятся в состоянии health, командой `docker compose -f docker-compose.prod.yaml ps`.
-19. Убедитесь, что приложение доступно по HTTPS, а cookies помечены флагом `Secure`.
-20. Проверьте вход в систему, сохранение сессий, Redis-зависимые операции и подключение к базе данных.
-21. До ввода в эксплуатацию проверьте процедуры резервного копирования и восстановления PostgreSQL и пользовательских файлов.
+16. Запустите стек командой `docker compose -f docker-compose.prod.yaml up -d`.
+17. Убедитесь, что контейнеры находятся в состоянии health, командой `docker compose -f docker-compose.prod.yaml ps`.
+18. Убедитесь, что приложение доступно по HTTPS, а cookies помечены флагом `Secure`.
+19. Проверьте вход в систему, сохранение сессий, Redis-зависимые операции и подключение к базе данных.
+20. До ввода в эксплуатацию проверьте процедуры резервного копирования и восстановления PostgreSQL и пользовательских файлов.

@@ -2,7 +2,7 @@
 
 This module provides functions for:
 - image_to_base64: legacy image encoding helper
-- analyze_image_with_ai: extracting receipt data using configured backend
+- analyze_image_with_ai: extracting receipt data using local inference
 - paginator_custom_view: pagination utility
 """
 
@@ -22,11 +22,9 @@ from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.receipts.services.ai_providers import (
     ModelUnavailableError,
     RateLimitExceededError,
-    get_ai_provider,
 )
 from hasta_la_vista_money.receipts.services.receipt_inference_client import (
     analyze_image_with_receipt_inference,
-    should_use_receipt_inference,
 )
 
 T = TypeVar('T')
@@ -102,17 +100,16 @@ def image_to_base64(uploaded_file: UploadedFile) -> str:
 
 
 def analyze_image_with_ai(
-    image_base64: UploadedFile,
+    uploaded_file: UploadedFile,
     user_id: int | None = None,
 ) -> str:
-    """Extract receipt data from image using configured backend.
+    """Extract receipt data from image using local receipt inference.
 
-    Prefers the internal receipt inference service when
-    ``RECEIPT_INFERENCE_URL`` is configured. Otherwise falls back to the
-    legacy OpenAI-compatible provider.
+    The project intentionally does not use external LLM fallbacks for receipt
+    data, so all recognition goes through ``RECEIPT_INFERENCE_URL``.
 
     Args:
-        image_base64: Uploaded receipt image file.
+        uploaded_file: Uploaded receipt image file.
         user_id: Optional user ID for rate limiting.
 
     Returns:
@@ -125,12 +122,7 @@ def analyze_image_with_ai(
         TypeError: If AI response doesn't contain content.
     """
     check_ai_rate_limit(user_id)
-
-    if should_use_receipt_inference():
-        return analyze_image_with_receipt_inference(image_base64)
-
-    provider = get_ai_provider()
-    return provider.analyze(image_base64)
+    return analyze_image_with_receipt_inference(uploaded_file)
 
 
 def paginator_custom_view(

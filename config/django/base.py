@@ -6,12 +6,10 @@ from typing import Any
 
 import dj_database_url
 import django_stubs_ext
-import sentry_sdk
 import structlog
 from csp.constants import NONCE, SELF
 from decouple import config
 from django.core.exceptions import ImproperlyConfigured
-from sentry_sdk.integrations.django import DjangoIntegration
 
 import hasta_la_vista_money.api.schema  # noqa: F401
 from config.django.sessions import *  # noqa: F403
@@ -458,20 +456,6 @@ REST_FRAMEWORK = {
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
-
-# Error tracking
-ERROR_TRACKING_DSN = config('ERROR_TRACKING_DSN', default='')
-if ERROR_TRACKING_DSN:
-    sentry_sdk.init(
-        dsn=str(ERROR_TRACKING_DSN),
-        integrations=[DjangoIntegration()],
-        auto_session_tracking=False,
-        traces_sample_rate=0,
-        send_default_pii=True,
-        environment=str(
-            config('ERROR_TRACKING_ENVIRONMENT', default=''),
-        ),
-    )
 
 # Rosetta
 ROSETTA_ENABLE_TRANSLATION_SUGGESTIONS = True

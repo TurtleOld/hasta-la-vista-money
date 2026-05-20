@@ -166,30 +166,8 @@ def create_receipt(request, receipt_form, product_formset, seller):
 ```python
 def analyze_image_with_ai(image_base64: UploadedFile):
     """Обработка изображения чека с помощью ИИ."""
-    
-    client = OpenAI(
-        base_url=os.environ.get('API_BASE_URL'),
-        api_key=os.environ.get('API_KEY')
-    )
-    
-    response = client.chat.completions.create(
-        model=os.environ.get('API_MODEL', 'openai/gpt-4o'),
-        temperature=0.6,
-        messages=[
-            {
-                'role': 'system',
-                'content': 'Системный промпт для извлечения данных'
-            },
-            {
-                'role': 'user',
-                'content': [
-                    {'type': 'text', 'text': 'Инструкции по обработке'},
-                    {'type': 'image_url', 'image_url': {'url': image_to_base64(image_base64)}}
-                ]
-            }
-        ]
-    )
-    return response.choices[0].message.content
+    check_ai_rate_limit(user_id)
+    return analyze_image_with_receipt_inference(image_base64)
 ```
 
 ## API разработка
@@ -532,9 +510,8 @@ def handle_receipt_error(error, context):
 
 ```bash
 # ИИ-сервис
-API_BASE_URL=https://models.github.ai/inference
-API_KEY=your_api_key_here
-API_MODEL=openai/gpt-4o
+RECEIPT_INFERENCE_URL=http://receipt-inference:8010
+RECEIPT_INFERENCE_TIMEOUT=420
 
 # Настройки обработки
 RECEIPT_MAX_FILE_SIZE=10485760  # 10 МБ
