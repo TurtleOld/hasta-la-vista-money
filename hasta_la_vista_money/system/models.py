@@ -1,4 +1,4 @@
-"""Shared operational models."""
+"""System-level operational models."""
 
 from typing import ClassVar
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from hasta_la_vista_money.core.models import AuditLog
+from hasta_la_vista_money.system.models import AuditLog
 
 
 @admin.register(AuditLog)

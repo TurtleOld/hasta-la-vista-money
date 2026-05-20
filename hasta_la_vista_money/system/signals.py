@@ -11,7 +11,6 @@ from django.dispatch import receiver
 from django.utils.encoding import force_str
 from django.utils.functional import Promise
 
-from hasta_la_vista_money.core.models import AuditLog
 from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import (
     Account,
@@ -19,6 +18,7 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.users.models import User
 
 AUDITED_MODELS = (Account, Expense, Income, Receipt, TransferMoneyLog)

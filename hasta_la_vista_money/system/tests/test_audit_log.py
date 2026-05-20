@@ -3,8 +3,8 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from hasta_la_vista_money.core.models import AuditLog
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.system.models import AuditLog
 
 User = get_user_model()
 

@@ -12,7 +12,10 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
-from hasta_la_vista_money.core.views import HealthCheckView, ReadinessCheckView
+from hasta_la_vista_money.system.views import (
+    HealthCheckView,
+    ReadinessCheckView,
+)
 from hasta_la_vista_money.users.views import (
     IndexView,
     LoginUser,

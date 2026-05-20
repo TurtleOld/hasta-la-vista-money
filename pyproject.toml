@@ -163,7 +163,7 @@ known-first-party = ["hasta_la_vista_money"]
 "hasta_la_vista_money/finance_account/models.py" = [
     "PLC0415",
 ]
-"hasta_la_vista_money/core/signals.py" = [
+"hasta_la_vista_money/system/signals.py" = [
     "SLF001",
 ]
 "hasta_la_vista_money/receipts/services/receipt_ai_prompt.py" = [
