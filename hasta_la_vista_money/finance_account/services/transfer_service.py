@@ -74,19 +74,20 @@ class TransferService:
         validate_different_accounts(from_account, to_account)
         validate_account_balance(from_account, amount)
 
-        if from_account.transfer_money(to_account, amount):
-            transfer_log = self.transfer_money_log_repository.create_log(
-                user=user,
-                from_account=from_account,
-                to_account=to_account,
-                amount=amount,
-                exchange_date=exchange_date,
-                notes=notes or '',
-            )
-            transaction.on_commit(
-                lambda: invalidate_user_detailed_statistics_cache(user.pk),
-            )
-            return transfer_log
+        from_account.balance -= amount
+        to_account.balance += amount
+        from_account.save(update_fields=['balance'])
+        to_account.save(update_fields=['balance'])
 
-        error_msg = 'Transfer failed - insufficient funds or invalid accounts'
-        raise ValueError(error_msg)
+        transfer_log = self.transfer_money_log_repository.create_log(
+            user=user,
+            from_account=from_account,
+            to_account=to_account,
+            amount=amount,
+            exchange_date=exchange_date,
+            notes=notes or '',
+        )
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(user.pk),
+        )
+        return transfer_log

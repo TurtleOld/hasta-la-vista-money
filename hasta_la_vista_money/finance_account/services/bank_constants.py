@@ -1,12 +1,17 @@
-"""Bank constants for credit card calculations."""
+"""Backward-compatible import path for bank constants."""
 
-from typing import Final
-
-BANK_SBERBANK: Final = 'SBERBANK'
-BANK_RAIFFEISENBANK: Final = 'RAIFFAISENBANK'
-BANK_DEFAULT: Final = '-'
-
-SUPPORTED_BANKS: Final[tuple[str, ...]] = (
-    BANK_SBERBANK,
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_CHOICES,
+    BANK_DEFAULT,
     BANK_RAIFFEISENBANK,
+    BANK_SBERBANK,
+    SUPPORTED_BANKS,
 )
+
+__all__ = [
+    'BANK_CHOICES',
+    'BANK_DEFAULT',
+    'BANK_RAIFFEISENBANK',
+    'BANK_SBERBANK',
+    'SUPPORTED_BANKS',
+]
