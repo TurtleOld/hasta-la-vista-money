@@ -6,6 +6,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db.models.aggregates import Sum
 from django.db.models.functions import TruncMonth
 from django.http import (
@@ -97,6 +98,22 @@ class IncomeView(BaseEntityFilterView, BaseView, EntityListViewMixin):
     template_name = 'income/income.html'
     context_object_name = 'incomes'
 
+    def get_template_names(self) -> list[str]:
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['income/_income_table.html']
+        return [self.template_name]
+
+    def _get_group_users(self, user: User) -> list[User]:
+        group_id = self.request.GET.get('group_id', 'my')
+        request = self.get_request_with_container()
+        account_service = request.container.core.account_service()
+        return account_service.get_users_for_group(user, group_id) or []
+
+    def _base_querystring(self) -> str:
+        query = self.request.GET.copy()
+        query.pop('page', None)
+        return query.urlencode()
+
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """
         Build context for income list, including categories, filters,
@@ -106,6 +123,7 @@ class IncomeView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         self.get_request_with_container()
         user = self.get_current_user()
         depth_limit = 3
+        group_users = self._get_group_users(user)
 
         categories = (
             IncomeCategory.objects.filter(user=user)
@@ -124,9 +142,11 @@ class IncomeView(BaseEntityFilterView, BaseView, EntityListViewMixin):
             'category',
             'account',
         )
-        income_filter = self.get_filtered_queryset(
-            IncomeFilter,
-            income_queryset,
+        income_filter = IncomeFilter(
+            self.request.GET,
+            queryset=income_queryset,
+            user=user,
+            users=group_users,
         )
 
         flattened_categories = self.get_flattened_categories(
@@ -136,7 +156,12 @@ class IncomeView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         )
 
         income_by_month = income_filter.qs.values('date', 'amount')
-        pages_income = income_by_month
+        paginator = Paginator(
+            list(income_filter.qs),
+            constants.PAGINATE_BY_DEFAULT,
+        )
+        page_obj = paginator.get_page(self.request.GET.get('page'))
+        pages_income = page_obj.object_list
 
         total_amount_page = self.get_total_amount_value(
             income_by_month,
@@ -165,6 +190,11 @@ class IncomeView(BaseEntityFilterView, BaseView, EntityListViewMixin):
                 'categories': categories,
                 'income_filter': income_filter,
                 'income_by_month': pages_income,
+                'incomes': pages_income,
+                'page_obj': page_obj,
+                'paginator': paginator,
+                'base_querystring': self._base_querystring(),
+                'selected_group_id': self.request.GET.get('group_id', 'my'),
                 'flattened_categories': flattened_categories,
                 'total_amount_page': total_amount_page,
                 'total_amount_period': total_amount_period,

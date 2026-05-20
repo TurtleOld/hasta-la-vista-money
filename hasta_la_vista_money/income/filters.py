@@ -35,22 +35,25 @@ class IncomeFilter(django_filters.FilterSet):
         Initialize filter fields for the current user.
         """
         self.user = kwargs.pop('user', None)
+        self.users = kwargs.pop('users', None)
         super().__init__(*args, **kwargs)
+        users = self.users or [self.user]
         self.filters['category'].queryset = (  # type: ignore[attr-defined]
-            IncomeCategory.objects.filter(user=self.user)
+            IncomeCategory.objects.filter(user__in=users)
             .distinct()
             .order_by('name')
         )
         self.filters['account'].queryset = Account.objects.filter(  # type: ignore[attr-defined]
-            user=self.user,
+            user__in=users,
         )
 
     @property
     def qs(self) -> Any:
         """Get the queryset of incomes for the current user."""
         queryset = super().qs
+        users = self.users or [self.user]
         return (
-            queryset.filter(user=self.user)
+            queryset.filter(user__in=users)
             .distinct()
             .values(
                 'id',
@@ -59,6 +62,8 @@ class IncomeFilter(django_filters.FilterSet):
                 'category__name',
                 'category__parent_category__name',
                 'amount',
+                'user__id',
+                'user__username',
             )
         )
 

@@ -37,6 +37,19 @@ class IncomeViewsTest(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('income:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'hx-get')
+        self.assertNotContains(response, 'tabulator')
+
+    def test_list_income_htmx_returns_table_partial(self) -> None:
+        """Test income list HTMX request renders only the table partial."""
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse_lazy('income:list'),
+            headers={'HX-Request': 'true'},
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertTemplateUsed(response, 'income/_income_table.html')
+        self.assertContains(response, 'income-table-block')
 
     def test_income_create(self) -> None:
         """Test creating a new income through POST request."""

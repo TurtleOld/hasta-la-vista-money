@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.http import (
     HttpResponse,
     HttpResponseRedirect,
@@ -96,6 +97,32 @@ class ExpenseView(BaseEntityFilterView, ExpenseBaseView, EntityListViewMixin):
     def template_name(self) -> str:  # type: ignore[override]
         return constants.EXPENSE_TEMPLATE
 
+    def get_template_names(self) -> list[str]:
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['expense/_expense_table.html']
+        return [self.template_name]
+
+    def _get_group_users(self, user: User) -> list[User]:
+        group_id = self.request.GET.get('group_id', 'my')
+        request = self.get_request_with_container()
+        account_service = request.container.core.account_service()
+        return account_service.get_users_for_group(user, group_id) or []
+
+    def _base_querystring(self) -> str:
+        query = self.request.GET.copy()
+        query.pop('page', None)
+        return query.urlencode()
+
+    def _item_date(self, expense: Any) -> Any:
+        if isinstance(expense, dict):
+            return expense.get('date')
+        return getattr(expense, 'date', None)
+
+    def _item_amount(self, expense: Any) -> Any:
+        if isinstance(expense, dict):
+            return expense.get('amount', 0)
+        return getattr(expense, 'amount', 0)
+
     def get_context_data(
         self,
         *args: Any,
@@ -110,6 +137,7 @@ class ExpenseView(BaseEntityFilterView, ExpenseBaseView, EntityListViewMixin):
         context: dict[str, Any] = super().get_context_data(**kwargs)
         user = self.get_current_user()
         request = self.get_request_with_container()
+        group_users = self._get_group_users(user)
 
         expense_service = request.container.expense.expense_service(
             user=user,
@@ -125,21 +153,33 @@ class ExpenseView(BaseEntityFilterView, ExpenseBaseView, EntityListViewMixin):
             'category',
             'account',
         )
-        expense_filter = self.get_filtered_queryset(
-            ExpenseFilter,
-            expense_queryset,
+        expense_filter = ExpenseFilter(
+            self.request.GET,
+            queryset=expense_queryset,
+            user=user,
+            users=group_users,
         )
         expenses = expense_filter.qs
 
-        receipt_expenses = receipt_service.get_receipt_expenses()
+        receipt_expenses = (
+            receipt_service.get_receipt_expenses_by_users(group_users)
+            if group_users and group_users != [user]
+            else receipt_service.get_receipt_expenses()
+        )
 
         all_expenses = list(expenses) + receipt_expenses
+        all_expenses.sort(
+            key=self._item_date,
+            reverse=True,
+        )
+        paginator = Paginator(all_expenses, constants.PAGINATE_BY_DEFAULT)
+        page_obj = paginator.get_page(self.request.GET.get('page'))
 
         total_amount_page = sum(
-            getattr(expense, 'amount', 0) for expense in all_expenses
+            self._item_amount(expense) for expense in page_obj.object_list
         )
         total_amount_period = sum(
-            getattr(expense, 'amount', 0) for expense in all_expenses
+            self._item_amount(expense) for expense in all_expenses
         )
 
         expense_categories = expense_service.get_categories()
@@ -155,7 +195,11 @@ class ExpenseView(BaseEntityFilterView, ExpenseBaseView, EntityListViewMixin):
             {
                 'expense_filter': expense_filter,
                 'categories': expense_categories,
-                'expenses': all_expenses,
+                'expenses': page_obj.object_list,
+                'page_obj': page_obj,
+                'paginator': paginator,
+                'base_querystring': self._base_querystring(),
+                'selected_group_id': self.request.GET.get('group_id', 'my'),
                 'add_expense_form': add_expense_form,
                 'flattened_categories': flattened_categories,
                 'total_amount_page': total_amount_page,
