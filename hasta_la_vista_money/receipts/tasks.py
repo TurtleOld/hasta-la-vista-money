@@ -30,6 +30,9 @@ from hasta_la_vista_money.receipts.services.receipt_ai_prompt import (
     ModelUnavailableError,
     RateLimitExceededError,
 )
+from hasta_la_vista_money.receipts.validators.parsed_receipt import (
+    validate_receipt_parse_payload,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -82,7 +85,10 @@ def _parse_inference_payload(raw: str) -> dict[str, Any]:
         raise ValueError('Empty inference response')
     match = _JSON_CODE_BLOCK_RE.search(raw)
     cleaned = match.group(1) if match else raw.strip()
-    return json.loads(cleaned)
+    payload = json.loads(cleaned)
+    if not isinstance(payload, dict):
+        raise ValueError('Inference response must be a JSON object')
+    return validate_receipt_parse_payload(payload).to_dict()
 
 
 def _run_inference(pending: PendingReceipt) -> dict[str, Any]:
