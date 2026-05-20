@@ -35,6 +35,10 @@ from hasta_la_vista_money.receipts.tasks import (
     cleanup_stale_pending_receipts,
     process_pending_receipt,
 )
+from hasta_la_vista_money.receipts.validators.parsed_receipt import (
+    ReceiptParseValidationError,
+    validate_receipt_parse_payload,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -195,6 +199,20 @@ class ProcessPendingReceiptTaskTests(TestCase):
         self.assertEqual(pending.status, PendingReceiptStatus.FAILED)
         self.assertNotEqual(pending.error_message, '')
 
+    def test_task_marks_failed_on_invalid_schema(self) -> None:
+        pending = self._create_pending()
+        payload = _fake_payload()
+        payload['items'][0]['price'] = -1
+        with mock.patch(
+            'hasta_la_vista_money.receipts.tasks.analyze_image_with_ai',
+            return_value=json.dumps(payload),
+        ):
+            process_pending_receipt(pending.pk)
+
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, PendingReceiptStatus.FAILED)
+        self.assertNotEqual(pending.error_message, '')
+
     def test_cleanup_purges_expired_rows(self) -> None:
         pending = self._create_pending()
         PendingReceipt.objects.filter(pk=pending.pk).update(
@@ -294,6 +312,40 @@ class ReceiptInferenceClientContentTypeTests(TestCase):
 
         self.assertEqual(json.loads(raw)['name_seller'], 'Shop')
         self.assertEqual(post_calls[0]['files']['file'][2], 'image/png')
+
+
+class ReceiptParseValidatorTests(TestCase):
+    """Receipt-inference payload validation."""
+
+    def test_valid_payload_is_normalized(self) -> None:
+        result = validate_receipt_parse_payload(_fake_payload())
+
+        normalized = result.to_dict()
+
+        self.assertEqual(normalized['total_sum'], '100.00')
+        self.assertEqual(normalized['operation_type'], 1)
+        self.assertEqual(normalized['items'][0]['amount'], '100.00')
+
+    def test_rejects_missing_required_field(self) -> None:
+        payload = _fake_payload()
+        del payload['receipt_date']
+
+        with self.assertRaises(ReceiptParseValidationError):
+            validate_receipt_parse_payload(payload)
+
+    def test_rejects_unknown_fields(self) -> None:
+        payload = _fake_payload()
+        payload['debug_prompt'] = 'leak'
+
+        with self.assertRaises(ReceiptParseValidationError):
+            validate_receipt_parse_payload(payload)
+
+    def test_rejects_total_sum_mismatch(self) -> None:
+        payload = _fake_payload()
+        payload['total_sum'] = '150.00'
+
+        with self.assertRaises(ReceiptParseValidationError):
+            validate_receipt_parse_payload(payload)
 
 
 class UploadImageViewTests(TestCase):
