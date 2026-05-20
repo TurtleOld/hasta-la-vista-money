@@ -11,6 +11,10 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_CHOICES,
+    BANK_DEFAULT,
+)
 from hasta_la_vista_money.finance_account.currencies import (
     currency_choices,
     get_default_currency,
@@ -117,11 +121,7 @@ class Account(TimeStampedModel):
         ('DebitCard', _('Дебетовая карта')),
         ('CASH', _('Наличные')),
     ]
-    BANK_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
-        ('-', _('—')),  # Default value - dash
-        ('SBERBANK', _('Сбербанк')),
-        ('RAIFFAISENBANK', _('Райффайзенбанк')),
-    ]
+    BANK_LIST: ClassVar[tuple[tuple[str, str | Promise], ...]] = BANK_CHOICES
 
     user = models.ForeignKey(
         User,
@@ -141,7 +141,7 @@ class Account(TimeStampedModel):
     bank = models.CharField(
         max_length=20,
         choices=BANK_LIST,
-        default='-',
+        default=BANK_DEFAULT,
         verbose_name=_('Банк'),
         help_text=_('Банк, выпустивший карту или обслуживающий счёт'),
     )
