@@ -1229,6 +1229,24 @@ class TestModelValidation(TestCase):
 
         self.assertEqual(seller.name_seller, '')
 
+    def test_receipt_kept_when_seller_deleted(self) -> None:
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller='Удаляемый продавец',
+        )
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=seller,
+            receipt_date=timezone.now(),
+            total_sum=Decimal('100.00'),
+        )
+
+        seller.delete()
+        receipt.refresh_from_db()
+
+        self.assertIsNone(receipt.seller)
+
 
 class TestReceiptOperations(TestCase):
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]

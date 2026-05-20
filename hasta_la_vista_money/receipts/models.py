@@ -430,9 +430,11 @@ class Receipt(models.Model):
     )
     seller = models.ForeignKey(
         Seller,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         verbose_name='seller',
         related_name='receipt_sellers',
+        null=True,
+        blank=True,
     )
     user = models.ForeignKey(
         User,

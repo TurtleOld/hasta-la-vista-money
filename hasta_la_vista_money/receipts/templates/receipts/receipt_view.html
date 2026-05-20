@@ -3,9 +3,10 @@
 {% load comma %}
 {% load csp %}
 
-{% block title %}{% translate 'Просмотр чека' %} - {{ receipt.seller.name_seller }}{% endblock %}
+{% block title %}{% translate 'Просмотр чека' %} - {% translate 'Неизвестный продавец' as unknown_seller %}{{ receipt.seller.name_seller|default:unknown_seller }}{% endblock %}
 
 {% block content %}
+{% translate 'Неизвестный продавец' as unknown_seller %}
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="mb-6">
         <div class="bg-gradient-to-br from-green-600 to-teal-500 rounded-2xl shadow-lg overflow-hidden">
@@ -49,7 +50,7 @@
                 <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div class="flex-1">
                         <h3 class="text-2xl font-heading font-bold text-green-600 dark:text-green-400 mb-4">
-                            {{ receipt.seller.name_seller }}
+                            {{ receipt.seller.name_seller|default:unknown_seller }}
                         </h3>
                         {% if receipt.seller.retail_place %}
                         <div class="flex items-start gap-2 mb-3">
