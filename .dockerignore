@@ -21,7 +21,6 @@ build/
 coverage.xml
 .coverage
 htmlcov/
-.pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .hypothesis/
