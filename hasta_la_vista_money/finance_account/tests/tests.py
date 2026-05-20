@@ -323,22 +323,6 @@ class TestAccount(TestCase):
         )
         self.assertEqual(self.account1.get_absolute_url(), expected_url)
 
-        initial_balance1 = self.account1.balance
-        initial_balance2 = self.account2.balance
-        amount = Decimal(100)
-
-        result = self.account1.transfer_money(self.account2, amount)
-        self.assertTrue(result)
-
-        self.account1.refresh_from_db()
-        self.account2.refresh_from_db()
-        self.assertEqual(self.account1.balance, initial_balance1 - amount)
-        self.assertEqual(self.account2.balance, initial_balance2 + amount)
-
-        large_amount = self.account1.balance + Decimal(1000)
-        result = self.account1.transfer_money(self.account2, large_amount)
-        self.assertFalse(result)
-
     def test_transfer_money_log_model(self) -> None:
         """Test TransferMoneyLog model."""
         transfer_log = TransferMoneyLog.objects.create(
@@ -747,22 +731,6 @@ class TestAccountBusinessLogic(TestCase):
         self.account2.save()
         self.container = ApplicationContainer()
         self.account_service = self.container.finance_account.account_service()
-
-    def test_transfer_money_success(self) -> None:
-        amount = Decimal(100)
-        initial_balance_1 = self.account1.balance
-        initial_balance_2 = self.account2.balance
-        result = self.account1.transfer_money(self.account2, amount)
-        self.account1.refresh_from_db()
-        self.account2.refresh_from_db()
-        self.assertTrue(result)
-        self.assertEqual(self.account1.balance, initial_balance_1 - amount)
-        self.assertEqual(self.account2.balance, initial_balance_2 + amount)
-
-    def test_transfer_money_insufficient(self) -> None:
-        amount = self.account1.balance + Decimal(1)
-        result = self.account1.transfer_money(self.account2, amount)
-        self.assertFalse(result)
 
     def test_get_credit_card_debt(self) -> None:
         self.account1.type_account = ACCOUNT_TYPE_CREDIT_CARD

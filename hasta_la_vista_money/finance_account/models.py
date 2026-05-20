@@ -1,8 +1,7 @@
 from datetime import date
-from decimal import Decimal
 from typing import ClassVar
 
-from django.db import models, transaction
+from django.db import models
 from django.urls import reverse
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
@@ -210,31 +209,6 @@ class Account(TimeStampedModel):
         Returns the absolute URL to edit this account in the admin or UI.
         """
         return reverse('finance_account:change', args=[self.pk])
-
-    @transaction.atomic
-    def transfer_money(self, to_account: 'Account', amount: Decimal) -> bool:
-        """
-        Transfers a specified amount of money from this account to another
-        account.
-        Returns True if the transfer was successful, False otherwise
-        (e.g., insufficient funds).
-
-        Args:
-            to_account (Account): The account to transfer money to.
-            amount (Decimal): The amount to transfer.
-
-        Returns:
-            bool: True if transfer succeeded, False otherwise.
-        """
-        if amount <= 0:
-            return False
-        if amount <= self.balance:
-            self.balance -= amount
-            to_account.balance += amount
-            self.save()
-            to_account.save()
-            return True
-        return False
 
 
 class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):
