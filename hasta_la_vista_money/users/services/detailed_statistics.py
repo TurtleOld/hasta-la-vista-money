@@ -69,6 +69,8 @@ class MonthDataDict(TypedDict, total=False):
     savings: float
     savings_percent: float
     balance: float
+    month_start: str
+    month_end: str
 
 
 class ChartDataDict(TypedDict):
@@ -520,18 +522,15 @@ def _six_months_data(
                 'expenses': exp_sum,
                 'income': inc_sum,
                 'savings': inc_sum - exp_sum,
-                'month_start': m_start,
-                'month_end': m_end,
+                'month_start': m_start.isoformat(),
+                'month_end': m_end.isoformat(),
             },
         )
     out.reverse()
 
     if out:
-        first_month_start = out[0]['month_start']
-        if isinstance(first_month_start, datetime):
-            first_month_start_date = first_month_start.date()
-        else:
-            first_month_start_date = first_month_start  # type: ignore[assignment]
+        first_month_start = str(out[0]['month_start'])
+        first_month_start_date = date.fromisoformat(first_month_start)
         period_end_date: date = first_month_start_date - timedelta(days=1)
 
         total_income_before = _sum_amount_for_period(
@@ -583,10 +582,7 @@ def _six_months_data(
         )
 
         running_balance = running_balance + income_val - expenses_val
-
         m['balance'] = round(running_balance, 2)
-        del m['month_start']
-        del m['month_end']
     return out  # type: ignore[return-value]
 
 

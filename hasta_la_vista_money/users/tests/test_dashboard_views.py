@@ -69,6 +69,18 @@ class DashboardViewTest(TestCase):
         response = self.client.get(reverse('users:dashboard'))
         self.assertIn('available_widgets', response.context)
         self.assertIn('default_period', response.context)
+        self.assertIn('kpi_cards', response.context)
+
+    def test_dashboard_view_has_clickable_kpi_cards(self) -> None:
+        """Test dashboard KPI strip points to filtered operation lists."""
+        response = self.client.get(reverse('users:dashboard'))
+        kpi_cards = response.context['kpi_cards']
+
+        self.assertEqual(len(kpi_cards), 4)
+        for card in kpi_cards:
+            self.assertIn('url', card)
+            self.assertIn('date_after=', card['url'])
+            self.assertIn('date_before=', card['url'])
 
 
 class DashboardDataViewTest(TestCase):
@@ -128,6 +140,20 @@ class DashboardDataViewTest(TestCase):
         data = response.json()
         self.assertIn('recent_transactions', data)
         self.assertIsInstance(data['recent_transactions'], list)
+
+    def test_dashboard_data_view_contains_click_through_urls(self) -> None:
+        """Test dashboard data contains operation list URLs for JS clicks."""
+        response = self.client.get(reverse('users:dashboard_data'))
+        data = response.json()
+
+        self.assertEqual(
+            data['click_through']['expense_list_url'],
+            reverse('expense:list'),
+        )
+        self.assertEqual(
+            data['click_through']['income_list_url'],
+            reverse('income:list'),
+        )
 
     def test_dashboard_data_view_with_period(self) -> None:
         """Test API with period parameter."""

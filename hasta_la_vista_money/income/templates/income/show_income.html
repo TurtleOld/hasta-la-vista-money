@@ -1,66 +1,61 @@
-{% load comma %}
 {% load i18n %}
 
 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
     <div class="mb-6">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
             <h1 class="text-2xl sm:text-3xl font-heading font-semibold text-gray-900 dark:text-gray-100">
                 {% translate 'Доходы' %}
             </h1>
             <div class="flex items-center gap-2">
-                <button id="toggle-group-filter" class="inline-flex items-center justify-center rounded-lg border border-green-600 dark:border-green-400 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="{% translate 'Фильтр по группе' %}" type="button">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-                    </svg>
+                <a href="{% url 'income:create' %}" class="inline-flex items-center justify-center rounded-lg border border-green-600 dark:border-green-400 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
+                    {% translate 'Добавить доход' %}
+                </a>
+                <a href="{% url 'income:category_list' %}" class="inline-flex items-center justify-center rounded-lg border border-green-600 dark:border-green-400 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
+                    {% translate 'Категории' %}
+                </a>
+            </div>
+        </div>
+
+        <form class="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:grid-cols-2 lg:grid-cols-5"
+              hx-get="{% url 'income:list' %}"
+              hx-target="#income-table-block"
+              hx-push-url="true"
+              hx-trigger="change, submit">
+            <div>
+                <label for="income-group-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{% translate 'Группа' %}</label>
+                <select id="income-group-select" name="group_id" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                    <option value="my" {% if selected_group_id == 'my' %}selected{% endif %}>{% translate 'Мои' %}</option>
+                    {% for group in user.groups.all %}
+                        <option value="{{ group.id }}" {% if selected_group_id == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="id_category" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{% translate 'Категория' %}</label>
+                {{ income_filter.form.category }}
+            </div>
+            <div>
+                <label for="id_account" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{% translate 'Счёт' %}</label>
+                {{ income_filter.form.account }}
+            </div>
+            <div>
+                <label for="id_date_0" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{% translate 'С даты' %}</label>
+                {{ income_filter.form.date.0 }}
+            </div>
+            <div>
+                <label for="id_date_1" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{% translate 'По дату' %}</label>
+                {{ income_filter.form.date.1 }}
+            </div>
+            <div class="sm:col-span-2 lg:col-span-5 flex flex-wrap gap-2">
+                <button type="submit" class="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+                    {% translate 'Применить' %}
                 </button>
-                <div id="income-group-filter-block" class="hidden flex items-center gap-2">
-                    <label for="income-group-select" class="text-sm font-medium text-gray-700 dark:text-gray-300">{% translate 'Группа:' %}</label>
-                    <select id="income-group-select" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 focus:outline-none">
-                        <option value="my">{% translate 'Мои' %}</option>
-                        {% for group in user.groups.all %}
-                            <option value="{{ group.id }}">{{ group.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <a href="{% url 'income:create' %}" class="inline-flex items-center justify-center rounded-lg border border-green-600 dark:border-green-400 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="{% translate 'Добавить новую доходную операцию' %}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                    </svg>
-                </a>
-                <a href="{% url 'income:category_list' %}" class="inline-flex items-center justify-center rounded-lg border border-green-600 dark:border-green-400 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="{% translate 'Добавить категорию' %}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
-                    </svg>
+                <a href="{% url 'income:list' %}" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+                    {% translate 'Сбросить' %}
                 </a>
             </div>
-        </div>
-        <div class="overflow-x-auto" id="income-table-block">
-            <div class="relative min-h-[400px]">
-                <div id="income-skeleton" class="skeleton-table absolute inset-0 z-10">
-                    <div class="skeleton-header">
-                        <div class="skeleton-cell"></div>
-                        <div class="skeleton-cell"></div>
-                        <div class="skeleton-cell"></div>
-                        <div class="skeleton-cell"></div>
-                        <div class="skeleton-cell"></div>
-                        <div class="skeleton-cell"></div>
-                    </div>
-                    <div class="skeleton-body">
-                        {% for i in "12345" %}
-                        <div class="skeleton-row">
-                            <div class="skeleton-cell"></div>
-                            <div class="skeleton-cell"></div>
-                            <div class="skeleton-cell"></div>
-                            <div class="skeleton-cell"></div>
-                            <div class="skeleton-cell"></div>
-                            <div class="skeleton-cell"></div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                <div id="income-table" class="income-table tabulator relative z-20 invisible" data-current-user-id="{{ request.user.id }}"></div>
-            </div>
-            <div id="income-mobile-cards" class="mobile-cards"></div>
-        </div>
+        </form>
+
+        {% include 'income/_income_table.html' %}
     </div>
 </div>

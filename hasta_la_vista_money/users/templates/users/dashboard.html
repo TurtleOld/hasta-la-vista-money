@@ -51,6 +51,34 @@
             </div>
         </div>
 
+        {% if kpi_cards %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8" aria-label="{% translate 'Ключевые показатели месяца' %}">
+            {% for card in kpi_cards %}
+            <a href="{{ card.url }}" class="group block bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ card.title }}</p>
+                        <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ card.value|floatformat:2 }} ₽
+                        </p>
+                    </div>
+                    <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg {% if card.tone == 'green' %}bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300{% elif card.tone == 'red' %}bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300{% elif card.tone == 'amber' %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300{% else %}bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300{% endif %}">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </span>
+                </div>
+                <div class="mt-4 flex items-center justify-between gap-3 text-sm">
+                    <span class="truncate text-gray-600 dark:text-gray-300">{{ card.subtitle }}</span>
+                    <span class="text-blue-600 dark:text-blue-400 font-medium opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100">
+                        {% translate 'Подробнее' %}
+                    </span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <div id="widgets-grid" class="dashboard-grid">
             <div class="dashboard-empty-state">
                 <svg class="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

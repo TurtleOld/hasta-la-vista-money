@@ -7,7 +7,6 @@
 
 @custom-variant dark (&:where(.dark, .dark *, [data-bs-theme="dark"], [data-bs-theme="dark"] *));
 
-@import './tabulator-tailwind.css';
 @import './light.css';
 /**
   * A catch-all path to Django template files, JavaScript, and Python files
@@ -298,28 +297,6 @@
 
     html:not(.dark) [data-bs-theme='light'] .dark\:focus\:ring-offset-gray-900 {
       --tw-ring-offset-color: unset !important;
-    }
-
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:bg-gray-800,
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:bg-gray-900\/60,
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:bg-gray-700\/50 {
-      background-color: unset !important;
-    }
-
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:text-gray-100,
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:text-gray-200,
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:text-gray-300,
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:text-gray-400 {
-      color: unset !important;
-    }
-
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:border-gray-700,
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:border-gray-600 {
-      border-color: unset !important;
-    }
-
-    html:not(.dark) [data-bs-theme='light'] .tabulator .dark\:hover\:bg-gray-700\/50 {
-      background-color: unset !important;
     }
 
     html:not(.dark) [data-bs-theme='light'] .dark\:from-gray-900,

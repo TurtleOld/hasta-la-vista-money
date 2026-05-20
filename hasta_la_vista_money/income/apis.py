@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING, Any, cast
 
+from django.utils.dateparse import parse_date
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -220,6 +221,14 @@ class IncomeDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
                 )
                 .order_by('-date')
             )
+            date_after = parse_date(request.query_params.get('date_after', ''))
+            date_before = parse_date(
+                request.query_params.get('date_before', ''),
+            )
+            if date_after is not None:
+                incomes = incomes.filter(date__date__gte=date_after)
+            if date_before is not None:
+                incomes = incomes.filter(date__date__lte=date_before)
         else:
             incomes = Income.objects.none()
 

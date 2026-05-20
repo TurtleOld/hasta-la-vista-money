@@ -41,14 +41,16 @@ class ExpenseFilter(django_filters.FilterSet):
                 to filter querysets.
         """
         self.user = kwargs.pop('user', None)
+        self.users = kwargs.pop('users', None)
         super().__init__(*args, **kwargs)
+        users = self.users or [self.user]
         self.filters['category'].queryset = (  # type: ignore[attr-defined]
-            ExpenseCategory.objects.filter(user=self.user)
+            ExpenseCategory.objects.filter(user__in=users)
             .distinct()
             .order_by('name')
         )
         self.filters['account'].queryset = Account.objects.filter(  # type: ignore[attr-defined]
-            user=self.user,
+            user__in=users,
         )
 
     @property
@@ -59,7 +61,8 @@ class ExpenseFilter(django_filters.FilterSet):
             QuerySet filtered by user with distinct results.
         """
         queryset = super().qs
-        return queryset.filter(user=self.user).distinct()
+        users = self.users or [self.user]
+        return queryset.filter(user__in=users).distinct()
 
     def get_expenses_with_annotations(self) -> list[dict[str, Any]]:
         """Get expenses list with additional display fields.

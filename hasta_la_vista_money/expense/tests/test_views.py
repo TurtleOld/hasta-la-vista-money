@@ -29,6 +29,18 @@ class TestExpenseViews(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse_lazy('expense:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'hx-get')
+        self.assertNotContains(response, 'tabulator')
+
+    def test_list_expense_htmx_returns_table_partial(self) -> None:
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse_lazy('expense:list'),
+            headers={'HX-Request': 'true'},
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertTemplateUsed(response, 'expense/_expense_table.html')
+        self.assertContains(response, 'expense-table-block')
 
     def test_expense_create(self) -> None:
         self.client.force_login(self.user)

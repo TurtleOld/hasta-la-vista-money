@@ -17,11 +17,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_page_size(self, request):  # type: ignore[override]
-        """Support both Tabulator's `size` and legacy DRF `page_size`.
-
-        Tabulator uses `size` by default. Other API clients may still send
-        `page_size`, so we keep backwards compatibility.
-        """
+        """Support `size` and `page_size` query parameters."""
 
         if 'size' in request.query_params:
             self.page_size_query_param = 'size'

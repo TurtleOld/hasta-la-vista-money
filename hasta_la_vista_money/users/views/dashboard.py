@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from decimal import Decimal
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
+from urllib.parse import urlencode
 
 from dateutil.parser import parse as parse_date
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -14,6 +15,8 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
+from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import TemplateView
 
@@ -30,6 +33,10 @@ from hasta_la_vista_money.users.models import (
 )
 from hasta_la_vista_money.users.services.dashboard_analytics import (
     calculate_linear_trend,
+)
+from hasta_la_vista_money.users.services.dashboard_kpis import (
+    DashboardKpiDict,
+    get_dashboard_month_kpis,
 )
 from hasta_la_vista_money.users.services.detailed_statistics import (
     DashboardSummaryStatisticsDict,
@@ -56,6 +63,83 @@ class Transaction(TypedDict):
     account: str
 
 
+class DashboardKpiCard(TypedDict):
+    title: str
+    value: Decimal | str
+    subtitle: str
+    url: str
+    tone: str
+
+
+def _operation_list_url(
+    url_name: str,
+    period_start: Any,
+    period_end: Any,
+    extra_params: dict[str, Any] | None = None,
+) -> str:
+    params = {
+        'date_after': period_start.isoformat(),
+        'date_before': period_end.isoformat(),
+    }
+    if extra_params:
+        params.update(extra_params)
+    return f'{reverse(url_name)}?{urlencode(params)}'
+
+
+def _build_kpi_cards(kpis: DashboardKpiDict) -> list[DashboardKpiCard]:
+    period_start = kpis['period_start']
+    period_end = kpis['period_end']
+    expense_url = _operation_list_url(
+        'expense:list',
+        period_start,
+        period_end,
+    )
+    income_url = _operation_list_url('income:list', period_start, period_end)
+    top_category_id = kpis['top_expense_category_id']
+    top_category_url = (
+        _operation_list_url(
+            'expense:list',
+            period_start,
+            period_end,
+            {'category': top_category_id},
+        )
+        if top_category_id is not None
+        else expense_url
+    )
+
+    return [
+        {
+            'title': _('Доходы за месяц'),
+            'value': kpis['income'],
+            'subtitle': _('Открыть доходы периода'),
+            'url': income_url,
+            'tone': 'green',
+        },
+        {
+            'title': _('Расходы за месяц'),
+            'value': kpis['expenses'],
+            'subtitle': _('Открыть расходы периода'),
+            'url': expense_url,
+            'tone': 'red',
+        },
+        {
+            'title': _('Итог месяца'),
+            'value': kpis['net_result'],
+            'subtitle': _('Накоплено: %(rate).1f%%')
+            % {'rate': kpis['savings_rate']},
+            'url': income_url,
+            'tone': 'blue' if kpis['net_result'] >= constants.ZERO else 'red',
+        },
+        {
+            'title': _('Топ категория'),
+            'value': kpis['top_expense_category_total'],
+            'subtitle': kpis['top_expense_category_name'] or _('Нет расходов'),
+            'url': top_category_url,
+            'tone': 'amber',
+        },
+    ]
+
+
 class DashboardView(LoginRequiredMixin, TemplateView):
     """View for dashboard page.
 
@@ -78,6 +162,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             {'type': 'top_categories', 'name': 'Топ категорий'},
             {'type': 'recent_transactions', 'name': 'Последние операции'},
         ]
+        user = self.request.user
+        if isinstance(user, User):
+            context['kpi_cards'] = _build_kpi_cards(
+                get_dashboard_month_kpis(user),
+            )
 
         return context
 
@@ -350,6 +439,10 @@ class DashboardDataView(LoginRequiredMixin, View):
                 },
                 'comparison': comparison_data,
                 'recent_transactions': recent_transactions,
+                'click_through': {
+                    'expense_list_url': reverse('expense:list'),
+                    'income_list_url': reverse('income:list'),
+                },
             }
 
             return JsonResponse(data, safe=False)
