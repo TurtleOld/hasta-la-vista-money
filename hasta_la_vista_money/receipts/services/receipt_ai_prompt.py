@@ -58,8 +58,9 @@ def check_ai_rate_limit(user_id: int | None = None) -> None:
 
     window = config('AI_RATE_LIMIT_WINDOW', default=60, cast=int)
 
-    count = cache.get(cache_key, 0)
-    if count >= limit:
+    cache.add(cache_key, 0, window)
+    count = cache.incr(cache_key)
+    if count > limit:
         logger.warning(
             'AI API rate limit exceeded',
             extra={
@@ -76,8 +77,6 @@ def check_ai_rate_limit(user_id: int | None = None) -> None:
             ),
         )
         raise RateLimitExceededError(error_msg)
-
-    cache.set(cache_key, count + 1, window)
 
 
 def image_to_base64(uploaded_file: UploadedFile) -> str:
