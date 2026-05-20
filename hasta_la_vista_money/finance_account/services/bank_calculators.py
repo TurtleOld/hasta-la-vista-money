@@ -9,11 +9,11 @@ from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
-from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.finance_account.services.bank_constants import (
+from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_RAIFFEISENBANK,
     BANK_SBERBANK,
 )
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.protocols import (
     BankCalculatorProtocol,
 )

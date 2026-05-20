@@ -12,6 +12,10 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT_CARD,
     ACCOUNT_TYPE_DEBIT_CARD,
 )
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_CHOICES,
+    BANK_DEFAULT,
+)
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -41,6 +45,8 @@ class TestAddAccountForm(TestCase):
             form.fields['type_account'].initial,
             Account.TYPE_ACCOUNT_LIST[1][0],
         )
+        self.assertEqual(Account.BANK_LIST, BANK_CHOICES)
+        self.assertEqual(Account._meta.get_field('bank').default, BANK_DEFAULT)
 
         for field in form.fields.values():
             if hasattr(field.widget, 'attrs'):

@@ -17,13 +17,13 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_RAIFFEISENBANK,
+    SUPPORTED_BANKS,
+)
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.bank_calculators import (
     create_bank_calculator,
-)
-from hasta_la_vista_money.finance_account.services.bank_constants import (
-    BANK_RAIFFEISENBANK,
-    SUPPORTED_BANKS,
 )
 from hasta_la_vista_money.finance_account.services.types import (
     GracePeriodInfoDict,
@@ -220,7 +220,8 @@ class CreditCalculationService:
             datetime.combine(purchase_month.replace(day=1), time.min),
         )
         last_day_of_month = monthrange(
-            purchase_start.year, purchase_start.month
+            purchase_start.year,
+            purchase_start.month,
         )[1]
         purchase_end = timezone.make_aware(
             datetime.combine(
@@ -468,7 +469,7 @@ class CreditCalculationService:
         for _ in range(constants.STATEMENT_DATES_COUNT):
             statement_dates.append(current_statement_date)
             current_statement_date = current_statement_date + relativedelta(
-                months=constants.ONE
+                months=constants.ONE,
             )
         return statement_dates
 

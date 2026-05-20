@@ -9,6 +9,11 @@ from django.test import TestCase
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.bank_constants import (
+    BANK_DEFAULT,
+    BANK_RAIFFEISENBANK,
+    BANK_SBERBANK,
+)
 from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.services.bank_calculators import (
     DefaultBankCalculator,
@@ -16,12 +21,26 @@ from hasta_la_vista_money.finance_account.services.bank_calculators import (
     SberbankCalculator,
     create_bank_calculator,
 )
-from hasta_la_vista_money.finance_account.services.bank_constants import (
-    BANK_DEFAULT,
-    BANK_RAIFFEISENBANK,
-    BANK_SBERBANK,
-)
 from hasta_la_vista_money.users.factories import UserFactory
+
+
+def _aware_datetime(
+    year: int,
+    month: int,
+    day: int,
+    hour: int,
+    minute: int,
+    second: int,
+) -> datetime:
+    return datetime(
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+        tzinfo=timezone.get_current_timezone(),
+    )
 
 
 class TestSberbankCalculator(TestCase):
@@ -36,12 +55,8 @@ class TestSberbankCalculator(TestCase):
             type_account='CreditCard',
         )
         self.calculator = SberbankCalculator()
-        self.purchase_start = timezone.make_aware(
-            datetime(2024, 1, 1, 0, 0, 0),  # noqa: DTZ001
-        )
-        self.purchase_end = timezone.make_aware(
-            datetime(2024, 1, 31, 23, 59, 59),  # noqa: DTZ001
-        )
+        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
+        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, 59)
 
     def test_calculate_grace_period(self) -> None:
         """Test grace period calculation for Sberbank."""
@@ -96,18 +111,12 @@ class TestRaiffeisenbankCalculator(TestCase):
             expense_repository=self.expense_repository,
             receipt_repository=self.receipt_repository,
         )
-        self.purchase_start = timezone.make_aware(
-            datetime(2024, 1, 1, 0, 0, 0),  # noqa: DTZ001
-        )
-        self.purchase_end = timezone.make_aware(
-            datetime(2024, 1, 31, 23, 59, 59),  # noqa: DTZ001
-        )
+        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
+        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, 59)
 
     def test_calculate_grace_period_with_first_purchase(self) -> None:
         """Test grace period calculation with first purchase."""
-        first_purchase = timezone.make_aware(
-            datetime(2024, 1, 5, 12, 0, 0),  # noqa: DTZ001
-        )
+        first_purchase = _aware_datetime(2024, 1, 5, 12, 0, 0)
 
         mock_expense = MagicMock()
         mock_expense.date = first_purchase
@@ -173,12 +182,8 @@ class TestDefaultBankCalculator(TestCase):
         self.user = UserFactory()
         self.account = AccountFactory(user=self.user, bank=BANK_DEFAULT)
         self.calculator = DefaultBankCalculator()
-        self.purchase_start = timezone.make_aware(
-            datetime(2024, 1, 1, 0, 0, 0),  # noqa: DTZ001
-        )
-        self.purchase_end = timezone.make_aware(
-            datetime(2024, 1, 31, 23, 59, 59),  # noqa: DTZ001
-        )
+        self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
+        self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, 59)
 
     def test_calculate_grace_period(self) -> None:
         """Test default grace period calculation."""
