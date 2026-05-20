@@ -1,6 +1,6 @@
 """Reports tasks module.
 
-This module provides async tasks for generating monthly, yearly,
+This module provides Celery tasks for generating monthly, yearly,
 and user statistics reports.
 """
 
@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from asgiref.sync import sync_to_async
+from celery import shared_task
 from django.db.models import Avg, Count, Max, Min, Sum
 
 from hasta_la_vista_money import constants
@@ -20,7 +20,8 @@ from hasta_la_vista_money.users.models import User
 logger = structlog.get_logger(__name__)
 
 
-async def generate_monthly_report(
+@shared_task(name='reports.generate_monthly_report')
+def generate_monthly_report(
     user_id: int,
     year: int,
     month: int,
@@ -44,7 +45,7 @@ async def generate_monthly_report(
     )
 
     try:
-        user = await User.objects.aget(id=user_id)
+        user = User.objects.get(id=user_id)
 
         # Определяем период
         start_date = datetime(year, month, 1, tzinfo=UTC)
@@ -63,10 +64,10 @@ async def generate_monthly_report(
         )
 
         # Статистика по доходам
-        income_stats = await Income.objects.filter(
+        income_stats = Income.objects.filter(
             user=user,
             date__range=(start_date, end_date),
-        ).aaggregate(
+        ).aggregate(
             total_income=Sum('amount'),
             income_count=Count('id'),
             avg_income=Avg('amount'),
@@ -75,10 +76,10 @@ async def generate_monthly_report(
         )
 
         # Статистика по расходам
-        expense_stats = await Expense.objects.filter(
+        expense_stats = Expense.objects.filter(
             user=user,
             date__range=(start_date, end_date),
-        ).aaggregate(
+        ).aggregate(
             total_expense=Sum('amount'),
             expense_count=Count('id'),
             avg_expense=Avg('amount'),
@@ -99,9 +100,7 @@ async def generate_monthly_report(
             )
             .order_by('-total')[:5]
         )
-        top_income_categories: list[dict[str, Any]] = await sync_to_async(
-            lambda: list(top_income_qs),
-        )()
+        top_income_categories: list[dict[str, Any]] = list(top_income_qs)
 
         # Топ категорий расходов
         top_expense_qs = (
@@ -116,15 +115,13 @@ async def generate_monthly_report(
             )
             .order_by('-total')[:5]
         )
-        top_expense_categories: list[dict[str, Any]] = await sync_to_async(
-            lambda: list(top_expense_qs),
-        )()
+        top_expense_categories: list[dict[str, Any]] = list(top_expense_qs)
 
         # Статистика по чекам
-        receipt_stats = await Receipt.objects.filter(
+        receipt_stats = Receipt.objects.filter(
             user=user,
             receipt_date__range=(start_date, end_date),
-        ).aaggregate(
+        ).aggregate(
             total_receipts=Count('id'),
             total_receipt_sum=Sum('total_sum'),
             avg_receipt_sum=Avg('total_sum'),
@@ -143,9 +140,7 @@ async def generate_monthly_report(
             )
             .order_by('-total')[:5]
         )
-        top_sellers: list[dict[str, Any]] = await sync_to_async(
-            lambda: list(top_sellers_qs),
-        )()
+        top_sellers: list[dict[str, Any]] = list(top_sellers_qs)
 
         summary = {
             'net_income': (income_stats['total_income'] or 0)
@@ -202,7 +197,8 @@ async def generate_monthly_report(
         return {'success': True, 'report': report_data}
 
 
-async def generate_yearly_report(
+@shared_task(name='reports.generate_yearly_report')
+def generate_yearly_report(
     user_id: int,
     year: int,
 ) -> dict[str, Any]:
@@ -223,7 +219,7 @@ async def generate_yearly_report(
     )
 
     try:
-        user = await User.objects.aget(id=user_id)
+        user = User.objects.get(id=user_id)
 
         start_date = datetime(year, 1, 1, tzinfo=UTC)
         end_date = datetime(year, 12, 31, tzinfo=UTC)
@@ -254,16 +250,16 @@ async def generate_yearly_report(
                 ) - timedelta(days=1)
 
             # Доходы за месяц
-            month_income = await Income.objects.filter(
+            month_income = Income.objects.filter(
                 user=user,
                 date__range=(month_start, month_end),
-            ).aaggregate(total=Sum('amount'))
+            ).aggregate(total=Sum('amount'))
 
             # Расходы за месяц
-            month_expense = await Expense.objects.filter(
+            month_expense = Expense.objects.filter(
                 user=user,
                 date__range=(month_start, month_end),
-            ).aaggregate(total=Sum('amount'))
+            ).aggregate(total=Sum('amount'))
 
             monthly_data.append(
                 {
@@ -276,19 +272,19 @@ async def generate_yearly_report(
             )
 
         # Общая статистика за год
-        yearly_income = await Income.objects.filter(
+        yearly_income = Income.objects.filter(
             user=user,
             date__year=year,
-        ).aaggregate(
+        ).aggregate(
             total=Sum('amount'),
             count=Count('id'),
             avg=Avg('amount'),
         )
 
-        yearly_expense = await Expense.objects.filter(
+        yearly_expense = Expense.objects.filter(
             user=user,
             date__year=year,
-        ).aaggregate(
+        ).aggregate(
             total=Sum('amount'),
             count=Count('id'),
             avg=Avg('amount'),
@@ -306,9 +302,7 @@ async def generate_yearly_report(
             )
             .order_by('-total')[:10]
         )
-        top_income_categories: list[dict[str, Any]] = await sync_to_async(
-            lambda: list(top_income_year_qs),
-        )()
+        top_income_categories: list[dict[str, Any]] = list(top_income_year_qs)
 
         top_expense_year_qs = (
             Expense.objects.filter(
@@ -321,9 +315,9 @@ async def generate_yearly_report(
             )
             .order_by('-total')[:10]
         )
-        top_expense_categories: list[dict[str, Any]] = await sync_to_async(
-            lambda: list(top_expense_year_qs),
-        )()
+        top_expense_categories: list[dict[str, Any]] = list(
+            top_expense_year_qs,
+        )
 
         summary = {
             'total_income': yearly_income['total'] or 0,
@@ -372,7 +366,8 @@ async def generate_yearly_report(
         return {'success': True, 'report': report_data}
 
 
-async def generate_user_statistics(
+@shared_task(name='reports.generate_user_statistics')
+def generate_user_statistics(
     user_id: int,
 ) -> dict[str, Any]:
     """Generate overall user statistics.
@@ -391,22 +386,22 @@ async def generate_user_statistics(
     )
 
     try:
-        user = await User.objects.aget(id=user_id)
+        user = User.objects.get(id=user_id)
 
         # Общая статистика
-        total_income = await Income.objects.filter(user=user).aaggregate(
+        total_income = Income.objects.filter(user=user).aggregate(
             total=Sum('amount'),
             count=Count('id'),
             avg=Avg('amount'),
         )
 
-        total_expense = await Expense.objects.filter(user=user).aaggregate(
+        total_expense = Expense.objects.filter(user=user).aggregate(
             total=Sum('amount'),
             count=Count('id'),
             avg=Avg('amount'),
         )
 
-        total_receipts = await Receipt.objects.filter(user=user).aaggregate(
+        total_receipts = Receipt.objects.filter(user=user).aggregate(
             total=Sum('total_sum'),
             count=Count('id'),
             avg=Avg('total_sum'),
@@ -424,9 +419,7 @@ async def generate_user_statistics(
             )
             .order_by('-total')[:10]
         )
-        income_categories: list[dict[str, Any]] = await sync_to_async(
-            lambda: list(income_cat_qs),
-        )()
+        income_categories: list[dict[str, Any]] = list(income_cat_qs)
 
         expense_cat_qs = (
             Expense.objects.filter(user=user)
@@ -439,17 +432,15 @@ async def generate_user_statistics(
             )
             .order_by('-total')[:10]
         )
-        expense_categories: list[dict[str, Any]] = await sync_to_async(
-            lambda: list(expense_cat_qs),
-        )()
+        expense_categories: list[dict[str, Any]] = list(expense_cat_qs)
 
         # Статистика по времени
-        first_income = await Income.objects.filter(user=user).aaggregate(
+        first_income = Income.objects.filter(user=user).aggregate(
             first_date=Min('date'),
             last_date=Max('date'),
         )
 
-        first_expense = await Expense.objects.filter(user=user).aaggregate(
+        first_expense = Expense.objects.filter(user=user).aggregate(
             first_date=Min('date'),
             last_date=Max('date'),
         )
