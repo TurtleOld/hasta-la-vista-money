@@ -498,17 +498,20 @@ def test_create_expense_insufficient_funds(self) -> None:
     # ...
 ```
 
-### Фикстуры
+### Общие тестовые данные
 
-Используйте фикстуры для общих данных:
+Используйте `setUpTestData` для общих данных класса:
 
 ```python
-@pytest.fixture
-def user_account(db):
-    """Create a user with an account for testing."""
-    user = UserFactory()
-    account = AccountFactory(user=user, balance=Decimal('1000.00'))
-    return user, account
+class ExpenseServiceCreationTest(TestCase):
+    @classmethod
+    def setUpTestData(cls) -> None:
+        """Create a user with an account for tests."""
+        cls.user = UserFactory()
+        cls.account = AccountFactory(
+            user=cls.user,
+            balance=Decimal('1000.00'),
+        )
 ```
 
 ### Группировка тестов
@@ -710,4 +713,3 @@ class TestExpenseService(TestCase):
 ## Примечания
 
 Это руководство является живым документом и может обновляться по мере развития проекта. Если вы видите несоответствия или хотите предложить улучшения, создайте issue или pull request.
-

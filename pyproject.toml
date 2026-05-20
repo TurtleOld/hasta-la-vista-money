@@ -245,10 +245,6 @@ exclude_lines = [
 ]
 fail_under = 85
 
-[tool.pytest.ini_options]
-norecursedirs = ["__pycache__"]
-addopts = "--strict-markers"
-
 [tool.isort]
 profile = "black"
 multi_line_output = 3
