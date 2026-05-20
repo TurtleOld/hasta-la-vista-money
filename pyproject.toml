@@ -161,10 +161,13 @@ known-first-party = ["hasta_la_vista_money"]
   "SLF001", # Django connection handler internals are required for isolated CI db swapping
 ]
 "hasta_la_vista_money/finance_account/models.py" = [
-  "PLC0415",
+    "PLC0415",
+]
+"hasta_la_vista_money/core/signals.py" = [
+    "SLF001",
 ]
 "hasta_la_vista_money/receipts/services/receipt_ai_prompt.py" = [
-  "E501",
+    "E501",
 ]
 "hasta_la_vista_money/receipts/apis.py" = [
   "C901", # _process_request complexity is acceptable

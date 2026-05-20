@@ -57,6 +57,7 @@ LOCAL_APPS = [
     'hasta_la_vista_money',
     'hasta_la_vista_money.api',
     'hasta_la_vista_money.authentication',
+    'hasta_la_vista_money.core',
     'hasta_la_vista_money.finance_account',
     'hasta_la_vista_money.budget',
     'hasta_la_vista_money.expense',
