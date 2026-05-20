@@ -13,7 +13,8 @@
                 <div class="flex justify-between items-start mb-4 gap-4">
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 mb-2 flex-wrap">
-                            <h5 class="text-lg font-heading font-bold text-green-600 dark:text-green-400 mb-0 truncate">{{ receipt.seller.name_seller }}</h5>
+                            {% translate 'Неизвестный продавец' as unknown_seller %}
+                            <h5 class="text-lg font-heading font-bold text-green-600 dark:text-green-400 mb-0 truncate">{{ receipt.seller.name_seller|default:unknown_seller }}</h5>
                             {% if receipt.operation_type == 2 %}
                                 <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-md">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
