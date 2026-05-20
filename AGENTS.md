@@ -277,28 +277,22 @@ class MyForm(forms.ModelForm):
 ### Написание тестов
 
 ```python
-import pytest
 from django.contrib.auth import get_user_model
+from django.test import TestCase
 
 User = get_user_model()
 
-@pytest.mark.django_db
-def test_create_expense(user: User):
-    container = ApplicationContainer()
-    container.config.from_dict({
-        'core': {
-            'openai': {
-                'api_key': 'test',
-                'base_url': 'test',
-            },
-        },
-    })
-    service = container.expense.expense_service()
-    # Тест логики
+class ExpenseServiceTest(TestCase):
+    def test_create_expense(self) -> None:
+        user = User.objects.create_user(username='test-user')
+        container = ApplicationContainer()
+        service = container.expense.expense_service()
+        # Тест логики
 ```
 
 **Правила:**
-- Используйте `pytest` и `pytest-django`
+- Используйте стандартные `django.test.TestCase` / `TransactionTestCase`
+- Запускайте тесты через `python manage.py test`
 - Покрытие тестами должно быть не менее 85%
 - Используйте фикстуры для общих данных
 - Тестируйте сервисы, а не только views

@@ -208,7 +208,7 @@ git checkout -b feature/amazing-feature
 uv sync --dev
 
 # 4. Make changes and test
-uv run pytest
+python manage.py test
 
 # 5. Create a Pull Request
 ```
