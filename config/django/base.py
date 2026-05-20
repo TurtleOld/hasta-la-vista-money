@@ -64,6 +64,7 @@ LOCAL_APPS = [
     'hasta_la_vista_money.loan',
     'hasta_la_vista_money.receipts',
     'hasta_la_vista_money.reports',
+    'hasta_la_vista_money.system',
     'hasta_la_vista_money.users',
     'hasta_la_vista_money.templatetags.thousand_comma',
     'hasta_la_vista_money.templatetags.generate_hash',

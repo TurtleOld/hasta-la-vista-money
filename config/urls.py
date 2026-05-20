@@ -12,6 +12,10 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from hasta_la_vista_money.system.views import (
+    HealthCheckView,
+    ReadinessCheckView,
+)
 from hasta_la_vista_money.users.views import (
     IndexView,
     LoginUser,
@@ -71,6 +75,8 @@ async def debug_static_serve(request, path: str):
 
 
 urlpatterns = [
+    path('healthz/', HealthCheckView.as_view(), name='healthz'),
+    path('readyz/', ReadinessCheckView.as_view(), name='readyz'),
     re_path(
         r'^users/',
         include(
