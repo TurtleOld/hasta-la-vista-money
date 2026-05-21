@@ -74,9 +74,8 @@ THIRD_PARTY_APPS = [
     'axes',
     'corsheaders',
     'csp',
-    'crispy_forms',
-    'crispy_tailwind',
     'django_filters',
+    'widget_tweaks',
     'locale',
     'rest_framework',
     'rest_framework.authtoken',
@@ -466,10 +465,6 @@ ROSETTA_LANGUAGE_GROUPS = True
 ROSETTA_STORAGE_CLASS = 'rosetta.storage.CacheRosettaStorage'
 ROSETTA_WSGI_AUTO_RELOAD = True
 ROSETTA_UWSGI_AUTO_RELOAD = True
-
-# Crispy Forms
-CRISPY_ALLOWED_TEMPLATE_PACKS = 'tailwind'
-CRISPY_TEMPLATE_PACK = 'tailwind'
 
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {

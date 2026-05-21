@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load crispy_forms_tags %}
 {% load i18n %}
 {% block title %}Добавить пользователя в группу{% endblock %}
 {% block content %}
@@ -7,7 +6,7 @@
     <h2>Добавить пользователя в группу</h2>
     <form method="post" id="add-user-to-group-form">
         {% csrf_token %}
-        {{ form |crispy }}
+        {% include 'forms/_form.html' with form=form %}
         <button type="submit" class="btn btn-success">{% translate "Добавить" %}</button>
     </form>
 </div>

@@ -1,0 +1,33 @@
+{% load widget_tweaks %}
+
+{% if field.is_hidden %}
+    {{ field }}
+{% else %}
+    <div class="space-y-1.5{% if field.errors %} has-error{% endif %}">
+        {% if field.field.widget.input_type == 'checkbox' %}
+            <label for="{{ field.id_for_label }}" class="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                {% render_field field class+="rounded border-gray-300 text-green-600 shadow-sm focus:border-green-500 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-green-500" %}
+                <span>{{ field.label }}</span>
+            </label>
+        {% else %}
+            {% if field.label %}
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {{ field.label }}{% if field.field.required %}<span class="ml-1 text-red-500">*</span>{% endif %}
+                </label>
+            {% endif %}
+            {% render_field field class+="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors duration-200 placeholder:text-gray-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/30 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 dark:focus:border-green-400 dark:focus:ring-green-400/30 dark:disabled:bg-gray-800" %}
+        {% endif %}
+
+        {% if field.help_text %}
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ field.help_text|safe }}</p>
+        {% endif %}
+
+        {% if field.errors %}
+            <div class="text-sm text-red-600 dark:text-red-400">
+                {% for error in field.errors %}
+                    <p>{{ error }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+{% endif %}
