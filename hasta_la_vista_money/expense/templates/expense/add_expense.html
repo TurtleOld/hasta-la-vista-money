@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% load i18n %}
-{% load crispy_forms_tags %}
 
 {% block title %}{% translate 'Добавить расход' %}{% endblock %}
 
@@ -27,7 +26,7 @@
                 {% if add_expense_form %}
                     {% for field in add_expense_form %}
                         <div class="space-y-1.5">
-                            {{ field|as_crispy_field }}
+                            {% include 'forms/_field.html' with field=field %}
                             {% if field.errors %}
                                 <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
                                     <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

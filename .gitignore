@@ -237,3 +237,5 @@ logs/
 .cursor/
 
 uv.lock
+
+.kilo/

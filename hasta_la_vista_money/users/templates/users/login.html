@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% load i18n %}
-{% load crispy_forms_tags %}
 
 {% block title %}{% translate 'Страница входа' %}{% endblock %}
 
@@ -31,7 +30,7 @@
                 {% if user_login_form %}
                     {% for field in user_login_form %}
                         <div>
-                            {{ field|as_crispy_field }}
+                            {% include 'forms/_field.html' with field=field %}
                             {% if field.errors %}
                                 <div class="mt-2 text-sm text-red-600 dark:text-red-400">
                                     {% for error in field.errors %}
