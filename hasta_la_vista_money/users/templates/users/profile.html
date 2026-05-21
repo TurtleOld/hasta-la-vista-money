@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load crispy_forms_tags %}
 {% load i18n %}
 {% load static %}
 {% load comma %}
@@ -113,7 +112,7 @@
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {% for field in user_update %}
                                         <div class="form-group {% if field.errors %}has-error{% endif %}">
-                                            {{ field | as_crispy_field }}
+                                            {% include 'forms/_field.html' with field=field %}
                                             {% if field.errors %}
                                                 {% for error in field.errors %}
                                                     <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ error }}</p>

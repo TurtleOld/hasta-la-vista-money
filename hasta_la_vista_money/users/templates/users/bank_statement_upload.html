@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load crispy_forms_tags %}
 {% load i18n %}
 {% load static %}
 
@@ -46,7 +45,7 @@
 
                         <div class="space-y-4">
                             <div class="form-group">
-                                {{ form.account | as_crispy_field }}
+                                {% include 'forms/_field.html' with field=form.account %}
                                 {% if form.account.errors %}
                                     {% for error in form.account.errors %}
                                         <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ error }}</p>

@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% load i18n %}
-{% load tailwind_filters %}
 {% load comma %}
 
 {% block content %}
@@ -21,10 +20,10 @@
                     {% if add_account_form %}
                     {% for field in add_account_form %}
                     <div class="space-y-1.5{% if field.errors %} has-error{% endif %}{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} credit-only-field-container{% endif %}"{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} data-credit-field="true"{% endif %}>
-                        {% if field == 'balance' %}
+                        {% if field.name == 'balance' %}
                         {{ field | comma }}
                         {% else %}
-                        {{ field | as_crispy_field }}
+                        {% include 'forms/_field.html' with field=field %}
                         {% endif %}
                         {% if field.errors %}
                         <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
 
 @plugin "daisyui" {
@@ -313,7 +314,7 @@
     }
   }
 }
-/* crispy-tailwind dark mode overrides — scoped to crispy field wrappers only */
+/* Form dark mode overrides */
 @layer base {
   [data-bs-theme='dark'] .mb-3 input:not([type='checkbox']):not([type='radio']):not([type='file']),
   [data-bs-theme='dark'] .mb-3 textarea,

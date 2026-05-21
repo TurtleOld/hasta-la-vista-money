@@ -1,6 +1,4 @@
 {% extends 'base.html' %}
-{% load crispy_forms_tags %}
-{% load tailwind_filters %}
 {% load comma %}
 {% load i18n %}
 
@@ -26,7 +24,7 @@
                             {% if field == 'balance' %}
                             {{ field | comma }}
                             {% else %}
-                            {{ field | as_crispy_field }}
+                            {% include 'forms/_field.html' with field=field %}
                             {% endif %}
                             {% if field.errors %}
                             <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
