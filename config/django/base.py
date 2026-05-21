@@ -399,6 +399,9 @@ CONTENT_SECURITY_POLICY = {
             *CSP_CDN_URLS,
             *additional_script_src,
         ],
+        'style-src-attr': [
+            "'unsafe-inline'",
+        ],
         'font-src': [
             SELF,
             NONCE,

@@ -1,0 +1,71 @@
+{% load i18n %}
+
+<div class="finances-list-head finances-stream-only">
+    <span></span>
+    <span>{% translate 'Категория' %}</span>
+    <span>{% translate 'Счёт' %}</span>
+    <span class="text-right">{% translate 'Сумма' %}</span>
+    <span>{% translate 'Дата' %}</span>
+    <span>{% translate 'Действия' %}</span>
+</div>
+
+<div class="finances-view-flat">
+    {% for tx in transactions %}
+        {% include 'finance_account/partials/_finances_row.html' with tx=tx show_date=True %}
+    {% empty %}
+        <div class="finances-empty">{% translate 'Операции не найдены' %}</div>
+    {% endfor %}
+</div>
+
+<div class="finances-view-day">
+    {% for day in by_day %}
+        <div class="finances-day-head">
+            <span>{{ day.label }}</span>
+            <span>{% if day.total >= 0 %}+{% endif %}{{ day.total|floatformat:0 }} ₽</span>
+        </div>
+        {% for tx in day.items %}
+            {% include 'finance_account/partials/_finances_row.html' with tx=tx show_date=False %}
+        {% endfor %}
+    {% empty %}
+        <div class="finances-empty">{% translate 'Операции не найдены' %}</div>
+    {% endfor %}
+</div>
+
+<div class="finances-category-grid finances-view-category">
+    {% for category in by_category %}
+        <article class="finances-category-card">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <div class="finances-row-title">{{ category.name }}</div>
+                    <div class="finances-row-sub">{{ category.items|length }} {% translate 'операций' %} · {{ category.share_pct|floatformat:1 }}%</div>
+                </div>
+                <strong class="{% if category.total > 0 %}finances-positive{% else %}finances-negative{% endif %}">
+                    {% if category.total > 0 %}+{% else %}-{% endif %}{{ category.total|floatformat:0|cut:'-' }} ₽
+                </strong>
+            </div>
+            <div class="finances-category-bar"><i style="width: {{ category.bar_pct|stringformat:'f' }}%"></i></div>
+            <div class="finances-side-list">
+                {% for tx in category.items|slice:':3' %}
+                    <div class="finances-side-item finances-muted">
+                        <span>{{ tx.date|date:'d.m' }} · {{ tx.account_name }}</span>
+                        <span>{% if tx.amount > 0 %}+{% else %}-{% endif %}{{ tx.abs_amount|floatformat:0 }} ₽</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </article>
+    {% empty %}
+        <div class="finances-empty">{% translate 'Операции не найдены' %}</div>
+    {% endfor %}
+</div>
+
+{% if page_obj.has_other_pages %}
+    <nav class="finances-pagination finances-stream-only" aria-label="{% translate 'Пагинация финансов' %}">
+        {% if page_obj.has_previous %}
+            <a class="finances-page-link" hx-get="{% url 'finances' %}?{{ base_querystring }}&page={{ page_obj.previous_page_number }}" hx-target="#finances-results" hx-push-url="true" href="?{{ base_querystring }}&page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>
+        {% endif %}
+        <span class="finances-muted">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+            <a class="finances-page-link" hx-get="{% url 'finances' %}?{{ base_querystring }}&page={{ page_obj.next_page_number }}" hx-target="#finances-results" hx-push-url="true" href="?{{ base_querystring }}&page={{ page_obj.next_page_number }}">{% translate 'Вперёд' %}</a>
+        {% endif %}
+    </nav>
+{% endif %}

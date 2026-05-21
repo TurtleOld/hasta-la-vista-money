@@ -313,25 +313,25 @@
     }
   }
 }
-/* crispy-tailwind dark mode overrides */
+/* crispy-tailwind dark mode overrides — scoped to crispy field wrappers only */
 @layer base {
-  [data-bs-theme='dark'] input:not([type='checkbox']):not([type='radio']):not([type='file']),
-  [data-bs-theme='dark'] textarea,
-  [data-bs-theme='dark'] select {
+  [data-bs-theme='dark'] .mb-3 input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  [data-bs-theme='dark'] .mb-3 textarea,
+  [data-bs-theme='dark'] .mb-3 select {
     background-color: rgb(31 41 55) !important;
     color: rgb(229 231 235) !important;
     border-color: rgb(75 85 99) !important;
   }
 
-  [data-bs-theme='dark'] input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
-  [data-bs-theme='dark'] textarea:focus,
-  [data-bs-theme='dark'] select:focus {
+  [data-bs-theme='dark'] .mb-3 input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
+  [data-bs-theme='dark'] .mb-3 textarea:focus,
+  [data-bs-theme='dark'] .mb-3 select:focus {
     border-color: rgb(16 185 129) !important;
     outline: none;
   }
 
-  [data-bs-theme='dark'] input[readonly]:not([type='checkbox']):not([type='radio']):not([type='file']),
-  [data-bs-theme='dark'] input[readonly]:not([type='checkbox']):not([type='radio']):not([type='file']):focus {
+  [data-bs-theme='dark'] .mb-3 input[readonly]:not([type='checkbox']):not([type='radio']):not([type='file']),
+  [data-bs-theme='dark'] .mb-3 input[readonly]:not([type='checkbox']):not([type='radio']):not([type='file']):focus {
     background-color: rgb(55 65 81) !important;
     color: rgb(156 163 175) !important;
     cursor: not-allowed;

@@ -20,6 +20,8 @@
         <link nonce="{{request.csp_nonce}}" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Gloria+Hallelujah&display=swap" rel="stylesheet">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'css/driver.css' %}">
+        {% block extra_head %}
+        {% endblock %}
     {% endblock %}
 </head>
 <body class="min-h-screen bg-white dark:bg-gray-800 {% if user.is_authenticated %}pb-20 md:pb-0{% endif %}" {% if user.is_authenticated %}data-bs-theme="{{ user.theme|default:'light' }}"{% else %}data-bs-theme="light"{% endif %}>
@@ -242,6 +244,7 @@
     </script>
     {% block extra_js %}
     {% endblock %}
+    <script defer nonce="{{request.csp_nonce}}" src="{% static 'js/alpine.csp.min.js' %}"></script>
     <script nonce="{{request.csp_nonce}}">
         window.SET_THEME_URL = "{% url 'users:set_theme' %}";
         window.LOGIN_URL = "{% url 'users:login' %}";
