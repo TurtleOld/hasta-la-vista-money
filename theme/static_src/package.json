@@ -14,7 +14,7 @@
   "license": "MIT",
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.11",
-    "@tailwindcss/postcss": "^4.1.18",
+    "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/typography": "^0.5.19",
     "cross-env": "^10.1.0",
     "daisyui": "^5.5.13",
@@ -23,6 +23,6 @@
     "postcss-nested": "^7.0.2",
     "postcss-simple-vars": "^7.0.1",
     "rimraf": "^6.0.1",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.3.0"
   }
 }

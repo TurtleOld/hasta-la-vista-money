@@ -604,8 +604,8 @@ class DashboardManager {
             const iconRow = this._el('div', { class: 'flex items-center gap-2 mb-1' });
 
             const typeIcon = t.type === 'expense'
-                ? this._createSVG([{ d: 'M19 14l-7 7m0 0l-7-7m7 7V3' }], { class: 'w-5 h-5 text-red-500 flex-shrink-0' })
-                : this._createSVG([{ d: 'M5 10l7-7m0 0l7 7m-7-7v18' }], { class: 'w-5 h-5 text-green-500 flex-shrink-0' });
+                ? this._createSVG([{ d: 'M19 14l-7 7m0 0l-7-7m7 7V3' }], { class: 'w-5 h-5 text-red-500 shrink-0' })
+                : this._createSVG([{ d: 'M5 10l7-7m0 0l7 7m-7-7v18' }], { class: 'w-5 h-5 text-green-500 shrink-0' });
 
             const categoryStrong = this._el('strong', { class: 'text-gray-900 dark:text-white font-medium' });
             categoryStrong.textContent = String(t.category ?? '');
@@ -637,7 +637,7 @@ class DashboardManager {
             leftDiv.appendChild(iconRow);
             leftDiv.appendChild(infoRow);
 
-            const rightDiv = this._el('div', { class: 'text-right flex-shrink-0' });
+            const rightDiv = this._el('div', { class: 'text-right shrink-0' });
             rightDiv.appendChild(amountNode(t.amount, t.type));
 
             itemContent.appendChild(leftDiv);
@@ -959,7 +959,7 @@ class DashboardManager {
 
         const errorSvg = this._createSVG([{
             d: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
-        }], { class: 'w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0' });
+        }], { class: 'w-6 h-6 text-red-600 dark:text-red-400 shrink-0' });
 
         const messageDiv = this._el('div', { class: 'flex-1' });
         const messageP = this._el('p', { class: 'text-sm font-medium text-red-800 dark:text-red-200' });

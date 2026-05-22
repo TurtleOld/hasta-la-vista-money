@@ -1,10 +1,10 @@
 function renderAccountGroupBlock(data) {
     const block = document.getElementById('account-cards-block');
     if (!block) return;
-    
+
     block.innerHTML = '';
     block.className = 'space-y-3';
-    
+
     function toSafeSameOriginPath(url, fallbackUrl) {
         if (typeof url !== 'string') return fallbackUrl;
         const trimmedUrl = url.trim();
@@ -46,26 +46,26 @@ function renderAccountGroupBlock(data) {
         block.appendChild(empty);
         return;
     }
-    
+
     data.accounts.forEach(account => {
         const card = document.createElement('div');
         const isForeign = account.is_foreign || false;
         card.className = 'group bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-xl border border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden' + (isForeign ? ' account-foreign border-l-4 border-l-blue-500' : '');
-        
+
         const cardBody = document.createElement('div');
         cardBody.className = 'p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4';
-        
+
         const left = document.createElement('div');
         left.className = 'flex-1 min-w-0';
-        
+
         const nameRow = document.createElement('div');
         nameRow.className = 'flex items-center gap-2.5 mb-2';
-        
+
         const name = document.createElement('h3');
         name.className = 'font-semibold text-lg text-gray-900 dark:text-white truncate';
         name.textContent = account.name_account;
         nameRow.appendChild(name);
-        
+
         if (isForeign) {
             const ownerBadge = document.createElement('span');
             ownerBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full';
@@ -78,14 +78,14 @@ function renderAccountGroupBlock(data) {
             ownerBadge.appendChild(ownerText);
             nameRow.appendChild(ownerBadge);
         }
-        
+
         left.appendChild(nameRow);
-        
+
         const type = document.createElement('div');
         type.className = 'text-sm text-gray-500 dark:text-gray-400 mb-2.5';
         type.textContent = account.type_account_display || account.type_account;
         left.appendChild(type);
-        
+
         const balanceRow = document.createElement('div');
         balanceRow.className = 'flex items-baseline gap-2';
         const balance = document.createElement('span');
@@ -97,25 +97,25 @@ function renderAccountGroupBlock(data) {
         currency.textContent = account.currency;
         balanceRow.appendChild(currency);
         left.appendChild(balanceRow);
-        
+
         const right = document.createElement('div');
-        right.className = 'flex items-center gap-2 flex-shrink-0';
-        
+        right.className = 'flex items-center gap-2 shrink-0';
+
         const link = document.createElement('a');
         const rawHref = account?.url ?? account?.get_absolute_url ?? '#';
         link.href = toSafeSameOriginPath(rawHref, '#');
         link.className = 'change-object-button inline-flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800';
         link.title = 'Редактировать';
-        link.innerHTML = '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>';
+        link.innerHTML = '<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>';
         right.appendChild(link);
-        
+
         const form = document.createElement('form');
         form.className = 'm-0';
         form.method = 'post';
         const fallbackDeleteUrl = `/finance_account/delete/${encodeURIComponent(String(account?.id ?? ''))}/`;
         const rawDeleteUrl = account?.delete_url ?? fallbackDeleteUrl;
         form.action = toSafeSameOriginPath(rawDeleteUrl, fallbackDeleteUrl);
-        
+
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
         if (csrfToken) {
             const csrfInput = document.createElement('input');
@@ -124,16 +124,16 @@ function renderAccountGroupBlock(data) {
             csrfInput.value = csrfToken.value;
             form.appendChild(csrfInput);
         }
-        
+
         const btn = document.createElement('button');
         btn.className = 'remove-object-button inline-flex items-center justify-center w-10 h-10 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800';
         btn.type = 'submit';
         btn.name = 'delete_account_button';
         btn.title = 'Удалить счёт';
-        btn.innerHTML = '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>';
+        btn.innerHTML = '<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>';
         form.appendChild(btn);
         right.appendChild(form);
-        
+
         cardBody.appendChild(left);
         cardBody.appendChild(right);
         card.appendChild(cardBody);
