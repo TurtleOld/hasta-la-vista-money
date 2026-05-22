@@ -475,7 +475,7 @@ class ExpenseCategoryCreateView(
     model = ExpenseCategory
     template_name = 'expense/add_category_expense.html'
     form_class = AddCategoryForm
-    success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
+    success_url = reverse_lazy('finances_categories')
 
     def get_form_kwargs(
         self,
@@ -538,7 +538,7 @@ class ExpenseCategoryUpdateView(
     model = ExpenseCategory
     template_name = 'expense/update_category_expense.html'
     form_class = AddCategoryForm
-    success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
+    success_url = reverse_lazy('finances_categories')
 
     def get_object(self, queryset: Any = None) -> ExpenseCategory:
         """Get the category object to update."""
@@ -606,7 +606,7 @@ class ExpenseCategoryDeleteView(
 
     model = ExpenseCategory
     template_name = constants.EXPENSE_CATEGORY_TEMPLATE
-    success_url = reverse_lazy(constants.EXPENSE_CATEGORY_LIST_URL)
+    success_url = reverse_lazy('finances_categories')
     success_message = str(constants.SUCCESS_CATEGORY_EXPENSE_DELETED)
     error_message = str(constants.ACCESS_DENIED_DELETE_EXPENSE_CATEGORY)
 

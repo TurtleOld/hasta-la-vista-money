@@ -13,6 +13,7 @@ from drf_spectacular.views import (
 )
 
 from hasta_la_vista_money.finance_account.views import (
+    FinancesCategoryView,
     FinancesCreateView,
     FinancesView,
 )
@@ -115,6 +116,11 @@ urlpatterns = [
         ),
     ),
     path('finance/', FinancesView.as_view(), name='finances'),
+    path(
+        'finance/categories/',
+        FinancesCategoryView.as_view(),
+        name='finances_categories',
+    ),
     path(
         'finance/create/',
         FinancesCreateView.as_view(),

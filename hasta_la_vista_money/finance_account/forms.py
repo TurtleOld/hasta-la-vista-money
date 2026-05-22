@@ -29,6 +29,7 @@ from hasta_la_vista_money.finance_account.base_forms import (
     DateFieldMixin,
     FormValidationMixin,
 )
+from hasta_la_vista_money.finance_account.bank_constants import BANK_DEFAULT
 from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
@@ -142,6 +143,11 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
                 code='invalid_balance',
             )
         return balance
+
+    def clean_bank(self) -> str:
+        """Use the placeholder bank value for non-credit accounts."""
+        bank = self.cleaned_data.get('bank')
+        return str(bank or BANK_DEFAULT)
 
     def clean(self) -> dict[str, Any]:
         """Validate form data, ensuring credit fields are provided for

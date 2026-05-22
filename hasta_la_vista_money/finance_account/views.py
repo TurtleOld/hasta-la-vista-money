@@ -46,6 +46,7 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.income.forms import IncomeForm
 from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
@@ -443,6 +444,47 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             messages.error(request, _('Ошибка при создании расхода.'))
             return HttpResponseRedirect(reverse('finances'))
         return self._success_redirect(request, 'expense', form.cleaned_data)
+
+
+class FinancesCategoryView(LoginRequiredMixin, TemplateView):
+    """Combined category settings page for finance operations."""
+
+    template_name = 'finance_account/categories.html'
+    depth = 3
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build context with user income and expense category trees."""
+        context = super().get_context_data(**kwargs)
+        user = cast('User', self.request.user)
+        income_categories = (
+            IncomeCategory.objects.filter(user=user)
+            .select_related('user')
+            .values('id', 'name', 'parent_category', 'parent_category__name')
+            .order_by('parent_category_id')
+        )
+        expense_categories = (
+            ExpenseCategory.objects.filter(user=user)
+            .select_related('user')
+            .values('id', 'name', 'parent_category', 'parent_category__name')
+            .order_by('parent_category_id')
+        )
+        context.update(
+            {
+                'income_categories': get_cached_category_tree(
+                    user_id=user.pk,
+                    category_type='income',
+                    categories=[dict(category) for category in income_categories],
+                    depth=self.depth,
+                ),
+                'expense_categories': get_cached_category_tree(
+                    user_id=user.pk,
+                    category_type='expense',
+                    categories=[dict(category) for category in expense_categories],
+                    depth=self.depth,
+                ),
+            },
+        )
+        return context
 
 
 def _end_of_month(value: date) -> date:
@@ -949,7 +991,10 @@ class AccountCreateView(
             object_list=object_list,
             **kwargs,
         )
-        context['add_account_form'] = AddAccountForm()
+        context['add_account_form'] = context.get(
+            'form',
+            self.get_form(),
+        )
         return context
 
     def get_success_url(self) -> str:
@@ -986,11 +1031,15 @@ class AccountCreateView(
                 'Ошибка при создании счета',
                 user_id=getattr(request.user, 'id', None),
             )
+            form.add_error(
+                None,
+                _('Не удалось создать счет. Пожалуйста, попробуйте позже.'),
+            )
             messages.error(
                 request,
                 _('Не удалось создать счет. Пожалуйста, попробуйте позже.'),
             )
-            return HttpResponseRedirect(self.get_success_url())
+            return self.form_invalid(form)  # type: ignore[return-value]
 
 
 class ChangeAccountView(

@@ -1,10 +1,9 @@
 {% extends 'base.html' %}
 {% load i18n %}
-{% load comma %}
 
 {% block content %}
 <div class="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-8 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-xl mx-auto">
+    <div class="max-w-2xl mx-auto">
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden backdrop-blur-sm">
             <div class="account-header-gradient px-6 py-5 shadow-lg shadow-green-500/30 dark:shadow-green-600/20">
                 <h2 class="text-xl font-bold text-white flex items-center gap-2.5 drop-shadow-sm">
@@ -15,16 +14,12 @@
                 </h2>
             </div>
             <div class="p-6 sm:p-8">
-                <form id="add-account-form" class="space-y-5 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300" method="post" action="{% url 'finance_account:create' %}">
+                <form id="add-account-form" class="space-y-4 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300" method="post" action="{% url 'finance_account:create' %}">
                     {% csrf_token %}
                     {% if add_account_form %}
                     {% for field in add_account_form %}
                     <div class="space-y-1.5{% if field.errors %} has-error{% endif %}{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} credit-only-field-container{% endif %}"{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} data-credit-field="true"{% endif %}>
-                        {% if field.name == 'balance' %}
-                        {{ field | comma }}
-                        {% else %}
                         {% include 'forms/_field.html' with field=field %}
-                        {% endif %}
                         {% if field.errors %}
                         <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
                             <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -40,13 +35,19 @@
                     </div>
                     {% endfor %}
                     {% endif %}
-                    <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-medium rounded-xl shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                    <div class="flex flex-wrap items-center gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-medium rounded-xl shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                             </svg>
                             <span>{% translate 'Добавить новый счёт' %}</span>
                         </button>
+                        <a href="{% url 'finance_account:list' %}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                            </svg>
+                            <span>{% translate 'Отмена' %}</span>
+                        </a>
                     </div>
                 </form>
             </div>

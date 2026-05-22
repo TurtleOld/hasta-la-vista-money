@@ -25,6 +25,7 @@ class EnvironmentValidatorTest(SimpleTestCase):
                 'SECRET_KEY': '',
                 'ALLOWED_HOSTS': '',
                 'DATABASE_URL': '',
+                'POSTGRES_PASSWORD': 'postgres',
                 'DEBUG': False,
                 'REDIS_LOCATION': '',
             }
@@ -54,8 +55,40 @@ class EnvironmentValidatorTest(SimpleTestCase):
                 'SECRET_KEY': 'secret',
                 'ALLOWED_HOSTS': 'localhost',
                 'DATABASE_URL': 'sqlite://:memory:',
+                'POSTGRES_PASSWORD': '',
+                'POSTGRES_USER': '',
                 'DEBUG': False,
                 'REDIS_LOCATION': 'redis://localhost:6379/0',
+            }
+            _ = cast
+            result = values.get(key, default)
+            return cast(result) if result is not None else default
+
+        with (
+            patch.dict('config.django.validator_env.environ', {}, clear=True),
+            patch(
+                'config.django.validator_env.config',
+                side_effect=fake_config,
+            ),
+            patch('config.django.validator_env.logger.warning'),
+        ):
+            validator = EnvironmentValidator()
+            self.assertTrue(validator.validate())
+
+    def test_validate_allows_sqlite_without_database_url(self) -> None:
+        def fake_config(
+            key: str,
+            cast: type[str] | type[bool] = str,
+            default: str = '',
+        ) -> str | bool:
+            values: dict[str, object] = {
+                'SECRET_KEY': 'secret',
+                'ALLOWED_HOSTS': 'localhost',
+                'DATABASE_URL': '',
+                'POSTGRES_PASSWORD': '',
+                'POSTGRES_USER': '',
+                'DEBUG': True,
+                'REDIS_LOCATION': '',
             }
             _ = cast
             result = values.get(key, default)

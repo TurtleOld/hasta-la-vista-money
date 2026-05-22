@@ -22,7 +22,7 @@
 
     <div class="composer-shell">
 
-        <form class="composer-card" method="post" action="{% url 'finances_create' %}" x-on:submit.prevent="submitForm">
+        <form class="composer-card" method="post" action="{% url 'finances_create' %}" x-ref="composerForm" x-on:submit.prevent="submitForm">
             {% csrf_token %}
             <input type="hidden" name="operation_type" x-bind:value="type">
             <input type="hidden" name="category"       x-bind:value="categoryId">
@@ -246,7 +246,7 @@
                 </div>
                 <div class="preview-tip">
                     <b>{% translate 'Совет.' %}</b> {% translate 'Категории — только ваши. Создавайте под себя в' %}
-                    <a href="{% url 'income:category_list' %}" class="composer-tip-link">{% translate 'Настройках' %}</a>.
+                    <a href="{% url 'finances_categories' %}" class="composer-tip-link">{% translate 'Настройках' %}</a>.
                 </div>
             </div>
         </aside>
@@ -377,7 +377,7 @@
                 if (this.$refs.actionField) {
                     this.$refs.actionField.value = action === 'save_and_add' ? 'save_and_add' : 'save';
                 }
-                this.$root.submit();
+                this.$refs.composerForm.submit();
             },
 
             prefillFromQuery() {

@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate 'Категории' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'finances/css/finances.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="finances-app">
+    <div class="composer-crumb">
+        <a href="{% url 'finances' %}">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+            {% translate 'Финансы' %}
+        </a>
+        <span class="sep">·</span>
+        <b>{% translate 'Категории' %}</b>
+    </div>
+
+    <div class="finance-categories-shell">
+        <section class="composer-card finance-categories-main">
+            <div class="composer-hd">
+                <h1>{% translate 'Категории операций' %}</h1>
+                <span class="meta">{% translate 'доходы и расходы' %}</span>
+            </div>
+
+            <div class="finance-categories-hero">
+                <div>
+                    <p class="finances-kicker">{% translate 'Настройки' %}</p>
+                    <h2>{% translate 'Соберите категории под свой бюджет' %}</h2>
+                    <p>{% translate 'Одна страница для категорий доходов и расходов. Они используются в форме новой операции и в общей ленте финансов.' %}</p>
+                </div>
+                <a href="{% url 'finances_create' %}" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    {% translate 'Новая операция' %}
+                </a>
+            </div>
+
+            <div class="finance-categories-grid">
+                <section class="cmp-section finance-category-panel finance-category-panel-expense">
+                    <div class="finance-category-panel-head">
+                        <h3>
+                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                            {% translate 'Расходы' %}
+                            <span class="opt">{{ expense_categories|length }}</span>
+                        </h3>
+                        <a href="{% url 'expense:create_category' %}" class="btn btn-secondary btn-sm">{% translate 'Добавить' %}</a>
+                    </div>
+
+                    {% with categories=expense_categories category_type='expense' %}
+                        {% include 'finance_account/partials/_category_tree.html' %}
+                    {% endwith %}
+                </section>
+
+                <section class="cmp-section finance-category-panel finance-category-panel-income">
+                    <div class="finance-category-panel-head">
+                        <h3>
+                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                            {% translate 'Доходы' %}
+                            <span class="opt">{{ income_categories|length }}</span>
+                        </h3>
+                        <a href="{% url 'income:create_category' %}" class="btn btn-secondary btn-sm">{% translate 'Добавить' %}</a>
+                    </div>
+
+                    {% with categories=income_categories category_type='income' %}
+                        {% include 'finance_account/partials/_category_tree.html' %}
+                    {% endwith %}
+                </section>
+            </div>
+
+            <div class="composer-ft">
+                <div class="hint">{% translate 'Категории остаются раздельными по типу операции, но управляются из одного места.' %}</div>
+                <div class="ft-actions">
+                    <a href="{% url 'finances' %}" class="btn btn-ghost">{% translate 'Вернуться к финансам' %}</a>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

@@ -11,7 +11,14 @@ from hasta_la_vista_money.users.middleware import CheckAdminMiddleware
 
 User = get_user_model()
 
+TEST_CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    },
+}
 
+
+@override_settings(CACHES=TEST_CACHES)
 class CheckAdminMiddlewareTest(TestCase):
     """Tests for CheckAdminMiddleware access blocking."""
 
@@ -66,6 +73,22 @@ class CheckAdminMiddlewareTest(TestCase):
 
         self.assertNotIsInstance(response, HttpResponseRedirect)
         self.assertIsInstance(response, HttpResponse)
+
+    def test_no_superuser_allows_static_and_media_files(self) -> None:
+        User.objects.all().delete()
+
+        allowed_asset_paths: list[str] = [
+            '/static/css/styles.min.css',
+            '/media/uploads/example.png',
+        ]
+
+        for path in allowed_asset_paths:
+            with self.subTest(path=path):
+                request: HttpRequest = self.factory.get(path)
+                response: HttpResponse = self.middleware(request)
+
+                self.assertNotIsInstance(response, HttpResponseRedirect)
+                self.assertIsInstance(response, HttpResponse)
 
     def test_with_superuser_allows_access_to_all_pages(self) -> None:
         User.objects.create_superuser(
@@ -174,6 +197,7 @@ class CheckAdminMiddlewareTest(TestCase):
 
 
 @override_settings(
+    CACHES=TEST_CACHES,
     MIDDLEWARE=[
         'django.middleware.security.SecurityMiddleware',
         'django.contrib.sessions.middleware.SessionMiddleware',
