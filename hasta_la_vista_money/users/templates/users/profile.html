@@ -12,7 +12,7 @@
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div class="p-6">
                     <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-                        <div class="flex-shrink-0">
+                        <div class="shrink-0">
                             <div class="profile-avatar-circle">
                                 {{ user.username|first|upper }}
                             </div>
@@ -37,7 +37,7 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
+                <div class="bg-linear-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-blue-100 text-sm font-medium mb-1">{% translate 'Общий баланс' %}</p>
@@ -48,7 +48,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
+                <div class="bg-linear-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-green-100 text-sm font-medium mb-1">{% translate 'Доходы (месяц)' %}</p>
@@ -59,7 +59,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
+                <div class="bg-linear-to-br from-red-500 to-red-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-red-100 text-sm font-medium mb-1">{% translate 'Расходы (месяц)' %}</p>
@@ -70,7 +70,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="{% if user_statistics.monthly_savings >= 0 %}bg-gradient-to-br from-cyan-500 to-cyan-600{% else %}bg-gradient-to-br from-yellow-500 to-yellow-600{% endif %} text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
+                <div class="{% if user_statistics.monthly_savings >= 0 %}bg-linear-to-br from-cyan-500 to-cyan-600{% else %}bg-linear-to-br from-yellow-500 to-yellow-600{% endif %} text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="{% if user_statistics.monthly_savings >= 0 %}text-cyan-100{% else %}text-yellow-100{% endif %} text-sm font-medium mb-1">{% translate 'Сбережения' %}</p>
@@ -307,7 +307,7 @@
                                     <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                                         <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Тема' %}</h5>
                                         <button id="theme-toggle" class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200" type="button" aria-live="polite">
-                                            <span id="theme-icon" class="w-5 h-5 flex-shrink-0">
+                                            <span id="theme-icon" class="w-5 h-5 shrink-0">
                                                 <svg id="theme-icon-sun" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
                                                 </svg>

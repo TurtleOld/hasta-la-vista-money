@@ -9,7 +9,7 @@
 {% block content %}
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-6">
     <div class="mb-6">
-        <div class="bg-gradient-to-br from-green-600 to-teal-500 rounded-2xl shadow-lg overflow-hidden">
+        <div class="bg-linear-to-br from-green-600 to-teal-500 rounded-2xl shadow-lg overflow-hidden">
             <div class="p-6 md:p-8">
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                     <div class="flex-1">
@@ -20,7 +20,7 @@
                             {% translate 'Редактировать чек' %}
                         </h4>
                     </div>
-                    <div class="flex-shrink-0">
+                    <div class="shrink-0">
                         <a href="{% url 'receipts:list' %}" class="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-600 font-semibold rounded-xl hover:bg-gray-50 transition-colors duration-200 shadow-md hover:shadow-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -52,7 +52,7 @@
                                 {% include 'forms/_field.html' with field=field %}
                                 {% if field.errors %}
                                 <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
-                                    <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
                                     <div class="flex flex-col gap-0.5">
@@ -82,7 +82,7 @@
                                 {% include 'forms/_form.html' with form=product_form %}
                                 {% if product_form.errors %}
                                 <div class="text-sm text-red-600 dark:text-red-400 mt-2 flex items-start gap-1.5">
-                                    <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
                                     <div class="flex flex-col gap-0.5">
@@ -140,4 +140,3 @@
 {% load word_hash %}
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/dist/pages/receipt-update.js' %}?v={% word_hash %}"></script>
 {% endblock %}
-
