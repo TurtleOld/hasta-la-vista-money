@@ -38,8 +38,14 @@ class SetUserThemeServiceTest(TestCase):
         self.assertTrue(result)
         self.assertEqual(self.user.theme, 'dark')
 
+    def test_set_user_theme_auto(self) -> None:
+        result: bool = set_user_theme(self.user, 'auto')
+        self.user.refresh_from_db()
+        self.assertTrue(result)
+        self.assertEqual(self.user.theme, 'auto')
+
     def test_set_user_theme_invalid(self) -> None:
         result: bool = set_user_theme(self.user, 'invalid_theme')
         self.user.refresh_from_db()
         self.assertTrue(result)
-        self.assertEqual(self.user.theme, 'light')
+        self.assertEqual(self.user.theme, 'auto')

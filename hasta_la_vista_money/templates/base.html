@@ -7,7 +7,7 @@
 
 
 <!DOCTYPE html>
-<html lang="ru" {% if user.is_authenticated and user.theme == 'dark' %}class="dark" data-bs-theme="dark" data-theme="dark"{% else %}data-bs-theme="light" data-theme="light"{% endif %}>
+<html lang="ru" {% if user.is_authenticated and user.theme == 'dark' %}class="dark" data-bs-theme="dark" data-theme="dark" data-theme-mode="dark"{% elif user.is_authenticated and user.theme == 'auto' %}data-bs-theme="light" data-theme="light" data-theme-mode="auto"{% else %}data-bs-theme="light" data-theme="light" data-theme-mode="light"{% endif %}>
 <head>
     {% block head %}
         <title>{% block title %}{% endblock %} - Hasta La Vista, Money!</title>
@@ -17,14 +17,14 @@
         <link nonce="{{request.csp_nonce}}" rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.googleapis.com">
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link nonce="{{request.csp_nonce}}" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Gloria+Hallelujah&display=swap" rel="stylesheet">
+        <link nonce="{{request.csp_nonce}}" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@300;400;500;600;700&family=Geist:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@700&family=Gloria+Hallelujah&display=swap" rel="stylesheet">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'css/driver.css' %}">
         {% block extra_head %}
         {% endblock %}
     {% endblock %}
 </head>
-<body class="min-h-screen bg-white dark:bg-gray-800 {% if user.is_authenticated %}pb-20 md:pb-0{% endif %}" {% if user.is_authenticated %}data-bs-theme="{{ user.theme|default:'light' }}"{% else %}data-bs-theme="light"{% endif %}>
+<body class="min-h-screen bg-white dark:bg-gray-800 {% if user.is_authenticated %}pb-20 md:pb-0{% endif %}" {% if user.is_authenticated and user.theme == 'dark' %}data-bs-theme="dark" data-theme-mode="dark"{% elif user.is_authenticated and user.theme == 'auto' %}data-bs-theme="light" data-theme-mode="auto"{% else %}data-bs-theme="light" data-theme-mode="light"{% endif %}>
     {% if user.is_authenticated %}
         <input type="checkbox" id="mobileMenuState" class="peer hidden" autocomplete="off">
         <div class="header">
