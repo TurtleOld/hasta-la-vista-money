@@ -328,8 +328,8 @@ class ExpenseServiceTest(TestCase):
 ### Установка зависимостей
 
 ```bash
-# Используйте uv для управления зависимостями
-uv sync --dev
+# Устанавливает Python-зависимости, Node-зависимости и собирает JS
+make install
 ```
 
 ### Запуск проекта
@@ -353,6 +353,36 @@ make migrate
 ```bash
 make staticfiles
 ```
+
+### JavaScript-сборка (esbuild)
+
+**После любых изменений в JS-файлах необходимо выполнить сборку:**
+
+```bash
+# Однократная сборка всех бандлов
+make build-js
+
+# Режим наблюдения (пересборка при изменениях)
+make watch-js
+```
+
+Esbuild собирает несколько entry points в `static/js/dist/`:
+
+| Entry point | Выходной файл | Загружается на |
+|---|---|---|
+| `frontend/js/app.js` | `dist/app.js` | Все страницы |
+| `frontend/js/pages/dashboard.js` | `dist/pages/dashboard.js` | Дашборд |
+| `frontend/js/pages/budget.js` | `dist/pages/budget.js` | Бюджет |
+| `frontend/js/pages/receipts.js` | `dist/pages/receipts.js` | Список чеков |
+| `frontend/js/pages/receipt-update.js` | `dist/pages/receipt-update.js` | Редактирование чека |
+| `frontend/js/pages/loan.js` | `dist/pages/loan.js` | Кредиты |
+| `frontend/js/pages/profile.js` | `dist/pages/profile.js` | Профиль |
+
+**Важно:**
+- `static/js/dist/` исключён из `.gitignore` и `.dockerignore` — файлы не хранятся в репозитории
+- В production Docker-образе JS собирается автоматически в `node-builder` stage
+- В локальной разработке Django-сервер читает уже собранные файлы — после изменений нужно вручную запустить `make build-js` (или держать открытым `make watch-js`)
+- Исходники для page-specific бандлов — в `frontend/js/pages/`, они импортируют файлы из `static/js/`
 
 ---
 
