@@ -473,13 +473,17 @@ class FinancesCategoryView(LoginRequiredMixin, TemplateView):
                 'income_categories': get_cached_category_tree(
                     user_id=user.pk,
                     category_type='income',
-                    categories=[dict(category) for category in income_categories],
+                    categories=[
+                        dict(category) for category in income_categories
+                    ],
                     depth=self.depth,
                 ),
                 'expense_categories': get_cached_category_tree(
                     user_id=user.pk,
                     category_type='expense',
-                    categories=[dict(category) for category in expense_categories],
+                    categories=[
+                        dict(category) for category in expense_categories
+                    ],
                     depth=self.depth,
                 ),
             },

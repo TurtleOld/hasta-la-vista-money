@@ -23,13 +23,13 @@ from django.forms import (
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.finance_account.bank_constants import BANK_DEFAULT
 from hasta_la_vista_money.finance_account.base_forms import (
     BaseAccountForm,
     BaseTransferForm,
     DateFieldMixin,
     FormValidationMixin,
 )
-from hasta_la_vista_money.finance_account.bank_constants import BANK_DEFAULT
 from hasta_la_vista_money.finance_account.currencies import currency_choices
 from hasta_la_vista_money.finance_account.models import (
     Account,
