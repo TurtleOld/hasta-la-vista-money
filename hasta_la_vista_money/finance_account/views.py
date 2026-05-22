@@ -366,6 +366,35 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             return self._create_income(request)
         return self._create_expense(request)
 
+    def _success_redirect(
+        self,
+        request: Any,
+        operation_type: str,
+        cleaned: dict[str, Any],
+    ) -> HttpResponse:
+        """Redirect after successful create.
+
+        If the user pressed «Сохранить и добавить ещё», return to the composer
+        page with type/category/account/date/time preserved via query string.
+        Otherwise return to the finances list.
+        """
+        if request.POST.get('action') != 'save_and_add':
+            return HttpResponseRedirect(reverse('finances'))
+        op_date = cleaned.get('date')
+        params = {
+            'type': operation_type,
+            'category': cleaned['category'].pk,
+            'account': cleaned['account'].pk,
+        }
+        if isinstance(op_date, datetime):
+            params['date'] = op_date.date().isoformat()
+            params['time'] = op_date.time().strftime('%H:%M')
+        elif isinstance(op_date, date):
+            params['date'] = op_date.isoformat()
+        return HttpResponseRedirect(
+            f'{reverse("finances_create")}?{urlencode(params)}',
+        )
+
     def _create_income(self, request: Any) -> HttpResponse:
         typed_request = cast('RequestWithContainer', request)
         income_categories = IncomeCategory.objects.filter(user=request.user)
@@ -391,7 +420,8 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             messages.success(request, constants.SUCCESS_INCOME_ADDED)
         except (ValueError, TypeError, PermissionDenied):
             messages.error(request, _('Ошибка при создании дохода.'))
-        return HttpResponseRedirect(reverse('finances'))
+            return HttpResponseRedirect(reverse('finances'))
+        return self._success_redirect(request, 'income', cd)
 
     def _create_expense(self, request: Any) -> HttpResponse:
         typed_request = cast('RequestWithContainer', request)
@@ -411,7 +441,8 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             messages.success(request, constants.SUCCESS_EXPENSE_ADDED)
         except (ValueError, TypeError):
             messages.error(request, _('Ошибка при создании расхода.'))
-        return HttpResponseRedirect(reverse('finances'))
+            return HttpResponseRedirect(reverse('finances'))
+        return self._success_redirect(request, 'expense', form.cleaned_data)
 
 
 def _end_of_month(value: date) -> date:

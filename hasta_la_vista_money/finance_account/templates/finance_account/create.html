@@ -28,6 +28,7 @@
             <input type="hidden" name="category"       x-bind:value="categoryId">
             <input type="hidden" name="account"        x-bind:value="accountId">
             <input type="hidden" name="date"           x-bind:value="datetimeLocal">
+            <input type="hidden" name="action"         x-ref="actionField" value="save">
 
             <div class="composer-hd">
                 <h1 x-text="typeLabel"></h1>
@@ -199,6 +200,11 @@
                 </div>
                 <div class="ft-actions">
                     <a href="{% url 'finances' %}" class="btn btn-ghost">{% translate 'Отмена' %}</a>
+                    <button type="button" class="btn btn-secondary" x-bind:disabled="!isValid"
+                            x-on:click="submitForm('save_and_add')">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                        {% translate 'Сохранить и добавить ещё' %}
+                    </button>
                     <button type="submit" class="btn btn-primary" x-bind:disabled="!isValid">
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-10"/></svg>
                         {% translate 'Сохранить' %}
@@ -366,16 +372,54 @@
             sanitizeAmount() {
                 this.amount = this.amount.replace(/[^\d.,]/g, '').replace(',', '.');
             },
-            submitForm() {
+            submitForm(action) {
                 if (!this.isValid) return;
-                this.$el.submit();
+                if (this.$refs.actionField) {
+                    this.$refs.actionField.value = action === 'save_and_add' ? 'save_and_add' : 'save';
+                }
+                this.$root.submit();
+            },
+
+            prefillFromQuery() {
+                const params = new URLSearchParams(window.location.search);
+                const type = params.get('type');
+                if (type === 'income' || type === 'expense') {
+                    this.type = type;
+                }
+                const categoryId = params.get('category');
+                if (categoryId) {
+                    const btn = document.querySelector(
+                        `.cat-chip[data-category-id="${categoryId}"][data-category-type="${this.type}"]`,
+                    );
+                    if (btn) {
+                        this.selectCategory(parseInt(categoryId, 10), btn.dataset.categoryName || '');
+                    }
+                }
+                const accountId = params.get('account');
+                if (accountId) {
+                    const btn = document.querySelector(
+                        `[data-account-id="${accountId}"]`,
+                    );
+                    if (btn) {
+                        this.selectAccount(parseInt(accountId, 10), btn.dataset.accountName || '');
+                    }
+                }
+                const date = params.get('date');
+                if (date) {
+                    this.date = date;
+                }
+                const time = params.get('time');
+                if (time) {
+                    this.time = time;
+                }
             },
 
             init() {
+                this.prefillFromQuery();
                 window.addEventListener('keydown', (e) => {
                     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                         e.preventDefault();
-                        this.submitForm();
+                        this.submitForm('save');
                     }
                     if (e.key === 'Escape') {
                         window.location.href = window.FINANCES_URL;

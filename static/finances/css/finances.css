@@ -671,7 +671,7 @@
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 28px;
   padding: 24px 28px 80px;
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -1097,6 +1097,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   z-index: 5;
 }
 
@@ -1123,6 +1124,8 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* Preview side-panel */
