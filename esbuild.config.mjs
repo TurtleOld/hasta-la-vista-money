@@ -3,11 +3,19 @@ import * as esbuild from 'esbuild';
 const isWatch = process.argv.includes('--watch');
 
 const options = {
-  entryPoints: ['frontend/js/app.js'],
+  entryPoints: {
+    'app': 'frontend/js/app.js',
+    'pages/dashboard': 'frontend/js/pages/dashboard.js',
+    'pages/budget': 'frontend/js/pages/budget.js',
+    'pages/receipts': 'frontend/js/pages/receipts.js',
+    'pages/receipt-update': 'frontend/js/pages/receipt-update.js',
+    'pages/loan': 'frontend/js/pages/loan.js',
+    'pages/profile': 'frontend/js/pages/profile.js',
+  },
   bundle: true,
   format: 'iife',
   target: ['es2020'],
-  outfile: 'static/js/dist/app.js',
+  outdir: 'static/js/dist',
   minify: !isWatch,
   sourcemap: isWatch,
   logLevel: 'info',

@@ -181,7 +181,5 @@
 {% csrf_token %}
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/echarts.min.js' %}?v={% word_hash %}"></script>
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/Sortable.min.js' %}?v={% word_hash %}"></script>
-<script nonce="{{request.csp_nonce}}" src="{% static 'js/chart-configs.js' %}?v={% word_hash %}"></script>
-<script nonce="{{request.csp_nonce}}" src="{% static 'js/chart-utils.js' %}?v={% word_hash %}"></script>
-<script nonce="{{request.csp_nonce}}" src="{% static 'js/dashboard.js' %}?v={% word_hash %}"></script>
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/dist/pages/dashboard.js' %}?v={% word_hash %}"></script>
 {% endblock %}

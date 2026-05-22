@@ -117,7 +117,7 @@
 {% block extra_js %}
     {% load static %}
     {% load word_hash %}
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/receipts-filter.js' %}?v={% word_hash %}"></script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/dist/pages/receipts.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}">
         document.body.addEventListener('htmx:afterSwap', function (event) {
             if (event.target.id !== 'pending-receipts-counter') {

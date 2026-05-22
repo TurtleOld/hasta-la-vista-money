@@ -179,3 +179,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+
+{% block extra_js %}
+{% load static %}
+{% load word_hash %}
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/dist/pages/budget.js' %}?v={% word_hash %}"></script>
+{% endblock %}
