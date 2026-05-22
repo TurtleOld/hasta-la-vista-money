@@ -1,0 +1,39 @@
+{% load i18n %}
+
+<section class="finances-summary">
+    <div class="finances-summary-cell">
+        <div class="finances-label">{% translate 'Доходы' %}</div>
+        <div class="finances-amount finances-positive">
+            <span class="finances-money">{{ summary.income|floatformat:0 }} ₽</span>
+            <span class="finances-money-hidden">•••</span>
+        </div>
+        <div class="finances-muted text-sm mt-2">{% translate 'За выбранный период' %}</div>
+    </div>
+    <div class="finances-summary-cell">
+        <div class="finances-label">{% translate 'Расходы' %}</div>
+        <div class="finances-amount finances-negative">
+            <span class="finances-money">{{ summary.expense|floatformat:0 }} ₽</span>
+            <span class="finances-money-hidden">•••</span>
+        </div>
+        <div class="finances-muted text-sm mt-2">{{ summary.count }} {% translate 'операций' %}</div>
+    </div>
+    <div class="finances-summary-cell">
+        <div class="finances-label">{% translate 'Баланс периода' %}</div>
+        <div class="finances-amount {% if summary.net >= 0 %}finances-positive{% else %}finances-negative{% endif %}">
+            <span class="finances-money">{% if summary.net >= 0 %}+{% endif %}{{ summary.net|floatformat:0 }} ₽</span>
+            <span class="finances-money-hidden">•••</span>
+        </div>
+        <div class="finances-muted text-sm mt-2">{% translate 'Средний чек' %}: {{ summary.avg_check|floatformat:0 }} ₽</div>
+    </div>
+    <div class="finances-summary-cell">
+        <div class="finances-label">{% translate 'Последние 14 дней' %}</div>
+        <div class="finances-sparkbar" aria-hidden="true">
+            {% for bar in summary.spark %}
+                <div class="finances-spark" title="{{ bar.label }}: +{{ bar.pos|floatformat:0 }} / -{{ bar.neg|floatformat:0 }}">
+                    <span class="finances-spark-pos" style="height: {{ bar.pos_pct|stringformat:'f' }}%"></span>
+                    <span class="finances-spark-neg" style="height: {{ bar.neg_pct|stringformat:'f' }}%"></span>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>

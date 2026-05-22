@@ -529,7 +529,7 @@ class IncomeCategoryCreateView(
     model = IncomeCategory
     template_name = 'income/add_category_income.html'
     form_class = AddCategoryIncomeForm
-    success_url = reverse_lazy('income:category_list')
+    success_url = reverse_lazy('finances_categories')
     depth = 3
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -608,7 +608,7 @@ class IncomeCategoryUpdateView(
     model = IncomeCategory
     template_name = 'income/update_category_income.html'
     form_class = AddCategoryIncomeForm
-    success_url = reverse_lazy('income:category_list')
+    success_url = reverse_lazy('finances_categories')
 
     def get_object(self, queryset: Any = None) -> IncomeCategory:
         """
@@ -690,7 +690,7 @@ class IncomeCategoryDeleteView(
     model = IncomeCategory
     success_message = str(constants.SUCCESS_CATEGORY_INCOME_DELETED)
     error_message = str(constants.ACCESS_DENIED_DELETE_INCOME_CATEGORY)
-    success_url = reverse_lazy('income:category_list')
+    success_url = reverse_lazy('finances_categories')
 
     def form_valid(self, form: Any) -> HttpResponse:
         """Handle valid form submission for deletion."""

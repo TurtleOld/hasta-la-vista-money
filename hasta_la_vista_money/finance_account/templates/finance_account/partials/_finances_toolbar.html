@@ -1,0 +1,111 @@
+{% load i18n %}
+
+<div class="finances-segment" role="tablist" aria-label="{% translate 'Тип операций' %}">
+    <button type="button" class="{% if finances_filter.type == 'all' %}is-active{% endif %}" data-finances-type="all">{% translate 'Все' %}</button>
+    <button type="button" class="{% if finances_filter.type == 'income' %}is-active{% endif %}" data-finances-type="income">{% translate 'Доходы' %}</button>
+    <button type="button" class="{% if finances_filter.type == 'expense' %}is-active{% endif %}" data-finances-type="expense">{% translate 'Расходы' %}</button>
+    <input id="finances-type" type="hidden" name="type" value="{{ finances_filter.type }}">
+</div>
+
+<div class="finances-pills">
+    <div class="finances-pop-wrap">
+        <button type="button" class="finances-chip {% if finances_filter.period != 'm' %}is-active{% endif %}" data-finances-pop-button="period">
+            {% translate 'Период' %}: {{ finances_filter.period_label }}
+        </button>
+        <div class="finances-pop" data-finances-pop="period">
+            <div class="finances-pop-title">{% translate 'Период' %}</div>
+            <div class="finances-pop-body">
+                {% for value, label, sublabel in finances_filter.period_choices %}
+                    <button type="button" class="finances-pop-option {% if finances_filter.period == value %}is-active{% endif %}" data-finances-set="finances-period" data-finances-value="{{ value }}">
+                        <span>{{ label }}</span>
+                        <span class="finances-muted ml-auto">{{ sublabel }}</span>
+                    </button>
+                {% endfor %}
+            </div>
+        </div>
+        <input id="finances-period" type="hidden" name="period" value="{{ finances_filter.period }}">
+    </div>
+
+    <div class="finances-pop-wrap">
+        <button type="button" class="finances-chip {% if selected_group_id != 'my' %}is-active{% endif %}" data-finances-pop-button="group">
+            {% translate 'Группа' %}: {% if selected_group_id == 'my' %}{% translate 'Мои' %}{% else %}{{ selected_group_id }}{% endif %}
+        </button>
+        <div class="finances-pop" data-finances-pop="group">
+            <div class="finances-pop-title">{% translate 'Группа' %}</div>
+            <div class="finances-pop-body">
+                <label class="finances-pop-option {% if selected_group_id == 'my' %}is-active{% endif %}">
+                    <input type="radio" name="group_id" value="my" {% if selected_group_id == 'my' %}checked{% endif %}>
+                    <span>{% translate 'Мои' %}</span>
+                </label>
+                {% for group in user.groups.all %}
+                    <label class="finances-pop-option {% if selected_group_id == group.id|stringformat:'s' %}is-active{% endif %}">
+                        <input type="radio" name="group_id" value="{{ group.id }}" {% if selected_group_id == group.id|stringformat:'s' %}checked{% endif %}>
+                        <span>{{ group.name }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="finances-pop-wrap">
+        <button type="button" class="finances-chip {% if finances_filter.account_ids %}is-active{% endif %}" data-finances-pop-button="account">
+            {% translate 'Счёт' %}: {% if finances_filter.account_ids %}{{ finances_filter.account_ids|length }}{% translate ' выбрано' %}{% else %}{% translate 'все' %}{% endif %}
+        </button>
+        <div class="finances-pop" data-finances-pop="account">
+            <div class="finances-pop-title">{% translate 'Счета' %}</div>
+            <div class="finances-pop-body">
+                {% for account in accounts %}
+                    <label class="finances-pop-option {% if account.id in finances_filter.account_ids %}is-active{% endif %}">
+                        <input type="checkbox" name="account" value="{{ account.id }}" {% if account.id in finances_filter.account_ids %}checked{% endif %}>
+                        <span>{{ account.name_account }}</span>
+                        <span class="finances-muted ml-auto">{{ account.currency }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="finances-pop-wrap">
+        <button type="button" class="finances-chip {% if finances_filter.category_keys %}is-active{% endif %}" data-finances-pop-button="category">
+            {% translate 'Категория' %}: {% if finances_filter.category_keys %}{{ finances_filter.category_keys|length }}{% translate ' выбрано' %}{% else %}{% translate 'все' %}{% endif %}
+        </button>
+        <div class="finances-pop" data-finances-pop="category">
+            <div class="finances-pop-title">{% translate 'Категории' %}</div>
+            <div class="finances-pop-body">
+                {% for category in finances_categories %}
+                    <label class="finances-pop-option {% if category.key in finances_filter.category_keys %}is-active{% endif %}">
+                        <input type="checkbox" name="category" value="{{ category.key }}" {% if category.key in finances_filter.category_keys %}checked{% endif %}>
+                        <span>{{ category.name }}</span>
+                        <span class="finances-muted ml-auto">{% if category.type == 'income' %}{% translate 'доход' %}{% else %}{% translate 'расход' %}{% endif %}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="finances-pop-wrap">
+        <button type="button" class="finances-chip {% if finances_filter.min_amount %}is-active{% endif %}" data-finances-pop-button="amount">
+            {% translate 'Сумма' %}: {% if finances_filter.min_amount %}≥ {{ finances_filter.min_amount|floatformat:0 }} ₽{% else %}{% translate 'любая' %}{% endif %}
+        </button>
+        <div class="finances-pop" data-finances-pop="amount">
+            <div class="finances-pop-title">{% translate 'Минимум' %}</div>
+            <div class="finances-pop-body">
+                <button type="button" class="finances-pop-option" data-finances-set="finances-min-amount" data-finances-value="500">≥ 500 ₽</button>
+                <button type="button" class="finances-pop-option" data-finances-set="finances-min-amount" data-finances-value="1000">≥ 1 000 ₽</button>
+                <button type="button" class="finances-pop-option" data-finances-set="finances-min-amount" data-finances-value="5000">≥ 5 000 ₽</button>
+                <button type="button" class="finances-pop-option" data-finances-set="finances-min-amount" data-finances-value="10000">≥ 10 000 ₽</button>
+                <button type="button" class="finances-pop-option" data-finances-set="finances-min-amount" data-finances-value="">{% translate 'Без ограничения' %}</button>
+            </div>
+        </div>
+        <input id="finances-min-amount" type="hidden" name="min_amount" value="{{ finances_filter.min_amount|default_if_none:'' }}">
+    </div>
+
+    {% if finances_filter.is_active %}
+        <a class="finances-chip is-active" href="{% url 'finances' %}">{% translate 'Сбросить' %}</a>
+    {% endif %}
+</div>
+
+<label class="finances-search">
+    <span class="finances-muted">⌕</span>
+    <input data-finances-search type="search" name="q" value="{{ finances_filter.q }}" placeholder="{% translate 'Поиск операций' %}">
+</label>

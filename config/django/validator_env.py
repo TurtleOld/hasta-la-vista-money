@@ -31,12 +31,20 @@ class EnvironmentValidator:
                 variable='ALLOWED_HOSTS',
                 hint='Set it to a comma-separated list of hosts',
             )
-        if not config('DATABASE_URL', cast=str, default=''):
+        database_url = config('DATABASE_URL', cast=str, default='')
+        uses_postgres_env = bool(
+            config('POSTGRES_PASSWORD', cast=str, default='')
+            or config('POSTGRES_USER', cast=str, default='')
+        )
+        if uses_postgres_env and not database_url:
             valid = False
             logger.warning(
                 'Required environment variable is not set',
                 variable='DATABASE_URL',
-                hint='Set it to a valid database URL',
+                hint=(
+                    'Set it to a valid database URL or remove POSTGRES_* '
+                    'variables to use SQLite'
+                ),
             )
 
         debug_mode = config('DEBUG', default=False, cast=bool)

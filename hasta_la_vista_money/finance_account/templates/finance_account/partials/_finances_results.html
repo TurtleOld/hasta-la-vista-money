@@ -1,0 +1,42 @@
+{% load i18n %}
+
+{% include 'finance_account/partials/_finances_summary.html' %}
+
+<form id="finances-form" class="finances-toolbar" hx-get="{% url 'finances' %}" hx-target="#finances-results" hx-swap="innerHTML" hx-push-url="true" hx-trigger="change, input delay:350ms, submit">
+    {% include 'finance_account/partials/_finances_toolbar.html' %}
+</form>
+
+<div class="finances-grid mt-4">
+    <section class="finances-panel">
+        {% include 'finance_account/partials/_finances_list.html' %}
+    </section>
+
+    <aside class="finances-side">
+        <section class="finances-side-card">
+            <h2 class="finances-side-title">{% translate 'Топ категорий' %}</h2>
+            <div class="finances-side-list">
+                {% for category in by_category|slice:':6' %}
+                    <div class="finances-side-item">
+                        <span>{{ category.name }}</span>
+                        <strong class="{% if category.total > 0 %}finances-positive{% else %}finances-negative{% endif %}">
+                            {% if category.total > 0 %}+{% else %}-{% endif %}{{ category.total|floatformat:0|cut:'-' }} ₽
+                        </strong>
+                    </div>
+                {% empty %}
+                    <p class="finances-muted">{% translate 'Нет данных для выбранных фильтров' %}</p>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="finances-side-card mt-4">
+            <h2 class="finances-side-title">{% translate 'Вид' %}</h2>
+            <div class="finances-side-list">
+                <button type="button" class="finances-chip" data-finances-group="day">{% translate 'По дням' %}</button>
+                <button type="button" class="finances-chip" data-finances-group="flat">{% translate 'Списком' %}</button>
+                <button type="button" class="finances-chip" data-finances-group="category">{% translate 'По категориям' %}</button>
+                <button type="button" class="finances-chip" data-finances-layout>{% translate 'Сайдбар' %}</button>
+                <button type="button" class="finances-chip" data-finances-balance>{% translate 'Скрыть суммы' %}</button>
+            </div>
+        </section>
+    </aside>
+</div>

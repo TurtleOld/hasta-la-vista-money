@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -27,6 +28,14 @@ class CheckAdminMiddleware:
                 str(reverse_lazy('users:registration')),
                 str(reverse_lazy('login')),
             }
-            if request.path not in allowed_paths:
+            allowed_prefixes = tuple(
+                prefix
+                for prefix in (settings.STATIC_URL, settings.MEDIA_URL)
+                if prefix
+            )
+            if (
+                request.path not in allowed_paths
+                and not request.path.startswith(allowed_prefixes)
+            ):
                 return redirect('users:registration')
         return self.get_response(request)

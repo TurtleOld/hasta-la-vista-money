@@ -12,6 +12,11 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from hasta_la_vista_money.finance_account.views import (
+    FinancesCategoryView,
+    FinancesCreateView,
+    FinancesView,
+)
 from hasta_la_vista_money.system.views import (
     HealthCheckView,
     ReadinessCheckView,
@@ -109,6 +114,17 @@ urlpatterns = [
             'hasta_la_vista_money.finance_account.urls',
             namespace='finance_account',
         ),
+    ),
+    path('finance/', FinancesView.as_view(), name='finances'),
+    path(
+        'finance/categories/',
+        FinancesCategoryView.as_view(),
+        name='finances_categories',
+    ),
+    path(
+        'finance/create/',
+        FinancesCreateView.as_view(),
+        name='finances_create',
     ),
     path(
         'receipts/',

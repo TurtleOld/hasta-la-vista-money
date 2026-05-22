@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate 'Финансы' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'finances/css/finances.css' %}">
+{% endblock %}
+
+{% block content %}
+<main class="finances-app" data-finances-app data-layout="compact" data-group="day">
+    <div class="finances-wrap">
+        <header class="finances-header">
+            <div>
+                <div class="finances-kicker">{% translate 'Финансы' %}</div>
+                <h1 class="finances-title">
+                    {% if finances_filter.type == 'income' %}{% translate 'Доходы' %}{% elif finances_filter.type == 'expense' %}{% translate 'Расходы' %}{% else %}{% translate 'Все операции' %}{% endif %}
+                </h1>
+                <p class="finances-muted mt-3">{{ finances_filter.period_label }} · {{ summary.count }} {% translate 'операций' %}</p>
+            </div>
+            <div class="finances-actions">
+                <a href="{% url 'finances_create' %}" class="finances-button finances-button-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    {% translate 'Новая операция' %}
+                </a>
+            </div>
+        </header>
+
+        <div id="finances-results">
+            {% include 'finance_account/partials/_finances_results.html' %}
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+    <script defer nonce="{{ request.csp_nonce }}" src="{% static 'finances/js/finances.js' %}"></script>
+{% endblock %}

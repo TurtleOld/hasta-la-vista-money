@@ -1,27 +1,6 @@
 name: hlvm-dev
 
 services:
-  db:
-    image: postgres:18
-    volumes:
-      - postgres_data:/var/lib/postgresql
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-hlvm}
-    env_file:
-      - .env
-    ports:
-      - "5433:5432"
-    restart: always
-    networks:
-      - default
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:8-alpine
     volumes:
@@ -47,11 +26,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
       SECRET_KEY: ${SECRET_KEY:-change_me}
-    depends_on:
-      db:
-        condition: service_healthy
     networks:
       - default
     restart: "no"
@@ -69,7 +44,6 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
       SECRET_KEY: ${SECRET_KEY:-change_me}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
       BASE_URL: ${BASE_URL:-http://127.0.0.1:8001}
@@ -80,8 +54,6 @@ services:
       RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-http://receipt-inference:8010}
       RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-420}
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_started
       migrator:
@@ -100,7 +72,6 @@ services:
     build:
       context: ./
       dockerfile: docker/local.Dockerfile
-    entrypoint: ["/bin/sh", "/app/docker/celery-entrypoint.sh"]
     command: celery -A config worker --loglevel=info --concurrency=2 -Q hlvm_tasks
     volumes:
       - ./:/app
@@ -108,14 +79,11 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
       SECRET_KEY: ${SECRET_KEY:-change_me}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
       RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-http://receipt-inference:8010}
       RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-420}
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_started
       migrator:
@@ -134,19 +102,15 @@ services:
     build:
       context: ./
       dockerfile: docker/local.Dockerfile
-    entrypoint: ["/bin/sh", "/app/docker/celery-entrypoint.sh"]
     command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
       - ./:/app
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@db:5432/hlvm}
       SECRET_KEY: ${SECRET_KEY:-change_me}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_started
       migrator:
@@ -207,7 +171,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
   staticfiles_data:
   redis_data:
   media_data:

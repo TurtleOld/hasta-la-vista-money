@@ -1,0 +1,432 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate 'Новая операция' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'finances/css/finances.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="finances-app" x-data="composerPage" x-bind:class="typeClass">
+
+    <div class="composer-crumb">
+        <a href="{% url 'finances' %}">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+            {% translate 'Финансы' %}
+        </a>
+        <span class="sep">·</span>
+        <b>{% translate 'Новая операция' %}</b>
+    </div>
+
+    <div class="composer-shell">
+
+        <form class="composer-card" method="post" action="{% url 'finances_create' %}" x-ref="composerForm" x-on:submit.prevent="submitForm">
+            {% csrf_token %}
+            <input type="hidden" name="operation_type" x-bind:value="type">
+            <input type="hidden" name="category"       x-bind:value="categoryId">
+            <input type="hidden" name="account"        x-bind:value="accountId">
+            <input type="hidden" name="date"           x-bind:value="datetimeLocal">
+            <input type="hidden" name="action"         x-ref="actionField" value="save">
+
+            <div class="composer-hd">
+                <h1 x-text="typeLabel"></h1>
+                <span class="meta" x-text="formattedDatetime"></span>
+            </div>
+
+            <!-- Тип операции — два фиксированных значения, без вызовов с аргументами -->
+            <div class="cmp-type">
+                <button type="button" data-type="expense"
+                        x-bind:data-on="isExpense"
+                        x-on:click="setType('expense')">
+                    <span class="glyph">
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                    </span>
+                    {% translate 'Расход' %}
+                </button>
+                <button type="button" data-type="income"
+                        x-bind:data-on="isIncome"
+                        x-on:click="setType('income')">
+                    <span class="glyph">
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    </span>
+                    {% translate 'Доход' %}
+                </button>
+            </div>
+
+            <!-- Сумма -->
+            <div class="cmp-amount">
+                <div class="cmp-amt-input">
+                    <span class="sign" x-text="amountSign"></span>
+                    <input type="text" inputmode="decimal" placeholder="0"
+                           name="amount" x-model="amount" x-ref="amountInput"
+                           x-on:input="sanitizeAmount"
+                           autofocus>
+                </div>
+                <div class="cmp-amt-meta" x-show="!amount" x-cloak>
+                    <span>{% translate 'Быстро' %}:</span>
+                    <button type="button" class="calc" x-on:click="setAmount('1000')">1 000</button>
+                    <button type="button" class="calc" x-on:click="setAmount('5000')">5 000</button>
+                    <button type="button" class="calc" x-on:click="setAmount('10000')">10 000</button>
+                </div>
+            </div>
+
+            <div class="cmp-body">
+
+                <!-- Категория — рендерится Django, Alpine управляет состоянием через data-атрибуты -->
+                <section class="cmp-section">
+                    <h3>
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+                        {% translate 'Категория' %}
+                        <span class="opt" x-show="categoryId" x-text="selectedCategoryLabel" x-cloak></span>
+                    </h3>
+
+                    <!-- Расходы -->
+                    <div class="cmp-cats" x-show="isExpense">
+                        {% for c in expense_categories %}
+                        <button type="button" class="cat-chip"
+                                data-category-id="{{ c.pk }}"
+                                data-category-type="expense"
+                                data-category-name="{{ c.name|escapejs }}"
+                                x-bind:data-on="categoryId == {{ c.pk }}"
+                                x-on:click="selectCategory({{ c.pk }}, '{{ c.name|escapejs }}')">
+                            <span class="dot">
+                                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                            </span>
+                            {{ c.name }}
+                        </button>
+                        {% empty %}
+                        <p class="finances-muted">{% translate 'Нет категорий расходов' %}</p>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Доходы -->
+                    <div class="cmp-cats" x-show="isIncome" x-cloak>
+                        {% for c in income_categories %}
+                        <button type="button" class="cat-chip"
+                                data-category-id="{{ c.pk }}"
+                                data-category-type="income"
+                                data-category-name="{{ c.name|escapejs }}"
+                                x-bind:data-on="categoryId == {{ c.pk }}"
+                                x-on:click="selectCategory({{ c.pk }}, '{{ c.name|escapejs }}')">
+                            <span class="dot">
+                                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                            </span>
+                            {{ c.name }}
+                        </button>
+                        {% empty %}
+                        <p class="finances-muted">{% translate 'Нет категорий доходов' %}</p>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <!-- Счёт — рендерится Django -->
+                <section class="cmp-section">
+                    <h3>
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 11h18M7 16h3"/></svg>
+                        <span x-text="accountSectionLabel"></span>
+                    </h3>
+                    <div class="cmp-select-list">
+                        {% for a in accounts %}
+                        <button type="button"
+                                data-account-id="{{ a.pk }}"
+                                data-account-name="{{ a.name_account|escapejs }}"
+                                x-bind:data-on="accountId == {{ a.pk }}"
+                                x-on:click="selectAccount({{ a.pk }}, '{{ a.name_account|escapejs }}')">
+                            <span class="acc-glyph">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>
+                            </span>
+                            <div>
+                                <div class="acc-name">{{ a.name_account }}</div>
+                            </div>
+                            <div class="acc-bal"></div>
+                        </button>
+                        {% empty %}
+                        <p class="finances-muted">{% translate 'Нет счетов' %}</p>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <!-- Дата / Время -->
+                <section class="cmp-section">
+                    <h3>
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+                        {% translate 'Когда' %}
+                    </h3>
+                    <div class="cmp-grid-2">
+                        <div class="cmp-field">
+                            <div class="cmp-input">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+                                <input type="date" x-model="date">
+                            </div>
+                            <div class="date-quick">
+                                <button type="button" x-bind:data-on="isToday" x-on:click="setDateOffset(0)">{% translate 'Сегодня' %}</button>
+                                <button type="button" x-bind:data-on="isYesterday" x-on:click="setDateOffset(-1)">{% translate 'Вчера' %}</button>
+                                <button type="button" x-on:click="setDateOffset(-2)">{% translate 'Позавчера' %}</button>
+                            </div>
+                        </div>
+                        <div class="cmp-field">
+                            <div class="cmp-input">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                                <input type="time" x-model="time">
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Описание -->
+                <section class="cmp-section">
+                    <h3>
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                        {% translate 'Описание' %}
+                        <span class="opt">{% translate 'необязательно' %}</span>
+                    </h3>
+                    <div class="cmp-input tall">
+                        <textarea name="description" placeholder="{% translate 'Заметка к операции' %}" x-model="note" rows="2"></textarea>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="composer-ft">
+                <div class="hint">
+                    <kbd>⌘</kbd><kbd>S</kbd>
+                    <span>{% translate 'сохранить' %}</span>
+                    <span class="composer-sep">·</span>
+                    <kbd>Esc</kbd>
+                    <span>{% translate 'выйти' %}</span>
+                </div>
+                <div class="ft-actions">
+                    <a href="{% url 'finances' %}" class="btn btn-ghost">{% translate 'Отмена' %}</a>
+                    <button type="button" class="btn btn-secondary" x-bind:disabled="!isValid"
+                            x-on:click="submitForm('save_and_add')">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                        {% translate 'Сохранить и добавить ещё' %}
+                    </button>
+                    <button type="submit" class="btn btn-primary" x-bind:disabled="!isValid">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-10"/></svg>
+                        {% translate 'Сохранить' %}
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Preview -->
+        <aside class="preview-card" x-bind:class="previewClass">
+            <div class="panel-hd">
+                <h2>{% translate 'Предпросмотр' %}</h2>
+                <span class="composer-meta-label">{% translate 'как в ленте' %}</span>
+            </div>
+            <div class="preview-body">
+                <div x-show="!previewReady" class="preview-empty" x-cloak>
+                    {% translate 'Заполни сумму, категорию и счёт — здесь появится строка как в ленте операций.' %}
+                </div>
+                <div class="preview-tx" x-show="previewReady" x-cloak>
+                    <div class="top">
+                        <div class="ico">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <path x-bind:d="categoryIconPath"></path>
+                            </svg>
+                        </div>
+                        <div class="preview-tx-body">
+                            <div class="name" x-text="selectedCategoryName"></div>
+                            <div class="note" x-text="noteOrDash"></div>
+                        </div>
+                        <div class="amt">
+                            <span x-text="previewAmount"></span>
+                            <span class="cur">₽</span>
+                        </div>
+                    </div>
+                    <div class="ft">
+                        <span x-text="selectedAccountName"></span>
+                        <span x-text="previewDate"></span>
+                    </div>
+                </div>
+                <div class="preview-tip">
+                    <b>{% translate 'Совет.' %}</b> {% translate 'Категории — только ваши. Создавайте под себя в' %}
+                    <a href="{% url 'finances_categories' %}" class="composer-tip-link">{% translate 'Настройках' %}</a>.
+                </div>
+            </div>
+        </aside>
+
+    </div>
+</div>
+
+<script nonce="{{ request.csp_nonce }}">
+    window.FINANCES_URL  = "{% url 'finances' %}";
+    window.LABEL_INCOME  = "{% translate 'Доход' %}";
+    window.LABEL_EXPENSE = "{% translate 'Расход' %}";
+    window.LABEL_TO      = "{% translate 'Куда' %}";
+    window.LABEL_FROM    = "{% translate 'Откуда' %}";
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('composerPage', () => ({
+            type:                 'expense',
+            amount:               '',
+            categoryId:           null,
+            accountId:            null,
+            selectedCategoryName: '',
+            selectedAccountName:  '',
+            date:                 new Date().toISOString().slice(0, 10),
+            time:                 new Date().toTimeString().slice(0, 5),
+            note:                 '',
+
+            /* ── Computed: тип ── */
+            get isExpense() { return this.type === 'expense' ? true : null; },
+            get isIncome()  { return this.type === 'income'  ? true : null; },
+            get typeLabel() {
+                return this.type === 'income' ? window.LABEL_INCOME : window.LABEL_EXPENSE;
+            },
+            get amountSign() {
+                return this.type === 'income' ? '+' : '−';
+            },
+            get accountSectionLabel() {
+                return this.type === 'income' ? window.LABEL_TO : window.LABEL_FROM;
+            },
+            get categoryIconPath() {
+                return this.type === 'income' ? 'M12 5v14M5 12h14' : 'M5 12h14';
+            },
+
+            /* ── Computed: классы для CSS-переменных --type-c / --prev-c ── */
+            get typeClass() {
+                return this.type === 'income' ? 'cmp-type-c-income' : 'cmp-type-c-expense';
+            },
+            get previewClass() {
+                return this.type === 'income' ? 'cmp-prev-c-income' : 'cmp-prev-c-expense';
+            },
+
+            /* ── Computed: категория ── */
+            get selectedCategoryLabel() {
+                return this.selectedCategoryName ? '· ' + this.selectedCategoryName : '';
+            },
+
+            /* ── Computed: дата ── */
+            get datetimeLocal() {
+                return this.date + 'T' + this.time;
+            },
+            get formattedDatetime() {
+                try {
+                    return new Date(this.date + 'T' + this.time).toLocaleString('ru-RU', {
+                        weekday: 'short', day: 'numeric', month: 'short',
+                        hour: '2-digit', minute: '2-digit',
+                    });
+                } catch (e) { return ''; }
+            },
+            get isToday() {
+                return this.date === new Date().toISOString().slice(0, 10) ? true : null;
+            },
+            get isYesterday() {
+                const y = new Date();
+                y.setDate(y.getDate() - 1);
+                return this.date === y.toISOString().slice(0, 10) ? true : null;
+            },
+
+            /* ── Computed: превью ── */
+            get previewReady() {
+                return !!(this.amount && this.categoryId && this.accountId);
+            },
+            get previewAmount() {
+                const sign = this.type === 'income' ? '+' : '−';
+                return sign + new Intl.NumberFormat('ru-RU').format(Math.round(parseFloat(this.amount) || 0));
+            },
+            get previewDate() {
+                return this.date + ' · ' + this.time;
+            },
+            get noteOrDash() {
+                return this.note || '—';
+            },
+
+            /* ── Computed: валидация ── */
+            get isValid() {
+                return !!(parseFloat(this.amount) > 0 && this.categoryId && this.accountId);
+            },
+
+            /* ── Методы: вызываются с литеральными аргументами из шаблона ── */
+            setType(t) {
+                this.type = t;
+                this.categoryId = null;
+                this.selectedCategoryName = '';
+            },
+            selectCategory(id, name) {
+                this.categoryId = id;
+                this.selectedCategoryName = name;
+            },
+            selectAccount(id, name) {
+                this.accountId = id;
+                this.selectedAccountName = name;
+            },
+            setAmount(val) {
+                this.amount = val;
+            },
+            setDateOffset(days) {
+                const d = new Date();
+                d.setDate(d.getDate() + days);
+                this.date = d.toISOString().slice(0, 10);
+            },
+            sanitizeAmount() {
+                this.amount = this.amount.replace(/[^\d.,]/g, '').replace(',', '.');
+            },
+            submitForm(action) {
+                if (!this.isValid) return;
+                if (this.$refs.actionField) {
+                    this.$refs.actionField.value = action === 'save_and_add' ? 'save_and_add' : 'save';
+                }
+                this.$refs.composerForm.submit();
+            },
+
+            prefillFromQuery() {
+                const params = new URLSearchParams(window.location.search);
+                const type = params.get('type');
+                if (type === 'income' || type === 'expense') {
+                    this.type = type;
+                }
+                const categoryId = params.get('category');
+                if (categoryId) {
+                    const btn = document.querySelector(
+                        `.cat-chip[data-category-id="${categoryId}"][data-category-type="${this.type}"]`,
+                    );
+                    if (btn) {
+                        this.selectCategory(parseInt(categoryId, 10), btn.dataset.categoryName || '');
+                    }
+                }
+                const accountId = params.get('account');
+                if (accountId) {
+                    const btn = document.querySelector(
+                        `[data-account-id="${accountId}"]`,
+                    );
+                    if (btn) {
+                        this.selectAccount(parseInt(accountId, 10), btn.dataset.accountName || '');
+                    }
+                }
+                const date = params.get('date');
+                if (date) {
+                    this.date = date;
+                }
+                const time = params.get('time');
+                if (time) {
+                    this.time = time;
+                }
+            },
+
+            init() {
+                this.prefillFromQuery();
+                window.addEventListener('keydown', (e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                        e.preventDefault();
+                        this.submitForm('save');
+                    }
+                    if (e.key === 'Escape') {
+                        window.location.href = window.FINANCES_URL;
+                    }
+                });
+            },
+        }));
+    });
+</script>
+{% endblock %}

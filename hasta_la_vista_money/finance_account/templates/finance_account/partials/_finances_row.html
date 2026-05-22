@@ -1,0 +1,43 @@
+{% load i18n %}
+
+<article class="finances-row">
+    <div class="finances-icon {% if tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
+        {% if tx.amount > 0 %}
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-5 5m5-5l5 5"></path>
+            </svg>
+        {% else %}
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m0 0l5-5m-5 5l-5-5"></path>
+            </svg>
+        {% endif %}
+    </div>
+    <div>
+        <div class="finances-row-title">{{ tx.category_name }}</div>
+        <div class="finances-row-sub">
+            {% if tx.is_receipt %}<span>{% translate 'Чеки' %}</span>{% else %}<span>{% if tx.amount > 0 %}{% translate 'Доход' %}{% else %}{% translate 'Расход' %}{% endif %}</span>{% endif %}
+            <span> · {{ tx.user_name }}</span>
+        </div>
+    </div>
+    <div class="finances-row-account finances-muted">{{ tx.account_name }}</div>
+    <div class="text-right font-bold {% if tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
+        <span class="finances-money">{% if tx.amount > 0 %}+{% else %}-{% endif %}{{ tx.abs_amount|floatformat:0 }} ₽</span>
+        <span class="finances-money-hidden">•••</span>
+    </div>
+    <div class="finances-row-date finances-muted">{{ tx.date|date:'d.m' }}</div>
+    <div class="finances-row-actions">
+        {% if tx.can_edit %}
+            <a class="finances-muted" href="{{ tx.edit_url }}" title="{% translate 'Изменить' %}">{% translate 'Изм.' %}</a>
+            <form method="post" action="{{ tx.copy_url }}">
+                {% csrf_token %}
+                <button class="finances-muted" type="submit" title="{% translate 'Копировать' %}">{% translate 'Коп.' %}</button>
+            </form>
+            <form method="post" action="{{ tx.delete_url }}">
+                {% csrf_token %}
+                <button class="finances-negative" type="submit" title="{% translate 'Удалить' %}">{% translate 'Удал.' %}</button>
+            </form>
+        {% else %}
+            <span class="finances-muted">—</span>
+        {% endif %}
+    </div>
+</article>

@@ -1,0 +1,50 @@
+{% load i18n %}
+
+<article class="finance-category-item finance-category-level-{{ level }}" style="--cat-level: {{ level }};">
+    <div class="finance-category-row">
+        <span class="dot">
+            {% if category_type == 'income' %}
+                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            {% else %}
+                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+            {% endif %}
+        </span>
+        <div class="finance-category-name">
+            <strong>{{ category.name }}</strong>
+            {% if category.total_children_count %}
+                <span>{{ category.total_children_count }} {% translate 'подкат.' %}</span>
+            {% endif %}
+        </div>
+        <div class="finance-category-actions">
+            {% if category_type == 'income' %}
+                <a href="{% url 'income:update_category_income' category.id %}" title="{% translate 'Редактировать категорию' %}">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </a>
+                <form method="post" action="{% url 'income:delete_category_income' category.id %}">
+                    {% csrf_token %}
+                    <button type="submit" name="delete_category_income_button" title="{% translate 'Удалить категорию' %}">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                    </button>
+                </form>
+            {% else %}
+                <a href="{% url 'expense:update_category_expense' category.id %}" title="{% translate 'Редактировать категорию' %}">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </a>
+                <form method="post" action="{% url 'expense:delete_category_expense' category.id %}">
+                    {% csrf_token %}
+                    <button type="submit" name="delete_category_expense_button" title="{% translate 'Удалить категорию' %}">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if category.children %}
+        <div class="finance-category-children">
+            {% for child in category.children %}
+                {% include 'finance_account/partials/_category_tree_item.html' with category=child category_type=category_type level=level|add:1 %}
+            {% endfor %}
+        </div>
+    {% endif %}
+</article>
