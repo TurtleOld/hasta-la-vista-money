@@ -119,18 +119,8 @@
 
 
 {% compress js %}
-<script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/htmx.min.js' %}"></script>
-<script src="{% static 'js/notifications.js' %}"></script>
-    <script src="{% static 'js/tokens.js' %}"></script>
-    <script src="{% static 'js/script.js' %}"></script>
-    <script src="{% static 'js/errors_form.js' %}"></script>
-    <script src="{% static 'js/account_group_filter.js' %}"></script>
-    <script src="{% static 'js/lazy-loader.js' %}"></script>
-    {% if user.is_authenticated %}
-        <script src="{% static 'js/header.js' %}"></script>
-        <script src="{% static 'js/bottom-nav.js' %}"></script>
-    {% endif %}
+    <script src="{% static 'js/dist/app.js' %}?v={% word_hash %}"></script>
     {% endcompress %}
     {% if user.is_authenticated %}
     <script nonce="{{request.csp_nonce}}">

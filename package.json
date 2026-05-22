@@ -1,6 +1,12 @@
 {
+  "scripts": {
+    "build:js": "node esbuild.config.mjs",
+    "watch:js": "node esbuild.config.mjs --watch"
+  },
   "dependencies": {
-    "datatables.net-dt": "^2.3.5",
     "driver.js": "^1.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0"
   }
 }

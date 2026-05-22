@@ -1,0 +1,8 @@
+import '../../static/js/notifications.js';
+import '../../static/js/tokens.js';
+import '../../static/js/script.js';
+import '../../static/js/errors_form.js';
+import '../../static/js/account_group_filter.js';
+import '../../static/js/lazy-loader.js';
+import '../../static/js/header.js';
+import '../../static/js/bottom-nav.js';
