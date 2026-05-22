@@ -151,10 +151,28 @@ function registerReceiptUploadPage(Alpine) {
     });
 }
 
+function registerInstructionModal(Alpine) {
+    Alpine.data('instructionModal', function () {
+        return {
+            open: false,
+            openModal() {
+                this.open = true;
+                var mobileMenu = document.getElementById('mobileMenuState');
+                if (mobileMenu) mobileMenu.checked = false;
+            },
+            closeModal() {
+                this.open = false;
+            },
+        };
+    });
+}
+
 if (window.Alpine) {
     registerReceiptUploadPage(window.Alpine);
+    registerInstructionModal(window.Alpine);
 } else {
     document.addEventListener('alpine:init', function () {
         registerReceiptUploadPage(window.Alpine);
+        registerInstructionModal(window.Alpine);
     });
 }
