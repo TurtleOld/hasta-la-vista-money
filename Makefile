@@ -3,7 +3,7 @@
         docker-build docker-build-prod docker-test-prod docker-up \
         gettext staticfiles start secretkey test coverage \
         rabbitmq rabbitmq-stop rabbitmq-management export-api-schema \
-        help check docs
+        help check docs build-js watch-js
 
 lint:
 	@cd hasta_la_vista_money && echo "Running flake8 check..." && uv run flake8 . --select=WPS
@@ -35,10 +35,10 @@ shell:
 	@test ! -f .env && cp .env.example .env || true
 
 install: .env secretkey
-	@uv sync --dev
+	@uv sync --dev && npm ci && npm run build:js
 
 install-prod: .env secretkey
-	@uv sync
+	@uv sync && npm ci && npm run build:js
 
 migrate:
 	@uv run python manage.py makemigrations && echo "" && echo "Migrating..." && uv run python manage.py migrate
@@ -60,6 +60,12 @@ gettext:
 
 staticfiles:
 	@uv run python manage.py collectstatic --noinput
+
+build-js:
+	@npm ci && npm run build:js
+
+watch-js:
+	@npm run watch:js
 
 start:
 	@uv run python manage.py runserver 127.0.0.1:8000
@@ -99,4 +105,4 @@ check:
 	@uv run mypy . && uv run pyright
 
 help:
-	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  test / coverage\\n  export-api-schema / docs\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)')"
+	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js\\n  test / coverage\\n  export-api-schema / docs\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)')"

@@ -2,6 +2,7 @@
 
 FROM node:20-alpine AS node-builder
 
+# Build Tailwind CSS
 WORKDIR /app/theme/static_src
 
 COPY theme/static_src/package.json theme/static_src/package-lock.json ./
@@ -15,6 +16,14 @@ COPY core/ /app/core/
 COPY static/ /app/static/
 
 RUN npm run build
+
+# Build esbuild JS bundles
+WORKDIR /app
+
+COPY package.json package-lock.json esbuild.config.mjs ./
+COPY frontend/ ./frontend/
+
+RUN --mount=type=cache,target=/root/.npm npm ci && npm run build:js
 
 
 FROM python:3.13.9-slim AS builder
@@ -51,6 +60,7 @@ COPY nginx/ ./nginx/
 COPY docker/entrypoint.sh docker/celery-entrypoint.sh ./docker/
 
 COPY --from=node-builder /app/static/css/styles.min.css ./static/css/styles.min.css
+COPY --from=node-builder /app/static/js/dist/ ./static/js/dist/
 
 
 FROM python:3.13.9-slim

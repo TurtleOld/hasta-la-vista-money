@@ -1,40 +1,42 @@
-$(document).ready(function () {
+document.addEventListener('DOMContentLoaded', function () {
     const csrftoken = getCookie('csrftoken');
-    const planningElements = $(".planning");
+    const planningElements = document.querySelectorAll('.planning');
 
     let timeoutId;
 
-    planningElements.on("input", function () {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
+    planningElements.forEach(function (planningElement) {
+        planningElement.addEventListener('input', function () {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
 
-        timeoutId = setTimeout(() => {
-            const planningCell = $(this);
-            const newPlanningValue = planningCell.text();
-            const date = planningCell.closest('.date').attr('id');
-            const category = planningCell.closest("tr").find("td:first-child").text().trim();
+            timeoutId = setTimeout(function () {
+                const newPlanningValue = planningElement.textContent;
+                const date = planningElement.closest('.date')?.id || '';
+                const category = planningElement
+                    .closest('tr')
+                    ?.querySelector('td:first-child')
+                    ?.textContent
+                    .trim() || '';
 
-            console.log("Data:", { planning: newPlanningValue, date, category });
-
-            $.ajax({
-                url: 'change-planning/',
-                type: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    "X-CSRFToken": csrftoken,
-                },
-                data: JSON.stringify({ planning: newPlanningValue, date, category }),
-                dataType: 'json',
-                success: function (data) {
-                    console.log('Success: ', data);
-                },
-                error: function (xhr, textStatus, errorThrown) {
-                    console.error('AJAX Error: ', xhr, textStatus, errorThrown);
-                    console.log('Server Response Text: ', xhr.responseText); // Log the actual response
-                },
-            });
-        }, 500); // Adjust the timeout value as needed
+                fetch('change-planning/', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken || '',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        planning: newPlanningValue,
+                        date: date,
+                        category: category,
+                    }),
+                }).catch(function (error) {
+                    console.error('Planning update failed:', error);
+                });
+            }, 500);
+        });
     });
 
     function getCookie(name) {
@@ -44,7 +46,9 @@ $(document).ready(function () {
             for (let i = 0; i < cookies.length; i++) {
                 const cookie = cookies[i].trim();
                 if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    cookieValue = decodeURIComponent(
+                        cookie.substring(name.length + 1),
+                    );
                     break;
                 }
             }

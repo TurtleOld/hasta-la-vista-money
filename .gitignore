@@ -233,6 +233,7 @@ Writerside
 
 logs/
 
+.claude/
 
 .cursor/
 
