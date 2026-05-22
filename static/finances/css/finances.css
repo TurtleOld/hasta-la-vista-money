@@ -2,17 +2,16 @@
   display: none !important;
 }
 
-/* ── Светлая тема (премиальный оттенок) ── */
 .finances-app {
-  --finances-bg:       #f0f7f4;
-  --finances-surface:  #ffffff;
-  --finances-surface-2: #e8f3ee;
-  --finances-border:   rgba(16, 185, 129, 0.14);
-  --finances-text:     #0d1f1a;
-  --finances-muted:    #4a6d5e;
-  --finances-positive: #059669;
-  --finances-negative: #dc2626;
-  --finances-accent:   #10b981;
+  --finances-bg: var(--app-bg);
+  --finances-surface: var(--app-surface);
+  --finances-surface-2: var(--app-surface-2);
+  --finances-border: var(--app-border);
+  --finances-text: var(--app-text);
+  --finances-muted: var(--app-muted);
+  --finances-positive: var(--app-positive);
+  --finances-negative: var(--app-negative);
+  --finances-accent: var(--app-accent);
   background:
     radial-gradient(ellipse 80% 50% at 0% 0%, rgba(16, 185, 129, 0.13), transparent),
     radial-gradient(ellipse 60% 40% at 100% 100%, rgba(5, 150, 105, 0.07), transparent),
@@ -22,14 +21,7 @@
   padding-bottom: 2rem;
 }
 
-/* ── Тёмная тема ── */
 .dark .finances-app {
-  --finances-bg:       #0b1120;
-  --finances-surface:  #111827;
-  --finances-surface-2: #1a2535;
-  --finances-border:   rgba(148, 163, 184, 0.14);
-  --finances-text:     #e2e8f0;
-  --finances-muted:    #94a3b8;
   background:
     radial-gradient(ellipse 70% 50% at 0% 0%, rgba(16, 185, 129, 0.12), transparent),
     radial-gradient(ellipse 50% 60% at 100% 100%, rgba(5, 150, 105, 0.06), transparent),

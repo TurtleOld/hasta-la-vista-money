@@ -32,7 +32,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
 
     <div class="mb-8 flex items-start gap-4">
         <div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-2xl bg-green-100 dark:bg-green-900/30">
@@ -57,7 +57,23 @@
             </div>
         {% endif %}
 
-        <div class="space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] gap-6 items-start">
+
+            {% if pending_receipt.image_file %}
+                <aside class="lg:sticky lg:top-6 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+                    <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
+                        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                            <i class="bi bi-image text-gray-400 dark:text-gray-500"></i>
+                            {% translate 'Фото чека' %}
+                        </h2>
+                    </div>
+                    <div class="p-4">
+                        <img src="{{ pending_receipt.image_file.url }}" alt="{% translate 'Фото загруженного чека' %}" class="max-h-[72vh] w-full rounded-xl object-contain bg-gray-100 dark:bg-gray-800">
+                    </div>
+                </aside>
+            {% endif %}
+
+            <div class="space-y-6">
 
             <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
                 <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
@@ -261,6 +277,8 @@
                     <i class="bi bi-x-lg text-base"></i>
                     {% translate 'Отмена' %}
                 </a>
+            </div>
+
             </div>
 
         </div>

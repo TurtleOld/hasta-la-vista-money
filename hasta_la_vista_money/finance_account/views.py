@@ -33,6 +33,10 @@ from django.views.generic import (
 from django_stubs_ext import StrOrPromise
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.constants import (
+    RECEIPT_CATEGORY_NAME,
+    RECEIPT_OPERATION_PURCHASE,
+)
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
 from hasta_la_vista_money.expense.forms import AddExpenseForm
 from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
@@ -46,6 +50,7 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.income.forms import IncomeForm
 from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
@@ -517,6 +522,15 @@ def _finances_categories(users: Iterable[User]) -> list[FinancesCategoryChoice]:
         )
         for category in expense_categories
     )
+    categories.extend(
+        [
+            FinancesCategoryChoice(
+                key='receipt',
+                name=str(RECEIPT_CATEGORY_NAME),
+                type='expense',
+            ),
+        ],
+    )
     return sorted(categories, key=lambda item: (item.type, item.name))
 
 
@@ -666,69 +680,74 @@ def _receipt_transactions(
     users: list[User],
     finances_filter: FinancesFilter,
 ) -> list[FinancesTransaction]:
-    if finances_filter.account_ids or finances_filter.category_keys:
+    queryset = (
+        Receipt.objects.filter(
+            user__in=users,
+            operation_type=RECEIPT_OPERATION_PURCHASE,
+        )
+        .select_related('account', 'user')
+        .prefetch_related('product')
+    )
+
+    queryset = _apply_date_filter(queryset, 'receipt_date', finances_filter)
+    if finances_filter.account_ids:
+        queryset = queryset.filter(account_id__in=finances_filter.account_ids)
+
+    if finances_filter.category_keys and 'receipt' not in (
+        finances_filter.category_keys
+    ):
         return []
-    receipt_service = request.container.expense.receipt_expense_service(
-        user=request.user,
-        request=request,
-    )
-    receipt_items = (
-        receipt_service.get_receipt_expenses_by_users(users)
-        if len(users) > 1 or users[0] != request.user
-        else receipt_service.get_receipt_expenses()
-    )
-    date_range = finances_filter.date_range()
+    category_name = str(RECEIPT_CATEGORY_NAME)
+    if finances_filter.q and finances_filter.q.lower() not in (
+        category_name.lower()
+    ):
+        return []
+
     transactions = []
-    for receipt in receipt_items:
-        receipt_date = _receipt_value(receipt, 'date')
-        amount = Decimal(str(_receipt_value(receipt, 'amount') or 0))
-        category = _receipt_value(receipt, 'category')
-        account = _receipt_value(receipt, 'account')
-        user = _receipt_value(receipt, 'user')
-        if (
-            date_range
-            and not date_range[0] <= _to_date(receipt_date) <= date_range[1]
-        ):
-            continue
+    for receipt in queryset:
+        amount = receipt.total_sum or Decimal()
         if finances_filter.min_amount and amount < finances_filter.min_amount:
             continue
-        category_name = _receipt_nested_value(category, 'name')
-        if (
-            finances_filter.q
-            and finances_filter.q.lower() not in category_name.lower()
-        ):
-            continue
         transactions.append(
-            FinancesTransaction(
-                key=str(_receipt_value(receipt, 'id')),
-                source='receipt',
-                source_id=str(_receipt_value(receipt, 'id')),
-                date=receipt_date,
-                amount=-amount,
+            _build_receipt_transaction(
+                key=f'receipt-{receipt.pk}',
+                source_id=receipt.pk,
+                receipt=receipt,
+                current_user=request.user,
+                amount=amount,
                 category_name=category_name,
                 category_key='receipt',
-                account_name=_receipt_nested_value(account, 'name_account'),
-                user_name=_receipt_nested_value(user, 'username'),
-                edit_url='',
-                copy_url='',
-                delete_url='',
-                can_edit=False,
-                is_receipt=True,
             ),
         )
     return transactions
 
 
-def _receipt_value(receipt: Any, key: str) -> Any:
-    if isinstance(receipt, dict):
-        return receipt.get(key)
-    return getattr(receipt, key)
-
-
-def _receipt_nested_value(value: Any, key: str) -> str:
-    if isinstance(value, dict):
-        return str(value.get(key, ''))
-    return str(getattr(value, key, ''))
+def _build_receipt_transaction(
+    *,
+    key: str,
+    source_id: int | str,
+    receipt: Receipt,
+    current_user: User,
+    amount: Decimal,
+    category_name: str,
+    category_key: str,
+) -> FinancesTransaction:
+    return FinancesTransaction(
+        key=key,
+        source='receipt',
+        source_id=source_id,
+        date=receipt.receipt_date,
+        amount=-amount,
+        category_name=category_name,
+        category_key=category_key,
+        account_name=receipt.account.name_account,
+        user_name=receipt.user.username,
+        edit_url=reverse('receipts:view', kwargs={'pk': receipt.pk}),
+        copy_url='',
+        delete_url='',
+        can_edit=receipt.user_id == current_user.pk,
+        is_receipt=True,
+    )
 
 
 def _finances_summary(

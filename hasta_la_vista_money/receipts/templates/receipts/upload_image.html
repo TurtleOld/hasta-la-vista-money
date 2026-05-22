@@ -21,12 +21,12 @@
         </label>
     </div>
 
-    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm p-5 sm:p-6">
+    <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm p-5 sm:p-6" x-data="receiptUploadPage()">
         <form method="post" enctype="multipart/form-data" id="uploadForm" class="space-y-5" novalidate>
             {% csrf_token %}
 
             <div class="space-y-3">
-                <label id="upload-zone" for="file-input" class="group block cursor-pointer rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-800/40 p-8 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 hover:border-blue-400 dark:hover:border-blue-500">
+                <label id="upload-zone" for="file-input" class="group block cursor-pointer rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-800/40 p-8 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 hover:border-blue-400 dark:hover:border-blue-500" x-bind:class="zoneClass" x-on:dragenter="handleDragEnter" x-on:dragover="handleDragOver" x-on:dragleave="handleDragLeave" x-on:drop="handleDrop">
                     <div class="flex flex-col items-center gap-3">
                         <i class="bi bi-cloud-upload text-4xl text-gray-500 dark:text-gray-300"></i>
                         <div class="space-y-1">
@@ -36,14 +36,23 @@
                             <p class="text-sm text-gray-600 dark:text-gray-300">
                                 {% translate 'JPG, JPEG или PNG, до 5 МБ' %}
                             </p>
-                            <p id="selected-file-name" class="text-xs text-gray-500 dark:text-gray-400"></p>
+                            <p id="selected-file-name" class="text-xs text-gray-500 dark:text-gray-400" x-text="selectedFileLabel"></p>
                         </div>
                     </div>
                 </label>
 
-                <input type="file" name="file" id="file-input" class="hidden" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
+                <input type="file" name="file" id="file-input" class="hidden" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple x-ref="fileInput" x-on:change="handleInputChange">
 
-                <div id="upload-error" class="hidden rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-800 dark:text-red-200"></div>
+                <div id="upload-preview" class="grid grid-cols-2 sm:grid-cols-3 gap-3" aria-live="polite" x-show="hasFiles" x-cloak>
+                    <template x-for="file in files" x-bind:key="file.previewUrl">
+                        <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                            <img x-bind:src="file.previewUrl" x-bind:alt="file.name" class="h-32 w-full object-cover">
+                            <div class="truncate px-3 py-2 text-xs text-gray-600 dark:text-gray-300" x-text="file.name"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <div id="upload-error" class="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-800 dark:text-red-200" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
             </div>
 
             <div class="space-y-1">
@@ -56,7 +65,7 @@
             </div>
 
             <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                <button type="submit" id="submitBtn" disabled class="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="submit" id="submitBtn" x-bind:disabled="!hasFiles" class="inline-flex items-center justify-center rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60">
                     <span class="inline-flex items-center gap-2">
                         <i class="bi bi-cloud-upload"></i>
                         <span>{% translate 'Поставить в обработку' %}</span>
@@ -75,5 +84,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script defer nonce="{{request.csp_nonce}}" src="{% static 'js/alpine.csp.min.js' %}"></script>
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/upload.js' %}"></script>
 {% endblock %}
+
+{% block alpine_js %}{% endblock %}

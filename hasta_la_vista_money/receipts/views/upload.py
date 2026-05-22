@@ -63,72 +63,76 @@ class UploadImageView(
             messages.error(request, constants.INVALID_FILE_FORMAT)
             return super().form_invalid(form)
 
-        uploaded_file = self._get_uploaded_file()
-        image_hash = compute_image_hash(uploaded_file)
+        uploaded_files = self._get_uploaded_files()
+        if not uploaded_files:
+            messages.error(request, constants.INVALID_FILE_FORMAT)
+            return super().form_invalid(form)
 
         pending_receipt_service = (
             request.container.receipts.pending_receipt_service()
         )
 
-        duplicate = pending_receipt_service.find_duplicate(
-            user=user,
-            image_hash=image_hash,
-        )
-        if duplicate is not None:
-            return self._handle_duplicate(duplicate)
+        queued_count = 0
+        duplicate_count = 0
 
-        try:
-            pending_receipt = pending_receipt_service.create_processing_job(
+        for uploaded_file in uploaded_files:
+            image_hash = compute_image_hash(uploaded_file)
+            uploaded_file.seek(0)
+
+            duplicate = pending_receipt_service.find_duplicate(
                 user=user,
-                account=account,
-                image_file=uploaded_file,
                 image_hash=image_hash,
             )
-        except Exception as exc:
-            logger.exception('Error queuing receipt for processing', error=exc)
-            return self.handle_form_error_with_message(
-                form,
-                exc,
-                constants.ERROR_PROCESSING_RECEIPT,
+            if duplicate is not None:
+                duplicate_count += 1
+                continue
+
+            try:
+                pending_receipt = pending_receipt_service.create_processing_job(
+                    user=user,
+                    account=account,
+                    image_file=uploaded_file,
+                    image_hash=image_hash,
+                )
+            except Exception as exc:
+                logger.exception(
+                    'Error queuing receipt for processing',
+                    error=exc,
+                )
+                return self.handle_form_error_with_message(
+                    form,
+                    exc,
+                    constants.ERROR_PROCESSING_RECEIPT,
+                )
+
+            async_result = _views_module().process_pending_receipt.delay(
+                pending_receipt.pk,
             )
+            pending_receipt_service.attach_task_id(
+                pending_receipt=pending_receipt,
+                task_id=async_result.id,
+            )
+            queued_count += 1
 
-        async_result = _views_module().process_pending_receipt.delay(
-            pending_receipt.pk,
-        )
-        pending_receipt_service.attach_task_id(
-            pending_receipt=pending_receipt,
-            task_id=async_result.id,
-        )
-
-        messages.success(
-            request,
-            _(
-                'Чек поставлен в обработку. '
-                'Когда распознавание завершится, он появится в списке.',
-            ),
-        )
-        return redirect('receipts:list')
-
-    def _get_uploaded_file(self) -> Any:
-        """Extract uploaded file from request."""
-        uploaded_file: Any = self.request.FILES['file']
-        if isinstance(uploaded_file, list):
-            uploaded_file = uploaded_file[0]
-        return uploaded_file
-
-    def _handle_duplicate(self, duplicate: Any) -> HttpResponse:
-        """Show a duplicate-upload message and redirect to receipts list."""
-        if duplicate.kind == 'pending':
-            messages.warning(
-                self.request,
+        if queued_count:
+            messages.success(
+                request,
                 _(
-                    'Этот чек уже загружен и сейчас обрабатывается '
-                    'либо ожидает проверки.',
-                ),
+                    'Чеков поставлено в обработку: %(count)s. '
+                    'Когда распознавание завершится, они появятся в списке.',
+                )
+                % {'count': queued_count},
             )
-        else:
+        if duplicate_count:
             messages.warning(
-                self.request,
-                _('Этот чек уже сохранён ранее.'),
+                request,
+                _('Дубликатов пропущено: %(count)s.')
+                % {'count': duplicate_count},
             )
+        if not queued_count and duplicate_count:
+            messages.warning(request, _('Все выбранные чеки уже загружены.'))
         return redirect('receipts:list')
+
+    def _get_uploaded_files(self) -> list[Any]:
+        """Extract all uploaded files from request."""
+        return list(self.request.FILES.getlist('file'))

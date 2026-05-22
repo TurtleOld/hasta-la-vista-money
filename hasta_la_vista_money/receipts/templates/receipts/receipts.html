@@ -118,4 +118,20 @@
     {% load static %}
     {% load word_hash %}
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/receipts-filter.js' %}?v={% word_hash %}"></script>
+    <script nonce="{{request.csp_nonce}}">
+        document.body.addEventListener('htmx:afterSwap', function (event) {
+            if (event.target.id !== 'pending-receipts-counter') {
+                return;
+            }
+
+            const countElement = document.getElementById('pending-receipts-count-value');
+            const count = countElement ? parseInt(countElement.textContent || '0', 10) : 0;
+            const previousCount = parseInt(event.target.dataset.previousCount || '0', 10);
+            event.target.dataset.previousCount = String(count);
+
+            if (previousCount > 0 && count === 0) {
+                window.location.reload();
+            }
+        });
+    </script>
 {% endblock %}

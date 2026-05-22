@@ -19,6 +19,7 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
+    Product,
     Receipt,
     ReceiptImageHash,
     Seller,
@@ -225,6 +226,66 @@ class ProcessPendingReceiptTaskTests(TestCase):
         )
 
 
+class PendingReceiptConversionTests(TestCase):
+    """Conversion from pending receipt keeps all parsed products."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='conversion-user',
+            password='pass',
+            email='conversion@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.service: PendingReceiptService = (
+            ApplicationContainer().receipts.pending_receipt_service()
+        )
+
+    def test_convert_to_receipt_keeps_multiple_items(self) -> None:
+        payload = _fake_payload()
+        payload['total_sum'] = 232.0
+        payload['items'] = [
+            {
+                'product_name': 'Услуги сервиса Доставка',
+                'category': 'Доставка',
+                'price': 169.0,
+                'quantity': 1,
+                'amount': 169.0,
+            },
+            {
+                'product_name': 'Услуги сервиса Авито Доставка для продавца',
+                'category': 'Доставка',
+                'price': 63.0,
+                'quantity': 1,
+                'amount': 63.0,
+            },
+        ]
+        pending = PendingReceipt.objects.create(
+            user=self.user,
+            account=self.account,
+            status=PendingReceiptStatus.READY,
+            receipt_data=payload,
+        )
+
+        receipt = self.service.convert_to_receipt(pending_receipt=pending)
+
+        products = list(
+            Product.objects.filter(receipt_products=receipt).order_by('pk'),
+        )
+        self.assertEqual(len(products), 2)
+        self.assertEqual(
+            [product.product_name for product in products],
+            [
+                'Услуги сервиса Доставка',
+                'Услуги сервиса Авито Доставка для продавца',
+            ],
+        )
+
+
 class ReceiptInferenceClientContentTypeTests(TestCase):
     """Persisted pending files keep a supported MIME type for inference."""
 
@@ -386,6 +447,36 @@ class UploadImageViewTests(TestCase):
         self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
         self.assertEqual(pending.task_id, 'task-id-1')
         task_mock.delay.assert_called_once_with(pending.pk)
+
+    def test_upload_creates_multiple_processing_jobs(self) -> None:
+        uploads = [
+            SimpleUploadedFile(
+                'r1.jpg',
+                b'sample-bytes-1',
+                content_type='image/jpeg',
+            ),
+            SimpleUploadedFile(
+                'r2.png',
+                b'sample-bytes-2',
+                content_type='image/png',
+            ),
+        ]
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+        ) as task_mock:
+            task_mock.delay.side_effect = [
+                mock.Mock(id='task-id-1'),
+                mock.Mock(id='task-id-2'),
+            ]
+            response = self.client.post(
+                reverse('receipts:upload'),
+                {'file': uploads, 'account': self.account.pk},
+            )
+
+        self.assertRedirects(response, reverse('receipts:list'))
+        pending_receipts = PendingReceipt.objects.filter(user=self.user)
+        self.assertEqual(pending_receipts.count(), 2)
+        self.assertEqual(task_mock.delay.call_count, 2)
 
     def test_upload_rejects_duplicate_against_saved_receipt(self) -> None:
         upload = SimpleUploadedFile(

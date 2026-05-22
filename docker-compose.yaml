@@ -31,6 +31,19 @@ services:
       - default
     restart: "no"
 
+  volume-permissions:
+    image: alpine:3.22
+    command:
+      - sh
+      - -c
+      - chown -R 1000:1000 /app/media /app/staticfiles && chmod -R u+rwX,go+rX /app/media /app/staticfiles
+    volumes:
+      - staticfiles_data:/app/staticfiles
+      - media_data:/app/media
+    networks:
+      - default
+    restart: "no"
+
   hlvm-server:
     build:
       context: ./
@@ -57,6 +70,8 @@ services:
       redis:
         condition: service_started
       migrator:
+        condition: service_completed_successfully
+      volume-permissions:
         condition: service_completed_successfully
     networks:
       - default
@@ -87,6 +102,8 @@ services:
       redis:
         condition: service_started
       migrator:
+        condition: service_completed_successfully
+      volume-permissions:
         condition: service_completed_successfully
     networks:
       - default
@@ -165,7 +182,10 @@ services:
       - staticfiles_data:/app/staticfiles
       - media_data:/app/media
     depends_on:
-      - hlvm-server
+      hlvm-server:
+        condition: service_started
+      volume-permissions:
+        condition: service_completed_successfully
     networks:
       - default
     restart: unless-stopped
