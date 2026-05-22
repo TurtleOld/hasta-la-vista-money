@@ -60,6 +60,31 @@
 }
 
 @layer base {
+  :root,
+  [data-bs-theme='light'] {
+    --app-bg: #f0f7f4;
+    --app-surface: #ffffff;
+    --app-surface-2: #e8f3ee;
+    --app-border: rgba(16, 185, 129, 0.14);
+    --app-text: #0d1f1a;
+    --app-muted: #4a6d5e;
+    --app-positive: #059669;
+    --app-negative: #dc2626;
+    --app-accent: #10b981;
+  }
+
+  [data-bs-theme='dark'] {
+    --app-bg: #0b1120;
+    --app-surface: #111827;
+    --app-surface-2: #1a2535;
+    --app-border: rgba(148, 163, 184, 0.14);
+    --app-text: #e2e8f0;
+    --app-muted: #94a3b8;
+    --app-positive: #059669;
+    --app-negative: #dc2626;
+    --app-accent: #10b981;
+  }
+
   html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
