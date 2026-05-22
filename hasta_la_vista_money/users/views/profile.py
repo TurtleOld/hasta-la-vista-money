@@ -32,7 +32,10 @@ from hasta_la_vista_money.users.services.notifications import (
     get_user_notifications,
 )
 from hasta_la_vista_money.users.services.profile import update_user_profile
-from hasta_la_vista_money.users.services.theme import VALID_THEMES, set_user_theme
+from hasta_la_vista_money.users.services.theme import (
+    VALID_THEMES,
+    set_user_theme,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
