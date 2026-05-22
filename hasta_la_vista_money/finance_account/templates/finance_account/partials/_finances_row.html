@@ -27,15 +27,19 @@
     <div class="finances-row-date finances-muted">{{ tx.date|date:'d.m' }}</div>
     <div class="finances-row-actions">
         {% if tx.can_edit %}
-            <a class="finances-muted" href="{{ tx.edit_url }}" title="{% translate 'Изменить' %}">{% translate 'Изм.' %}</a>
-            <form method="post" action="{{ tx.copy_url }}">
-                {% csrf_token %}
-                <button class="finances-muted" type="submit" title="{% translate 'Копировать' %}">{% translate 'Коп.' %}</button>
-            </form>
-            <form method="post" action="{{ tx.delete_url }}">
-                {% csrf_token %}
-                <button class="finances-negative" type="submit" title="{% translate 'Удалить' %}">{% translate 'Удал.' %}</button>
-            </form>
+            {% if tx.is_receipt %}
+                <a class="finances-muted" href="{{ tx.edit_url }}" title="{% translate 'Перейти к чеку' %}">{% translate 'Чек' %}</a>
+            {% else %}
+                <a class="finances-muted" href="{{ tx.edit_url }}" title="{% translate 'Изменить' %}">{% translate 'Изм.' %}</a>
+                <form method="post" action="{{ tx.copy_url }}">
+                    {% csrf_token %}
+                    <button class="finances-muted" type="submit" title="{% translate 'Копировать' %}">{% translate 'Коп.' %}</button>
+                </form>
+                <form method="post" action="{{ tx.delete_url }}">
+                    {% csrf_token %}
+                    <button class="finances-negative" type="submit" title="{% translate 'Удалить' %}">{% translate 'Удал.' %}</button>
+                </form>
+            {% endif %}
         {% else %}
             <span class="finances-muted">—</span>
         {% endif %}

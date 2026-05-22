@@ -366,18 +366,31 @@ def validate_image_jpg_png(value: UploadedFile) -> None:
         )
 
 
+class MultipleFileInput(ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(FileField):
+    def clean(self, data: Any, initial: Any = None) -> Any:
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single_file_clean(file, initial) for file in data]
+        return single_file_clean(data, initial)
+
+
 class UploadImageForm(Form):
     account = ModelChoiceField(
         label=_('Счёт'),
         queryset=Account.objects.all(),
         widget=Select(attrs={'class': _SELECT_CLASSES}),
     )
-    file = FileField(
+    file = MultipleImageField(
         label=_('Выберите файл'),
-        widget=ClearableFileInput(
+        widget=MultipleFileInput(
             attrs={
                 'class': _INPUT_CLASSES,
                 'accept': '.jpg,.jpeg,.png',
+                'multiple': True,
                 'data-max-size': str(constants.MAX_FILE_SIZE_BYTES),
             },
         ),
@@ -394,15 +407,18 @@ class UploadImageForm(Form):
             ].queryset.first()  # type: ignore[attr-defined]
 
     def clean_file(self) -> Any:
-        file = self.cleaned_data.get('file')
-        if file and file.size > constants.MAX_FILE_SIZE_BYTES:
-            raise ValidationError(
-                _(
-                    f'Размер файла не должен превышать '
-                    f'{constants.MAX_FILE_SIZE_MB}MB',
-                ),
-            )
-        return file
+        files = self.cleaned_data.get('file')
+        if not isinstance(files, list):
+            files = [files]
+        for file in files:
+            if file and file.size > constants.MAX_FILE_SIZE_BYTES:
+                raise ValidationError(
+                    _(
+                        f'Размер файла не должен превышать '
+                        f'{constants.MAX_FILE_SIZE_MB}MB',
+                    ),
+                )
+        return self.cleaned_data.get('file')
 
 
 class PendingReceiptReviewForm(Form):

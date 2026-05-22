@@ -244,7 +244,9 @@
     </script>
     {% block extra_js %}
     {% endblock %}
+    {% block alpine_js %}
     <script defer nonce="{{request.csp_nonce}}" src="{% static 'js/alpine.csp.min.js' %}"></script>
+    {% endblock %}
     <script nonce="{{request.csp_nonce}}">
         window.SET_THEME_URL = "{% url 'users:set_theme' %}";
         window.LOGIN_URL = "{% url 'users:login' %}";

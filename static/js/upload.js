@@ -1,150 +1,160 @@
-(function () {
-    function fileLooksLikeImage(file) {
-        if (!file) {
-            return false;
-        }
-        if (file.type === 'image/jpeg' || file.type === 'image/png') {
-            return true;
-        }
-        const name = (file.name || '').toLowerCase();
-        return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
-    }
+function registerReceiptUploadPage(Alpine) {
+    Alpine.data('receiptUploadPage', function () {
+        return {
+            files: [],
+            errorMessage: '',
+            isDragging: false,
+            maxSize: 5 * 1024 * 1024,
 
-    function initReceiptImageUpload() {
-        const uploadZone = document.getElementById('upload-zone');
-        const fileInput = document.getElementById('file-input');
-        const submitBtn = document.getElementById('submitBtn');
-        const form = document.getElementById('uploadForm');
-        const errorBox = document.getElementById('upload-error');
-        const fileNameLabel = document.getElementById('selected-file-name');
+            get hasFiles() {
+                return this.files.length > 0;
+            },
 
-        if (!uploadZone || !fileInput || !submitBtn || !form) {
-            return;
-        }
-
-        const maxSize = 5 * 1024 * 1024;
-
-        const dragActiveClasses = [
-            'border-blue-400',
-            'dark:border-blue-500',
-            'bg-blue-50',
-            'dark:bg-blue-900/20'
-        ];
-
-        const errorClasses = [
-            'border-red-400',
-            'dark:border-red-500',
-            'bg-red-50',
-            'dark:bg-red-900/20'
-        ];
-
-        function setZoneClasses(state) {
-            uploadZone.classList.remove(...dragActiveClasses);
-            uploadZone.classList.remove(...errorClasses);
-            if (state === 'drag') {
-                uploadZone.classList.add(...dragActiveClasses);
-            }
-            if (state === 'error') {
-                uploadZone.classList.add(...errorClasses);
-            }
-        }
-
-        function setError(message) {
-            setZoneClasses('error');
-            if (errorBox) {
-                errorBox.textContent = message;
-                errorBox.classList.remove('hidden');
-            }
-        }
-
-        function clearError() {
-            setZoneClasses(null);
-            if (errorBox) {
-                errorBox.textContent = '';
-                errorBox.classList.add('hidden');
-            }
-        }
-
-        function applyFile(file) {
-            if (!file) {
-                submitBtn.disabled = true;
-                if (fileNameLabel) {
-                    fileNameLabel.textContent = '';
+            get selectedFileLabel() {
+                if (this.files.length === 0) {
+                    return '';
                 }
-                return;
-            }
-            if (!fileLooksLikeImage(file)) {
-                setError('Поддерживаются только JPG, JPEG или PNG.');
-                submitBtn.disabled = true;
-                fileInput.value = '';
-                return;
-            }
-            if (file.size > maxSize) {
-                setError('Размер файла не должен превышать 5 МБ.');
-                submitBtn.disabled = true;
-                fileInput.value = '';
-                return;
-            }
-            clearError();
-            submitBtn.disabled = false;
-            if (fileNameLabel) {
-                fileNameLabel.textContent = file.name;
-            }
-        }
-
-        fileInput.addEventListener('change', function (event) {
-            const target = event.target;
-            applyFile(target && target.files ? target.files[0] : null);
-        });
-
-        ['dragenter', 'dragover'].forEach(function (eventName) {
-            uploadZone.addEventListener(eventName, function (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                setZoneClasses('drag');
-            });
-        });
-
-        ['dragleave', 'drop'].forEach(function (eventName) {
-            uploadZone.addEventListener(eventName, function (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                if (eventName === 'dragleave') {
-                    setZoneClasses(null);
+                if (this.files.length === 1) {
+                    return this.files[0].name;
                 }
-            });
-        });
+                return 'Выбрано файлов: ' + this.files.length;
+            },
 
-        uploadZone.addEventListener('drop', function (event) {
-            const dt = event.dataTransfer;
-            if (!dt || !dt.files || !dt.files.length) {
-                return;
-            }
-            const file = dt.files[0];
-            const transfer = new DataTransfer();
-            transfer.items.add(file);
-            fileInput.files = transfer.files;
-            applyFile(file);
-        });
+            get zoneClass() {
+                if (this.errorMessage) {
+                    return 'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-900/20';
+                }
+                if (this.isDragging) {
+                    return 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20';
+                }
+                return '';
+            },
 
-        document.addEventListener('paste', function (event) {
-            if (!event.clipboardData || !event.clipboardData.files || !event.clipboardData.files.length) {
-                return;
-            }
-            const file = event.clipboardData.files[0];
-            if (!fileLooksLikeImage(file)) {
-                return;
-            }
-            const transfer = new DataTransfer();
-            transfer.items.add(file);
-            fileInput.files = transfer.files;
-            applyFile(file);
-        });
-    }
+            init() {
+                document.addEventListener('paste', this.handlePaste.bind(this));
+            },
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initReceiptImageUpload);
-    } else {
-        initReceiptImageUpload();
-    }
-})();
+            handleInputChange(event) {
+                this.applyFiles(event.target.files || []);
+            },
+
+            handleDragEnter(event) {
+                event.preventDefault();
+                this.isDragging = true;
+            },
+
+            handleDragOver(event) {
+                event.preventDefault();
+                this.isDragging = true;
+            },
+
+            handleDragLeave(event) {
+                event.preventDefault();
+                this.isDragging = false;
+            },
+
+            handleDrop(event) {
+                event.preventDefault();
+                this.isDragging = false;
+                if (!event.dataTransfer || !event.dataTransfer.files.length) {
+                    return;
+                }
+                this.setInputFiles(event.dataTransfer.files);
+                this.applyFiles(event.dataTransfer.files);
+            },
+
+            handlePaste(event) {
+                if (!event.clipboardData || !event.clipboardData.files.length) {
+                    return;
+                }
+                const images = Array.from(event.clipboardData.files).filter(
+                    this.fileLooksLikeImage,
+                );
+                if (!images.length) {
+                    return;
+                }
+                this.setInputFiles(images);
+                this.applyFiles(images);
+            },
+
+            applyFiles(fileList) {
+                this.revokePreviewUrls();
+                const selectedFiles = Array.from(fileList || []);
+                if (!selectedFiles.length) {
+                    this.files = [];
+                    this.errorMessage = '';
+                    return;
+                }
+
+                const invalidFile = selectedFiles.find(
+                    file => !this.fileLooksLikeImage(file),
+                );
+                if (invalidFile) {
+                    this.rejectFiles('Поддерживаются только JPG, JPEG или PNG.');
+                    return;
+                }
+
+                const oversizedFile = selectedFiles.find(
+                    file => file.size > this.maxSize,
+                );
+                if (oversizedFile) {
+                    this.rejectFiles('Размер файла не должен превышать 5 МБ.');
+                    return;
+                }
+
+                this.errorMessage = '';
+                this.files = selectedFiles.map(file => ({
+                    name: file.name || 'Изображение',
+                    previewUrl: URL.createObjectURL(file),
+                }));
+            },
+
+            setInputFiles(fileList) {
+                const input = this.$refs.fileInput;
+                if (!input || typeof DataTransfer === 'undefined') {
+                    return;
+                }
+                const transfer = new DataTransfer();
+                Array.from(fileList || []).forEach(file => {
+                    transfer.items.add(file);
+                });
+                input.files = transfer.files;
+            },
+
+            rejectFiles(message) {
+                this.files = [];
+                this.errorMessage = message;
+                if (this.$refs.fileInput) {
+                    this.$refs.fileInput.value = '';
+                }
+            },
+
+            revokePreviewUrls() {
+                this.files.forEach(file => {
+                    if (file.previewUrl) {
+                        URL.revokeObjectURL(file.previewUrl);
+                    }
+                });
+            },
+
+            fileLooksLikeImage(file) {
+                if (!file) {
+                    return false;
+                }
+                if (file.type === 'image/jpeg' || file.type === 'image/png') {
+                    return true;
+                }
+                const name = (file.name || '').toLowerCase();
+                return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
+            },
+        };
+    });
+}
+
+if (window.Alpine) {
+    registerReceiptUploadPage(window.Alpine);
+} else {
+    document.addEventListener('alpine:init', function () {
+        registerReceiptUploadPage(window.Alpine);
+    });
+}

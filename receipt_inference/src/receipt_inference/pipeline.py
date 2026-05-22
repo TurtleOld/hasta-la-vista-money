@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from html import unescape
 from importlib import import_module
 from io import BytesIO
@@ -32,6 +33,7 @@ logger = structlog.get_logger(__name__)
 
 MIN_OCR_ENTRY_PARTS = 2
 KEY_VALUE_PAIR_CELLS = 2
+THREE_COLUMN_ROW_CELLS = 3
 FOUR_COLUMN_ROW_CELLS = 4
 MIN_SELLER_LINE_LENGTH = 3
 LLM_CONNECT_RETRY_COUNT = 3
@@ -751,7 +753,7 @@ class PaddleOCRVLBackend:
                     str(block.get('block_content', '')),
                 )
                 if table_data['items']:
-                    payload['items'] = table_data['items']
+                    payload['items'].extend(table_data['items'])
                 metadata.update(table_data['metadata'])
                 if table_data['total_sum'] != '0.00':
                     payload['total_sum'] = table_data['total_sum']
@@ -982,6 +984,15 @@ class PaddleOCRVLBackend:
                 self._normalize_quantity_text(cells[2]),
             )
 
+        if (
+            len(cells) == THREE_COLUMN_ROW_CELLS
+            and self._looks_like_quantity(cells[1])
+            and self._looks_like_amount(cells[2])
+        ):
+            quantity = self._normalize_quantity_text(cells[1])
+            amount = self._normalize_amount_text(cells[2])
+            return (self._calculate_unit_price(amount, quantity), quantity)
+
         for cell in cells:
             pair = self._extract_price_quantity_pair(cell)
             if pair is not None:
@@ -997,6 +1008,14 @@ class PaddleOCRVLBackend:
                 self._normalize_quantity_text(quantity_cells[0]),
             )
         return (None, None)
+
+    def _calculate_unit_price(self, amount: str, quantity: str) -> str:
+        """Calculate unit price when OCR table omits price column."""
+        amount_decimal = Decimal(amount.replace(' ', '').replace(',', '.'))
+        quantity_decimal = Decimal(quantity.replace(' ', '').replace(',', '.'))
+        if quantity_decimal == 0:
+            return amount
+        return f'{amount_decimal / quantity_decimal:.2f}'
 
     def _extract_price_quantity_pair(
         self,

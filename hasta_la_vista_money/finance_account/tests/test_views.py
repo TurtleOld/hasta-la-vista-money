@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
+from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.tests.helpers import (
@@ -20,8 +21,12 @@ from hasta_la_vista_money.finance_account.views import (
     AccountView,
     ChangeAccountView,
     DeleteAccountView,
+    FinancesFilter,
     TransferMoneyAccountView,
+    _finances_categories,
+    _finances_transactions,
 )
+from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import User
 
@@ -95,6 +100,111 @@ class TestAccountView(TestCase):
         self.assertIn('transfer_money_log', context)
         self.assertIn('sum_all_accounts', context)
         self.assertIn('sum_all_accounts_in_group', context)
+
+
+class TestFinancesView(TestCase):
+    """Test cases for the combined finances view."""
+
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+        self.user = User.objects.create_user(
+            username='finances-user',
+            password='testpass123',  # nosec B106: test-only password
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Card',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.other_account = Account.objects.create(
+            user=self.user,
+            name_account='Cash',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.expense_category = ExpenseCategory.objects.create(
+            user=self.user,
+            name='Food',
+        )
+        Expense.objects.create(
+            user=self.user,
+            account=self.other_account,
+            category=self.expense_category,
+            amount=Decimal('50.00'),
+            date=timezone.now(),
+        )
+        seller = Seller.objects.create(user=self.user, name_seller='Shop')
+        self.receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=seller,
+            receipt_date=timezone.now(),
+            operation_type=1,
+            total_sum=Decimal('120.00'),
+        )
+        product = Product.objects.create(
+            user=self.user,
+            product_name='Milk',
+            category='Groceries',
+            price=Decimal('120.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('120.00'),
+        )
+        self.receipt.product.add(product)
+
+    def test_finances_include_receipt_as_single_expense(self) -> None:
+        request = self.factory.get('/finance/')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(),
+        )
+        receipt_transactions = [tx for tx in transactions if tx.is_receipt]
+
+        self.assertEqual(len(receipt_transactions), 1)
+        self.assertEqual(receipt_transactions[0].amount, Decimal('-120.00'))
+        self.assertEqual(
+            receipt_transactions[0].category_name,
+            'Покупки по чекам',
+        )
+        self.assertEqual(
+            receipt_transactions[0].category_key,
+            'receipt',
+        )
+
+    def test_finances_categories_include_receipt_category(self) -> None:
+        categories = _finances_categories([self.user])
+
+        self.assertIn(
+            'receipt',
+            {category.key for category in categories},
+        )
+
+    def test_finances_filter_receipts_by_account_and_category(self) -> None:
+        request = self.factory.get('/finance/')
+        request.user = self.user
+        setup_container_for_request(request)
+        finances_filter = FinancesFilter(
+            account_ids=[self.account.pk],
+            category_keys=['receipt'],
+        )
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=finances_filter,
+        )
+
+        self.assertEqual(len(transactions), 1)
+        self.assertTrue(transactions[0].is_receipt)
+        self.assertEqual(
+            transactions[0].account_name,
+            self.account.name_account,
+        )
 
 
 class TestAccountCreateView(TestCase):
