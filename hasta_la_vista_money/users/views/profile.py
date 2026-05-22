@@ -32,7 +32,7 @@ from hasta_la_vista_money.users.services.notifications import (
     get_user_notifications,
 )
 from hasta_la_vista_money.users.services.profile import update_user_profile
-from hasta_la_vista_money.users.services.theme import set_user_theme
+from hasta_la_vista_money.users.services.theme import VALID_THEMES, set_user_theme
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -178,9 +178,9 @@ class SwitchThemeView(LoginRequiredMixin, View):
         try:
             user = User.objects.get(pk=request.user.pk)
             data = json.loads(request.body)
-            theme = data.get('theme', 'light')
+            theme = data.get('theme', 'auto')
 
-            if theme not in ['light', 'dark']:
+            if theme not in VALID_THEMES:
                 return JsonResponse(
                     {'success': False, 'error': 'Invalid theme'},
                     status=400,

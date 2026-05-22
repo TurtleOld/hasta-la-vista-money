@@ -32,10 +32,10 @@ class User(AbstractUser):
     for the user interface.
 
     Attributes:
-        theme: User's preferred theme (default: 'dark').
+        theme: User's preferred theme (default: 'auto').
     """
 
-    theme: CharField[Any, Any] = CharField(max_length=10, default='dark')
+    theme: CharField[Any, Any] = CharField(max_length=10, default='auto')
 
     def __str__(self) -> str:
         """Return string representation of the user.
