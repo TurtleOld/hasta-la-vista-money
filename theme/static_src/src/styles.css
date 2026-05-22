@@ -22,12 +22,13 @@
 @source "../../../static/js/**/*.js";
 
 @theme {
-  --font-family-sans: 'Inter', 'Roboto', system-ui, -apple-system, 'Segoe UI',
-    'Helvetica Neue', 'Noto Sans', 'Liberation Sans', Arial, sans-serif;
-  --font-family-heading: 'Montserrat', 'Inter', 'Roboto', system-ui, sans-serif;
+  --font-family-sans: 'Golos Text', 'Geist', system-ui, -apple-system,
+    sans-serif;
+  --font-family-heading: 'Golos Text', 'Montserrat', 'Inter', 'Roboto',
+    system-ui, sans-serif;
   --font-family-mono: 'IBM Plex Mono', 'SFMono-Regular', Menlo, Monaco, Consolas,
     'Liberation Mono', 'Courier New', monospace;
-  --font-family-logo: 'Gloria Hallelujah', cursive;
+  --font-family-logo: 'Caveat', 'Gloria Hallelujah', cursive;
 
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
@@ -38,6 +39,8 @@
   --font-size-3xl: 1.875rem;
   --font-size-4xl: 2.25rem;
   --font-size-5xl: 3rem;
+  --font-size-logo: 2rem;
+  --logo-min-width: 18rem;
 
   --line-height-tight: 1.25;
   --line-height-snug: 1.375;
@@ -180,6 +183,16 @@
 
   .logo {
     font-family: var(--font-family-logo);
+    font-size: var(--font-size-logo) !important;
+    line-height: 1.2;
+    display: inline-block;
+    min-width: var(--logo-min-width);
+    overflow: visible;
+  }
+
+  #account-list,
+  #account-list a {
+    overflow: visible;
   }
 
   table th,
