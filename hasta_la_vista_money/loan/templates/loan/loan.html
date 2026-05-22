@@ -9,6 +9,7 @@
 {% block title %}{% translate 'Кредиты' %}{% endblock %}
 
 {% block content %}
+<div x-data>
 <div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-8">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="mb-8 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 p-8 text-white shadow-xl">
@@ -123,15 +124,15 @@
                                 {{ item_loan.get_type_loan_display }}
                             </div>
                         </div>
-                        <div class="relative" data-dropdown>
-                            <button type="button" class="dropdown-toggle rounded-lg p-2 text-white transition-colors hover:bg-white/20">
+                        <div class="relative" x-data="{ dropdownOpen: false }" @click.outside="dropdownOpen = false">
+                            <button type="button" @click.stop="dropdownOpen = !dropdownOpen" class="rounded-lg p-2 text-white transition-colors hover:bg-white/20">
                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
                                 </svg>
                             </button>
-                            <ul class="dropdown-menu absolute right-0 top-full z-10 mt-2 hidden w-48 rounded-lg bg-white shadow-xl dark:bg-gray-700">
+                            <ul x-show="dropdownOpen" x-cloak class="absolute right-0 top-full z-10 mt-2 w-48 rounded-lg bg-white shadow-xl dark:bg-gray-700">
                                 <li>
-                                    <a href="#" class="modal-open flex items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600" data-modal="loan-{{ item_loan.pk }}">
+                                    <a href="#" @click.prevent="$store.loanModal.open('loan-{{ item_loan.pk }}')" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
@@ -140,7 +141,7 @@
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="#" class="modal-open flex items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600" data-modal="payment-{{ item_loan.pk }}">
+                                    <a href="#" @click.prevent="$store.loanModal.open('payment-{{ item_loan.pk }}')" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
                                         </svg>
@@ -194,14 +195,14 @@
 
                 <div class="border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700/30">
                     <div class="flex gap-2">
-                        <button type="button" class="modal-open flex-1 rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg" data-modal="loan-{{ item_loan.pk }}">
+                        <button type="button" @click="$store.loanModal.open('loan-{{ item_loan.pk }}')" class="flex-1 rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg">
                             <svg class="mr-1 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                             </svg>
                             {% translate 'График' %}
                         </button>
-                        <button type="button" class="modal-open flex-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg" data-modal="payment-{{ item_loan.pk }}">
+                        <button type="button" @click="$store.loanModal.open('payment-{{ item_loan.pk }}')" class="flex-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg">
                             <svg class="mr-1 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
                             </svg>
@@ -233,7 +234,7 @@
 </div>
 
 {% for item_loan in loan %}
-<div id="loan-{{ item_loan.pk }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+<div x-cloak x-show="$store.loanModal.current === 'loan-{{ item_loan.pk }}'" @click.self="$store.loanModal.close()" @keydown.escape.window="$store.loanModal.close()" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
     <div class="relative max-h-[90vh] w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
         <div class="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-4 text-white">
             <div class="flex items-center justify-between">
@@ -243,7 +244,7 @@
                     </svg>
                     {% translate 'Кредит №' %} {{ item_loan.pk }}
                 </h3>
-                <button type="button" class="modal-close rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
+                <button type="button" @click="$store.loanModal.close()" class="rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
@@ -344,8 +345,8 @@
             </div>
         </div>
         <div class="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700/30">
-            <button type="button" class="modal-close rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">{% translate 'Закрыть' %}</button>
-            <button type="button" class="modal-open rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg" data-modal="payment-{{ item_loan.pk }}">
+            <button type="button" @click="$store.loanModal.close()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">{% translate 'Закрыть' %}</button>
+            <button type="button" @click="$store.loanModal.open('payment-{{ item_loan.pk }}')" class="rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg">
                 <svg class="mr-2 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
                 </svg>
@@ -355,7 +356,7 @@
     </div>
 </div>
 
-<div id="payment-{{ item_loan.pk }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+<div x-cloak x-show="$store.loanModal.current === 'payment-{{ item_loan.pk }}'" @click.self="$store.loanModal.close()" @keydown.escape.window="$store.loanModal.close()" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
     <div class="relative max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
         <div class="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-4 text-white">
             <div class="flex items-center justify-between">
@@ -365,7 +366,7 @@
                     </svg>
                     {% translate 'Внести платеж по кредиту №' %}{{ item_loan.pk }}
                 </h3>
-                <button type="button" class="modal-close rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
+                <button type="button" @click="$store.loanModal.close()" class="rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
@@ -391,7 +392,7 @@
             </form>
         </div>
         <div class="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700/30">
-            <button type="button" class="modal-close rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">{% translate 'Отмена' %}</button>
+            <button type="button" @click="$store.loanModal.close()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">{% translate 'Отмена' %}</button>
             <button type="submit" form="payment-form-{{ item_loan.pk }}" class="rounded-lg bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:shadow-lg">
                 <svg class="mr-2 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -402,6 +403,7 @@
     </div>
 </div>
 {% endfor %}
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -411,74 +413,21 @@
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/mathjax.js' %}?v={% word_hash %}"></script>
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/dist/pages/loan.js' %}?v={% word_hash %}"></script>
 <script nonce="{{request.csp_nonce}}">
+document.addEventListener('alpine:init', function() {
+    Alpine.store('loanModal', {
+        current: null,
+        open: function(id) {
+            this.current = id;
+            document.body.style.overflow = 'hidden';
+        },
+        close: function() {
+            this.current = null;
+            document.body.style.overflow = '';
+        }
+    });
+});
+
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.modal-open').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const modalId = this.getAttribute('data-modal');
-            const modal = document.getElementById(modalId);
-            if (modal) {
-                document.querySelectorAll('[id^="payment"], [id^="loan"]').forEach(m => {
-                    m.classList.add('hidden');
-                    m.classList.remove('flex');
-                });
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-                document.body.style.overflow = 'hidden';
-            }
-        });
-    });
-
-    document.querySelectorAll('.modal-close').forEach(button => {
-        button.addEventListener('click', function() {
-            const modal = this.closest('[id^="payment"], [id^="loan"]');
-            if (modal) {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-                document.body.style.overflow = '';
-            }
-        });
-    });
-
-    document.querySelectorAll('[id^="payment"], [id^="loan"]').forEach(modal => {
-        modal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                this.classList.add('hidden');
-                this.classList.remove('flex');
-                document.body.style.overflow = '';
-            }
-        });
-    });
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('[id^="payment"], [id^="loan"]').forEach(modal => {
-                if (!modal.classList.contains('hidden')) {
-                    modal.classList.add('hidden');
-                    modal.classList.remove('flex');
-                    document.body.style.overflow = '';
-                }
-            });
-        }
-    });
-
-    document.querySelectorAll('[data-dropdown]').forEach(dropdown => {
-        const toggle = dropdown.querySelector('.dropdown-toggle');
-        const menu = dropdown.querySelector('.dropdown-menu');
-        if (toggle && menu) {
-            toggle.addEventListener('click', function(e) {
-                e.stopPropagation();
-                menu.classList.toggle('hidden');
-            });
-            document.addEventListener('click', function(e) {
-                if (!dropdown.contains(e.target)) {
-                    menu.classList.add('hidden');
-                }
-            });
-        }
-    });
-
     document.querySelectorAll('.ajax-form').forEach(function(form) {
         form.addEventListener('submit', function(e) {
             const submitBtn = form.querySelector('button[type="submit"]');
@@ -514,7 +463,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                 })
-                .catch(error => {
+                .catch(function(error) {
                     submitBtn.innerHTML = originalHTML;
                     submitBtn.disabled = false;
                     console.error('Error:', error);

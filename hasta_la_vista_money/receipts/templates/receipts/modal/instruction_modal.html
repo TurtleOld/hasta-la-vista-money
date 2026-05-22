@@ -1,21 +1,41 @@
 {% load i18n %}
 {% load static %}
 
-<input type="checkbox" id="instruction-modal-toggle" class="peer hidden" />
+<div
+    x-show="open"
+    x-cloak
+    x-transition:enter="transition-opacity ease-out duration-300"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition-opacity ease-in duration-200"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    @click="closeModal()"
+    class="fixed inset-0 z-[60] cursor-pointer bg-black/50 backdrop-blur-sm"
+></div>
 
-<label for="instruction-modal-toggle" class="fixed inset-0 z-[60] hidden cursor-pointer bg-black/50 backdrop-blur-sm opacity-0 transition-opacity duration-300 peer-checked:block peer-checked:opacity-100" onclick="if(document.getElementById('mobileMenuState')) document.getElementById('mobileMenuState').checked = false;"></label>
-
-<div class="fixed inset-0 z-[70] hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300 peer-checked:flex peer-checked:opacity-100 pointer-events-none peer-checked:pointer-events-auto">
-    <div class="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl transform transition-transform duration-300 scale-95 peer-checked:scale-100">
+<div
+    x-show="open"
+    x-cloak
+    x-transition:enter="transition ease-out duration-300"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100 scale-100"
+    x-transition:leave-end="opacity-0 scale-95"
+    @keydown.escape.window="closeModal()"
+    class="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none"
+>
+    <div class="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl pointer-events-auto">
         <div class="flex flex-col max-h-[90vh]">
             <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                 <h2 class="text-xl font-semibold text-white">
                     {% translate 'Инструкция по загрузке чеков' %}
                 </h2>
-                <label for="instruction-modal-toggle" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer">
+                <button type="button" @click="closeModal()" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer">
                     <i class="bi bi-x-lg text-lg"></i>
                     <span class="sr-only">{% translate 'Закрыть' %}</span>
-                </label>
+                </button>
             </div>
 
             <div class="flex-1 overflow-y-auto px-6 py-4">
@@ -55,9 +75,9 @@
             </div>
 
             <div class="flex items-center justify-end gap-3 border-t border-gray-200 dark:border-gray-700 px-6 py-4">
-                <label for="instruction-modal-toggle" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 cursor-pointer">
+                <button type="button" @click="closeModal()" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 cursor-pointer">
                     {% translate 'Понятно' %}
-                </label>
+                </button>
             </div>
         </div>
     </div>
