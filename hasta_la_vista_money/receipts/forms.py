@@ -373,7 +373,7 @@ class MultipleFileInput(ClearableFileInput):
 class MultipleImageField(FileField):
     def clean(self, data: Any, initial: Any = None) -> Any:
         single_file_clean = super().clean
-        if isinstance(data, (list, tuple)):
+        if isinstance(data, list | tuple):
             return [single_file_clean(file, initial) for file in data]
         return single_file_clean(data, initial)
 
