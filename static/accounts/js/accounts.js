@@ -137,10 +137,13 @@
         this.csrfToken = config.csrfToken || '';
         this.accountId = config.defaultAccount || '';
         this.syncCategory();
+        console.log('[quickAdd] init done. open=', this.open, 'accountId=', this.accountId, 'categoryId=', this.categoryId);
       },
 
       toggle() {
+        console.log('[quickAdd] toggle BEFORE: open=', this.open);
         this.open = !this.open;
+        console.log('[quickAdd] toggle AFTER: open=', this.open);
         if (this.open) {
           this.syncCategory();
         }
