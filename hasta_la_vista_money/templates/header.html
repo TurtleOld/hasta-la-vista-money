@@ -120,6 +120,25 @@
 
                 <!-- User Menu -->
                 <div id="user-menu" class="flex items-center ml-4 gap-2">
+                    <button id="theme-toggle" type="button" aria-live="polite"
+                            class="flex items-center justify-center w-9 h-9 rounded-xl text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                            aria-label="{% translate 'Сменить тему' %}">
+                        <span id="theme-icon" class="flex items-center justify-center w-5 h-5 shrink-0">
+                            <svg id="theme-icon-sun" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                            </svg>
+                            <svg id="theme-icon-moon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                            </svg>
+                            <svg id="theme-icon-auto" class="w-5 h-5 hidden" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <text x="12" y="17" text-anchor="middle"
+                                      font-family="'Geist', 'Golos Text', system-ui, sans-serif"
+                                      font-size="15" font-weight="700" fill="currentColor"
+                                      letter-spacing="-0.02em">A</text>
+                            </svg>
+                        </span>
+                        <span id="theme-label" class="sr-only">{% translate 'Авто' %}</span>
+                    </button>
                     <a href="{% url 'users:profile' user.id %}" class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-gray-700 dark:text-gray-300">
                         <div class="flex items-center justify-center w-9 h-9 rounded-full bg-linear-to-br from-green-500 to-emerald-600 dark:from-green-900/40 dark:to-emerald-900/40 text-white dark:text-green-400 ring-2 ring-green-200 dark:ring-green-800 shadow-md dark:shadow-none">
                             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="background: none; background-color: transparent;">
