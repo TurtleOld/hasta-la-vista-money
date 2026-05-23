@@ -144,6 +144,14 @@
         console.log('[quickAdd] toggle BEFORE: open=', this.open);
         this.open = !this.open;
         console.log('[quickAdd] toggle AFTER: open=', this.open);
+        // Force DOM check after a tick to verify reactivity propagated
+        setTimeout(() => {
+          const fab = document.querySelector('.accounts-fab');
+          const drawer = document.querySelector('.accounts-drawer');
+          console.log('[quickAdd] post-tick: this.open=', this.open,
+                      'fab[data-open]=', fab && fab.getAttribute('data-open'),
+                      'drawer[data-open]=', drawer && drawer.getAttribute('data-open'));
+        }, 0);
         if (this.open) {
           this.syncCategory();
         }
