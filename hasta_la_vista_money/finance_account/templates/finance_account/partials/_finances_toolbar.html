@@ -7,6 +7,12 @@
     <input id="finances-type" type="hidden" name="type" value="{{ finances_filter.type }}">
 </div>
 
+<div class="finances-scope" role="tablist" aria-label="{% translate 'Область данных' %}">
+    <button type="button" class="{% if selected_group_id == 'family' %}is-active{% endif %}" data-finances-scope="family">{% translate 'Семья' %}</button>
+    <button type="button" class="{% if selected_group_id == 'my' %}is-active{% endif %}" data-finances-scope="my">{% translate 'Мои' %}</button>
+    <input id="finances-group" type="hidden" name="group_id" value="{{ selected_group_id }}">
+</div>
+
 <div class="finances-pills">
     <div class="finances-pop-wrap">
         <button type="button" class="finances-chip {% if finances_filter.period != 'm' %}is-active{% endif %}" data-finances-pop-button="period">
@@ -24,27 +30,6 @@
             </div>
         </div>
         <input id="finances-period" type="hidden" name="period" value="{{ finances_filter.period }}">
-    </div>
-
-    <div class="finances-pop-wrap">
-        <button type="button" class="finances-chip {% if selected_group_id != 'my' %}is-active{% endif %}" data-finances-pop-button="group">
-            {% translate 'Группа' %}: {% if selected_group_id == 'my' %}{% translate 'Мои' %}{% else %}{{ selected_group_id }}{% endif %}
-        </button>
-        <div class="finances-pop" data-finances-pop="group">
-            <div class="finances-pop-title">{% translate 'Группа' %}</div>
-            <div class="finances-pop-body">
-                <label class="finances-pop-option {% if selected_group_id == 'my' %}is-active{% endif %}">
-                    <input type="radio" name="group_id" value="my" {% if selected_group_id == 'my' %}checked{% endif %}>
-                    <span>{% translate 'Мои' %}</span>
-                </label>
-                {% for group in user.groups.all %}
-                    <label class="finances-pop-option {% if selected_group_id == group.id|stringformat:'s' %}is-active{% endif %}">
-                        <input type="radio" name="group_id" value="{{ group.id }}" {% if selected_group_id == group.id|stringformat:'s' %}checked{% endif %}>
-                        <span>{{ group.name }}</span>
-                    </label>
-                {% endfor %}
-            </div>
-        </div>
     </div>
 
     <div class="finances-pop-wrap">

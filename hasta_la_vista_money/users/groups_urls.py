@@ -7,6 +7,7 @@ from hasta_la_vista_money.users.views import (
     DeleteUserFromGroupView,
     GroupCreateView,
     GroupDeleteView,
+    JoinFamilyGroupView,
 )
 
 app_name = 'groups'
@@ -16,4 +17,5 @@ urlpatterns = [
     path('delete/', GroupDeleteView.as_view(), name='delete'),
     path('add-user/', AddUserToGroupView.as_view(), name='add_user'),
     path('delete-user/', DeleteUserFromGroupView.as_view(), name='delete_user'),
+    path('join/<str:token>/', JoinFamilyGroupView.as_view(), name='join'),
 ]

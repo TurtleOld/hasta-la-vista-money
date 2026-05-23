@@ -7,7 +7,7 @@ including dashboard widgets and admin configurations.
 from typing import Any
 
 from django.contrib import admin
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, Group
 from django.db.models import (
     CASCADE,
     BooleanField,
@@ -21,6 +21,7 @@ from django.db.models import (
     PositiveIntegerField,
     TextChoices,
     TextField,
+    UniqueConstraint,
 )
 from django.utils.translation import gettext_lazy as _
 
@@ -148,6 +149,77 @@ class BankStatementUpload(Model):
             str: Formatted string with username and status.
         """
         return f'{self.user.username} - {self.status} - {self.created_at}'
+
+
+class FamilyGroupMembership(Model):
+    """User role inside a shared family finance group."""
+
+    class Role(TextChoices):
+        OWNER = 'owner', _('Владелец')
+        VIEWER = 'viewer', _('Просмотр')
+
+    group = ForeignKey(
+        Group,
+        on_delete=CASCADE,
+        related_name='family_memberships',
+    )
+    user = ForeignKey(
+        User,
+        on_delete=CASCADE,
+        related_name='family_memberships',
+    )
+    role = CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.VIEWER,
+    )
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=['group', 'user'],
+                name='unique_family_group_membership',
+            ),
+        ]
+        verbose_name = _('Участник семейной группы')
+        verbose_name_plural = _('Участники семейных групп')
+
+    def __str__(self) -> str:
+        return f'{self.group.name}: {self.user.username} ({self.role})'
+
+
+class FamilyInvite(Model):
+    """Share link for joining a family finance group."""
+
+    group = ForeignKey(
+        Group,
+        on_delete=CASCADE,
+        related_name='family_invites',
+    )
+    created_by = ForeignKey(
+        User,
+        on_delete=CASCADE,
+        related_name='created_family_invites',
+    )
+    token = CharField(max_length=64, unique=True)
+    role = CharField(
+        max_length=20,
+        choices=FamilyGroupMembership.Role.choices,
+        default=FamilyGroupMembership.Role.VIEWER,
+    )
+    is_active = BooleanField(default=True)
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Семейное приглашение')
+        verbose_name_plural = _('Семейные приглашения')
+
+    def __str__(self) -> str:
+        return f'{self.group.name}: {self.role}'
 
 
 class TokenAdmin(admin.ModelAdmin[Any]):

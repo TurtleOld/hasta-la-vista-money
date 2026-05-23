@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.contrib.auth.models import Group
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Sum
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import (
@@ -23,6 +23,10 @@ from hasta_la_vista_money.finance_account.services.types import (
     RaiffeisenbankScheduleDict,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import (
+    get_family_group_ids,
+    user_has_group_access,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.expense.repositories import ExpenseRepository
@@ -119,6 +123,14 @@ class AccountService:
         if not group_id or group_id == 'my':
             return [user]
 
+        if group_id == 'family':
+            group_ids = get_family_group_ids(user)
+            users = User.objects.filter(groups__id__in=group_ids).distinct()
+            return list(users) or [user]
+
+        if not user_has_group_access(user, group_id):
+            return []
+
         try:
             group = Group.objects.get(pk=group_id)
         except Group.DoesNotExist:
@@ -151,8 +163,8 @@ class AccountService:
         Returns:
             Total balance as Decimal.
         """
-        total = sum(acc.balance for acc in accounts)
-        return Decimal(str(total))
+        total = accounts.aggregate(total=Sum('balance'))['total']
+        return Decimal(total or constants.ZERO)
 
     def get_transfer_money_log(
         self,

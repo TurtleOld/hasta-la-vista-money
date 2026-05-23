@@ -8,6 +8,10 @@ from django.db.models import QuerySet
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.groups import (
+    get_family_group_ids,
+    user_has_group_access,
+)
 
 
 class AccountRepository:
@@ -95,14 +99,14 @@ class AccountRepository:
         if group_id == 'my':
             return Account.objects.filter(user=user).select_related('user')
 
-        if group_id is None:
+        if group_id is None or group_id == 'family':
             user_with_groups = User.objects.prefetch_related('groups').get(
                 pk=user.pk,
             )
-            user_groups = user_with_groups.groups.all()
-            if user_groups.exists():
+            family_group_ids = get_family_group_ids(user_with_groups)
+            if family_group_ids:
                 users_in_groups = User.objects.filter(
-                    groups__in=user_groups,
+                    groups__id__in=family_group_ids,
                 ).distinct()
                 return (
                     Account.objects.filter(user__in=users_in_groups)
@@ -110,6 +114,9 @@ class AccountRepository:
                     .distinct()
                 )
             return Account.objects.filter(user=user).select_related('user')
+
+        if not user_has_group_access(user, group_id):
+            return Account.objects.none()
 
         users_in_group = User.objects.filter(groups__id=group_id).distinct()
         if users_in_group.exists():

@@ -1,6 +1,7 @@
 """KPI calculations for the dashboard header."""
 
 from calendar import monthrange
+from collections.abc import Iterable
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import TypedDict
@@ -43,25 +44,29 @@ def _aware_bounds(start: date, end: date) -> tuple[datetime, datetime]:
 
 def _sum_for_month(
     model: type[Expense] | type[Income],
-    user: User,
+    users: Iterable[User],
     start: datetime,
     end: datetime,
 ) -> Decimal:
     total = model.objects.filter(
-        user=user,
+        user__in=users,
         date__gte=start,
         date__lte=end,
     ).aggregate(total=Sum('amount'))['total']
     return Decimal(total or constants.ZERO)
 
 
-def get_dashboard_month_kpis(user: User) -> DashboardKpiDict:
+def get_dashboard_month_kpis(
+    user: User,
+    users: Iterable[User] | None = None,
+) -> DashboardKpiDict:
     """Return current-month KPI values for the dashboard strip."""
     period_start, period_end = _current_month_bounds()
     start_dt, end_dt = _aware_bounds(period_start, period_end)
+    selected_users = list(users or [user])
 
-    income = _sum_for_month(Income, user, start_dt, end_dt)
-    expenses = _sum_for_month(Expense, user, start_dt, end_dt)
+    income = _sum_for_month(Income, selected_users, start_dt, end_dt)
+    expenses = _sum_for_month(Expense, selected_users, start_dt, end_dt)
     net_result = income - expenses
     savings_rate = (
         net_result / income * constants.PERCENTAGE_MULTIPLIER
@@ -71,7 +76,7 @@ def get_dashboard_month_kpis(user: User) -> DashboardKpiDict:
 
     top_category = (
         Expense.objects.filter(
-            user=user,
+            user__in=selected_users,
             date__gte=start_dt,
             date__lte=end_dt,
         )

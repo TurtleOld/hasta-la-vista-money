@@ -263,23 +263,35 @@
                                         </a>
                                     </div>
                                     <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                                        <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Группы</h5>
+                                        <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Семейный доступ' %}</h5>
+                                        {% if family_groups %}
+                                            <div class="space-y-3 mb-4">
+                                                {% for group in family_groups %}
+                                                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                                                        <div class="flex items-center justify-between gap-3">
+                                                            <div>
+                                                                <p class="font-semibold text-gray-900 dark:text-white">{{ group.name }}</p>
+                                                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ group.role_label }}</p>
+                                                            </div>
+                                                            <a class="text-sm font-semibold text-green-700 dark:text-green-300" href="{% url 'finances' %}">{% translate 'Открыть' %}</a>
+                                                        </div>
+                                                        {% if group.invite_url %}
+                                                            <label class="mt-3 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{% translate 'Ссылка приглашения' %}</label>
+                                                            <input class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100" value="{{ group.invite_url }}" readonly>
+                                                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{% translate 'Отправьте эту ссылку члену семьи. После входа в аккаунт он присоединится к семейному доступу.' %}</p>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
                                         <div class="space-y-3">
-                                            <a class="flex items-center gap-3 w-full px-4 py-3 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:create' %}">
-                                                <i class="bi bi-people"></i>
-                                                <span>{% translate "Создать группу" %}</span>
-                                            </a>
-                                            <a class="flex items-center gap-3 w-full px-4 py-3 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-red-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:delete' %}">
-                                                <i class="bi bi-person-dash"></i>
-                                                <span>{% translate "Удалить группу" %}</span>
-                                            </a>
                                             <a class="flex items-center gap-3 w-full px-4 py-3 border border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-green-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:add_user' %}">
                                                 <i class="bi bi-person-plus"></i>
-                                                <span>{% translate "Добавить пользователя в группу" %}</span>
+                                                <span>{% translate "Добавить пользователя в семью" %}</span>
                                             </a>
                                             <a class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:delete_user' %}">
                                                 <i class="bi bi-person-dash"></i>
-                                                <span>{% translate "Удалить пользователя из группы" %}</span>
+                                                <span>{% translate "Удалить пользователя из семьи" %}</span>
                                             </a>
                                         </div>
                                     </div>

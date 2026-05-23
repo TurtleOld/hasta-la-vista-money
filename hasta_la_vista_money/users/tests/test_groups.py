@@ -13,12 +13,16 @@ from hasta_la_vista_money.users.forms import (
     GroupCreateForm,
     GroupDeleteForm,
 )
+from hasta_la_vista_money.users.models import FamilyGroupMembership
 from hasta_la_vista_money.users.services.groups import (
     GroupDict,
     create_group,
     delete_group,
+    get_family_groups,
     get_groups_not_for_user,
+    get_or_create_family_invite,
     get_user_groups,
+    user_has_group_access,
 )
 
 if TYPE_CHECKING:
@@ -56,9 +60,18 @@ class GroupsServiceTest(TestCase):
 
     def test_create_and_delete_group(self) -> None:
         form: GroupCreateForm = GroupCreateForm(data={'name': 'NewGroup'})
+        form.current_user = self.user
         self.assertTrue(form.is_valid())
         group: Group = create_group(form)
         self.assertTrue(Group.objects.filter(name='NewGroup').exists())
+        self.assertIn(group, self.user.groups.all())
+        self.assertTrue(
+            FamilyGroupMembership.objects.filter(
+                group=group,
+                user=self.user,
+                role=FamilyGroupMembership.Role.OWNER,
+            ).exists(),
+        )
         delete_form: GroupDeleteForm = GroupDeleteForm(data={'group': group.pk})
         self.assertTrue(delete_form.is_valid())
         delete_form.cleaned_data = {'group': group}
@@ -78,6 +91,13 @@ class GroupsServiceTest(TestCase):
         self.assertTrue(add_form.is_valid())
         add_form.save(request)
         self.assertIn(self.group, self.user.groups.all())
+        self.assertTrue(
+            FamilyGroupMembership.objects.filter(
+                group=self.group,
+                user=self.user,
+                role=FamilyGroupMembership.Role.VIEWER,
+            ).exists(),
+        )
 
         remove_form: DeleteUserFromGroupForm = DeleteUserFromGroupForm(
             data={'user': self.user.pk, 'group': self.group.pk},
@@ -85,3 +105,33 @@ class GroupsServiceTest(TestCase):
         self.assertTrue(remove_form.is_valid())
         remove_form.save(request)
         self.assertNotIn(self.group, self.user.groups.all())
+        self.assertFalse(
+            FamilyGroupMembership.objects.filter(
+                group=self.group,
+                user=self.user,
+            ).exists(),
+        )
+
+    def test_family_invite_and_access_helpers(self) -> None:
+        factory: RequestFactory = RequestFactory()
+        request: HttpRequest = factory.get('/')
+        self.user.groups.add(self.group)
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=self.user,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+
+        invite = get_or_create_family_invite(self.group, self.user)
+        second_invite = get_or_create_family_invite(self.group, self.user)
+
+        self.assertEqual(invite.pk, second_invite.pk)
+        self.assertTrue(user_has_group_access(self.user, str(self.group.pk)))
+        self.assertFalse(user_has_group_access(self.user, '999999'))
+
+        family_groups = get_family_groups(self.user, request)
+        self.assertEqual(
+            family_groups[0]['role'],
+            FamilyGroupMembership.Role.OWNER,
+        )
+        self.assertIn(invite.token, family_groups[0]['invite_url'] or '')

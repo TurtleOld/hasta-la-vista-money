@@ -72,6 +72,7 @@
 .finances-toolbar,
 .finances-pills,
 .finances-segment,
+.finances-scope,
 .finances-search,
 .finances-day-head,
 .finances-pagination,
@@ -233,7 +234,17 @@
   box-shadow: var(--finances-shadow-card);
 }
 
+.finances-scope {
+  background: color-mix(in oklab, var(--finances-accent) 7%, var(--finances-surface));
+  border: 1px dashed color-mix(in oklab, var(--finances-accent) 28%, transparent);
+  border-radius: 1rem;
+  gap: 0.2rem;
+  padding: 0.25rem;
+  box-shadow: var(--finances-shadow-card);
+}
+
 .finances-segment button,
+.finances-scope button,
 .finances-chip,
 .finances-pop button {
   border: 0;
@@ -249,9 +260,23 @@
   padding: 0.55rem 0.95rem;
 }
 
+.finances-scope button {
+  background: transparent;
+  border-radius: 0.75rem;
+  color: var(--finances-muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+  padding: 0.55rem 0.95rem;
+}
+
 .finances-segment button.is-active {
   background: var(--finances-surface-2);
   color: var(--finances-text);
+}
+
+.finances-scope button.is-active {
+  background: var(--finances-surface);
+  color: var(--finances-accent);
 }
 
 .finances-chip {

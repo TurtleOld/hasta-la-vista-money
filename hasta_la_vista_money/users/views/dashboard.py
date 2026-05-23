@@ -164,9 +164,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ]
         user = self.request.user
         if isinstance(user, User):
-            context['kpi_cards'] = _build_kpi_cards(
-                get_dashboard_month_kpis(user),
+            request_with_container = cast('RequestWithContainer', self.request)
+            account_service = (
+                request_with_container.container.core.account_service()
             )
+            scope = self.request.GET.get('group_id', 'family')
+            users = account_service.get_users_for_group(user, scope)
+            context['kpi_cards'] = _build_kpi_cards(
+                get_dashboard_month_kpis(user, users),
+            )
+            context['selected_group_id'] = scope
 
         return context
 
