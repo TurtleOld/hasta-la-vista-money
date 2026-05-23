@@ -10,7 +10,7 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.tests.helpers import (
     setup_container_for_request,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -37,6 +37,16 @@ class TestGroupAccountMixin(TestCase):
         self.group = Group.objects.create(name='Test Group')
         self.user1.groups.add(self.group)
         self.user2.groups.add(self.group)
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=self.user1,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=self.user2,
+            role=FamilyGroupMembership.Role.VIEWER,
+        )
 
         self.account1 = Account.objects.create(
             user=self.user1,
