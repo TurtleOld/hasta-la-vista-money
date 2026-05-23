@@ -25,31 +25,9 @@
                 }
             }
 
-            this.attachPeriodButtonListeners();
-            
             const chartContainer = widget.querySelector('[data-has-data]');
             if (chartContainer && chartContainer.textContent === 'true') {
                 this.renderChart();
-            }
-        },
-
-        attachPeriodButtonListeners: function() {
-            const buttons = document.querySelectorAll('#balance-trend-widget .period-btn');
-            buttons.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const period = btn.dataset.period;
-                    this.changePeriod(period);
-                });
-            });
-        },
-
-        changePeriod: function(period) {
-            const params = new URLSearchParams(window.location.search);
-            params.set('balance_trend_period', period);
-            const safeUrl = window.location.pathname + '?' + params.toString();
-            if (safeUrl.startsWith('/') || safeUrl.startsWith(window.location.origin)) {
-                window.location.href = encodeURI(safeUrl);
             }
         },
 
@@ -60,10 +38,9 @@
                 return;
             }
 
-            // Get series data from data attribute
-            const widget = document.getElementById('balance-trend-widget');
-            const dataElement = widget.querySelector('[data-series]');
-            
+            // Get series data from json_script tag
+            const dataElement = document.getElementById('balance-trend-series');
+
             if (!dataElement) {
                 console.warn('[BalanceTrendWidget] No series data found');
                 return;
@@ -100,10 +77,15 @@
                 ? 'rgba(34, 197, 94, 0.1)'
                 : 'rgba(239, 68, 68, 0.1)';
 
-            // Destroy existing chart if present
-            if (this.chartInstance) {
-                this.chartInstance.destroy();
+            // Destroy any chart instance bound to this canvas. Chart.js keeps
+            // a registry per <canvas>, so HTMX-replacing the canvas leaves the
+            // previous instance pointing at a detached node — clean it up via
+            // the static getter to avoid "Canvas is already in use" errors.
+            const existing = Chart.getChart(canvas);
+            if (existing) {
+                existing.destroy();
             }
+            this.chartInstance = null;
 
             // Create new chart
             this.chartInstance = new Chart(ctx, {

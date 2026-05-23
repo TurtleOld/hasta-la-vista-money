@@ -3,17 +3,15 @@
 
 <div class="accounts-list">
     {% for account in accounts %}
-        <article class="accounts-row{% if account.user != request.user %} accounts-row-foreign{% endif %}" x-data="swipeCard">
+        <article class="accounts-row{% if account.user != request.user %} accounts-row-foreign{% endif %}">
             <div class="accounts-row-actions" aria-hidden="true">
                 <a href="{% url 'finance_account:transfer_money' %}?from_account={{ account.id }}"
-                   class="accounts-row-action transfer"
-                   @click="close">
+                   class="accounts-row-action transfer">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>
                     <span>{% translate 'Перевод' %}</span>
                 </a>
                 <a href="{{ account.get_absolute_url }}"
-                   class="accounts-row-action edit change-object-button"
-                   @click="close">
+                   class="accounts-row-action edit change-object-button">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 20h4l11-11-4-4L4 16zM14 6l4 4"/></svg>
                     <span>{% translate 'Изменить' %}</span>
                 </a>
@@ -30,9 +28,7 @@
 
             <div class="accounts-row-hint" aria-hidden="true"><i></i><i></i><i></i></div>
 
-            <div class="accounts-row-content" :class="swiping ? 'swiping' : ''" :style="'transform: translate3d(' + x + 'px, 0, 0)'"
-                 @pointerdown="onDown" @pointermove="onMove"
-                 @pointerup="onUp" @pointercancel="onUp">
+            <div class="accounts-row-content">
                 <div class="accounts-row-mark">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>
                 </div>

@@ -19,9 +19,12 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import QuerySet
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse, reverse_lazy
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
+from django.views import View
+from django.views.decorators.http import require_POST
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -1385,3 +1388,55 @@ class DeleteAccountView(
     success_url = reverse_lazy('finance_account:list')
     success_message = constants.SUCCESS_MESSAGE_DELETE_ACCOUNT[:]
     error_message = constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT[:]
+
+
+@method_decorator(require_POST, name='dispatch')
+class QuickCategoryCreateView(LoginRequiredMixin, View):
+    """Lightweight JSON endpoint for the accounts dashboard drawer.
+
+    Creates an Income or Expense category for the current user (no parent,
+    no extra fields) and returns its id+name. Used by the quick-add drawer
+    to let users add a missing category without leaving the page.
+    """
+
+    def post(self, request: Any, *args: Any, **kwargs: Any) -> JsonResponse:
+        category_type = request.POST.get('type', 'expense')
+        name = (request.POST.get('name') or '').strip()
+        if not name:
+            return JsonResponse(
+                {'ok': False, 'error': str(_('Введите название категории'))},
+                status=400,
+            )
+
+        if category_type == 'income':
+            model_cls: type[Any] = IncomeCategory
+        elif category_type == 'expense':
+            model_cls = ExpenseCategory
+        else:
+            return JsonResponse(
+                {'ok': False, 'error': 'Invalid category type'},
+                status=400,
+            )
+
+        if len(name) > constants.TWO_HUNDRED_FIFTY:
+            return JsonResponse(
+                {'ok': False, 'error': str(_('Слишком длинное название'))},
+                status=400,
+            )
+
+        existing = model_cls.objects.filter(
+            user=request.user,
+            name=name,
+        ).first()
+        if existing is not None:
+            return JsonResponse(
+                {'ok': True, 'id': existing.pk, 'name': existing.name},
+            )
+
+        category = model_cls.objects.create(
+            user=request.user,
+            name=name,
+        )
+        return JsonResponse(
+            {'ok': True, 'id': category.pk, 'name': category.name},
+        )

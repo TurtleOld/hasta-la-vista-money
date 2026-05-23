@@ -54,9 +54,9 @@
                 <h1>{% translate 'Мои счета' %}</h1>
             </div>
             <div class="accounts-actions">
-                <button type="button" class="accounts-eye" @click="$store.accountsUi.toggle()">
-                    <svg x-show="!$store.accountsUi.hideBalance" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
-                    <svg x-show="$store.accountsUi.hideBalance" x-cloak viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M3 3l18 18"/><path d="M10.6 5.2c.5-.1.9-.2 1.4-.2 6.5 0 10 6 10 6a17 17 0 01-3.2 3.8M6.3 6.4A17 17 0 002 11s3.5 6 10 6c1.5 0 2.8-.3 4-.8"/><path d="M9.9 10a3 3 0 004.2 4.2"/></svg>
+                <button type="button" class="accounts-eye">
+                    <svg data-eye-show-when-visible viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                    <svg data-eye-show-when-hidden class="is-hidden-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M3 3l18 18"/><path d="M10.6 5.2c.5-.1.9-.2 1.4-.2 6.5 0 10 6 10 6a17 17 0 01-3.2 3.8M6.3 6.4A17 17 0 002 11s3.5 6 10 6c1.5 0 2.8-.3 4-.8"/><path d="M9.9 10a3 3 0 004.2 4.2"/></svg>
                 </button>
                 <a id="detailed-statistics" href="{% url 'users:statistics' %}" class="accounts-btn accounts-btn-ghost-accent">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 4v16h16"/><path d="M8 14l3-3 3 3 5-6"/></svg>
@@ -139,53 +139,57 @@
 
     {# ── Quick add: FAB + drawer ──────────────────────────────── #}
     {% if drawer_accounts %}
-    <div x-data>
-        <button type="button" class="accounts-fab" :data-open="$store.quickAdd.open ? '1' : '0'"
-                @click="$store.quickAdd.toggle()" aria-label="{% translate 'Новая операция' %}">
-            <span class="plus">+</span>
-            <span x-show="!$store.quickAdd.open" x-cloak>{% translate 'Операция' %}</span>
-        </button>
+    <button type="button" class="accounts-fab" data-open="0" aria-label="{% translate 'Новая операция' %}">
+        <span class="plus">+</span>
+        <span data-qa-fab-label>{% translate 'Операция' %}</span>
+    </button>
 
-        <div class="accounts-drawer" :data-open="$store.quickAdd.open ? '1' : '0'" x-cloak @click.outside="$store.quickAdd.handleOutside()">
-            <div class="accounts-drawer-hd">
-                <h3>{% translate 'Новая операция' %}</h3>
-                <div class="accounts-drawer-tabs">
-                    <button type="button" :class="$store.quickAdd.type === 'expense' ? 'on' : ''" @click="$store.quickAdd.setExpense()">{% translate 'Расход' %}</button>
-                    <button type="button" :class="$store.quickAdd.type === 'income' ? 'on' : ''" @click="$store.quickAdd.setIncome()">{% translate 'Доход' %}</button>
-                </div>
+    <div class="accounts-drawer" data-open="0">
+        <div class="accounts-drawer-hd">
+            <h3>{% translate 'Новая операция' %}</h3>
+            <div class="accounts-drawer-tabs">
+                <button type="button" class="on" data-qa-tab="expense">{% translate 'Расход' %}</button>
+                <button type="button" data-qa-tab="income">{% translate 'Доход' %}</button>
             </div>
-            <form class="accounts-drawer-body" @submit="$store.quickAdd.submit($event)">
-                <div class="accounts-drawer-amt">
-                    <input type="text" inputmode="numeric" placeholder="0"
-                           x-model="$store.quickAdd.amount" @input="$store.quickAdd.onAmountInput($event)">
-                    <span class="cur">₽</span>
-                </div>
-                <div class="accounts-drawer-field">
-                    <label>{% translate 'Счёт' %}</label>
-                    <select x-model="$store.quickAdd.accountId">
-                        {% for account in drawer_accounts %}
-                            <option value="{{ account.id }}">{{ account.name_account }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="accounts-drawer-field">
-                    <label>{% translate 'Категория' %}</label>
-                    <select x-model="$store.quickAdd.categoryId">
-                        <template x-for="cat in ($store.quickAdd.type === 'income' ? $store.quickAdd.incomeCategories : $store.quickAdd.expenseCategories)" :key="cat.id">
-                            <option :value="cat.id" x-text="cat.name"></option>
-                        </template>
-                    </select>
-                </div>
-                <button type="submit" class="accounts-drawer-submit" :disabled="$store.quickAdd.submitting || !$store.quickAdd.amount || !$store.quickAdd.accountId || !$store.quickAdd.categoryId">
-                    <span x-show="!$store.quickAdd.submitting">{% translate 'Добавить операцию' %}</span>
-                    <span x-show="$store.quickAdd.submitting" x-cloak>{% translate 'Сохраняем…' %}</span>
-                </button>
-            </form>
         </div>
+        <form class="accounts-drawer-body" data-qa-form>
+            <div class="accounts-drawer-amt">
+                <input type="text" inputmode="numeric" placeholder="0" data-qa-amount>
+                <span class="cur">₽</span>
+            </div>
+            <div class="accounts-drawer-field">
+                <label>{% translate 'Счёт' %}</label>
+                <select data-qa-account>
+                    {% for account in drawer_accounts %}
+                        <option value="{{ account.id }}">{{ account.name_account }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="accounts-drawer-field accounts-drawer-field-category">
+                <label>{% translate 'Категория' %}</label>
+                <select data-qa-category></select>
+                <button type="button" class="accounts-drawer-cat-add" data-qa-cat-add
+                        aria-label="{% translate 'Добавить категорию' %}"
+                        title="{% translate 'Добавить категорию' %}">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+            </div>
+            <div class="accounts-drawer-cat-form is-hidden-icon" data-qa-cat-form>
+                <input type="text" placeholder="{% translate 'Название категории' %}" data-qa-cat-name maxlength="100">
+                <button type="button" class="accounts-drawer-cat-save" data-qa-cat-save>{% translate 'Создать' %}</button>
+                <button type="button" class="accounts-drawer-cat-cancel" data-qa-cat-cancel aria-label="{% translate 'Отмена' %}">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M6 6l12 12M6 18L18 6"/></svg>
+                </button>
+            </div>
+            <button type="submit" class="accounts-drawer-submit" data-qa-submit disabled>
+                <span data-qa-submit-idle>{% translate 'Добавить операцию' %}</span>
+                <span data-qa-submit-busy class="is-hidden-icon">{% translate 'Сохраняем…' %}</span>
+            </button>
+        </form>
     </div>
 
-    <div x-data :class="$store.accountsToast.error ? 'accounts-toast is-error' : 'accounts-toast'" :data-on="$store.accountsToast.visible ? '1' : '0'" aria-live="polite">
-        <span x-text="$store.accountsToast.message"></span>
+    <div class="accounts-toast" data-on="0" aria-live="polite">
+        <span data-toast-message></span>
     </div>
     {% endif %}
 </main>
@@ -193,6 +197,7 @@
 <script nonce="{{ request.csp_nonce }}">
     window.HLVM_QUICK_ADD_CONFIG = {
         createUrl: "{% url 'finances_create' %}",
+        quickCategoryUrl: "{% url 'finance_account:quick_category' %}",
         csrfToken: "{{ csrf_token }}",
         defaultAccount: "{% if drawer_accounts %}{{ drawer_accounts.0.id }}{% endif %}",
         incomeCategories: [

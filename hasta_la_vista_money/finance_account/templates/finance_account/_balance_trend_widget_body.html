@@ -16,9 +16,26 @@
     </div>
 
     <div class="accounts-trend-periods">
-        <button type="button" data-period="7d" class="period-btn{% if selected_period == '7d' %} on{% endif %}">{% translate '7 дней' %}</button>
-        <button type="button" data-period="30d" class="period-btn{% if selected_period == '30d' or not selected_period %} on{% endif %}">{% translate '30 дней' %}</button>
-        <button type="button" data-period="12m" class="period-btn{% if selected_period == '12m' %} on{% endif %}">{% translate '12 месяцев' %}</button>
+        {% with base_qs=request.GET.urlencode %}
+        <button type="button" data-period="7d"
+                class="period-btn{% if selected_period == '7d' %} on{% endif %}"
+                hx-get="{% url 'finance_account:list' %}?balance_trend_period=7d{% if request.GET.group_id %}&group_id={{ request.GET.group_id }}{% endif %}"
+                hx-target="#account-cards-block"
+                hx-swap="outerHTML"
+                hx-push-url="true">{% translate '7 дней' %}</button>
+        <button type="button" data-period="30d"
+                class="period-btn{% if selected_period == '30d' or not selected_period %} on{% endif %}"
+                hx-get="{% url 'finance_account:list' %}?balance_trend_period=30d{% if request.GET.group_id %}&group_id={{ request.GET.group_id }}{% endif %}"
+                hx-target="#account-cards-block"
+                hx-swap="outerHTML"
+                hx-push-url="true">{% translate '30 дней' %}</button>
+        <button type="button" data-period="12m"
+                class="period-btn{% if selected_period == '12m' %} on{% endif %}"
+                hx-get="{% url 'finance_account:list' %}?balance_trend_period=12m{% if request.GET.group_id %}&group_id={{ request.GET.group_id }}{% endif %}"
+                hx-target="#account-cards-block"
+                hx-swap="outerHTML"
+                hx-push-url="true">{% translate '12 месяцев' %}</button>
+        {% endwith %}
     </div>
 
     {% if balance_trend.has_data %}
@@ -49,5 +66,6 @@
     {% endif %}
 </div>
 
-<div data-balance-trend data-has-data="{{ balance_trend.has_data|lower }}" class="hidden">{"period": "{{ selected_period|default:'30d'|escapejs }}", "groupId": "{{ request.GET.group_id|default:'my'|escapejs }}"}</div>
-{% if balance_trend.has_data %}<div class="hidden" data-series>{{ balance_trend.series|safe }}</div>{% endif %}
+<div data-balance-trend class="hidden">{"period": "{{ selected_period|default:'30d'|escapejs }}", "groupId": "{{ request.GET.group_id|default:'my'|escapejs }}"}</div>
+<div data-has-data class="hidden">{{ balance_trend.has_data|lower }}</div>
+{% if balance_trend.has_data %}{{ balance_trend.series|json_script:"balance-trend-series" }}{% endif %}

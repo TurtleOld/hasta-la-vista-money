@@ -1,11 +1,12 @@
 /**
- * Accounts dashboard — Alpine.js (CSP build) components.
+ * Accounts dashboard — vanilla JS interactions.
  *
- * Alpine CSP build only allows identifier expressions in templates:
- * no method calls with arguments, no ternaries, no operators.
- * All conditional values are exposed as getters/computed properties.
+ * Alpine.js CSP build was unreliable for state binding here (methods on
+ * stores receive a non-reactive `this`, so writes never reach the proxy
+ * Alpine reads from in templates). To keep things working everywhere we
+ * drive the UI through plain DOM classes and a small module-scoped state
+ * object. Pages no longer need Alpine for this dashboard at all.
  */
-
 (function () {
   const STORAGE_KEY = 'hlvm.accounts.hideBalance';
 
@@ -31,269 +32,541 @@
 
   function formatLocalDateTime(date) {
     return (
-      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-      `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+      pad(date.getFullYear()) + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+      'T' + pad(date.getHours()) + ':' + pad(date.getMinutes())
     );
   }
 
-  document.addEventListener('alpine:init', () => {
-    /* ── Store: hide-balance ─────────────────────────────────── */
-    window.Alpine.store('accountsUi', {
-      hideBalance: safeGet(STORAGE_KEY, 'false') === 'true',
+  /* ──────────────────────────────────────────────────────────────
+   * Hide-balance toggle
+   * ────────────────────────────────────────────────────────────── */
+  const balanceState = {
+    hidden: safeGet(STORAGE_KEY, 'false') === 'true',
+  };
 
-      get balanceVisible() {
-        return !this.hideBalance;
-      },
-
-      init() {
-        this.applyClass();
-      },
-
-      toggle() {
-        this.hideBalance = !this.hideBalance;
-        safeSet(STORAGE_KEY, this.hideBalance ? 'true' : 'false');
-        this.applyClass();
-      },
-
-      applyClass() {
-        const root = document.querySelector('.accounts-app');
-        if (!root) return;
-        root.classList.toggle('is-hidden', this.hideBalance);
-      },
+  function applyHideBalance() {
+    const root = document.querySelector('.accounts-app');
+    if (!root) return;
+    root.classList.toggle('is-hidden', balanceState.hidden);
+    document.querySelectorAll('[data-eye-show-when-visible]').forEach((el) => {
+      el.classList.toggle('is-hidden-icon', balanceState.hidden);
     });
+    document.querySelectorAll('[data-eye-show-when-hidden]').forEach((el) => {
+      el.classList.toggle('is-hidden-icon', !balanceState.hidden);
+    });
+  }
 
-    /* ── Swipe card ──────────────────────────────────────────── */
-    window.Alpine.data('swipeCard', () => ({
-      x: 0,
-      startX: 0,
-      swiping: false,
-      reveal: 192,
+  function toggleHideBalance() {
+    balanceState.hidden = !balanceState.hidden;
+    safeSet(STORAGE_KEY, balanceState.hidden ? 'true' : 'false');
+    applyHideBalance();
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+   * Quick-add drawer
+   * ────────────────────────────────────────────────────────────── */
+  const drawerState = {
+    open: false,
+    submitting: false,
+    type: 'expense',
+    accountId: '',
+    categoryId: '',
+    amount: '',
+    incomeCategories: [],
+    expenseCategories: [],
+    createUrl: '',
+    quickCategoryUrl: '',
+    csrfToken: '',
+    catFormOpen: false,
+    catCreating: false,
+  };
+
+  function fab() { return document.querySelector('.accounts-fab'); }
+  function drawer() { return document.querySelector('.accounts-drawer'); }
+  function drawerAmountInput() { return document.querySelector('[data-qa-amount]'); }
+  function drawerAccountSelect() { return document.querySelector('[data-qa-account]'); }
+  function drawerCategorySelect() { return document.querySelector('[data-qa-category]'); }
+  function drawerSubmit() { return document.querySelector('[data-qa-submit]'); }
+  function drawerSubmitTxtIdle() { return document.querySelector('[data-qa-submit-idle]'); }
+  function drawerSubmitTxtBusy() { return document.querySelector('[data-qa-submit-busy]'); }
+  function drawerFabLabel() { return document.querySelector('[data-qa-fab-label]'); }
+  function drawerTabExpense() { return document.querySelector('[data-qa-tab="expense"]'); }
+  function drawerTabIncome() { return document.querySelector('[data-qa-tab="income"]'); }
+  function drawerCatForm() { return document.querySelector('[data-qa-cat-form]'); }
+  function drawerCatNameInput() { return document.querySelector('[data-qa-cat-name]'); }
+  function drawerCatSaveBtn() { return document.querySelector('[data-qa-cat-save]'); }
+
+  function applyDrawerState() {
+    const fabEl = fab();
+    const drawerEl = drawer();
+    if (fabEl) fabEl.setAttribute('data-open', drawerState.open ? '1' : '0');
+    if (drawerEl) drawerEl.setAttribute('data-open', drawerState.open ? '1' : '0');
+
+    const labelEl = drawerFabLabel();
+    if (labelEl) labelEl.classList.toggle('is-hidden-icon', drawerState.open);
+
+    const tabE = drawerTabExpense();
+    const tabI = drawerTabIncome();
+    if (tabE) tabE.classList.toggle('on', drawerState.type === 'expense');
+    if (tabI) tabI.classList.toggle('on', drawerState.type === 'income');
+
+    const submitEl = drawerSubmit();
+    if (submitEl) {
+      submitEl.disabled = (
+        drawerState.submitting ||
+        !drawerState.amount ||
+        !drawerState.accountId ||
+        !drawerState.categoryId
+      );
+    }
+    const idleTxt = drawerSubmitTxtIdle();
+    const busyTxt = drawerSubmitTxtBusy();
+    if (idleTxt) idleTxt.classList.toggle('is-hidden-icon', drawerState.submitting);
+    if (busyTxt) busyTxt.classList.toggle('is-hidden-icon', !drawerState.submitting);
+
+    const catForm = drawerCatForm();
+    if (catForm) catForm.classList.toggle('is-hidden-icon', !drawerState.catFormOpen);
+    const saveBtn = drawerCatSaveBtn();
+    if (saveBtn) saveBtn.disabled = drawerState.catCreating;
+  }
+
+  function openCatForm() {
+    drawerState.catFormOpen = true;
+    applyDrawerState();
+    const input = drawerCatNameInput();
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  function closeCatForm() {
+    drawerState.catFormOpen = false;
+    drawerState.catCreating = false;
+    applyDrawerState();
+  }
+
+  async function quickCreateCategory() {
+    if (drawerState.catCreating) return;
+    const input = drawerCatNameInput();
+    if (!input) return;
+    const name = (input.value || '').trim();
+    if (!name) {
+      showToast({ message: 'Введите название', error: true });
+      return;
+    }
+    drawerState.catCreating = true;
+    applyDrawerState();
+
+    const formData = new FormData();
+    formData.append('type', drawerState.type);
+    formData.append('name', name);
+
+    try {
+      const response = await fetch(drawerState.quickCategoryUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': drawerState.csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: formData,
+        credentials: 'same-origin',
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        showToast({ message: data.error || 'Ошибка', error: true });
+        drawerState.catCreating = false;
+        applyDrawerState();
+        return;
+      }
+      const entry = { id: data.id, name: data.name };
+      const list = drawerState.type === 'income'
+        ? drawerState.incomeCategories
+        : drawerState.expenseCategories;
+      const existing = list.find((c) => String(c.id) === String(entry.id));
+      if (!existing) list.unshift(entry);
+      drawerState.categoryId = String(entry.id);
+      drawerState.catFormOpen = false;
+      drawerState.catCreating = false;
+      syncDrawerCategorySelect();
+      showToast({ message: 'Категория «' + entry.name + '» добавлена' });
+    } catch (_err) {
+      showToast({ message: 'Сеть недоступна', error: true });
+      drawerState.catCreating = false;
+      applyDrawerState();
+    }
+  }
+
+  function syncDrawerCategorySelect() {
+    const select = drawerCategorySelect();
+    if (!select) return;
+    const list = drawerState.type === 'income'
+      ? drawerState.incomeCategories
+      : drawerState.expenseCategories;
+    select.innerHTML = '';
+    list.forEach((cat) => {
+      const opt = document.createElement('option');
+      opt.value = String(cat.id);
+      opt.textContent = cat.name;
+      select.appendChild(opt);
+    });
+    if (!list.length) {
+      drawerState.categoryId = '';
+    } else {
+      const match = list.find((c) => String(c.id) === String(drawerState.categoryId));
+      drawerState.categoryId = match ? String(match.id) : String(list[0].id);
+      select.value = drawerState.categoryId;
+    }
+    applyDrawerState();
+  }
+
+  function openDrawer() {
+    drawerState.open = true;
+    syncDrawerCategorySelect();
+    applyDrawerState();
+  }
+
+  function closeDrawer() {
+    drawerState.open = false;
+    applyDrawerState();
+  }
+
+  function setDrawerType(next) {
+    drawerState.type = next;
+    drawerState.catFormOpen = false;
+    drawerState.catCreating = false;
+    syncDrawerCategorySelect();
+  }
+
+  function setDrawerAmount(value) {
+    const cleaned = String(value || '').replace(/[^\d]/g, '');
+    drawerState.amount = cleaned;
+    const input = drawerAmountInput();
+    if (input && input.value !== cleaned) input.value = cleaned;
+    applyDrawerState();
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+   * Swipe cards (PointerEvents)
+   * ────────────────────────────────────────────────────────────── */
+  const SWIPE_REVEAL = 192;
+  const SWIPE_SLOP = 8;
+
+  function bindSwipeRow(content) {
+    if (!content || content.dataset.swipeBound === '1') return;
+    content.dataset.swipeBound = '1';
+
+    let state = {
       pointerId: null,
+      startX: 0,
+      startY: 0,
+      currentX: 0,
+      offset: 0,
+      swiping: false,
+      locked: false,
+    };
 
-      onDown(event) {
-        this.startX = event.clientX - this.x;
-        this.swiping = true;
-        this.pointerId = event.pointerId;
-        try {
-          event.currentTarget.setPointerCapture(event.pointerId);
-        } catch (_err) {
-          /* ignore */
-        }
-      },
+    function setTransform(x, animated) {
+      content.style.transform = 'translate3d(' + x + 'px, 0, 0)';
+      content.style.transition = animated
+        ? 'transform .25s cubic-bezier(.3,.8,.4,1)'
+        : 'none';
+    }
 
-      onMove(event) {
-        if (!this.swiping) return;
-        const next = event.clientX - this.startX;
-        if (next > 0) {
-          this.x = 0;
-          return;
-        }
-        if (next < -this.reveal) {
-          this.x = -this.reveal;
-          return;
-        }
-        this.x = next;
-      },
-
-      onUp(event) {
-        if (!this.swiping) return;
-        this.swiping = false;
-        try {
-          event.currentTarget.releasePointerCapture(this.pointerId);
-        } catch (_err) {
-          /* ignore */
-        }
-        this.pointerId = null;
-        if (this.x < -this.reveal / 2) {
-          this.x = -this.reveal;
-        } else {
-          this.x = 0;
-        }
-      },
-
-      close() {
-        this.x = 0;
-      },
-    }));
-
-    /* ── Quick Add drawer state (store — CSP-safe reactivity) ── */
-    window.Alpine.store('quickAdd', {
-      open: false,
-      submitting: false,
-      type: 'expense',
-      amount: '',
-      accountId: '',
-      categoryId: '',
-      incomeCategories: [],
-      expenseCategories: [],
-      createUrl: '',
-      csrfToken: '',
-
-      init() {
-        const config = window.HLVM_QUICK_ADD_CONFIG || {};
-        this.incomeCategories = config.incomeCategories || [];
-        this.expenseCategories = config.expenseCategories || [];
-        this.createUrl = config.createUrl || '';
-        this.csrfToken = config.csrfToken || '';
-        this.accountId = config.defaultAccount || '';
-        this.syncCategory();
-        console.log('[store.quickAdd] init done. open=', this.open);
-      },
-
-      toggle() {
-        console.log('[store.quickAdd] toggle BEFORE: open=', this.open);
-        this.open = !this.open;
-        console.log('[store.quickAdd] toggle AFTER: open=', this.open);
-        setTimeout(() => {
-          const fab = document.querySelector('.accounts-fab');
-          const drawer = document.querySelector('.accounts-drawer');
-          console.log('[store.quickAdd] post-tick: $store.open=', window.Alpine.store('quickAdd').open,
-                      'fab[data-open]=', fab && fab.getAttribute('data-open'),
-                      'drawer[data-open]=', drawer && drawer.getAttribute('data-open'));
-        }, 0);
-        if (this.open) {
-          this.syncCategory();
-        }
-      },
-
-      closeDrawer() {
-        this.open = false;
-      },
-
-      handleOutside() {
-        if (this.open) this.open = false;
-      },
-
-      setExpense() {
-        this.type = 'expense';
-        this.syncCategory();
-      },
-
-      setIncome() {
-        this.type = 'income';
-        this.syncCategory();
-      },
-
-      onAmountInput(event) {
-        const cleaned = (event.target.value || '').replace(/[^\d]/g, '');
-        this.amount = cleaned;
-        event.target.value = cleaned;
-      },
-
-      syncCategory() {
-        const list = this.type === 'income'
-          ? this.incomeCategories
-          : this.expenseCategories;
-        if (!list.length) {
-          this.categoryId = '';
-          return;
-        }
-        const match = list.find(
-          (c) => String(c.id) === String(this.categoryId),
-        );
-        if (!match) {
-          this.categoryId = String(list[0].id);
-        }
-      },
-
-      async submit(event) {
-        event.preventDefault();
-        if (this.submitting || !this.amount || !this.accountId || !this.categoryId) return;
-        this.submitting = true;
-
-        const formData = new FormData();
-        formData.append('operation_type', this.type);
-        formData.append('amount', this.amount);
-        formData.append('account', this.accountId);
-        formData.append('category', this.categoryId);
-        formData.append('date', formatLocalDateTime(new Date()));
-
-        try {
-          const response = await fetch(this.createUrl, {
-            method: 'POST',
-            headers: {
-              'X-CSRFToken': this.csrfToken,
-              'X-Requested-With': 'XMLHttpRequest',
-              'HX-Request': 'true',
-            },
-            body: formData,
-            credentials: 'same-origin',
-          });
-
-          if (response.ok || response.redirected) {
-            const sign = this.type === 'income' ? '+' : '−';
-            window.dispatchEvent(
-              new CustomEvent('accounts-toast', {
-                detail: { message: `${sign}${this.amount} ₽` },
-              }),
-            );
-            this.amount = '';
-            this.open = false;
-            window.setTimeout(() => window.location.reload(), 600);
-          } else {
-            window.dispatchEvent(
-              new CustomEvent('accounts-toast', {
-                detail: { message: 'Ошибка при сохранении', error: true },
-              }),
-            );
-          }
-        } catch (_err) {
-          window.dispatchEvent(
-            new CustomEvent('accounts-toast', {
-              detail: { message: 'Сеть недоступна', error: true },
-            }),
-          );
-        } finally {
-          this.submitting = false;
-        }
-      },
+    content.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'touch' && event.pointerType !== 'pen') {
+        if (event.button !== 0) return;
+      }
+      state.pointerId = event.pointerId;
+      state.startX = event.clientX;
+      state.startY = event.clientY;
+      state.currentX = event.clientX;
+      state.locked = false;
+      state.swiping = false;
     });
 
-    /* ── Toast (store — CSP-safe reactivity) ────────────────── */
-    window.Alpine.store('accountsToast', {
-      message: '',
-      visible: false,
-      error: false,
-      timer: null,
+    content.addEventListener('pointermove', (event) => {
+      if (state.pointerId !== event.pointerId) return;
+      const dx = event.clientX - state.startX;
+      const dy = event.clientY - state.startY;
+      if (!state.locked) {
+        if (Math.abs(dx) < SWIPE_SLOP && Math.abs(dy) < SWIPE_SLOP) return;
+        if (Math.abs(dy) > Math.abs(dx)) {
+          /* Vertical scroll — cancel swipe gesture. */
+          state.pointerId = null;
+          return;
+        }
+        state.locked = true;
+        state.swiping = true;
+        content.classList.add('swiping');
+        try { content.setPointerCapture(event.pointerId); } catch (_e) { /* ignore */ }
+      }
+      let next = state.offset + dx;
+      if (next > 0) next = 0;
+      if (next < -SWIPE_REVEAL) next = -SWIPE_REVEAL;
+      state.currentX = next;
+      setTransform(next, false);
+      event.preventDefault();
+    }, { passive: false });
 
-      init() {
-        window.addEventListener('accounts-toast', (event) => {
-          this.show(event.detail || {});
+    function release(event) {
+      if (state.pointerId !== event.pointerId) return;
+      try { content.releasePointerCapture(event.pointerId); } catch (_e) { /* ignore */ }
+      state.pointerId = null;
+      if (!state.swiping) return;
+      content.classList.remove('swiping');
+      state.swiping = false;
+      const snap = state.currentX < -SWIPE_REVEAL / 2 ? -SWIPE_REVEAL : 0;
+      state.offset = snap;
+      setTransform(snap, true);
+    }
+
+    content.addEventListener('pointerup', release);
+    content.addEventListener('pointercancel', release);
+
+    /* Click on an action closes the row. */
+    const row = content.closest('.accounts-row');
+    if (row) {
+      row.querySelectorAll('.accounts-row-action').forEach((action) => {
+        action.addEventListener('click', () => {
+          state.offset = 0;
+          setTransform(0, true);
         });
-      },
+      });
+    }
+  }
 
-      show(detail) {
-        this.message = detail.message || '';
-        this.error = Boolean(detail.error);
-        this.visible = true;
-        if (this.timer) window.clearTimeout(this.timer);
-        this.timer = window.setTimeout(() => {
-          this.visible = false;
-        }, 2400);
-      },
+  function initSwipeCards() {
+    document.querySelectorAll('.accounts-row-content').forEach(bindSwipeRow);
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+   * Toast
+   * ────────────────────────────────────────────────────────────── */
+  const toastState = { timer: null };
+
+  function toastEl() { return document.querySelector('.accounts-toast'); }
+
+  function showToast(detail) {
+    const el = toastEl();
+    if (!el) return;
+    el.querySelector('[data-toast-message]').textContent = detail.message || '';
+    el.classList.toggle('is-error', Boolean(detail.error));
+    el.setAttribute('data-on', '1');
+    if (toastState.timer) window.clearTimeout(toastState.timer);
+    toastState.timer = window.setTimeout(() => {
+      el.setAttribute('data-on', '0');
+    }, 2400);
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+   * Submit
+   * ────────────────────────────────────────────────────────────── */
+  async function submitDrawer(event) {
+    event.preventDefault();
+    if (
+      drawerState.submitting ||
+      !drawerState.amount ||
+      !drawerState.accountId ||
+      !drawerState.categoryId
+    ) return;
+    drawerState.submitting = true;
+    applyDrawerState();
+
+    const formData = new FormData();
+    formData.append('operation_type', drawerState.type);
+    formData.append('amount', drawerState.amount);
+    formData.append('account', drawerState.accountId);
+    formData.append('category', drawerState.categoryId);
+    formData.append('date', formatLocalDateTime(new Date()));
+
+    try {
+      const response = await fetch(drawerState.createUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': drawerState.csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+          'HX-Request': 'true',
+        },
+        body: formData,
+        credentials: 'same-origin',
+      });
+
+      if (response.ok || response.redirected) {
+        const sign = drawerState.type === 'income' ? '+' : '−';
+        showToast({ message: sign + drawerState.amount + ' ₽' });
+        drawerState.amount = '';
+        const input = drawerAmountInput();
+        if (input) input.value = '';
+        drawerState.open = false;
+        window.setTimeout(() => window.location.reload(), 600);
+      } else {
+        showToast({ message: 'Ошибка при сохранении', error: true });
+      }
+    } catch (_err) {
+      showToast({ message: 'Сеть недоступна', error: true });
+    } finally {
+      drawerState.submitting = false;
+      applyDrawerState();
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+   * Init
+   * ────────────────────────────────────────────────────────────── */
+  function init() {
+    /* Hide-balance */
+    applyHideBalance();
+
+    /* Drawer config */
+    const config = window.HLVM_QUICK_ADD_CONFIG || {};
+    drawerState.incomeCategories = config.incomeCategories || [];
+    drawerState.expenseCategories = config.expenseCategories || [];
+    drawerState.createUrl = config.createUrl || '';
+    drawerState.quickCategoryUrl = config.quickCategoryUrl || '';
+    drawerState.csrfToken = config.csrfToken || '';
+    drawerState.accountId = config.defaultAccount || '';
+
+    const accountSelect = drawerAccountSelect();
+    if (accountSelect) {
+      accountSelect.value = drawerState.accountId;
+      accountSelect.addEventListener('change', () => {
+        drawerState.accountId = accountSelect.value;
+        applyDrawerState();
+      });
+    }
+
+    syncDrawerCategorySelect();
+
+    const categorySelect = drawerCategorySelect();
+    if (categorySelect) {
+      categorySelect.addEventListener('change', () => {
+        drawerState.categoryId = categorySelect.value;
+        applyDrawerState();
+      });
+    }
+
+    const amountInput = drawerAmountInput();
+    if (amountInput) {
+      amountInput.addEventListener('input', (event) => setDrawerAmount(event.target.value));
+    }
+
+    const form = document.querySelector('[data-qa-form]');
+    if (form) form.addEventListener('submit', submitDrawer);
+
+    const catName = drawerCatNameInput();
+    if (catName) {
+      catName.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          quickCreateCategory();
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          closeCatForm();
+        }
+      });
+    }
+
+    applyDrawerState();
+
+    /* Listen for global accounts-toast events (still used elsewhere). */
+    window.addEventListener('accounts-toast', (event) => {
+      showToast(event.detail || {});
     });
 
-    /* ── Re-init balance-trend chart + hide-balance class after HTMX swap ─ */
+    /* HTMX hooks. */
+    document.addEventListener('htmx:beforeSwap', (event) => {
+      /* Destroy the chart bound to the soon-to-be-removed canvas before
+         HTMX detaches it; otherwise Chart.js keeps a stale reference and
+         the next render throws "Canvas is already in use". */
+      if (!window.Chart) return;
+      const canvas = document.getElementById('balance-trend-chart');
+      if (!canvas) return;
+      const target = event.detail && event.detail.target;
+      if (!target) return;
+      const willReplace = (
+        target === canvas ||
+        target.contains(canvas) ||
+        target.id === 'balance-trend-widget'
+      );
+      if (willReplace) {
+        const existing = window.Chart.getChart(canvas);
+        if (existing) existing.destroy();
+      }
+    });
+
     document.addEventListener('htmx:afterSwap', () => {
       if (window.BalanceTrendWidget && typeof window.BalanceTrendWidget.init === 'function') {
         window.BalanceTrendWidget.init();
       }
-      const store = window.Alpine && window.Alpine.store('accountsUi');
-      if (store && typeof store.applyClass === 'function') {
-        store.applyClass();
+      applyHideBalance();
+      initSwipeCards();
+    });
+
+    /* Touch swipe for account rows (PointerEvents). */
+    initSwipeCards();
+
+    /* Delegated clicks for FAB, eye, drawer outside, tabs, group chips. */
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const eyeBtn = target.closest('.accounts-eye');
+      if (eyeBtn) {
+        toggleHideBalance();
+        return;
+      }
+
+      const fabBtn = target.closest('.accounts-fab');
+      if (fabBtn) {
+        if (drawerState.open) closeDrawer();
+        else openDrawer();
+        return;
+      }
+
+      const tabBtn = target.closest('[data-qa-tab]');
+      if (tabBtn) {
+        setDrawerType(tabBtn.getAttribute('data-qa-tab'));
+        return;
+      }
+
+      if (target.closest('[data-qa-cat-add]')) {
+        openCatForm();
+        return;
+      }
+      if (target.closest('[data-qa-cat-cancel]')) {
+        closeCatForm();
+        return;
+      }
+      if (target.closest('[data-qa-cat-save]')) {
+        quickCreateCategory();
+        return;
+      }
+
+      const chip = target.closest('[data-group-chip]');
+      if (chip) {
+        const container = chip.closest('.accounts-group-chips');
+        if (container) {
+          container.querySelectorAll('[data-group-chip]').forEach((btn) => {
+            btn.classList.toggle('is-active', btn === chip);
+          });
+        }
+        return;
+      }
+
+      /* Click outside drawer closes it (when open). */
+      if (drawerState.open) {
+        const drawerEl = drawer();
+        if (drawerEl && !drawerEl.contains(target) && !target.closest('.accounts-fab')) {
+          closeDrawer();
+        }
       }
     });
+  }
 
-    /* ── Group chips: toggle is-active on click (HTMX swaps content, not chips) ─ */
-    document.addEventListener('click', (event) => {
-      const chip = event.target.closest('[data-group-chip]');
-      if (!chip) return;
-      const container = chip.closest('.accounts-group-chips');
-      if (!container) return;
-      container.querySelectorAll('[data-group-chip]').forEach((btn) => {
-        btn.classList.toggle('is-active', btn === chip);
-      });
-    });
-
-  });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

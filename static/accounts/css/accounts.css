@@ -334,6 +334,10 @@
   min-width: 0;
 }
 
+.is-hidden-icon {
+  display: none !important;
+}
+
 .accounts-row-delete-form {
   display: contents;
 }
@@ -1055,9 +1059,11 @@
 .accounts-fab .plus {
   font-size: 1.375rem;
   line-height: 1;
-  margin-top: -2px;
   font-weight: 400;
   transition: transform 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .accounts-fab:hover {
@@ -1066,6 +1072,13 @@
 
 .accounts-fab:active {
   transform: translateY(0);
+}
+
+.accounts-fab[data-open='1'] {
+  width: 3.25rem;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
 }
 
 .accounts-fab[data-open='1'] .plus {
@@ -1148,6 +1161,13 @@
   padding: 0.875rem 1.125rem 1.125rem;
   display: grid;
   gap: 0.625rem;
+  box-sizing: border-box;
+}
+
+.accounts-drawer-body *,
+.accounts-drawer-body *::before,
+.accounts-drawer-body *::after {
+  box-sizing: border-box;
 }
 
 .accounts-drawer-amt {
@@ -1155,33 +1175,47 @@
   align-items: baseline;
   gap: 0.375rem;
   padding: 0.625rem 0.75rem;
-  border: 1px solid var(--acc-border);
-  background: var(--acc-bg);
-  border-radius: 0.75rem;
+  border: 1px solid var(--acc-border) !important;
+  background: var(--acc-bg) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: none !important;
+  width: 100%;
 }
 
-.accounts-drawer-amt input {
-  flex: 1;
+.accounts-drawer-amt input,
+.accounts-drawer-amt input[type='text'] {
+  flex: 1 1 auto;
   min-width: 0;
-  background: transparent;
-  border: 0;
-  outline: none;
+  width: auto !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
   color: var(--acc-text);
   font-family: var(--font-family-mono);
   font-size: 1.5rem;
   font-weight: 500;
   letter-spacing: -0.02em;
+  padding: 0 !important;
+  margin: 0;
+  border-radius: 0 !important;
+}
+
+.accounts-drawer-amt input:focus {
+  --tw-ring-color: transparent !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
 }
 
 .accounts-drawer-amt .cur {
   font-family: var(--font-family-mono);
   font-size: 1rem;
   color: var(--acc-muted);
+  flex: 0 0 auto;
 }
 
 .accounts-drawer-field {
   display: grid;
-  grid-template-columns: 5.5rem 1fr;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
   align-items: center;
   gap: 0.625rem;
   padding: 0.5rem 0.75rem;
@@ -1189,26 +1223,137 @@
   border: 1px solid var(--acc-border);
   border-radius: 0.625rem;
   font-size: 0.8125rem;
+  width: 100%;
 }
 
 .accounts-drawer-field label {
   color: var(--acc-muted);
+  margin: 0;
 }
 
 .accounts-drawer-field select {
-  background: transparent;
-  border: 0;
-  outline: none;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
   color: var(--acc-text);
   font: inherit;
   text-align: right;
   appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   cursor: pointer;
-  padding: 0.25rem 0;
+  padding: 0.25rem 0 !important;
+  width: 100%;
+  min-width: 0;
+  border-radius: 0 !important;
+}
+
+.accounts-drawer-field select:focus {
+  --tw-ring-color: transparent !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
 }
 
 .accounts-drawer-field select option {
   background: var(--acc-surface);
+  color: var(--acc-text);
+}
+
+.accounts-drawer-field-category {
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+}
+
+.accounts-drawer-cat-add {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--acc-muted);
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.375rem;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.accounts-drawer-cat-add:hover {
+  background: var(--acc-surface-2);
+  color: var(--acc-text);
+}
+
+.accounts-drawer-cat-form {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--acc-bg);
+  border: 1px solid var(--acc-border);
+  border-radius: 0.625rem;
+}
+
+.accounts-drawer-cat-form input[type='text'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--acc-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0 !important;
+  margin: 0;
+  border-radius: 0 !important;
+}
+
+.accounts-drawer-cat-form input[type='text']:focus {
+  --tw-ring-color: transparent !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.accounts-drawer-cat-save {
+  appearance: none;
+  border: 0;
+  background: var(--acc-accent);
+  color: #052e1d;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.35rem 0.625rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.accounts-drawer-cat-save:hover {
+  filter: brightness(1.05);
+}
+
+.accounts-drawer-cat-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.accounts-drawer-cat-cancel {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--acc-muted);
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.375rem;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.accounts-drawer-cat-cancel:hover {
+  background: var(--acc-surface-2);
   color: var(--acc-text);
 }
 
