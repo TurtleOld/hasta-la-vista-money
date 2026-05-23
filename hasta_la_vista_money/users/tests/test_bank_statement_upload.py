@@ -15,9 +15,8 @@ from django.urls import reverse
 from django.utils import timezone
 from faker import Faker
 
-from hasta_la_vista_money.expense.models import ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.forms import BankStatementUploadForm
 from hasta_la_vista_money.users.models import BankStatementUpload, User
 from hasta_la_vista_money.users.services.bank_statement import (
@@ -25,8 +24,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParser,
     _create_parser,
     _GenericBankParser,
-    _get_or_create_expense_category,
-    _get_or_create_income_category,
+    _get_or_create_category,
     _RaiffeisenBankParser,
     _SberbankParser,
     process_bank_statement,
@@ -485,30 +483,32 @@ class TestProcessBankStatementTask(TestCase):
         self,
     ) -> None:
         """Test that categories can be created from transactions."""
-        # Manually create categories as the task would
-        income_category, created = IncomeCategory.objects.get_or_create(
+        income_category, created = Category.objects.get_or_create(
             user=self.user,
             name='Зарплата Январь',
+            type=TransactionType.INCOME,
         )
         self.assertTrue(created or income_category.pk is not None)
 
-        expense_category, created = ExpenseCategory.objects.get_or_create(
+        expense_category, created = Category.objects.get_or_create(
             user=self.user,
             name='Продукты Магнит',
+            type=TransactionType.EXPENSE,
         )
         self.assertTrue(created or expense_category.pk is not None)
 
-        # Verify categories exist
         self.assertTrue(
-            IncomeCategory.objects.filter(
+            Category.objects.filter(
                 user=self.user,
                 name='Зарплата Январь',
+                type=TransactionType.INCOME,
             ).exists(),
         )
         self.assertTrue(
-            ExpenseCategory.objects.filter(
+            Category.objects.filter(
                 user=self.user,
                 name='Продукты Магнит',
+                type=TransactionType.EXPENSE,
             ).exists(),
         )
 
@@ -1025,41 +1025,45 @@ class TestBankStatementIntegration(TestCase):
 
     def test_category_creation_for_transaction(self) -> None:
         """Test that categories are created for transactions."""
-        # Create expense category
-        expense_cat = _get_or_create_expense_category(
+        expense_cat = _get_or_create_category(
             self.user,
             'Тестовые расходы',
+            TransactionType.EXPENSE,
         )
         self.assertEqual(expense_cat.user, self.user)
         self.assertEqual(expense_cat.name, 'Тестовые расходы')
 
-        # Create income category
-        income_cat = _get_or_create_income_category(
+        income_cat = _get_or_create_category(
             self.user,
             'Тестовый доход',
+            TransactionType.INCOME,
         )
         self.assertEqual(income_cat.user, self.user)
         self.assertEqual(income_cat.name, 'Тестовый доход')
 
-        # Verify categories exist
         self.assertTrue(
-            ExpenseCategory.objects.filter(
+            Category.objects.filter(
                 user=self.user,
                 name='Тестовые расходы',
+                type=TransactionType.EXPENSE,
             ).exists(),
         )
         self.assertTrue(
-            IncomeCategory.objects.filter(
+            Category.objects.filter(
                 user=self.user,
                 name='Тестовый доход',
+                type=TransactionType.INCOME,
             ).exists(),
         )
 
     def test_category_name_truncation(self) -> None:
         """Test that category names are truncated to 250 characters."""
-        # Create a very long category name
         long_name = 'A' * 300
-        category = _get_or_create_expense_category(self.user, long_name)
+        category = _get_or_create_category(
+            self.user,
+            long_name,
+            TransactionType.EXPENSE,
+        )
 
         # Verify it's truncated to 250
         self.assertEqual(len(category.name), 250)
@@ -1770,13 +1774,15 @@ class TestBankStatementProcessIntegration(TestCase):
     ) -> None:
         """Test that existing categories are reused."""
         # Create existing categories
-        IncomeCategory.objects.create(
+        Category.objects.create(
             user=self.user,
             name='Зарплата Январь',
+            type=TransactionType.INCOME,
         )
-        ExpenseCategory.objects.create(
+        Category.objects.create(
             user=self.user,
             name='Продукты Магнит',
+            type=TransactionType.EXPENSE,
         )
 
         mock_df = pd.DataFrame(
@@ -1811,13 +1817,15 @@ class TestBankStatementProcessIntegration(TestCase):
             )
 
             # Verify existing categories were used (not created again)
-            income_count = IncomeCategory.objects.filter(
+            income_count = Category.objects.filter(
                 user=self.user,
                 name='Зарплата Январь',
+                type=TransactionType.INCOME,
             ).count()
-            expense_count = ExpenseCategory.objects.filter(
+            expense_count = Category.objects.filter(
                 user=self.user,
                 name='Продукты Магнит',
+                type=TransactionType.EXPENSE,
             ).count()
 
             self.assertEqual(income_count, 1)
@@ -1970,25 +1978,35 @@ class TestBankStatementEdgeCases(TestCase):
         """Test creating category with very long name."""
         long_name = 'A' * 300
 
-        income_cat = _get_or_create_income_category(self.user, long_name)
+        income_cat = _get_or_create_category(
+            self.user,
+            long_name,
+            TransactionType.INCOME,
+        )
         self.assertEqual(len(income_cat.name), 250)
 
-        expense_cat = _get_or_create_expense_category(self.user, long_name)
+        expense_cat = _get_or_create_category(
+            self.user,
+            long_name,
+            TransactionType.EXPENSE,
+        )
         self.assertEqual(len(expense_cat.name), 250)
 
     def test_get_or_create_category_with_special_chars(self) -> None:
         """Test creating category with special characters."""
         special_name = 'Категория; с, спец. символами!'
 
-        income_cat = _get_or_create_income_category(
+        income_cat = _get_or_create_category(
             self.user,
             special_name,
+            TransactionType.INCOME,
         )
         self.assertEqual(income_cat.name, special_name)
 
-        expense_cat = _get_or_create_expense_category(
+        expense_cat = _get_or_create_category(
             self.user,
             special_name,
+            TransactionType.EXPENSE,
         )
         self.assertEqual(expense_cat.name, special_name)
 

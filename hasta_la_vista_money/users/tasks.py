@@ -6,9 +6,12 @@ from celery import shared_task
 from django.db import transaction
 from django.db.models import F
 
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import BankStatementUpload
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
@@ -148,40 +151,32 @@ def _process_transactions(
             abs_amount = abs(amount)
 
             if amount > 0:
-                category, _ = IncomeCategory.objects.get_or_create(
-                    user=upload.user,
-                    name=description[:250],
-                )
-                _, created = Income.objects.get_or_create(
-                    user=upload.user,
-                    account=upload.account,
-                    category=category,
-                    amount=abs_amount,
-                    date=trans_date,
-                )
-                if created:
-                    # Update account balance only for new records
-                    Account.objects.filter(pk=upload.account.pk).update(
-                        balance=F('balance') + abs_amount,
-                    )
-                    income_count += 1
+                type_value = TransactionType.INCOME
+                balance_change = abs_amount
             else:
-                category, _ = ExpenseCategory.objects.get_or_create(
-                    user=upload.user,
-                    name=description[:250],
+                type_value = TransactionType.EXPENSE
+                balance_change = -abs_amount
+
+            category, _ = Category.objects.get_or_create(
+                user=upload.user,
+                name=description[:250],
+                type=type_value,
+            )
+            _, created = Transaction.objects.get_or_create(
+                user=upload.user,
+                account=upload.account,
+                category=category,
+                type=type_value,
+                amount=abs_amount,
+                date=trans_date,
+            )
+            if created:
+                Account.objects.filter(pk=upload.account.pk).update(
+                    balance=F('balance') + balance_change,
                 )
-                _, created = Expense.objects.get_or_create(
-                    user=upload.user,
-                    account=upload.account,
-                    category=category,
-                    amount=abs_amount,
-                    date=trans_date,
-                )
-                if created:
-                    # Update account balance only for new records
-                    Account.objects.filter(pk=upload.account.pk).update(
-                        balance=F('balance') - abs_amount,
-                    )
+                if type_value == TransactionType.INCOME:
+                    income_count += 1
+                else:
                     expense_count += 1
 
         upload.processed_transactions = idx + 1

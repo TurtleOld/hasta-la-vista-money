@@ -23,8 +23,6 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
-from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.expense.repositories import ExpenseRepository
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -34,11 +32,14 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
-from hasta_la_vista_money.income.models import Income
-from hasta_la_vista_money.income.repositories import IncomeRepository
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.receipts.repositories import ReceiptRepository
 from hasta_la_vista_money.services.views import collect_info_receipt
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
+from hasta_la_vista_money.transactions.repositories import TransactionRepository
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     get_dashboard_summary_cache_key,
@@ -282,75 +283,48 @@ def _month_bounds_for_offset(today: date, offset: int) -> tuple[date, date]:
 
 
 def _sum_amount_for_period(
-    model: type[Expense] | type[Income],
+    type_value: str,
     user: User,
     start: date,
     end: date,
     container: 'ApplicationContainer',
-    expense_repository: ExpenseRepository | None = None,
-    income_repository: IncomeRepository | None = None,
+    transaction_repository: TransactionRepository | None = None,
 ) -> float:
     start_dt = timezone.make_aware(datetime.combine(start, time.min))
     end_dt = timezone.make_aware(datetime.combine(end, time.max))
 
-    if model == Expense:
-        if expense_repository is None:
-            expense_repository = container.expense.expense_repository()
-        if expense_repository is None:
-            raise ValueError('expense_repository is None')
-        qs = expense_repository.filter_by_user_and_date_range(
-            user,
-            start_dt,
-            end_dt,
-        )
-    elif model == Income:
-        if income_repository is None:
-            income_repository = container.income.income_repository()
-        if income_repository is None:
-            raise ValueError('income_repository is None')
-        qs = income_repository.filter_by_user_and_date_range(
-            user,
-            start_dt,
-            end_dt,
-        )
-    else:
-        error_msg = f'Unsupported model type: {model}'
-        raise ValueError(error_msg)
+    if transaction_repository is None:
+        transaction_repository = container.transactions.transaction_repository()
+    if transaction_repository is None:
+        raise ValueError('transaction_repository is None')
 
+    qs = transaction_repository.filter_by_user_and_date_range(
+        user,
+        start_dt,
+        end_dt,
+        type_value=type_value,
+    )
     return float(qs.aggregate(total=Sum('amount'))['total'] or 0)
 
 
 def _top_categories_qs(
-    model: type[Expense] | type[Income],
+    type_value: str,
     user: User,
     year_start: date,
     container: 'ApplicationContainer',
-    expense_repository: ExpenseRepository | None = None,
-    income_repository: IncomeRepository | None = None,
+    transaction_repository: TransactionRepository | None = None,
 ) -> Any:
     year_start_dt = timezone.make_aware(datetime.combine(year_start, time.min))
-    if model == Expense:
-        if expense_repository is None:
-            expense_repository = container.expense.expense_repository()
-        if expense_repository is None:
-            raise ValueError('expense_repository is None')
-        return expense_repository.get_top_categories(
-            user,
-            year_start_dt,
-            constants.TOP_CATEGORIES_LIMIT,
-        )
-    if model == Income:
-        if income_repository is None:
-            income_repository = container.income.income_repository()
-        if income_repository is None:
-            raise ValueError('income_repository is None')
-        return income_repository.get_top_categories(
-            user,
-            year_start_dt,
-            constants.TOP_CATEGORIES_LIMIT,
-        )
-    error_msg = f'Unsupported model type: {model}'
-    raise ValueError(error_msg)
+    if transaction_repository is None:
+        transaction_repository = container.transactions.transaction_repository()
+    if transaction_repository is None:
+        raise ValueError('transaction_repository is None')
+    return transaction_repository.get_top_categories(
+        user,
+        year_start_dt,
+        type_value=type_value,
+        limit=constants.TOP_CATEGORIES_LIMIT,
+    )
 
 
 def _dates_amounts(
@@ -366,20 +340,20 @@ def _dates_amounts(
 def _build_chart(
     user: User,
     container: 'ApplicationContainer',
-    expense_repository: ExpenseRepository | None = None,
-    income_repository: IncomeRepository | None = None,
+    transaction_repository: TransactionRepository | None = None,
 ) -> ChartDataDict:
-    if expense_repository is None:
-        expense_repository = container.expense.expense_repository()
-    if income_repository is None:
-        income_repository = container.income.income_repository()
-
-    if expense_repository is None:
-        raise ValueError('expense_repository is None')
-    if income_repository is None:
-        raise ValueError('income_repository is None')
-    exp_ds = expense_repository.get_aggregated_by_date(user)
-    inc_ds = income_repository.get_aggregated_by_date(user)
+    if transaction_repository is None:
+        transaction_repository = container.transactions.transaction_repository()
+    if transaction_repository is None:
+        raise ValueError('transaction_repository is None')
+    exp_ds = transaction_repository.get_aggregated_by_date(
+        user,
+        type_value=TransactionType.EXPENSE,
+    )
+    inc_ds = transaction_repository.get_aggregated_by_date(
+        user,
+        type_value=TransactionType.INCOME,
+    )
 
     exp_dates, exp_amts = _dates_amounts(exp_ds)
     inc_dates, inc_amts = _dates_amounts(inc_ds)
@@ -421,8 +395,7 @@ def get_dashboard_summary_statistics(
     if cached_stats is not None:
         return cached_stats  # type: ignore[no-any-return]
 
-    expense_repository = container.expense.expense_repository()
-    income_repository = container.income.income_repository()
+    transaction_repository = container.transactions.transaction_repository()
 
     now = timezone.now()
     today = now.date()
@@ -433,17 +406,15 @@ def get_dashboard_summary_statistics(
             user,
             today,
             container,
-            expense_repository,
-            income_repository,
+            transaction_repository,
         ),
         'top_expense_categories': list(
             _top_categories_qs(
-                Expense,
+                TransactionType.EXPENSE,
                 user,
                 year_start,
                 container,
-                expense_repository,
-                income_repository,
+                transaction_repository,
             ),
         ),
     }
@@ -485,8 +456,7 @@ def _six_months_data(
     user: User,
     today: date,
     container: 'ApplicationContainer',
-    expense_repository: ExpenseRepository | None = None,
-    income_repository: IncomeRepository | None = None,
+    transaction_repository: TransactionRepository | None = None,
 ) -> list[MonthDataDict]:
     out = []
 
@@ -498,13 +468,13 @@ def _six_months_data(
         period_start = month_ranges[-1][0]
         period_end = month_ranges[0][1]
         expense_by_month = _aggregate_amounts_by_month(
-            Expense,
+            TransactionType.EXPENSE,
             user,
             period_start,
             period_end,
         )
         income_by_month = _aggregate_amounts_by_month(
-            Income,
+            TransactionType.INCOME,
             user,
             period_start,
             period_end,
@@ -534,22 +504,20 @@ def _six_months_data(
         period_end_date: date = first_month_start_date - timedelta(days=1)
 
         total_income_before = _sum_amount_for_period(
-            Income,
+            TransactionType.INCOME,
             user,
             date(2000, 1, 1),
             period_end_date,
             container,
-            expense_repository=expense_repository,
-            income_repository=income_repository,
+            transaction_repository=transaction_repository,
         )
         total_expense_before = _sum_amount_for_period(
-            Expense,
+            TransactionType.EXPENSE,
             user,
             date(2000, 1, 1),
             period_end_date,
             container,
-            expense_repository=expense_repository,
-            income_repository=income_repository,
+            transaction_repository=transaction_repository,
         )
 
         running_balance = total_income_before - total_expense_before
@@ -616,18 +584,19 @@ def _calculate_card_date_range(
 
 
 def _aggregate_amounts_by_month(
-    model: type[Expense] | type[Income],
+    type_value: str,
     user: User,
     start: date,
     end: date,
 ) -> dict[date, float]:
-    """Aggregate amounts by month for the given period."""
+    """Aggregate transaction amounts by month for the given period."""
     start_dt = timezone.make_aware(datetime.combine(start, time.min))
     end_dt = timezone.make_aware(datetime.combine(end, time.max))
 
     monthly_totals = (
-        model.objects.filter(
+        Transaction.objects.filter(
             user=user,
+            type=type_value,
             date__range=(start_dt, end_dt),
         )
         .annotate(month=TruncMonth('date'))
@@ -644,7 +613,7 @@ def _aggregate_amounts_by_month(
 
 
 def _build_expenses_receipts_dicts(
-    expenses_by_month: QuerySet[Expense, dict[str, Any]],
+    expenses_by_month: QuerySet[Transaction, dict[str, Any]],
     receipts_by_month: QuerySet[Receipt, dict[str, Any]],
 ) -> tuple[dict[date, Decimal], dict[date, dict[int, Decimal]]]:
     """Build expenses and receipts dictionaries by month.
@@ -813,30 +782,19 @@ def _card_months_block(
     card: Account,
     today_month: date,
     account_service: AccountServiceProtocol,
-    expense_repository: ExpenseRepository,
+    transaction_repository: TransactionRepository,
     receipt_repository: ReceiptRepository,
 ) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
-    """Build months data block for card.
-
-    Args:
-        card: Account (credit card) instance.
-        today_month: Current month date.
-        account_service: Account service for payment schedule calculations.
-        expense_repository: Expense repository for querying expenses.
-        receipt_repository: Receipt repository for querying receipts.
-
-    Returns:
-        Tuple of (months, history) where months is list of monthly card data
-        and history is list of card history entries.
-    """
+    """Build months data block for card."""
     now = timezone.now()
     first_month_start, last_month_end = _calculate_card_date_range(today_month)
 
-    expenses_by_month = expense_repository.filter_by_user_and_account(
+    expenses_by_month = transaction_repository.aggregate_by_month(
         user=card.user,
         account=card,
         start_date=first_month_start,
         end_date=last_month_end,
+        type_value=TransactionType.EXPENSE,
     )
 
     receipts_by_month = receipt_repository.filter_by_account_and_date_range(
@@ -933,8 +891,7 @@ def _build_payment_schedule(
 def _credit_cards_block(
     accounts: QuerySet[Account],
     account_service: AccountServiceProtocol,
-    income_repository: IncomeRepository,
-    expense_repository: ExpenseRepository,
+    transaction_repository: TransactionRepository,
     receipt_repository: ReceiptRepository,
 ) -> list[CreditCardDataDict]:
     out: list[CreditCardDataDict] = []
@@ -950,12 +907,15 @@ def _credit_cards_block(
             card,
             today_month,
             account_service=account_service,
-            expense_repository=expense_repository,
+            transaction_repository=transaction_repository,
             receipt_repository=receipt_repository,
         )
 
         payments_raw = list(
-            income_repository.filter_by_account(card).values('amount', 'date'),
+            transaction_repository.filter_by_account(
+                card,
+                type_value=TransactionType.INCOME,
+            ).values('amount', 'date'),
         )
         payments: list[PaymentItemDict] = [
             {'amount': Decimal(str(p['amount'])), 'date': p['date']}
@@ -1023,8 +983,7 @@ def get_user_detailed_statistics(
     if cached_stats is not None:
         return cached_stats  # type: ignore[no-any-return]
 
-    expense_repository = container.expense.expense_repository()
-    income_repository = container.income.income_repository()
+    transaction_repository = container.transactions.transaction_repository()
     receipt_repository = container.receipts.receipt_repository()
     account_repository = container.finance_account.account_repository()
     transfer_money_log_repository = (
@@ -1038,25 +997,22 @@ def get_user_detailed_statistics(
         user,
         today,
         container,
-        expense_repository,
-        income_repository,
+        transaction_repository,
     )
     year_start = today.replace(month=1, day=1)
     top_expense_categories = _top_categories_qs(
-        Expense,
+        TransactionType.EXPENSE,
         user,
         year_start,
         container,
-        expense_repository,
-        income_repository,
+        transaction_repository,
     )
     top_income_categories = _top_categories_qs(
-        Income,
+        TransactionType.INCOME,
         user,
         year_start,
         container,
-        expense_repository,
-        income_repository,
+        transaction_repository,
     )
 
     receipt_info_by_month = collect_info_receipt(user=user)
@@ -1085,16 +1041,14 @@ def get_user_detailed_statistics(
     chart_combined = _build_chart(
         user,
         container,
-        expense_repository,
-        income_repository,
+        transaction_repository,
     )
 
     account_service = container.core.account_service()
     credit_cards_data = _credit_cards_block(
         accounts,
         account_service=account_service,
-        income_repository=income_repository,
-        expense_repository=expense_repository,
+        transaction_repository=transaction_repository,
         receipt_repository=receipt_repository,
     )
 

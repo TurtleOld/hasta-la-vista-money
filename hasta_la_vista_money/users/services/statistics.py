@@ -14,8 +14,7 @@ from django.utils import timezone
 from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.repositories.statistics_repository import (
     StatisticsRepository,
@@ -53,8 +52,8 @@ class UserStatistics(TypedDict, total=False):
     current_month_income: Decimal
     last_month_expenses: Decimal
     last_month_income: Decimal
-    recent_expenses: list[Expense]
-    recent_incomes: list[Income]
+    recent_expenses: list[Transaction]
+    recent_incomes: list[Transaction]
     receipts_count: int
     top_expense_categories: list[dict[str, str | Decimal]]
     monthly_savings: Decimal
@@ -199,7 +198,7 @@ class UserStatisticsService:
         today = timezone.now().date()
         month_start_date, _ = get_month_start_end(today)
         last_month_start_date, last_month_end_date = get_last_month_start_end(
-            today
+            today,
         )
 
         month_start = timezone.make_aware(
@@ -305,7 +304,7 @@ class UserStatisticsService:
     def _get_recent_transactions(
         self,
         user: User,
-    ) -> dict[str, list[Expense] | list[Income]]:
+    ) -> dict[str, list[Transaction]]:
         """Get recent transactions for user.
 
         Args:

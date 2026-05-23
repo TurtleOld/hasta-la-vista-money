@@ -1,10 +1,5 @@
-"""Tests for dashboard analytics services.
+"""Tests for dashboard analytics services."""
 
-This module provides test cases for dashboard analytics functions including
-linear trend calculations, period comparisons, and drill-down data.
-"""
-
-from collections.abc import Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -16,8 +11,8 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from hasta_la_vista_money.expense.models import ExpenseCategory
-from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.services.dashboard_analytics import (
     calculate_linear_trend,
     get_drill_down_data,
@@ -33,13 +28,9 @@ User = get_user_model()
 
 
 class CalculateLinearTrendTest(TestCase):
-    """Test cases for calculate_linear_trend function.
-
-    Tests linear trend calculation with various data scenarios.
-    """
+    """Test cases for calculate_linear_trend function."""
 
     def test_calculate_linear_trend_with_sufficient_data(self) -> None:
-        """Test trend calculation with sufficient data."""
         today = timezone.now().date()
         dates = [today - timedelta(days=30 * i) for i in range(5, -1, -1)]
         values = [
@@ -66,7 +57,6 @@ class CalculateLinearTrendTest(TestCase):
         self.assertEqual(len(result['forecast']), 30)
 
     def test_calculate_linear_trend_with_insufficient_data(self) -> None:
-        """Test trend calculation with insufficient data."""
         dates = [timezone.now().date()]
         values = [Decimal(1000)]
 
@@ -80,7 +70,6 @@ class CalculateLinearTrendTest(TestCase):
         self.assertEqual(result['forecast'], [])
 
     def test_calculate_linear_trend_with_empty_data(self) -> None:
-        """Test trend calculation with empty data."""
         dates: list[date] = []
         values: list[Decimal] = []
 
@@ -89,7 +78,6 @@ class CalculateLinearTrendTest(TestCase):
         self.assertIn('error', result)
 
     def test_calculate_linear_trend_forecast_dates(self) -> None:
-        """Test that forecast contains correct dates."""
         today = timezone.now().date()
         dates = [today - timedelta(days=30 * i) for i in range(5, -1, -1)]
         values = [Decimal(1000) * (i + 1) for i in range(6)]
@@ -103,31 +91,21 @@ class CalculateLinearTrendTest(TestCase):
 
 
 class GetPeriodComparisonTest(TestCase):
-    """Test cases for get_period_comparison function.
-
-    Tests period comparison for month, quarter, and year periods.
-    """
-
-    fixtures: Sequence[str] = [
-        'users.yaml',
-        'finance_account.yaml',
-        'expense_cat.yaml',
-        'expense.yaml',
-        'income_cat.yaml',
-        'income.yaml',
-    ]
+    """Test cases for get_period_comparison function."""
 
     def setUp(self) -> None:
-        user = User.objects.first()
-        if user is None:
-            msg = 'No user found in fixtures'
-            raise ValueError(msg)
-        self.assertIsInstance(user, User)
-        self.user: UserType = user
+        self.user = User.objects.create_user(
+            username='analytics-user',
+            password='pass',  # nosec B106: test-only password
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Main',
+            balance=Decimal('1000.00'),
+        )
         cache.clear()
 
     def test_get_period_comparison_month(self) -> None:
-        """Test period comparison for month."""
         result = get_period_comparison(self.user, 'month')
 
         self.assertIn('current', result)
@@ -138,14 +116,12 @@ class GetPeriodComparisonTest(TestCase):
         self.assertIn('income', result['previous'])
 
     def test_get_period_comparison_quarter(self) -> None:
-        """Test period comparison for quarter."""
         result = get_period_comparison(self.user, 'quarter')
 
         self.assertIn('current', result)
         self.assertIn('previous', result)
 
     def test_get_period_comparison_year(self) -> None:
-        """Test period comparison for year."""
         result = get_period_comparison(self.user, 'year')
 
         self.assertIn('current', result)
@@ -169,58 +145,54 @@ class GetPeriodComparisonTest(TestCase):
 
 
 class GetDrillDownDataTest(TestCase):
-    """Test cases for get_drill_down_data function.
-
-    Tests drill-down data retrieval for expense and income categories.
-    """
-
-    fixtures: Sequence[str] = [
-        'users.yaml',
-        'finance_account.yaml',
-        'expense_cat.yaml',
-        'expense.yaml',
-        'income_cat.yaml',
-        'income.yaml',
-    ]
+    """Test cases for get_drill_down_data function."""
 
     def setUp(self) -> None:
-        user = User.objects.first()
-        if user is None:
-            msg = 'No user found in fixtures'
-            raise ValueError(msg)
-        self.assertIsInstance(user, User)
-        self.user: UserType = user
+        self.user = User.objects.create_user(
+            username='drill-down-user',
+            password='pass',  # nosec B106: test-only password
+        )
+        self.expense_category = Category.objects.create(
+            user=self.user,
+            name='Groceries',
+            type=TransactionType.EXPENSE,
+        )
+        self.income_category = Category.objects.create(
+            user=self.user,
+            name='Salary',
+            type=TransactionType.INCOME,
+        )
 
     def test_get_drill_down_data_expense(self) -> None:
-        """Test drill-down data retrieval for expenses."""
-        category = ExpenseCategory.objects.filter(user=self.user).first()
-        if category is None:
-            self.skipTest('No expense category found in fixtures')
-
-        result = get_drill_down_data(self.user, str(category.pk), 'expense')
+        result = get_drill_down_data(
+            self.user,
+            str(self.expense_category.pk),
+            date_str=None,
+            data_type='expense',
+        )
 
         self.assertIn('data', result)
         self.assertIsInstance(result['data'], list)
 
     def test_get_drill_down_data_income(self) -> None:
-        """Test drill-down data retrieval for income."""
-        category = IncomeCategory.objects.filter(user=self.user).first()
-        if category is None:
-            self.skipTest('No income category found in fixtures')
-
-        result = get_drill_down_data(self.user, str(category.pk), 'income')
+        result = get_drill_down_data(
+            self.user,
+            str(self.income_category.pk),
+            date_str=None,
+            data_type='income',
+        )
 
         self.assertIn('data', result)
         self.assertIsInstance(result['data'], list)
 
     def test_get_drill_down_data_invalid_category(self) -> None:
-        """Test with non-existent category."""
         invalid_category_id = 99999
 
         result = get_drill_down_data(
             self.user,
             str(invalid_category_id),
-            'expense',
+            date_str=None,
+            data_type='expense',
         )
 
         self.assertIn('data', result)

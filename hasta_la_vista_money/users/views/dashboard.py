@@ -21,12 +21,14 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import (
     DashboardWidget,
     User,
@@ -54,7 +56,7 @@ def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.users.views']
 
 
-class Transaction(TypedDict):
+class TransactionDict(TypedDict):
     id: int
     type: Literal['expense', 'income']
     date: str
@@ -348,7 +350,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
         return trends
 
-    def _get_recent_transactions(self, user: User) -> list[Transaction]:
+    def _get_recent_transactions(self, user: User) -> list[TransactionDict]:
         """Get recent transactions for user.
 
         Args:
@@ -358,17 +360,17 @@ class DashboardDataView(LoginRequiredMixin, View):
             List of Transaction dictionaries sorted by date descending.
         """
         recent_expenses = (
-            Expense.objects.filter(user=user)
+            Transaction.objects.filter(user=user, type=TransactionType.EXPENSE)
             .select_related('category', 'account')
             .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
         )
         recent_incomes = (
-            Income.objects.filter(user=user)
+            Transaction.objects.filter(user=user, type=TransactionType.INCOME)
             .select_related('category', 'account')
             .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
         )
 
-        expense_transactions: list[Transaction] = [
+        expense_transactions: list[TransactionDict] = [
             {
                 'id': expense.pk,
                 'type': 'expense',
@@ -379,7 +381,7 @@ class DashboardDataView(LoginRequiredMixin, View):
             }
             for expense in recent_expenses
         ]
-        income_transactions: list[Transaction] = [
+        income_transactions: list[TransactionDict] = [
             {
                 'id': income.pk,
                 'type': 'income',

@@ -5,10 +5,12 @@ from typing import cast
 from django.db.models import Sum
 from typing_extensions import TypedDict
 
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -164,7 +166,10 @@ def get_user_export_data(user: User) -> UserExportData:
         'expenses': cast(
             'list[ExpenseDict]',
             list(
-                Expense.objects.filter(user=user).values(
+                Transaction.objects.filter(
+                    user=user,
+                    type=TransactionType.EXPENSE,
+                ).values(
                     'amount',
                     'date',
                     'category__name',
@@ -175,7 +180,10 @@ def get_user_export_data(user: User) -> UserExportData:
         'incomes': cast(
             'list[IncomeDict]',
             list(
-                Income.objects.filter(user=user).values(
+                Transaction.objects.filter(
+                    user=user,
+                    type=TransactionType.INCOME,
+                ).values(
                     'amount',
                     'date',
                     'category__name',
@@ -201,15 +209,17 @@ def get_user_export_data(user: User) -> UserExportData:
                 or 0,
             ),
             'total_expenses': float(
-                Expense.objects.filter(user=user).aggregate(
-                    total=Sum('amount'),
-                )['total']
+                Transaction.objects.filter(
+                    user=user,
+                    type=TransactionType.EXPENSE,
+                ).aggregate(total=Sum('amount'))['total']
                 or 0,
             ),
             'total_incomes': float(
-                Income.objects.filter(user=user).aggregate(total=Sum('amount'))[
-                    'total'
-                ]
+                Transaction.objects.filter(
+                    user=user,
+                    type=TransactionType.INCOME,
+                ).aggregate(total=Sum('amount'))['total']
                 or 0,
             ),
             'receipts_count': Receipt.objects.filter(user=user).count(),

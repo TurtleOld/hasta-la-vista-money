@@ -10,8 +10,10 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -43,13 +45,14 @@ def _aware_bounds(start: date, end: date) -> tuple[datetime, datetime]:
 
 
 def _sum_for_month(
-    model: type[Expense] | type[Income],
+    type_value: str,
     users: Iterable[User],
     start: datetime,
     end: datetime,
 ) -> Decimal:
-    total = model.objects.filter(
+    total = Transaction.objects.filter(
         user__in=users,
+        type=type_value,
         date__gte=start,
         date__lte=end,
     ).aggregate(total=Sum('amount'))['total']
@@ -65,8 +68,18 @@ def get_dashboard_month_kpis(
     start_dt, end_dt = _aware_bounds(period_start, period_end)
     selected_users = list(users or [user])
 
-    income = _sum_for_month(Income, selected_users, start_dt, end_dt)
-    expenses = _sum_for_month(Expense, selected_users, start_dt, end_dt)
+    income = _sum_for_month(
+        TransactionType.INCOME,
+        selected_users,
+        start_dt,
+        end_dt,
+    )
+    expenses = _sum_for_month(
+        TransactionType.EXPENSE,
+        selected_users,
+        start_dt,
+        end_dt,
+    )
     net_result = income - expenses
     savings_rate = (
         net_result / income * constants.PERCENTAGE_MULTIPLIER
@@ -75,8 +88,9 @@ def get_dashboard_month_kpis(
     )
 
     top_category = (
-        Expense.objects.filter(
+        Transaction.objects.filter(
             user__in=selected_users,
+            type=TransactionType.EXPENSE,
             date__gte=start_dt,
             date__lte=end_dt,
         )

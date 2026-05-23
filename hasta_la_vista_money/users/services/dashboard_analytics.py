@@ -6,7 +6,7 @@ including trend calculation, period comparison, and drill-down data.
 
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 from django.core.cache import cache
@@ -14,8 +14,11 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     get_period_comparison_cache_key,
@@ -128,7 +131,10 @@ def get_period_comparison(
     previous_start_dt = period_dates['previous_start']
     previous_end_dt = period_dates['previous_end']
 
-    expense_aggregates = Expense.objects.filter(user=user).aggregate(
+    expense_aggregates = Transaction.objects.filter(
+        user=user,
+        type=TransactionType.EXPENSE,
+    ).aggregate(
         current_total=Sum(
             'amount',
             filter=Q(date__gte=current_start_dt, date__lte=today_dt),
@@ -138,7 +144,10 @@ def get_period_comparison(
             filter=Q(date__gte=previous_start_dt, date__lte=previous_end_dt),
         ),
     )
-    income_aggregates = Income.objects.filter(user=user).aggregate(
+    income_aggregates = Transaction.objects.filter(
+        user=user,
+        type=TransactionType.INCOME,
+    ).aggregate(
         current_total=Sum(
             'amount',
             filter=Q(date__gte=current_start_dt, date__lte=today_dt),
@@ -235,39 +244,31 @@ def get_drill_down_data(
     )
     month_end_dt = timezone.make_aware(datetime.combine(month_end, time.max))
 
-    if data_type == 'expense':
-        model: type[Expense | Income] = Expense
-        category_model: type[ExpenseCategory | IncomeCategory] = ExpenseCategory
-        category_relation = 'category'
-    else:
-        model = cast('type[Expense | Income]', Income)
-        category_model = cast(
-            'type[ExpenseCategory | IncomeCategory]',
-            IncomeCategory,
-        )
-        category_relation = 'category'
+    type_value = (
+        TransactionType.EXPENSE
+        if data_type == 'expense'
+        else TransactionType.INCOME
+    )
 
     if category_id is None:
         top_categories = (
-            model.objects.filter(
+            Transaction.objects.filter(
                 user=user,
+                type=type_value,
                 date__gte=month_start_dt,
                 date__lte=month_end_dt,
-                **{f'{category_relation}__parent_category__isnull': True},
+                category__parent_category__isnull=True,
             )
-            .values(
-                f'{category_relation}__id',
-                f'{category_relation}__name',
-            )
+            .values('category__id', 'category__name')
             .annotate(total=Sum('amount'))
             .order_by('-total')[: constants.TOP_CATEGORIES_LIMIT]
         )
 
         data = [
             {
-                'name': cat[f'{category_relation}__name'],
+                'name': cat['category__name'],
                 'value': float(cat['total']),
-                'category_id': cat[f'{category_relation}__id'],
+                'category_id': cat['category__id'],
             }
             for cat in top_categories
         ]
@@ -278,45 +279,45 @@ def get_drill_down_data(
             'level': 0,
         }
 
-    category = category_model.objects.filter(
+    category = Category.objects.filter(
         user=user,
         id=category_id,
+        type=type_value,
     ).first()
 
     if not category:
         return {'error': 'Категория не найдена', 'data': []}
 
     subcategories = (
-        model.objects.filter(
+        Transaction.objects.filter(
             user=user,
+            type=type_value,
             date__gte=month_start_dt,
             date__lte=month_end_dt,
-            **{f'{category_relation}__parent_category_id': category_id},
+            category__parent_category_id=category_id,
         )
-        .values(
-            f'{category_relation}__id',
-            f'{category_relation}__name',
-        )
+        .values('category__id', 'category__name')
         .annotate(total=Sum('amount'))
         .order_by('-total')
     )
 
     data = [
         {
-            'name': subcat[f'{category_relation}__name'],
+            'name': subcat['category__name'],
             'value': float(subcat['total']),
-            'category_id': subcat[f'{category_relation}__id'],
+            'category_id': subcat['category__id'],
         }
         for subcat in subcategories
     ]
 
     if not data:
         transactions = list(
-            model.objects.filter(
+            Transaction.objects.filter(
                 user=user,
+                type=type_value,
                 date__gte=month_start_dt,
                 date__lte=month_end_dt,
-                **{f'{category_relation}__id': category_id},
+                category__id=category_id,
             ).order_by('-date')[: constants.RECENT_RECEIPTS_LIMIT],
         )
 
