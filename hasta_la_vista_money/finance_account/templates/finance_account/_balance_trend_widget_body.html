@@ -50,4 +50,4 @@
 </div>
 
 <div data-balance-trend data-has-data="{{ balance_trend.has_data|lower }}">{{ selected_period|default:"30d" }}</div>
-{% if balance_trend.has_data %}<div style="display: none;" data-series>{{ balance_trend.series|safe }}</div>{% endif %}
+{% if balance_trend.has_data %}<div class="hidden" data-series>{{ balance_trend.series|safe }}</div>{% endif %}

@@ -202,9 +202,6 @@
             {% for cat in drawer_expense_categories %}{"id": {{ cat.id }}, "name": "{{ cat.name|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}
         ],
     };
-    document.addEventListener('alpine:init', function () {
-        window.Alpine.store('accountsUi').init();
-    });
 </script>
 {% endblock %}
 

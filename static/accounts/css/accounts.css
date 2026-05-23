@@ -329,6 +329,25 @@
   color: var(--acc-text);
 }
 
+/* ── Helpers ────────────────────────────────────────────────────── */
+.accounts-min0 {
+  min-width: 0;
+}
+
+.accounts-row-delete-form {
+  display: contents;
+}
+
+.accounts-empty-title {
+  font-weight: 500;
+  color: var(--acc-text);
+}
+
+.accounts-empty-text {
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+}
+
 /* ── Accounts list ──────────────────────────────────────────────── */
 .accounts-list {
   padding: 0.625rem;

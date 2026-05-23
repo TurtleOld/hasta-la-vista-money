@@ -17,7 +17,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 20h4l11-11-4-4L4 16zM14 6l4 4"/></svg>
                     <span>{% translate 'Изменить' %}</span>
                 </a>
-                <form method="post" action="{% url 'finance_account:delete_account' account.id %}" class="m-0" style="display:contents">
+                <form method="post" action="{% url 'finance_account:delete_account' account.id %}" class="accounts-row-delete-form">
                     {% csrf_token %}
                     <button type="submit" name="delete_account_button"
                             class="accounts-row-action delete remove-object-button"
@@ -36,7 +36,7 @@
                 <div class="accounts-row-mark">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>
                 </div>
-                <div style="min-width:0">
+                <div class="accounts-min0">
                     <div class="accounts-row-name">
                         <span class="truncate">{{ account.name_account }}</span>
                         {% if account.user != request.user %}
@@ -62,8 +62,8 @@
             <div class="accounts-empty-ico">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>
             </div>
-            <p style="font-weight:500;color:var(--acc-text)">{% translate 'Счета ещё не созданы!' %}</p>
-            <p style="font-size:0.8125rem;margin-top:0.25rem">{% translate 'Начните с добавления первого счёта' %}</p>
+            <p class="accounts-empty-title">{% translate 'Счета ещё не созданы!' %}</p>
+            <p class="accounts-empty-text">{% translate 'Начните с добавления первого счёта' %}</p>
         </div>
     {% endfor %}
 
