@@ -192,6 +192,7 @@
       },
 
       toggle() {
+        console.log('[quickAdd] toggle clicked, open was:', this.open);
         this.open = !this.open;
         if (this.open) {
           this.syncCategory();

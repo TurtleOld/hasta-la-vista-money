@@ -208,5 +208,5 @@
 {% block extra_js %}
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/chart.umd.min.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/balance_trend_widget.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'accounts/js/accounts.js' %}?v={% word_hash %}"></script>
+    <script defer nonce="{{request.csp_nonce}}" src="{% static 'accounts/js/accounts.js' %}?v={% word_hash %}"></script>
 {% endblock %}
