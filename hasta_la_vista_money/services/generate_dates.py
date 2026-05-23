@@ -12,8 +12,7 @@ from django.db.models import QuerySet
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.models import DateList, Planning
-from hasta_la_vista_money.expense.models import ExpenseCategory
-from hasta_la_vista_money.income.models import IncomeCategory
+from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import User
 
 
@@ -50,7 +49,8 @@ class DateListGenerator:
         self._ensure_planning(months)
 
     def _actual_date(
-        self, current_date: datetime | QuerySet[DateList] | date
+        self,
+        current_date: datetime | QuerySet[DateList] | date,
     ) -> date:
         """Extract reference date from datetime or QuerySet.
 
@@ -134,52 +134,29 @@ class DateListGenerator:
         if self.type_ not in {'expense', 'income'}:
             return
 
-        if self.type_ == 'expense':
-            expense_cats = list(ExpenseCategory.objects.filter(user=self.user))
-            existing = set(
-                Planning.objects.filter(
-                    user=self.user,
-                    planning_type='expense',
-                    date__in=months,
-                    category_expense__in=expense_cats,
-                ).values_list('category_expense_id', 'date'),
+        categories = list(
+            Category.objects.filter(user=self.user, type=self.type_),
+        )
+        existing = set(
+            Planning.objects.filter(
+                user=self.user,
+                planning_type=self.type_,
+                date__in=months,
+                category__in=categories,
+            ).values_list('category_id', 'date'),
+        )
+        to_create = [
+            Planning(
+                user=self.user,
+                category=c,
+                date=d,
+                planning_type=self.type_,
+                amount=0,
             )
-            to_create = [
-                Planning(
-                    user=self.user,
-                    category_expense=c,
-                    date=d,
-                    planning_type='expense',
-                    amount=0,
-                )
-                for c in expense_cats
-                for d in months
-                if (c.pk, d) not in existing
-            ]
-        else:
-            income_cats: list[IncomeCategory] = list(
-                IncomeCategory.objects.filter(user=self.user),
-            )
-            existing = set(
-                Planning.objects.filter(
-                    user=self.user,
-                    planning_type='income',
-                    date__in=months,
-                    category_income__in=income_cats,
-                ).values_list('category_income_id', 'date'),
-            )
-            to_create = [
-                Planning(
-                    user=self.user,
-                    category_income=c,
-                    date=d,
-                    planning_type='income',
-                    amount=0,
-                )
-                for c in income_cats
-                for d in months
-                if (c.pk, d) not in existing
-            ]
+            for c in categories
+            for d in months
+            if (c.pk, d) not in existing
+        ]
 
         if to_create:
             Planning.objects.bulk_create(to_create)

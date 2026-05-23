@@ -29,13 +29,12 @@ from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
 )
-from hasta_la_vista_money.expense.models import ExpenseCategory
+from hasta_la_vista_money.services.generate_dates import generate_date_list
+from hasta_la_vista_money.transactions.models import Category
+from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
-from hasta_la_vista_money.income.models import IncomeCategory
-from hasta_la_vista_money.services.generate_dates import generate_date_list
-from hasta_la_vista_money.users.models import User
 
 
 @extend_schema(
@@ -275,30 +274,19 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             request_with_container.container.budget.planning_repository()
         )
 
-        if type_ == 'expense':
-            expense_category = get_object_or_404(
-                ExpenseCategory,
-                id=request.data['category_id'],
-            )
-            plan, created = planning_repository.get_or_create_planning(
-                user=user,
-                category_expense=expense_category,
-                date=month,
-                planning_type=type_,
-                defaults={'amount': amount},
-            )
-        else:
-            income_category = get_object_or_404(
-                IncomeCategory,
-                id=request.data['category_id'],
-            )
-            plan, created = planning_repository.get_or_create_planning(
-                user=user,
-                category_income=income_category,
-                date=month,
-                planning_type=type_,
-                defaults={'amount': amount},
-            )
+        category = get_object_or_404(
+            Category,
+            id=request.data['category_id'],
+            user=user,
+            type=type_,
+        )
+        plan, created = planning_repository.get_or_create_planning(
+            user=user,
+            category=category,
+            date=month,
+            planning_type=type_,
+            defaults={'amount': amount},
+        )
 
         if not created:
             plan.amount = Decimal(str(amount))
