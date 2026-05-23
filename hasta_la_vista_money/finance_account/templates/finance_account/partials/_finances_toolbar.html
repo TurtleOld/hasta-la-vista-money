@@ -7,6 +7,13 @@
     <input id="finances-type" type="hidden" name="type" value="{{ finances_filter.type }}">
 </div>
 
+<a class="finances-chip" href="{% url 'finances_categories' %}" style="align-items: center;" aria-label="{% translate 'Перейти к категориям' %}">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;">
+        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+    </svg>
+    <span>{% translate 'Категории' %}</span>
+</a>
+
 <div class="finances-scope" role="tablist" aria-label="{% translate 'Область данных' %}">
     <button type="button" class="{% if selected_group_id == 'family' %}is-active{% endif %}" data-finances-scope="family">{% translate 'Семья' %}</button>
     <button type="button" class="{% if selected_group_id == 'my' %}is-active{% endif %}" data-finances-scope="my">{% translate 'Мои' %}</button>
