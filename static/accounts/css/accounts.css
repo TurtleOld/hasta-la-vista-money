@@ -1,0 +1,1321 @@
+/* ─────────────────────────────────────────────────────────────────────
+   Accounts dashboard — премиум-дизайн со счетами и операциями.
+   Тёмная/светлая тема через существующие токены --app-*.
+   ─────────────────────────────────────────────────────────────────── */
+
+[x-cloak] {
+  display: none !important;
+}
+
+.accounts-app {
+  --acc-bg: var(--app-bg);
+  --acc-surface: var(--app-surface);
+  --acc-surface-2: var(--app-surface-2);
+  --acc-border: var(--app-border);
+  --acc-text: var(--app-text);
+  --acc-muted: var(--app-muted);
+  --acc-positive: var(--app-positive);
+  --acc-negative: var(--app-negative);
+  --acc-accent: var(--app-accent);
+  --acc-border-2: color-mix(in oklab, var(--acc-border) 60%, var(--acc-text));
+  --acc-muted-2: color-mix(in oklab, var(--acc-muted) 80%, transparent);
+
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, rgba(16, 185, 129, 0.10), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(5, 150, 105, 0.06), transparent),
+    var(--acc-bg);
+  color: var(--acc-text);
+  min-height: calc(100vh - 4rem);
+  padding-bottom: 6rem;
+  font-feature-settings: 'ss01', 'cv11';
+  font-variant-numeric: tabular-nums;
+}
+
+.dark .accounts-app {
+  background:
+    radial-gradient(ellipse 70% 50% at 0% 0%, rgba(16, 185, 129, 0.12), transparent),
+    radial-gradient(ellipse 50% 60% at 100% 100%, rgba(5, 150, 105, 0.06), transparent),
+    var(--acc-bg);
+}
+
+.accounts-wrap {
+  margin: 0 auto;
+  max-width: 84rem;
+  padding: 0 1rem;
+}
+
+/* ── Mono / utility ─────────────────────────────────────────────── */
+.accounts-mono {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.accounts-muted {
+  color: var(--acc-muted);
+}
+
+/* ── Hero ───────────────────────────────────────────────────────── */
+.accounts-hero {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 3rem;
+  align-items: end;
+  padding: 2.5rem 0 2rem;
+  border-bottom: 1px solid var(--acc-border);
+}
+
+.accounts-hero-label {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.6875rem;
+  color: var(--acc-muted);
+  font-weight: 500;
+  margin-bottom: 0.875rem;
+}
+
+.accounts-hero-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--acc-accent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--acc-accent) 18%, transparent);
+}
+
+.accounts-hero-amt {
+  font-family: var(--font-family-mono);
+  font-size: clamp(2.75rem, 6vw, 4.5rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  color: var(--acc-text);
+}
+
+.accounts-hero-amt .cur {
+  color: var(--acc-muted);
+  margin-left: 0.5rem;
+  font-weight: 400;
+  font-size: 0.6em;
+}
+
+.accounts-hero-change {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--acc-muted);
+  flex-wrap: wrap;
+}
+
+.accounts-chip-pos {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: color-mix(in oklab, var(--acc-positive) 18%, transparent);
+  color: var(--acc-positive);
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 0.75rem;
+  font-family: var(--font-family-mono);
+}
+
+.accounts-chip-neg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: color-mix(in oklab, var(--acc-negative) 18%, transparent);
+  color: var(--acc-negative);
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 0.75rem;
+  font-family: var(--font-family-mono);
+}
+
+/* ── Page header (title + actions) ──────────────────────────────── */
+.accounts-page-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+.accounts-page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.accounts-page-ico {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.625rem;
+  background: color-mix(in oklab, var(--acc-accent) 16%, var(--acc-surface));
+  color: var(--acc-accent);
+  border: 1px solid color-mix(in oklab, var(--acc-accent) 25%, var(--acc-border));
+}
+
+.accounts-page-title h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--acc-text) !important;
+}
+
+.accounts-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.accounts-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--acc-border);
+  background: var(--acc-surface);
+  color: var(--acc-text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  text-decoration: none;
+}
+
+.accounts-btn:hover {
+  background: var(--acc-surface-2);
+  border-color: var(--acc-border-2);
+}
+
+.accounts-btn:active {
+  transform: scale(0.97);
+}
+
+.accounts-btn-primary {
+  background: var(--acc-text);
+  color: var(--acc-bg);
+  border-color: var(--acc-text);
+}
+
+.accounts-btn-primary:hover {
+  background: color-mix(in oklab, var(--acc-text) 88%, var(--acc-accent));
+  color: var(--acc-bg);
+  border-color: color-mix(in oklab, var(--acc-text) 88%, var(--acc-accent));
+}
+
+.accounts-btn-ghost-accent {
+  color: var(--acc-accent);
+  border-color: color-mix(in oklab, var(--acc-accent) 30%, var(--acc-border));
+}
+
+.accounts-btn-ghost-accent:hover {
+  background: color-mix(in oklab, var(--acc-accent) 10%, var(--acc-surface));
+  color: var(--acc-accent);
+}
+
+/* ── Main grid ──────────────────────────────────────────────────── */
+.accounts-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+  padding-top: 0.5rem;
+}
+
+/* ── Panel ──────────────────────────────────────────────────────── */
+.accounts-panel {
+  background: var(--acc-surface);
+  border: 1px solid var(--acc-border);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.accounts-panel-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.125rem;
+  border-bottom: 1px solid var(--acc-border);
+}
+
+.accounts-panel-hd h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--acc-text) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.accounts-group-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.accounts-group-chips-label {
+  font-size: 0.8125rem;
+  color: var(--acc-muted);
+  margin-right: 0.25rem;
+}
+
+.accounts-group-chip {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+  border: 1px solid var(--acc-border);
+  background: var(--acc-surface);
+  color: var(--acc-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+}
+
+.accounts-group-chip:hover {
+  background: var(--acc-surface-2);
+  color: var(--acc-text);
+  border-color: var(--acc-border-2);
+}
+
+.accounts-group-chip:active {
+  transform: scale(0.97);
+}
+
+.accounts-group-chip.is-active {
+  background: var(--acc-text);
+  color: var(--acc-bg);
+  border-color: var(--acc-text);
+}
+
+.accounts-group-chip.is-active:hover {
+  background: color-mix(in oklab, var(--acc-text) 88%, var(--acc-accent));
+  color: var(--acc-bg);
+  border-color: color-mix(in oklab, var(--acc-text) 88%, var(--acc-accent));
+}
+
+.accounts-panel-hd .accounts-panel-link {
+  font-size: 0.75rem;
+  color: var(--acc-muted);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: color 0.15s;
+}
+
+.accounts-panel-hd .accounts-panel-link:hover {
+  color: var(--acc-text);
+}
+
+/* ── Accounts list ──────────────────────────────────────────────── */
+.accounts-list {
+  padding: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.accounts-row {
+  position: relative;
+  border-radius: 0.75rem;
+  border: 1px solid var(--acc-border);
+  background: var(--acc-surface);
+  overflow: hidden;
+}
+
+.accounts-row-content {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  background: var(--acc-surface);
+  position: relative;
+  z-index: 1;
+}
+
+.accounts-row-foreign .accounts-row-content {
+  box-shadow: inset 3px 0 0 var(--acc-accent);
+}
+
+.accounts-row-mark {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--acc-accent) 28%, var(--acc-surface-2)),
+    var(--acc-surface-2)
+  );
+  border: 1px solid var(--acc-border);
+  color: var(--acc-text);
+  flex-shrink: 0;
+}
+
+.accounts-row-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--acc-text);
+  min-width: 0;
+}
+
+.accounts-row-name .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounts-row-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--acc-accent) 14%, var(--acc-surface));
+  color: var(--acc-accent);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.accounts-row-kind {
+  font-size: 0.75rem;
+  color: var(--acc-muted);
+  margin-top: 0.125rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.accounts-row-kind .sep {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--acc-muted-2);
+}
+
+.accounts-row-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.accounts-row-amt {
+  font-family: var(--font-family-mono);
+  font-size: 1.125rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--acc-text);
+}
+
+.accounts-row-amt .cur {
+  color: var(--acc-muted);
+  margin-left: 0.25rem;
+  font-size: 0.8em;
+  font-weight: 400;
+}
+
+.accounts-row-cta {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.accounts-row-iconbtn {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5rem;
+  border: 1px solid var(--acc-border);
+  background: var(--acc-surface);
+  color: var(--acc-muted);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  text-decoration: none;
+}
+
+.accounts-row-iconbtn:hover {
+  background: var(--acc-surface-2);
+  color: var(--acc-text);
+  border-color: var(--acc-border-2);
+}
+
+.accounts-row-iconbtn.danger:hover {
+  color: var(--acc-negative);
+  border-color: color-mix(in oklab, var(--acc-negative) 30%, var(--acc-border));
+}
+
+.accounts-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0.125rem 0.125rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: transparent;
+  border: 1px dashed var(--acc-border-2);
+  color: var(--acc-muted);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  justify-content: center;
+}
+
+.accounts-add:hover {
+  background: color-mix(in oklab, var(--acc-accent) 8%, transparent);
+  color: var(--acc-accent);
+  border-color: color-mix(in oklab, var(--acc-accent) 35%, var(--acc-border));
+}
+
+.accounts-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--acc-muted);
+}
+
+.accounts-empty-ico {
+  width: 3rem;
+  height: 3rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--acc-surface-2);
+  margin-bottom: 0.75rem;
+  color: var(--acc-muted);
+}
+
+/* ── Sidebar ────────────────────────────────────────────────────── */
+.accounts-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── Sum card ───────────────────────────────────────────────────── */
+.accounts-sum-card {
+  background: var(--acc-surface);
+  border: 1px solid var(--acc-border);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.accounts-sum-hd {
+  padding: 0.875rem 1.125rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--acc-border);
+  background: color-mix(in oklab, var(--acc-accent) 8%, transparent);
+}
+
+.accounts-sum-hd h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--acc-text) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.accounts-sum-hd .ico {
+  color: var(--acc-accent);
+}
+
+.accounts-sum-body {
+  padding: 1.125rem 1.125rem 1.25rem;
+}
+
+.accounts-sum-amt {
+  font-family: var(--font-family-mono);
+  font-size: 1.875rem;
+  font-weight: 600;
+  color: var(--acc-positive);
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.accounts-sum-text {
+  font-size: 0.8125rem;
+  color: var(--acc-muted);
+  line-height: 1.5;
+}
+
+/* ── Operations list ────────────────────────────────────────────── */
+.accounts-ops-day {
+  padding: 0.75rem 1.125rem 0.375rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+  color: var(--acc-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+
+.accounts-ops-day .sum {
+  font-family: var(--font-family-mono);
+  letter-spacing: 0;
+}
+
+.accounts-ops-day .sum.pos {
+  color: var(--acc-positive);
+}
+
+.accounts-op {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.625rem 1.125rem;
+  border-top: 1px solid color-mix(in oklab, var(--acc-border) 60%, transparent);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 0.12s;
+}
+
+.accounts-op:hover {
+  background: var(--acc-surface-2);
+}
+
+.accounts-op-ico {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
+  display: grid;
+  place-items: center;
+  background: var(--acc-surface-2);
+  border: 1px solid var(--acc-border);
+  color: var(--acc-muted);
+}
+
+.accounts-op-mid {
+  min-width: 0;
+}
+
+.accounts-op-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--acc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounts-op-meta {
+  font-size: 0.6875rem;
+  color: var(--acc-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.125rem;
+  flex-wrap: wrap;
+}
+
+.accounts-op-meta .sep {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--acc-muted-2);
+}
+
+.accounts-op-right {
+  text-align: right;
+}
+
+.accounts-op-amt {
+  font-family: var(--font-family-mono);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--acc-text);
+}
+
+.accounts-op-amt.pos {
+  color: var(--acc-positive);
+}
+
+.accounts-op-amt.neg {
+  color: var(--acc-text);
+}
+
+.accounts-op-sub {
+  font-size: 0.6875rem;
+  color: var(--acc-muted);
+  font-family: var(--font-family-mono);
+  margin-top: 0.125rem;
+}
+
+.accounts-ops-empty {
+  padding: 2.5rem 1.125rem;
+  text-align: center;
+  color: var(--acc-muted);
+  font-size: 0.875rem;
+}
+
+/* ── Balance trend widget ───────────────────────────────────────── */
+.accounts-trend {
+  background: var(--acc-surface);
+  border: 1px solid var(--acc-border);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.accounts-trend-hd {
+  padding: 0.875rem 1.125rem;
+  border-bottom: 1px solid var(--acc-border);
+}
+
+.accounts-trend-hd h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--acc-text) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  letter-spacing: -0.005em;
+}
+
+.accounts-trend-hd .ico {
+  color: var(--acc-accent);
+  display: inline-grid;
+  place-items: center;
+}
+
+.accounts-trend-body {
+  padding: 1rem 1.125rem 1.125rem;
+}
+
+.accounts-trend-lbl {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--acc-muted);
+  margin-bottom: 0.5rem;
+}
+
+.accounts-trend-amt {
+  font-family: var(--font-family-mono);
+  font-size: 1.75rem;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--acc-text);
+  margin-bottom: 0.875rem;
+}
+
+.accounts-trend-amt .cur {
+  color: var(--acc-muted);
+  margin-left: 0.375rem;
+  font-weight: 400;
+  font-size: 0.7em;
+}
+
+.accounts-trend-periods {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--acc-surface-2);
+  border: 1px solid var(--acc-border);
+  border-radius: 0.5rem;
+  margin-bottom: 0.875rem;
+}
+
+.accounts-trend-periods .period-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--acc-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.3rem 0.625rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.accounts-trend-periods .period-btn:hover {
+  color: var(--acc-text);
+}
+
+.accounts-trend-periods .period-btn.on {
+  background: var(--acc-surface);
+  color: var(--acc-text);
+  box-shadow: 0 0 0 1px var(--acc-border-2);
+}
+
+.accounts-trend-chart {
+  height: 96px;
+  margin: 0.5rem 0 1rem;
+  position: relative;
+}
+
+.accounts-trend-chart canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.accounts-trend-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--acc-border);
+}
+
+.accounts-trend-stat {
+  background: var(--acc-surface-2);
+  border: 1px solid var(--acc-border);
+  border-radius: 0.625rem;
+  padding: 0.625rem 0.75rem;
+}
+
+.accounts-trend-stat .lbl {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--acc-muted);
+  margin-bottom: 0.25rem;
+}
+
+.accounts-trend-stat .val {
+  font-family: var(--font-family-mono);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.accounts-trend-stat .val.pos {
+  color: var(--acc-positive);
+}
+
+.accounts-trend-stat .val.neg {
+  color: var(--acc-negative);
+}
+
+.accounts-trend-empty {
+  padding: 1.75rem 1rem;
+  text-align: center;
+  color: var(--acc-muted);
+}
+
+.accounts-trend-empty svg {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  opacity: 0.6;
+  vertical-align: middle;
+}
+
+.accounts-trend-empty p {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--acc-text);
+  margin: 0 0 0.25rem;
+}
+
+.accounts-trend-empty span {
+  display: block;
+  font-size: 0.75rem;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 1080px) {
+  .accounts-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .accounts-hero {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+}
+
+@media (max-width: 720px) {
+  .accounts-wrap {
+    padding: 0 0.75rem;
+  }
+
+  .accounts-page-hd {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .accounts-row-content {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .accounts-row-right {
+    grid-column: 1 / -1;
+    text-align: left;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .accounts-hero {
+    padding: 1.5rem 0 1.25rem;
+  }
+
+  .accounts-hero-amt {
+    font-size: clamp(2rem, 9vw, 2.75rem);
+  }
+}
+
+/* ── Swipe actions ──────────────────────────────────────────────── */
+.accounts-row {
+  user-select: none;
+  touch-action: pan-y;
+}
+
+.accounts-row-actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  z-index: 0;
+}
+
+.accounts-row-action {
+  appearance: none;
+  border: 0;
+  width: 4rem;
+  display: grid;
+  place-items: center;
+  gap: 0.25rem;
+  color: var(--acc-text);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--acc-surface-2);
+  text-decoration: none;
+  padding: 0;
+  font-family: inherit;
+  transition: filter 0.15s ease;
+}
+
+.accounts-row-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.accounts-row-action.transfer {
+  background: color-mix(in oklab, var(--acc-accent) 36%, var(--acc-surface-2));
+  color: var(--acc-text);
+}
+
+.accounts-row-action.edit {
+  background: var(--acc-surface-2);
+  color: var(--acc-text-2, var(--acc-text));
+}
+
+.accounts-row-action.delete {
+  background: color-mix(in oklab, var(--acc-negative) 40%, var(--acc-surface-2));
+  color: var(--acc-text);
+}
+
+.accounts-row-action:hover {
+  filter: brightness(1.1);
+}
+
+.accounts-row-content {
+  position: relative;
+  z-index: 1;
+  background: var(--acc-surface);
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.25s cubic-bezier(0.3, 0.8, 0.4, 1);
+  cursor: grab;
+}
+
+.accounts-row-content.swiping {
+  transition: none;
+  cursor: grabbing;
+}
+
+.accounts-row-hint {
+  position: absolute;
+  top: 0.625rem;
+  right: 0.625rem;
+  z-index: 2;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.accounts-row-hint i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--acc-muted);
+}
+
+@media (hover: hover) {
+  .accounts-row:hover .accounts-row-hint {
+    opacity: 0.55;
+  }
+
+  .accounts-row:hover .accounts-row-content:not(.swiping) {
+    transform: translate3d(-12rem, 0, 0);
+  }
+}
+
+/* Hide stock CTA buttons on desktop while swipe panel exposes them */
+@media (hover: hover) {
+  .accounts-row-cta {
+    visibility: hidden;
+  }
+}
+
+/* ── FAB ────────────────────────────────────────────────────────── */
+.accounts-fab {
+  position: fixed;
+  right: 1.75rem;
+  bottom: 1.75rem;
+  z-index: 60;
+  appearance: none;
+  border: 0;
+  background: var(--acc-accent);
+  color: #052e1d;
+  height: 3.25rem;
+  padding: 0 1.375rem 0 1.125rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 color-mix(in oklab, white 35%, transparent) inset,
+    0 8px 24px color-mix(in oklab, var(--acc-accent) 40%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+
+.accounts-fab .plus {
+  font-size: 1.375rem;
+  line-height: 1;
+  margin-top: -2px;
+  font-weight: 400;
+  transition: transform 0.15s;
+}
+
+.accounts-fab:hover {
+  transform: translateY(-1px);
+}
+
+.accounts-fab:active {
+  transform: translateY(0);
+}
+
+.accounts-fab[data-open='1'] .plus {
+  transform: rotate(45deg);
+}
+
+/* ── Drawer ─────────────────────────────────────────────────────── */
+.accounts-drawer {
+  position: fixed;
+  right: 1.75rem;
+  bottom: 5.75rem;
+  z-index: 60;
+  width: 22rem;
+  background: var(--acc-surface);
+  border: 1px solid var(--acc-border);
+  border-radius: 1rem;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.2);
+  transform: translateY(8px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.2s cubic-bezier(0.3, 0.8, 0.4, 1),
+    opacity 0.2s;
+}
+
+.accounts-drawer[data-open='1'] {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.accounts-drawer-hd {
+  padding: 1rem 1.125rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--acc-border);
+}
+
+.accounts-drawer-hd h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--acc-text) !important;
+}
+
+.accounts-drawer-tabs {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--acc-surface-2);
+  border: 1px solid var(--acc-border);
+  border-radius: 0.5rem;
+  padding: 2px;
+}
+
+.accounts-drawer-tabs button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  color: var(--acc-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.accounts-drawer-tabs button.on {
+  background: var(--acc-surface);
+  color: var(--acc-text);
+  box-shadow: 0 0 0 1px var(--acc-border-2);
+}
+
+.accounts-drawer-body {
+  padding: 0.875rem 1.125rem 1.125rem;
+  display: grid;
+  gap: 0.625rem;
+}
+
+.accounts-drawer-amt {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--acc-border);
+  background: var(--acc-bg);
+  border-radius: 0.75rem;
+}
+
+.accounts-drawer-amt input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--acc-text);
+  font-family: var(--font-family-mono);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.accounts-drawer-amt .cur {
+  font-family: var(--font-family-mono);
+  font-size: 1rem;
+  color: var(--acc-muted);
+}
+
+.accounts-drawer-field {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--acc-bg);
+  border: 1px solid var(--acc-border);
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.accounts-drawer-field label {
+  color: var(--acc-muted);
+}
+
+.accounts-drawer-field select {
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--acc-text);
+  font: inherit;
+  text-align: right;
+  appearance: none;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.accounts-drawer-field select option {
+  background: var(--acc-surface);
+  color: var(--acc-text);
+}
+
+.accounts-drawer-submit {
+  appearance: none;
+  border: 0;
+  background: var(--acc-text);
+  color: var(--acc-bg);
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  margin-top: 0.25rem;
+  font-family: inherit;
+  transition: background-color 0.15s, transform 0.12s;
+}
+
+.accounts-drawer-submit:hover {
+  background: color-mix(in oklab, var(--acc-text) 88%, var(--acc-accent));
+}
+
+.accounts-drawer-submit:active {
+  transform: scale(0.98);
+}
+
+.accounts-drawer-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Toast ──────────────────────────────────────────────────────── */
+.accounts-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 6.25rem;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--acc-text);
+  color: var(--acc-bg);
+  padding: 0.625rem 1rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 70;
+  transition: opacity 0.25s, transform 0.25s;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.accounts-toast[data-on='1'] {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.accounts-toast.is-error {
+  background: var(--acc-negative);
+  color: white;
+}
+
+/* ── Hide-balance icon button ───────────────────────────────────── */
+.accounts-eye {
+  appearance: none;
+  border: 1px solid var(--acc-border);
+  background: var(--acc-surface);
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--acc-muted);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.accounts-eye:hover {
+  background: var(--acc-surface-2);
+  color: var(--acc-text);
+  border-color: var(--acc-border-2);
+}
+
+/* ── Hidden balance state ───────────────────────────────────────── */
+.accounts-app.is-hidden .hide-target {
+  visibility: hidden;
+  position: relative;
+}
+
+.accounts-app.is-hidden .hide-target::after {
+  content: '•••••';
+  visibility: visible;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--acc-muted);
+  font-family: var(--font-family-mono);
+  letter-spacing: 0.15em;
+}
+
+.accounts-app.is-hidden .hide-target-left::after {
+  justify-content: flex-start;
+}
+
+@media (max-width: 720px) {
+  .accounts-fab {
+    right: 1rem;
+    bottom: 1rem;
+  }
+
+  .accounts-drawer {
+    right: 1rem;
+    left: 1rem;
+    width: auto;
+    bottom: 5rem;
+  }
+
+  /* On touch screens revert hover-based swipe peek */
+  .accounts-row:hover .accounts-row-content:not(.swiping) {
+    transform: translate3d(0, 0, 0);
+  }
+
+  .accounts-row-cta {
+    visibility: visible;
+  }
+}

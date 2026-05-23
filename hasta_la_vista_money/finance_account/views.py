@@ -369,8 +369,26 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
         """Handle POST: create income or expense based on operation_type."""
         operation_type = request.POST.get('operation_type', 'expense')
         if operation_type == 'income':
-            return self._create_income(request)
-        return self._create_expense(request)
+            response = self._create_income(request)
+        else:
+            response = self._create_expense(request)
+        if request.headers.get('HX-Request') == 'true':
+            return self._quick_add_response(response)
+        return response
+
+    @staticmethod
+    def _quick_add_response(response: HttpResponse) -> HttpResponse:
+        """Return a lightweight 200/400 response for the quick-add drawer.
+
+        The drawer issues a `fetch()` from the accounts dashboard and only
+        needs to know whether the operation succeeded — full template
+        rendering happens after the JS reloads the page.
+        """
+        if isinstance(response, HttpResponseRedirect):
+            target = response['Location']
+            ok = reverse('finances_create') not in target
+            return HttpResponse(status=204 if ok else 400)
+        return response
 
     def _success_redirect(
         self,
@@ -858,6 +876,71 @@ def _day_label(value: date) -> str:
     return value.strftime('%d.%m.%Y')
 
 
+def _recent_transactions(
+    current_user: User,
+    users: Iterable[User],
+    limit: int = 12,
+) -> list[FinancesDayGroup]:
+    """Return latest income+expense transactions grouped by day.
+
+    Used by the accounts dashboard to show the "last operations" widget
+    without applying any date/category filters.
+    """
+    user_list = list(users)
+    income_qs = (
+        Income.objects.filter(user__in=user_list)
+        .select_related('account', 'category', 'user')
+        .order_by('-date')[:limit]
+    )
+    expense_qs = (
+        Expense.objects.filter(user__in=user_list)
+        .select_related('account', 'category', 'user')
+        .order_by('-date')[:limit]
+    )
+
+    transactions: list[FinancesTransaction] = [
+        FinancesTransaction(
+            key=f'income-{income.pk}',
+            source='income',
+            source_id=income.pk,
+            date=income.date,
+            amount=income.amount,
+            category_name=income.category.name,
+            category_key=f'income-{income.category_id}',
+            account_name=income.account.name_account,
+            user_name=income.user.username,
+            edit_url=reverse('income:change', kwargs={'pk': income.pk}),
+            copy_url=reverse('income:income_copy', kwargs={'pk': income.pk}),
+            delete_url=reverse(
+                'income:delete_income',
+                kwargs={'pk': income.pk},
+            ),
+            can_edit=income.user_id == current_user.pk,
+        )
+        for income in income_qs
+    ]
+    transactions.extend(
+        FinancesTransaction(
+            key=f'expense-{expense.pk}',
+            source='expense',
+            source_id=expense.pk,
+            date=expense.date,
+            amount=-expense.amount,
+            category_name=expense.category.name,
+            category_key=f'expense-{expense.category_id}',
+            account_name=expense.account.name_account,
+            user_name=expense.user.username,
+            edit_url=reverse('expense:change', kwargs={'pk': expense.pk}),
+            copy_url=reverse('expense:expense_copy', kwargs={'pk': expense.pk}),
+            delete_url=reverse('expense:delete', kwargs={'pk': expense.pk}),
+            can_edit=expense.user_id == current_user.pk,
+        )
+        for expense in expense_qs
+    )
+    transactions.sort(key=lambda item: item.date, reverse=True)
+    return _group_finances_by_day(transactions[:limit])
+
+
 def _to_date(value: Any) -> date:
     if isinstance(value, datetime):
         return value.date()
@@ -912,6 +995,12 @@ class AccountView(
 
     context_object_name = 'finance_account'
     template_name = 'finance_account/account.html'
+
+    def get_template_names(self) -> list[str]:
+        """Return partial template for HTMX requests (group filter)."""
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['finance_account/_account_dashboard_partial.html']
+        return [self.template_name]
 
     def get_queryset(self) -> QuerySet[Account]:
         """Get the queryset of accounts for the current user or group.
@@ -975,6 +1064,26 @@ class AccountView(
         )
 
         context.update(page_context)
+
+        account_service = request.container.core.account_service()
+        users_in_group = account_service.get_users_for_group(
+            request.user,
+            group_id,
+        ) or [request.user]
+        context['last_operations'] = _recent_transactions(
+            request.user,
+            users_in_group,
+            limit=12,
+        )
+        context['drawer_accounts'] = Account.objects.filter(
+            user=request.user,
+        ).order_by('name_account')
+        context['drawer_income_categories'] = IncomeCategory.objects.filter(
+            user=request.user,
+        ).order_by('name')
+        context['drawer_expense_categories'] = ExpenseCategory.objects.filter(
+            user=request.user,
+        ).order_by('name')
         return context
 
 
@@ -1191,6 +1300,26 @@ class TransferMoneyAccountView(
             request.container.finance_account.account_repository()
         )
         return kwargs
+
+    def get_initial(self) -> dict[str, Any]:
+        """Prefill ``from_account`` from ``?from_account=<id>`` query param.
+
+        The accounts page lets users start a transfer from a specific card
+        via swipe action; the source account id is passed in the URL.
+        """
+        initial = super().get_initial()
+        request = cast('WSGIRequestWithContainer', self.request)
+        from_account_id = request.GET.get('from_account')
+        if from_account_id and from_account_id.isdigit():
+            account = (
+                request.container.finance_account.account_repository()
+                .get_by_user_with_related(request.user)
+                .filter(pk=int(from_account_id))
+                .first()
+            )
+            if account is not None:
+                initial['from_account'] = account
+        return initial
 
     def form_valid(
         self,

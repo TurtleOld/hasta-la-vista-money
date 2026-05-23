@@ -1,0 +1,53 @@
+{% load i18n comma %}
+
+<div class="accounts-trend-hd">
+    <h3>
+        <span class="ico">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M7 17L17 7M9 7h8v8"/></svg>
+        </span>
+        <span>{% translate 'Динамика баланса' %}</span>
+    </h3>
+</div>
+
+<div class="accounts-trend-body">
+    <div class="accounts-trend-lbl">{% translate 'Текущий баланс' %}</div>
+    <div class="accounts-trend-amt">
+        <span class="hide-target">{{ balance_trend.current_balance|default:0|comma }}<span class="cur">₽</span></span>
+    </div>
+
+    <div class="accounts-trend-periods">
+        <button type="button" data-period="7d" class="period-btn{% if selected_period == '7d' %} on{% endif %}">{% translate '7 дней' %}</button>
+        <button type="button" data-period="30d" class="period-btn{% if selected_period == '30d' or not selected_period %} on{% endif %}">{% translate '30 дней' %}</button>
+        <button type="button" data-period="12m" class="period-btn{% if selected_period == '12m' %} on{% endif %}">{% translate '12 месяцев' %}</button>
+    </div>
+
+    {% if balance_trend.has_data %}
+        <div class="accounts-trend-chart">
+            <canvas id="balance-trend-chart" height="96"></canvas>
+        </div>
+
+        <div class="accounts-trend-stats">
+            <div class="accounts-trend-stat">
+                <div class="lbl">{% translate 'CHANGE' %}</div>
+                <div class="val {% if balance_trend.delta_absolute >= 0 %}pos{% else %}neg{% endif %}">
+                    <span class="hide-target">{% if balance_trend.delta_absolute >= 0 %}+{% endif %}{{ balance_trend.delta_absolute|comma }} ₽</span>
+                </div>
+            </div>
+            <div class="accounts-trend-stat">
+                <div class="lbl">{% translate 'PERCENT' %}</div>
+                <div class="val {% if balance_trend.delta_percent >= 0 %}pos{% else %}neg{% endif %}">
+                    {% if balance_trend.delta_percent >= 0 %}+{% endif %}{{ balance_trend.delta_percent|floatformat:1 }}%
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="accounts-trend-empty">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            <p>{% translate 'Нет данных о транзакциях' %}</p>
+            <span>{% translate 'Добавьте счёт и записывайте операции' %}</span>
+        </div>
+    {% endif %}
+</div>
+
+<div data-balance-trend data-has-data="{{ balance_trend.has_data|lower }}">{{ selected_period|default:"30d" }}</div>
+{% if balance_trend.has_data %}<div style="display: none;" data-series>{{ balance_trend.series|safe }}</div>{% endif %}
