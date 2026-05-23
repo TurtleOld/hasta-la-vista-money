@@ -49,5 +49,5 @@
     {% endif %}
 </div>
 
-<div data-balance-trend data-has-data="{{ balance_trend.has_data|lower }}">{{ selected_period|default:"30d" }}</div>
+<div data-balance-trend data-has-data="{{ balance_trend.has_data|lower }}" class="hidden">{"period": "{{ selected_period|default:'30d'|escapejs }}", "groupId": "{{ request.GET.group_id|default:'my'|escapejs }}"}</div>
 {% if balance_trend.has_data %}<div class="hidden" data-series>{{ balance_trend.series|safe }}</div>{% endif %}
