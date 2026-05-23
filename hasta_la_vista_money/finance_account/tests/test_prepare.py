@@ -5,14 +5,17 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.prepare import (
     collect_info_expense,
     collect_info_income,
     sort_expense_income,
 )
-from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -33,19 +36,22 @@ class TestPrepareFunctions(TestCase):
             currency='RUB',
         )
 
-        self.expense_category = ExpenseCategory.objects.create(
+        self.expense_category = Category.objects.create(
             name='Test Expense Category',
             user=self.user,
+            type=TransactionType.EXPENSE,
         )
 
-        self.income_category = IncomeCategory.objects.create(
+        self.income_category = Category.objects.create(
             name='Test Income Category',
             user=self.user,
+            type=TransactionType.INCOME,
         )
 
     def test_collect_info_expense_with_data(self) -> None:
         """Test collect_info_expense with expense data."""
-        Expense.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
             user=self.user,
             account=self.account,
             category=self.expense_category,
@@ -67,14 +73,16 @@ class TestPrepareFunctions(TestCase):
 
     def test_collect_info_expense_multiple_expenses(self) -> None:
         """Test collect_info_expense with multiple expenses."""
-        Expense.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
             user=self.user,
             account=self.account,
             category=self.expense_category,
             amount=Decimal('100.00'),
             date=timezone.now().date(),
         )
-        Expense.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
             user=self.user,
             account=self.account,
             category=self.expense_category,
@@ -89,14 +97,16 @@ class TestPrepareFunctions(TestCase):
 
     def test_collect_info_expense_different_dates(self) -> None:
         """Test collect_info_expense with expenses on different dates."""
-        Expense.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
             user=self.user,
             account=self.account,
             category=self.expense_category,
             amount=Decimal('100.00'),
             date=timezone.now().date(),
         )
-        Expense.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
             user=self.user,
             account=self.account,
             category=self.expense_category,
@@ -111,7 +121,8 @@ class TestPrepareFunctions(TestCase):
 
     def test_collect_info_income_with_data(self) -> None:
         """Test collect_info_income with income data."""
-        Income.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.INCOME,
             user=self.user,
             account=self.account,
             category=self.income_category,
@@ -133,14 +144,16 @@ class TestPrepareFunctions(TestCase):
 
     def test_collect_info_income_multiple_incomes(self) -> None:
         """Test collect_info_income with multiple incomes."""
-        Income.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.INCOME,
             user=self.user,
             account=self.account,
             category=self.income_category,
             amount=Decimal('1000.00'),
             date=timezone.now().date(),
         )
-        Income.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.INCOME,
             user=self.user,
             account=self.account,
             category=self.income_category,
@@ -155,14 +168,16 @@ class TestPrepareFunctions(TestCase):
 
     def test_collect_info_income_different_dates(self) -> None:
         """Test collect_info_income with incomes on different dates."""
-        Income.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.INCOME,
             user=self.user,
             account=self.account,
             category=self.income_category,
             amount=Decimal('1000.00'),
             date=timezone.now().date(),
         )
-        Income.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.INCOME,
             user=self.user,
             account=self.account,
             category=self.income_category,
@@ -177,7 +192,8 @@ class TestPrepareFunctions(TestCase):
 
     def test_sort_expense_income_with_data(self) -> None:
         """Test sort_expense_income with expense and income data."""
-        Expense.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
             user=self.user,
             account=self.account,
             category=self.expense_category,
@@ -185,7 +201,8 @@ class TestPrepareFunctions(TestCase):
             date=timezone.now().date(),
         )
 
-        Income.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.INCOME,
             user=self.user,
             account=self.account,
             category=self.income_category,
@@ -213,7 +230,8 @@ class TestPrepareFunctions(TestCase):
 
     def test_sort_expense_income_only_expenses(self) -> None:
         """Test sort_expense_income with only expense data."""
-        Expense.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
             user=self.user,
             account=self.account,
             category=self.expense_category,
@@ -231,7 +249,8 @@ class TestPrepareFunctions(TestCase):
 
     def test_sort_expense_income_only_incomes(self) -> None:
         """Test sort_expense_income with only income data."""
-        Income.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.INCOME,
             user=self.user,
             account=self.account,
             category=self.income_category,
@@ -250,7 +269,8 @@ class TestPrepareFunctions(TestCase):
     def test_sort_expense_income_multiple_records(self) -> None:
         """Test sort_expense_income with multiple expense and income records."""
         for _ in range(5):
-            Expense.objects.create(
+            Transaction.objects.create(
+                type=TransactionType.EXPENSE,
                 user=self.user,
                 account=self.account,
                 category=self.expense_category,
@@ -258,7 +278,8 @@ class TestPrepareFunctions(TestCase):
                 date=timezone.now().date(),
             )
 
-            Income.objects.create(
+            Transaction.objects.create(
+                type=TransactionType.INCOME,
                 user=self.user,
                 account=self.account,
                 category=self.income_category,

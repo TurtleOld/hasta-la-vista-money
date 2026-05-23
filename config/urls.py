@@ -134,6 +134,13 @@ urlpatterns = [
         ),
     ),
     path(
+        'transactions/',
+        include(
+            'hasta_la_vista_money.transactions.urls',
+            namespace='transactions',
+        ),
+    ),
+    path(
         'income/',
         include(
             'hasta_la_vista_money.income.urls',

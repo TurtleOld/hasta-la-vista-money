@@ -22,7 +22,6 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
 )
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -44,7 +43,11 @@ from hasta_la_vista_money.finance_account.validators import (
     validate_positive_amount,
 )
 from hasta_la_vista_money.finance_account.views import AccountView
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 BALANCE_TEST = 250000
@@ -86,15 +89,32 @@ class TestAccount(TestCase):
         self.account2.user = self.user
         self.account2.save()
 
-        self.expense1 = Expense.objects.get(pk=1)
-        self.expense1.account = self.account1
-        self.expense1.user = self.user
-        self.expense1.save()
-
-        self.income1 = Income.objects.get(pk=1)
-        self.income1.account = self.account1
-        self.income1.user = self.user
-        self.income1.save()
+        self.expense_category = Category.objects.create(
+            user=self.user,
+            name='Test expense category',
+            type=TransactionType.EXPENSE,
+        )
+        self.income_category = Category.objects.create(
+            user=self.user,
+            name='Test income category',
+            type=TransactionType.INCOME,
+        )
+        self.expense1 = Transaction.objects.create(
+            user=self.user,
+            account=self.account1,
+            category=self.expense_category,
+            amount=Decimal('100.00'),
+            date=timezone.now(),
+            type=TransactionType.EXPENSE,
+        )
+        self.income1 = Transaction.objects.create(
+            user=self.user,
+            account=self.account1,
+            category=self.income_category,
+            amount=Decimal('100.00'),
+            date=timezone.now(),
+            type=TransactionType.INCOME,
+        )
 
     def test_account_list(self) -> None:
         self.client.force_login(self.user)
@@ -180,7 +200,10 @@ class TestAccount(TestCase):
             args=(self.account1.pk,),
         )
 
-        expense_exists = Expense.objects.filter(account=self.account1).exists()
+        expense_exists = Transaction.objects.filter(
+            account=self.account1,
+            type=TransactionType.EXPENSE,
+        ).exists()
         self.assertTrue(expense_exists)
 
         response = self.client.post(url2, follow=True)
@@ -619,8 +642,7 @@ class TestAccount(TestCase):
 
     def test_account_view_with_no_data(self) -> None:
         """Test AccountView with empty data."""
-        Expense.objects.all().delete()
-        Income.objects.all().delete()
+        Transaction.objects.all().delete()
 
         self.client.force_login(self.user)
         url = reverse('finance_account:list')

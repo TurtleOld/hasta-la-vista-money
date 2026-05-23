@@ -10,7 +10,6 @@ from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.tests.helpers import (
@@ -27,6 +26,11 @@ from hasta_la_vista_money.finance_account.views import (
     _finances_transactions,
 )
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import User
 
@@ -123,11 +127,13 @@ class TestFinancesView(TestCase):
             balance=Decimal('1000.00'),
             currency='RUB',
         )
-        self.expense_category = ExpenseCategory.objects.create(
+        self.expense_category = Category.objects.create(
             user=self.user,
             name='Food',
+            type=TransactionType.EXPENSE,
         )
-        Expense.objects.create(
+        Transaction.objects.create(
+            type=TransactionType.EXPENSE,
             user=self.user,
             account=self.other_account,
             category=self.expense_category,

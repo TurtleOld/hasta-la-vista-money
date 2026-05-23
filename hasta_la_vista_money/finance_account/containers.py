@@ -17,9 +17,8 @@ from hasta_la_vista_money.finance_account.services import (
 
 class FinanceAccountContainer(containers.DeclarativeContainer):
     core = providers.DependenciesContainer()
-    expense = providers.DependenciesContainer()
-    income = providers.DependenciesContainer()
     receipts = providers.DependenciesContainer()
+    transactions = providers.DependenciesContainer()
 
     account_repository = providers.Singleton(AccountRepository)
     transfer_money_log_repository = providers.Singleton(
@@ -31,8 +30,7 @@ class FinanceAccountContainer(containers.DeclarativeContainer):
             AccountService,
             account_repository=account_repository,
             transfer_money_log_repository=transfer_money_log_repository,
-            expense_repository=expense.expense_repository,
-            income_repository=income.income_repository,
+            transaction_repository=transactions.transaction_repository,
             receipt_repository=receipts.receipt_repository,
         )
     )

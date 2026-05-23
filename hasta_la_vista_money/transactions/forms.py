@@ -127,7 +127,14 @@ class TransactionForm(
             and category
         ):
             account = get_object_or_404(Account, pk=account_form.pk)
-            if amount > account.balance:
+            available_balance = account.balance
+            if (
+                self.instance.pk
+                and self.instance.type == TransactionType.EXPENSE
+                and self.instance.account_id == account.pk
+            ):
+                available_balance += self.instance.amount
+            if amount > available_balance:
                 self.add_error(
                     'account',
                     _(f'Недостаточно средств на счёте {account}'),

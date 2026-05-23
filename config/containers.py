@@ -47,23 +47,22 @@ class ApplicationContainer(containers.DeclarativeContainer):
         receipts=receipts,
     )
 
+    transactions = providers.Container(
+        TransactionContainer,
+        core=core,
+    )
+
     finance_account = providers.Container(
         FinanceAccountContainer,
         core=core,
-        expense=expense,
-        income=income,
         receipts=receipts,
+        transactions=transactions,
     )
 
     core.account_service.override(finance_account.account_service)
 
     receipts.finance_account.override(finance_account)
     expense.finance_account.override(finance_account)
-
-    transactions = providers.Container(
-        TransactionContainer,
-        core=core,
-    )
 
     budget = providers.Container(
         BudgetContainer,

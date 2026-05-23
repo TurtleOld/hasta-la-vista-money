@@ -105,10 +105,10 @@ class TestRaiffeisenbankCalculator(TestCase):
             bank=BANK_RAIFFEISENBANK,
             type_account='CreditCard',
         )
-        self.expense_repository = MagicMock()
+        self.transaction_repository = MagicMock()
         self.receipt_repository = MagicMock()
         self.calculator = RaiffeisenbankCalculator(
-            expense_repository=self.expense_repository,
+            transaction_repository=self.transaction_repository,
             receipt_repository=self.receipt_repository,
         )
         self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
@@ -120,7 +120,7 @@ class TestRaiffeisenbankCalculator(TestCase):
 
         mock_expense = MagicMock()
         mock_expense.date = first_purchase
-        self.expense_repository.filter.return_value.order_by.return_value.first.return_value = (  # noqa: E501
+        self.transaction_repository.filter.return_value.order_by.return_value.first.return_value = (  # noqa: E501
             mock_expense
         )
         self.receipt_repository.filter.return_value.order_by.return_value.first.return_value = (  # noqa: E501
@@ -151,7 +151,7 @@ class TestRaiffeisenbankCalculator(TestCase):
 
     def test_calculate_grace_period_without_first_purchase(self) -> None:
         """Test grace period calculation without first purchase."""
-        self.expense_repository.filter.return_value.order_by.return_value.first.return_value = (  # noqa: E501
+        self.transaction_repository.filter.return_value.order_by.return_value.first.return_value = (  # noqa: E501
             None
         )
         self.receipt_repository.filter.return_value.order_by.return_value.first.return_value = (  # noqa: E501
@@ -208,7 +208,7 @@ class TestCreateBankCalculator(TestCase):
 
     def setUp(self) -> None:
         """Set up test fixtures."""
-        self.expense_repository = MagicMock()
+        self.transaction_repository = MagicMock()
         self.receipt_repository = MagicMock()
 
     def test_create_sberbank_calculator(self) -> None:
@@ -220,7 +220,7 @@ class TestCreateBankCalculator(TestCase):
         """Test creating Raiffeisenbank calculator."""
         calculator = create_bank_calculator(
             BANK_RAIFFEISENBANK,
-            expense_repository=self.expense_repository,
+            transaction_repository=self.transaction_repository,
             receipt_repository=self.receipt_repository,
         )
         self.assertIsInstance(calculator, RaiffeisenbankCalculator)
