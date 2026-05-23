@@ -17,6 +17,7 @@ from hasta_la_vista_money.finance_account.views import (
     AccountView,
     ChangeAccountView,
     DeleteAccountView,
+    QuickCategoryCreateView,
     TransferMoneyAccountView,
 )
 
@@ -61,5 +62,10 @@ urlpatterns = [
         'by-group/',
         AccountsByGroupAPIView.as_view(),
         name='by_group',
+    ),
+    path(
+        'quick-category/',
+        QuickCategoryCreateView.as_view(),
+        name='quick_category',
     ),
 ]

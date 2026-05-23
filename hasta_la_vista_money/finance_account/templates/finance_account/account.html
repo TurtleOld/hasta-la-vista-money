@@ -4,94 +4,214 @@
 {% load static %}
 {% load word_hash %}
 
-{% block title %}
-    {% translate 'Управляй финансами семьи грамотно!' %}{% endblock %}
+{% block title %}{% translate 'Управляй финансами семьи грамотно!' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'accounts/css/accounts.css' %}?v={% word_hash %}">
+{% endblock %}
+
 {% block content %}
-    <div class="finance-account-page min-h-screen bg-linear-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-6 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-7xl mx-auto">
-            <div class="mb-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                    <h1 class="font-heading text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                        <div class="p-2 bg-linear-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 rounded-xl">
-                            <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                            </svg>
-                        </div>
-                        <span>{% translate 'Мои счета' %}</span>
-                    </h1>
-                    <div class="flex flex-wrap items-center gap-2.5">
-                        <a id="detailed-statistics" href="{% url 'users:statistics' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 font-medium rounded-xl border border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                            </svg>
-                            <span>{% translate 'Детальная статистика' %}</span>
-                        </a>
-                        <a id="finance-account-create" href="{% url 'finance_account:create' %}" class="add-account-button inline-flex items-center gap-2 px-4 py-2 text-white font-medium rounded-xl transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                            </svg>
-                            <span>{% translate 'Добавить счет' %}</span>
-                        </a>
-                        <a id="transfer-money-between-accounts" href="{% url 'finance_account:transfer_money' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-medium rounded-xl border border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
-                            </svg>
-                            <span>{% translate 'Перевести средства' %}</span>
-                        </a>
-                    </div>
+<main class="accounts-app">
+    <div class="accounts-wrap">
+
+        <section class="accounts-hero">
+            <div>
+                <div class="accounts-hero-label">
+                    <span class="accounts-hero-dot"></span>
+                    {% translate 'Общий баланс семьи' %}
+                </div>
+                <div class="accounts-hero-amt">
+                    <span id="accounts-hero-amt-value" class="hide-target">{{ sum_all_accounts_in_group|comma }}<span class="cur">₽</span></span>
+                </div>
+                <div id="accounts-hero-change" class="accounts-hero-change">
+                    {% if balance_trend.has_data %}
+                        {% if balance_trend.delta_absolute >= 0 %}
+                            <span class="accounts-chip-pos">
+                                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M7 14l5-5 5 5"/></svg>
+                                <span class="hide-target">+{{ balance_trend.delta_absolute|comma }} ₽</span>
+                            </span>
+                        {% else %}
+                            <span class="accounts-chip-neg">
+                                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5"/></svg>
+                                <span class="hide-target">{{ balance_trend.delta_absolute|comma }} ₽</span>
+                            </span>
+                        {% endif %}
+                        <span>{% translate 'за период' %} · {% if balance_trend.delta_percent >= 0 %}+{% endif %}{{ balance_trend.delta_percent|floatformat:1 }}%</span>
+                    {% else %}
+                        <span>{% translate 'Недостаточно данных для расчёта динамики' %}</span>
+                    {% endif %}
                 </div>
             </div>
+            <div></div>
+        </section>
 
-            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <div class="xl:col-span-2 space-y-4">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-2 py-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                        <div class="font-heading font-semibold text-gray-900 dark:text-white">{% translate 'Счета' %}</div>
-                        <div id="group-accounts" class="flex items-center gap-2.5">
-                            <label for="account-group-select" class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{% translate 'Показать:' %}</label>
-                            <select id="account-group-select" class="px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
-                                <option value="family" {% if request.GET.group_id == 'family' or not request.GET.group_id %}selected{% endif %}>{% translate 'Семья' %}</option>
-                                <option value="my" {% if request.GET.group_id == 'my' %}selected{% endif %}>{% translate 'Мои' %}</option>
-                                {% for group in user_groups %}
-                                    <option value="{{ group.id }}" {% if request.GET.group_id == group.id|stringformat:"s" %}selected{% endif %}>{{ group.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    <div id="account-cards-block">
-                        {% include 'finance_account/_account_cards_block.html' %}
-                    </div>
-                </div>
-                <div class="xl:col-span-1 space-y-4">
-                    {% include 'finance_account/_balance_trend_widget.html' %}
-                    <div id="sum-all-groups-accounts" class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-                        <div class="bg-linear-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <h3 class="font-heading text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <svg class="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                                </svg>
-                                <span>{% translate 'Общий баланс семьи' %}</span>
-                            </h3>
-                        </div>
-                        <div class="p-5">
-                            <p class="font-mono text-3xl font-bold text-green-600 dark:text-green-400 mb-3">
-                                {{ sum_all_accounts_in_group|comma }} ₽
-                            </p>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                                {% if user_groups %}
-                                    {% translate 'Это сумма всех счетов участников ваших семейных групп.' %}
-                                {% else %}
-                                    {% translate 'Вы не состоите ни в одной группе. Отображается сумма только ваших счетов.' %}
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-                </div>
+        {# ── Page header ──────────────────────────────────────── #}
+        <div class="accounts-page-hd">
+            <div class="accounts-page-title">
+                <span class="accounts-page-ico">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>
+                </span>
+                <h1>{% translate 'Мои счета' %}</h1>
+            </div>
+            <div class="accounts-actions">
+                <button type="button" class="accounts-eye">
+                    <svg data-eye-show-when-visible viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                    <svg data-eye-show-when-hidden class="is-hidden-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M3 3l18 18"/><path d="M10.6 5.2c.5-.1.9-.2 1.4-.2 6.5 0 10 6 10 6a17 17 0 01-3.2 3.8M6.3 6.4A17 17 0 002 11s3.5 6 10 6c1.5 0 2.8-.3 4-.8"/><path d="M9.9 10a3 3 0 004.2 4.2"/></svg>
+                </button>
+                <a id="detailed-statistics" href="{% url 'users:statistics' %}" class="accounts-btn accounts-btn-ghost-accent">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 4v16h16"/><path d="M8 14l3-3 3 3 5-6"/></svg>
+                    {% translate 'Детальная статистика' %}
+                </a>
+                <a id="finance-account-create" href="{% url 'finance_account:create' %}" class="accounts-btn accounts-btn-primary">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14M5 12h14"/></svg>
+                    {% translate 'Добавить счет' %}
+                </a>
+                <a id="transfer-money-between-accounts" href="{% url 'finance_account:transfer_money' %}" class="accounts-btn">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>
+                    {% translate 'Перевести средства' %}
+                </a>
             </div>
         </div>
+
+        {# ── Main grid ────────────────────────────────────────── #}
+        <div class="accounts-grid">
+
+            {# ── Accounts panel ───────────────────────────────── #}
+            <section class="accounts-panel">
+                <div class="accounts-panel-hd">
+                    <h2>{% translate 'Счета' %}</h2>
+                    {% with current_group=request.GET.group_id|default:'my' %}
+                    <div id="group-accounts" class="accounts-group-chips">
+                        <span class="accounts-group-chips-label">{% translate 'Группа:' %}</span>
+                        <button type="button"
+                                class="accounts-group-chip{% if current_group == 'my' %} is-active{% endif %}"
+                                data-group-chip="my"
+                                hx-get="{% url 'finance_account:list' %}?group_id=my"
+                                hx-target="#account-cards-block"
+                                hx-swap="outerHTML"
+                                hx-push-url="true">
+                            {% translate 'Мои' %}
+                        </button>
+                        {% for group in user_groups %}
+                            <button type="button"
+                                    class="accounts-group-chip{% if current_group == group.id|stringformat:'s' %} is-active{% endif %}"
+                                    data-group-chip="{{ group.id }}"
+                                    hx-get="{% url 'finance_account:list' %}?group_id={{ group.id }}"
+                                    hx-target="#account-cards-block"
+                                    hx-swap="outerHTML"
+                                    hx-push-url="true">
+                                {{ group.name }}
+                            </button>
+                        {% endfor %}
+                    </div>
+                    {% endwith %}
+                </div>
+                <div id="account-cards-block">
+                    {% include 'finance_account/_account_cards_block.html' %}
+                </div>
+            </section>
+
+            {# ── Sidebar ──────────────────────────────────────── #}
+            <aside class="accounts-sidebar">
+
+                {# ── Balance trend ────────────────────────────── #}
+                {% include 'finance_account/_balance_trend_widget.html' %}
+
+                {# ── Last operations ──────────────────────────── #}
+                <section class="accounts-panel">
+                    <div class="accounts-panel-hd">
+                        <h2>
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+                            {% translate 'Последние операции' %}
+                        </h2>
+                        <a href="{% url 'finances' %}" class="accounts-panel-link">
+                            {% translate 'Все' %}
+                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                        </a>
+                    </div>
+                    <div id="accounts-last-operations">
+                        {% include 'finance_account/_last_operations.html' %}
+                    </div>
+                </section>
+            </aside>
+        </div>
     </div>
+
+    {# ── Quick add: FAB + drawer ──────────────────────────────── #}
+    {% if drawer_accounts %}
+    <button type="button" class="accounts-fab" data-open="0" aria-label="{% translate 'Новая операция' %}">
+        <span class="plus">+</span>
+        <span data-qa-fab-label>{% translate 'Операция' %}</span>
+    </button>
+
+    <div class="accounts-drawer" data-open="0">
+        <div class="accounts-drawer-hd">
+            <h3>{% translate 'Новая операция' %}</h3>
+            <div class="accounts-drawer-tabs">
+                <button type="button" class="on" data-qa-tab="expense">{% translate 'Расход' %}</button>
+                <button type="button" data-qa-tab="income">{% translate 'Доход' %}</button>
+            </div>
+        </div>
+        <form class="accounts-drawer-body" data-qa-form>
+            <div class="accounts-drawer-amt">
+                <input type="text" inputmode="numeric" placeholder="0" data-qa-amount>
+                <span class="cur">₽</span>
+            </div>
+            <div class="accounts-drawer-field">
+                <label>{% translate 'Счёт' %}</label>
+                <select data-qa-account>
+                    {% for account in drawer_accounts %}
+                        <option value="{{ account.id }}">{{ account.name_account }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="accounts-drawer-field accounts-drawer-field-category">
+                <label>{% translate 'Категория' %}</label>
+                <select data-qa-category></select>
+                <button type="button" class="accounts-drawer-cat-add" data-qa-cat-add
+                        aria-label="{% translate 'Добавить категорию' %}"
+                        title="{% translate 'Добавить категорию' %}">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+            </div>
+            <div class="accounts-drawer-cat-form is-hidden-icon" data-qa-cat-form>
+                <input type="text" placeholder="{% translate 'Название категории' %}" data-qa-cat-name maxlength="100">
+                <button type="button" class="accounts-drawer-cat-save" data-qa-cat-save>{% translate 'Создать' %}</button>
+                <button type="button" class="accounts-drawer-cat-cancel" data-qa-cat-cancel aria-label="{% translate 'Отмена' %}">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M6 6l12 12M6 18L18 6"/></svg>
+                </button>
+            </div>
+            <button type="submit" class="accounts-drawer-submit" data-qa-submit disabled>
+                <span data-qa-submit-idle>{% translate 'Добавить операцию' %}</span>
+                <span data-qa-submit-busy class="is-hidden-icon">{% translate 'Сохраняем…' %}</span>
+            </button>
+        </form>
+    </div>
+
+    <div class="accounts-toast" data-on="0" aria-live="polite">
+        <span data-toast-message></span>
+    </div>
+    {% endif %}
+</main>
+
+<script nonce="{{ request.csp_nonce }}">
+    window.HLVM_QUICK_ADD_CONFIG = {
+        createUrl: "{% url 'finances_create' %}",
+        quickCategoryUrl: "{% url 'finance_account:quick_category' %}",
+        csrfToken: "{{ csrf_token }}",
+        defaultAccount: "{% if drawer_accounts %}{{ drawer_accounts.0.id }}{% endif %}",
+        incomeCategories: [
+            {% for cat in drawer_income_categories %}{"id": {{ cat.id }}, "name": "{{ cat.name|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}
+        ],
+        expenseCategories: [
+            {% for cat in drawer_expense_categories %}{"id": {{ cat.id }}, "name": "{{ cat.name|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}
+        ],
+    };
+</script>
 {% endblock %}
 
 {% block extra_js %}
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/chart.umd.min.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/balance_trend_widget.js' %}?v={% word_hash %}"></script>
+    <script defer nonce="{{request.csp_nonce}}" src="{% static 'accounts/js/accounts.js' %}?v={% word_hash %}"></script>
 {% endblock %}
