@@ -20,6 +20,7 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 from hasta_la_vista_money.users.factories import UserFactory
+from hasta_la_vista_money.users.models import FamilyGroupMembership
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User as UserType
@@ -80,6 +81,16 @@ class TestAccountServices(TestCase):
         group = Group.objects.create(name='Test Group')
         self.user1.groups.add(group)
         self.user2.groups.add(group)
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.user1,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.user2,
+            role=FamilyGroupMembership.Role.VIEWER,
+        )
 
         accounts = self.account_service.get_accounts_for_user_or_group(
             self.user1,
@@ -98,10 +109,10 @@ class TestAccountServices(TestCase):
             '999',
         )
 
-        # When group doesn't exist, should return only user's own accounts
-        self.assertEqual(accounts.count(), 2)
-        self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        # Unknown or inaccessible groups should not leak user's own accounts.
+        self.assertEqual(accounts.count(), 0)
+        self.assertNotIn(self.account1, accounts)
+        self.assertNotIn(self.account2, accounts)
 
     def test_get_sum_all_accounts(self) -> None:
         """Test get_sum_all_accounts function."""

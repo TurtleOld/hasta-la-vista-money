@@ -10,9 +10,10 @@ from django_stubs_ext.db.models import TypedModelMeta
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import (
     add_user_to_group,
+    get_or_create_default_family_group,
     remove_user_from_group,
 )
 
@@ -172,6 +173,18 @@ class GroupCreateForm(ModelForm[Group]):
 class GroupDeleteForm(forms.Form):
     """Form for deleting user groups."""
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        current_user = kwargs.pop('current_user', None)
+        super().__init__(*args, **kwargs)
+        if isinstance(current_user, User):
+            owner_group_ids = FamilyGroupMembership.objects.filter(
+                user=current_user,
+                role=FamilyGroupMembership.Role.OWNER,
+            ).values_list('group_id', flat=True)
+            self.fields['group'].queryset = Group.objects.filter(
+                id__in=owner_group_ids,
+            ).exclude(name='Семья')
+
     group = forms.ModelChoiceField(
         queryset=Group.objects.all(),
         label=_('Группа для удаления'),
@@ -187,8 +200,10 @@ class UserGroupBaseForm(forms.Form):
     """Base form for user-group operations."""
 
     user_instance: User | None = None
+    current_user: User | None = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
         self.user_instance = self._get_user_instance()
 
@@ -233,12 +248,27 @@ class AddUserToGroupForm(UserGroupBaseForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        family_group = None
+        if isinstance(self.current_user, User):
+            family_group = get_or_create_default_family_group(
+                self.current_user,
+            )
         if self.user_instance:
-            self.fields['group'].queryset = Group.objects.exclude(  # type: ignore[attr-defined]
+            queryset = Group.objects.exclude(
                 id__in=self.user_instance.groups.values_list('id', flat=True),
             )
+            if family_group is not None:
+                queryset = queryset.filter(pk=family_group.pk)
+            self.fields['group'].queryset = queryset  # type: ignore[attr-defined]
         else:
-            self.fields['group'].queryset = Group.objects.none()  # type: ignore[attr-defined]
+            self.fields['group'].queryset = (  # type: ignore[attr-defined]
+                Group.objects.filter(pk=family_group.pk)
+                if family_group is not None
+                else Group.objects.none()
+            )
+        if family_group is not None:
+            self.fields['group'].initial = family_group
+            self.fields['group'].widget = forms.HiddenInput()
 
     def save(self, request: HttpRequest) -> None:
         """Add user to selected group."""
@@ -254,10 +284,25 @@ class DeleteUserFromGroupForm(UserGroupBaseForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        family_group = None
+        if isinstance(self.current_user, User):
+            family_group = get_or_create_default_family_group(
+                self.current_user,
+            )
         if self.user_instance:
-            self.fields['group'].queryset = self.user_instance.groups.all()  # type: ignore[attr-defined]
+            queryset = self.user_instance.groups.all()
+            if family_group is not None:
+                queryset = queryset.filter(pk=family_group.pk)
+            self.fields['group'].queryset = queryset  # type: ignore[attr-defined]
         else:
-            self.fields['group'].queryset = Group.objects.none()  # type: ignore[attr-defined]
+            self.fields['group'].queryset = (  # type: ignore[attr-defined]
+                Group.objects.filter(pk=family_group.pk)
+                if family_group is not None
+                else Group.objects.none()
+            )
+        if family_group is not None:
+            self.fields['group'].initial = family_group
+            self.fields['group'].widget = forms.HiddenInput()
 
     def save(self, request: HttpRequest) -> None:
         """Remove user from selected group."""

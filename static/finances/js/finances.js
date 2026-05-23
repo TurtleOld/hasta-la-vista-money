@@ -136,6 +136,16 @@ document.addEventListener('alpine:init', () => {
       return;
     }
 
+    const scopeButton = event.target.closest('[data-finances-scope]');
+    if (scopeButton) {
+      const groupInput = document.getElementById('finances-group');
+      if (groupInput) {
+        groupInput.value = scopeButton.dataset.financesScope;
+      }
+      submitForm();
+      return;
+    }
+
     const groupButton = event.target.closest('[data-finances-group]');
     if (groupButton) {
       setGroup(groupButton.dataset.financesGroup);

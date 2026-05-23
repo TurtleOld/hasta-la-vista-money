@@ -35,7 +35,7 @@ class GroupAccountMixin:
         if request_obj is None:
             raise AttributeError('request attribute is required')
         request = cast('RequestWithContainer', request_obj)
-        return request.GET.get('group_id') or 'my'
+        return request.GET.get('group_id') or 'family'
 
     def get_accounts(self, user: User) -> QuerySet[Account]:
         """Get accounts filtered by user or group.

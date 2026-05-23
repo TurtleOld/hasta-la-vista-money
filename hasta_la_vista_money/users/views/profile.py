@@ -28,6 +28,7 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.services.export import get_user_export_data
+from hasta_la_vista_money.users.services.groups import get_family_groups
 from hasta_la_vista_money.users.services.notifications import (
     get_user_notifications,
 )
@@ -67,6 +68,7 @@ class ListUsers(
         context['user_update_pass_form'] = user_update_pass_form
         context['user_statistics'] = user_statistics
         context['user'] = user
+        context['family_groups'] = get_family_groups(user, self.request)
         return context
 
 

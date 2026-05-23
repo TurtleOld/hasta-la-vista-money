@@ -39,7 +39,11 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+                <div class="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-1" aria-label="{% translate 'Область данных' %}">
+                    <a class="rounded-lg px-4 py-2 text-sm font-semibold {% if selected_group_id == 'family' %}bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 shadow-sm{% else %}text-gray-500 dark:text-gray-400{% endif %}" href="?group_id=family">{% translate 'Семья' %}</a>
+                    <a class="rounded-lg px-4 py-2 text-sm font-semibold {% if selected_group_id == 'my' %}bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 shadow-sm{% else %}text-gray-500 dark:text-gray-400{% endif %}" href="?group_id=my">{% translate 'Мои' %}</a>
+                </div>
                 <label for="period-select" class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                     {% translate 'Период:' %}
                 </label>

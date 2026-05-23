@@ -32,6 +32,7 @@ from hasta_la_vista_money.users.views.groups import (
     DeleteUserFromGroupView,
     GroupCreateView,
     GroupDeleteView,
+    JoinFamilyGroupView,
 )
 from hasta_la_vista_money.users.views.profile import (
     ExportUserDataView,
@@ -58,6 +59,7 @@ __all__ = [
     'GroupCreateView',
     'GroupDeleteView',
     'IndexView',
+    'JoinFamilyGroupView',
     'ListUsers',
     'LoginUser',
     'LogoutUser',

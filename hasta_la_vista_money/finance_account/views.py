@@ -164,7 +164,7 @@ class FinancesFilter:
     category_keys: list[str] = field(default_factory=list)
     min_amount: Decimal | None = None
     q: str = ''
-    group_id: str = 'my'
+    group_id: str = 'family'
     page: int = 1
 
     @classmethod
@@ -190,7 +190,7 @@ class FinancesFilter:
             category_keys=list(query.getlist('category')),
             min_amount=min_amount,
             q=query.get('q', '').strip(),
-            group_id=query.get('group_id', 'my'),
+            group_id=query.get('group_id', 'family'),
             page=int(query.get('page', '1') or 1),
         )
 
@@ -205,7 +205,7 @@ class FinancesFilter:
             or self.category_keys
             or self.min_amount
             or self.q
-            or self.group_id != 'my',
+            or self.group_id != 'family',
         )
 
     @property
@@ -217,7 +217,7 @@ class FinancesFilter:
             params.append(('type', self.type))
         if self.period != 'm':
             params.append(('period', self.period))
-        if self.group_id != 'my':
+        if self.group_id != 'family':
             params.append(('group_id', self.group_id))
         params.extend(
             ('account', account_id) for account_id in self.account_ids
@@ -310,7 +310,7 @@ class FinancesView(LoginRequiredMixin, TemplateView):
             )
             or []
         )
-        users = group_users or [request.user]
+        users = group_users
         accounts = Account.objects.filter(user__in=users).order_by(
             'name_account',
         )

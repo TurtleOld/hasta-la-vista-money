@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% load i18n %}
-{% block title %}Удалить пользователя из группы{% endblock %}
+{% block title %}Удалить пользователя из семьи{% endblock %}
 {% block content %}
 <div class="container mt-4">
-    <h2>Удалить пользователя из группы</h2>
+    <h2>Удалить пользователя из семьи</h2>
     <form method="post" id="delete-user-from-group-form">
         {% csrf_token %}
         {% include 'forms/_form.html' with form=form %}
