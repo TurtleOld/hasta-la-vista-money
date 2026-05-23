@@ -70,16 +70,6 @@
       reveal: 192,
       pointerId: null,
 
-      get contentStyle() {
-        return `transform: translate3d(${this.x}px, 0, 0)`;
-      },
-
-      get contentClass() {
-        return this.swiping
-          ? 'accounts-row-content swiping'
-          : 'accounts-row-content';
-      },
-
       onDown(event) {
         this.startX = event.clientX - this.x;
         this.swiping = true;
@@ -149,50 +139,7 @@
         this.syncCategory();
       },
 
-      get drawerOpenAttr() {
-        return this.open ? '1' : '0';
-      },
-
-      get notOpen() {
-        return !this.open;
-      },
-
-      get isExpense() {
-        return this.type === 'expense';
-      },
-
-      get isIncome() {
-        return this.type === 'income';
-      },
-
-      get expenseTabClass() {
-        return this.type === 'expense' ? 'on' : '';
-      },
-
-      get incomeTabClass() {
-        return this.type === 'income' ? 'on' : '';
-      },
-
-      get currentCategories() {
-        return this.type === 'income'
-          ? this.incomeCategories
-          : this.expenseCategories;
-      },
-
-      get submitDisabled() {
-        if (this.submitting) return true;
-        if (!this.amount) return true;
-        if (!this.accountId) return true;
-        if (!this.categoryId) return true;
-        return false;
-      },
-
-      get notSubmitting() {
-        return !this.submitting;
-      },
-
       toggle() {
-        console.log('[quickAdd] toggle clicked, open was:', this.open);
         this.open = !this.open;
         if (this.open) {
           this.syncCategory();
@@ -224,7 +171,9 @@
       },
 
       syncCategory() {
-        const list = this.currentCategories;
+        const list = this.type === 'income'
+          ? this.incomeCategories
+          : this.expenseCategories;
         if (!list.length) {
           this.categoryId = '';
           return;
@@ -303,18 +252,6 @@
         });
       },
 
-      get toastClass() {
-        return this.error ? 'accounts-toast is-error' : 'accounts-toast';
-      },
-
-      get dataOn() {
-        return this.visible ? '1' : '0';
-      },
-
-      get notVisible() {
-        return !this.visible;
-      },
-
       show(detail) {
         this.message = detail.message || '';
         this.error = Boolean(detail.error);
@@ -348,22 +285,5 @@
       });
     });
 
-    /* ── Eye button helpers (computed flags) ─────────────────── */
-    window.Alpine.data('accountsEye', () => ({
-      get hidden() {
-        return window.Alpine.store('accountsUi').hideBalance;
-      },
-      get visible() {
-        return !window.Alpine.store('accountsUi').hideBalance;
-      },
-      get titleText() {
-        return window.Alpine.store('accountsUi').hideBalance
-          ? 'Показать суммы'
-          : 'Скрыть суммы';
-      },
-      toggle() {
-        window.Alpine.store('accountsUi').toggle();
-      },
-    }));
   });
 })();

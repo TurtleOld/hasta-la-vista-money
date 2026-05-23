@@ -54,9 +54,9 @@
                 <h1>{% translate 'Мои счета' %}</h1>
             </div>
             <div class="accounts-actions">
-                <button type="button" class="accounts-eye" x-data="accountsEye" @click="toggle" :title="titleText">
-                    <svg x-show="visible" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
-                    <svg x-show="hidden" x-cloak viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M3 3l18 18"/><path d="M10.6 5.2c.5-.1.9-.2 1.4-.2 6.5 0 10 6 10 6a17 17 0 01-3.2 3.8M6.3 6.4A17 17 0 002 11s3.5 6 10 6c1.5 0 2.8-.3 4-.8"/><path d="M9.9 10a3 3 0 004.2 4.2"/></svg>
+                <button type="button" class="accounts-eye" @click="$store.accountsUi.toggle()">
+                    <svg x-show="!$store.accountsUi.hideBalance" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                    <svg x-show="$store.accountsUi.hideBalance" x-cloak viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M3 3l18 18"/><path d="M10.6 5.2c.5-.1.9-.2 1.4-.2 6.5 0 10 6 10 6a17 17 0 01-3.2 3.8M6.3 6.4A17 17 0 002 11s3.5 6 10 6c1.5 0 2.8-.3 4-.8"/><path d="M9.9 10a3 3 0 004.2 4.2"/></svg>
                 </button>
                 <a id="detailed-statistics" href="{% url 'users:statistics' %}" class="accounts-btn accounts-btn-ghost-accent">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 4v16h16"/><path d="M8 14l3-3 3 3 5-6"/></svg>
@@ -140,18 +140,18 @@
     {# ── Quick add: FAB + drawer ──────────────────────────────── #}
     {% if drawer_accounts %}
     <div x-data="quickAdd">
-        <button type="button" class="accounts-fab" :data-open="drawerOpenAttr"
+        <button type="button" class="accounts-fab" :data-open="open ? '1' : '0'"
                 @click="toggle" aria-label="{% translate 'Новая операция' %}">
             <span class="plus">+</span>
-            <span x-show="notOpen" x-cloak>{% translate 'Операция' %}</span>
+            <span x-show="!open" x-cloak>{% translate 'Операция' %}</span>
         </button>
 
-        <div class="accounts-drawer" :data-open="drawerOpenAttr" x-cloak @click.outside="handleOutside">
+        <div class="accounts-drawer" :data-open="open ? '1' : '0'" x-cloak @click.outside="handleOutside">
             <div class="accounts-drawer-hd">
                 <h3>{% translate 'Новая операция' %}</h3>
                 <div class="accounts-drawer-tabs">
-                    <button type="button" :class="expenseTabClass" @click="setExpense">{% translate 'Расход' %}</button>
-                    <button type="button" :class="incomeTabClass" @click="setIncome">{% translate 'Доход' %}</button>
+                    <button type="button" :class="type === 'expense' ? 'on' : ''" @click="setExpense">{% translate 'Расход' %}</button>
+                    <button type="button" :class="type === 'income' ? 'on' : ''" @click="setIncome">{% translate 'Доход' %}</button>
                 </div>
             </div>
             <form class="accounts-drawer-body" @submit="submit">
@@ -171,20 +171,20 @@
                 <div class="accounts-drawer-field">
                     <label>{% translate 'Категория' %}</label>
                     <select x-model="categoryId">
-                        <template x-for="cat in currentCategories" :key="cat.id">
+                        <template x-for="cat in (type === 'income' ? incomeCategories : expenseCategories)" :key="cat.id">
                             <option :value="cat.id" x-text="cat.name"></option>
                         </template>
                     </select>
                 </div>
-                <button type="submit" class="accounts-drawer-submit" :disabled="submitDisabled">
-                    <span x-show="notSubmitting">{% translate 'Добавить операцию' %}</span>
+                <button type="submit" class="accounts-drawer-submit" :disabled="submitting || !amount || !accountId || !categoryId">
+                    <span x-show="!submitting">{% translate 'Добавить операцию' %}</span>
                     <span x-show="submitting" x-cloak>{% translate 'Сохраняем…' %}</span>
                 </button>
             </form>
         </div>
     </div>
 
-    <div x-data="accountsToast" :class="toastClass" :data-on="dataOn" aria-live="polite">
+    <div x-data="accountsToast" :class="error ? 'accounts-toast is-error' : 'accounts-toast'" :data-on="visible ? '1' : '0'" aria-live="polite">
         <span x-text="message"></span>
     </div>
     {% endif %}

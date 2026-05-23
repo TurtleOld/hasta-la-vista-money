@@ -30,7 +30,7 @@
 
             <div class="accounts-row-hint" aria-hidden="true"><i></i><i></i><i></i></div>
 
-            <div :class="contentClass" :style="contentStyle"
+            <div class="accounts-row-content" :class="swiping ? 'swiping' : ''" :style="'transform: translate3d(' + x + 'px, 0, 0)'"
                  @pointerdown="onDown" @pointermove="onMove"
                  @pointerup="onUp" @pointercancel="onUp">
                 <div class="accounts-row-mark">
