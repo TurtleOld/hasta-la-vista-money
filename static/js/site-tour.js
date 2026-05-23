@@ -88,25 +88,6 @@
         }
 
 
-        // Helper function to toggle dropdown menu
-        function toggleFinanceDropdown(show = true) {
-            const button = document.getElementById('financeDropdownButton');
-            const menu = document.getElementById('financeDropdownMenu');
-            const arrow = document.getElementById('financeDropdownArrow');
-
-            if (!button || !menu || !arrow) return;
-
-            if (show) {
-                menu.classList.remove('hidden');
-                button.setAttribute('aria-expanded', 'true');
-                arrow.style.transform = 'rotate(180deg)';
-            } else {
-                menu.classList.add('hidden');
-                button.setAttribute('aria-expanded', 'false');
-                arrow.style.transform = 'rotate(0deg)';
-            }
-        }
-
         // Helper function to toggle user dropdown menu
         function toggleUserDropdown(show = true) {
             const button = document.getElementById('userDropdownButton');
@@ -175,42 +156,12 @@
                 }
             },
             {
-                element: '#financeDropdown',
+                element: '#finances',
                 popover: {
                     title: 'Финансы',
-                    description: 'Управление расходами и доходами. Нажмите далее для раскрытия меню.',
+                    description: 'Здесь вы управляете всеми операциями — доходами и расходами.',
                     side: 'bottom',
                     align: 'start'
-                },
-                onHighlightStarted: () => {
-                    toggleFinanceDropdown(false);
-                }
-            },
-            {
-                element: '#financeDropdownMenu li:nth-child(1) a',
-                popover: {
-                    title: 'Доходы',
-                    description: 'Здесь вы можете управлять вашими доходами',
-                    side: 'bottom',
-                    align: 'start'
-                },
-                onHighlightStarted: () => {
-                    toggleFinanceDropdown(true);
-                }
-            },
-            {
-                element: '#financeDropdownMenu li:nth-child(2) a',
-                popover: {
-                    title: 'Расходы',
-                    description: 'Здесь вы можете управлять вашими расходами',
-                    side: 'bottom',
-                    align: 'start'
-                },
-                onHighlightStarted: () => {
-                    toggleFinanceDropdown(true);
-                },
-                onDeselected: () => {
-                    toggleFinanceDropdown(false);
                 }
             },
             {
