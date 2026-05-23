@@ -137,10 +137,20 @@
         this.csrfToken = config.csrfToken || '';
         this.accountId = config.defaultAccount || '';
         this.syncCategory();
+        console.log('[store.quickAdd] init done. open=', this.open);
       },
 
       toggle() {
+        console.log('[store.quickAdd] toggle BEFORE: open=', this.open);
         this.open = !this.open;
+        console.log('[store.quickAdd] toggle AFTER: open=', this.open);
+        setTimeout(() => {
+          const fab = document.querySelector('.accounts-fab');
+          const drawer = document.querySelector('.accounts-drawer');
+          console.log('[store.quickAdd] post-tick: $store.open=', window.Alpine.store('quickAdd').open,
+                      'fab[data-open]=', fab && fab.getAttribute('data-open'),
+                      'drawer[data-open]=', drawer && drawer.getAttribute('data-open'));
+        }, 0);
         if (this.open) {
           this.syncCategory();
         }
