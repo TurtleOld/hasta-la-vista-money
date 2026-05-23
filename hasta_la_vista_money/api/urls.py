@@ -22,6 +22,13 @@ urlpatterns = [
         include('hasta_la_vista_money.income.api_urls', namespace='income'),
     ),
     path(
+        'transactions/',
+        include(
+            'hasta_la_vista_money.transactions.api_urls',
+            namespace='transactions',
+        ),
+    ),
+    path(
         'finaccount/',
         include(
             'hasta_la_vista_money.finance_account.urls',
