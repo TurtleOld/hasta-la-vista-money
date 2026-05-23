@@ -8,15 +8,17 @@
             <span class="leading-none">{% translate 'Счета' %}</span>
         </a>
 
-        <a href="{% url 'finances' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if request.path == '/finance/' or 'income' in request.path or 'expense' in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">
+        <a href="{% url 'finances' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if request.path == '/finance/' %}text-emerald-600 dark:text-emerald-400{% endif %}">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
             </svg>
             <span class="leading-none">{% translate 'Финансы' %}</span>
         </a>
 
-        <a href="{% url 'expense:create' %}" class="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-linear-to-br from-emerald-600 to-emerald-400 text-white shadow-lg shadow-emerald-600/30 ring-1 ring-white/20 active:scale-95" id="bottom-nav-fab" data-income-url="{% url 'income:create' %}" data-expense-url="{% url 'expense:create' %}">
-            <span id="fab-icon" class="flex h-6 w-6 items-center justify-center"></span>
+        <a href="{% url 'finances_create' %}" class="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-linear-to-br from-emerald-600 to-emerald-400 text-white shadow-lg shadow-emerald-600/30 ring-1 ring-white/20 active:scale-95" id="bottom-nav-fab" aria-label="{% translate 'Новая операция' %}">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v8m-4-4h8"></path>
+            </svg>
         </a>
 
         <a href="{% url 'reports:list' %}" class="flex min-w-[56px] flex-col items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:text-emerald-600 active:scale-95 dark:text-gray-300 dark:hover:text-emerald-400 {% if 'reports' in request.path %}text-emerald-600 dark:text-emerald-400{% endif %}">

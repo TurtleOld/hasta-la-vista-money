@@ -33,46 +33,15 @@
                         </a>
                     </li>
 
-                    <!-- Finance Dropdown -->
-                    <li class="relative" id="financeDropdown">
-                        <button class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium {% if request.path == '/finance/' or request.path == '/income/' or request.path == '/expense/' %}bg-linear-to-r from-green-600 to-emerald-600 text-green-50 dark:text-white shadow-lg shadow-green-500/30{% else %}text-gray-700 dark:text-gray-300{% endif %} focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900" type="button" aria-expanded="false" id="financeDropdownButton">
+                    <!-- Finances -->
+                    <li id="finances">
+                        <a class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium {% if request.path == '/finance/' %}bg-linear-to-r from-green-600 to-emerald-600 text-green-50 dark:text-white shadow-lg shadow-green-500/30{% else %}text-gray-700 dark:text-gray-300{% endif %}"
+                           href="{% url 'finances' %}">
                             <svg class="w-4 h-4 shrink-0" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
                             <span>{% translate "Финансы" %}</span>
-                            <svg class="w-3.5 h-3.5 shrink-0" width="14" height="14" id="financeDropdownArrow" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-                        <ul class="absolute left-0 mt-3 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm hidden z-50 overflow-hidden" id="financeDropdownMenu">
-                            <li>
-                                <a class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-xl {% if request.path == '/finance/' %}bg-linear-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 text-green-600 dark:text-green-400{% endif %}"
-                                   href="{% url 'finances' %}">
-                                    <svg class="w-4 h-4 shrink-0 text-green-500" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
-                                    </svg>
-                                    <span>{% translate 'Все операции' %}</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-xl {% if request.path == '/income/' %}bg-linear-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 text-green-600 dark:text-green-400{% endif %}"
-                                   href="{% url 'income:list' %}">
-                                    <svg class="w-4 h-4 shrink-0 text-green-500" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                                    </svg>
-                                    <span>{% translate 'Доходы' %}</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-xl {% if request.path == '/expense/' %}bg-linear-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 text-red-600 dark:text-red-400{% endif %}"
-                                   href="{% url 'expense:list' %}">
-                                    <svg class="w-4 h-4 shrink-0 text-red-500" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
-                                    </svg>
-                                    <span>{% translate 'Расходы' %}</span>
-                                </a>
-                            </li>
-                        </ul>
+                        </a>
                     </li>
                     <!-- Budget-->
                     <li id="budget">
