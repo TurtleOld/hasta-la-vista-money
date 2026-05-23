@@ -12,9 +12,11 @@ from celery import shared_task
 from django.db.models import Avg, Count, Max, Min, Sum
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.expense.models import Expense
-from hasta_la_vista_money.income.models import Income
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
@@ -26,17 +28,7 @@ def generate_monthly_report(
     year: int,
     month: int,
 ) -> dict[str, Any]:
-    """Generate monthly report for user.
-
-    Args:
-        user_id: User ID.
-        year: Report year.
-        month: Report month.
-
-    Returns:
-        Dictionary with 'success' flag and 'report' data containing
-        income, expense, receipt statistics, top categories, and summary.
-    """
+    """Generate monthly report for user."""
     logger.info(
         'Starting monthly report generation',
         user_id=user_id,
@@ -47,7 +39,6 @@ def generate_monthly_report(
     try:
         user = User.objects.get(id=user_id)
 
-        # Определяем период
         start_date = datetime(year, month, 1, tzinfo=UTC)
         if month == constants.NUMBER_TWELFTH_MONTH_YEAR:
             end_date = datetime(year + 1, 1, 1, tzinfo=UTC) - timedelta(days=1)
@@ -63,9 +54,9 @@ def generate_monthly_report(
             end_date=end_date.isoformat(),
         )
 
-        # Статистика по доходам
-        income_stats = Income.objects.filter(
+        income_stats = Transaction.objects.filter(
             user=user,
+            type=TransactionType.INCOME,
             date__range=(start_date, end_date),
         ).aggregate(
             total_income=Sum('amount'),
@@ -75,9 +66,9 @@ def generate_monthly_report(
             max_income=Max('amount'),
         )
 
-        # Статистика по расходам
-        expense_stats = Expense.objects.filter(
+        expense_stats = Transaction.objects.filter(
             user=user,
+            type=TransactionType.EXPENSE,
             date__range=(start_date, end_date),
         ).aggregate(
             total_expense=Sum('amount'),
@@ -87,10 +78,10 @@ def generate_monthly_report(
             max_expense=Max('amount'),
         )
 
-        # Топ категорий доходов
         top_income_qs = (
-            Income.objects.filter(
+            Transaction.objects.filter(
                 user=user,
+                type=TransactionType.INCOME,
                 date__range=(start_date, end_date),
             )
             .values('category__name')
@@ -102,10 +93,10 @@ def generate_monthly_report(
         )
         top_income_categories: list[dict[str, Any]] = list(top_income_qs)
 
-        # Топ категорий расходов
         top_expense_qs = (
-            Expense.objects.filter(
+            Transaction.objects.filter(
                 user=user,
+                type=TransactionType.EXPENSE,
                 date__range=(start_date, end_date),
             )
             .values('category__name')
@@ -117,7 +108,6 @@ def generate_monthly_report(
         )
         top_expense_categories: list[dict[str, Any]] = list(top_expense_qs)
 
-        # Статистика по чекам
         receipt_stats = Receipt.objects.filter(
             user=user,
             receipt_date__range=(start_date, end_date),
@@ -127,7 +117,6 @@ def generate_monthly_report(
             avg_receipt_sum=Avg('total_sum'),
         )
 
-        # Топ продавцов
         top_sellers_qs = (
             Receipt.objects.filter(
                 user=user,
@@ -202,16 +191,7 @@ def generate_yearly_report(
     user_id: int,
     year: int,
 ) -> dict[str, Any]:
-    """Generate yearly report for user.
-
-    Args:
-        user_id: User ID.
-        year: Report year.
-
-    Returns:
-        Dictionary with 'success' flag and 'report' data containing
-        monthly breakdown, yearly totals, top categories, and summary.
-    """
+    """Generate yearly report for user."""
     logger.info(
         'Starting yearly report generation',
         user_id=user_id,
@@ -249,15 +229,15 @@ def generate_yearly_report(
                     tzinfo=UTC,
                 ) - timedelta(days=1)
 
-            # Доходы за месяц
-            month_income = Income.objects.filter(
+            month_income = Transaction.objects.filter(
                 user=user,
+                type=TransactionType.INCOME,
                 date__range=(month_start, month_end),
             ).aggregate(total=Sum('amount'))
 
-            # Расходы за месяц
-            month_expense = Expense.objects.filter(
+            month_expense = Transaction.objects.filter(
                 user=user,
+                type=TransactionType.EXPENSE,
                 date__range=(month_start, month_end),
             ).aggregate(total=Sum('amount'))
 
@@ -271,9 +251,9 @@ def generate_yearly_report(
                 },
             )
 
-        # Общая статистика за год
-        yearly_income = Income.objects.filter(
+        yearly_income = Transaction.objects.filter(
             user=user,
+            type=TransactionType.INCOME,
             date__year=year,
         ).aggregate(
             total=Sum('amount'),
@@ -281,8 +261,9 @@ def generate_yearly_report(
             avg=Avg('amount'),
         )
 
-        yearly_expense = Expense.objects.filter(
+        yearly_expense = Transaction.objects.filter(
             user=user,
+            type=TransactionType.EXPENSE,
             date__year=year,
         ).aggregate(
             total=Sum('amount'),
@@ -290,10 +271,10 @@ def generate_yearly_report(
             avg=Avg('amount'),
         )
 
-        # Топ категорий за год
         top_income_year_qs = (
-            Income.objects.filter(
+            Transaction.objects.filter(
                 user=user,
+                type=TransactionType.INCOME,
                 date__year=year,
             )
             .values('category__name')
@@ -305,8 +286,9 @@ def generate_yearly_report(
         top_income_categories: list[dict[str, Any]] = list(top_income_year_qs)
 
         top_expense_year_qs = (
-            Expense.objects.filter(
+            Transaction.objects.filter(
                 user=user,
+                type=TransactionType.EXPENSE,
                 date__year=year,
             )
             .values('category__name')
@@ -370,16 +352,7 @@ def generate_yearly_report(
 def generate_user_statistics(
     user_id: int,
 ) -> dict[str, Any]:
-    """Generate overall user statistics.
-
-    Args:
-        user_id: User ID.
-
-    Returns:
-        Dictionary with 'success' flag and 'statistics' data containing
-        total income/expense/receipts, top categories, time periods,
-        and summary.
-    """
+    """Generate overall user statistics."""
     logger.info(
         'Starting user statistics generation',
         user_id=user_id,
@@ -388,14 +361,19 @@ def generate_user_statistics(
     try:
         user = User.objects.get(id=user_id)
 
-        # Общая статистика
-        total_income = Income.objects.filter(user=user).aggregate(
+        total_income = Transaction.objects.filter(
+            user=user,
+            type=TransactionType.INCOME,
+        ).aggregate(
             total=Sum('amount'),
             count=Count('id'),
             avg=Avg('amount'),
         )
 
-        total_expense = Expense.objects.filter(user=user).aggregate(
+        total_expense = Transaction.objects.filter(
+            user=user,
+            type=TransactionType.EXPENSE,
+        ).aggregate(
             total=Sum('amount'),
             count=Count('id'),
             avg=Avg('amount'),
@@ -407,12 +385,12 @@ def generate_user_statistics(
             avg=Avg('total_sum'),
         )
 
-        # Статистика по категориям
         income_cat_qs = (
-            Income.objects.filter(user=user)
-            .values(
-                'category__name',
+            Transaction.objects.filter(
+                user=user,
+                type=TransactionType.INCOME,
             )
+            .values('category__name')
             .annotate(
                 total=Sum('amount'),
                 count=Count('id'),
@@ -422,10 +400,11 @@ def generate_user_statistics(
         income_categories: list[dict[str, Any]] = list(income_cat_qs)
 
         expense_cat_qs = (
-            Expense.objects.filter(user=user)
-            .values(
-                'category__name',
+            Transaction.objects.filter(
+                user=user,
+                type=TransactionType.EXPENSE,
             )
+            .values('category__name')
             .annotate(
                 total=Sum('amount'),
                 count=Count('id'),
@@ -434,13 +413,18 @@ def generate_user_statistics(
         )
         expense_categories: list[dict[str, Any]] = list(expense_cat_qs)
 
-        # Статистика по времени
-        first_income = Income.objects.filter(user=user).aggregate(
+        first_income = Transaction.objects.filter(
+            user=user,
+            type=TransactionType.INCOME,
+        ).aggregate(
             first_date=Min('date'),
             last_date=Max('date'),
         )
 
-        first_expense = Expense.objects.filter(user=user).aggregate(
+        first_expense = Transaction.objects.filter(
+            user=user,
+            type=TransactionType.EXPENSE,
+        ).aggregate(
             first_date=Min('date'),
             last_date=Max('date'),
         )

@@ -14,8 +14,6 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView
 
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.reports.services.aggregation import (
     budget_charts,
     collect_datasets,
@@ -24,6 +22,11 @@ from hasta_la_vista_money.reports.services.aggregation import (
 )
 from hasta_la_vista_money.reports.services.aggregation import (
     pie_expense_category as pie_expense_category_service,
+)
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -119,31 +122,23 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
             budget_chart_data,
         )
 
-    def _get_expense_data(
+    def _aggregate_for_type(
         self,
         user: User,
-        categories: list[ExpenseCategory],
+        categories: list[Category],
         months: list[date],
+        type_value: str,
     ) -> dict[int, dict[date, Decimal | int]]:
-        """Get expense data by categories and months.
-
-        Args:
-            user: User to get expenses for.
-            categories: List of expense categories.
-            months: List of months to aggregate.
-
-        Returns:
-            Dictionary mapping category_id to month->amount mapping.
-        """
         fact_map: dict[int, dict[date, Decimal | int]] = defaultdict(
             lambda: defaultdict(lambda: 0),
         )
         if not months:
             return fact_map
 
-        expenses = (
-            Expense.objects.filter(
+        rows = (
+            Transaction.objects.filter(
                 user=user,
+                type=type_value,
                 category__in=categories,
                 date__gte=months[0],
                 date__lte=months[-1],
@@ -152,71 +147,51 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
             .values('category_id', 'month')
             .annotate(total=Sum('amount'))
         )
-        for e in expenses:
+        for row in rows:
             month_date = (
-                e['month'].date() if hasattr(e['month'], 'date') else e['month']
+                row['month'].date()
+                if hasattr(row['month'], 'date')
+                else row['month']
             )
-            total_amount = e['total'] if e['total'] is not None else 0
-            fact_map[e['category_id']][month_date] = total_amount
+            total_amount = row['total'] if row['total'] is not None else 0
+            fact_map[row['category_id']][month_date] = total_amount
         return fact_map
+
+    def _get_expense_data(
+        self,
+        user: User,
+        categories: list[Category],
+        months: list[date],
+    ) -> dict[int, dict[date, Decimal | int]]:
+        """Aggregate expense transactions per category and month."""
+        return self._aggregate_for_type(
+            user,
+            categories,
+            months,
+            TransactionType.EXPENSE,
+        )
 
     def _get_income_data(
         self,
         user: User,
-        categories: list[IncomeCategory],
+        categories: list[Category],
         months: list[date],
     ) -> dict[int, dict[date, Decimal | int]]:
-        """Get income data by categories and months.
-
-        Args:
-            user: User to get income for.
-            categories: List of income categories.
-            months: List of months to aggregate.
-
-        Returns:
-            Dictionary mapping category_id to month->amount mapping.
-        """
-        fact_map: dict[int, dict[date, Decimal | int]] = defaultdict(
-            lambda: defaultdict(lambda: 0),
+        """Aggregate income transactions per category and month."""
+        return self._aggregate_for_type(
+            user,
+            categories,
+            months,
+            TransactionType.INCOME,
         )
-        if not months:
-            return fact_map
-
-        incomes = (
-            Income.objects.filter(
-                user=user,
-                category__in=categories,
-                date__gte=months[0],
-                date__lte=months[-1],
-            )
-            .annotate(month=TruncMonth('date'))
-            .values('category_id', 'month')
-            .annotate(total=Sum('amount'))
-        )
-        for e in incomes:
-            month_date = (
-                e['month'].date() if hasattr(e['month'], 'date') else e['month']
-            )
-            total_amount = e['total'] if e['total'] is not None else 0
-            fact_map[e['category_id']][month_date] = total_amount
-        return fact_map
 
     def _calculate_totals(
         self,
-        categories: list[ExpenseCategory | IncomeCategory],
+        categories: list[Category],
         months: list[date],
         fact_map: dict[int, dict[date, Decimal | int]],
     ) -> list[int]:
-        """Calculate total amounts by month.
-
-        Args:
-            categories: List of categories.
-            months: List of months.
-            fact_map: Category to month->amount mapping.
-
-        Returns:
-            List of total amounts per month as integers.
-        """
+        """Calculate total amounts by month."""
         totals: list[int] = [0] * len(months)
         for i, m in enumerate(months):
             for cat in categories:
@@ -226,20 +201,11 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
 
     def _calculate_category_totals(
         self,
-        categories: list[ExpenseCategory | IncomeCategory],
+        categories: list[Category],
         months: list[date],
         fact_map: dict[int, dict[date, Decimal | int]],
     ) -> dict[int, Decimal]:
-        """Calculate total amounts by category.
-
-        Args:
-            categories: List of categories.
-            months: List of months.
-            fact_map: Category to month->amount mapping.
-
-        Returns:
-            Dictionary mapping category_id to total amount.
-        """
+        """Calculate total amounts by category."""
         category_totals: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
         for cat in categories:
             for month in months:
@@ -250,20 +216,11 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
 
     def _calculate_pie_data(
         self,
-        categories: list[ExpenseCategory | IncomeCategory],
+        categories: list[Category],
         months: list[date],
         fact_map: dict[int, dict[date, Decimal | int]],
     ) -> tuple[list[str], list[float]]:
-        """Calculate data for pie chart.
-
-        Args:
-            categories: List of categories.
-            months: List of months.
-            fact_map: Category to month->amount mapping.
-
-        Returns:
-            Tuple of (labels, values) for pie chart.
-        """
+        """Calculate data for pie chart."""
         labels: list[str] = []
         values: list[float] = []
         if not months or not categories:
@@ -283,17 +240,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         return labels, values
 
     def prepare_budget_charts(self, request: HttpRequest) -> dict[str, Any]:
-        """Prepare budget chart data.
-
-        Args:
-            request: HTTP request object.
-
-        Returns:
-            Dictionary with budget chart data.
-
-        Raises:
-            TypeError: If user is not authenticated.
-        """
+        """Prepare budget chart data."""
         if isinstance(request.user, AnonymousUser):
             raise TypeError('User must be authenticated')
         charts_data = budget_charts(
