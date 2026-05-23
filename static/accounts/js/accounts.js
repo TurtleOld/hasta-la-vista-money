@@ -116,8 +116,8 @@
       },
     }));
 
-    /* ── Quick Add drawer ────────────────────────────────────── */
-    window.Alpine.data('quickAdd', () => ({
+    /* ── Quick Add drawer state (store — CSP-safe reactivity) ── */
+    window.Alpine.store('quickAdd', {
       open: false,
       submitting: false,
       type: 'expense',
@@ -137,21 +137,10 @@
         this.csrfToken = config.csrfToken || '';
         this.accountId = config.defaultAccount || '';
         this.syncCategory();
-        console.log('[quickAdd] init done. open=', this.open, 'accountId=', this.accountId, 'categoryId=', this.categoryId);
       },
 
       toggle() {
-        console.log('[quickAdd] toggle BEFORE: open=', this.open);
         this.open = !this.open;
-        console.log('[quickAdd] toggle AFTER: open=', this.open);
-        // Force DOM check after a tick to verify reactivity propagated
-        setTimeout(() => {
-          const fab = document.querySelector('.accounts-fab');
-          const drawer = document.querySelector('.accounts-drawer');
-          console.log('[quickAdd] post-tick: this.open=', this.open,
-                      'fab[data-open]=', fab && fab.getAttribute('data-open'),
-                      'drawer[data-open]=', drawer && drawer.getAttribute('data-open'));
-        }, 0);
         if (this.open) {
           this.syncCategory();
         }
@@ -199,7 +188,7 @@
 
       async submit(event) {
         event.preventDefault();
-        if (this.submitDisabled) return;
+        if (this.submitting || !this.amount || !this.accountId || !this.categoryId) return;
         this.submitting = true;
 
         const formData = new FormData();
@@ -248,10 +237,10 @@
           this.submitting = false;
         }
       },
-    }));
+    });
 
-    /* ── Toast ──────────────────────────────────────────────── */
-    window.Alpine.data('accountsToast', () => ({
+    /* ── Toast (store — CSP-safe reactivity) ────────────────── */
+    window.Alpine.store('accountsToast', {
       message: '',
       visible: false,
       error: false,
@@ -272,7 +261,7 @@
           this.visible = false;
         }, 2400);
       },
-    }));
+    });
 
     /* ── Re-init balance-trend chart + hide-balance class after HTMX swap ─ */
     document.addEventListener('htmx:afterSwap', () => {

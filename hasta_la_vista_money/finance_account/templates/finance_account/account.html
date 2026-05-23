@@ -139,30 +139,30 @@
 
     {# ── Quick add: FAB + drawer ──────────────────────────────── #}
     {% if drawer_accounts %}
-    <div x-data="quickAdd">
-        <button type="button" class="accounts-fab" :data-open="open ? '1' : '0'"
-                @click="toggle" aria-label="{% translate 'Новая операция' %}">
+    <div x-data>
+        <button type="button" class="accounts-fab" :data-open="$store.quickAdd.open ? '1' : '0'"
+                @click="$store.quickAdd.toggle()" aria-label="{% translate 'Новая операция' %}">
             <span class="plus">+</span>
-            <span x-show="!open" x-cloak>{% translate 'Операция' %}</span>
+            <span x-show="!$store.quickAdd.open" x-cloak>{% translate 'Операция' %}</span>
         </button>
 
-        <div class="accounts-drawer" :data-open="open ? '1' : '0'" x-cloak @click.outside="handleOutside">
+        <div class="accounts-drawer" :data-open="$store.quickAdd.open ? '1' : '0'" x-cloak @click.outside="$store.quickAdd.handleOutside()">
             <div class="accounts-drawer-hd">
                 <h3>{% translate 'Новая операция' %}</h3>
                 <div class="accounts-drawer-tabs">
-                    <button type="button" :class="type === 'expense' ? 'on' : ''" @click="setExpense">{% translate 'Расход' %}</button>
-                    <button type="button" :class="type === 'income' ? 'on' : ''" @click="setIncome">{% translate 'Доход' %}</button>
+                    <button type="button" :class="$store.quickAdd.type === 'expense' ? 'on' : ''" @click="$store.quickAdd.setExpense()">{% translate 'Расход' %}</button>
+                    <button type="button" :class="$store.quickAdd.type === 'income' ? 'on' : ''" @click="$store.quickAdd.setIncome()">{% translate 'Доход' %}</button>
                 </div>
             </div>
-            <form class="accounts-drawer-body" @submit="submit">
+            <form class="accounts-drawer-body" @submit="$store.quickAdd.submit($event)">
                 <div class="accounts-drawer-amt">
                     <input type="text" inputmode="numeric" placeholder="0"
-                           x-model="amount" @input="onAmountInput">
+                           x-model="$store.quickAdd.amount" @input="$store.quickAdd.onAmountInput($event)">
                     <span class="cur">₽</span>
                 </div>
                 <div class="accounts-drawer-field">
                     <label>{% translate 'Счёт' %}</label>
-                    <select x-model="accountId">
+                    <select x-model="$store.quickAdd.accountId">
                         {% for account in drawer_accounts %}
                             <option value="{{ account.id }}">{{ account.name_account }}</option>
                         {% endfor %}
@@ -170,22 +170,22 @@
                 </div>
                 <div class="accounts-drawer-field">
                     <label>{% translate 'Категория' %}</label>
-                    <select x-model="categoryId">
-                        <template x-for="cat in (type === 'income' ? incomeCategories : expenseCategories)" :key="cat.id">
+                    <select x-model="$store.quickAdd.categoryId">
+                        <template x-for="cat in ($store.quickAdd.type === 'income' ? $store.quickAdd.incomeCategories : $store.quickAdd.expenseCategories)" :key="cat.id">
                             <option :value="cat.id" x-text="cat.name"></option>
                         </template>
                     </select>
                 </div>
-                <button type="submit" class="accounts-drawer-submit" :disabled="submitting || !amount || !accountId || !categoryId">
-                    <span x-show="!submitting">{% translate 'Добавить операцию' %}</span>
-                    <span x-show="submitting" x-cloak>{% translate 'Сохраняем…' %}</span>
+                <button type="submit" class="accounts-drawer-submit" :disabled="$store.quickAdd.submitting || !$store.quickAdd.amount || !$store.quickAdd.accountId || !$store.quickAdd.categoryId">
+                    <span x-show="!$store.quickAdd.submitting">{% translate 'Добавить операцию' %}</span>
+                    <span x-show="$store.quickAdd.submitting" x-cloak>{% translate 'Сохраняем…' %}</span>
                 </button>
             </form>
         </div>
     </div>
 
-    <div x-data="accountsToast" :class="error ? 'accounts-toast is-error' : 'accounts-toast'" :data-on="visible ? '1' : '0'" aria-live="polite">
-        <span x-text="message"></span>
+    <div x-data :class="$store.accountsToast.error ? 'accounts-toast is-error' : 'accounts-toast'" :data-on="$store.accountsToast.visible ? '1' : '0'" aria-live="polite">
+        <span x-text="$store.accountsToast.message"></span>
     </div>
     {% endif %}
 </main>
