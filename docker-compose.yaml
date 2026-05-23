@@ -48,6 +48,7 @@ services:
     build:
       context: ./
       dockerfile: docker/local.Dockerfile
+    command: sh -c "python manage.py collectstatic --noinput --clear && python manage.py runserver 0.0.0.0:8001"
     volumes:
       - ./:/app
       - staticfiles_data:/app/staticfiles
