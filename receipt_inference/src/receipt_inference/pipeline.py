@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from html import unescape
 from importlib import import_module
 from io import BytesIO
@@ -714,8 +714,18 @@ class PaddleOCRVLBackend:
         )
         if not payload['items']:
             payload['items'] = self._extract_items_from_text(combined_text)
+        else:
+            payload['items'] = self._merge_missing_text_items(
+                payload['items'],
+                self._extract_items_from_text(combined_text),
+                payload['total_sum'],
+            )
         if not payload['items']:
             return None
+        payload['items'] = self._add_missing_balance_item(
+            payload['items'],
+            payload['total_sum'],
+        )
         return payload
 
     def _collect_payload_parts(
@@ -939,6 +949,107 @@ class PaddleOCRVLBackend:
             'quantity': quantity,
             'amount': amount,
         }
+
+    def _merge_missing_text_items(
+        self,
+        current_items: list[dict[str, str]],
+        text_items: list[dict[str, str]],
+        total_sum: str,
+    ) -> list[dict[str, str]]:
+        """Supplement table items with numbered items found in plain text."""
+        if not text_items or self._items_total_matches(
+            current_items,
+            total_sum,
+        ):
+            return current_items
+        if self._items_total_matches(text_items, total_sum):
+            return text_items
+
+        current_by_signature = {
+            self._item_amount_signature(item): item for item in current_items
+        }
+        merged: list[dict[str, str]] = []
+        signatures: set[tuple[str, str, str]] = set()
+        for item in text_items:
+            signature = self._item_amount_signature(item)
+            merged.append(current_by_signature.get(signature, item))
+            signatures.add(signature)
+            if self._items_total_matches(merged, total_sum):
+                break
+
+        for item in current_items:
+            signature = self._item_amount_signature(item)
+            if signature in signatures:
+                continue
+            merged.append(item)
+            signatures.add(signature)
+            if self._items_total_matches(merged, total_sum):
+                break
+        return merged
+
+    def _item_amount_signature(
+        self,
+        item: dict[str, str],
+    ) -> tuple[str, str, str]:
+        """Return a stable amount-based signature for duplicate detection."""
+        return (
+            str(item.get('price', '')),
+            str(item.get('quantity', '')),
+            str(item.get('amount', '')),
+        )
+
+    def _items_total_matches(
+        self,
+        items: list[dict[str, str]],
+        total_sum: str,
+    ) -> bool:
+        """Return whether item amounts match the receipt total within 2%."""
+        total = self._to_decimal(total_sum)
+        if total <= 0:
+            return False
+        items_total = sum(
+            (self._to_decimal(item.get('amount')) for item in items),
+            Decimal(0),
+        )
+        allowed_diff = max(total * Decimal('0.02'), Decimal('1.00'))
+        return abs(total - items_total) <= allowed_diff
+
+    def _add_missing_balance_item(
+        self,
+        items: list[dict[str, str]],
+        total_sum: str,
+    ) -> list[dict[str, str]]:
+        """Add an editable placeholder when OCR misses a receipt position."""
+        total = self._to_decimal(total_sum)
+        if total <= 0 or self._items_total_matches(items, total_sum):
+            return items
+
+        items_total = sum(
+            (self._to_decimal(item.get('amount')) for item in items),
+            Decimal(0),
+        )
+        missing_amount = total - items_total
+        if missing_amount <= 0:
+            return items
+
+        missing_amount_text = f'{missing_amount:.2f}'
+        return [
+            *items,
+            {
+                'product_name': 'Нераспознанная позиция',
+                'category': 'Другое',
+                'price': missing_amount_text,
+                'quantity': '1',
+                'amount': missing_amount_text,
+            },
+        ]
+
+    def _to_decimal(self, value: Any) -> Decimal:
+        """Parse a decimal-like OCR value without raising on bad input."""
+        try:
+            return Decimal(str(value or '0').replace(' ', '').replace(',', '.'))
+        except (InvalidOperation, ValueError):
+            return Decimal(0)
 
     def _extract_row_item_name(
         self,
@@ -1394,18 +1505,25 @@ class PaddleOCRVLBackend:
         if not block_lines:
             return None
         first_line = re.sub(r'^\d+[.)]\s*', '', block_lines[0]).strip()
-        money_pattern = (
-            r'\d{1,3}(?:[ \u00a0]\d{3})*[,.]\d{2}|'
-            r'\d+[,.]\d{2}'
-        )
+        money_pattern = self._money_amount_pattern()
         all_text = ' '.join(block_lines)
-        amounts = [
-            amount
-            for line in block_lines
-            for amount in re.findall(money_pattern, line)
-        ]
-        if len(amounts) < KEY_VALUE_PAIR_CELLS:
-            return None
+        price_quantity_amount = self._extract_price_quantity_amount(all_text)
+        if price_quantity_amount is None:
+            amounts = [
+                amount
+                for line in block_lines
+                for amount in re.findall(money_pattern, line)
+            ]
+            if len(amounts) < KEY_VALUE_PAIR_CELLS:
+                return None
+            price = self._normalize_amount_text(amounts[0])
+            amount = self._normalize_amount_text(amounts[-1])
+            quantity = self._extract_quantity_between_amounts(
+                all_text,
+                amounts,
+            )
+        else:
+            price, quantity, amount = price_quantity_amount
 
         first_amount = re.search(money_pattern, first_line)
         if first_amount:
@@ -1426,9 +1544,6 @@ class PaddleOCRVLBackend:
         if not name:
             return None
 
-        price = self._normalize_amount_text(amounts[0])
-        amount = self._normalize_amount_text(amounts[-1])
-        quantity = self._extract_quantity_between_amounts(all_text, amounts)
         return {
             'product_name': name[:255],
             'category': 'Другое',
@@ -1436,6 +1551,30 @@ class PaddleOCRVLBackend:
             'quantity': quantity,
             'amount': amount,
         }
+
+    def _money_amount_pattern(self) -> str:
+        """Return a regex fragment for money amounts in OCR text."""
+        return r'(?:\d{1,3}(?:[ \u00a0]\d{3})+|\d+)[,.]\d{2}'
+
+    def _extract_price_quantity_amount(
+        self,
+        text: str,
+    ) -> tuple[str, str, str] | None:
+        """Parse compact OCR text formatted as price, quantity, amount."""
+        money_pattern = self._money_amount_pattern()
+        match = re.search(
+            rf'(?P<price>{money_pattern})\s+'
+            rf'(?P<quantity>\d+(?:[,.]\d+)?)\s+'
+            rf'(?P<amount>{money_pattern})',
+            text,
+        )
+        if not match:
+            return None
+        return (
+            self._normalize_amount_text(match.group('price')),
+            self._normalize_quantity_text(match.group('quantity')),
+            self._normalize_amount_text(match.group('amount')),
+        )
 
     def _extract_quantity_between_amounts(
         self,
