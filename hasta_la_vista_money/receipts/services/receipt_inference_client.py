@@ -64,7 +64,7 @@ class ReceiptInferenceClient:
         self._base_url = get_receipt_inference_url()
         self._timeout = config(
             'RECEIPT_INFERENCE_TIMEOUT',
-            default=420.0,
+            default=1500.0,
             cast=float,
         )
 
@@ -93,15 +93,20 @@ class ReceiptInferenceClient:
 
         if response.status_code == HTTP_RATE_LIMIT:
             raise RateLimitExceededError(
-                str(_('Превышен лимит запросов к сервису распознавания.')),
+                str(
+                    _(
+                        'Сервис распознавания перегружен запросами. '
+                        'Попробуйте ещё раз через несколько минут.',
+                    ),
+                ),
             )
 
         if response.status_code in {404, 503}:
             raise ModelUnavailableError(
                 str(
                     _(
-                        'Сервис распознавания чеков недоступен. '
-                        'Проверьте настройки receipt inference.',
+                        'Сервис распознавания чеков временно недоступен. '
+                        'Попробуйте ещё раз через несколько минут.',
                     ),
                 ),
             )
@@ -197,11 +202,12 @@ class ReceiptInferenceClient:
                 timeout=self._timeout,
                 exc_info=True,
             )
-            raise RuntimeError(
+            raise TimeoutError(
                 str(
                     _(
-                        'Превышено время ожидания ответа сервиса '
-                        'распознавания чеков.',
+                        'Распознавание заняло слишком много времени и было '
+                        'прервано. Попробуйте ещё раз или загрузите более '
+                        'чёткое фото меньшего размера.',
                     ),
                 ),
             ) from exc
@@ -212,10 +218,11 @@ class ReceiptInferenceClient:
                 error=str(exc),
                 exc_info=True,
             )
-            raise RuntimeError(
+            raise ConnectionError(
                 str(
                     _(
-                        'Не удалось связаться с сервисом распознавания чеков.',
+                        'Не удалось связаться с сервисом распознавания чеков. '
+                        'Попробуйте ещё раз через минуту.',
                     ),
                 ),
             ) from exc

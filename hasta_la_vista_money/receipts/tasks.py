@@ -31,18 +31,36 @@ from hasta_la_vista_money.receipts.services.receipt_ai_prompt import (
     RateLimitExceededError,
 )
 from hasta_la_vista_money.receipts.validators.parsed_receipt import (
+    ReceiptParseValidationError,
     validate_receipt_parse_payload,
 )
 
 logger = structlog.get_logger(__name__)
 
 _PROCESSING_GRACE_MINUTES = 10
-_RATE_LIMIT_MESSAGE = _('Превышен лимит запросов к сервису распознавания')
-_MODEL_UNAVAILABLE_MESSAGE = _('Сервис распознавания временно недоступен')
-_TIMEOUT_MESSAGE = _('Истёк лимит времени обработки чека')
-_PARSE_FAILED_MESSAGE = _('Не удалось разобрать ответ распознавания')
-_UNEXPECTED_MESSAGE = _('Непредвиденная ошибка при распознавании чека')
-_MISSING_FILE_MESSAGE = _('Файл изображения отсутствует')
+_RATE_LIMIT_MESSAGE = _(
+    'Сервис распознавания перегружен запросами. '
+    'Попробуйте ещё раз через несколько минут.',
+)
+_MODEL_UNAVAILABLE_MESSAGE = _(
+    'Сервис распознавания временно недоступен. '
+    'Попробуйте ещё раз через несколько минут.',
+)
+_TIMEOUT_MESSAGE = _(
+    'Распознавание заняло слишком много времени и было прервано. '
+    'Попробуйте ещё раз или загрузите более чёткое фото меньшего размера.',
+)
+_PARSE_FAILED_MESSAGE = _(
+    'Не удалось разобрать ответ сервиса распознавания. '
+    'Попробуйте загрузить более чёткое фото.',
+)
+_UNEXPECTED_MESSAGE = _(
+    'Произошла непредвиденная ошибка при распознавании чека. '
+    'Попробуйте ещё раз.',
+)
+_MISSING_FILE_MESSAGE = _(
+    'Файл изображения чека не найден. Загрузите чек заново.',
+)
 _TIMEOUT_RECOVERY_MESSAGE = _(
     'Обработка прервана по таймауту. Попробуйте ещё раз.',
 )
@@ -99,15 +117,22 @@ def _run_inference(pending: PendingReceipt) -> dict[str, Any]:
 
 
 def _classify_failure(exc: Exception) -> tuple[str, str]:
-    """Map an exception to a (log_event, user-facing message) pair."""
+    """Map an exception to a (log_event, user-facing message) pair.
+
+    ``ReceiptParseValidationError`` may carry a Russian ``user_message`` with
+    a specific, actionable explanation (sum mismatch, missing items, etc.).
+    When present, it overrides the generic parse-failed fallback.
+    """
     if isinstance(exc, RateLimitExceededError):
         return 'pending_receipt_rate_limited', str(_RATE_LIMIT_MESSAGE)
-    if isinstance(exc, ModelUnavailableError):
+    if isinstance(exc, ModelUnavailableError | ConnectionError):
         return 'pending_receipt_model_unavailable', str(
             _MODEL_UNAVAILABLE_MESSAGE,
         )
-    if isinstance(exc, SoftTimeLimitExceeded):
+    if isinstance(exc, SoftTimeLimitExceeded | TimeoutError):
         return 'pending_receipt_timed_out', str(_TIMEOUT_MESSAGE)
+    if isinstance(exc, ReceiptParseValidationError) and exc.user_message:
+        return 'pending_receipt_parse_failed', exc.user_message
     if isinstance(exc, json.JSONDecodeError | ValueError | TypeError):
         return 'pending_receipt_parse_failed', str(_PARSE_FAILED_MESSAGE)
     return 'pending_receipt_failed', str(_UNEXPECTED_MESSAGE)
@@ -116,7 +141,7 @@ def _classify_failure(exc: Exception) -> tuple[str, str]:
 @shared_task(
     bind=True,
     name='receipts.process_pending_receipt',
-    autoretry_for=(ConnectionError, TimeoutError),
+    autoretry_for=(ConnectionError,),
     max_retries=2,
     retry_backoff=True,
     acks_late=True,
