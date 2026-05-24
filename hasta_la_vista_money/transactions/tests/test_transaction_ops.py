@@ -30,6 +30,8 @@ from hasta_la_vista_money.transactions.services.transaction_ops import (
 )
 from hasta_la_vista_money.users.models import User
 
+TEST_PASSWORD = 'pwd123456!'  # nosec B105
+
 
 class TransactionServiceTest(TestCase):
     fixtures: ClassVar[list[str]] = [
@@ -94,7 +96,7 @@ class TransactionServiceTest(TestCase):
     def test_add_rejects_account_owned_by_another_user(self) -> None:
         other = User.objects.create_user(
             username='other',
-            password='pwd123456!',
+            password=TEST_PASSWORD,
             email='o@example.com',
         )
         with self.assertRaises(PermissionDenied):
@@ -156,7 +158,7 @@ class TransactionServiceTest(TestCase):
             )
         other = User.objects.create_user(
             username='ext',
-            password='pwd123456!',
+            password=TEST_PASSWORD,
             email='e@example.com',
         )
         with self.assertRaises(PermissionDenied):
@@ -200,7 +202,7 @@ class TransactionServiceTest(TestCase):
         )
         other = User.objects.create_user(
             username='x',
-            password='pwd123456!',
+            password=TEST_PASSWORD,
             email='x@example.com',
         )
         with self.assertRaises(PermissionDenied):
@@ -241,7 +243,7 @@ class TransactionServiceTest(TestCase):
         )
         other = User.objects.create_user(
             username='y',
-            password='pwd123456!',
+            password=TEST_PASSWORD,
             email='y@example.com',
         )
         with self.assertRaises(PermissionDenied):

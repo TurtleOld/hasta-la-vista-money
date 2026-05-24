@@ -15,15 +15,17 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.models import User
 
+TEST_PASSWORD = 'pwd123456!'  # nosec B105
+
 
 class CategoryCRUDViewsTest(TestCase):
     fixtures: ClassVar[list[str]] = ['users.yaml']
 
     def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
-        self.user.set_password('pwd123456!')
+        self.user.set_password(TEST_PASSWORD)
         self.user.save()
-        self.client.login(username=self.user.username, password='pwd123456!')
+        self.client.login(username=self.user.username, password=TEST_PASSWORD)
 
     def test_list_view_redirects_to_finances_categories(self) -> None:
         response = self.client.get(reverse('transactions:category_list'))
@@ -85,7 +87,7 @@ class CategoryCRUDViewsTest(TestCase):
     def test_update_rejects_foreign_category(self) -> None:
         other = User.objects.create_user(
             username='other',
-            password='pwd123456!',
+            password=TEST_PASSWORD,
             email='o@example.com',
         )
         category = Category.objects.create(

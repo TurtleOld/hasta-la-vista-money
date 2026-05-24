@@ -21,6 +21,8 @@ from hasta_la_vista_money.transactions.repositories.transaction_repository impor
 )
 from hasta_la_vista_money.users.models import User
 
+TEST_PASSWORD = 'pwd123456!'  # nosec B105
+
 
 class CategoryRepositoryTest(TestCase):
     fixtures: ClassVar[list[str]] = ['users.yaml']
@@ -108,7 +110,7 @@ class TransactionRepositoryTest(TestCase):
         cls.account = Account.objects.get(pk=1)
         cls.other_user = User.objects.create_user(
             username='other',
-            password='pwd123456!',
+            password=TEST_PASSWORD,
             email='other@example.com',
         )
         cls.repo = TransactionRepository()
