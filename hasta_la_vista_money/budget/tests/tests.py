@@ -6,7 +6,7 @@ from django.urls import resolve, reverse
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.apps import BudgetConfig
-from hasta_la_vista_money.budget.models import DateList, Planning
+from hasta_la_vista_money.budget.models import Budget, DateList, Planning
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 
 User = get_user_model()
@@ -37,6 +37,13 @@ class BudgetModelTest(TestCase):
             category=self.category,
             amount=100,
         )
+        self.budget = Budget.objects.create(
+            user=self.user,
+            period=self.date,
+            category=self.category,
+            amount_limit=500,
+            alert_threshold=75,
+        )
 
     def test_datelist_str(self) -> None:
         self.assertEqual(str(self.datelist), f'{self.user} - {self.date}')
@@ -44,6 +51,10 @@ class BudgetModelTest(TestCase):
     def test_planning_str(self) -> None:
         self.assertIn(str(self.user), str(self.planning))
         self.assertIn(str(self.date), str(self.planning))
+
+    def test_budget_str(self) -> None:
+        self.assertIn(str(self.user), str(self.budget))
+        self.assertIn(str(self.date), str(self.budget))
 
 
 class BudgetUrlsTest(TestCase):
@@ -60,6 +71,10 @@ class BudgetUrlsTest(TestCase):
         self.assertEqual(
             resolve('/budget/save-planning/').view_name,
             'budget:save_planning',
+        )
+        self.assertEqual(
+            resolve('/budget/save-limit/').view_name,
+            'budget:save_limit',
         )
 
 
@@ -115,6 +130,55 @@ class BudgetViewsTest(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertIn('success', response.json())
         self.assertIn('amount', response.json())
+
+    def test_save_budget_limit_post(self) -> None:
+        category = Category.objects.create(
+            user=self.user,
+            name='Food',
+            type=TransactionType.EXPENSE,
+        )
+        response = self.client.post(
+            reverse('budget:save_limit'),
+            {
+                'category_id': category.id,
+                'month': self.date.isoformat(),
+                'amount_limit': 1000,
+                'alert_threshold': 85,
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertIn('success', response.json())
+        self.assertEqual(
+            Budget.objects.get(category=category).alert_threshold,
+            85,
+        )
+
+    def test_save_overall_budget_limit_htmx_uses_month_start(self) -> None:
+        self.user.budget_date_lists.all().delete()
+        DateList.objects.create(user=self.user, date=date(2024, 5, 24))
+
+        response = self.client.post(
+            reverse('budget:save_limit'),
+            {
+                'category_id': '',
+                'month': '2024-05-24',
+                'amount_limit': 2000,
+                'alert_threshold': 80,
+            },
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertTrue(
+            Budget.objects.filter(
+                user=self.user,
+                category__isnull=True,
+                period=date(2024, 5, 1),
+                amount_limit=2000,
+            ).exists(),
+        )
+        self.assertContains(response, 'value="2000,00"')
 
     def test_change_planning_post(self) -> None:
         response = self.client.post(

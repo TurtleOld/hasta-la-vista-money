@@ -19,6 +19,7 @@ from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
 from hasta_la_vista_money.budget.models import Planning
+from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
 from hasta_la_vista_money.budget.repositories import (
     PlanningRepository,
 )
@@ -92,7 +93,7 @@ class BudgetContextMixin:
         user = get_object_or_404(User, username=request.user)
         date_list_repository = request.container.budget.date_list_repository()
         list_dates = date_list_repository.get_by_user_ordered(user)
-        months = [d.date for d in list_dates]
+        months = [d.date.replace(day=1) for d in list_dates]
         expense_categories = list(get_categories(user, 'expense'))
         income_categories = list(get_categories(user, 'income'))
         return user, months, expense_categories, income_categories
@@ -114,13 +115,29 @@ class BudgetView(
         )
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
+        data = budget_service.aggregate_budget_data(
+            user=user,
+            months=months,
+            expense_categories=expense_categories,
+            income_categories=income_categories,
+        )
+        context.update(data)
+        context.update(context['chart_data'])
         context.update(
-            budget_service.aggregate_budget_data(
-                user=user,
-                months=months,
-                expense_categories=expense_categories,
-                income_categories=income_categories,
-            ),
+            {
+                'current_plan_expense': data['total_plan_expense'][-1]
+                if data['total_plan_expense']
+                else 0,
+                'current_fact_expense': data['total_fact_expense'][-1]
+                if data['total_fact_expense']
+                else 0,
+                'current_plan_income': data['total_plan_income'][-1]
+                if data['total_plan_income']
+                else 0,
+                'current_fact_income': data['total_fact_income'][-1]
+                if data['total_fact_income']
+                else 0,
+            },
         )
         return context
 
@@ -134,16 +151,29 @@ class ExpenseTableView(
     model = Planning
     template_name = 'expense_table.html'
 
+    def get_template_names(self) -> list[str]:
+        if self.request.headers.get('HX-Request'):
+            return ['budget/partials/_budget_matrix.html']
+        return [self.template_name]
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user, months, expense_categories, _ = self.get_budget_context()
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
+        data = budget_service.aggregate_expense_table(
+            user=user,
+            months=months,
+            expense_categories=expense_categories,
+        )
+        context.update(data)
         context.update(
-            budget_service.aggregate_expense_table(
-                user=user,
-                months=months,
-                expense_categories=expense_categories,
+            build_budget_matrix_context(
+                table_type='expense',
+                months=data['months'],
+                rows=data['expense_data'],
+                total_fact=data['total_fact_expense'],
+                total_plan=data['total_plan_expense'],
             ),
         )
         return context
@@ -158,16 +188,29 @@ class IncomeTableView(
     model = Planning
     template_name = 'income_table.html'
 
+    def get_template_names(self) -> list[str]:
+        if self.request.headers.get('HX-Request'):
+            return ['budget/partials/_budget_matrix.html']
+        return [self.template_name]
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user, months, _, income_categories = self.get_budget_context()
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
+        data = budget_service.aggregate_income_table(
+            user=user,
+            months=months,
+            income_categories=income_categories,
+        )
+        context.update(data)
         context.update(
-            budget_service.aggregate_income_table(
-                user=user,
-                months=months,
-                income_categories=income_categories,
+            build_budget_matrix_context(
+                table_type='income',
+                months=data['months'],
+                rows=data['income_data'],
+                total_fact=data['total_fact_income'],
+                total_plan=data['total_plan_income'],
             ),
         )
         return context

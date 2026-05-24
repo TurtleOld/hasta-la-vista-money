@@ -1,15 +1,22 @@
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from config.containers import ApplicationContainer
-from hasta_la_vista_money.budget.models import DateList
+from hasta_la_vista_money.budget.models import Budget, DateList
 from hasta_la_vista_money.budget.services.budget import (
     BudgetDataError,
     get_categories,
 )
-from hasta_la_vista_money.transactions.models import Category, TransactionType
+from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 
 User = get_user_model()
 
@@ -29,6 +36,12 @@ class BudgetServicesTestCase(TestCase):
             name='Groceries',
             type=TransactionType.EXPENSE,
         )
+        self.child_expense_category = Category.objects.create(
+            user=self.user,
+            name='Fruit',
+            type=TransactionType.EXPENSE,
+            parent_category=self.expense_category,
+        )
         self.income_category = Category.objects.create(
             user=self.user,
             name='Salary',
@@ -36,6 +49,10 @@ class BudgetServicesTestCase(TestCase):
         )
         self.expense_categories = [self.expense_category]
         self.income_categories = [self.income_category]
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Main',
+        )
 
         DateList.objects.create(user=self.user, date=date(2026, 1, 1))
         DateList.objects.create(user=self.user, date=date(2026, 2, 1))
@@ -147,6 +164,71 @@ class BudgetServicesTestCase(TestCase):
         self.assertIn('total_fact_expense', data)
         self.assertIn('total_plan_expense', data)
         self.assertEqual(len(data['months']), len(self.months))
+
+    def test_aggregate_expense_table_includes_child_categories(self) -> None:
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.child_expense_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('125.00'),
+            date=datetime(
+                2026,
+                1,
+                10,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+
+        data = self.budget_service.aggregate_expense_table(
+            user=self.user,
+            months=self.months,
+            expense_categories=self.expense_categories,
+        )
+
+        self.assertEqual(data['expense_data'][0]['fact'][0], 125)
+
+    def test_aggregate_budget_limit_overview(self) -> None:
+        Budget.objects.create(
+            user=self.user,
+            period=date(2026, 2, 1),
+            amount_limit=Decimal('1000.00'),
+            alert_threshold=80,
+        )
+        Budget.objects.create(
+            user=self.user,
+            period=date(2026, 2, 1),
+            category=self.expense_category,
+            amount_limit=Decimal('500.00'),
+            alert_threshold=80,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('450.00'),
+            date=datetime(
+                2026,
+                2,
+                10,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+
+        overview = self.budget_service.aggregate_budget_limit_overview(
+            user=self.user,
+            months=self.months,
+            expense_categories=self.expense_categories,
+        )
+
+        self.assertEqual(overview['current_month'], date(2026, 2, 1))
+        self.assertEqual(overview['monthly_limits'][-1]['percent'], 45.0)
+        self.assertEqual(overview['category_limits'][0]['status'], 'warning')
 
     def test_aggregate_expense_table_error(self) -> None:
         with self.assertRaises(BudgetDataError):

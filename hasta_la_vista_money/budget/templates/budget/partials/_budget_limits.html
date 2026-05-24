@@ -1,0 +1,80 @@
+{% load i18n %}
+
+<div id="budget-limits-panel" class="budget-limits-panel">
+    <div class="budget-panel-head">
+        <div>
+            <p class="budget-kicker">{% translate 'Лимиты' %}</p>
+            <h2 class="budget-panel-title">{% translate 'Контроль бюджета' %}</h2>
+        </div>
+        {% if budget_limit_overview.current_month %}
+            <span class="budget-period-chip">{{ budget_limit_overview.current_month|date:'F Y' }}</span>
+        {% endif %}
+    </div>
+
+    {% if budget_limit_overview.current_month %}
+        <div class="budget-limit-strip">
+            {% for item in budget_limit_overview.monthly_limits %}
+                <article class="budget-limit-card budget-limit-card-{{ item.status }}">
+                    <div class="budget-limit-card-head">
+                        <span>{{ item.period|date:'M Y' }}</span>
+                        <strong>{{ item.percent|floatformat:0 }}%</strong>
+                    </div>
+                    <div class="budget-limit-amounts">
+                        <span>{% translate 'Факт' %}: {{ item.fact|floatformat:0 }}</span>
+                        <span>{% translate 'Лимит' %}: {{ item.limit|floatformat:0 }}</span>
+                    </div>
+                    <div class="budget-progress budget-progress-{{ item.status }}">
+                        <progress value="{{ item.progress_width|floatformat:0 }}" max="100"></progress>
+                    </div>
+                    <form class="budget-limit-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="month" value="{{ item.period|date:'Y-m-d' }}">
+                        <input type="hidden" name="category_id" value="">
+                        <label>
+                            <span>{% translate 'Общий лимит' %}</span>
+                            <input type="number" min="0" step="0.01" name="amount_limit" value="{% if item.limit %}{{ item.limit|floatformat:2 }}{% endif %}" placeholder="0" hx-post="{% url 'budget:save_limit' %}" hx-trigger="change delay:250ms" hx-include="closest form" hx-target="#budget-limits-panel" hx-swap="outerHTML">
+                        </label>
+                        <input type="hidden" name="alert_threshold" value="{{ item.alert_threshold }}">
+                    </form>
+                </article>
+            {% endfor %}
+        </div>
+
+        <div class="budget-category-limits">
+            {% for item in budget_limit_overview.category_limits %}
+                <article class="budget-category-limit budget-limit-card-{{ item.status }}">
+                    <div class="budget-category-limit-main">
+                        <div>
+                            <strong>{{ item.category }}</strong>
+                            <span>{% translate 'Остаток' %}: {{ item.remaining|floatformat:0 }}</span>
+                        </div>
+                        <div class="budget-category-limit-meta">
+                            <span>{{ item.fact|floatformat:0 }} / {{ item.limit|floatformat:0 }}</span>
+                            <b>{{ item.percent|floatformat:0 }}%</b>
+                        </div>
+                    </div>
+                    <div class="budget-progress budget-progress-{{ item.status }}">
+                        <progress value="{{ item.progress_width|floatformat:0 }}" max="100"></progress>
+                    </div>
+                    <form class="budget-limit-form budget-category-limit-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="month" value="{{ item.period|date:'Y-m-d' }}">
+                        <input type="hidden" name="category_id" value="{{ item.category_id }}">
+                        <label>
+                            <span>{% translate 'Лимит категории' %}</span>
+                            <input type="number" min="0" step="0.01" name="amount_limit" value="{% if item.limit %}{{ item.limit|floatformat:2 }}{% endif %}" placeholder="0" hx-post="{% url 'budget:save_limit' %}" hx-trigger="change delay:250ms" hx-include="closest form" hx-target="#budget-limits-panel" hx-swap="outerHTML">
+                        </label>
+                        <label>
+                            <span>{% translate "Порог, %" %}</span>
+                            <input type="number" min="1" max="100" step="1" name="alert_threshold" value="{{ item.alert_threshold }}" hx-post="{% url 'budget:save_limit' %}" hx-trigger="change delay:250ms" hx-include="closest form" hx-target="#budget-limits-panel" hx-swap="outerHTML">
+                        </label>
+                    </form>
+                </article>
+            {% empty %}
+                <div class="budget-empty">{% translate 'Создайте категории расходов, чтобы настроить лимиты по категориям.' %}</div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="budget-empty">{% translate 'Добавьте месяцы планирования, чтобы настроить лимиты бюджета.' %}</div>
+    {% endif %}
+</div>

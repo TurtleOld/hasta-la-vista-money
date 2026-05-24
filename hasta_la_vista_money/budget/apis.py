@@ -5,7 +5,7 @@ from datetime import datetime as dt
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from drf_spectacular.openapi import AutoSchema
@@ -22,19 +22,92 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
+from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
+from hasta_la_vista_money.budget.services.budget import get_categories
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
 )
 from hasta_la_vista_money.services.generate_dates import generate_date_list
-from hasta_la_vista_money.transactions.models import Category
+from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
+
+
+def _is_htmx_request(request: Request) -> bool:
+    return request.headers.get('HX-Request') == 'true'
+
+
+def _render_budget_matrix(request: Request, table_type: str) -> Any:
+    request_with_container = cast('RequestWithContainer', request)
+    user = cast('User', request.user)
+    date_list_repository = (
+        request_with_container.container.budget.date_list_repository()
+    )
+    months = [
+        d.date.replace(day=1)
+        for d in date_list_repository.get_by_user_ordered(user)
+    ]
+    budget_service = request_with_container.container.budget.budget_service()
+
+    if table_type == TransactionType.EXPENSE:
+        categories = list(get_categories(user, TransactionType.EXPENSE))
+        data = budget_service.aggregate_expense_table(
+            user=user,
+            months=months,
+            expense_categories=categories,
+        )
+        context = build_budget_matrix_context(
+            table_type=TransactionType.EXPENSE,
+            months=data['months'],
+            rows=data['expense_data'],
+            total_fact=data['total_fact_expense'],
+            total_plan=data['total_plan_expense'],
+        )
+    else:
+        categories = list(get_categories(user, TransactionType.INCOME))
+        data = budget_service.aggregate_income_table(
+            user=user,
+            months=months,
+            income_categories=categories,
+        )
+        context = build_budget_matrix_context(
+            table_type=TransactionType.INCOME,
+            months=data['months'],
+            rows=data['income_data'],
+            total_fact=data['total_fact_income'],
+            total_plan=data['total_plan_income'],
+        )
+
+    return render(request, 'budget/partials/_budget_matrix.html', context)
+
+
+def _render_budget_limits(request: Request) -> Any:
+    request_with_container = cast('RequestWithContainer', request)
+    user = cast('User', request.user)
+    date_list_repository = (
+        request_with_container.container.budget.date_list_repository()
+    )
+    months = [
+        d.date.replace(day=1)
+        for d in date_list_repository.get_by_user_ordered(user)
+    ]
+    expense_categories = list(get_categories(user, TransactionType.EXPENSE))
+    budget_service = request_with_container.container.budget.budget_service()
+    context = {
+        'budget_limit_overview': budget_service.aggregate_budget_limit_overview(
+            user=user,
+            months=months,
+            expense_categories=expense_categories,
+        ),
+    }
+    return render(request, 'budget/partials/_budget_limits.html', context)
 
 
 @extend_schema(
@@ -75,7 +148,7 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         request: Request,
         *args: Any,
         **kwargs: Any,
-    ) -> Response:
+    ) -> Response | Any:
         """Generate date list.
 
         Args:
@@ -102,6 +175,11 @@ class GenerateDatesAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         generate_date_list(queryset_last_date, queryset_user, 'income')
 
         redirect_url = str(reverse_lazy('budget:list'))
+
+        if _is_htmx_request(request):
+            response = Response({'success': True}, status=status.HTTP_200_OK)
+            response['HX-Redirect'] = redirect_url
+            return response
 
         return Response(
             {'success': True, 'redirect_url': redirect_url},
@@ -292,7 +370,132 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             plan.amount = Decimal(str(amount))
             plan.save()
 
+        if _is_htmx_request(request):
+            return _render_budget_matrix(request, str(type_))
+
         return Response(
             {'success': True, 'amount': str(plan.amount)},
+            status=status.HTTP_200_OK,
+        )
+
+
+@extend_schema(
+    tags=['budget'],
+    summary='Сохранить бюджетный лимит',
+    description=(
+        'Сохраняет месячный лимит расходов для категории или всего бюджета'
+    ),
+    request={
+        'type': 'object',
+        'properties': {
+            'month': {'type': 'string', 'format': 'date'},
+            'amount_limit': {'type': 'number'},
+            'alert_threshold': {'type': 'integer'},
+            'category_id': {'type': 'integer', 'nullable': True},
+        },
+        'required': ['month', 'amount_limit'],
+    },
+    responses={
+        200: OpenApiResponse(
+            description='Бюджетный лимит сохранён',
+            response={
+                'type': 'object',
+                'properties': {
+                    'success': {'type': 'boolean'},
+                    'amount_limit': {'type': 'string'},
+                },
+            },
+        ),
+        400: OpenApiResponse(description='Неверные данные запроса'),
+    },
+)
+class SaveBudgetLimitAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
+    """API view for saving monthly expense budget limits."""
+
+    schema = AutoSchema()
+    authentication_classes = (CookieJWTAuthentication, SessionAuthentication)
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle,)
+
+    def post(
+        self,
+        request: Request,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Response | Any:
+        request_with_container = cast('RequestWithContainer', request)
+        user = cast('User', request.user)
+
+        try:
+            month = date.fromisoformat(request.data['month']).replace(day=1)
+        except (ValueError, KeyError) as e:
+            raise ValidationError(
+                detail='Invalid month format. Expected ISO format (YYYY-MM-DD)',
+                code='invalid_month_format',
+            ) from e
+
+        try:
+            amount_limit = Decimal(str(request.data['amount_limit']))
+        except (ValueError, TypeError, KeyError) as e:
+            raise ValidationError(
+                detail='Invalid amount_limit value',
+                code='invalid_amount_limit',
+            ) from e
+
+        if amount_limit < 0:
+            raise ValidationError(
+                detail='amount_limit must be greater than or equal to zero',
+                code='invalid_amount_limit',
+            )
+
+        try:
+            alert_threshold = int(request.data.get('alert_threshold') or 80)
+        except (TypeError, ValueError) as e:
+            raise ValidationError(
+                detail='Invalid alert_threshold value',
+                code='invalid_alert_threshold',
+            ) from e
+
+        if (
+            alert_threshold < constants.ONE
+            or alert_threshold > constants.ONE_HUNDRED
+        ):
+            raise ValidationError(
+                detail='alert_threshold must be between 1 and 100',
+                code='invalid_alert_threshold',
+            )
+
+        raw_category_id = request.data.get('category_id')
+        category = None
+        if raw_category_id:
+            category = get_object_or_404(
+                Category,
+                id=raw_category_id,
+                user=user,
+                type=TransactionType.EXPENSE,
+            )
+
+        budget_repository = (
+            request_with_container.container.budget.budget_repository()
+        )
+        budget, created = budget_repository.get_or_create_budget(
+            user=user,
+            period=month,
+            category=category,
+            defaults={
+                'amount_limit': amount_limit,
+                'alert_threshold': alert_threshold,
+            },
+        )
+        if not created:
+            budget.amount_limit = amount_limit
+            budget.alert_threshold = alert_threshold
+            budget.save()
+
+        if _is_htmx_request(request):
+            return _render_budget_limits(request)
+
+        return Response(
+            {'success': True, 'amount_limit': str(budget.amount_limit)},
             status=status.HTTP_200_OK,
         )

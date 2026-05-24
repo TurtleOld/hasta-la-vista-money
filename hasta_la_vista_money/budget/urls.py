@@ -3,6 +3,7 @@ from django.urls import path
 from hasta_la_vista_money.budget.apis import (
     ChangePlanningAPIView,
     GenerateDatesAPIView,
+    SaveBudgetLimitAPIView,
     SavePlanningAPIView,
 )
 from hasta_la_vista_money.budget.views import (
@@ -30,5 +31,10 @@ urlpatterns = [
         'save-planning/',
         SavePlanningAPIView.as_view(),
         name='save_planning',
+    ),
+    path(
+        'save-limit/',
+        SaveBudgetLimitAPIView.as_view(),
+        name='save_limit',
     ),
 ]
