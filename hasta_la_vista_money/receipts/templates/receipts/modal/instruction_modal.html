@@ -26,56 +26,47 @@
     @keydown.escape.window="closeModal()"
     class="fixed inset-0 z-70 flex items-center justify-center p-4 pointer-events-none"
 >
-    <div class="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl pointer-events-auto">
-        <div class="flex flex-col max-h-[90vh]">
-            <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                <h2 class="text-xl font-semibold text-white">
+    <div class="receipts-instruction-modal pointer-events-auto">
+        <div class="receipts-instruction-modal-inner">
+            <div class="receipts-instruction-modal-head">
+                <h2 class="receipts-instruction-modal-title">
                     {% translate 'Инструкция по загрузке чеков' %}
                 </h2>
-                <button type="button" @click="closeModal()" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer">
-                    <i class="bi bi-x-lg text-lg"></i>
-                    <span class="sr-only">{% translate 'Закрыть' %}</span>
+                <button type="button" @click="closeModal()" class="receipts-instruction-modal-close" aria-label="{% translate 'Закрыть' %}">
+                    <i class="bi bi-x-lg"></i>
                 </button>
             </div>
 
-            <div class="flex-1 overflow-y-auto px-6 py-4">
-                <div class="prose prose-sm dark:prose-invert max-w-none">
-                    <div class="space-y-4 text-gray-700 dark:text-gray-300">
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                {% translate 'Примечание*' %}
-                            </h3>
-                            <p class="leading-relaxed">
-                                {% translate 'Для качественного распознавания чека лучше взять его с сайта lkdr.nalog.ru. Регистрация по номеру телефона. Чтобы туда чеки попадали, нужно их добавлять через мобильное приложение "Мои чеки онлайн", либо чеки добавляются в личный кабинет автоматически, если при получении чека в онлайн-магазинах указан ваш номер телефона и/или электронная почта.' %}
-                            </p>
-                        </div>
+            <div class="receipts-instruction-modal-body">
+                <section class="receipts-instruction-section">
+                    <h3>{% translate 'Примечание*' %}</h3>
+                    <p>
+                        {% translate 'Для качественного распознавания чека лучше взять его с сайта lkdr.nalog.ru. Регистрация по номеру телефона. Чтобы туда чеки попадали, нужно их добавлять через мобильное приложение "Мои чеки онлайн", либо чеки добавляются в личный кабинет автоматически, если при получении чека в онлайн-магазинах указан ваш номер телефона и/или электронная почта.' %}
+                    </p>
+                </section>
 
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                {% translate 'Как загрузить чек?' %}
-                            </h3>
-                            <p class="text-sm leading-relaxed">
-                                {% translate 'Если чек брать с сайта, то лучше сделать скриншот, чтобы была видна вся основная информация о покупках, продавце и чеке. Пример ниже:' %}
-                                <img width="70%" height="70%" src="{% static 'img/receipt_screenshot.png' %}" alt="Скриншот чека">
-                                {% translate 'Можно просто скачать чек и загрузить скачанную версию, но за счёт того, что в чеке будут лишние данные, точность распознавания может быть ниже.' %}
-                            </p>
-                        </div>
+                <section class="receipts-instruction-section">
+                    <h3>{% translate 'Как загрузить чек?' %}</h3>
+                    <p>
+                        {% translate 'Если чек брать с сайта, то лучше сделать скриншот, чтобы была видна вся основная информация о покупках, продавце и чеке. Пример ниже:' %}
+                    </p>
+                    <img class="receipts-instruction-img" src="{% static 'img/receipt_screenshot.png' %}" alt="{% translate 'Скриншот чека' %}">
+                    <p>
+                        {% translate 'Можно просто скачать чек и загрузить скачанную версию, но за счёт того, что в чеке будут лишние данные, точность распознавания может быть ниже.' %}
+                    </p>
+                </section>
 
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                {% translate 'Дополнительная информация' %}
-                            </h3>
-                            <p class="text-sm leading-relaxed">
-                                {% translate 'Можно также загрузить фото чека, но чек не должен быть обрезан или сильно смят, тогда качество распознавания будет выше, иначе данные могут распознаться неправильно/неполностью.<br>Пример фото чека ниже. Но и в этом случае распознавание текста чека зависит от мощности используемой модели.' %}
-                                <img width="70%" height="70%" src="{% static 'img/receipt_photo.png' %}" alt="Фото чека">
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                <section class="receipts-instruction-section">
+                    <h3>{% translate 'Дополнительная информация' %}</h3>
+                    <p>
+                        {% translate 'Можно также загрузить фото чека, но чек не должен быть обрезан или сильно смят, тогда качество распознавания будет выше, иначе данные могут распознаться неправильно/неполностью. Пример фото чека ниже. Но и в этом случае распознавание текста чека зависит от мощности используемой модели.' %}
+                    </p>
+                    <img class="receipts-instruction-img" src="{% static 'img/receipt_photo.png' %}" alt="{% translate 'Фото чека' %}">
+                </section>
             </div>
 
-            <div class="flex items-center justify-end gap-3 border-t border-gray-200 dark:border-gray-700 px-6 py-4">
-                <button type="button" @click="closeModal()" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 cursor-pointer">
+            <div class="receipts-instruction-modal-ft">
+                <button type="button" @click="closeModal()" class="receipts-btn receipts-btn-primary">
                     {% translate 'Понятно' %}
                 </button>
             </div>

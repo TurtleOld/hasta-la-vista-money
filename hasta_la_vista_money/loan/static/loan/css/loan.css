@@ -1,0 +1,99 @@
+.loan-form-input {
+  display: block;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-neutral-300);
+  background-color: var(--app-surface);
+  padding: 0.5rem 0.75rem;
+  padding-right: 2.5rem;
+  font-size: 0.875rem;
+  color: var(--color-neutral-900);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.loan-form-input:focus {
+  border-color: var(--color-brand-500);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-brand-500);
+}
+
+[data-bs-theme="dark"] .loan-form-input {
+  border-color: var(--color-neutral-600);
+  background-color: var(--color-neutral-800);
+  color: var(--color-neutral-100);
+}
+
+[data-bs-theme="dark"] .loan-form-input:focus {
+  border-color: var(--color-brand-400);
+  box-shadow: 0 0 0 2px var(--color-brand-400);
+}
+
+.loan-form-datetime {
+  display: block;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-neutral-300);
+  background-color: var(--app-surface);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-neutral-900);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.loan-form-datetime:focus {
+  border-color: var(--color-brand-500);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-brand-500);
+}
+
+[data-bs-theme="dark"] .loan-form-datetime {
+  border-color: var(--color-neutral-600);
+  background-color: var(--color-neutral-800);
+  color: var(--color-neutral-100);
+}
+
+[data-bs-theme="dark"] .loan-form-datetime:focus {
+  border-color: var(--color-brand-400);
+  box-shadow: 0 0 0 2px var(--color-brand-400);
+}
+
+.loan-form-select {
+  display: block;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-neutral-300);
+  background-color: var(--app-surface);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-neutral-900);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.loan-form-select:focus {
+  border-color: var(--color-brand-500);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-brand-500);
+}
+
+[data-bs-theme="dark"] .loan-form-select {
+  border-color: var(--color-neutral-600);
+  background-color: var(--color-neutral-800);
+  color: var(--color-neutral-100);
+}
+
+[data-bs-theme="dark"] .loan-form-select:focus {
+  border-color: var(--color-brand-400);
+  box-shadow: 0 0 0 2px var(--color-brand-400);
+}

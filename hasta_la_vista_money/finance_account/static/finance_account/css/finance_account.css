@@ -1,0 +1,192 @@
+.account-header-gradient {
+  background-image: linear-gradient(to right, var(--color-brand-600), var(--color-emerald-600));
+}
+
+[data-bs-theme='dark'] .account-header-gradient {
+  background-image: linear-gradient(to right, var(--color-brand-700), var(--color-emerald-700));
+}
+
+.add-account-button {
+  background-image: linear-gradient(to right, var(--color-info-600), var(--color-indigo-600));
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.2);
+}
+
+.add-account-button:hover {
+  background-image: linear-gradient(to right, var(--color-info-700), var(--color-indigo-700));
+  box-shadow: 0 20px 25px -5px rgba(37, 99, 235, 0.4), 0 10px 10px -5px rgba(37, 99, 235, 0.3);
+}
+
+[data-bs-theme='dark'] .add-account-button {
+  background-image: linear-gradient(to right, var(--color-info-700), var(--color-indigo-700));
+  box-shadow: 0 10px 15px -3px rgba(29, 78, 216, 0.2), 0 4px 6px -2px rgba(29, 78, 216, 0.15);
+}
+
+[data-bs-theme='dark'] .add-account-button:hover {
+  background-image: linear-gradient(to right, var(--color-info-800), var(--color-indigo-900));
+  box-shadow: 0 20px 25px -5px rgba(29, 78, 216, 0.3), 0 10px 10px -5px rgba(29, 78, 216, 0.2);
+}
+
+.finance-account-page {
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, var(--app-halo-1), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, var(--app-halo-2), transparent),
+    var(--app-bg) !important;
+  color: var(--app-text);
+}
+
+[data-bs-theme='dark'] .finance-account-page {
+  background:
+    radial-gradient(ellipse 70% 50% at 0% 0%, var(--app-halo-1), transparent),
+    radial-gradient(ellipse 50% 60% at 100% 100%, var(--app-halo-2), transparent),
+    var(--app-bg) !important;
+}
+
+.finance-account-page h1,
+.finance-account-page h2,
+.finance-account-page h3,
+.finance-account-page .text-gray-900,
+.finance-account-page .dark\:text-white {
+  color: var(--app-text) !important;
+}
+
+.finance-account-page .text-gray-600,
+.finance-account-page .text-gray-500,
+.finance-account-page .dark\:text-gray-400 {
+  color: var(--app-muted) !important;
+}
+
+.finance-account-page .bg-white,
+.finance-account-page .dark\:bg-gray-800,
+.finance-account-page .card-total-balance,
+.finance-account-page #balance-trend-widget,
+.finance-account-page #sum-all-groups-accounts,
+.finance-account-page #account-cards-block > .group {
+  background: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+  box-shadow: var(--shadow-app-panel) !important;
+}
+
+.finance-account-page #account-cards-block > .group:hover {
+  background: var(--app-surface) !important;
+  border-color: color-mix(in oklab, var(--app-accent) 28%, transparent) !important;
+  box-shadow: var(--shadow-app-soft) !important;
+  transform: translateY(-1px);
+}
+
+.finance-account-page .bg-linear-to-r.from-green-50,
+.finance-account-page .bg-linear-to-r.from-purple-50,
+.finance-account-page .dark\:from-green-900\/30,
+.finance-account-page .dark\:from-purple-900\/30,
+.finance-account-page .card-total-balance {
+  background: var(--app-surface-2) !important;
+}
+
+.finance-account-page .bg-linear-to-br.from-green-100,
+.finance-account-page .dark\:from-green-900\/40,
+.finance-account-page .dark\:from-green-800\/50 {
+  background: color-mix(in oklab, var(--app-accent) 14%, var(--app-surface)) !important;
+}
+
+.finance-account-page .border-gray-200,
+.finance-account-page .border-gray-200\/50,
+.finance-account-page .border-gray-300,
+.finance-account-page .dark\:border-gray-700,
+.finance-account-page .dark\:border-gray-700\/50,
+.finance-account-page .dark\:border-gray-600 {
+  border-color: var(--app-border) !important;
+}
+
+.finance-account-page .text-green-600,
+.finance-account-page .dark\:text-green-400 {
+  color: var(--app-positive) !important;
+}
+
+.finance-account-page .text-red-600,
+.finance-account-page .dark\:text-red-400 {
+  color: var(--app-negative) !important;
+}
+
+.finance-account-page .add-account-button,
+.finance-account-page button.bg-linear-to-r.from-green-600,
+.finance-account-page button.bg-linear-to-r.from-blue-600 {
+  background: var(--gradient-brand-diagonal) !important;
+  border-color: transparent !important;
+  box-shadow: var(--shadow-app-button) !important;
+  color: var(--app-on-accent) !important;
+}
+
+.finance-account-page a.bg-white,
+.finance-account-page a.dark\:bg-gray-800,
+.finance-account-page a.bg-gray-100,
+.finance-account-page a.dark\:bg-gray-700 {
+  background: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+}
+
+.finance-account-page a.bg-white:hover,
+.finance-account-page a.dark\:bg-gray-800:hover,
+.finance-account-page a.bg-gray-100:hover,
+.finance-account-page a.dark\:bg-gray-700:hover {
+  background: var(--app-surface-2) !important;
+}
+
+.finance-account-page select,
+.finance-account-page input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.finance-account-page textarea,
+.finance-account-page .dark\:bg-gray-700 {
+  background-color: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+.finance-account-page .bg-gray-50,
+.finance-account-page .bg-gray-100,
+.finance-account-page .bg-blue-50,
+.finance-account-page .bg-blue-100,
+.finance-account-page .bg-purple-100,
+.finance-account-page .dark\:bg-gray-700,
+.finance-account-page .dark\:bg-gray-700\/50,
+.finance-account-page .dark\:bg-blue-900\/30,
+.finance-account-page .dark\:bg-purple-900\/30 {
+  background-color: var(--app-surface-2) !important;
+}
+
+.finance-account-page .account-header-gradient,
+.finance-account-page .bg-linear-to-r.from-green-600,
+.finance-account-page .bg-linear-to-r.from-blue-600 {
+  background: var(--gradient-brand-diagonal) !important;
+}
+
+.finance-account-page .account-header-gradient h2,
+.finance-account-page .bg-linear-to-r.from-green-600 h2,
+.finance-account-page .bg-linear-to-r.from-blue-600 h2,
+.finance-account-page .text-white {
+  color: var(--app-on-accent) !important;
+}
+
+.finance-account-page .change-object-button {
+  background-color: color-mix(in oklab, var(--color-info-500) 12%, var(--app-surface)) !important;
+  color: var(--color-info-600) !important;
+}
+
+.finance-account-page .remove-object-button {
+  background-color: color-mix(in oklab, var(--app-negative) 10%, var(--app-surface)) !important;
+  color: var(--app-negative) !important;
+}
+
+.finance-account-page #swap-transfer-accounts,
+.finance-account-page .period-btn {
+  background: var(--app-surface-2) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text) !important;
+}
+
+.finance-account-page .period-btn.bg-purple-100 {
+  background: color-mix(in oklab, var(--app-accent) 12%, var(--app-surface)) !important;
+  border-color: color-mix(in oklab, var(--app-accent) 34%, var(--app-border)) !important;
+  color: var(--app-accent) !important;
+}
+
+.finance-account-page .account-foreign {
+  border-left-color: var(--color-info-500) !important;
+}

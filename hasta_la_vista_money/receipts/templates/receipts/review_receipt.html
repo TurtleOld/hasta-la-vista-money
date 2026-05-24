@@ -5,284 +5,206 @@
 
 {% block title %}{% translate 'Проверка чека перед сохранением' %}{% endblock %}
 
-{% block extra_css %}
-<style nonce="{{ request.csp_nonce }}">
-    .field-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-    }
-    .field-label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #6b7280;
-    }
-    .dark .field-label {
-        color: #9ca3af;
-    }
-    .product-row.marked-delete td {
-        opacity: 0.4;
-    }
-    .product-row.marked-delete td input:not([type="checkbox"]) {
-        text-decoration: line-through;
-    }
-</style>
-{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-
-    <div class="mb-8 flex items-start gap-4">
-        <div class="shrink-0 flex items-center justify-center w-12 h-12 rounded-2xl bg-green-100 dark:bg-green-900/30">
-            <i class="bi bi-receipt text-xl text-green-600 dark:text-green-400"></i>
-        </div>
-        <div>
-            <h1 class="text-2xl sm:text-3xl font-heading font-semibold text-gray-900 dark:text-gray-100">
-                {% translate 'Проверка чека перед сохранением' %}
-            </h1>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {% translate 'Проверьте и при необходимости отредактируйте данные чека. После проверки нажмите "Всё верно, сохранить".' %}
-            </p>
-        </div>
-    </div>
-
-    <form method="post" novalidate>
-        {% csrf_token %}
-
-        {% if form.non_field_errors %}
-            <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-                {{ form.non_field_errors }}
+<div class="receipts-app">
+    <div class="receipts-wrap">
+        <header class="receipts-header">
+            <div>
+                <div class="receipts-kicker">{% translate 'Распознанный чек' %}</div>
+                <h1 class="receipts-title">{% translate 'Проверка чека перед сохранением' %}</h1>
+                <p class="receipts-upload-lead">
+                    {% translate 'Проверьте и при необходимости отредактируйте данные чека. После проверки нажмите «Всё верно, сохранить».' %}
+                </p>
             </div>
-        {% endif %}
-
-        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] gap-6 items-start">
-
-            {% if pending_receipt.image_file %}
-                <aside class="lg:sticky lg:top-6 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
-                    <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
-                        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                            <i class="bi bi-image text-gray-400 dark:text-gray-500"></i>
-                            {% translate 'Фото чека' %}
-                        </h2>
-                    </div>
-                    <div class="p-4">
-                        <img src="{{ pending_receipt.image_file.url }}" alt="{% translate 'Фото загруженного чека' %}" class="max-h-[72vh] w-full rounded-xl object-contain bg-gray-100 dark:bg-gray-800">
-                    </div>
-                </aside>
-            {% endif %}
-
-            <div class="space-y-6">
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
-                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                        <i class="bi bi-shop text-gray-400 dark:text-gray-500"></i>
-                        {% translate 'Продавец' %}
-                    </h2>
-                </div>
-                <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="md:col-span-2 field-group">
-                        <span class="field-label">{{ form.name_seller.label }}</span>
-                        {{ form.name_seller }}
-                        {% if form.name_seller.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.name_seller.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="field-group">
-                        <span class="field-label">{{ form.retail_place.label }}</span>
-                        {{ form.retail_place }}
-                        {% if form.retail_place.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.retail_place.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="md:col-span-3 field-group">
-                        <span class="field-label">{{ form.retail_place_address.label }}</span>
-                        {{ form.retail_place_address }}
-                        {% if form.retail_place_address.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.retail_place_address.errors }}</div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
-                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                        <i class="bi bi-file-text text-gray-400 dark:text-gray-500"></i>
-                        {% translate 'Реквизиты чека' %}
-                    </h2>
-                </div>
-                <div class="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="col-span-2 field-group">
-                        <span class="field-label">{{ form.account.label }}</span>
-                        {{ form.account }}
-                        {% if form.account.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.account.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="col-span-2 field-group">
-                        <span class="field-label">{{ form.receipt_date.label }}</span>
-                        {{ form.receipt_date }}
-                        {% if form.receipt_date.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.receipt_date.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="field-group">
-                        <span class="field-label">{{ form.number_receipt.label }}</span>
-                        {{ form.number_receipt }}
-                        {% if form.number_receipt.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.number_receipt.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="field-group">
-                        <span class="field-label">{{ form.operation_type.label }}</span>
-                        {{ form.operation_type }}
-                        {% if form.operation_type.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.operation_type.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="field-group">
-                        <span class="field-label">{{ form.nds10.label }}</span>
-                        {{ form.nds10 }}
-                        {% if form.nds10.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.nds10.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="field-group">
-                        <span class="field-label">{{ form.nds20.label }}</span>
-                        {{ form.nds20 }}
-                        {% if form.nds20.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.nds20.errors }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="field-group">
-                        <span class="field-label">{{ form.total_sum.label }}</span>
-                        {{ form.total_sum }}
-                        {% if form.total_sum.errors %}
-                            <div class="text-xs text-red-600 dark:text-red-400">{{ form.total_sum.errors }}</div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
-                    <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                        <i class="bi bi-list-ul text-gray-400 dark:text-gray-500"></i>
-                        {% translate 'Позиции чека' %}
-                    </h2>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">
-                        {{ product_formset.total_form_count }} {% translate 'позиций' %}
-                    </span>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full">
-                        <thead>
-                            <tr class="border-b border-gray-100 dark:border-gray-800">
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-px">#</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Название' %}</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Категория' %}</th>
-                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Цена' %}</th>
-                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Кол-во' %}</th>
-                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Сумма' %}</th>
-                                <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{% translate 'Удалить' %}</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                            {{ product_formset.management_form }}
-                            {% for product_form in product_formset %}
-                                <tr class="product-row group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                    <td class="px-4 py-3 text-sm text-gray-400 dark:text-gray-600 tabular-nums w-px">
-                                        {{ forloop.counter }}
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        {{ product_form.product_name }}
-                                        {% if product_form.product_name.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.product_name.errors }}</div>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        {{ product_form.category }}
-                                        {% if product_form.category.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.category.errors }}</div>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-4 py-3 text-right">
-                                        {{ product_form.price }}
-                                        {% if product_form.price.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.price.errors }}</div>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-4 py-3 text-right">
-                                        {{ product_form.quantity }}
-                                        {% if product_form.quantity.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.quantity.errors }}</div>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-4 py-3 text-right">
-                                        {{ product_form.amount }}
-                                        {% if product_form.amount.errors %}
-                                            <div class="text-xs text-red-600 dark:text-red-400 mt-1">{{ product_form.amount.errors }}</div>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-4 py-3 text-center">
-                                        {{ product_form.DELETE }}
-                                    </td>
-                                    {% for hidden in product_form.hidden_fields %}
-                                        {{ hidden }}
-                                    {% endfor %}
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                        <tfoot>
-                            <tr class="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
-                                <td colspan="5" class="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 text-right">
-                                    {% translate 'Итого:' %}
-                                </td>
-                                <td class="px-4 py-3 text-right">
-                                    <span class="text-sm font-bold text-gray-900 dark:text-gray-100" id="total-sum-display">—</span>
-                                </td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
-
-            <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                <div class="flex flex-col sm:flex-row gap-3">
-                    <button
-                        type="submit"
-                        name="save"
-                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                    >
-                        <i class="bi bi-check2-circle text-base"></i>
-                        {% translate 'Всё верно, сохранить' %}
-                    </button>
-                    <button
-                        type="submit"
-                        name="update"
-                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 px-6 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                    >
-                        <i class="bi bi-save text-base"></i>
-                        {% translate 'Сохранить изменения' %}
-                    </button>
-                </div>
-                <a
-                    href="{% url 'receipts:list' %}"
-                    class="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-medium text-gray-500 dark:text-gray-400 transition hover:text-gray-700 dark:hover:text-gray-200"
-                >
-                    <i class="bi bi-x-lg text-base"></i>
-                    {% translate 'Отмена' %}
+            <div class="receipts-actions">
+                <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
+                    <i class="bi bi-arrow-left"></i>
+                    {% translate 'К списку' %}
                 </a>
             </div>
+        </header>
 
+        <form method="post" novalidate class="receipt-review-form">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="receipts-upload-error">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="receipt-review-grid">
+                {% if pending_receipt.image_file %}
+                    <aside class="receipts-side-card receipt-review-photo">
+                        <div class="receipts-side-title">
+                            <i class="bi bi-image"></i>
+                            {% translate 'Фото чека' %}
+                        </div>
+                        <img src="{{ pending_receipt.image_file.url }}"
+                             alt="{% translate 'Фото загруженного чека' %}"
+                             class="receipt-review-photo-img">
+                    </aside>
+                {% endif %}
+
+                <div class="receipt-review-main">
+                    <section class="receipts-card">
+                        <header class="receipts-card-hd">
+                            <h2><i class="bi bi-shop"></i> {% translate 'Продавец' %}</h2>
+                        </header>
+                        <div class="receipts-section">
+                            <div class="receipts-grid-2">
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.name_seller.label }}</span>
+                                    {{ form.name_seller }}
+                                    {% if form.name_seller.errors %}<div class="receipt-review-error">{{ form.name_seller.errors }}</div>{% endif %}
+                                </div>
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.retail_place.label }}</span>
+                                    {{ form.retail_place }}
+                                    {% if form.retail_place.errors %}<div class="receipt-review-error">{{ form.retail_place.errors }}</div>{% endif %}
+                                </div>
+                            </div>
+                            <div class="receipts-field" style="margin-top: 0.75rem;">
+                                <span class="receipts-label">{{ form.retail_place_address.label }}</span>
+                                {{ form.retail_place_address }}
+                                {% if form.retail_place_address.errors %}<div class="receipt-review-error">{{ form.retail_place_address.errors }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="receipts-card">
+                        <header class="receipts-card-hd">
+                            <h2><i class="bi bi-file-text"></i> {% translate 'Реквизиты чека' %}</h2>
+                        </header>
+                        <div class="receipts-section">
+                            <div class="receipts-grid-2">
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.account.label }}</span>
+                                    {{ form.account }}
+                                    {% if form.account.errors %}<div class="receipt-review-error">{{ form.account.errors }}</div>{% endif %}
+                                </div>
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.receipt_date.label }}</span>
+                                    {{ form.receipt_date }}
+                                    {% if form.receipt_date.errors %}<div class="receipt-review-error">{{ form.receipt_date.errors }}</div>{% endif %}
+                                </div>
+                            </div>
+                            <div class="receipt-review-grid-4">
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.number_receipt.label }}</span>
+                                    {{ form.number_receipt }}
+                                    {% if form.number_receipt.errors %}<div class="receipt-review-error">{{ form.number_receipt.errors }}</div>{% endif %}
+                                </div>
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.operation_type.label }}</span>
+                                    {{ form.operation_type }}
+                                    {% if form.operation_type.errors %}<div class="receipt-review-error">{{ form.operation_type.errors }}</div>{% endif %}
+                                </div>
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.nds10.label }}</span>
+                                    {{ form.nds10 }}
+                                    {% if form.nds10.errors %}<div class="receipt-review-error">{{ form.nds10.errors }}</div>{% endif %}
+                                </div>
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.nds20.label }}</span>
+                                    {{ form.nds20 }}
+                                    {% if form.nds20.errors %}<div class="receipt-review-error">{{ form.nds20.errors }}</div>{% endif %}
+                                </div>
+                                <div class="receipts-field">
+                                    <span class="receipts-label">{{ form.total_sum.label }}</span>
+                                    {{ form.total_sum }}
+                                    {% if form.total_sum.errors %}<div class="receipt-review-error">{{ form.total_sum.errors }}</div>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="receipts-card">
+                        <header class="receipts-card-hd">
+                            <h2><i class="bi bi-list-ul"></i> {% translate 'Позиции чека' %}</h2>
+                            <span class="meta">{{ product_formset.total_form_count }} {% translate 'позиций' %}</span>
+                        </header>
+                        <div class="receipt-review-table-wrap">
+                            <table class="receipt-review-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>{% translate 'Название' %}</th>
+                                        <th>{% translate 'Категория' %}</th>
+                                        <th class="ta-right">{% translate 'Цена' %}</th>
+                                        <th class="ta-right">{% translate 'Кол-во' %}</th>
+                                        <th class="ta-right">{% translate 'Сумма' %}</th>
+                                        <th class="ta-center">{% translate 'Удалить' %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{ product_formset.management_form }}
+                                    {% for product_form in product_formset %}
+                                        <tr class="product-row">
+                                            <td class="receipt-review-table-idx">{{ forloop.counter }}</td>
+                                            <td>
+                                                {{ product_form.product_name }}
+                                                {% if product_form.product_name.errors %}<div class="receipt-review-error">{{ product_form.product_name.errors }}</div>{% endif %}
+                                            </td>
+                                            <td>
+                                                {{ product_form.category }}
+                                                {% if product_form.category.errors %}<div class="receipt-review-error">{{ product_form.category.errors }}</div>{% endif %}
+                                            </td>
+                                            <td class="ta-right">
+                                                {{ product_form.price }}
+                                                {% if product_form.price.errors %}<div class="receipt-review-error">{{ product_form.price.errors }}</div>{% endif %}
+                                            </td>
+                                            <td class="ta-right">
+                                                {{ product_form.quantity }}
+                                                {% if product_form.quantity.errors %}<div class="receipt-review-error">{{ product_form.quantity.errors }}</div>{% endif %}
+                                            </td>
+                                            <td class="ta-right">
+                                                {{ product_form.amount }}
+                                                {% if product_form.amount.errors %}<div class="receipt-review-error">{{ product_form.amount.errors }}</div>{% endif %}
+                                            </td>
+                                            <td class="ta-center">
+                                                {{ product_form.DELETE }}
+                                            </td>
+                                            {% for hidden in product_form.hidden_fields %}{{ hidden }}{% endfor %}
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="receipt-review-table-total">
+                                        <td colspan="5" class="ta-right">{% translate 'Итого:' %}</td>
+                                        <td class="ta-right">
+                                            <span class="receipts-amount receipts-positive" id="total-sum-display">—</span>
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </section>
+
+                    <div class="receipts-card-ft">
+                        <p class="hint">
+                            <i class="bi bi-shield-check"></i>
+                            {% translate 'После сохранения чек попадёт в общий список и спишется со счёта.' %}
+                        </p>
+                        <div class="ft-actions">
+                            <a href="{% url 'receipts:list' %}" class="receipts-btn receipts-btn-ghost">
+                                <i class="bi bi-x-lg"></i>
+                                {% translate 'Отмена' %}
+                            </a>
+                            <button type="submit" name="update" class="receipts-btn receipts-btn-secondary">
+                                <i class="bi bi-save"></i>
+                                {% translate 'Сохранить изменения' %}
+                            </button>
+                            <button type="submit" name="save" class="receipts-btn receipts-btn-primary">
+                                <i class="bi bi-check2-circle"></i>
+                                {% translate 'Всё верно, сохранить' %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-
-        </div>
-    </form>
+        </form>
+    </div>
 </div>
 
 <script nonce="{{ request.csp_nonce }}">
@@ -371,7 +293,7 @@
 
         calculateTotalSum();
 
-        const form = document.querySelector('form[method="post"]');
+        const form = document.querySelector('form.receipt-review-form');
         if (form) {
             form.addEventListener('submit', calculateTotalSum);
         }
