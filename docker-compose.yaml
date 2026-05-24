@@ -66,7 +66,7 @@ services:
       ERROR_TRACKING_ENVIRONMENT: ${ERROR_TRACKING_ENVIRONMENT:-development}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
       RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-http://receipt-inference:8010}
-      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-420}
+      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-1500}
     depends_on:
       redis:
         condition: service_started
@@ -98,7 +98,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change_me}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
       RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-http://receipt-inference:8010}
-      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-420}
+      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-1500}
     depends_on:
       redis:
         condition: service_started
