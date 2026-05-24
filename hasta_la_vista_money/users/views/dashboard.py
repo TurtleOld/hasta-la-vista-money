@@ -73,38 +73,22 @@ class DashboardKpiCard(TypedDict):
     tone: str
 
 
-def _operation_list_url(
-    url_name: str,
-    period_start: Any,
-    period_end: Any,
+def _finances_url(
+    transaction_type: str,
     extra_params: dict[str, Any] | None = None,
 ) -> str:
-    params = {
-        'date_after': period_start.isoformat(),
-        'date_before': period_end.isoformat(),
-    }
+    params: dict[str, Any] = {'type': transaction_type}
     if extra_params:
         params.update(extra_params)
-    return f'{reverse(url_name)}?{urlencode(params)}'
+    return f'{reverse("finances")}?{urlencode(params)}'
 
 
 def _build_kpi_cards(kpis: DashboardKpiDict) -> list[DashboardKpiCard]:
-    period_start = kpis['period_start']
-    period_end = kpis['period_end']
-    expense_url = _operation_list_url(
-        'expense:list',
-        period_start,
-        period_end,
-    )
-    income_url = _operation_list_url('income:list', period_start, period_end)
+    expense_url = _finances_url('expense')
+    income_url = _finances_url('income')
     top_category_id = kpis['top_expense_category_id']
     top_category_url = (
-        _operation_list_url(
-            'expense:list',
-            period_start,
-            period_end,
-            {'category': top_category_id},
-        )
+        _finances_url('expense', {'category': top_category_id})
         if top_category_id is not None
         else expense_url
     )
@@ -449,8 +433,8 @@ class DashboardDataView(LoginRequiredMixin, View):
                 'comparison': comparison_data,
                 'recent_transactions': recent_transactions,
                 'click_through': {
-                    'expense_list_url': reverse('expense:list'),
-                    'income_list_url': reverse('income:list'),
+                    'expense_list_url': _finances_url('expense'),
+                    'income_list_url': _finances_url('income'),
                 },
             }
 

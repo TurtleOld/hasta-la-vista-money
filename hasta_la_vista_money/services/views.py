@@ -1,29 +1,12 @@
 from collections import defaultdict
 from collections.abc import Generator
-from datetime import datetime
-from decimal import Decimal
-from typing import TYPE_CHECKING, Any, TypeVar, Union, cast
+from typing import Any, cast
 
 from django.core.cache import cache
 from django.db.models import Count, Model, QuerySet, Sum
 from django.db.models.functions import TruncMonth
-from django.forms import ModelForm
-from django.http import HttpRequest
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 
 from hasta_la_vista_money.users.models import User
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-    from hasta_la_vista_money.income.models import Income, IncomeCategory
-else:
-    from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-    from hasta_la_vista_money.income.models import Income, IncomeCategory
-
-M = TypeVar('M', bound=Model)
-TModel = TypeVar('TModel', bound=Model)
-ExpenseOrIncome = Union['Expense', 'Income']
 
 
 class CategoryTreeBuilder:
@@ -199,93 +182,4 @@ def collect_info_receipt(user: User) -> Any:
             total_amount=Sum('total_sum'),
         )
         .order_by('-month')
-    )
-
-
-def get_queryset_type_income_expenses[TModel: Model](
-    type_id: int | None,
-    model: type[TModel],
-    form: ModelForm[TModel],
-) -> TModel:
-    """Get model instance by ID or from form.
-
-    Args:
-        type_id: Optional model instance ID.
-        model: Model class.
-        form: Validated model form.
-
-    Returns:
-        Model instance from ID or form.
-
-    Raises:
-        Http404: If type_id provided and instance not found.
-        ValueError: If form save returns None.
-    """
-    if type_id:
-        return get_object_or_404(model, id=type_id)
-    instance = form.save(commit=False)
-    if instance is None:
-        raise ValueError('Form save returned None')
-    return instance
-
-
-def get_new_type_operation[M: Model](
-    model: type[M],
-    id_type_operation: int,
-    request: HttpRequest,
-) -> M:
-    """Get operation instance and prepare for new operation.
-
-    Args:
-        model: Model class (Expense or Income).
-        id_type_operation: Operation instance ID.
-        request: HTTP request object.
-
-    Returns:
-        Model instance for new operation creation.
-
-    Raises:
-        Http404: If operation not found.
-    """
-    expense = cast(
-        'ExpenseOrIncome',
-        get_object_or_404(model, pk=id_type_operation, user=request.user),
-    )
-    account = expense.account
-    amount = Decimal(str(expense.amount))
-
-    if 'income' in request.path:
-        account.balance = Decimal(str(account.balance)) + amount
-    else:
-        account.balance = Decimal(str(account.balance)) - amount
-    account.save()
-
-    if isinstance(expense, Income):
-        income_category: IncomeCategory = expense.category
-        date_value = expense.date
-        if isinstance(date_value, datetime) and timezone.is_naive(date_value):
-            date_value = timezone.make_aware(date_value)
-        return cast(
-            'M',
-            Income.objects.create(
-                user=expense.user,
-                account=expense.account,
-                category=income_category,
-                amount=expense.amount,
-                date=date_value,
-            ),
-        )
-    expense_category: ExpenseCategory = expense.category
-    date_value = expense.date
-    if isinstance(date_value, datetime) and timezone.is_naive(date_value):
-        date_value = timezone.make_aware(date_value)
-    return cast(
-        'M',
-        Expense.objects.create(
-            user=expense.user,
-            account=expense.account,
-            category=expense_category,
-            amount=expense.amount,
-            date=date_value,
-        ),
     )

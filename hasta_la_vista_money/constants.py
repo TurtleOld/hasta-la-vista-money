@@ -118,35 +118,13 @@ ACCOUNT_FORM_NOTES: Final = _(
 )
 
 # ============================================================================
-# User Messages - Expense Operations
+# User Messages - Transaction Operations
 # ============================================================================
-# Messages related to expense operations
+# Messages related to financial transaction operations
 
 SUCCESS_CATEGORY_ADDED: Final = _('Категория добавлена!')
 SUCCESS_EXPENSE_ADDED: Final = _('Операция расхода успешно добавлена!')
-SUCCESS_EXPENSE_UPDATE: Final = _('Операция расхода успешно обновлена!')
-SUCCESS_EXPENSE_DELETED: Final = _('Операция расхода успешно удалена!')
-SUCCESS_CATEGORY_EXPENSE_DELETED: Final = _(
-    'Категория расхода успешно удалена!',
-)
-ACCESS_DENIED_DELETE_EXPENSE_CATEGORY: Final = _(
-    'Категория не может быть удалена, так как связана с расходом',
-)
-
-# ============================================================================
-# User Messages - Income Operations
-# ============================================================================
-# Messages related to income operations
-
 SUCCESS_INCOME_ADDED: Final = _('Операция дохода успешно добавлена!')
-SUCCESS_INCOME_UPDATE: Final = _('Операция дохода успешно обновлена!')
-SUCCESS_INCOME_DELETED: Final = _('Операция дохода успешно удалена!')
-SUCCESS_CATEGORY_INCOME_DELETED: Final = _(
-    'Категория дохода успешно удалена!',
-)
-ACCESS_DENIED_DELETE_INCOME_CATEGORY: Final = _(
-    'Категория не может быть удалена, так как связана с доходом',
-)
 
 # ============================================================================
 # User Messages - Loan Operations
@@ -201,22 +179,6 @@ SUCCESS_CODE: Final = 200
 REDIRECTS: Final = 302
 NOT_FOUND: Final = 404
 SERVER_ERROR: Final = 500
-
-# ============================================================================
-# Template Paths
-# ============================================================================
-# Paths to Django templates
-
-EXPENSE_CATEGORY_TEMPLATE: Final = 'expense/show_category_expense.html'
-EXPENSE_TEMPLATE: Final = 'expense/show_expense.html'
-
-# ============================================================================
-# URL Names
-# ============================================================================
-# Django URL pattern names
-
-EXPENSE_CATEGORY_LIST_URL: Final = 'expense:category_list'
-EXPENSE_LIST_URL: Final = 'expense:list'
 
 # ============================================================================
 # Dependency Injection

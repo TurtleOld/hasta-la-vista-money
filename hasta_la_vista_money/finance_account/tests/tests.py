@@ -58,10 +58,8 @@ class TestAccount(TestCase):
     fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
-        'expense.yaml',
-        'expense_cat.yaml',
-        'income.yaml',
-        'income_cat.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     factory: RequestFactory
@@ -662,14 +660,12 @@ class TestAccountServices(TestCase):
     fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
-        'expense.yaml',
-        'expense_cat.yaml',
-        'income.yaml',
-        'income_cat.yaml',
         'loan.yaml',
         'receipt_receipt.yaml',
         'receipt_product.yaml',
         'receipt_seller.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:
@@ -737,10 +733,8 @@ class TestAccountBusinessLogic(TestCase):
     fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
-        'expense.yaml',
-        'expense_cat.yaml',
-        'income.yaml',
-        'income_cat.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:

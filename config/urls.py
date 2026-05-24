@@ -141,20 +141,6 @@ urlpatterns = [
         ),
     ),
     path(
-        'income/',
-        include(
-            'hasta_la_vista_money.income.urls',
-            namespace='income',
-        ),
-    ),
-    path(
-        'expense/',
-        include(
-            'hasta_la_vista_money.expense.urls',
-            namespace='expense',
-        ),
-    ),
-    path(
         'reports/',
         include('hasta_la_vista_money.reports.urls', namespace='reports'),
     ),

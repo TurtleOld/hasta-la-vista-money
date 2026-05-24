@@ -2,11 +2,9 @@ from dependency_injector import containers, providers
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.budget.containers import BudgetContainer
-from hasta_la_vista_money.expense.containers import ExpenseContainer
 from hasta_la_vista_money.finance_account.containers import (
     FinanceAccountContainer,
 )
-from hasta_la_vista_money.income.containers import IncomeContainer
 from hasta_la_vista_money.loan.containers import LoanContainer
 from hasta_la_vista_money.receipts.containers import ReceiptsContainer
 from hasta_la_vista_money.transactions.containers import TransactionContainer
@@ -35,18 +33,6 @@ class ApplicationContainer(containers.DeclarativeContainer):
         finance_account=providers.DependenciesContainer(),
     )
 
-    income = providers.Container(
-        IncomeContainer,
-        core=core,
-    )
-
-    expense = providers.Container(
-        ExpenseContainer,
-        core=core,
-        finance_account=providers.DependenciesContainer(),
-        receipts=receipts,
-    )
-
     transactions = providers.Container(
         TransactionContainer,
         core=core,
@@ -62,7 +48,6 @@ class ApplicationContainer(containers.DeclarativeContainer):
     core.account_service.override(finance_account.account_service)
 
     receipts.finance_account.override(finance_account)
-    expense.finance_account.override(finance_account)
 
     budget = providers.Container(
         BudgetContainer,

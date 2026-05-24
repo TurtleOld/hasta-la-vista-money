@@ -44,10 +44,8 @@ class TestAccountView(TestCase):
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
-        'expense.yaml',
-        'expense_cat.yaml',
-        'income.yaml',
-        'income_cat.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:
