@@ -36,11 +36,6 @@ def get_receipt_inference_url() -> str:
     return str(config('RECEIPT_INFERENCE_URL', default='')).strip().rstrip('/')
 
 
-def should_use_receipt_inference() -> bool:
-    """Check whether the internal receipt inference service is configured."""
-    return bool(get_receipt_inference_url())
-
-
 def resolve_upload_content_type(uploaded_file: UploadedFile) -> str:
     """Return a supported image MIME type for a live or persisted upload."""
     raw_content_type = str(

@@ -149,9 +149,9 @@ def _classify_failure(exc: Exception) -> tuple[str, str]:
 def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
     """Run inference for a pending receipt and update its state.
 
-    Loads the persisted image, calls ``analyze_image_with_ai`` (which routes
-    to the local PaddleOCR-VL service or the AI fallback), parses the result
-    and transitions the PendingReceipt to ``ready`` or ``failed``.
+    Loads the persisted image, calls ``analyze_image_with_ai`` (which uses the
+    local receipt inference service), parses the result and transitions the
+    PendingReceipt to ``ready`` or ``failed``.
 
     Args:
         _self: Bound Celery task instance (unused, present for ``bind=True``).
