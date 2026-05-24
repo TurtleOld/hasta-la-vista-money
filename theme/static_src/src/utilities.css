@@ -1,0 +1,80 @@
+@layer utilities {
+  .font-heading {
+    font-family: var(--font-family-heading) !important;
+  }
+
+  .font-logo {
+    font-family: var(--font-family-logo) !important;
+  }
+}
+
+@layer utilities {
+  @media (prefers-color-scheme: dark) {
+    html:not(.dark) [data-bs-theme='light'],
+    html:not(.dark) [data-bs-theme='light'] *,
+    body[data-bs-theme='light']:not(.dark),
+    body[data-bs-theme='light']:not(.dark) * {
+      color-scheme: light !important;
+    }
+
+    html:not(.dark) [data-bs-theme='light'] body,
+    html:not(.dark) [data-bs-theme='light'] body * {
+      font-family: var(--font-family-sans) !important;
+    }
+
+    html:not(.dark) [data-bs-theme='light'] h1,
+    html:not(.dark) [data-bs-theme='light'] h2,
+    html:not(.dark) [data-bs-theme='light'] h3,
+    html:not(.dark) [data-bs-theme='light'] h4,
+    html:not(.dark) [data-bs-theme='light'] h5,
+    html:not(.dark) [data-bs-theme='light'] h6,
+    html:not(.dark) [data-bs-theme='light'] .font-heading {
+      font-family: var(--font-family-heading) !important;
+    }
+
+    html:not(.dark) [data-bs-theme='light'] .logo,
+    html:not(.dark) [data-bs-theme='light'] .font-logo {
+      font-family: var(--font-family-logo) !important;
+    }
+  }
+}
+
+.circle-badge {
+    width: 1.75rem;
+    height: 1.75rem;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+}
+
+.modal-backdrop {
+  transition: opacity 0.2s ease;
+}
+
+.group:hover {
+  background-color: rgba(16, 185, 129, 0.2);
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+[data-credit-field="true"] {
+  display: none !important;
+}
+
+[data-credit-field="true"].show {
+  display: block !important;
+}
+
+[data-balance-trend] {
+  display: none !important;
+}
+
+[data-series] {
+    display: none !important;
+}

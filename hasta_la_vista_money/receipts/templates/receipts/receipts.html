@@ -7,111 +7,89 @@
 
 {% block title %}{% translate 'Список чеков' %}{% endblock %}
 
+
 {% block content %}
-<div class="w-full">
-    {% include 'receipts/filter.html' %}
-</div>
+<div class="receipts-app">
+    <div class="receipts-wrap">
+        {% include 'receipts/filter.html' %}
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <div class="mb-6">
-        <div class="receipts-header-gradient rounded-2xl shadow-lg overflow-hidden">
-            <div class="p-6 md:p-8">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                    <div class="flex-1">
-                        <h4 class="text-2xl font-heading font-bold text-white mb-4 flex items-center gap-2">
-                            <i class="bi bi-receipt"></i>
-                            {% translate 'Мои чеки' %}
-                        </h4>
-                        <div class="flex flex-wrap gap-6">
-                            <div class="flex flex-col">
-                                <div class="text-3xl font-mono font-bold text-white mb-1">{{ total_receipts.count }}</div>
-                                <div class="text-sm text-white/80">{% translate 'Количество чеков' %}</div>
-                            </div>
-                            <div class="flex flex-col">
-                                <div class="text-3xl font-mono font-bold text-white mb-1">
-                                    {% if total_sum_receipts.total is not None %}
-                                    {{ total_sum_receipts.total | comma }}
-                                    {% else %}
-                                    0
-                                    {% endif %}
-                                </div>
-                                <div class="text-sm text-white/80">{% translate 'Общая сумма' %}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="shrink-0">
-                        <a href="{% url 'users:statistics' %}" class="receipts-stats-button inline-flex items-center gap-2 px-6 py-3 text-green-600 font-semibold rounded-xl transition-all duration-200">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                            </svg>
-                            {% translate 'Детальная статистика' %}
-                        </a>
-                    </div>
-                </div>
+        <header class="receipts-header">
+            <div>
+                <div class="receipts-kicker">{% translate 'Чеки' %}</div>
+                <h1 class="receipts-title">{% translate 'Мои чеки' %}</h1>
             </div>
-        </div>
-    </div>
-
-    <div class="mb-6">
-        <div class="receipts-actions-card bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <div class="flex flex-wrap gap-3 justify-center">
-                <a class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/30 transition-all duration-200 shadow-sm hover:shadow-md"
-                   href="{% url 'receipts:products' %}">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-                    </svg>
-                    {% translate 'Часто покупаемые товары' %}
+            <div class="receipts-actions">
+                <a href="{% url 'users:statistics' %}" class="receipts-button receipts-button-secondary">
+                    <i class="bi bi-bar-chart"></i>
+                    {% translate 'Детальная статистика' %}
                 </a>
-                <a href="{% url 'receipts:create_seller' %}"
-                   class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200 shadow-sm hover:shadow-md">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                    </svg>
-                    {% translate 'Добавить продавца' %}
-                </a>
-                <a href="{% url 'receipts:create' %}"
-                   class="receipts-add-button inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl transition-all duration-200">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                    </svg>
+                <a href="{% url 'receipts:create' %}" class="receipts-button receipts-button-primary">
+                    <i class="bi bi-plus-lg"></i>
                     {% translate 'Добавить чек' %}
                 </a>
-                <div class="inline-flex items-center gap-2">
-                    <a class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-all duration-200 shadow-sm hover:shadow-md"
-                       href="{% url 'receipts:upload' %}">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                        {% translate 'Добавить чек из изображения' %}
-                    </a>
-                    <span id="pending-receipts-counter"
-                          hx-get="{% url 'receipts:pending_counter' %}"
-                          hx-trigger="load, every 5s"
-                          hx-swap="innerHTML"></span>
+            </div>
+        </header>
+
+        <section class="receipts-summary" aria-label="{% translate 'Сводка по чекам' %}">
+            <div class="receipts-summary-cell">
+                <div class="receipts-label">{% translate 'Количество чеков' %}</div>
+                <div class="receipts-amount">{{ total_receipts.count|default:0 }}</div>
+            </div>
+            <div class="receipts-summary-cell">
+                <div class="receipts-label">{% translate 'Общая сумма' %}</div>
+                <div class="receipts-amount receipts-positive">
+                    {% if total_sum_receipts.total is not None %}
+                        {{ total_sum_receipts.total|comma }} ₽
+                    {% else %}
+                        0 ₽
+                    {% endif %}
                 </div>
             </div>
-        </div>
-    </div>
+            <div class="receipts-summary-cell">
+                <div class="receipts-label">{% translate 'Группа чеков' %}</div>
+                <div>
+                    <select id="receipt-group-select"
+                            name="group_id"
+                            class="receipts-chip"
+                            aria-label="{% translate 'Группа чеков' %}">
+                        <option value="my" {% if not request.GET.group_id or request.GET.group_id == 'my' %}selected{% endif %}>{% translate 'Мои' %}</option>
+                        {% for group in user_groups %}
+                            <option value="{{ group.id }}" {% if request.GET.group_id == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="receipts-summary-cell">
+                <div class="receipts-label">{% translate 'В обработке' %}</div>
+                <span id="pending-receipts-counter"
+                      hx-get="{% url 'receipts:pending_counter' %}"
+                      hx-trigger="load, every 5s"
+                      hx-swap="innerHTML"></span>
+            </div>
+        </section>
 
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <h4 class="text-xl font-heading font-bold text-gray-900 dark:text-white">Чеки</h4>
-        <div class="flex items-center gap-2">
-            <label for="receipt-group-select" class="text-sm font-medium text-gray-700 dark:text-gray-300">Группа чеков:</label>
-            <select id="receipt-group-select"
-                    name="group_id"
-                    class="inline-block px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                <option value="my" {% if not request.GET.group_id or request.GET.group_id == 'my' %}selected{% endif %}>Мои</option>
-                {% for group in user_groups %}
-                    <option value="{{ group.id }}" {% if request.GET.group_id == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>
-                {% endfor %}
-            </select>
+        <div class="receipts-toolbar">
+            <div class="receipts-pills">
+                <a class="receipts-chip" href="{% url 'receipts:products' %}">
+                    <i class="bi bi-star"></i>
+                    {% translate 'Часто покупаемые товары' %}
+                </a>
+                <a class="receipts-chip" href="{% url 'receipts:create_seller' %}">
+                    <i class="bi bi-shop"></i>
+                    {% translate 'Добавить продавца' %}
+                </a>
+                <a class="receipts-chip is-active" href="{% url 'receipts:upload' %}">
+                    <i class="bi bi-camera"></i>
+                    {% translate 'Добавить чек из изображения' %}
+                </a>
+            </div>
+        </div>
+
+        <div id="receipts-block">
+            {% include 'receipts/receipts_block.html' %}
         </div>
     </div>
-    <div id="receipts-block">
-        {% include 'receipts/receipts_block.html' %}
-    </div>
-    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

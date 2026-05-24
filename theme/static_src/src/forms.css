@@ -1,0 +1,82 @@
+/* Form dark mode overrides */
+[data-bs-theme='dark'] .mb-3 input:not([type='checkbox']):not([type='radio']):not([type='file']),
+[data-bs-theme='dark'] .mb-3 textarea,
+[data-bs-theme='dark'] .mb-3 select {
+  background-color: var(--color-neutral-800) !important;
+  color: var(--color-neutral-200) !important;
+  border-color: var(--color-neutral-600) !important;
+}
+
+[data-bs-theme='dark'] .mb-3 input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
+[data-bs-theme='dark'] .mb-3 textarea:focus,
+[data-bs-theme='dark'] .mb-3 select:focus {
+  border-color: var(--color-emerald-500) !important;
+  outline: none;
+}
+
+[data-bs-theme='dark'] .mb-3 input[readonly]:not([type='checkbox']):not([type='radio']):not([type='file']),
+[data-bs-theme='dark'] .mb-3 input[readonly]:not([type='checkbox']):not([type='radio']):not([type='file']):focus {
+  background-color: var(--color-neutral-700) !important;
+  color: var(--color-neutral-400) !important;
+  cursor: not-allowed;
+}
+
+[data-bs-theme='dark'] label {
+  color: var(--color-neutral-300);
+}
+
+[data-bs-theme='dark'] small {
+  color: var(--color-neutral-400);
+}
+
+.needs-validation input[type="number"],
+.needs-validation input[type="text"],
+.needs-validation input[type="datetime-local"],
+.needs-validation select,
+.ajax-form input[type="number"],
+.ajax-form input[type="text"],
+.ajax-form input[type="datetime-local"],
+.ajax-form select {
+  background-color: var(--app-surface) !important;
+  color: var(--color-neutral-900) !important;
+  border: 1px solid var(--color-neutral-300) !important;
+}
+
+[data-bs-theme="dark"] .needs-validation input[type="number"],
+[data-bs-theme="dark"] .needs-validation input[type="text"],
+[data-bs-theme="dark"] .needs-validation input[type="datetime-local"],
+[data-bs-theme="dark"] .needs-validation select,
+[data-bs-theme="dark"] .ajax-form input[type="number"],
+[data-bs-theme="dark"] .ajax-form input[type="text"],
+[data-bs-theme="dark"] .ajax-form input[type="datetime-local"],
+[data-bs-theme="dark"] .ajax-form select {
+  background-color: var(--color-neutral-800) !important;
+  color: var(--color-neutral-100) !important;
+  border-color: var(--color-neutral-600) !important;
+}
+
+.needs-validation input[type="number"]:focus,
+.needs-validation input[type="text"]:focus,
+.needs-validation input[type="datetime-local"]:focus,
+.needs-validation select:focus,
+.ajax-form input[type="number"]:focus,
+.ajax-form input[type="text"]:focus,
+.ajax-form input[type="datetime-local"]:focus,
+.ajax-form select:focus {
+  background-color: var(--app-surface) !important;
+  color: var(--color-neutral-900) !important;
+  border-color: var(--color-emerald-500) !important;
+}
+
+[data-bs-theme="dark"] .needs-validation input[type="number"]:focus,
+[data-bs-theme="dark"] .needs-validation input[type="text"]:focus,
+[data-bs-theme="dark"] .needs-validation input[type="datetime-local"]:focus,
+[data-bs-theme="dark"] .needs-validation select:focus,
+[data-bs-theme="dark"] .ajax-form input[type="number"]:focus,
+[data-bs-theme="dark"] .ajax-form input[type="text"]:focus,
+[data-bs-theme="dark"] .ajax-form input[type="datetime-local"]:focus,
+[data-bs-theme="dark"] .ajax-form select:focus {
+  background-color: var(--color-neutral-800) !important;
+  color: var(--color-neutral-100) !important;
+  border-color: var(--color-emerald-400) !important;
+}

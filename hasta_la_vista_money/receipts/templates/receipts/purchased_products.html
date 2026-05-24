@@ -1,117 +1,87 @@
 {% extends 'base.html' %}
 {% load i18n %}
+{% load static %}
 {% load comma %}
+{% load csp %}
 
 {% block title %}{% translate 'Часто покупаемые товары' %}{% endblock %}
 
+
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <div class="mb-6">
-        <div class="bg-linear-to-br from-green-600 to-teal-500 rounded-2xl shadow-lg overflow-hidden">
-            <div class="p-6 md:p-8">
-                <h4 class="text-2xl font-heading font-bold text-white mb-2 flex items-center gap-2">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                    </svg>
-                    {% translate 'Часто покупаемые товары' %}
-                </h4>
-                <p class="text-white/80 text-sm">{% translate 'Статистика покупок по месяцам и общая статистика' %}</p>
+<div class="receipts-app">
+    <div class="receipts-wrap">
+        <header class="receipts-header">
+            <div>
+                <div class="receipts-kicker">{% translate 'Аналитика чеков' %}</div>
+                <h1 class="receipts-title">{% translate 'Часто покупаемые товары' %}</h1>
+                <p class="receipts-upload-lead">
+                    {% translate 'Статистика покупок по месяцам и общая статистика' %}
+                </p>
             </div>
-        </div>
-    </div>
+            <div class="receipts-actions">
+                <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
+                    <i class="bi bi-arrow-left"></i>
+                    {% translate 'К списку' %}
+                </a>
+            </div>
+        </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div class="lg:col-span-2">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <div class="p-6">
-                    <h5 class="text-lg font-heading font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                        {% translate 'Статистика по месяцам' %}
-                    </h5>
-                    <div class="space-y-3">
+        <div class="receipts-grid">
+            <div class="receipts-card">
+                <header class="receipts-card-hd">
+                    <h2><i class="bi bi-calendar3"></i> {% translate 'Статистика по месяцам' %}</h2>
+                </header>
+                <div class="receipts-section">
+                    <div class="purchased-products-months">
                         {% for month, products in purchased_products_by_month.items %}
-                        <details class="group">
-                            <summary class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 list-none">
-                                <span class="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                    <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                    </svg>
-                                    {{ month|date:"F Y" }}
-                                </span>
-                                <span class="text-sm font-mono text-gray-600 dark:text-gray-300">
-                                    {{ products|length }} {% translate 'товаров' %}
-                                </span>
-                                <svg class="w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </summary>
-                            <div class="mt-2 space-y-2 pl-4">
-                                {% for product, total_quantity in products.items %}
-                                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-150">
-                                    <span class="text-gray-900 dark:text-gray-100 font-medium">{{ product }}</span>
-                                    <span class="inline-flex items-center px-3 py-1 text-sm font-mono font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-full">
-                                        {{ total_quantity|floatformat:0 }}
+                            <details class="purchased-products-month">
+                                <summary>
+                                    <span class="purchased-products-month-name">
+                                        <i class="bi bi-calendar-event"></i>
+                                        {{ month|date:"F Y" }}
                                     </span>
+                                    <span class="receipts-muted">{{ products|length }} {% translate 'товаров' %}</span>
+                                    <i class="bi bi-chevron-down purchased-products-month-chevron"></i>
+                                </summary>
+                                <div class="purchased-products-month-body">
+                                    {% for product, total_quantity in products.items %}
+                                        <div class="purchased-products-row">
+                                            <span>{{ product }}</span>
+                                            <span class="receipts-cat-chip">
+                                                {{ total_quantity|floatformat:0 }}
+                                            </span>
+                                        </div>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
-                            </div>
-                        </details>
+                            </details>
                         {% empty %}
-                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                            <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                            </svg>
-                            <p>{% translate 'Нет данных за выбранный период' %}</p>
-                        </div>
+                            <div class="receipts-empty">
+                                {% translate 'Нет данных за выбранный период' %}
+                            </div>
                         {% endfor %}
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="lg:col-span-1">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 sticky top-4">
-                <div class="p-6">
-                    <h5 class="text-lg font-heading font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                        </svg>
-                        {% translate 'Общая статистика' %}
-                    </h5>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{% translate 'Топ-10 самых покупаемых товаров за весь период' %}</p>
-                    <div class="space-y-2">
+            <aside class="receipts-side">
+                <div class="receipts-side-card">
+                    <div class="receipts-side-title">{% translate 'Топ-10 за весь период' %}</div>
+                    <div class="receipts-side-list">
                         {% for item in frequently_purchased_products %}
-                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-150">
-                            <div class="flex items-center gap-3 flex-1 min-w-0">
-                                <span class="inline-flex items-center justify-center w-8 h-8 shrink-0 rounded-full text-xs font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-700">
-                                    {{ forloop.counter }}
+                            <div class="receipts-side-item">
+                                <span>
+                                    <strong class="receipts-muted">{{ forloop.counter }}.</strong>
+                                    {{ item.product__product_name }}
                                 </span>
-                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ item.product__product_name }}</span>
+                                <span class="receipts-cat-chip">{{ item.products }}</span>
                             </div>
-                            <span class="shrink-0 inline-flex items-center w-8 h-8 justify-center px-2.5 py-1 text-xs font-mono font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-full ml-2">
-                                {{ item.products }}
-                            </span>
-                        </div>
                         {% empty %}
-                        <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
-                            {% translate 'Нет данных' %}
-                        </div>
+                            <div class="receipts-empty">{% translate 'Нет данных' %}</div>
                         {% endfor %}
                     </div>
                 </div>
-            </div>
+            </aside>
         </div>
-    </div>
-
-    <div class="flex justify-center">
-        <a href="{% url 'receipts:list' %}" class="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-            </svg>
-            {% translate 'Назад к списку чеков' %}
-        </a>
     </div>
 </div>
 {% endblock %}
