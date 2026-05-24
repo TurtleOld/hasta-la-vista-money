@@ -9,7 +9,44 @@ from typing import Any, Final
 
 
 class ReceiptParseValidationError(ValueError):
-    """Raised when receipt-inference returns an invalid receipt payload."""
+    """Raised when receipt-inference returns an invalid receipt payload.
+
+    ``user_message`` carries an end-user-facing explanation in Russian for the
+    pending-receipt card. When omitted, callers fall back to a generic message.
+    """
+
+    def __init__(self, message: str, *, user_message: str | None = None):
+        super().__init__(message)
+        self.user_message = user_message
+
+
+_USER_MSG_TOTAL_MISMATCH = (
+    'Сумма позиций не совпадает с итогом чека. '
+    'Скорее всего, несколько позиций не распознались — '
+    'попробуйте загрузить более чёткое фото.'
+)
+_USER_MSG_NO_ITEMS = (
+    'Не удалось распознать ни одной позиции на чеке. '
+    'Попробуйте загрузить более чёткое фото.'
+)
+_USER_MSG_BAD_TOTAL = (
+    'Не удалось распознать итоговую сумму чека. '
+    'Попробуйте загрузить более чёткое фото.'
+)
+_USER_MSG_BAD_DATE = (
+    'Не удалось распознать дату чека. Попробуйте загрузить более чёткое фото.'
+)
+_USER_MSG_BAD_SELLER = (
+    'Не удалось распознать продавца. Попробуйте загрузить более чёткое фото.'
+)
+_USER_MSG_BAD_ITEM = (
+    'Одна из позиций чека распозналась некорректно. '
+    'Попробуйте загрузить более чёткое фото.'
+)
+_USER_MSG_BAD_STRUCTURE = (
+    'Сервис распознавания вернул чек в неожиданном формате. '
+    'Попробуйте загрузить чек ещё раз.'
+)
 
 
 TOP_LEVEL_FIELDS: Final[frozenset[str]] = frozenset(
@@ -152,15 +189,23 @@ def validate_receipt_parse_payload(
     if not isinstance(items_raw, list) or not items_raw:
         raise ReceiptParseValidationError(
             'receipt.items must be a non-empty list',
+            user_message=_USER_MSG_NO_ITEMS,
         )
 
     items = tuple(
         _validate_item(item, index=index)
         for index, item in enumerate(items_raw, start=1)
     )
-    total_sum = _parse_decimal(payload.get('total_sum'), 'receipt.total_sum')
+    total_sum = _parse_decimal(
+        payload.get('total_sum'),
+        'receipt.total_sum',
+        user_message=_USER_MSG_BAD_TOTAL,
+    )
     if total_sum <= 0:
-        raise ReceiptParseValidationError('receipt.total_sum must be positive')
+        raise ReceiptParseValidationError(
+            'receipt.total_sum must be positive',
+            user_message=_USER_MSG_BAD_TOTAL,
+        )
 
     _validate_items_total(total_sum, items)
 
@@ -171,6 +216,7 @@ def validate_receipt_parse_payload(
     if operation_type not in ALLOWED_OPERATION_TYPES:
         raise ReceiptParseValidationError(
             'receipt.operation_type must be one of 1, 2, 3, 4',
+            user_message=_USER_MSG_BAD_STRUCTURE,
         )
 
     receipt_date = _parse_receipt_date(payload.get('receipt_date'))
@@ -178,6 +224,7 @@ def validate_receipt_parse_payload(
         name_seller=_parse_required_text(
             payload.get('name_seller'),
             'receipt.name_seller',
+            user_message=_USER_MSG_BAD_SELLER,
         ),
         retail_place_address=_parse_optional_text(
             payload.get('retail_place_address'),
@@ -207,28 +254,51 @@ def _validate_item(value: Any, *, index: int) -> ReceiptParseItem:
         message = f'receipt.items[{index}] must be an object'
         raise ReceiptParseValidationError(
             message,
+            user_message=_USER_MSG_BAD_ITEM,
         )
     path = f'receipt.items[{index}]'
     _validate_object_keys(value, ITEM_FIELDS, path)
     _validate_required_fields(value, REQUIRED_ITEM_FIELDS, path)
 
-    price = _parse_decimal(value.get('price'), f'{path}.price')
-    quantity = _parse_decimal(value.get('quantity'), f'{path}.quantity')
-    amount = _parse_decimal(value.get('amount'), f'{path}.amount')
+    price = _parse_decimal(
+        value.get('price'),
+        f'{path}.price',
+        user_message=_USER_MSG_BAD_ITEM,
+    )
+    quantity = _parse_decimal(
+        value.get('quantity'),
+        f'{path}.quantity',
+        user_message=_USER_MSG_BAD_ITEM,
+    )
+    amount = _parse_decimal(
+        value.get('amount'),
+        f'{path}.amount',
+        user_message=_USER_MSG_BAD_ITEM,
+    )
     if price < 0:
         message = f'{path}.price must not be negative'
-        raise ReceiptParseValidationError(message)
+        raise ReceiptParseValidationError(
+            message,
+            user_message=_USER_MSG_BAD_ITEM,
+        )
     if quantity <= 0:
         message = f'{path}.quantity must be positive'
-        raise ReceiptParseValidationError(message)
+        raise ReceiptParseValidationError(
+            message,
+            user_message=_USER_MSG_BAD_ITEM,
+        )
     if amount < 0:
         message = f'{path}.amount must not be negative'
-        raise ReceiptParseValidationError(message)
+        raise ReceiptParseValidationError(
+            message,
+            user_message=_USER_MSG_BAD_ITEM,
+        )
 
     return ReceiptParseItem(
         product_name=_parse_required_text(
             value.get('product_name'),
             f'{path}.product_name',
+            user_message=_USER_MSG_BAD_ITEM,
         ),
         category=_parse_optional_text(value.get('category')) or 'Прочее',
         price=price,
@@ -245,6 +315,7 @@ def _validate_items_total(
     if items_total <= 0:
         raise ReceiptParseValidationError(
             'receipt.items total must be positive',
+            user_message=_USER_MSG_TOTAL_MISMATCH,
         )
 
     allowed_diff = max(
@@ -255,6 +326,7 @@ def _validate_items_total(
         raise ReceiptParseValidationError(
             'receipt.total_sum differs from receipt.items total by more '
             'than 2%',
+            user_message=_USER_MSG_TOTAL_MISMATCH,
         )
 
 
@@ -268,6 +340,7 @@ def _validate_object_keys(
         message = f'{path} contains unknown fields: {", ".join(unknown_keys)}'
         raise ReceiptParseValidationError(
             message,
+            user_message=_USER_MSG_BAD_STRUCTURE,
         )
 
 
@@ -283,21 +356,30 @@ def _validate_required_fields(
         )
         raise ReceiptParseValidationError(
             message,
+            user_message=_USER_MSG_BAD_STRUCTURE,
         )
 
 
-def _parse_decimal(value: Any, path: str) -> Decimal:
+def _parse_decimal(
+    value: Any,
+    path: str,
+    *,
+    user_message: str | None = None,
+) -> Decimal:
     if isinstance(value, bool) or value is None:
         message = f'{path} must be a number'
-        raise ReceiptParseValidationError(message)
+        raise ReceiptParseValidationError(message, user_message=user_message)
     try:
         decimal_value = Decimal(str(value).replace(',', '.').replace(' ', ''))
     except (InvalidOperation, ValueError) as exc:
         message = f'{path} must be a number'
-        raise ReceiptParseValidationError(message) from exc
+        raise ReceiptParseValidationError(
+            message,
+            user_message=user_message,
+        ) from exc
     if not decimal_value.is_finite():
         message = f'{path} must be a finite number'
-        raise ReceiptParseValidationError(message)
+        raise ReceiptParseValidationError(message, user_message=user_message)
     return decimal_value
 
 
@@ -310,19 +392,28 @@ def _parse_optional_non_negative_decimal(
     decimal_value = _parse_decimal(value, path)
     if decimal_value < 0:
         message = f'{path} must not be negative'
-        raise ReceiptParseValidationError(message)
+        raise ReceiptParseValidationError(
+            message,
+            user_message=_USER_MSG_BAD_STRUCTURE,
+        )
     return decimal_value
 
 
 def _parse_int(value: Any, path: str) -> int:
     if isinstance(value, bool) or value is None:
         message = f'{path} must be an integer'
-        raise ReceiptParseValidationError(message)
+        raise ReceiptParseValidationError(
+            message,
+            user_message=_USER_MSG_BAD_STRUCTURE,
+        )
     try:
         return int(str(value).strip())
     except ValueError as exc:
         message = f'{path} must be an integer'
-        raise ReceiptParseValidationError(message) from exc
+        raise ReceiptParseValidationError(
+            message,
+            user_message=_USER_MSG_BAD_STRUCTURE,
+        ) from exc
 
 
 def _parse_optional_int(value: Any, path: str) -> int | None:
@@ -331,11 +422,16 @@ def _parse_optional_int(value: Any, path: str) -> int | None:
     return _parse_int(value, path)
 
 
-def _parse_required_text(value: Any, path: str) -> str:
+def _parse_required_text(
+    value: Any,
+    path: str,
+    *,
+    user_message: str | None = None,
+) -> str:
     text = _parse_optional_text(value)
     if text is None:
         message = f'{path} must be a non-empty string'
-        raise ReceiptParseValidationError(message)
+        raise ReceiptParseValidationError(message, user_message=user_message)
     return text
 
 
@@ -347,7 +443,11 @@ def _parse_optional_text(value: Any) -> str | None:
 
 
 def _parse_receipt_date(value: Any) -> str:
-    text = _parse_required_text(value, 'receipt.receipt_date')
+    text = _parse_required_text(
+        value,
+        'receipt.receipt_date',
+        user_message=_USER_MSG_BAD_DATE,
+    )
     for date_format in ('%d.%m.%Y %H:%M', '%d.%m.%y %H:%M'):
         try:
             parsed = datetime.strptime(text, date_format).replace(tzinfo=UTC)
@@ -356,6 +456,7 @@ def _parse_receipt_date(value: Any) -> str:
         return parsed.strftime('%d.%m.%Y %H:%M')
     raise ReceiptParseValidationError(
         'receipt.receipt_date must be parseable as DD.MM.YYYY HH:MM',
+        user_message=_USER_MSG_BAD_DATE,
     )
 
 
