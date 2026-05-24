@@ -134,14 +134,14 @@ class Migration(migrations.Migration):
             model_name='budget',
             index=models.Index(
                 fields=['user', 'period'],
-                name='budget_bud_user_id_d27573_idx',
+                name='budget_budg_user_id_6ecba7_idx',
             ),
         ),
         migrations.AddIndex(
             model_name='budget',
             index=models.Index(
                 fields=['user', 'category', 'period'],
-                name='budget_bud_user_id_3adce6_idx',
+                name='budget_budg_user_id_ad7d92_idx',
             ),
         ),
     ]
