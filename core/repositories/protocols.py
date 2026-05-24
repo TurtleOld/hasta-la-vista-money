@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from django.db.models import Model, QuerySet
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
     from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+    from hasta_la_vista_money.transactions.models import Category, Transaction
     from hasta_la_vista_money.users.models import User
 
 
@@ -75,31 +75,31 @@ class BaseRepositoryProtocol(Protocol):
 
 
 @runtime_checkable
-class ExpenseRepositoryProtocol(Protocol):
-    """Protocol for Expense repository operations."""
+class TransactionRepositoryProtocol(Protocol):
+    """Protocol for Transaction repository operations."""
 
-    def get_by_id(self, expense_id: int) -> 'Expense':
-        """Get expense by ID.
+    def get_by_id(self, transaction_id: int) -> 'Transaction':
+        """Get transaction by ID.
 
         Args:
-            expense_id: Expense ID.
+            transaction_id: Transaction ID.
 
         Returns:
-            Expense instance.
+            Transaction instance.
 
         Raises:
-            Expense.DoesNotExist: If expense not found.
+            Transaction.DoesNotExist: If transaction not found.
         """
         ...
 
-    def get_by_user(self, user: 'User') -> QuerySet['Expense']:
-        """Get expenses for a user.
+    def get_by_user(self, user: 'User') -> QuerySet['Transaction']:
+        """Get transactions for a user.
 
         Args:
             user: User instance.
 
         Returns:
-            QuerySet of expenses.
+            QuerySet of transactions.
         """
         ...
 
@@ -107,83 +107,83 @@ class ExpenseRepositoryProtocol(Protocol):
         self,
         user: 'User',
         group_id: str | None = None,
-    ) -> QuerySet['Expense']:
-        """Get expenses for user or group.
+    ) -> QuerySet['Transaction']:
+        """Get transactions for user or group.
 
         Args:
             user: User instance.
             group_id: Optional group ID.
 
         Returns:
-            QuerySet of expenses.
+            QuerySet of transactions.
         """
         ...
 
-    def create_expense(self, **kwargs: object) -> 'Expense':
-        """Create a new expense.
+    def create_transaction(self, **kwargs: object) -> 'Transaction':
+        """Create a new transaction.
 
         Args:
-            **kwargs: Expense field values.
+            **kwargs: Transaction field values.
 
         Returns:
-            Created Expense instance.
+            Created Transaction instance.
         """
         ...
 
-    def filter(self, **kwargs: object) -> QuerySet['Expense']:
-        """Filter expenses.
+    def filter(self, **kwargs: object) -> QuerySet['Transaction']:
+        """Filter transactions.
 
         Args:
             **kwargs: Filter criteria.
 
         Returns:
-            QuerySet of matching expenses.
+            QuerySet of matching transactions.
         """
         ...
 
 
 @runtime_checkable
-class ExpenseCategoryRepositoryProtocol(Protocol):
-    """Protocol for ExpenseCategory repository operations."""
+class CategoryRepositoryProtocol(Protocol):
+    """Protocol for Category repository operations."""
 
-    def get_by_user(self, user: 'User') -> QuerySet['ExpenseCategory']:
-        """Get expense categories for a user.
+    def get_by_user(self, user: 'User') -> QuerySet['Category']:
+        """Get categories for a user.
 
         Args:
             user: User instance.
 
         Returns:
-            QuerySet of expense categories.
+            QuerySet of categories.
         """
         ...
 
-    def get_by_id(self, category_id: int) -> 'ExpenseCategory':
-        """Get expense category by ID.
+    def get_by_id(self, category_id: int) -> 'Category':
+        """Get category by ID.
 
         Args:
             category_id: Category ID.
 
         Returns:
-            ExpenseCategory instance.
+            Category instance.
 
         Raises:
-            ExpenseCategory.DoesNotExist: If category not found.
+            Category.DoesNotExist: If category not found.
         """
         ...
 
-    def create_category(self, **kwargs: object) -> 'ExpenseCategory':
-        """Create a new expense category.
+    def create_category(self, **kwargs: object) -> 'Category':
+        """Create a new category.
 
         Args:
             **kwargs: Category field values.
 
         Returns:
-            Created ExpenseCategory instance.
+            Created Category instance.
         """
         ...
 
-    def filter(self, **kwargs: object) -> QuerySet['ExpenseCategory']:
-        """Filter expense categories.
+    def filter(self, **kwargs: object) -> QuerySet['Category']:
+        """Filter categories.
 
         Args:
             **kwargs: Filter criteria.

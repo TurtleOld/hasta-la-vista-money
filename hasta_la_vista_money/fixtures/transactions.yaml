@@ -1,0 +1,26 @@
+[
+{
+    "model": "transactions.transaction",
+    "pk": 1,
+    "fields": {
+        "type": "expense",
+        "user": 1,
+        "account": 1,
+        "category": 1,
+        "date": "2023-06-30T22:31:54Z",
+        "amount": "15000.00"
+    }
+},
+{
+    "model": "transactions.transaction",
+    "pk": 2,
+    "fields": {
+        "type": "income",
+        "user": 1,
+        "account": 1,
+        "category": 2,
+        "date": "2023-06-30T22:31:41Z",
+        "amount": "150000.00"
+    }
+}
+]

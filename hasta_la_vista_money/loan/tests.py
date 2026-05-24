@@ -30,9 +30,9 @@ class TestLoan(TestCase):
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
         'finance_account.yaml',
-        'income.yaml',
-        'income_cat.yaml',
         'loan.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:
@@ -799,6 +799,8 @@ class TestLoanCalculationIntegration(TestCase):
         'users.yaml',
         'finance_account.yaml',
         'loan.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:

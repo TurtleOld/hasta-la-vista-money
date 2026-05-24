@@ -4,12 +4,11 @@ from typing import TYPE_CHECKING, ClassVar
 from django.test import TestCase
 
 from hasta_la_vista_money.budget.models import DateList, Planning
-from hasta_la_vista_money.expense.models import ExpenseCategory
-from hasta_la_vista_money.income.models import IncomeCategory
 from hasta_la_vista_money.services.generate_dates import (
     DateListGenerator,
     generate_date_list,
 )
+from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -19,12 +18,20 @@ if TYPE_CHECKING:
 class DateListGeneratorTest(TestCase):
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
-        'expense_cat.yaml',
-        'income_cat.yaml',
     ]
 
     def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
+        self.expense_category = Category.objects.create(
+            user=self.user,
+            name='Test expense',
+            type=TransactionType.EXPENSE,
+        )
+        self.income_category = Category.objects.create(
+            user=self.user,
+            name='Test income',
+            type=TransactionType.INCOME,
+        )
 
     def test_init(self) -> None:
         generator = DateListGenerator(user=self.user, type_='expense')
@@ -53,7 +60,8 @@ class DateListGeneratorTest(TestCase):
     def test_actual_date_from_empty_queryset(self) -> None:
         generator = DateListGenerator(user=self.user, type_=None)
         queryset: QuerySet[DateList] = DateList.objects.filter(
-            user=self.user, date__year=3000
+            user=self.user,
+            date__year=3000,
         )
         with self.assertRaises(ValueError):
             generator._actual_date(queryset)
@@ -96,29 +104,27 @@ class DateListGeneratorTest(TestCase):
 
     def test_ensure_planning_expense(self) -> None:
         generator = DateListGenerator(user=self.user, type_='expense')
-        category = ExpenseCategory.objects.filter(user=self.user).first()
-        if category:
-            months = [date(2025, 1, 1)]
-            generator._ensure_planning(months)
-            count = Planning.objects.filter(
-                user=self.user,
-                planning_type='expense',
-                date__in=months,
-            ).count()
-            self.assertGreaterEqual(count, 0)
+        months = [date(2025, 1, 1)]
+        generator._ensure_planning(months)
+        count = Planning.objects.filter(
+            user=self.user,
+            planning_type='expense',
+            date__in=months,
+            category=self.expense_category,
+        ).count()
+        self.assertEqual(count, 1)
 
     def test_ensure_planning_income(self) -> None:
         generator = DateListGenerator(user=self.user, type_='income')
-        category = IncomeCategory.objects.filter(user=self.user).first()
-        if category:
-            months = [date(2025, 1, 1)]
-            generator._ensure_planning(months)
-            count = Planning.objects.filter(
-                user=self.user,
-                planning_type='income',
-                date__in=months,
-            ).count()
-            self.assertGreaterEqual(count, 0)
+        months = [date(2025, 1, 1)]
+        generator._ensure_planning(months)
+        count = Planning.objects.filter(
+            user=self.user,
+            planning_type='income',
+            date__in=months,
+            category=self.income_category,
+        ).count()
+        self.assertEqual(count, 1)
 
     def test_ensure_planning_invalid_type(self) -> None:
         generator = DateListGenerator(user=self.user, type_='invalid')

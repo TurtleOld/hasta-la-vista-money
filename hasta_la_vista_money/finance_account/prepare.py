@@ -11,6 +11,7 @@ from typing import cast
 
 from typing_extensions import TypedDict
 
+from hasta_la_vista_money.transactions.models import TransactionType
 from hasta_la_vista_money.users.models import User
 
 
@@ -62,12 +63,18 @@ def collect_info_income(user: User) -> list[IncomeInfoDict]:
     Returns:
         List of dictionaries containing income records with related data.
     """
-    queryset = user.income_users.select_related('user').values(
-        'id',
-        'date',
-        'account__name_account',
-        'category__name',
-        'amount',
+    queryset = (
+        user.transactions.filter(
+            type=TransactionType.INCOME,
+        )
+        .select_related('user')
+        .values(
+            'id',
+            'date',
+            'account__name_account',
+            'category__name',
+            'amount',
+        )
     )
     return cast('list[IncomeInfoDict]', list(queryset))
 
@@ -84,12 +91,18 @@ def collect_info_expense(user: User) -> list[ExpenseInfoDict]:
     Returns:
         List of dictionaries containing expense records with related data.
     """
-    queryset = user.expense_users.select_related('user').values(
-        'id',
-        'date',
-        'account__name_account',
-        'category__name',
-        'amount',
+    queryset = (
+        user.transactions.filter(
+            type=TransactionType.EXPENSE,
+        )
+        .select_related('user')
+        .values(
+            'id',
+            'date',
+            'account__name_account',
+            'category__name',
+            'amount',
+        )
     )
     return cast('list[ExpenseInfoDict]', list(queryset))
 

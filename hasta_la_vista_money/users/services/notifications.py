@@ -4,9 +4,11 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -60,15 +62,19 @@ def get_user_notifications(user: User) -> list[NotificationDict]:
             },
         )
     current_month_expenses = (
-        Expense.objects.filter(user=user, date__gte=month_start).aggregate(
-            total=Sum('amount'),
-        )['total']
+        Transaction.objects.filter(
+            user=user,
+            type=TransactionType.EXPENSE,
+            date__gte=month_start,
+        ).aggregate(total=Sum('amount'))['total']
         or 0
     )
     current_month_income = (
-        Income.objects.filter(user=user, date__gte=month_start).aggregate(
-            total=Sum('amount'),
-        )['total']
+        Transaction.objects.filter(
+            user=user,
+            type=TransactionType.INCOME,
+            date__gte=month_start,
+        ).aggregate(total=Sum('amount'))['total']
         or 0
     )
     if current_month_expenses > current_month_income:

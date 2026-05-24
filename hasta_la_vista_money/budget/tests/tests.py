@@ -7,7 +7,7 @@ from django.urls import resolve, reverse
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.apps import BudgetConfig
 from hasta_la_vista_money.budget.models import DateList, Planning
-from hasta_la_vista_money.expense.models import ExpenseCategory
+from hasta_la_vista_money.transactions.models import Category, TransactionType
 
 User = get_user_model()
 
@@ -25,15 +25,16 @@ class BudgetModelTest(TestCase):
         )
         self.date = date(2024, 1, 1)
         self.datelist = DateList.objects.create(user=self.user, date=self.date)
-        self.expense_category = ExpenseCategory.objects.create(
+        self.category = Category.objects.create(
             user=self.user,
             name='Test Category',
+            type=TransactionType.EXPENSE,
         )
         self.planning = Planning.objects.create(
             user=self.user,
             date=self.date,
-            planning_type='expense',
-            category_expense=self.expense_category,
+            planning_type=TransactionType.EXPENSE,
+            category=self.category,
             amount=100,
         )
 
@@ -96,9 +97,10 @@ class BudgetViewsTest(TestCase):
         self.assertIn('redirect_url', response.json())
 
     def test_save_planning_post(self) -> None:
-        category = ExpenseCategory.objects.create(
+        category = Category.objects.create(
             user=self.user,
             name='Test Category',
+            type=TransactionType.EXPENSE,
         )
         response = self.client.post(
             reverse('budget:save_planning'),

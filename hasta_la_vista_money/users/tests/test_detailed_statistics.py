@@ -27,13 +27,11 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
-        'expense_cat.yaml',
-        'expense.yaml',
-        'income_cat.yaml',
-        'income.yaml',
         'receipt_product.yaml',
         'receipt_seller.yaml',
         'receipt_receipt.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:

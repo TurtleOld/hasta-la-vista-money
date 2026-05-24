@@ -41,6 +41,8 @@ class DashboardViewTest(TestCase):
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:
@@ -76,11 +78,12 @@ class DashboardViewTest(TestCase):
         response = self.client.get(reverse('users:dashboard'))
         kpi_cards = response.context['kpi_cards']
 
+        finances_url = reverse('finances')
         self.assertEqual(len(kpi_cards), 4)
         for card in kpi_cards:
             self.assertIn('url', card)
-            self.assertIn('date_after=', card['url'])
-            self.assertIn('date_before=', card['url'])
+            self.assertTrue(card['url'].startswith(finances_url))
+            self.assertIn('type=', card['url'])
 
 
 class DashboardDataViewTest(TestCase):
@@ -92,10 +95,8 @@ class DashboardDataViewTest(TestCase):
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
-        'expense_cat.yaml',
-        'expense.yaml',
-        'income_cat.yaml',
-        'income.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:
@@ -146,14 +147,18 @@ class DashboardDataViewTest(TestCase):
         response = self.client.get(reverse('users:dashboard_data'))
         data = response.json()
 
-        self.assertEqual(
-            data['click_through']['expense_list_url'],
-            reverse('expense:list'),
+        self.assertTrue(
+            data['click_through']['expense_list_url'].startswith(
+                reverse('finances'),
+            ),
         )
-        self.assertEqual(
-            data['click_through']['income_list_url'],
-            reverse('income:list'),
+        self.assertIn('type=expense', data['click_through']['expense_list_url'])
+        self.assertTrue(
+            data['click_through']['income_list_url'].startswith(
+                reverse('finances'),
+            ),
         )
+        self.assertIn('type=income', data['click_through']['income_list_url'])
 
     def test_dashboard_data_view_with_period(self) -> None:
         """Test API with period parameter."""
@@ -247,6 +252,8 @@ class DashboardWidgetConfigViewTest(TestCase):
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:
@@ -333,10 +340,8 @@ class DashboardAnalyticsEndpointsTest(TestCase):
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
-        'expense_cat.yaml',
-        'expense.yaml',
-        'income_cat.yaml',
-        'income.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:

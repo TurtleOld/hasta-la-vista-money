@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate 'Категория' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'finances/css/finances.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="finances-app">
+    <div class="composer-crumb">
+        <a href="{% url 'finances_categories' %}">{% translate 'Категории' %}</a>
+        <span class="sep">·</span>
+        <b>{% translate 'Редактирование' %}</b>
+    </div>
+
+    <div class="composer-shell">
+        <form class="composer-card" method="post">
+            {% csrf_token %}
+            <div class="composer-hd">
+                <h1>{% translate 'Категория операции' %}</h1>
+                <span class="meta">{% translate 'доход или расход' %}</span>
+            </div>
+
+            {{ form.non_field_errors }}
+            {% for field in form %}
+                {% if field.is_hidden %}
+                    {{ field }}
+                {% else %}
+                    <section class="cmp-section">
+                        <h3>{{ field.label }}</h3>
+                        <div class="cmp-input">
+                            {{ field }}
+                        </div>
+                        {{ field.errors }}
+                        {% if field.help_text %}
+                            <p class="finances-muted">{{ field.help_text }}</p>
+                        {% endif %}
+                    </section>
+                {% endif %}
+            {% endfor %}
+
+            <div class="composer-ft">
+                <div class="hint">{% translate 'Категория будет доступна в форме новой операции.' %}</div>
+                <div class="ft-actions">
+                    <a href="{% url 'finances_categories' %}" class="btn btn-ghost">{% translate 'Отмена' %}</a>
+                    <button type="submit" class="btn btn-primary">{% translate 'Сохранить' %}</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

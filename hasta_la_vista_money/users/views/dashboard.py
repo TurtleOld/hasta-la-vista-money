@@ -21,12 +21,14 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import (
     DashboardWidget,
     User,
@@ -54,7 +56,7 @@ def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.users.views']
 
 
-class Transaction(TypedDict):
+class TransactionDict(TypedDict):
     id: int
     type: Literal['expense', 'income']
     date: str
@@ -71,38 +73,22 @@ class DashboardKpiCard(TypedDict):
     tone: str
 
 
-def _operation_list_url(
-    url_name: str,
-    period_start: Any,
-    period_end: Any,
+def _finances_url(
+    transaction_type: str,
     extra_params: dict[str, Any] | None = None,
 ) -> str:
-    params = {
-        'date_after': period_start.isoformat(),
-        'date_before': period_end.isoformat(),
-    }
+    params: dict[str, Any] = {'type': transaction_type}
     if extra_params:
         params.update(extra_params)
-    return f'{reverse(url_name)}?{urlencode(params)}'
+    return f'{reverse("finances")}?{urlencode(params)}'
 
 
 def _build_kpi_cards(kpis: DashboardKpiDict) -> list[DashboardKpiCard]:
-    period_start = kpis['period_start']
-    period_end = kpis['period_end']
-    expense_url = _operation_list_url(
-        'expense:list',
-        period_start,
-        period_end,
-    )
-    income_url = _operation_list_url('income:list', period_start, period_end)
+    expense_url = _finances_url('expense')
+    income_url = _finances_url('income')
     top_category_id = kpis['top_expense_category_id']
     top_category_url = (
-        _operation_list_url(
-            'expense:list',
-            period_start,
-            period_end,
-            {'category': top_category_id},
-        )
+        _finances_url('expense', {'category': top_category_id})
         if top_category_id is not None
         else expense_url
     )
@@ -348,7 +334,7 @@ class DashboardDataView(LoginRequiredMixin, View):
 
         return trends
 
-    def _get_recent_transactions(self, user: User) -> list[Transaction]:
+    def _get_recent_transactions(self, user: User) -> list[TransactionDict]:
         """Get recent transactions for user.
 
         Args:
@@ -358,17 +344,17 @@ class DashboardDataView(LoginRequiredMixin, View):
             List of Transaction dictionaries sorted by date descending.
         """
         recent_expenses = (
-            Expense.objects.filter(user=user)
+            Transaction.objects.filter(user=user, type=TransactionType.EXPENSE)
             .select_related('category', 'account')
             .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
         )
         recent_incomes = (
-            Income.objects.filter(user=user)
+            Transaction.objects.filter(user=user, type=TransactionType.INCOME)
             .select_related('category', 'account')
             .order_by('-date')[: constants.RECENT_ITEMS_LIMIT]
         )
 
-        expense_transactions: list[Transaction] = [
+        expense_transactions: list[TransactionDict] = [
             {
                 'id': expense.pk,
                 'type': 'expense',
@@ -379,7 +365,7 @@ class DashboardDataView(LoginRequiredMixin, View):
             }
             for expense in recent_expenses
         ]
-        income_transactions: list[Transaction] = [
+        income_transactions: list[TransactionDict] = [
             {
                 'id': income.pk,
                 'type': 'income',
@@ -447,8 +433,8 @@ class DashboardDataView(LoginRequiredMixin, View):
                 'comparison': comparison_data,
                 'recent_transactions': recent_transactions,
                 'click_through': {
-                    'expense_list_url': reverse('expense:list'),
-                    'income_list_url': reverse('income:list'),
+                    'expense_list_url': _finances_url('expense'),
+                    'income_list_url': _finances_url('income'),
                 },
             }
 

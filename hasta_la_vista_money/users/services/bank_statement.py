@@ -25,8 +25,11 @@ from pdfminer.pdfparser import PDFSyntaxError
 if TYPE_CHECKING:
     import pandas as pd
 
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
-from hasta_la_vista_money.income.models import Income, IncomeCategory
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
@@ -849,27 +852,23 @@ def process_bank_statement(
         trans_date = trans['date']
 
         if amount > 0:
-            category = _get_or_create_income_category(user, description)
-            Income.objects.create(
-                user=user,
-                account=account,
-                category=category,
-                amount=abs(amount),
-                date=trans_date,
-            )
-            # Update account balance for income (add money)
+            type_value = TransactionType.INCOME
+        else:
+            type_value = TransactionType.EXPENSE
+
+        category = _get_or_create_category(user, description, type_value)
+        Transaction.objects.create(
+            user=user,
+            account=account,
+            category=category,
+            type=type_value,
+            amount=abs(amount),
+            date=trans_date,
+        )
+        if type_value == TransactionType.INCOME:
             account.balance += abs(amount)
             income_count += 1
         else:
-            category = _get_or_create_expense_category(user, description)
-            Expense.objects.create(
-                user=user,
-                account=account,
-                category=category,
-                amount=abs(amount),
-                date=trans_date,
-            )
-            # Update account balance for expense (subtract money)
             account.balance -= abs(amount)
             expense_count += 1
 
@@ -888,17 +887,14 @@ def process_bank_statement(
     }
 
 
-def _get_or_create_income_category(user: User, name: str) -> IncomeCategory:
-    category, _ = IncomeCategory.objects.get_or_create(
+def _get_or_create_category(
+    user: User,
+    name: str,
+    type_value: str,
+) -> Category:
+    category, _ = Category.objects.get_or_create(
         user=user,
         name=name[:250],
-    )
-    return category
-
-
-def _get_or_create_expense_category(user: User, name: str) -> ExpenseCategory:
-    category, _ = ExpenseCategory.objects.get_or_create(
-        user=user,
-        name=name[:250],
+        type=type_value,
     )
     return category

@@ -1,0 +1,22 @@
+[
+{
+    "model": "transactions.category",
+    "pk": 1,
+    "fields": {
+        "user": 1,
+        "name": "ЖКХ",
+        "type": "expense",
+        "parent_category": null
+    }
+},
+{
+    "model": "transactions.category",
+    "pk": 2,
+    "fields": {
+        "user": 1,
+        "name": "Зарплата",
+        "type": "income",
+        "parent_category": null
+    }
+}
+]

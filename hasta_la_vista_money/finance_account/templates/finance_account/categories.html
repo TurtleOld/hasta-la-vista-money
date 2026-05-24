@@ -46,7 +46,7 @@
                             {% translate 'Расходы' %}
                             <span class="opt">{{ expense_categories|length }}</span>
                         </h3>
-                        <a href="{% url 'expense:create_category' %}" class="btn btn-secondary btn-sm">{% translate 'Добавить' %}</a>
+                        <a href="{% url 'transactions:create_category' %}?type=expense" class="btn btn-secondary btn-sm">{% translate 'Добавить' %}</a>
                     </div>
 
                     {% with categories=expense_categories category_type='expense' %}
@@ -61,7 +61,7 @@
                             {% translate 'Доходы' %}
                             <span class="opt">{{ income_categories|length }}</span>
                         </h3>
-                        <a href="{% url 'income:create_category' %}" class="btn btn-secondary btn-sm">{% translate 'Добавить' %}</a>
+                        <a href="{% url 'transactions:create_category' %}?type=income" class="btn btn-secondary btn-sm">{% translate 'Добавить' %}</a>
                     </div>
 
                     {% with categories=income_categories category_type='income' %}

@@ -1,6 +1,6 @@
 """Service for computing balance trends from transaction history."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TypedDict
 
@@ -8,9 +8,11 @@ from django.db.models import QuerySet, Sum
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
-from hasta_la_vista_money.expense.models import Expense
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.income.models import Income
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 
 
 class BalanceTrendPoint(TypedDict):
@@ -148,37 +150,26 @@ class BalanceTrendService:
         """
         account_ids = list(accounts.values_list('id', flat=True))
 
-        # Get daily expenses
-        daily_expenses = (
-            Expense.objects.filter(
+        daily_totals = (
+            Transaction.objects.filter(
                 account_id__in=account_ids,
                 date__gte=start_date,
             )
             .annotate(date_only=TruncDate('date'))
-            .values('date_only')
+            .values('date_only', 'type')
             .annotate(total=Coalesce(Sum('amount'), Decimal(0)))
             .order_by('date_only')
         )
 
-        # Get daily income
-        daily_income = (
-            Income.objects.filter(
-                account_id__in=account_ids,
-                date__gte=start_date,
+        expenses_dict: dict[date, Decimal] = {}
+        income_dict: dict[date, Decimal] = {}
+        for item in daily_totals:
+            target = (
+                income_dict
+                if item['type'] == TransactionType.INCOME
+                else expenses_dict
             )
-            .annotate(date_only=TruncDate('date'))
-            .values('date_only')
-            .annotate(total=Coalesce(Sum('amount'), Decimal(0)))
-            .order_by('date_only')
-        )
-
-        # Convert to dict for easy lookup
-        expenses_dict = {
-            item['date_only']: item['total'] for item in daily_expenses
-        }
-        income_dict = {
-            item['date_only']: item['total'] for item in daily_income
-        }
+            target[item['date_only']] = item['total']
 
         # Get balance at period start
         starting_balance = self._get_balance_at_date(
@@ -203,7 +194,7 @@ class BalanceTrendService:
                 {
                     'date': current_date.isoformat(),
                     'balance': float(current_balance),
-                }
+                },
             )
 
             current_date += timedelta(days=1)
@@ -213,7 +204,7 @@ class BalanceTrendService:
     def _get_balance_at_date(
         self,
         accounts: QuerySet[Account],
-        target_date: datetime.date,
+        target_date: date,
     ) -> Decimal:
         """Get estimated balance at a specific date.
 
@@ -230,17 +221,17 @@ class BalanceTrendService:
         account_ids = list(accounts.values_list('id', flat=True))
         current_balance = self._get_current_balance(accounts)
 
-        # Sum expenses after target_date
-        expenses_after = Expense.objects.filter(
-            account_id__in=account_ids,
-            date__date__gte=target_date,
-        ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
-
-        # Sum income after target_date
-        income_after = Income.objects.filter(
-            account_id__in=account_ids,
-            date__date__gte=target_date,
-        ).aggregate(total=Coalesce(Sum('amount'), Decimal(0)))['total']
+        totals_after = (
+            Transaction.objects.filter(
+                account_id__in=account_ids,
+                date__date__gte=target_date,
+            )
+            .values('type')
+            .annotate(total=Coalesce(Sum('amount'), Decimal(0)))
+        )
+        totals_by_type = {item['type']: item['total'] for item in totals_after}
+        expenses_after = totals_by_type.get(TransactionType.EXPENSE, Decimal(0))
+        income_after = totals_by_type.get(TransactionType.INCOME, Decimal(0))
 
         # Balance at target_date = current - income_after + expenses_after
         return current_balance - income_after + expenses_after

@@ -17,10 +17,13 @@ from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.protocols import (
     BankCalculatorProtocol,
 )
+from hasta_la_vista_money.transactions.models import TransactionType
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.expense.repositories import ExpenseRepository
     from hasta_la_vista_money.receipts.repositories import ReceiptRepository
+    from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
+        TransactionRepository,
+    )
 
 
 class SberbankCalculator:
@@ -68,16 +71,16 @@ class RaiffeisenbankCalculator:
 
     def __init__(
         self,
-        expense_repository: 'ExpenseRepository',
+        transaction_repository: 'TransactionRepository',
         receipt_repository: 'ReceiptRepository',
     ) -> None:
         """Initialize RaiffeisenbankCalculator.
 
         Args:
-            expense_repository: Repository for expense data access.
+            transaction_repository: Repository for transaction data access.
             receipt_repository: Repository for receipt data access.
         """
-        self.expense_repository = expense_repository
+        self.transaction_repository = transaction_repository
         self.receipt_repository = receipt_repository
 
     def _find_first_purchase_in_month(
@@ -104,8 +107,9 @@ class RaiffeisenbankCalculator:
         )
 
         first_expense = (
-            self.expense_repository.filter(
+            self.transaction_repository.filter(
                 account=account,
+                type=TransactionType.EXPENSE,
                 date__range=(month_start, month_end),
             )
             .order_by('date')
@@ -200,14 +204,14 @@ class DefaultBankCalculator:
 
 def create_bank_calculator(
     bank: str,
-    expense_repository: 'ExpenseRepository | None' = None,
+    transaction_repository: 'TransactionRepository | None' = None,
     receipt_repository: 'ReceiptRepository | None' = None,
 ) -> BankCalculatorProtocol:
     """Create bank calculator based on bank type.
 
     Args:
         bank: Bank identifier.
-        expense_repository: Repository for expense data access (required
+        transaction_repository: Repository for transaction data access (required
             for Raiffeisenbank).
         receipt_repository: Repository for receipt data access (required
             for Raiffeisenbank).
@@ -222,13 +226,13 @@ def create_bank_calculator(
     if bank == BANK_SBERBANK:
         return SberbankCalculator()
     if bank == BANK_RAIFFEISENBANK:
-        if expense_repository is None or receipt_repository is None:
+        if transaction_repository is None or receipt_repository is None:
             raise ValueError(
-                'Expense and receipt repositories are required for '
+                'Transaction and receipt repositories are required for '
                 'Raiffeisenbank calculator',
             )
         return RaiffeisenbankCalculator(
-            expense_repository=expense_repository,
+            transaction_repository=transaction_repository,
             receipt_repository=receipt_repository,
         )
     return DefaultBankCalculator()

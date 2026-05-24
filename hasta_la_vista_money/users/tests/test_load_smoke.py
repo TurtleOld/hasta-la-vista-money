@@ -17,10 +17,8 @@ class CoreLoadSmokeTest(StaticLiveServerTestCase):
     fixtures = [
         'users.yaml',
         'finance_account.yaml',
-        'expense_cat.yaml',
-        'expense.yaml',
-        'income_cat.yaml',
-        'income.yaml',
+        'categories.yaml',
+        'transactions.yaml',
     ]
 
     def setUp(self) -> None:

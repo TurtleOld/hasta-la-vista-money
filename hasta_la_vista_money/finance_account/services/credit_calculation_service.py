@@ -30,11 +30,13 @@ from hasta_la_vista_money.finance_account.services.types import (
     PaymentScheduleStatementDict,
     RaiffeisenbankScheduleDict,
 )
+from hasta_la_vista_money.transactions.models import TransactionType
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.expense.repositories import ExpenseRepository
-    from hasta_la_vista_money.income.repositories import IncomeRepository
     from hasta_la_vista_money.receipts.repositories import ReceiptRepository
+    from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
+        TransactionRepository,
+    )
 
 
 class CreditCalculationService:
@@ -46,19 +48,16 @@ class CreditCalculationService:
 
     def __init__(
         self,
-        expense_repository: 'ExpenseRepository',
-        income_repository: 'IncomeRepository',
+        transaction_repository: 'TransactionRepository',
         receipt_repository: 'ReceiptRepository',
     ) -> None:
         """Initialize CreditCalculationService.
 
         Args:
-            expense_repository: Repository for expense data access.
-            income_repository: Repository for income data access.
+            transaction_repository: Repository for transaction data access.
             receipt_repository: Repository for receipt data access.
         """
-        self.expense_repository = expense_repository
-        self.income_repository = income_repository
+        self.transaction_repository = transaction_repository
         self.receipt_repository = receipt_repository
 
     def get_credit_card_debt(
@@ -104,8 +103,14 @@ class CreditCalculationService:
                     datetime.combine(end_date, time.max),
                 )
 
-        expenses_queryset = self.expense_repository.filter(account=account)
-        income_queryset = self.income_repository.filter(account=account)
+        expenses_queryset = self.transaction_repository.filter(
+            account=account,
+            type=TransactionType.EXPENSE,
+        )
+        income_queryset = self.transaction_repository.filter(
+            account=account,
+            type=TransactionType.INCOME,
+        )
         receipts_queryset = self.receipt_repository.filter(account=account)
 
         if start_date_dt and end_date_dt:
@@ -179,8 +184,9 @@ class CreditCalculationService:
         )
 
         first_expense = (
-            self.expense_repository.filter(
+            self.transaction_repository.filter(
                 account=account,
+                type=TransactionType.EXPENSE,
                 date__range=(month_start, month_end),
             )
             .order_by('date')
@@ -252,7 +258,7 @@ class CreditCalculationService:
         """
         calculator = create_bank_calculator(
             account.bank,
-            expense_repository=self.expense_repository,
+            transaction_repository=self.transaction_repository,
             receipt_repository=self.receipt_repository,
         )
         return calculator.calculate_grace_period(

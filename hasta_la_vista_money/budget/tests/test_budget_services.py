@@ -1,52 +1,51 @@
-from typing import ClassVar
+from datetime import date
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
+from hasta_la_vista_money.budget.models import DateList
 from hasta_la_vista_money.budget.services.budget import (
     BudgetDataError,
     get_categories,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.transactions.models import Category, TransactionType
+
+User = get_user_model()
 
 
 class BudgetServicesTestCase(TestCase):
-    fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
-        'users.yaml',
-        'expense_cat.yaml',
-        'income_cat.yaml',
-        'expense.yaml',
-        'income.yaml',
-        'finance_account.yaml',
-        'loan.yaml',
-        'receipt_product.yaml',
-        'receipt_receipt.yaml',
-        'receipt_seller.yaml',
-    ]
+    """Cover the budget aggregation service end-to-end."""
 
     def setUp(self) -> None:
-        user = User.objects.first()
-        if user is None:
-            raise ValueError('No user found in fixtures')
-        self.user = user
+        self.user = User.objects.create_user(
+            username='budget_user',
+            password='pass',  # nosec B106: test-only password
+        )
         self.container = ApplicationContainer()
-        self.expense_categories = list(
-            self.user.category_expense_users.filter(
-                parent_category=None,
-            ),
+
+        self.expense_category = Category.objects.create(
+            user=self.user,
+            name='Groceries',
+            type=TransactionType.EXPENSE,
         )
-        self.income_categories = list(
-            self.user.category_income_users.filter(
-                parent_category=None,
-            ),
+        self.income_category = Category.objects.create(
+            user=self.user,
+            name='Salary',
+            type=TransactionType.INCOME,
         )
+        self.expense_categories = [self.expense_category]
+        self.income_categories = [self.income_category]
+
+        DateList.objects.create(user=self.user, date=date(2026, 1, 1))
+        DateList.objects.create(user=self.user, date=date(2026, 2, 1))
+
         date_list_repository = self.container.budget.date_list_repository()
         self.dates = list(date_list_repository.get_by_user_ordered(self.user))
         self.months = [d.date for d in self.dates]
         self.budget_service = self.container.budget.budget_service()
 
     def test_get_categories_expense(self) -> None:
-        """Test get_categories returns expense categories for user."""
         cats = get_categories(self.user, 'expense')
         self.assertQuerySetEqual(
             cats.order_by('id'),
@@ -55,7 +54,6 @@ class BudgetServicesTestCase(TestCase):
         )
 
     def test_get_categories_income(self) -> None:
-        """Test get_categories returns income categories for user."""
         cats = get_categories(self.user, 'income')
         self.assertQuerySetEqual(
             cats.order_by('id'),
@@ -64,12 +62,10 @@ class BudgetServicesTestCase(TestCase):
         )
 
     def test_get_categories_error(self) -> None:
-        """Test get_categories raises error if user is None."""
         with self.assertRaises(BudgetDataError):
             get_categories(None, 'expense')
 
     def test_aggregate_budget_data_success(self) -> None:
-        """Test aggregate_budget_data returns correct structure."""
         data = self.budget_service.aggregate_budget_data(
             user=self.user,
             months=self.months,
@@ -83,7 +79,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(len(data['months']), len(self.months))
 
     def test_aggregate_budget_data_error(self) -> None:
-        """Test aggregate_budget_data raises error on missing data."""
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_budget_data(
                 None,
@@ -114,7 +109,6 @@ class BudgetServicesTestCase(TestCase):
             )
 
     def test_aggregate_budget_data_empty_months(self) -> None:
-        """Test aggregate_budget_data with empty months list."""
         data = self.budget_service.aggregate_budget_data(
             user=self.user,
             months=[],
@@ -122,7 +116,6 @@ class BudgetServicesTestCase(TestCase):
             income_categories=self.income_categories,
         )
         self.assertEqual(data['months'], [])
-        # Проверяем, что для каждой категории массивы пустые
         for row in data['expense_data']:
             self.assertEqual(row['fact'], [])
             self.assertEqual(row['plan'], [])
@@ -135,7 +128,6 @@ class BudgetServicesTestCase(TestCase):
             self.assertEqual(row['percent'], [])
 
     def test_aggregate_budget_data_no_categories(self) -> None:
-        """Test aggregate_budget_data with no categories."""
         data = self.budget_service.aggregate_budget_data(
             user=self.user,
             months=self.months,
@@ -146,7 +138,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(data['income_data'], [])
 
     def test_aggregate_expense_table_success(self) -> None:
-        """Test aggregate_expense_table returns correct structure."""
         data = self.budget_service.aggregate_expense_table(
             user=self.user,
             months=self.months,
@@ -158,7 +149,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(len(data['months']), len(self.months))
 
     def test_aggregate_expense_table_error(self) -> None:
-        """Test aggregate_expense_table raises error on missing data."""
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_table(
                 None,
@@ -200,7 +190,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(data['expense_data'], [])
 
     def test_aggregate_income_table_success(self) -> None:
-        """Test aggregate_income_table returns correct structure."""
         data = self.budget_service.aggregate_income_table(
             user=self.user,
             months=self.months,
@@ -212,7 +201,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(len(data['months']), len(self.months))
 
     def test_aggregate_income_table_error(self) -> None:
-        """Test aggregate_income_table raises error on missing data."""
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_table(
                 None,
@@ -254,7 +242,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(data['income_data'], [])
 
     def test_aggregate_expense_api_success(self) -> None:
-        """Test aggregate_expense_api returns correct structure."""
         data = self.budget_service.aggregate_expense_api(
             user=self.user,
             months=self.months,
@@ -265,7 +252,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(len(data['months']), len(self.months))
 
     def test_aggregate_expense_api_error(self) -> None:
-        """Test aggregate_expense_api raises error on missing data."""
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_expense_api(
                 None,
@@ -292,13 +278,6 @@ class BudgetServicesTestCase(TestCase):
             expense_categories=self.expense_categories,
         )
         self.assertEqual(data['months'], [])
-        for row in data['data']:
-            self.assertTrue(
-                all(
-                    row[f] == []
-                    for f in ['fact_' + str(m) for m in data['months']]
-                ),
-            )
 
     def test_aggregate_expense_api_empty_categories(self) -> None:
         data = self.budget_service.aggregate_expense_api(
@@ -309,7 +288,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(data['data'], [])
 
     def test_aggregate_income_api_success(self) -> None:
-        """Test aggregate_income_api returns correct structure."""
         data = self.budget_service.aggregate_income_api(
             user=self.user,
             months=self.months,
@@ -320,7 +298,6 @@ class BudgetServicesTestCase(TestCase):
         self.assertEqual(len(data['months']), len(self.months))
 
     def test_aggregate_income_api_error(self) -> None:
-        """Test aggregate_income_api raises error on missing data."""
         with self.assertRaises(BudgetDataError):
             self.budget_service.aggregate_income_api(
                 None,
@@ -347,13 +324,6 @@ class BudgetServicesTestCase(TestCase):
             income_categories=self.income_categories,
         )
         self.assertEqual(data['months'], [])
-        for row in data['data']:
-            self.assertTrue(
-                all(
-                    row[f] == []
-                    for f in ['fact_' + str(m) for m in data['months']]
-                ),
-            )
 
     def test_aggregate_income_api_empty_categories(self) -> None:
         data = self.budget_service.aggregate_income_api(

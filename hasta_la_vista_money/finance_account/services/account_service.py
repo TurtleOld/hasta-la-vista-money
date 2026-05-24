@@ -29,13 +29,14 @@ from hasta_la_vista_money.users.services.groups import (
 )
 
 if TYPE_CHECKING:
-    from hasta_la_vista_money.expense.repositories import ExpenseRepository
     from hasta_la_vista_money.finance_account.repositories import (
         AccountRepository,
         TransferMoneyLogRepository,
     )
-    from hasta_la_vista_money.income.repositories import IncomeRepository
     from hasta_la_vista_money.receipts.repositories import ReceiptRepository
+    from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
+        TransactionRepository,
+    )
 
 
 class AccountService:
@@ -49,8 +50,7 @@ class AccountService:
         self,
         account_repository: 'AccountRepository',
         transfer_money_log_repository: 'TransferMoneyLogRepository',
-        expense_repository: 'ExpenseRepository',
-        income_repository: 'IncomeRepository',
+        transaction_repository: 'TransactionRepository',
         receipt_repository: 'ReceiptRepository',
     ) -> None:
         """Initialize AccountService.
@@ -59,8 +59,7 @@ class AccountService:
             account_repository: Repository for account data access.
             transfer_money_log_repository: Repository for transfer log
                 operations.
-            expense_repository: Repository for expense data access.
-            income_repository: Repository for income data access.
+            transaction_repository: Repository for transaction data access.
             receipt_repository: Repository for receipt data access.
         """
         self.account_repository = account_repository
@@ -69,8 +68,7 @@ class AccountService:
         # Initialize sub-services
         self.balance_service = BalanceService()
         self.credit_calculation_service = CreditCalculationService(
-            expense_repository=expense_repository,
-            income_repository=income_repository,
+            transaction_repository=transaction_repository,
             receipt_repository=receipt_repository,
         )
 

@@ -20,6 +20,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import QuerySet
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -41,8 +42,6 @@ from hasta_la_vista_money.constants import (
     RECEIPT_OPERATION_PURCHASE,
 )
 from hasta_la_vista_money.custom_mixin import DeleteObjectMixin
-from hasta_la_vista_money.expense.forms import AddExpenseForm
-from hasta_la_vista_money.expense.models import Expense, ExpenseCategory
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
@@ -51,10 +50,14 @@ from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import (
     Account,
 )
-from hasta_la_vista_money.income.forms import IncomeForm
-from hasta_la_vista_money.income.models import Income, IncomeCategory
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import get_cached_category_tree
+from hasta_la_vista_money.transactions.forms import TransactionForm
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
@@ -354,8 +357,14 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
         """Build context with both income and expense forms."""
         context = super().get_context_data(**kwargs)
         request = cast('WSGIRequestWithContainer', self.request)
-        income_categories = IncomeCategory.objects.filter(user=request.user)
-        expense_categories = ExpenseCategory.objects.filter(user=request.user)
+        income_categories = Category.objects.filter(
+            user=request.user,
+            type=TransactionType.INCOME,
+        )
+        expense_categories = Category.objects.filter(
+            user=request.user,
+            type=TransactionType.EXPENSE,
+        )
         accounts = Account.objects.filter(user=request.user).order_by(
             'name_account',
         )
@@ -372,9 +381,15 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
         """Handle POST: create income or expense based on operation_type."""
         operation_type = request.POST.get('operation_type', 'expense')
         if operation_type == 'income':
-            response = self._create_income(request)
+            response = self._create_transaction(
+                request,
+                TransactionType.INCOME,
+            )
         else:
-            response = self._create_expense(request)
+            response = self._create_transaction(
+                request,
+                TransactionType.EXPENSE,
+            )
         if request.headers.get('HX-Request') == 'true':
             return self._quick_add_response(response)
         return response
@@ -422,13 +437,22 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             f'{reverse("finances_create")}?{urlencode(params)}',
         )
 
-    def _create_income(self, request: Any) -> HttpResponse:
+    def _create_transaction(
+        self,
+        request: Any,
+        type_value: str,
+    ) -> HttpResponse:
         typed_request = cast('RequestWithContainer', request)
-        income_categories = IncomeCategory.objects.filter(user=request.user)
+        category_queryset = Category.objects.filter(
+            user=request.user,
+            type=type_value,
+        )
         accounts = Account.objects.filter(user=request.user)
-        form = IncomeForm(
-            request.POST,
-            category_queryset=income_categories,
+        form_data = request.POST.copy()
+        form_data['type'] = type_value
+        form = TransactionForm(
+            form_data,
+            category_queryset=category_queryset,
             account_queryset=accounts,
         )
         if not form.is_valid():
@@ -436,40 +460,139 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
             return HttpResponseRedirect(reverse('finances_create'))
         cd = form.cleaned_data
         try:
-            income_ops = typed_request.container.income.income_ops()
-            income_ops.add_income(
+            transaction_service = (
+                typed_request.container.transactions.transaction_service()
+            )
+            transaction_service.add_transaction(
                 user=request.user,
                 account=cd['account'],
                 category=cd['category'],
                 amount=cd['amount'],
-                income_date=cd['date'],
+                transaction_date=cd['date'],
+                type_value=type_value,
             )
-            messages.success(request, constants.SUCCESS_INCOME_ADDED)
+            success_message = (
+                constants.SUCCESS_INCOME_ADDED
+                if type_value == TransactionType.INCOME
+                else constants.SUCCESS_EXPENSE_ADDED
+            )
+            messages.success(request, success_message)
         except (ValueError, TypeError, PermissionDenied):
-            messages.error(request, _('Ошибка при создании дохода.'))
+            error_message = (
+                _('Ошибка при создании дохода.')
+                if type_value == TransactionType.INCOME
+                else _('Ошибка при создании расхода.')
+            )
+            messages.error(request, error_message)
             return HttpResponseRedirect(reverse('finances'))
-        return self._success_redirect(request, 'income', cd)
+        return self._success_redirect(request, type_value, cd)
 
-    def _create_expense(self, request: Any) -> HttpResponse:
-        typed_request = cast('RequestWithContainer', request)
-        expense_service = typed_request.container.expense.expense_service(
-            user=request.user,
-            request=request,
+
+class TransactionUpdateView(
+    LoginRequiredMixin,
+    UpdateView[Transaction, TransactionForm],
+):
+    """Update a unified transaction from the finances list."""
+
+    model = Transaction
+    form_class = TransactionForm
+    template_name = 'finance_account/update_transaction.html'
+    success_url = reverse_lazy('finances')
+
+    def get_object(self, queryset: Any = None) -> Transaction:
+        """Return a transaction owned by the current user."""
+        return get_object_or_404(
+            Transaction.objects.select_related('user', 'category', 'account'),
+            pk=self.kwargs['pk'],
+            user=self.request.user,
         )
-        form = AddExpenseForm(
-            request.POST,
-            **expense_service.get_form_querysets(),
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Limit category and account choices to the current transaction."""
+        kwargs = super().get_form_kwargs()
+        transaction_obj = self.get_object()
+        kwargs['category_queryset'] = Category.objects.filter(
+            user=self.request.user,
+            type=transaction_obj.type,
         )
-        if not form.is_valid():
-            messages.error(request, _('Пожалуйста, исправьте ошибки в форме.'))
-            return HttpResponseRedirect(reverse('finances_create'))
+        kwargs['account_queryset'] = Account.objects.filter(
+            user=self.request.user,
+        )
+        kwargs.setdefault('initial', {})['type'] = transaction_obj.type
+        return kwargs
+
+    def form_valid(self, form: TransactionForm) -> HttpResponse:
+        """Persist changes through TransactionService for balance safety."""
+        request = cast('RequestWithContainer', self.request)
+        cd = form.cleaned_data
         try:
-            expense_service.create_expense(form)
-            messages.success(request, constants.SUCCESS_EXPENSE_ADDED)
-        except (ValueError, TypeError):
-            messages.error(request, _('Ошибка при создании расхода.'))
-            return HttpResponseRedirect(reverse('finances'))
-        return self._success_redirect(request, 'expense', form.cleaned_data)
+            request.container.transactions.transaction_service().update_transaction(
+                user=request.user,
+                transaction_obj=self.get_object(),
+                account=cd['account'],
+                category=cd['category'],
+                amount=cd['amount'],
+                transaction_date=cd['date'],
+                type_value=cd['type'],
+            )
+            messages.success(request, _('Операция успешно обновлена.'))
+            return HttpResponseRedirect(str(self.success_url))
+        except (ValueError, TypeError, PermissionDenied) as error:
+            form.add_error(None, error)
+            return self.form_invalid(form)
+
+
+class TransactionCopyView(LoginRequiredMixin, View):
+    """Copy a unified transaction and return to finances."""
+
+    def post(
+        self,
+        request: 'RequestWithContainer',
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        transaction_id = kwargs.get('pk')
+        if transaction_id is None:
+            messages.error(request, _('Некорректный идентификатор операции.'))
+            return redirect('finances')
+        try:
+            request.container.transactions.transaction_service().copy_transaction(
+                user=request.user,
+                transaction_id=int(transaction_id),
+            )
+            messages.success(request, _('Операция успешно скопирована.'))
+        except (ValueError, TypeError, PermissionDenied) as error:
+            messages.error(request, str(error))
+        return redirect('finances')
+
+
+class TransactionDeleteView(LoginRequiredMixin, View):
+    """Delete a unified transaction and return to finances."""
+
+    def post(
+        self,
+        request: 'RequestWithContainer',
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        transaction_id = kwargs.get('pk')
+        if transaction_id is None:
+            messages.error(request, _('Некорректный идентификатор операции.'))
+            return redirect('finances')
+        transaction_obj = get_object_or_404(
+            Transaction.objects.select_related('user', 'account'),
+            pk=transaction_id,
+            user=request.user,
+        )
+        try:
+            request.container.transactions.transaction_service().delete_transaction(
+                user=request.user,
+                transaction_obj=transaction_obj,
+            )
+            messages.success(request, _('Операция успешно удалена.'))
+        except (ValueError, TypeError, PermissionDenied) as error:
+            messages.error(request, str(error))
+        return redirect('finances')
 
 
 class FinancesCategoryView(LoginRequiredMixin, TemplateView):
@@ -483,13 +606,13 @@ class FinancesCategoryView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = cast('User', self.request.user)
         income_categories = (
-            IncomeCategory.objects.filter(user=user)
+            Category.objects.filter(user=user, type=TransactionType.INCOME)
             .select_related('user')
             .values('id', 'name', 'parent_category', 'parent_category__name')
             .order_by('parent_category_id')
         )
         expense_categories = (
-            ExpenseCategory.objects.filter(user=user)
+            Category.objects.filter(user=user, type=TransactionType.EXPENSE)
             .select_related('user')
             .values('id', 'name', 'parent_category', 'parent_category__name')
             .order_by('parent_category_id')
@@ -525,24 +648,14 @@ def _end_of_month(value: date) -> date:
 
 
 def _finances_categories(users: Iterable[User]) -> list[FinancesCategoryChoice]:
-    income_categories = IncomeCategory.objects.filter(user__in=users)
-    expense_categories = ExpenseCategory.objects.filter(user__in=users)
     categories = [
         FinancesCategoryChoice(
-            key=f'income-{category.pk}',
+            key=f'{category.type}-{category.pk}',
             name=category.name,
-            type='income',
+            type=category.type,
         )
-        for category in income_categories
+        for category in Category.objects.filter(user__in=users)
     ]
-    categories.extend(
-        FinancesCategoryChoice(
-            key=f'expense-{category.pk}',
-            name=category.name,
-            type='expense',
-        )
-        for category in expense_categories
-    )
     categories.extend(
         [
             FinancesCategoryChoice(
@@ -583,23 +696,40 @@ def _finances_transactions(
     finances_filter: FinancesFilter,
 ) -> list[FinancesTransaction]:
     transactions: list[FinancesTransaction] = []
-    if finances_filter.type in {'all', 'income'}:
+    if finances_filter.type in {'all', TransactionType.INCOME}:
         transactions.extend(
-            _income_transactions(request.user, users, finances_filter),
+            _typed_transactions(
+                current_user=request.user,
+                users=users,
+                finances_filter=finances_filter,
+                type_value=TransactionType.INCOME,
+            ),
         )
-    if finances_filter.type in {'all', 'expense'}:
+    if finances_filter.type in {'all', TransactionType.EXPENSE}:
         transactions.extend(
-            _expense_transactions(request, users, finances_filter),
+            _typed_transactions(
+                current_user=request.user,
+                users=users,
+                finances_filter=finances_filter,
+                type_value=TransactionType.EXPENSE,
+            ),
+        )
+        transactions.extend(
+            _receipt_transactions(request, users, finances_filter),
         )
     return sorted(transactions, key=lambda item: item.date, reverse=True)
 
 
-def _income_transactions(
+def _typed_transactions(
     current_user: User,
     users: list[User],
     finances_filter: FinancesFilter,
+    type_value: str,
 ) -> list[FinancesTransaction]:
-    queryset = Income.objects.filter(user__in=users).select_related(
+    queryset = Transaction.objects.filter(
+        user__in=users,
+        type=type_value,
+    ).select_related(
         'account',
         'category',
         'user',
@@ -607,12 +737,12 @@ def _income_transactions(
     queryset = _apply_date_filter(queryset, 'date', finances_filter)
     if finances_filter.account_ids:
         queryset = queryset.filter(account_id__in=finances_filter.account_ids)
-    income_category_ids = _category_ids(
+    category_ids = _category_ids(
         finances_filter.category_keys,
-        'income-',
+        f'{type_value}-',
     )
-    if income_category_ids:
-        queryset = queryset.filter(category_id__in=income_category_ids)
+    if category_ids:
+        queryset = queryset.filter(category_id__in=category_ids)
     elif finances_filter.category_keys:
         queryset = queryset.none()
     if finances_filter.min_amount:
@@ -621,79 +751,42 @@ def _income_transactions(
         queryset = queryset.filter(category__name__icontains=finances_filter.q)
 
     return [
-        FinancesTransaction(
-            key=f'income-{income.pk}',
-            source='income',
-            source_id=income.pk,
-            date=income.date,
-            amount=income.amount,
-            category_name=income.category.name,
-            category_key=f'income-{income.category_id}',
-            account_name=income.account.name_account,
-            user_name=income.user.username,
-            edit_url=reverse('income:change', kwargs={'pk': income.pk}),
-            copy_url=reverse('income:income_copy', kwargs={'pk': income.pk}),
-            delete_url=reverse(
-                'income:delete_income',
-                kwargs={'pk': income.pk},
-            ),
-            can_edit=income.user_id == current_user.pk,
-        )
-        for income in queryset
+        _build_transaction_row(transaction_obj, current_user)
+        for transaction_obj in queryset
     ]
 
 
-def _expense_transactions(
-    request: 'WSGIRequestWithContainer',
-    users: list[User],
-    finances_filter: FinancesFilter,
-) -> list[FinancesTransaction]:
-    queryset = Expense.objects.filter(user__in=users).select_related(
-        'account',
-        'category',
-        'user',
+def _build_transaction_row(
+    transaction_obj: Transaction,
+    current_user: User,
+) -> FinancesTransaction:
+    amount = transaction_obj.amount
+    if transaction_obj.type == TransactionType.EXPENSE:
+        amount = -amount
+    return FinancesTransaction(
+        key=f'{transaction_obj.type}-{transaction_obj.pk}',
+        source=transaction_obj.type,
+        source_id=transaction_obj.pk,
+        date=transaction_obj.date,
+        amount=amount,
+        category_name=transaction_obj.category.name,
+        category_key=f'{transaction_obj.type}-{transaction_obj.category_id}',
+        account_name=transaction_obj.account.name_account,
+        user_name=transaction_obj.user.username,
+        edit_url=reverse(
+            'finance_account:transaction_change',
+            kwargs={'pk': transaction_obj.pk},
+        ),
+        copy_url=reverse(
+            'finance_account:transaction_copy',
+            kwargs={'pk': transaction_obj.pk},
+        ),
+        delete_url=reverse(
+            'finance_account:transaction_delete',
+            kwargs={'pk': transaction_obj.pk},
+        ),
+        can_edit=transaction_obj.user_id == current_user.pk,
     )
-    queryset = _apply_date_filter(queryset, 'date', finances_filter)
-    if finances_filter.account_ids:
-        queryset = queryset.filter(account_id__in=finances_filter.account_ids)
-    expense_category_ids = _category_ids(
-        finances_filter.category_keys,
-        'expense-',
-    )
-    if expense_category_ids:
-        queryset = queryset.filter(category_id__in=expense_category_ids)
-    elif finances_filter.category_keys:
-        queryset = queryset.none()
-    if finances_filter.min_amount:
-        queryset = queryset.filter(amount__gte=finances_filter.min_amount)
-    if finances_filter.q:
-        queryset = queryset.filter(category__name__icontains=finances_filter.q)
-
-    transactions = [
-        FinancesTransaction(
-            key=f'expense-{expense.pk}',
-            source='expense',
-            source_id=expense.pk,
-            date=expense.date,
-            amount=-expense.amount,
-            category_name=expense.category.name,
-            category_key=f'expense-{expense.category_id}',
-            account_name=expense.account.name_account,
-            user_name=expense.user.username,
-            edit_url=reverse('expense:change', kwargs={'pk': expense.pk}),
-            copy_url=reverse(
-                'expense:expense_copy',
-                kwargs={'pk': expense.pk},
-            ),
-            delete_url=reverse('expense:delete', kwargs={'pk': expense.pk}),
-            can_edit=expense.user_id == request.user.pk,
-        )
-        for expense in queryset
-    ]
-    transactions.extend(
-        _receipt_transactions(request, users, finances_filter),
-    )
-    return transactions
 
 
 def _receipt_transactions(
@@ -890,56 +983,16 @@ def _recent_transactions(
     without applying any date/category filters.
     """
     user_list = list(users)
-    income_qs = (
-        Income.objects.filter(user__in=user_list)
-        .select_related('account', 'category', 'user')
-        .order_by('-date')[:limit]
-    )
-    expense_qs = (
-        Expense.objects.filter(user__in=user_list)
+    transaction_qs = (
+        Transaction.objects.filter(user__in=user_list)
         .select_related('account', 'category', 'user')
         .order_by('-date')[:limit]
     )
 
-    transactions: list[FinancesTransaction] = [
-        FinancesTransaction(
-            key=f'income-{income.pk}',
-            source='income',
-            source_id=income.pk,
-            date=income.date,
-            amount=income.amount,
-            category_name=income.category.name,
-            category_key=f'income-{income.category_id}',
-            account_name=income.account.name_account,
-            user_name=income.user.username,
-            edit_url=reverse('income:change', kwargs={'pk': income.pk}),
-            copy_url=reverse('income:income_copy', kwargs={'pk': income.pk}),
-            delete_url=reverse(
-                'income:delete_income',
-                kwargs={'pk': income.pk},
-            ),
-            can_edit=income.user_id == current_user.pk,
-        )
-        for income in income_qs
+    transactions = [
+        _build_transaction_row(transaction_obj, current_user)
+        for transaction_obj in transaction_qs
     ]
-    transactions.extend(
-        FinancesTransaction(
-            key=f'expense-{expense.pk}',
-            source='expense',
-            source_id=expense.pk,
-            date=expense.date,
-            amount=-expense.amount,
-            category_name=expense.category.name,
-            category_key=f'expense-{expense.category_id}',
-            account_name=expense.account.name_account,
-            user_name=expense.user.username,
-            edit_url=reverse('expense:change', kwargs={'pk': expense.pk}),
-            copy_url=reverse('expense:expense_copy', kwargs={'pk': expense.pk}),
-            delete_url=reverse('expense:delete', kwargs={'pk': expense.pk}),
-            can_edit=expense.user_id == current_user.pk,
-        )
-        for expense in expense_qs
-    )
     transactions.sort(key=lambda item: item.date, reverse=True)
     return _group_finances_by_day(transactions[:limit])
 
@@ -1081,11 +1134,13 @@ class AccountView(
         context['drawer_accounts'] = Account.objects.filter(
             user=request.user,
         ).order_by('name_account')
-        context['drawer_income_categories'] = IncomeCategory.objects.filter(
+        context['drawer_income_categories'] = Category.objects.filter(
             user=request.user,
+            type=TransactionType.INCOME,
         ).order_by('name')
-        context['drawer_expense_categories'] = ExpenseCategory.objects.filter(
+        context['drawer_expense_categories'] = Category.objects.filter(
             user=request.user,
+            type=TransactionType.EXPENSE,
         ).order_by('name')
         return context
 
@@ -1394,7 +1449,7 @@ class DeleteAccountView(
 class QuickCategoryCreateView(LoginRequiredMixin, View):
     """Lightweight JSON endpoint for the accounts dashboard drawer.
 
-    Creates an Income or Expense category for the current user (no parent,
+    Creates an income or expense category for the current user (no parent,
     no extra fields) and returns its id+name. Used by the quick-add drawer
     to let users add a missing category without leaving the page.
     """
@@ -1408,11 +1463,10 @@ class QuickCategoryCreateView(LoginRequiredMixin, View):
                 status=400,
             )
 
-        if category_type == 'income':
-            model_cls: type[Any] = IncomeCategory
-        elif category_type == 'expense':
-            model_cls = ExpenseCategory
-        else:
+        if category_type not in {
+            TransactionType.INCOME,
+            TransactionType.EXPENSE,
+        }:
             return JsonResponse(
                 {'ok': False, 'error': 'Invalid category type'},
                 status=400,
@@ -1424,18 +1478,20 @@ class QuickCategoryCreateView(LoginRequiredMixin, View):
                 status=400,
             )
 
-        existing = model_cls.objects.filter(
+        existing = Category.objects.filter(
             user=request.user,
             name=name,
+            type=category_type,
         ).first()
         if existing is not None:
             return JsonResponse(
                 {'ok': True, 'id': existing.pk, 'name': existing.name},
             )
 
-        category = model_cls.objects.create(
+        category = Category.objects.create(
             user=request.user,
             name=name,
+            type=category_type,
         )
         return JsonResponse(
             {'ok': True, 'id': category.pk, 'name': category.name},
