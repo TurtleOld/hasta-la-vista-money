@@ -233,7 +233,7 @@ jobs:
         run: |
           docker network create receipt-inference-ci
 
-          sed 's/^          //' > receipt_llm_mock.py <<'PY'
+          cat > receipt_llm_mock.py <<'PY'
           from http.server import BaseHTTPRequestHandler, HTTPServer
           import json
 
