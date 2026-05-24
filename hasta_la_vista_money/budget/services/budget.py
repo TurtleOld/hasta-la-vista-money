@@ -5,6 +5,7 @@ After the income/expense merge this service depends on a single
 ``transactions`` app, discriminating rows by ``type``.
 """
 
+from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -132,7 +133,11 @@ class BudgetDataError(Exception):
 def _month_range(months: list[date]) -> tuple[datetime, datetime]:
     """Return the inclusive datetime bounds covering a list of months."""
     start_date = timezone.make_aware(datetime.combine(months[0], time.min))
-    end_date = timezone.make_aware(datetime.combine(months[-1], time.max))
+    last_month = months[-1]
+    last_day = monthrange(last_month.year, last_month.month)[1]
+    end_date = timezone.make_aware(
+        datetime.combine(last_month.replace(day=last_day), time.max),
+    )
     return start_date, end_date
 
 

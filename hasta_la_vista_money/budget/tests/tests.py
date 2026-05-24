@@ -178,7 +178,7 @@ class BudgetViewsTest(TestCase):
                 amount_limit=2000,
             ).exists(),
         )
-        self.assertContains(response, 'value="2000.00"')
+        self.assertContains(response, 'value="2000,00"')
 
     def test_change_planning_post(self) -> None:
         response = self.client.post(
