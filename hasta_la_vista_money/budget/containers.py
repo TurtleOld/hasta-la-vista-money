@@ -1,6 +1,7 @@
 from dependency_injector import containers, providers
 
 from hasta_la_vista_money.budget.repositories import (
+    BudgetRepository,
     DateListRepository,
     PlanningRepository,
 )
@@ -12,9 +13,11 @@ class BudgetContainer(containers.DeclarativeContainer):
 
     planning_repository = providers.Singleton(PlanningRepository)
     date_list_repository = providers.Singleton(DateListRepository)
+    budget_repository = providers.Singleton(BudgetRepository)
 
     budget_service = providers.Factory(
         BudgetService,
         transaction_repository=transactions.transaction_repository,
         planning_repository=planning_repository,
+        budget_repository=budget_repository,
     )

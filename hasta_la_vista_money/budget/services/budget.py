@@ -15,7 +15,11 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
 
-from hasta_la_vista_money.budget.repositories import PlanningRepository
+from hasta_la_vista_money import constants
+from hasta_la_vista_money.budget.repositories import (
+    BudgetRepository,
+    PlanningRepository,
+)
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.transactions.repositories import TransactionRepository
 from hasta_la_vista_money.users.models import User
@@ -52,6 +56,29 @@ class BudgetChartDataDict(TypedDict):
     chart_balance: list[float]
 
 
+class BudgetProgressDict(TypedDict):
+    """Budget limit progress for one month or category."""
+
+    period: date
+    category: str
+    category_id: int | None
+    fact: Decimal
+    limit: Decimal
+    remaining: Decimal
+    percent: float
+    progress_width: float
+    status: str
+    alert_threshold: int
+
+
+class BudgetLimitOverviewDict(TypedDict):
+    """Budget limit progress data for the budget page."""
+
+    current_month: date | None
+    monthly_limits: list[BudgetProgressDict]
+    category_limits: list[BudgetProgressDict]
+
+
 class AggregateBudgetDataDict(TypedDict):
     """Aggregated budget data."""
 
@@ -63,6 +90,7 @@ class AggregateBudgetDataDict(TypedDict):
     total_fact_income: list[Decimal]
     total_plan_income: list[Decimal]
     chart_data: BudgetChartDataDict
+    budget_limit_overview: BudgetLimitOverviewDict
 
 
 class AggregateExpenseTableDict(TypedDict):
@@ -108,6 +136,72 @@ def _month_range(months: list[date]) -> tuple[datetime, datetime]:
     return start_date, end_date
 
 
+def _get_category_ids_by_root(
+    categories: list[Category],
+) -> dict[int, set[int]]:
+    category_ids_by_root = {
+        category.pk: {category.pk} for category in categories
+    }
+    if not categories:
+        return category_ids_by_root
+
+    children = Category.objects.filter(
+        parent_category__in=categories,
+    ).values_list(
+        'parent_category_id',
+        'id',
+    )
+    for parent_id, child_id in children:
+        category_ids_by_root[parent_id].add(child_id)
+    return category_ids_by_root
+
+
+def _get_root_id_by_category_id(
+    category_ids_by_root: dict[int, set[int]],
+) -> dict[int, int]:
+    root_id_by_category_id = {}
+    for root_id, category_ids in category_ids_by_root.items():
+        for category_id in category_ids:
+            root_id_by_category_id[category_id] = root_id
+    return root_id_by_category_id
+
+
+def _build_budget_progress(
+    period: date,
+    category: str,
+    category_id: int | None,
+    fact: Decimal,
+    limit: Decimal,
+    alert_threshold: int,
+) -> BudgetProgressDict:
+    percent = float(
+        (fact / limit * Decimal(constants.ONE_HUNDRED))
+        if limit
+        else Decimal(constants.ZERO),
+    )
+    remaining = limit - fact
+    if limit and percent >= constants.ONE_HUNDRED:
+        status = 'over'
+    elif limit and percent >= alert_threshold:
+        status = 'warning'
+    elif limit:
+        status = 'ok'
+    else:
+        status = 'empty'
+    return {
+        'period': period,
+        'category': category,
+        'category_id': category_id,
+        'fact': fact,
+        'limit': limit,
+        'remaining': remaining,
+        'percent': percent,
+        'progress_width': min(percent, 100),
+        'status': status,
+        'alert_threshold': alert_threshold,
+    }
+
+
 class BudgetService:
     """Service for budget data aggregation."""
 
@@ -115,9 +209,11 @@ class BudgetService:
         self,
         transaction_repository: TransactionRepository,
         planning_repository: PlanningRepository,
+        budget_repository: BudgetRepository,
     ) -> None:
         self.transaction_repository = transaction_repository
         self.planning_repository = planning_repository
+        self.budget_repository = budget_repository
 
     def _get_fact_map_int(
         self,
@@ -129,12 +225,20 @@ class BudgetService:
         if not months:
             return {}
 
+        category_ids_by_root = _get_category_ids_by_root(categories)
+        root_id_by_category_id = _get_root_id_by_category_id(
+            category_ids_by_root,
+        )
+        category_ids = list(root_id_by_category_id)
+        if not category_ids:
+            return {}
+
         start_date, end_date = _month_range(months)
         rows = (
             self.transaction_repository.filter(
                 user=user,
                 type=type_value,
-                category__in=categories,
+                category_id__in=category_ids,
                 date__gte=start_date,
                 date__lte=end_date,
             )
@@ -153,7 +257,8 @@ class BudgetService:
                 else row['month']
             )
             month_start = month_date.replace(day=1)
-            fact_map[row['category_id']][month_start] = row['total'] or 0
+            root_id = root_id_by_category_id[row['category_id']]
+            fact_map[root_id][month_start] += int(row['total'] or 0)
         return fact_map
 
     def _get_fact_map_decimal(
@@ -166,12 +271,20 @@ class BudgetService:
         if not months:
             return {}
 
+        category_ids_by_root = _get_category_ids_by_root(categories)
+        root_id_by_category_id = _get_root_id_by_category_id(
+            category_ids_by_root,
+        )
+        category_ids = list(root_id_by_category_id)
+        if not category_ids:
+            return {}
+
         start_date, end_date = _month_range(months)
         rows = (
             self.transaction_repository.filter(
                 user=user,
                 type=type_value,
-                category__in=categories,
+                category_id__in=category_ids,
                 date__gte=start_date,
                 date__lte=end_date,
             )
@@ -190,11 +303,80 @@ class BudgetService:
                 else row['month']
             )
             month_start = month_date.replace(day=1)
-            total = row['total']
-            fact_map[row['category_id']][month_start] = (
-                Decimal(str(total)) if total else Decimal(0)
-            )
+            root_id = root_id_by_category_id[row['category_id']]
+            total = Decimal(str(row['total'])) if row['total'] else Decimal(0)
+            fact_map[root_id][month_start] += total
         return fact_map
+
+    def aggregate_budget_limit_overview(
+        self,
+        user: User,
+        months: list[date],
+        expense_categories: list[Category],
+    ) -> BudgetLimitOverviewDict:
+        """Aggregate monthly and category expense-limit progress."""
+        if not months:
+            return {
+                'current_month': None,
+                'monthly_limits': [],
+                'category_limits': [],
+            }
+
+        fact_map = self._get_fact_map_decimal(
+            user,
+            months,
+            expense_categories,
+            TransactionType.EXPENSE,
+        )
+        budgets = self.budget_repository.filter(
+            user=user,
+            period__in=months,
+        )
+        budget_by_key = {
+            (budget.period, budget.category_id): budget for budget in budgets
+        }
+        monthly_limits = []
+        for month in months:
+            fact = sum(
+                (fact_map[cat.pk][month] for cat in expense_categories),
+                Decimal(0),
+            )
+            budget = budget_by_key.get((month, None))
+            monthly_limits.append(
+                _build_budget_progress(
+                    period=month,
+                    category='Общий лимит',
+                    category_id=None,
+                    fact=fact,
+                    limit=budget.amount_limit if budget else Decimal(0),
+                    alert_threshold=(
+                        budget.alert_threshold if budget else constants.EIGHTY
+                    ),
+                ),
+            )
+
+        current_month = months[-1]
+        category_limits = []
+        for category in expense_categories:
+            budget = budget_by_key.get((current_month, category.pk))
+            category_limits.append(
+                _build_budget_progress(
+                    period=current_month,
+                    category=category.name,
+                    category_id=category.pk,
+                    fact=fact_map[category.pk][current_month],
+                    limit=budget.amount_limit if budget else Decimal(0),
+                    alert_threshold=(
+                        budget.alert_threshold if budget else constants.EIGHTY
+                    ),
+                ),
+            )
+
+        return {
+            'current_month': current_month,
+            'monthly_limits': monthly_limits,
+            'category_limits': category_limits,
+        }
 
     def _get_plan_map_int(
         self,
@@ -318,6 +500,11 @@ class BudgetService:
 
         return {
             'chart_data': chart_data,
+            'budget_limit_overview': self.aggregate_budget_limit_overview(
+                user=user,
+                months=months,
+                expense_categories=expense_categories,
+            ),
             'months': months,
             'expense_data': expense_data,
             'income_data': income_data,

@@ -3,9 +3,12 @@ from decimal import Decimal
 from typing import ClassVar
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.models import User
 
@@ -195,3 +198,110 @@ class Planning(models.Model):
     def is_income(self) -> bool:
         """Return True if this planning is for an income."""
         return self.planning_type == TransactionType.INCOME
+
+
+class Budget(models.Model):
+    """
+    Stores a monthly expense limit for the whole budget or one category.
+    """
+
+    user: User = models.ForeignKey(  # type: ignore[assignment]
+        'users.User',
+        on_delete=models.CASCADE,
+        related_name='budgets',
+        verbose_name=_('Пользователь'),
+        help_text=_('Пользователь, для которого задан бюджет'),
+        db_index=True,
+    )
+    category: Category | None = models.ForeignKey(  # type: ignore[assignment]
+        'transactions.Category',
+        on_delete=models.CASCADE,
+        related_name='budgets',
+        verbose_name=_('Категория'),
+        help_text=_('Категория расходов; пусто для общего лимита'),
+        null=True,
+        blank=True,
+    )
+    period: date = models.DateField(  # type: ignore[assignment]
+        default=date.today,
+        verbose_name=_('Период'),
+        help_text=_('Первый день месяца, на который задан лимит'),
+        db_index=True,
+    )
+    amount_limit: Decimal = models.DecimalField(  # type: ignore[assignment]
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal(0))],
+        verbose_name=_('Лимит'),
+        help_text=_('Максимальная сумма расходов за период'),
+    )
+    alert_threshold: int = models.PositiveSmallIntegerField(  # type: ignore[assignment]
+        default=constants.EIGHTY,
+        validators=[
+            MinValueValidator(constants.ONE),
+            MaxValueValidator(constants.ONE_HUNDRED),
+        ],
+        verbose_name=_('Порог предупреждения'),
+        help_text=_('Процент использования лимита для предупреждения'),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+        blank=True,
+        verbose_name=_('Дата создания'),
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        null=True,
+        blank=True,
+        verbose_name=_('Дата обновления'),
+    )
+
+    objects = models.Manager['Budget']()
+
+    class Meta:
+        verbose_name = _('Бюджет')
+        verbose_name_plural = _('Бюджеты')
+        ordering: ClassVar[list[str]] = ['-period', 'category__name']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['user', 'period'],
+                condition=Q(category__isnull=True),
+                name='unique_overall_budget_per_user_period',
+            ),
+            models.UniqueConstraint(
+                fields=['user', 'category', 'period'],
+                condition=Q(category__isnull=False),
+                name='unique_category_budget_per_user_period',
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=['user', 'period']),
+            models.Index(fields=['user', 'category', 'period']),
+        ]
+
+    def clean(self) -> None:
+        if self.period and self.period.day != 1:
+            self.period = self.period.replace(day=1)
+        if self.category_id and self.category.type != TransactionType.EXPENSE:
+            raise ValidationError(
+                {
+                    'category': _(
+                        'Бюджетный лимит можно задать только для расходов.',
+                    ),
+                },
+            )
+        if self.category_id and self.category.user_id != self.user_id:
+            raise ValidationError(
+                {'category': _('Категория должна принадлежать пользователю.')},
+            )
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        if self.period:
+            self.period = self.period.replace(day=1)
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        category = self.category.name if self.category else _('Общий лимит')
+        return f'{self.user} - {self.period} - {category} - {self.amount_limit}'
