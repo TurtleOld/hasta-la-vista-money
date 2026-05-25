@@ -43,7 +43,6 @@ class PaddleOCRVLParsingTests(TestCase):
         payload = backend._build_payload_from_blocks(blocks)
 
         self.assertIsNotNone(payload)
-        assert payload is not None
         self.assertEqual(payload['total_sum'], '232.00')
         self.assertEqual(
             [item['amount'] for item in payload['items']],
@@ -120,7 +119,6 @@ class PaddleOCRVLParsingTests(TestCase):
         payload = backend._build_payload_from_blocks(blocks)
 
         self.assertIsNotNone(payload)
-        assert payload is not None
         self.assertEqual(payload['total_sum'], '486.48')
         self.assertEqual(
             [item['amount'] for item in payload['items']],
@@ -175,7 +173,6 @@ class PaddleOCRVLParsingTests(TestCase):
         payload = backend._build_payload_from_blocks(blocks)
 
         self.assertIsNotNone(payload)
-        assert payload is not None
         self.assertEqual(payload['total_sum'], '1198.00')
         self.assertEqual(len(payload['items']), 7)
         self.assertEqual(
@@ -232,7 +229,6 @@ class PaddleOCRVLParsingTests(TestCase):
         payload = backend._build_payload_from_blocks(blocks)
 
         self.assertIsNotNone(payload)
-        assert payload is not None
         self.assertEqual(
             payload['items'][-1]['product_name'],
             'Нераспознанная позиция',

@@ -1,7 +1,7 @@
 {% load i18n %}
 {% load static %}
 
-<div class="fixed inset-0 z-50 hidden lg:hidden peer-checked:block peer-checked:**:data-mobile-menu-overlay:opacity-100 peer-checked:**:data-mobile-menu-overlay:pointer-events-auto peer-checked:**:data-mobile-menu-panel:translate-y-0" id="mobileMenu">
+<div class="fixed inset-0 z-50 hidden lg:hidden peer-checked:block peer-checked:[&_[data-mobile-menu-overlay]]:opacity-100 peer-checked:[&_[data-mobile-menu-overlay]]:pointer-events-auto peer-checked:[&_[data-mobile-menu-panel]]:translate-y-0" id="mobileMenu">
     <label class="absolute inset-0 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200" for="mobileMenuState" data-mobile-menu-overlay></label>
     <div class="absolute inset-x-0 top-0 w-full -translate-y-full bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-gray-900" data-mobile-menu-panel>
         <div class="flex items-center justify-between border-b border-gray-200 px-4 py-4 dark:border-gray-800">

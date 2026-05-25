@@ -1461,6 +1461,12 @@
   justify-content: flex-start;
 }
 
+@media (max-width: 767px) {
+  .accounts-fab {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
   .accounts-fab {
     right: 1rem;
