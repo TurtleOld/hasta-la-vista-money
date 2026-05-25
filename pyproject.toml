@@ -17,6 +17,7 @@ dependencies = [
     "django-csp>=4.0",
     "channels>=4.0.0",
     "Pillow>=11.0.0",
+    "pyzbar>=0.1.9",
     "numpy>=2.0.0",
     "django-axes>=8.0.0",
     "Twisted[http2,tls]>=25.0.0",

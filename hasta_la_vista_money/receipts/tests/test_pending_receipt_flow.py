@@ -10,7 +10,7 @@ from typing import Any, Self
 from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -143,6 +143,7 @@ class PendingReceiptServiceHashTests(TestCase):
         self.assertIsNone(match)
 
 
+@override_settings(FNS_ENABLED=False)
 class ProcessPendingReceiptTaskTests(TestCase):
     """The Celery task transitions state and never raises out."""
 
