@@ -1,99 +1,426 @@
-.loan-form-input {
-  display: block;
-  width: 100%;
-  border-radius: 0.5rem;
-  border: 1px solid var(--color-neutral-300);
-  background-color: var(--app-surface);
-  padding: 0.5rem 0.75rem;
-  padding-right: 2.5rem;
+.loan-app,
+.loan-modal-backdrop {
+  --loan-bg: var(--app-bg);
+  --loan-surface: var(--app-surface);
+  --loan-surface-2: var(--app-surface-2);
+  --loan-border: var(--app-border);
+  --loan-text: var(--app-text);
+  --loan-muted: var(--app-muted);
+  --loan-accent: var(--app-accent);
+  --loan-positive: var(--app-positive);
+  --loan-negative: var(--app-negative);
+  --loan-info: var(--color-info-500);
+  --loan-warning: #d97706;
+  --loan-shadow-soft: var(--shadow-app-soft);
+  --loan-shadow-panel: var(--shadow-app-panel);
+  --loan-shadow-button: var(--shadow-app-button);
+  --loan-shadow-pop: 0 24px 60px rgba(15, 23, 42, 0.18);
+  --loan-radius: 1.5rem;
+}
+
+.loan-app {
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, var(--app-halo-1), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, var(--app-halo-2), transparent),
+    var(--loan-bg);
+  color: var(--loan-text);
+  min-height: calc(100vh - 4rem);
+  padding: 2rem 0 5rem;
+}
+
+.loan-wrap {
+  margin: 0 auto;
+  max-width: 80rem;
+  padding: 0 1rem;
+}
+
+.loan-wrap-narrow {
+  max-width: 56rem;
+}
+
+.loan-hero,
+.loan-panel,
+.loan-card,
+.loan-empty,
+.loan-modal-panel {
+  background: var(--loan-surface);
+  border: 1px solid var(--loan-border);
+  border-radius: var(--loan-radius);
+  box-shadow: var(--loan-shadow-panel);
+  overflow: hidden;
+}
+
+.loan-hero {
+  align-items: center;
+  background:
+    radial-gradient(80% 140% at 100% 0%, color-mix(in oklab, var(--loan-accent) 18%, transparent), transparent 60%),
+    var(--loan-surface);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding: 1.75rem;
+}
+
+.loan-title {
+  font-size: clamp(1.8rem, 3vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 1.05;
+  margin: 0 0 0.45rem;
+}
+
+.loan-subtitle,
+.loan-muted {
+  color: var(--loan-muted);
+}
+
+.loan-button {
+  align-items: center;
+  border: 1px solid var(--loan-border);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
   font-size: 0.875rem;
-  color: var(--color-neutral-900);
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
+  font-weight: 700;
+  gap: 0.45rem;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.65rem 1rem;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.loan-form-input:focus {
-  border-color: var(--color-brand-500);
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 2px var(--color-brand-500);
+.loan-button:hover {
+  transform: translateY(-1px);
 }
 
-[data-bs-theme="dark"] .loan-form-input {
-  border-color: var(--color-neutral-600);
-  background-color: var(--color-neutral-800);
-  color: var(--color-neutral-100);
+.loan-button-primary {
+  background: var(--gradient-brand-diagonal);
+  border-color: transparent;
+  box-shadow: var(--loan-shadow-button);
+  color: var(--app-on-accent);
 }
 
-[data-bs-theme="dark"] .loan-form-input:focus {
-  border-color: var(--color-brand-400);
-  box-shadow: 0 0 0 2px var(--color-brand-400);
+.loan-button-secondary {
+  background: var(--loan-surface);
+  color: var(--loan-text);
 }
 
-.loan-form-datetime {
-  display: block;
+.loan-button-info {
+  background: color-mix(in oklab, var(--loan-info) 8%, var(--loan-surface));
+  border-color: color-mix(in oklab, var(--loan-info) 35%, var(--loan-border));
+  color: var(--loan-info);
+}
+
+.loan-summary {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1.5rem;
+}
+
+.loan-summary-card {
+  background: var(--loan-surface);
+  border: 1px solid var(--loan-border);
+  border-radius: 1.25rem;
+  box-shadow: var(--loan-shadow-soft);
+  padding: 1.25rem;
+}
+
+.loan-icon {
+  align-items: center;
+  background: color-mix(in oklab, var(--loan-card-color, var(--loan-accent)) 14%, var(--loan-surface-2));
+  border: 1px solid color-mix(in oklab, var(--loan-card-color, var(--loan-accent)) 22%, var(--loan-border));
+  border-radius: 1rem;
+  color: var(--loan-card-color, var(--loan-accent));
+  display: flex;
+  height: 3rem;
+  justify-content: center;
+  margin-bottom: 0.85rem;
+  width: 3rem;
+}
+
+.loan-stat-value,
+.loan-money {
+  font-family: var(--font-family-mono);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.loan-stat-value {
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+}
+
+.loan-label {
+  color: var(--loan-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.loan-info-box {
+  background: color-mix(in oklab, var(--loan-info) 6%, var(--loan-surface));
+  border: 1px dashed color-mix(in oklab, var(--loan-info) 35%, var(--loan-border));
+  border-radius: 1.25rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+}
+
+.loan-info-box summary {
+  color: var(--loan-info);
+}
+
+.loan-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.loan-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.loan-card:hover {
+  box-shadow: var(--loan-shadow-soft);
+  transform: translateY(-2px);
+}
+
+.loan-card-head,
+.loan-modal-head {
+  background: var(--gradient-brand-diagonal);
+  color: var(--app-on-accent);
+  padding: 1.25rem 1.5rem;
+}
+
+.loan-card-body,
+.loan-modal-body {
+  padding: 1.5rem;
+}
+
+.loan-card-foot,
+.loan-modal-foot {
+  background: var(--loan-surface-2);
+  border-top: 1px solid var(--loan-border);
+  padding: 1rem 1.5rem;
+}
+
+.loan-mini-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.loan-mini-card,
+.loan-formula-card {
+  background: var(--loan-surface-2);
+  border: 1px solid var(--loan-border);
+  border-radius: 0.95rem;
+  padding: 1rem;
+}
+
+.loan-return-box {
+  background: color-mix(in oklab, var(--loan-accent) 5%, var(--loan-surface-2));
+  border: 1px solid var(--loan-border);
+  border-radius: 0.95rem;
+  padding: 1rem;
+}
+
+.loan-dropdown {
+  background: var(--loan-surface);
+  border: 1px solid var(--loan-border);
+  border-radius: 0.9rem;
+  box-shadow: var(--loan-shadow-pop);
+  overflow: hidden;
+}
+
+.loan-dropdown a,
+.loan-dropdown button {
+  color: var(--loan-text);
+}
+
+.loan-dropdown a:hover,
+.loan-dropdown button:hover {
+  background: var(--loan-surface-2);
+}
+
+.loan-danger {
+  color: var(--loan-negative) !important;
+}
+
+.loan-positive {
+  color: var(--loan-positive) !important;
+}
+
+.loan-warning {
+  color: var(--loan-warning) !important;
+}
+
+.loan-info-color {
+  color: var(--loan-info) !important;
+}
+
+.loan-empty {
+  padding: 4rem 1rem;
+  text-align: center;
+}
+
+.loan-modal-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.loan-modal-panel {
+  max-height: 90vh;
+}
+
+.loan-table-wrap {
+  border: 1px solid var(--loan-border);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.loan-table {
+  background: var(--loan-surface);
+  color: var(--loan-text);
   width: 100%;
-  border-radius: 0.5rem;
-  border: 1px solid var(--color-neutral-300);
-  background-color: var(--app-surface);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  color: var(--color-neutral-900);
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
 }
 
-.loan-form-datetime:focus {
-  border-color: var(--color-brand-500);
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 2px var(--color-brand-500);
+.loan-table thead {
+  background: var(--loan-surface-2);
 }
 
-[data-bs-theme="dark"] .loan-form-datetime {
-  border-color: var(--color-neutral-600);
-  background-color: var(--color-neutral-800);
-  color: var(--color-neutral-100);
+.loan-table th {
+  color: var(--loan-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  text-transform: uppercase;
 }
 
-[data-bs-theme="dark"] .loan-form-datetime:focus {
-  border-color: var(--color-brand-400);
-  box-shadow: 0 0 0 2px var(--color-brand-400);
+.loan-table td {
+  border-top: 1px solid var(--loan-border);
+  color: var(--loan-text);
+  padding: 0.75rem 1rem;
+  white-space: nowrap;
 }
 
-.loan-form-select {
+.loan-table tr:hover {
+  background: color-mix(in oklab, var(--loan-accent) 5%, transparent);
+}
+
+.loan-table tr.is-paid {
+  background: color-mix(in oklab, var(--loan-positive) 9%, transparent);
+}
+
+.loan-badge {
+  background: color-mix(in oklab, var(--loan-positive) 14%, var(--loan-surface));
+  border-radius: 999px;
+  color: var(--loan-positive);
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.65rem;
+}
+
+.loan-form-card {
+  padding: 1.5rem;
+}
+
+.loan-form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.loan-field,
+.loan-form-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.loan-field label {
+  color: var(--loan-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.loan-form-input,
+.loan-form-datetime,
+.loan-form-select,
+.loan-app .needs-validation input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.loan-app .needs-validation select,
+.loan-app .ajax-form input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.loan-app .ajax-form select {
+  background: var(--loan-surface-2) !important;
+  border: 1px solid var(--loan-border) !important;
+  border-radius: 0.75rem;
+  box-shadow: none !important;
+  color: var(--loan-text) !important;
   display: block;
-  width: 100%;
-  border-radius: 0.5rem;
-  border: 1px solid var(--color-neutral-300);
-  background-color: var(--app-surface);
-  padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
-  color: var(--color-neutral-900);
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
+  padding: 0.65rem 0.8rem;
+  width: 100%;
 }
 
-.loan-form-select:focus {
-  border-color: var(--color-brand-500);
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 2px var(--color-brand-500);
+.loan-form-input:focus,
+.loan-form-datetime:focus,
+.loan-form-select:focus,
+.loan-app .needs-validation input:focus,
+.loan-app .needs-validation select:focus,
+.loan-app .ajax-form input:focus,
+.loan-app .ajax-form select:focus {
+  border-color: var(--loan-accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--loan-accent) 18%, transparent) !important;
+  outline: 0 !important;
 }
 
-[data-bs-theme="dark"] .loan-form-select {
-  border-color: var(--color-neutral-600);
-  background-color: var(--color-neutral-800);
-  color: var(--color-neutral-100);
+.loan-tip-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
 }
 
-[data-bs-theme="dark"] .loan-form-select:focus {
-  border-color: var(--color-brand-400);
-  box-shadow: 0 0 0 2px var(--color-brand-400);
+.loan-tip-list li {
+  align-items: flex-start;
+  color: var(--loan-muted);
+  display: flex;
+  gap: 0.75rem;
+}
+
+.loan-modal-content h3,
+.loan-modal-content strong {
+  color: var(--loan-text);
+}
+
+.loan-modal-content p,
+.loan-modal-content li {
+  color: var(--loan-muted);
+}
+
+@media (max-width: 1024px) {
+  .loan-grid,
+  .loan-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .loan-app {
+    padding-top: 1rem;
+  }
+
+  .loan-hero {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 1.25rem;
+  }
+
+  .loan-mini-grid,
+  .loan-form-grid {
+    grid-template-columns: 1fr;
+  }
 }
