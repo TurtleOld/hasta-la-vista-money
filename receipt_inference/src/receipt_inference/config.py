@@ -63,7 +63,7 @@ def load_settings() -> ReceiptInferenceSettings:
             'Qwen2.5-3B-Instruct-Q5_K_M',
         ),
         max_image_dimension=int(os.getenv('MAX_IMAGE_DIMENSION', '1600')),
-        min_ocr_image_width=int(os.getenv('MIN_OCR_IMAGE_WIDTH', '768')),
+        min_ocr_image_width=int(os.getenv('MIN_OCR_IMAGE_WIDTH', '960')),
         jpeg_quality=int(os.getenv('JPEG_QUALITY', '85')),
         ocr_language=os.getenv('OCR_LANGUAGE', 'ru'),
         ocr_min_confidence=float(os.getenv('OCR_MIN_CONFIDENCE', '0.5')),
@@ -79,7 +79,7 @@ def load_settings() -> ReceiptInferenceSettings:
             os.getenv('OCR_USE_ANGLE_CLS', 'false').strip().lower() == 'true'
         ),
         ocr_enable_mkldnn=(
-            os.getenv('OCR_ENABLE_MKLDNN', 'true').strip().lower() == 'true'
+            os.getenv('OCR_ENABLE_MKLDNN', 'false').strip().lower() == 'true'
         ),
         optimize_jpeg=(
             os.getenv('OPTIMIZE_JPEG', 'false').strip().lower() == 'true'

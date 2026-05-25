@@ -14,6 +14,7 @@ RUN apt-get update && \
     libsm6 \
     libxext6 \
     libxrender1 \
+    libzbar0 \
     netcat-openbsd \
     tk \
     && rm -rf /var/lib/apt/lists/* \

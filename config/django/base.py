@@ -194,7 +194,18 @@ else:
     )
     is_testing = IS_TESTING
 
-    if redis_location:
+    if is_testing:
+        CACHES = {
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': 'unique-snowflake',
+                'TIMEOUT': 300,
+                'OPTIONS': {
+                    'MAX_ENTRIES': 1000,
+                },
+            },
+        }
+    elif redis_location:
         CACHES = {
             'default': {
                 'BACKEND': 'django_redis.cache.RedisCache',
@@ -209,7 +220,7 @@ else:
                 'TIMEOUT': 300,
             },
         }
-    elif is_local_dev or is_testing:
+    elif is_local_dev:
         CACHES = {
             'default': {
                 'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -542,6 +553,36 @@ SIMPLE_JWT = {
 PENDING_RECEIPT_EXPIRY_HOURS: int = config(
     'PENDING_RECEIPT_EXPIRY_HOURS',
     default=24,
+    cast=int,
+)
+
+# FNS mobile API integration for official receipt data by QR code.
+FNS_ENABLED: bool = config('FNS_ENABLED', default=False, cast=bool)
+FNS_BASE_URL: str = config(
+    'FNS_BASE_URL',
+    default='https://irkkt-mobile.nalog.ru:8888/v2',
+)
+FNS_CLIENT_SECRET: str = config('FNS_CLIENT_SECRET', default='')
+FNS_INN: str = config('FNS_INN', default='')
+FNS_PASSWORD: str = config('FNS_PASSWORD', default='')
+FNS_TIMEOUT_SECONDS: float = config(
+    'FNS_TIMEOUT_SECONDS',
+    default=10.0,
+    cast=float,
+)
+FNS_POLL_ATTEMPTS: int = config(
+    'FNS_POLL_ATTEMPTS',
+    default=5,
+    cast=int,
+)
+FNS_POLL_INTERVAL_SECONDS: float = config(
+    'FNS_POLL_INTERVAL_SECONDS',
+    default=1.0,
+    cast=float,
+)
+FNS_SESSION_CACHE_TTL_SECONDS: int = config(
+    'FNS_SESSION_CACHE_TTL_SECONDS',
+    default=3600,
     cast=int,
 )
 
