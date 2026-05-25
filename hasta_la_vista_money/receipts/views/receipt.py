@@ -226,6 +226,7 @@ class ReceiptUpdateView(
         initial_data: list[dict[str, Any]] = [
             {
                 'product_name': product.product_name,
+                'category': product.category,
                 'price': product.price,
                 'quantity': product.quantity,
                 'amount': product.amount,

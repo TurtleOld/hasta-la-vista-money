@@ -186,6 +186,7 @@ class ReceiptCreatorService:
                     product = self.product_repository.create_product(
                         user=user,
                         product_name=product_data['product_name'],
+                        category=product_data.get('category', ''),
                         price=product_data['price'],
                         quantity=product_data['quantity'],
                         amount=product_data['amount'],
