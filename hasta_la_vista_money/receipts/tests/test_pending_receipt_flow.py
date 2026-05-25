@@ -72,7 +72,7 @@ class PendingReceiptServiceHashTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='hash-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='h@example.com',
         )
         self.account = Account.objects.create(
@@ -150,7 +150,7 @@ class ProcessPendingReceiptTaskTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='task-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='task@example.com',
         )
         self.account = Account.objects.create(
@@ -233,7 +233,7 @@ class PendingReceiptConversionTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='conversion-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='conversion@example.com',
         )
         self.account = Account.objects.create(
@@ -293,7 +293,7 @@ class ReceiptInferenceClientContentTypeTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='inference-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='inference@example.com',
         )
         self.account = Account.objects.create(
@@ -416,7 +416,7 @@ class UploadImageViewTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='upload-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='upload@example.com',
         )
         self.account = Account.objects.create(
@@ -529,7 +529,7 @@ class PendingCounterViewTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='counter-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='c@example.com',
         )
         self.account = Account.objects.create(
@@ -574,7 +574,7 @@ class PendingRetryViewTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='retry-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='r@example.com',
         )
         self.account = Account.objects.create(

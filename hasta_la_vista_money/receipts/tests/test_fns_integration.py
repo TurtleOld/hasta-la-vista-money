@@ -201,7 +201,7 @@ class ReceiptItemCategoryServiceTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='category-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='category@example.com',
         )
         self.service = ReceiptItemCategoryService()
@@ -250,12 +250,15 @@ class FNSSessionCacheTests(TestCase):
         session_cache = FNSSessionCache()
 
         session_cache.set(
-            FNSSession(session_id='session-id', refresh_token='refresh-token'),
+            FNSSession(
+                session_id='session-id',
+                refresh_token='refresh-token',  # nosec B106: test-only token
+            ),
         )
 
         self.assertEqual(
             session_cache.get(),
-            FNSSession('session-id', 'refresh-token'),
+            FNSSession('session-id', 'refresh-token'),  # nosec B106
         )
 
     def test_clear_removes_session(self) -> None:
@@ -314,8 +317,8 @@ class FNSClientTests(TestCase):
         _FakeHTTPClient.responses = []
         self.credentials = FNSCredentials(
             inn='123456789012',
-            password='password',
-            client_secret='secret',
+            password='password',  # nosec B106: test-only password
+            client_secret='secret',  # nosec B106: test-only secret
         )
 
     def _client(self) -> FNSClient:
@@ -331,7 +334,10 @@ class FNSClientTests(TestCase):
     def test_fetch_receipt_authenticates_and_caches_session(self) -> None:
         _FakeHTTPClient.responses = [
             _FakeResponse(
-                payload={'sessionId': 'session-id', 'refresh_token': 'refresh'},
+                payload={
+                    'sessionId': 'session-id',
+                    'refresh_token': 'refresh',  # nosec B105
+                },
             ),
             _FakeResponse(payload={'id': 'ticket-id'}),
             _FakeResponse(payload=_fns_payload()),
@@ -397,8 +403,8 @@ class FNSClientTests(TestCase):
     CACHES=TEST_CACHES,
     FNS_ENABLED=True,
     FNS_INN='123456789012',
-    FNS_PASSWORD='password',
-    FNS_CLIENT_SECRET='secret',
+    FNS_PASSWORD='password',  # nosec B106: test-only password
+    FNS_CLIENT_SECRET='secret',  # nosec B106: test-only secret
     FNS_POLL_INTERVAL_SECONDS=0,
 )
 class ProcessPendingReceiptFNSTests(TestCase):
@@ -407,7 +413,7 @@ class ProcessPendingReceiptFNSTests(TestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(
             username='fns-user',
-            password='pass',
+            password='pass',  # nosec B106: test-only password
             email='fns@example.com',
         )
         self.account = Account.objects.create(
