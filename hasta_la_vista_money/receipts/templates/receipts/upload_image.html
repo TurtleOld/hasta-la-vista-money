@@ -7,7 +7,7 @@
 
 
 {% block content %}
-<div class="receipts-app" x-data="instructionModal()">
+<div class="receipts-app" x-data="instructionModal">
     <div class="receipts-wrap">
         <header class="receipts-header">
             <div>
@@ -29,7 +29,7 @@
             </div>
         </header>
 
-        <div class="receipts-card receipts-upload-card" x-data="receiptUploadPage()">
+        <div class="receipts-card receipts-upload-card" x-data="receiptUploadPage">
             <form method="post" enctype="multipart/form-data" id="uploadForm" class="receipts-upload-form" novalidate>
                 {% csrf_token %}
 

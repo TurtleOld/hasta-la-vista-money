@@ -134,7 +134,13 @@ class ImagePreprocessor:
         if width >= self._min_ocr_image_width or width == 0:
             return image
 
-        scale = self._min_ocr_image_width / width
+        target_scale = self._min_ocr_image_width / width
+        max_side = max(width, height)
+        max_scale = self._max_dimension / max_side if max_side else 1
+        scale = min(target_scale, max_scale)
+        if scale <= 1:
+            return image
+
         resized_width = round(width * scale)
         resized_height = round(height * scale)
         return image.resize(
@@ -726,6 +732,9 @@ class PaddleOCRVLBackend:
             payload['items'],
             payload['total_sum'],
         )
+        payload['items'] = [
+            self._strip_item_position(item) for item in payload['items']
+        ]
         return payload
 
     def _collect_payload_parts(
@@ -943,7 +952,7 @@ class PaddleOCRVLBackend:
         if not name or amount is None or price is None or quantity is None:
             return None
         return {
-            'product_name': re.sub(r'^\d+[.)]?\s*', '', name).strip(),
+            'product_name': name.strip(),
             'category': 'Другое',
             'price': price,
             'quantity': quantity,
@@ -956,15 +965,35 @@ class PaddleOCRVLBackend:
         text_items: list[dict[str, str]],
         total_sum: str,
     ) -> list[dict[str, str]]:
-        """Supplement table items with numbered items found in plain text."""
-        if not text_items or self._items_total_matches(
-            current_items,
+        """Supplement table items with items recovered from plain text."""
+        if not text_items:
+            return current_items
+
+        positional = self._merge_items_by_position(current_items, text_items)
+        if positional is not None and self._items_total_matches(
+            positional,
             total_sum,
         ):
+            return positional
+        if self._items_total_matches(current_items, total_sum):
             return current_items
         if self._items_total_matches(text_items, total_sum):
             return text_items
+        if positional is not None:
+            return positional
+        return self._merge_items_by_signature(
+            current_items,
+            text_items,
+            total_sum,
+        )
 
+    def _merge_items_by_signature(
+        self,
+        current_items: list[dict[str, str]],
+        text_items: list[dict[str, str]],
+        total_sum: str,
+    ) -> list[dict[str, str]]:
+        """Combine items by price/quantity/amount signature."""
         current_by_signature = {
             self._item_amount_signature(item): item for item in current_items
         }
@@ -975,7 +1004,7 @@ class PaddleOCRVLBackend:
             merged.append(current_by_signature.get(signature, item))
             signatures.add(signature)
             if self._items_total_matches(merged, total_sum):
-                break
+                return merged
 
         for item in current_items:
             signature = self._item_amount_signature(item)
@@ -984,8 +1013,64 @@ class PaddleOCRVLBackend:
             merged.append(item)
             signatures.add(signature)
             if self._items_total_matches(merged, total_sum):
-                break
+                return merged
         return merged
+
+    def _merge_items_by_position(
+        self,
+        current_items: list[dict[str, str]],
+        text_items: list[dict[str, str]],
+    ) -> list[dict[str, str]] | None:
+        """Merge by leading position number when both sources are numbered.
+
+        Recovers items dropped by table OCR (e.g. multi-line first row) by
+        slotting numbered text items into missing positions while preferring
+        table items where positions overlap.
+        """
+        current_by_position = self._items_by_position(current_items)
+        text_by_position = self._items_by_position(text_items)
+        if not current_by_position or not text_by_position:
+            return None
+
+        all_positions = sorted(current_by_position | text_by_position)
+        if not all_positions:
+            return None
+
+        merged: list[dict[str, str]] = []
+        for position in all_positions:
+            item = current_by_position.get(position) or text_by_position.get(
+                position,
+            )
+            if item is not None:
+                merged.append(item)
+        return merged or None
+
+    def _items_by_position(
+        self,
+        items: list[dict[str, str]],
+    ) -> dict[int, dict[str, str]]:
+        """Index items by their leading position number when present."""
+        indexed: dict[int, dict[str, str]] = {}
+        for item in items:
+            position = self._extract_item_position(item.get('product_name', ''))
+            if position is not None and position not in indexed:
+                indexed[position] = item
+        return indexed
+
+    def _extract_item_position(self, product_name: str) -> int | None:
+        """Return the leading position number from a product name if any."""
+        match = re.match(r'\s*(\d{1,3})[.)]\s+', str(product_name or ''))
+        if not match:
+            return None
+        return int(match.group(1))
+
+    def _strip_item_position(self, item: dict[str, str]) -> dict[str, str]:
+        """Drop the leading position number from a finalized item name."""
+        name = str(item.get('product_name', ''))
+        stripped = re.sub(r'^\s*\d{1,3}[.)]\s+', '', name).strip()
+        if stripped == name:
+            return item
+        return {**item, 'product_name': stripped or name}
 
     def _item_amount_signature(
         self,
@@ -1504,6 +1589,7 @@ class PaddleOCRVLBackend:
         """Build an item from OCR lines belonging to one numbered position."""
         if not block_lines:
             return None
+        leading_position = re.match(r'^(\d+[.)])\s*', block_lines[0])
         first_line = re.sub(r'^\d+[.)]\s*', '', block_lines[0]).strip()
         money_pattern = self._money_amount_pattern()
         all_text = ' '.join(block_lines)
@@ -1543,6 +1629,9 @@ class PaddleOCRVLBackend:
         name = ' '.join(part for part in name_parts if part).strip()
         if not name:
             return None
+
+        if leading_position:
+            name = f'{leading_position.group(1)} {name}'
 
         return {
             'product_name': name[:255],
