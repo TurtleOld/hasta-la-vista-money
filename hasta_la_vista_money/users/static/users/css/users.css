@@ -69,8 +69,16 @@
 }
 
 .widget-controls {
-  display: flex;
+  display: none;
   gap: 0.5rem;
+}
+
+.dashboard-grid.edit-mode .widget-controls {
+  display: flex;
+}
+
+.dashboard-grid.edit-mode .widget-header {
+  cursor: move;
 }
 
 .widget-controls button {
