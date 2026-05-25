@@ -5,101 +5,92 @@
 
 {% block title %}{% translate 'Отчёты' %}{% endblock %}
 {% block content %}
-    <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div class="mb-8">
-            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white text-center mb-2">
+    <div class="reports-app">
+    <div class="reports-wrap">
+        <header class="reports-header">
+            <p class="reports-kicker">{% translate 'Аналитика' %}</p>
+            <h1 class="reports-title">
                 {% translate 'Финансовые отчёты' %}
             </h1>
-            <p class="text-center text-gray-600 dark:text-gray-400 text-sm sm:text-base">
+            <p class="reports-subtitle">
                 {% translate 'Визуализация ваших доходов, расходов и баланса' %}
             </p>
-        </div>
+        </header>
 
-        <form method="get" class="mb-6 flex flex-wrap items-center justify-center gap-2">
+        <form method="get" class="reports-periods">
             {% for value, label in period_choices %}
-                <button type="submit" name="period" value="{{ value }}" class="rounded-full px-4 py-2 text-sm font-medium transition-colors {% if selected_period == value %}bg-green-600 text-white shadow-lg shadow-green-500/20{% else %}bg-white text-gray-700 border border-gray-200 hover:bg-green-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700{% endif %}">
+                <button type="submit" name="period" value="{{ value }}" class="reports-period-button{% if selected_period == value %} reports-period-button-active{% endif %}">
                     {{ label }}
                 </button>
             {% endfor %}
         </form>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-gray-200 dark:border-gray-700">
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% translate 'Доходы всего' %}</p>
-                <p class="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">{{ total_income|floatformat:2 }}</p>
+        <div class="reports-kpi-grid">
+            <div class="reports-kpi-card">
+                <p class="reports-label">{% translate 'Доходы всего' %}</p>
+                <p class="reports-amount reports-positive">{{ total_income|floatformat:2 }}</p>
             </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-gray-200 dark:border-gray-700">
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% translate 'Расходы всего' %}</p>
-                <p class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400">{{ total_expense|floatformat:2 }}</p>
+            <div class="reports-kpi-card">
+                <p class="reports-label">{% translate 'Расходы всего' %}</p>
+                <p class="reports-amount reports-negative">{{ total_expense|floatformat:2 }}</p>
             </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-gray-200 dark:border-gray-700">
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% translate 'Итоговый баланс' %}</p>
-                <p class="mt-2 text-2xl font-bold {% if net_balance < 0 %}text-red-600 dark:text-red-400{% else %}text-blue-600 dark:text-blue-400{% endif %}">{{ net_balance|floatformat:2 }}</p>
+            <div class="reports-kpi-card">
+                <p class="reports-label">{% translate 'Итоговый баланс' %}</p>
+                <p class="reports-amount {% if net_balance < 0 %}reports-negative{% else %}reports-accent{% endif %}">{{ net_balance|floatformat:2 }}</p>
             </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-gray-200 dark:border-gray-700">
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% translate 'Норма сбережений' %}</p>
-                <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ savings_rate|floatformat:1 }}%</p>
+            <div class="reports-kpi-card">
+                <p class="reports-label">{% translate 'Норма сбережений' %}</p>
+                <p class="reports-amount">{{ savings_rate|floatformat:1 }}%</p>
                 {% if top_expense_category %}
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{% translate 'Топ расход:' %} {{ top_expense_category }}</p>
+                    <p class="reports-muted text-xs mt-1">{% translate 'Топ расход:' %} {{ top_expense_category }}</p>
                 {% endif %}
             </div>
         </div>
 
-        <div class="space-y-8">
-            <div class="flex justify-center">
-                <div class="w-full max-w-5xl">
-                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
-                        <div class="mb-4">
-                            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+        <div class="reports-panel-stack">
+            <section class="reports-panel">
+                        <div>
+                            <h2 class="reports-panel-title">
                                 {% translate 'Доходы и расходы по месяцам' %}
                             </h2>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            <p class="reports-panel-subtitle">
                                 {% translate 'Сравнение доходов и расходов по месяцам' %}
                             </p>
                         </div>
-                        <div class="relative h-64 sm:h-80 lg:h-96">
+                        <div class="reports-chart-box">
                             <canvas id="budgetChart"></canvas>
                         </div>
-                    </div>
-                </div>
-            </div>
+            </section>
 
-            <div class="flex justify-center">
-                <div class="w-full max-w-5xl">
-                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
-                        <div class="mb-4">
-                            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+            <section class="reports-panel">
+                        <div>
+                            <h2 class="reports-panel-title">
                                 {% translate 'Баланс по месяцам' %}
                             </h2>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            <p class="reports-panel-subtitle">
                                 {% translate 'Динамика баланса (доходы минус расходы)' %}
                             </p>
                         </div>
-                        <div class="relative h-64 sm:h-80 lg:h-96">
+                        <div class="reports-chart-box">
                             <canvas id="balanceChart"></canvas>
                         </div>
-                    </div>
-                </div>
-            </div>
+            </section>
 
-            <div class="flex justify-center">
-                <div class="w-full max-w-4xl">
-                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
-                        <div class="mb-4">
-                            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">
+            <section class="reports-panel reports-panel-narrow">
+                        <div>
+                            <h2 class="reports-panel-title">
                                 {% translate 'Структура расходов по категориям' %}
                             </h2>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            <p class="reports-panel-subtitle">
                                 {% translate 'Распределение расходов по категориям за все месяцы' %}
                             </p>
                         </div>
-                        <div class="relative h-64 sm:h-80 lg:h-96">
+                        <div class="reports-chart-box">
                             <canvas id="pieChart"></canvas>
                         </div>
-                    </div>
-                </div>
-            </div>
+            </section>
         </div>
+    </div>
     </div>
 
     <!-- Данные для новых графиков -->
