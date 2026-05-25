@@ -8,6 +8,7 @@ const options = {
     'pages/dashboard': 'frontend/js/pages/dashboard.js',
     'pages/budget': 'frontend/js/pages/budget.js',
     'pages/receipts': 'frontend/js/pages/receipts.js',
+    'pages/reports': 'frontend/js/pages/reports.js',
     'pages/receipt-update': 'frontend/js/pages/receipt-update.js',
     'pages/loan': 'frontend/js/pages/loan.js',
     'pages/profile': 'frontend/js/pages/profile.js',

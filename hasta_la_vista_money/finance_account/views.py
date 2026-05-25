@@ -169,6 +169,8 @@ class FinancesFilter:
     account_ids: list[int] = field(default_factory=list)
     category_keys: list[str] = field(default_factory=list)
     min_amount: Decimal | None = None
+    date_from: date | None = None
+    date_to: date | None = None
     q: str = ''
     group_id: str = 'family'
     page: int = 1
@@ -185,6 +187,9 @@ class FinancesFilter:
             except InvalidOperation:
                 min_amount = None
 
+        date_from = _parse_filter_date(query.get('date_from'))
+        date_to = _parse_filter_date(query.get('date_to'))
+
         return cls(
             type=query.get('type', 'all'),
             period=query.get('period', 'm'),
@@ -195,6 +200,8 @@ class FinancesFilter:
             ],
             category_keys=list(query.getlist('category')),
             min_amount=min_amount,
+            date_from=date_from,
+            date_to=date_to,
             q=query.get('q', '').strip(),
             group_id=query.get('group_id', 'family'),
             page=int(query.get('page', '1') or 1),
@@ -210,6 +217,8 @@ class FinancesFilter:
             or self.account_ids
             or self.category_keys
             or self.min_amount
+            or self.date_from
+            or self.date_to
             or self.q
             or self.group_id != 'family',
         )
@@ -233,6 +242,10 @@ class FinancesFilter:
         )
         if self.min_amount:
             params.append(('min_amount', self.min_amount))
+        if self.date_from:
+            params.append(('date_from', self.date_from.isoformat()))
+        if self.date_to:
+            params.append(('date_to', self.date_to.isoformat()))
         if self.q:
             params.append(('q', self.q))
         return urlencode(params)
@@ -273,20 +286,37 @@ class FinancesFilter:
     def date_range(self) -> tuple[date, date] | None:
         """Return selected date range or None for all time."""
 
+        if self.date_from or self.date_to:
+            return self.date_from or date.min, self.date_to or date.max
+
         today = datetime.now(tz=UTC).date()
-        if self.period == 'd':
-            return today, today
-        if self.period == 'w':
-            start = today - timedelta(days=today.weekday())
-            return start, start + timedelta(days=6)
-        if self.period == 'm':
-            return today.replace(day=1), _end_of_month(today)
-        if self.period == 'q':
-            quarter = (today.month - 1) // 3
-            start = date(today.year, quarter * 3 + 1, 1)
-            return start, _end_of_month(date(today.year, quarter * 3 + 3, 1))
-        if self.period == 'y':
-            return date(today.year, 1, 1), date(today.year, 12, 31)
+        ranges = {
+            'd': (today, today),
+            'w': _week_range(today),
+            'm': (today.replace(day=1), _end_of_month(today)),
+            'q': _quarter_range(today),
+            'y': (date(today.year, 1, 1), date(today.year, 12, 31)),
+        }
+        return ranges.get(self.period)
+
+
+def _parse_filter_date(value: str | None) -> date | None:
+    if not value:
+        return None
+
+
+def _week_range(value: date) -> tuple[date, date]:
+    start = value - timedelta(days=value.weekday())
+    return start, start + timedelta(days=6)
+
+
+def _quarter_range(value: date) -> tuple[date, date]:
+    quarter = (value.month - 1) // 3
+    start = date(value.year, quarter * 3 + 1, 1)
+    return start, _end_of_month(date(value.year, quarter * 3 + 3, 1))
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
         return None
 
 
