@@ -14,6 +14,7 @@ from hasta_la_vista_money.loan.models import (
     PaymentSchedule,
 )
 from hasta_la_vista_money.loan.services.loan_calculation import (
+    LoanCalculationService,
     calculate_annuity_schedule,
     calculate_differentiated_schedule,
 )
@@ -279,6 +280,38 @@ class TestLoan(TestCase):
         self.assertEqual(response.status_code, 200)
         response_data = response.json()
         self.assertIn('success', response_data)
+
+    def test_payment_make_create_view_rejects_foreign_account(self) -> None:
+        """Test payment creation rejects accounts owned by another user."""
+        other_user = User.objects.create_user(
+            username='loan-other-user',
+            password='test-pass',
+        )
+        foreign_account = Account.objects.create(
+            user=other_user,
+            name_account='Foreign payment account',
+            balance=constants.TEST_ACCOUNT_BALANCE,
+            currency='RU',
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse_lazy('loan:payment_create'),
+            {
+                'date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'account': foreign_account.pk,
+                'loan': self.loan1.pk,
+                'amount': constants.TEST_PAYMENT_AMOUNT,
+            },
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        response_data = response.json()
+        self.assertFalse(response_data['success'])
+        self.assertIn('account', response_data['errors'])
+        self.assertFalse(
+            PaymentMakeLoan.objects.filter(account=foreign_account).exists(),
+        )
 
     def test_calculate_annuity_loan(self) -> None:
         """Test calculate_annuity_loan function."""
@@ -954,3 +987,54 @@ class TestLoanCalculationIntegration(TestCase):
                 calc_payment['principal'],
                 places=constants.DECIMAL_PLACES_PRECISION,
             )
+
+    def test_loan_calculation_service_runs_differentiated_schedule(
+        self,
+    ) -> None:
+        """Test service persists differentiated schedules for loans."""
+        PaymentSchedule.objects.filter(loan=self.loan1).delete()
+
+        LoanCalculationService().run(
+            type_loan='Differentiated',
+            user_id=self.user.pk,
+            loan=self.loan1,
+            start_date=timezone.now(),
+            loan_amount=Decimal(constants.TEST_LOAN_AMOUNT_MEDIUM),
+            annual_interest_rate=Decimal(
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
+            ),
+            period_loan=constants.TEST_PERIOD_MEDIUM,
+        )
+
+        schedules = PaymentSchedule.objects.filter(
+            loan=self.loan1,
+        ).order_by('date')
+        self.assertEqual(schedules.count(), constants.TEST_PERIOD_MEDIUM)
+        first_schedule = schedules.first()
+        last_schedule = schedules.last()
+        if first_schedule is None or last_schedule is None:
+            self.fail('Expected differentiated schedules to be created')
+        self.assertGreater(
+            first_schedule.monthly_payment,
+            last_schedule.monthly_payment,
+        )
+
+    def test_loan_calculation_service_ignores_unknown_type(self) -> None:
+        """Test service does not persist schedules for unknown loan types."""
+        PaymentSchedule.objects.filter(loan=self.loan1).delete()
+
+        LoanCalculationService().run(
+            type_loan='Unknown',
+            user_id=self.user.pk,
+            loan=self.loan1,
+            start_date=timezone.now(),
+            loan_amount=Decimal(constants.TEST_LOAN_AMOUNT_MEDIUM),
+            annual_interest_rate=Decimal(
+                str(constants.TEST_INTEREST_RATE_MEDIUM),
+            ),
+            period_loan=constants.TEST_PERIOD_MEDIUM,
+        )
+
+        self.assertFalse(
+            PaymentSchedule.objects.filter(loan=self.loan1).exists(),
+        )

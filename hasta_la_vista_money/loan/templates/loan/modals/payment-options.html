@@ -1,9 +1,9 @@
 {% load i18n %}
 {% load comma %}
 
-<div id="payment-options" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-    <div class="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
-        <div class="bg-linear-to-r from-cyan-600 to-blue-600 px-6 py-4 text-white">
+<div id="payment-options" class="loan-modal-backdrop fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="loan-modal-panel relative w-full max-w-4xl">
+        <div class="loan-modal-head">
             <div class="flex items-center justify-between">
                 <h5 class="text-xl font-semibold" id="payment-options-title">
                     {% translate 'Варианты платежей' %}
@@ -15,8 +15,8 @@
                 </button>
             </div>
         </div>
-        <div class="max-h-[calc(90vh-200px)] overflow-y-auto p-6">
-            <div class="space-y-6">
+        <div class="loan-modal-body max-h-[calc(90vh-200px)] overflow-y-auto">
+            <div class="loan-modal-content space-y-6">
                 <div>
                     <h3 class="mb-3 text-xl font-semibold text-gray-900 dark:text-gray-100">{% translate '1. Аннуитетный платеж' %}</h3>
 
@@ -34,7 +34,7 @@
                         <li>{% translate 'По мере выплаты кредита соотношение меняется: проценты уменьшаются, а доля основного долга увеличивается.' %}</li>
                     </ul>
 
-                    <div class="mb-4 rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                    <div class="loan-formula-card mb-4">
                         <p class="mb-2 text-gray-700 dark:text-gray-300">
                             <strong class="text-gray-900 dark:text-gray-100">{% translate 'Формула расчета аннуитетного платежа:' %}</strong><br>
                             \[
@@ -73,7 +73,7 @@
                         <li>{% translate 'Первоначальные платежи выше, чем при аннуитетной схеме, но общая переплата по кредиту меньше.' %}</li>
                     </ul>
 
-                    <div class="mb-4 space-y-4 rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                    <div class="loan-formula-card mb-4 space-y-4">
                         <p class="text-gray-700 dark:text-gray-300">
                             <strong class="text-gray-900 dark:text-gray-100">{% translate 'Формула расчета дифференцированного платежа:' %}</strong>
                         </p>
@@ -116,9 +116,9 @@
 
                 <div class="border-t border-gray-200 pt-6 dark:border-gray-700">
                     <h3 class="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">{% translate 'Сравнение аннуитетного и дифференцированного платежей' %}</h3>
-                    <div class="overflow-x-auto">
-                        <table class="w-full border-collapse rounded-lg border border-gray-200 dark:border-gray-700">
-                            <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <div class="loan-table-wrap overflow-x-auto">
+                        <table class="loan-table">
+                            <thead>
                                 <tr>
                                     <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:border-gray-700 dark:text-gray-100">{% translate 'Критерий' %}</th>
                                     <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:border-gray-700 dark:text-gray-100">{% translate 'Аннуитетный платеж' %}</th>
@@ -168,7 +168,7 @@
                     </p>
                 </div>
 
-                <div class="rounded-lg bg-linear-to-r from-green-50 to-emerald-50 p-4 dark:from-green-900/20 dark:to-emerald-900/20">
+                <div class="loan-info-box">
                     <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">{% translate 'Итог:' %}</h3>
                     <p class="text-gray-700 dark:text-gray-300">
                         {% translate 'Аннуитетный платеж — это равные ежемесячные выплаты, где большая часть денег в начале идет на проценты.' %}<br>
@@ -177,8 +177,8 @@
                 </div>
             </div>
         </div>
-        <div class="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700/30">
-            <button type="button" class="modal-close rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">{% translate 'Закрыть' %}</button>
+        <div class="loan-modal-foot flex items-center justify-end gap-3">
+            <button type="button" class="modal-close loan-button loan-button-secondary">{% translate 'Закрыть' %}</button>
         </div>
     </div>
 </div>
