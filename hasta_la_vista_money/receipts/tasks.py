@@ -8,7 +8,7 @@ live here so the work survives the user closing the page.
 import json
 import re
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from celery import shared_task
@@ -23,6 +23,28 @@ from hasta_la_vista_money.receipts.models import (
 )
 from hasta_la_vista_money.receipts.repositories import ReceiptRepository
 from hasta_la_vista_money.receipts.services import analyze_image_with_ai
+from hasta_la_vista_money.receipts.services.category_classifier import (
+    ReceiptItemCategoryService,
+)
+from hasta_la_vista_money.receipts.services.fns_client import (
+    FNSAuthenticationError,
+    FNSClient,
+    FNSConfigurationError,
+    FNSIntegrationError,
+    FNSMalformedResponseError,
+    FNSRateLimitError,
+    FNSTemporaryUnavailableError,
+    FNSTimeoutError,
+)
+from hasta_la_vista_money.receipts.services.fns_mapper import (
+    FNSReceiptMappingError,
+    map_fns_receipt_to_receipt_data,
+)
+from hasta_la_vista_money.receipts.services.fns_qr import (
+    QRCodeDecodeError,
+    QRCodeExtractor,
+    QRCodeNotFoundError,
+)
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
     PendingReceiptService,
 )
@@ -34,6 +56,9 @@ from hasta_la_vista_money.receipts.validators.parsed_receipt import (
     ReceiptParseValidationError,
     validate_receipt_parse_payload,
 )
+
+if TYPE_CHECKING:
+    from django.core.files.uploadedfile import UploadedFile
 
 logger = structlog.get_logger(__name__)
 
@@ -51,18 +76,80 @@ _TIMEOUT_MESSAGE = _(
     'Попробуйте ещё раз или загрузите более чёткое фото меньшего размера.',
 )
 _PARSE_FAILED_MESSAGE = _(
-    'Не удалось разобрать ответ сервиса распознавания. '
+    'Не удалось разобрать данные чека из ФНС. '
     'Попробуйте загрузить более чёткое фото.',
 )
 _UNEXPECTED_MESSAGE = _(
-    'Произошла непредвиденная ошибка при распознавании чека. '
+    'Произошла непредвиденная ошибка при обработке чека. '
     'Попробуйте ещё раз.',
+)
+_NO_QR_MESSAGE = _(
+    'Не удалось найти QR-код на изображении чека. '
+    'Загрузите более чёткое фото, где QR-код виден полностью.',
+)
+_BAD_QR_MESSAGE = _(
+    'QR-код на изображении не похож на QR-код кассового чека ФНС. '
+    'Проверьте фото и загрузите чек заново.',
+)
+_FNS_UNAVAILABLE_MESSAGE = _(
+    'Сервис ФНС временно недоступен. Попробуйте обработать чек позже.',
+)
+_FNS_RATE_LIMIT_MESSAGE = _(
+    'Сервис ФНС временно ограничил частоту запросов. '
+    'Попробуйте обработать чек через несколько минут.',
+)
+_FNS_AUTH_MESSAGE = _(
+    'Не удалось авторизоваться в ФНС. Проверьте настройки интеграции.',
 )
 _MISSING_FILE_MESSAGE = _(
     'Файл изображения чека не найден. Загрузите чек заново.',
 )
 _TIMEOUT_RECOVERY_MESSAGE = _(
     'Обработка прервана по таймауту. Попробуйте ещё раз.',
+)
+_FAILURE_RULES = (
+    (
+        RateLimitExceededError,
+        'pending_receipt_rate_limited',
+        _RATE_LIMIT_MESSAGE,
+    ),
+    (
+        (ModelUnavailableError, ConnectionError),
+        'pending_receipt_model_unavailable',
+        _MODEL_UNAVAILABLE_MESSAGE,
+    ),
+    (QRCodeNotFoundError, 'pending_receipt_qr_not_found', _NO_QR_MESSAGE),
+    (QRCodeDecodeError, 'pending_receipt_qr_decode_failed', _BAD_QR_MESSAGE),
+    (
+        FNSRateLimitError,
+        'pending_receipt_fns_rate_limited',
+        _FNS_RATE_LIMIT_MESSAGE,
+    ),
+    (
+        (FNSAuthenticationError, FNSConfigurationError),
+        'pending_receipt_fns_auth_failed',
+        _FNS_AUTH_MESSAGE,
+    ),
+    (
+        (FNSTemporaryUnavailableError, FNSTimeoutError),
+        'pending_receipt_fns_unavailable',
+        _FNS_UNAVAILABLE_MESSAGE,
+    ),
+    (
+        (FNSMalformedResponseError, FNSReceiptMappingError),
+        'pending_receipt_fns_parse_failed',
+        _PARSE_FAILED_MESSAGE,
+    ),
+    (
+        FNSIntegrationError,
+        'pending_receipt_fns_failed',
+        _FNS_UNAVAILABLE_MESSAGE,
+    ),
+    (
+        (SoftTimeLimitExceeded, TimeoutError),
+        'pending_receipt_timed_out',
+        _TIMEOUT_MESSAGE,
+    ),
 )
 
 
@@ -112,8 +199,56 @@ def _parse_inference_payload(raw: str) -> dict[str, Any]:
 def _run_inference(pending: PendingReceipt) -> dict[str, Any]:
     """Open the stored image and run the configured inference backend."""
     with pending.image_file.open('rb') as image_fp:
-        raw = analyze_image_with_ai(image_fp, user_id=pending.user_id)
+        uploaded_file = cast('UploadedFile', image_fp)
+        raw = analyze_image_with_ai(uploaded_file, user_id=pending.user_id)
     return _parse_inference_payload(raw)
+
+
+def _extract_seller_name_with_ocr(pending: PendingReceipt) -> str | None:
+    """Use local OCR/AI only as seller-name fallback, not full parsing."""
+    try:
+        with pending.image_file.open('rb') as image_fp:
+            uploaded_file = cast('UploadedFile', image_fp)
+            raw = analyze_image_with_ai(uploaded_file, user_id=pending.user_id)
+        payload = _parse_inference_payload(raw)
+    except Exception:
+        logger.warning(
+            'pending_receipt_ocr_seller_fallback_failed',
+            pending_receipt_id=pending.pk,
+            exc_info=True,
+        )
+        return None
+
+    seller_name = str(payload.get('name_seller', '')).strip()
+    return seller_name or None
+
+
+def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
+    """Process a pending receipt through QR -> FNS -> mapper pipeline."""
+    with pending.image_file.open('rb') as image_fp:
+        qr_data = QRCodeExtractor().extract(image_fp)
+
+    fns_payload = FNSClient().fetch_receipt(qr_data.raw)
+    receipt_data = map_fns_receipt_to_receipt_data(fns_payload)
+    receipt_data['items'] = ReceiptItemCategoryService().categorize_items(
+        user=pending.user,
+        items=receipt_data.get('items', []),
+    )
+    if not receipt_data.get('retail_place'):
+        seller_name = _extract_seller_name_with_ocr(pending)
+        if seller_name:
+            receipt_data['name_seller'] = seller_name
+
+    validated = validate_receipt_parse_payload(receipt_data).to_dict()
+    validated['_fns_raw'] = fns_payload
+    return validated
+
+
+def _run_processing_pipeline(pending: PendingReceipt) -> dict[str, Any]:
+    """Run the configured pending receipt processing pipeline."""
+    if getattr(settings, 'FNS_ENABLED', False):
+        return _run_fns_pipeline(pending)
+    return _run_inference(pending)
 
 
 def _classify_failure(exc: Exception) -> tuple[str, str]:
@@ -123,14 +258,9 @@ def _classify_failure(exc: Exception) -> tuple[str, str]:
     a specific, actionable explanation (sum mismatch, missing items, etc.).
     When present, it overrides the generic parse-failed fallback.
     """
-    if isinstance(exc, RateLimitExceededError):
-        return 'pending_receipt_rate_limited', str(_RATE_LIMIT_MESSAGE)
-    if isinstance(exc, ModelUnavailableError | ConnectionError):
-        return 'pending_receipt_model_unavailable', str(
-            _MODEL_UNAVAILABLE_MESSAGE,
-        )
-    if isinstance(exc, SoftTimeLimitExceeded | TimeoutError):
-        return 'pending_receipt_timed_out', str(_TIMEOUT_MESSAGE)
+    for exception_types, event, message in _FAILURE_RULES:
+        if isinstance(exc, exception_types):
+            return event, str(message)
     if isinstance(exc, ReceiptParseValidationError) and exc.user_message:
         return 'pending_receipt_parse_failed', exc.user_message
     if isinstance(exc, json.JSONDecodeError | ValueError | TypeError):
@@ -138,7 +268,7 @@ def _classify_failure(exc: Exception) -> tuple[str, str]:
     return 'pending_receipt_failed', str(_UNEXPECTED_MESSAGE)
 
 
-@shared_task(
+@shared_task(  # type: ignore[untyped-decorator]
     bind=True,
     name='receipts.process_pending_receipt',
     autoretry_for=(ConnectionError,),
@@ -178,7 +308,7 @@ def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
         return
 
     try:
-        receipt_data = _run_inference(pending)
+        receipt_data = _run_processing_pipeline(pending)
     except Exception as exc:
         event, message = _classify_failure(exc)
         service.mark_failed(
@@ -198,7 +328,7 @@ def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
     )
 
 
-@shared_task(name='receipts.cleanup_stale_pending_receipts')
+@shared_task(name='receipts.cleanup_stale_pending_receipts')  # type: ignore[untyped-decorator]
 def cleanup_stale_pending_receipts() -> dict[str, int]:
     """Recover stuck processing rows and purge expired pending receipts.
 

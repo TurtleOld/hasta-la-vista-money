@@ -102,6 +102,63 @@ class TestReceipt(TestCase):
         response = self.client.post(url, data=form_data)
         self.assertEqual(response.status_code, constants.REDIRECTS)
 
+    def test_receipt_update_preserves_product_category(self) -> None:
+        self.client.force_login(self.user)
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=self.seller,
+            receipt_date=timezone.now(),
+            number_receipt=987654,
+            operation_type=1,
+            total_sum=Decimal('10.00'),
+        )
+        product = Product.objects.create(
+            user=self.user,
+            product_name='Яблоко',
+            category='Фрукты',
+            price=Decimal('10.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('10.00'),
+        )
+        receipt.product.add(product)
+        url = reverse_lazy('receipts:update', kwargs={'pk': receipt.pk})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        product_formset = response.context['product_formset']
+        self.assertEqual(product_formset.forms[0].initial['category'], 'Фрукты')
+
+        data = {
+            'seller': self.seller.pk,
+            'account': self.account.pk,
+            'receipt_date': '2023-06-28T21:24',
+            'number_receipt': '987654',
+            'operation_type': '1',
+            'total_sum': '10.00',
+            'nds10': '',
+            'nds20': '',
+            'form-TOTAL_FORMS': '1',
+            'form-INITIAL_FORMS': '0',
+            'form-MIN_NUM_FORMS': '0',
+            'form-MAX_NUM_FORMS': '1000',
+            'form-0-product_name': 'Яблоко',
+            'form-0-category': 'Фрукты',
+            'form-0-price': '10.00',
+            'form-0-quantity': '1',
+            'form-0-amount': '10.00',
+        }
+
+        response = self.client.post(url, data=data)
+
+        self.assertEqual(response.status_code, constants.REDIRECTS)
+        receipt.refresh_from_db()
+        updated_product = receipt.product.first()
+        self.assertIsNotNone(updated_product)
+        if updated_product is not None:
+            self.assertEqual(updated_product.category, 'Фрукты')
+
     def test_receipt_delete(self) -> None:
         self.client.force_login(self.user)
         initial_balance = self.account.balance

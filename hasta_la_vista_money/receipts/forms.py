@@ -247,11 +247,17 @@ class ProductForm(ModelForm[Product]):
         ),
         widget=NumberInput(attrs={'class': 'amount', 'readonly': True}),
     )
+    category = CharField(
+        label=_('Категория'),
+        help_text=_('Укажите категорию продукта'),
+        required=False,
+    )
 
     class Meta:
         model = Product
         fields: ClassVar[list[str]] = [
             'product_name',
+            'category',
             'price',
             'quantity',
             'amount',
