@@ -513,6 +513,83 @@
     margin: 0 auto 0.5rem;
     width: 2.5rem;
   }
+
+  .statistics-muted {
+    color: var(--statistics-muted);
+  }
+
+  .statistics-budget-list {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .statistics-budget-item {
+    background: var(--statistics-surface);
+    border: 1px solid var(--statistics-border);
+    border-radius: 0.5rem;
+    padding: 0.875rem 1rem;
+  }
+
+  .statistics-budget-header {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .statistics-budget-name {
+    flex: 1 1 auto;
+    font-weight: 500;
+  }
+
+  .statistics-budget-period {
+    color: var(--statistics-muted);
+    font-size: 0.85em;
+  }
+
+  .statistics-budget-amounts {
+    color: var(--statistics-muted);
+    font-size: 0.875rem;
+  }
+
+  .statistics-progress-track {
+    background: color-mix(in oklab, var(--statistics-border) 60%, transparent);
+    border-radius: 9999px;
+    height: 0.5rem;
+    overflow: visible;
+    position: relative;
+  }
+
+  .statistics-progress-fill {
+    border-radius: 9999px;
+    height: 100%;
+    max-width: 100%;
+    min-width: 0;
+    transition: width 0.3s ease;
+  }
+
+  .statistics-progress-ok {
+    background: var(--statistics-positive);
+  }
+
+  .statistics-progress-warn {
+    background: #f59e0b;
+  }
+
+  .statistics-progress-over {
+    background: var(--statistics-negative);
+  }
+
+  .statistics-progress-threshold {
+    background: #f59e0b;
+    border-radius: 9999px;
+    bottom: -2px;
+    position: absolute;
+    top: -2px;
+    transform: translateX(-50%);
+    width: 2px;
+  }
 }
 
 @layer components {

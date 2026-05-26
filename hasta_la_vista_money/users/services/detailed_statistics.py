@@ -34,6 +34,7 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
+from hasta_la_vista_money.budget.models import Budget, Planning
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.transactions.models import (
@@ -64,6 +65,9 @@ class MonthDataDict(TypedDict, total=False):
         savings: Savings for month.
         savings_percent: Savings percentage.
         balance: Balance for month.
+        planned_income: Planned income for month.
+        planned_expenses: Planned expenses for month.
+        deviation: Actual savings minus planned savings.
     """
 
     month: str
@@ -74,6 +78,33 @@ class MonthDataDict(TypedDict, total=False):
     balance: float
     month_start: str
     month_end: str
+    planned_income: float
+    planned_expenses: float
+    deviation: float
+
+
+class BudgetDataDict(TypedDict):
+    """Budget vs actual data for a single budget limit.
+
+    Attributes:
+        category_name: Category name or 'Общий лимит'.
+        period: Human-readable month string.
+        amount_limit: Budget limit amount.
+        actual_expenses: Actual expenses in this period/category.
+        usage_percent: Percentage of limit used.
+        alert_threshold: Warning threshold percentage.
+        over_limit: Whether actual exceeds limit.
+        near_limit: Whether actual is between threshold and limit.
+    """
+
+    category_name: str
+    period: str
+    amount_limit: float
+    actual_expenses: float
+    usage_percent: float
+    alert_threshold: int
+    over_limit: bool
+    near_limit: bool
 
 
 class ChartDataDict(TypedDict):
@@ -347,6 +378,7 @@ class UserDetailedStatisticsDict(TypedDict):
     """
 
     months_data: list[MonthDataDict]
+    budgets_data: list[BudgetDataDict]
     top_expense_categories: list[dict[str, Any]]
     top_income_categories: list[dict[str, Any]]
     receipt_info_by_month: QuerySet[Receipt]
@@ -793,6 +825,36 @@ def _balances_and_delta(
     return dict(balances_now), delta  # type: ignore[return-value]
 
 
+def _planning_amounts_by_month(
+    users: Iterable[User],
+    period_start: date,
+    period_end: date,
+) -> tuple[dict[date, float], dict[date, float]]:
+    """Aggregate planned income and expense amounts by month."""
+    qs = (
+        Planning.objects.filter(
+            user__in=list(users),
+            date__range=(period_start, period_end),
+        )
+        .select_related(None)
+        .annotate(month=TruncMonth('date'))
+        .values('month', 'planning_type')
+        .annotate(total=Sum('amount'))
+    )
+    income: dict[date, float] = {}
+    expense: dict[date, float] = {}
+    for item in qs:
+        if item['month'] is None:
+            continue
+        m: date = item['month'].date() if hasattr(item['month'], 'date') else item['month']
+        total = float(item['total'] or 0)
+        if item['planning_type'] == TransactionType.INCOME:
+            income[m] = income.get(m, 0.0) + total
+        else:
+            expense[m] = expense.get(m, 0.0) + total
+    return income, expense
+
+
 def _six_months_data(
     users: Iterable[User],
     today: date,
@@ -818,13 +880,22 @@ def _six_months_data(
             period_start,
             period_end,
         )
+        planned_income_by_month, planned_expense_by_month = _planning_amounts_by_month(
+            users,
+            period_start,
+            period_end,
+        )
     else:
         expense_by_month = {}
         income_by_month = {}
+        planned_income_by_month = {}
+        planned_expense_by_month = {}
 
     for m_start, range_start, range_end in month_ranges:
         exp_sum = expense_by_month.get(m_start, 0.0)
         inc_sum = income_by_month.get(m_start, 0.0)
+        plan_inc = planned_income_by_month.get(m_start, 0.0)
+        plan_exp = planned_expense_by_month.get(m_start, 0.0)
         out.append(
             {
                 'month': m_start.strftime('%B %Y'),
@@ -833,6 +904,9 @@ def _six_months_data(
                 'savings': inc_sum - exp_sum,
                 'month_start': range_start.isoformat(),
                 'month_end': range_end.isoformat(),
+                'planned_income': plan_inc,
+                'planned_expenses': plan_exp,
+                'deviation': (inc_sum - exp_sum) - (plan_inc - plan_exp),
             },
         )
 
@@ -888,6 +962,59 @@ def _six_months_data(
         running_balance = running_balance + income_val - expenses_val
         m['balance'] = round(running_balance, 2)
     return out  # type: ignore[return-value]
+
+
+def _budgets_data(
+    users: Iterable[User],
+    period_start: date,
+    period_end: date,
+) -> list[BudgetDataDict]:
+    """Build budget vs actual data for all budgets within the period."""
+    users_list = list(users)
+    budgets = (
+        Budget.objects.filter(
+            user__in=users_list,
+            period__gte=period_start.replace(day=1),
+            period__lte=period_end.replace(day=1),
+        )
+        .select_related('category')
+        .order_by('period', 'category__name')
+    )
+
+    result: list[BudgetDataDict] = []
+    for budget in budgets:
+        month_start = budget.period
+        last_day = monthrange(month_start.year, month_start.month)[1]
+        month_end = month_start.replace(day=last_day)
+
+        expense_qs = Transaction.objects.filter(
+            user__in=users_list,
+            type=TransactionType.EXPENSE,
+            date__gte=_date_to_aware(month_start),
+            date__lte=_date_to_aware(month_end, end_of_day=True),
+        )
+        if budget.category_id:
+            expense_qs = expense_qs.filter(category=budget.category)
+
+        actual = float(
+            expense_qs.aggregate(total=Sum('amount'))['total'] or 0,
+        )
+        limit = float(budget.amount_limit)
+        usage_pct = round(actual / limit * constants.PERCENTAGE_MULTIPLIER, 1) if limit > 0 else 0.0
+
+        result.append(
+            {
+                'category_name': budget.category.name if budget.category_id else 'Общий лимит',
+                'period': budget.period.strftime('%B %Y'),
+                'amount_limit': limit,
+                'actual_expenses': actual,
+                'usage_percent': usage_pct,
+                'alert_threshold': budget.alert_threshold,
+                'over_limit': usage_pct >= constants.ONE_HUNDRED,
+                'near_limit': usage_pct >= budget.alert_threshold and usage_pct < constants.ONE_HUNDRED,
+            },
+        )
+    return result
 
 
 def _aggregate_amounts_by_month(
@@ -1329,6 +1456,7 @@ def get_user_detailed_statistics(
         today,
         stats_filter,
     )
+    budgets_data = _budgets_data(users, period_start, period_end)
     top_expense_categories = _top_categories_qs(
         TransactionType.EXPENSE,
         users,
@@ -1436,6 +1564,7 @@ def get_user_detailed_statistics(
 
     stats = {
         'months_data': months_data,
+        'budgets_data': budgets_data,
         'top_expense_categories': list(top_expense_categories),
         'top_income_categories': list(top_income_categories),
         'receipt_info_by_month': receipt_info_by_month,

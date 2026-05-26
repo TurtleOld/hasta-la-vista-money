@@ -136,6 +136,7 @@
                 <button class="statistics-tab-btn" data-tab="transfers" x-on:click="activateTab" type="button" role="tab">{% translate 'Переводы' %}</button>
                 <button class="statistics-tab-btn" data-tab="categories" x-on:click="activateTab" type="button" role="tab">{% translate 'Топ категорий' %}</button>
                 <button class="statistics-tab-btn" data-tab="creditcards" x-on:click="activateTab" type="button" role="tab">{% translate 'Кредитные карты' %}</button>
+                <button class="statistics-tab-btn" data-tab="budgets" x-on:click="activateTab" type="button" role="tab">{% translate 'Бюджеты' %}</button>
             </div>
 
             <div class="statistics-panel-body">
@@ -149,6 +150,9 @@
                                     <th class="statistics-cell-right">{% translate 'Расходы' %}</th>
                                     <th class="statistics-cell-right">{% translate 'Сбережения' %}</th>
                                     <th class="statistics-cell-center">{% translate 'Процент сбережений' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'План доходов' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'План расходов' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'Отклонение' %}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -164,6 +168,15 @@
                                             {% else %}
                                                 <span class="statistics-badge">-</span>
                                             {% endif %}
+                                        </td>
+                                        <td class="statistics-cell-right">
+                                            {% if month.planned_income %}{{ month.planned_income|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
+                                        </td>
+                                        <td class="statistics-cell-right">
+                                            {% if month.planned_expenses %}{{ month.planned_expenses|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
+                                        </td>
+                                        <td class="{% if month.deviation >= 0 %}statistics-money-positive{% else %}statistics-money-negative{% endif %} statistics-cell-right">
+                                            {% if month.planned_income or month.planned_expenses %}{{ month.deviation|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
                                         </td>
                                     </tr>
                                 {% endfor %}
@@ -411,6 +424,42 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 6.75A1.75 1.75 0 015.5 5h13a1.75 1.75 0 011.75 1.75v10.5A1.75 1.75 0 0118.5 19h-13a1.75 1.75 0 01-1.75-1.75V6.75zM4 9h16M7 15h3"></path>
                             </svg>
                             <p>{% translate 'Нет кредитных карт' %}</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="statistics-pane" data-panel="budgets" role="tabpanel">
+                    {% if budgets_data %}
+                        <div class="statistics-budget-list">
+                            {% for budget in budgets_data %}
+                                <div class="statistics-budget-item">
+                                    <div class="statistics-budget-header">
+                                        <span class="statistics-budget-name">{{ budget.category_name }}</span>
+                                        <span class="statistics-budget-period">{{ budget.period }}</span>
+                                        <span class="statistics-budget-amounts">
+                                            {{ budget.actual_expenses|comma }} ₽ / {{ budget.amount_limit|comma }} ₽
+                                        </span>
+                                        <span class="statistics-badge {% if budget.over_limit %}statistics-badge-negative{% elif budget.near_limit %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">
+                                            {{ budget.usage_percent|floatformat:1 }}%
+                                        </span>
+                                    </div>
+                                    <div class="statistics-progress-track">
+                                        <div class="statistics-progress-fill {% if budget.over_limit %}statistics-progress-over{% elif budget.near_limit %}statistics-progress-warn{% else %}statistics-progress-ok{% endif %}"
+                                             style="width: {% if budget.usage_percent > 100 %}100{% else %}{{ budget.usage_percent|floatformat:0 }}{% endif %}%;">
+                                        </div>
+                                        {% if not budget.over_limit %}
+                                            <div class="statistics-progress-threshold" style="left: {{ budget.alert_threshold }}%;"></div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="statistics-empty">
+                            <svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p>{% translate 'Нет бюджетов за выбранный период' %}</p>
                         </div>
                     {% endif %}
                 </div>

@@ -26,7 +26,7 @@
                     <div class="budget-progress budget-progress-{{ item.status }}">
                         <progress value="{{ item.progress_width|floatformat:0 }}" max="100"></progress>
                     </div>
-                    <form class="budget-limit-form">
+                    <form class="budget-limit-form" onsubmit="return false">
                         {% csrf_token %}
                         <input type="hidden" name="month" value="{{ item.period|date:'Y-m-d' }}">
                         <input type="hidden" name="category_id" value="">
@@ -56,7 +56,7 @@
                     <div class="budget-progress budget-progress-{{ item.status }}">
                         <progress value="{{ item.progress_width|floatformat:0 }}" max="100"></progress>
                     </div>
-                    <form class="budget-limit-form budget-category-limit-form">
+                    <form class="budget-limit-form budget-category-limit-form" onsubmit="return false">
                         {% csrf_token %}
                         <input type="hidden" name="month" value="{{ item.period|date:'Y-m-d' }}">
                         <input type="hidden" name="category_id" value="{{ item.category_id }}">

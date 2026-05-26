@@ -40,7 +40,7 @@
                             {% for cell in row.cells %}
                                 <td class="budget-table-cell-fact" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>{{ cell.fact|floatformat:0 }}</td>
                                 <td class="budget-table-cell-plan" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>
-                                    <form class="budget-plan-form">
+                                    <form class="budget-plan-form" onsubmit="return false">
                                         {% csrf_token %}
                                         <input type="hidden" name="category_id" value="{{ row.category_id }}">
                                         <input type="hidden" name="month" value="{{ cell.month|date:'Y-m-d' }}">
