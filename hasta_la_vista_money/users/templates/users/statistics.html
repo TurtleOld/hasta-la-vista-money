@@ -181,6 +181,7 @@
                                     <th class="statistics-cell-center">{% translate 'Количество чеков' %}</th>
                                     <th class="statistics-cell-right">{% translate 'Сумма' %}</th>
                                     <th>{% translate 'Счёт' %}</th>
+                                    <th>{% translate 'Кто внёс' %}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -190,6 +191,7 @@
                                         <td class="statistics-cell-center">{{ receipt.count }}</td>
                                         <td class="statistics-money-positive statistics-cell-right">{{ receipt.total_amount|comma }}</td>
                                         <td>{{ receipt.account__name_account }}</td>
+                                        <td>{{ receipt.user__username }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -207,6 +209,7 @@
                                     <th>{% translate 'Дата' %}</th>
                                     <th class="statistics-cell-right">{% translate 'Сумма' %}</th>
                                     <th>{% translate 'Счёт' %}</th>
+                                    <th>{% translate 'Кто внёс' %}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -223,6 +226,7 @@
                                         <td>{{ item.date|date:'d.m.Y' }}</td>
                                         <td class="{% if item.type == 'income' %}statistics-money-positive{% else %}statistics-money-negative{% endif %} statistics-cell-right">{{ item.amount|comma }}</td>
                                         <td>{{ item.account__name_account }}</td>
+                                        <td>{{ item.user__username }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -244,6 +248,7 @@
                                 <div>
                                     <span class="statistics-badge">{{ transfer.amount|comma }}</span>
                                     <span class="statistics-badge">{{ transfer.created_at|date:'d.m.Y H:i' }}</span>
+                                    <span class="statistics-badge">{{ transfer.user.username }}</span>
                                 </div>
                             </div>
                         {% empty %}

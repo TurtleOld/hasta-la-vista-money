@@ -195,6 +195,7 @@ def collect_info_receipt(
         .values(
             'month',
             'account__name_account',
+            'user__username',
         )
         .annotate(
             count=Count('id'),

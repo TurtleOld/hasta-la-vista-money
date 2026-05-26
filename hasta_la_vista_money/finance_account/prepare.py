@@ -31,6 +31,7 @@ class IncomeInfoDict(TypedDict):
     date: datetime | date
     account__name_account: str
     category__name: str
+    user__username: str
     amount: Decimal
 
 
@@ -49,6 +50,7 @@ class ExpenseInfoDict(TypedDict):
     date: datetime | date
     account__name_account: str
     category__name: str
+    user__username: str
     amount: Decimal
 
 
@@ -92,6 +94,7 @@ def collect_info_income(
         'date',
         'account__name_account',
         'category__name',
+        'user__username',
         'amount',
     )
     return cast('list[IncomeInfoDict]', list(queryset))
@@ -137,6 +140,7 @@ def collect_info_expense(
         'date',
         'account__name_account',
         'category__name',
+        'user__username',
         'amount',
     )
     return cast('list[ExpenseInfoDict]', list(queryset))

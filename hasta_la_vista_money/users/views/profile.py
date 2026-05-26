@@ -155,6 +155,7 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
                     user,
                     container=request_with_container.container,
                     stats_filter=statistics_filter,
+                    request=self.request,
                 ).items(),
             )
         return context

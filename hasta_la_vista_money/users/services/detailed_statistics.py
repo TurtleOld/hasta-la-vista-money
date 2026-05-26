@@ -41,11 +41,12 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.cache import (
     get_dashboard_summary_cache_key,
     get_user_detailed_statistics_cache_key,
 )
+from hasta_la_vista_money.users.services.groups import get_family_groups
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.services import (
@@ -225,6 +226,7 @@ class IncomeExpenseDict(TypedDict):
     date: date
     account__name_account: str
     category__name: str
+    user__username: str
     amount: Decimal
     type: str
 
@@ -271,7 +273,7 @@ class StatisticsFilters:
             ],
             currency=query.get('currency', '').strip().upper(),
             category_keys=list(query.getlist('category')),
-            member=query.get('member', 'my'),
+            member=_normalize_member_filter(query.get('member', 'my')),
         )
 
     @property
@@ -362,11 +364,26 @@ class UserDetailedStatisticsDict(TypedDict):
     statistics_currency_choices: list[str]
     statistics_category_choices: list[StatisticsChoiceDict]
     statistics_member_choices: list[StatisticsChoiceDict]
+    statistics_members: list[User]
 
 
 def _parse_filter_date(value: str | None) -> date | None:
     if not value:
         return None
+
+
+def _normalize_member_filter(value: str | None) -> str:
+    if value in {'my', 'family'}:
+        return value
+    if value == 'all':
+        return 'family'
+    if value and value.startswith('user-'):
+        user_id = value.removeprefix('user-')
+        if user_id.isdigit():
+            return value
+    if value and value.isdigit():
+        return f'user-{value}'
+    return 'my'
     try:
         return date.fromisoformat(value)
     except ValueError:
@@ -406,39 +423,67 @@ def _period_choices() -> list[StatisticsChoiceDict]:
     ]
 
 
-def _users_for_member_filter(
+def _owned_family_group_ids(user: User) -> list[int]:
+    return list(
+        FamilyGroupMembership.objects.filter(
+            user=user,
+            role=FamilyGroupMembership.Role.OWNER,
+        ).values_list('group_id', flat=True),
+    )
+
+
+def _family_users_for_statistics(user: User) -> list[User]:
+    group_ids = _owned_family_group_ids(user)
+    if not group_ids:
+        return [user]
+    return list(
+        User.objects.filter(family_memberships__group_id__in=group_ids)
+        .distinct()
+        .order_by('username'),
+    ) or [user]
+
+
+def _resolve_statistics_members(
     user: User,
-    container: 'ApplicationContainer',
     stats_filter: StatisticsFilters,
 ) -> list[User]:
     if stats_filter.member == 'my':
         return [user]
 
-    account_service = container.core.account_service()
-    family_users = account_service.get_users_for_group(user, 'family')
-    if stats_filter.member == 'all':
-        return family_users or [user]
-    if stats_filter.member.isdigit():
-        selected_id = int(stats_filter.member)
-        selected_users = [u for u in family_users if u.pk == selected_id]
-        if selected_users:
-            return selected_users
+    family_users = _family_users_for_statistics(user)
+    if stats_filter.member == 'family':
+        return family_users
+    if stats_filter.member.startswith('user-'):
+        user_id = stats_filter.member.removeprefix('user-')
+        if user_id.isdigit():
+            selected = [member for member in family_users if member.pk == int(user_id)]
+            if selected:
+                return selected
     return [user]
 
 
 def _member_choices(
     user: User,
-    container: 'ApplicationContainer',
+    request: Any | None,
 ) -> list[StatisticsChoiceDict]:
-    account_service = container.core.account_service()
-    family_users = account_service.get_users_for_group(user, 'family') or [user]
+    if request is None:
+        return [{'value': 'my', 'label': 'Мои данные'}]
+
+    family_groups = get_family_groups(user, request)
+    has_owned_family = any(
+        group['role'] == FamilyGroupMembership.Role.OWNER
+        for group in family_groups
+    )
+    family_users = _family_users_for_statistics(user)
     choices = [
         {'value': 'my', 'label': 'Мои данные'},
-        {'value': 'all', 'label': 'Вся семья'},
     ]
+    if has_owned_family:
+        choices.append({'value': 'family', 'label': 'Вся семья'})
     choices.extend(
-        {'value': str(member.pk), 'label': member.username}
+        {'value': f'user-{member.pk}', 'label': member.username}
         for member in family_users
+        if has_owned_family or member.pk == user.pk
     )
     return choices
 
@@ -1252,6 +1297,8 @@ def get_user_detailed_statistics(
     user: User,
     container: 'ApplicationContainer',
     stats_filter: StatisticsFilters,
+    request: Any | None = None,
+    members: list[User] | None = None,
 ) -> UserDetailedStatisticsDict:
     """
     Получение детальной статистики пользователя с кешированием.
@@ -1275,7 +1322,7 @@ def get_user_detailed_statistics(
     now = timezone.now()
     today = now.date()
     period_start, period_end = stats_filter.date_range(today)
-    users = _users_for_member_filter(user, container, stats_filter)
+    users = members or _resolve_statistics_members(user, stats_filter)
 
     months_data = _six_months_data(
         users,
@@ -1405,7 +1452,8 @@ def get_user_detailed_statistics(
         'statistics_account_choices': account_choices,
         'statistics_currency_choices': currency_choices,
         'statistics_category_choices': _category_choices(users),
-        'statistics_member_choices': _member_choices(user, container),
+        'statistics_member_choices': _member_choices(user, request),
+        'statistics_members': users,
     }
 
     cache.set(cache_key, stats, 600)

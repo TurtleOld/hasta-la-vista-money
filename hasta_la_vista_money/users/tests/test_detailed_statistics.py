@@ -64,6 +64,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertIn('user', stats)
         self.assertIn('credit_cards_data', stats)
         self.assertIn('statistics_filter', stats)
+        self.assertIn('statistics_members', stats)
 
     def test_get_user_detailed_statistics_uses_cached_value(self) -> None:
         container = ApplicationContainer()
@@ -91,6 +92,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
             'statistics_currency_choices': [],
             'statistics_category_choices': [],
             'statistics_member_choices': [],
+            'statistics_members': [self.user],
         }
         cache.set(cache_key, cached_stats, 600)
 
