@@ -12,7 +12,10 @@ from typing import cast
 
 from typing_extensions import TypedDict
 
-from hasta_la_vista_money.transactions.models import Transaction, TransactionType
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 

@@ -19,6 +19,7 @@ from core.protocols.services import AccountServiceProtocol
 if TYPE_CHECKING:
     from config.containers import ApplicationContainer
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.budget.models import Budget, Planning
 from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
@@ -34,7 +35,6 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
-from hasta_la_vista_money.budget.models import Budget, Planning
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.transactions.models import (
@@ -330,7 +330,9 @@ class StatisticsFilters:
             params.append(('date_from', self.date_from.isoformat()))
         if self.date_to:
             params.append(('date_to', self.date_to.isoformat()))
-        params.extend(('account', account_id) for account_id in self.account_ids)
+        params.extend(
+            ('account', account_id) for account_id in self.account_ids
+        )
         if self.currency:
             params.append(('currency', self.currency))
         params.extend(
@@ -402,24 +404,25 @@ class UserDetailedStatisticsDict(TypedDict):
 def _parse_filter_date(value: str | None) -> date | None:
     if not value:
         return None
-
-
-def _normalize_member_filter(value: str | None) -> str:
-    if value in {'my', 'family'}:
-        return value
-    if value == 'all':
-        return 'family'
-    if value and value.startswith('user-'):
-        user_id = value.removeprefix('user-')
-        if user_id.isdigit():
-            return value
-    if value and value.isdigit():
-        return f'user-{value}'
-    return 'my'
     try:
         return date.fromisoformat(value)
     except ValueError:
         return None
+
+
+def _normalize_member_filter(value: str | None) -> str:
+    result = 'my'
+    if value in {'my', 'family'}:
+        result = value
+    elif value == 'all':
+        result = 'family'
+    elif value and value.startswith('user-'):
+        user_id = value.removeprefix('user-')
+        if user_id.isdigit():
+            result = value
+    elif value and value.isdigit():
+        result = f'user-{value}'
+    return result
 
 
 def _date_to_aware(value: date, *, end_of_day: bool = False) -> datetime:
@@ -488,7 +491,9 @@ def _resolve_statistics_members(
     if stats_filter.member.startswith('user-'):
         user_id = stats_filter.member.removeprefix('user-')
         if user_id.isdigit():
-            selected = [member for member in family_users if member.pk == int(user_id)]
+            selected = [
+                member for member in family_users if member.pk == int(user_id)
+            ]
             if selected:
                 return selected
     return [user]
@@ -539,7 +544,9 @@ def _filter_transaction_queryset(
     if start is not None:
         queryset = queryset.filter(date__gte=_date_to_aware(start))
     if end is not None:
-        queryset = queryset.filter(date__lte=_date_to_aware(end, end_of_day=True))
+        queryset = queryset.filter(
+            date__lte=_date_to_aware(end, end_of_day=True)
+        )
     if stats_filter.account_ids:
         queryset = queryset.filter(account_id__in=stats_filter.account_ids)
     if stats_filter.currency:
@@ -588,7 +595,10 @@ def _filtered_receipts(
         queryset = queryset.filter(account_id__in=stats_filter.account_ids)
     if stats_filter.currency:
         queryset = queryset.filter(account__currency=stats_filter.currency)
-    if stats_filter.category_keys and 'receipt' not in stats_filter.category_keys:
+    if (
+        stats_filter.category_keys
+        and 'receipt' not in stats_filter.category_keys
+    ):
         queryset = queryset.none()
     return queryset
 
@@ -763,6 +773,8 @@ def get_dashboard_summary_statistics(
     container: 'ApplicationContainer',
 ) -> DashboardSummaryStatisticsDict:
     """Return the dashboard widget payload without heavyweight sections."""
+    del container
+
     cache_key = get_dashboard_summary_cache_key(user.pk)
     cached_stats = cache.get(cache_key)
 
@@ -846,7 +858,11 @@ def _planning_amounts_by_month(
     for item in qs:
         if item['month'] is None:
             continue
-        m: date = item['month'].date() if hasattr(item['month'], 'date') else item['month']
+        m: date = (
+            item['month'].date()
+            if hasattr(item['month'], 'date')
+            else item['month']
+        )
         total = float(item['total'] or 0)
         if item['planning_type'] == TransactionType.INCOME:
             income[m] = income.get(m, 0.0) + total
@@ -880,10 +896,12 @@ def _six_months_data(
             period_start,
             period_end,
         )
-        planned_income_by_month, planned_expense_by_month = _planning_amounts_by_month(
-            users,
-            period_start,
-            period_end,
+        planned_income_by_month, planned_expense_by_month = (
+            _planning_amounts_by_month(
+                users,
+                period_start,
+                period_end,
+            )
         )
     else:
         expense_by_month = {}
@@ -1000,18 +1018,25 @@ def _budgets_data(
             expense_qs.aggregate(total=Sum('amount'))['total'] or 0,
         )
         limit = float(budget.amount_limit)
-        usage_pct = round(actual / limit * constants.PERCENTAGE_MULTIPLIER, 1) if limit > 0 else 0.0
+        usage_pct = (
+            round(actual / limit * constants.PERCENTAGE_MULTIPLIER, 1)
+            if limit > 0
+            else 0.0
+        )
 
         result.append(
             {
-                'category_name': budget.category.name if budget.category_id else 'Общий лимит',
+                'category_name': budget.category.name
+                if budget.category_id
+                else 'Общий лимит',
                 'period': budget.period.strftime('%B %Y'),
                 'amount_limit': limit,
                 'actual_expenses': actual,
                 'usage_percent': usage_pct,
                 'alert_threshold': budget.alert_threshold,
                 'over_limit': usage_pct >= constants.ONE_HUNDRED,
-                'near_limit': usage_pct >= budget.alert_threshold and usage_pct < constants.ONE_HUNDRED,
+                'near_limit': usage_pct >= budget.alert_threshold
+                and usage_pct < constants.ONE_HUNDRED,
             },
         )
     return result
@@ -1556,10 +1581,7 @@ def get_user_detailed_statistics(
         account_service=account_service,
     )
     currency_choices = sorted(
-        {
-            currency
-            for currency in account_choices.values_list('currency', flat=True)
-        },
+        set(account_choices.values_list('currency', flat=True)),
     )
 
     stats = {

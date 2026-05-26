@@ -7,8 +7,7 @@ including filtering by user, group, type, and currency.
 from django.db.models import QuerySet
 
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.models import FamilyGroupMembership
+from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import user_has_group_access
 
 
@@ -94,8 +93,11 @@ class AccountRepository:
         Returns:
             QuerySet[Account]: QuerySet of accounts according to filter.
         """
+        user_accounts = Account.objects.filter(user=user).select_related('user')
+        result = user_accounts
+
         if group_id is None or group_id == 'my':
-            return Account.objects.filter(user=user).select_related('user')
+            return result
 
         if group_id == 'family':
             owner_group_ids = FamilyGroupMembership.objects.filter(
@@ -106,33 +108,31 @@ class AccountRepository:
                 family_memberships__group_id__in=owner_group_ids,
             ).distinct()
             if users_in_owned_groups.exists():
-                return (
+                result = (
                     Account.objects.filter(user__in=users_in_owned_groups)
                     .select_related('user')
                     .distinct()
                 )
-            return Account.objects.filter(user=user).select_related('user')
-
-        if not user_has_group_access(user, group_id):
-            return Account.objects.none()
-
-        if not FamilyGroupMembership.objects.filter(
+        elif not user_has_group_access(user, group_id):
+            result = Account.objects.none()
+        elif not FamilyGroupMembership.objects.filter(
             user=user,
             group_id=group_id,
             role=FamilyGroupMembership.Role.OWNER,
         ).exists():
-            return Account.objects.filter(user=user).select_related('user')
+            result = user_accounts
+        else:
+            users_in_group = User.objects.filter(
+                family_memberships__group_id=group_id,
+            ).distinct()
+            if users_in_group.exists():
+                result = (
+                    Account.objects.filter(user__in=users_in_group)
+                    .select_related('user')
+                    .distinct()
+                )
 
-        users_in_group = User.objects.filter(
-            family_memberships__group_id=group_id,
-        ).distinct()
-        if users_in_group.exists():
-            return (
-                Account.objects.filter(user__in=users_in_group)
-                .select_related('user')
-                .distinct()
-            )
-        return Account.objects.filter(user=user).select_related('user')
+        return result
 
     def get_credit_accounts(self) -> QuerySet[Account]:
         """Get only credit accounts and credit cards.
