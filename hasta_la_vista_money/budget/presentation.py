@@ -4,6 +4,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from django.utils import timezone
+
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.services.budget import (
     ExpenseDataRowDict,
@@ -17,7 +19,29 @@ def build_budget_matrix_context(
     rows: list[ExpenseDataRowDict] | list[IncomeDataRowDict],
     total_fact: list[int] | list[Decimal],
     total_plan: list[int] | list[Decimal],
+    current_date: date | None = None,
+    selected_range: str = '6',
 ) -> dict[str, Any]:
+    visible_range = _normalize_visible_range(selected_range)
+    visible_start, visible_count = _visible_state(
+        months,
+        current_date,
+        visible_range,
+    )
+    month_columns = []
+    for index, month in enumerate(months):
+        month_columns.append(
+            {
+                'month': month,
+                'index': index,
+                'is_visible_default': _is_visible_month(
+                    index,
+                    visible_start,
+                    visible_count,
+                ),
+            },
+        )
+
     matrix_rows = []
     for row in rows:
         cells = []
@@ -31,6 +55,7 @@ def build_budget_matrix_context(
                     'fact': fact,
                     'plan': plan,
                     'diff': Decimal(str(row['diff'][index])),
+                    'index': index,
                     'percent': percent,
                     'percent_label': _format_percent(percent),
                     'progress_width': min(
@@ -38,7 +63,12 @@ def build_budget_matrix_context(
                         constants.ONE_HUNDRED,
                     ),
                     'status': _resolve_status(table_type, percent, fact, plan),
-                    'visible_from': max(len(months) - 6, 0),
+                    'visible_from': visible_start,
+                    'is_visible_default': _is_visible_month(
+                        index,
+                        visible_start,
+                        visible_count,
+                    ),
                 },
             )
         matrix_rows.append(
@@ -64,6 +94,7 @@ def build_budget_matrix_context(
                 'fact': fact,
                 'plan': plan,
                 'diff': fact - plan,
+                'index': index,
                 'percent': percent,
                 'percent_label': _format_percent(percent),
                 'progress_width': min(
@@ -71,20 +102,71 @@ def build_budget_matrix_context(
                     constants.ONE_HUNDRED,
                 ),
                 'status': _resolve_status(table_type, percent, fact, plan),
-                'visible_from': max(len(months) - 6, 0),
+                'visible_from': visible_start,
+                'is_visible_default': _is_visible_month(
+                    index,
+                    visible_start,
+                    visible_count,
+                ),
             },
         )
 
     return {
         'budget_table_type': table_type,
         'budget_table_id': f'{table_type}-budget-table',
+        'budget_table_url_name': f'budget:{table_type}_table',
         'budget_months': months,
+        'budget_month_columns': month_columns,
         'budget_visible_6': min(len(months), constants.SIX),
         'budget_visible_12': min(len(months), constants.TWELVE),
-        'budget_visible_default': min(len(months), constants.SIX),
+        'budget_visible_default': visible_count,
+        'budget_visible_range': visible_range,
+        'budget_visible_start': visible_start,
         'budget_rows': matrix_rows,
         'budget_total_cells': total_cells,
     }
+
+
+def _normalize_visible_range(selected_range: str) -> str:
+    if selected_range in {'6', '12', 'all'}:
+        return selected_range
+    return '6'
+
+
+def _visible_state(
+    months: list[date],
+    current_date: date | None,
+    visible_range: str,
+) -> tuple[int, int]:
+    if visible_range == 'all':
+        return constants.ZERO, len(months)
+
+    visible_start = _default_visible_start(months, current_date)
+    visible_count = constants.TWELVE if visible_range == '12' else constants.SIX
+    return visible_start, min(len(months), visible_count)
+
+
+def _default_visible_start(
+    months: list[date],
+    current_date: date | None,
+) -> int:
+    if not months:
+        return constants.ZERO
+
+    target_date = current_date or timezone.localdate()
+    current_month = target_date.replace(day=1)
+    for index, month in enumerate(months):
+        if month >= current_month:
+            return index
+    return max(len(months) - constants.SIX, constants.ZERO)
+
+
+def _is_visible_month(
+    index: int,
+    visible_start: int,
+    visible_count: int,
+) -> bool:
+    return visible_start <= index < visible_start + visible_count
 
 
 def _resolve_status(

@@ -174,6 +174,7 @@ class ExpenseTableView(
                 rows=data['expense_data'],
                 total_fact=data['total_fact_expense'],
                 total_plan=data['total_plan_expense'],
+                selected_range=self.request.GET.get('range', '6'),
             ),
         )
         return context
@@ -211,6 +212,7 @@ class IncomeTableView(
                 rows=data['income_data'],
                 total_fact=data['total_fact_income'],
                 total_plan=data['total_plan_income'],
+                selected_range=self.request.GET.get('range', '6'),
             ),
         )
         return context
