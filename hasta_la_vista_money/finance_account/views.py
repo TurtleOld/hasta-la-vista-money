@@ -304,6 +304,11 @@ def _parse_filter_date(value: str | None) -> date | None:
     if not value:
         return None
 
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
 
 def _week_range(value: date) -> tuple[date, date]:
     start = value - timedelta(days=value.weekday())
@@ -314,10 +319,6 @@ def _quarter_range(value: date) -> tuple[date, date]:
     quarter = (value.month - 1) // 3
     start = date(value.year, quarter * 3 + 1, 1)
     return start, _end_of_month(date(value.year, quarter * 3 + 3, 1))
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        return None
 
 
 class FinancesView(LoginRequiredMixin, TemplateView):
