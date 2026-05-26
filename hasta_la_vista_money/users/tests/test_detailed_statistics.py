@@ -9,6 +9,7 @@ from hasta_la_vista_money.users.services.cache import (
     get_user_detailed_statistics_cache_key,
 )
 from hasta_la_vista_money.users.services.detailed_statistics import (
+    StatisticsFilters,
     UserDetailedStatisticsDict,
     get_user_detailed_statistics,
 )
@@ -44,9 +45,11 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
 
     def test_get_user_detailed_statistics(self) -> None:
         container = ApplicationContainer()
+        stats_filter = StatisticsFilters()
         stats: UserDetailedStatisticsDict = get_user_detailed_statistics(
             self.user,
             container=container,
+            stats_filter=stats_filter,
         )
         self.assertIn('months_data', stats)
         self.assertIn('top_expense_categories', stats)
@@ -60,10 +63,15 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertIn('chart_combined', stats)
         self.assertIn('user', stats)
         self.assertIn('credit_cards_data', stats)
+        self.assertIn('statistics_filter', stats)
 
     def test_get_user_detailed_statistics_uses_cached_value(self) -> None:
         container = ApplicationContainer()
-        cache_key = get_user_detailed_statistics_cache_key(self.user.pk)
+        stats_filter = StatisticsFilters()
+        cache_key = get_user_detailed_statistics_cache_key(
+            self.user.pk,
+            stats_filter.cache_suffix,
+        )
         cached_stats: UserDetailedStatisticsDict = {
             'months_data': [],
             'top_expense_categories': [],
@@ -77,9 +85,19 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
             'chart_combined': {},
             'user': self.user,
             'credit_cards_data': [],
+            'statistics_filter': stats_filter,
+            'statistics_period_choices': [],
+            'statistics_account_choices': [],
+            'statistics_currency_choices': [],
+            'statistics_category_choices': [],
+            'statistics_member_choices': [],
         }
         cache.set(cache_key, cached_stats, 600)
 
-        stats = get_user_detailed_statistics(self.user, container=container)
+        stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=stats_filter,
+        )
 
         self.assertEqual(stats, cached_stats)

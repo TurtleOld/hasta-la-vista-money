@@ -1,5 +1,6 @@
 from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
+from datetime import datetime
 from typing import Any, cast
 
 from django.core.cache import cache
@@ -162,17 +163,35 @@ def get_cached_category_tree(
     return tree
 
 
-def collect_info_receipt(user: User) -> Any:
+def collect_info_receipt(
+    user: User,
+    users: Iterable[User] | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    account_ids: list[int] | None = None,
+    currency: str = '',
+    category_keys: list[str] | None = None,
+) -> Any:
     """
     Сбор информации о чеках для отображения на страницах сайта.
 
     :param user: User
     :return: QuerySet с данными о чеках
     """
+    users = users or [user]
+    queryset = user.receipt_users.model.objects.filter(user__in=users)
+    if start is not None:
+        queryset = queryset.filter(receipt_date__gte=start)
+    if end is not None:
+        queryset = queryset.filter(receipt_date__lte=end)
+    if account_ids:
+        queryset = queryset.filter(account_id__in=account_ids)
+    if currency:
+        queryset = queryset.filter(account__currency=currency)
+    if category_keys and 'receipt' not in category_keys:
+        queryset = queryset.none()
     return (
-        user.receipt_users.annotate(
-            month=TruncMonth('receipt_date'),
-        )
+        queryset.annotate(month=TruncMonth('receipt_date'))
         .values(
             'month',
             'account__name_account',

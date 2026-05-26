@@ -25,6 +25,7 @@ from hasta_la_vista_money.users.models import (
     User,
 )
 from hasta_la_vista_money.users.services.detailed_statistics import (
+    StatisticsFilters,
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.services.export import get_user_export_data
@@ -148,10 +149,12 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         request_with_container = cast('RequestWithContainer', self.request)
         if isinstance(user, User):
+            statistics_filter = StatisticsFilters.from_query(self.request.GET)
             context.update(
                 get_user_detailed_statistics(
                     user,
                     container=request_with_container.container,
+                    stats_filter=statistics_filter,
                 ).items(),
             )
         return context

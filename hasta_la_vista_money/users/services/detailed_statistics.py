@@ -1,13 +1,15 @@
 from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlencode
 
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
-from django.db.models import QuerySet, Sum
+from django.db.models import Q, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
@@ -33,13 +35,12 @@ from hasta_la_vista_money.finance_account.prepare import (
     sort_expense_income,
 )
 from hasta_la_vista_money.receipts.models import Receipt
-from hasta_la_vista_money.receipts.repositories import ReceiptRepository
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.transactions.models import (
+    Category,
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.transactions.repositories import TransactionRepository
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     get_dashboard_summary_cache_key,
@@ -235,6 +236,96 @@ class DashboardSummaryStatisticsDict(TypedDict):
     top_expense_categories: list[dict[str, Any]]
 
 
+class StatisticsChoiceDict(TypedDict):
+    """Generic select option for the statistics filter form."""
+
+    value: str
+    label: str
+
+
+@dataclass(frozen=True)
+class StatisticsFilters:
+    """GET parameters shared by all detailed statistics tabs."""
+
+    period: str = '6'
+    date_from: date | None = None
+    date_to: date | None = None
+    account_ids: list[int] = field(default_factory=list)
+    currency: str = ''
+    category_keys: list[str] = field(default_factory=list)
+    member: str = 'my'
+
+    @classmethod
+    def from_query(cls, query: Any) -> 'StatisticsFilters':
+        period = query.get('period', '6')
+        if period not in {'month', '3', '6', '12', 'range'}:
+            period = '6'
+        return cls(
+            period=period,
+            date_from=_parse_filter_date(query.get('date_from')),
+            date_to=_parse_filter_date(query.get('date_to')),
+            account_ids=[
+                int(value)
+                for value in query.getlist('account')
+                if value.isdigit()
+            ],
+            currency=query.get('currency', '').strip().upper(),
+            category_keys=list(query.getlist('category')),
+            member=query.get('member', 'my'),
+        )
+
+    @property
+    def is_default(self) -> bool:
+        return not any(
+            (
+                self.period != '6',
+                self.date_from,
+                self.date_to,
+                self.account_ids,
+                self.currency,
+                self.category_keys,
+                self.member != 'my',
+            ),
+        )
+
+    @property
+    def query_string(self) -> str:
+        params: list[tuple[str, str | int]] = []
+        if self.period != '6':
+            params.append(('period', self.period))
+        if self.date_from:
+            params.append(('date_from', self.date_from.isoformat()))
+        if self.date_to:
+            params.append(('date_to', self.date_to.isoformat()))
+        params.extend(('account', account_id) for account_id in self.account_ids)
+        if self.currency:
+            params.append(('currency', self.currency))
+        params.extend(
+            ('category', category_key) for category_key in self.category_keys
+        )
+        if self.member != 'my':
+            params.append(('member', self.member))
+        return urlencode(params)
+
+    @property
+    def cache_suffix(self) -> str:
+        return self.query_string or 'default'
+
+    def date_range(self, today: date) -> tuple[date, date]:
+        if self.period == 'range':
+            start = self.date_from or date(2000, 1, 1)
+            end = self.date_to or today
+            return (end, start) if start > end else (start, end)
+        if self.period == 'month':
+            return today.replace(day=1), today
+
+        months_count = int(self.period)
+        start = today.replace(day=1) - relativedelta(
+            months=months_count - constants.ONE,
+        )
+        return start, today
+
+
 class UserDetailedStatisticsDict(TypedDict):
     """User detailed statistics.
 
@@ -265,65 +356,258 @@ class UserDetailedStatisticsDict(TypedDict):
     chart_combined: ChartDataDict
     user: User
     credit_cards_data: list[CreditCardDataDict]
+    statistics_filter: StatisticsFilters
+    statistics_period_choices: list[StatisticsChoiceDict]
+    statistics_account_choices: QuerySet[Account]
+    statistics_currency_choices: list[str]
+    statistics_category_choices: list[StatisticsChoiceDict]
+    statistics_member_choices: list[StatisticsChoiceDict]
 
 
-def _month_bounds_for_offset(today: date, offset: int) -> tuple[date, date]:
-    month_date = today.replace(day=1) - timedelta(
-        days=offset * constants.DAYS_IN_MONTH_APPROXIMATE,
+def _parse_filter_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _date_to_aware(value: date, *, end_of_day: bool = False) -> datetime:
+    edge = time.max if end_of_day else time.min
+    return timezone.make_aware(datetime.combine(value, edge))
+
+
+def _month_ranges_for_filter(
+    today: date,
+    stats_filter: StatisticsFilters,
+) -> list[tuple[date, date, date]]:
+    start, end = stats_filter.date_range(today)
+    first_month = start.replace(day=1)
+    last_month = end.replace(day=1)
+
+    ranges = []
+    current = first_month
+    while current <= last_month:
+        last_day = monthrange(current.year, current.month)[1]
+        month_end = current.replace(day=last_day)
+        ranges.append((current, max(current, start), min(month_end, end)))
+        current = current + relativedelta(months=constants.ONE)
+    return ranges
+
+
+def _period_choices() -> list[StatisticsChoiceDict]:
+    return [
+        {'value': 'month', 'label': 'Текущий месяц'},
+        {'value': '3', 'label': '3 месяца'},
+        {'value': '6', 'label': '6 месяцев'},
+        {'value': '12', 'label': '12 месяцев'},
+        {'value': 'range', 'label': 'Диапазон'},
+    ]
+
+
+def _users_for_member_filter(
+    user: User,
+    container: 'ApplicationContainer',
+    stats_filter: StatisticsFilters,
+) -> list[User]:
+    if stats_filter.member == 'my':
+        return [user]
+
+    account_service = container.core.account_service()
+    family_users = account_service.get_users_for_group(user, 'family')
+    if stats_filter.member == 'all':
+        return family_users or [user]
+    if stats_filter.member.isdigit():
+        selected_id = int(stats_filter.member)
+        selected_users = [u for u in family_users if u.pk == selected_id]
+        if selected_users:
+            return selected_users
+    return [user]
+
+
+def _member_choices(
+    user: User,
+    container: 'ApplicationContainer',
+) -> list[StatisticsChoiceDict]:
+    account_service = container.core.account_service()
+    family_users = account_service.get_users_for_group(user, 'family') or [user]
+    choices = [
+        {'value': 'my', 'label': 'Мои данные'},
+        {'value': 'all', 'label': 'Вся семья'},
+    ]
+    choices.extend(
+        {'value': str(member.pk), 'label': member.username}
+        for member in family_users
     )
-    month_start = month_date.replace(day=1)
-    if offset == 0:
-        month_end = today
-    else:
-        next_month = month_start + timedelta(
-            days=constants.DAYS_FOR_NEXT_MONTH_CALC,
+    return choices
+
+
+def _category_ids(keys: list[str], prefix: str) -> list[int]:
+    return [
+        int(value.removeprefix(prefix))
+        for value in keys
+        if value.startswith(prefix) and value.removeprefix(prefix).isdigit()
+    ]
+
+
+def _filter_transaction_queryset(
+    queryset: QuerySet[Transaction],
+    *,
+    stats_filter: StatisticsFilters,
+    type_value: str,
+    start: date | None = None,
+    end: date | None = None,
+) -> QuerySet[Transaction]:
+    if start is not None:
+        queryset = queryset.filter(date__gte=_date_to_aware(start))
+    if end is not None:
+        queryset = queryset.filter(date__lte=_date_to_aware(end, end_of_day=True))
+    if stats_filter.account_ids:
+        queryset = queryset.filter(account_id__in=stats_filter.account_ids)
+    if stats_filter.currency:
+        queryset = queryset.filter(account__currency=stats_filter.currency)
+
+    category_ids = _category_ids(stats_filter.category_keys, f'{type_value}-')
+    if category_ids:
+        queryset = queryset.filter(category_id__in=category_ids)
+    elif stats_filter.category_keys:
+        queryset = queryset.none()
+    return queryset
+
+
+def _filtered_transactions(
+    type_value: str,
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date | None = None,
+    end: date | None = None,
+) -> QuerySet[Transaction]:
+    queryset = Transaction.objects.filter(user__in=users, type=type_value)
+    return _filter_transaction_queryset(
+        queryset,
+        stats_filter=stats_filter,
+        type_value=type_value,
+        start=start,
+        end=end,
+    )
+
+
+def _filtered_receipts(
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+    account: Account | None = None,
+) -> QuerySet[Receipt]:
+    queryset = Receipt.objects.filter(
+        user__in=users,
+        receipt_date__gte=_date_to_aware(start),
+        receipt_date__lte=_date_to_aware(end, end_of_day=True),
+    )
+    if account is not None:
+        queryset = queryset.filter(account=account)
+    if stats_filter.account_ids:
+        queryset = queryset.filter(account_id__in=stats_filter.account_ids)
+    if stats_filter.currency:
+        queryset = queryset.filter(account__currency=stats_filter.currency)
+    if stats_filter.category_keys and 'receipt' not in stats_filter.category_keys:
+        queryset = queryset.none()
+    return queryset
+
+
+def _filtered_accounts(
+    accounts: QuerySet[Account],
+    stats_filter: StatisticsFilters,
+) -> QuerySet[Account]:
+    if stats_filter.account_ids:
+        accounts = accounts.filter(pk__in=stats_filter.account_ids)
+    if stats_filter.currency:
+        accounts = accounts.filter(currency=stats_filter.currency)
+    return accounts
+
+
+def _category_choices(users: Iterable[User]) -> list[StatisticsChoiceDict]:
+    choices = [
+        {
+            'value': f'{category.type}-{category.pk}',
+            'label': f'{category.name} ({category.get_type_display()})',
+        }
+        for category in Category.objects.filter(user__in=users).order_by(
+            'type',
+            'name',
         )
-        month_end = next_month.replace(day=1) - timedelta(days=1)
-    return month_start, month_end
+    ]
+    choices.append({'value': 'receipt', 'label': 'Чеки'})
+    return choices
+
+
+def _transfer_logs(
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+) -> QuerySet[TransferMoneyLog]:
+    if stats_filter.category_keys:
+        return TransferMoneyLog.objects.none()
+
+    queryset = (
+        TransferMoneyLog.objects.filter(
+            user__in=users,
+            exchange_date__gte=_date_to_aware(start),
+            exchange_date__lte=_date_to_aware(end, end_of_day=True),
+        )
+        .select_related('to_account', 'from_account', 'user')
+        .order_by('-exchange_date')
+    )
+    if stats_filter.account_ids:
+        queryset = queryset.filter(
+            Q(from_account_id__in=stats_filter.account_ids)
+            | Q(to_account_id__in=stats_filter.account_ids),
+        )
+    if stats_filter.currency:
+        queryset = queryset.filter(
+            Q(from_account__currency=stats_filter.currency)
+            | Q(to_account__currency=stats_filter.currency),
+        )
+    return queryset
 
 
 def _sum_amount_for_period(
     type_value: str,
-    user: User,
+    users: Iterable[User],
     start: date,
     end: date,
-    container: 'ApplicationContainer',
-    transaction_repository: TransactionRepository | None = None,
+    stats_filter: StatisticsFilters,
 ) -> float:
-    start_dt = timezone.make_aware(datetime.combine(start, time.min))
-    end_dt = timezone.make_aware(datetime.combine(end, time.max))
-
-    if transaction_repository is None:
-        transaction_repository = container.transactions.transaction_repository()
-    if transaction_repository is None:
-        raise ValueError('transaction_repository is None')
-
-    qs = transaction_repository.filter_by_user_and_date_range(
-        user,
-        start_dt,
-        end_dt,
-        type_value=type_value,
+    queryset = _filtered_transactions(
+        type_value,
+        users,
+        stats_filter,
+        start=start,
+        end=end,
     )
-    return float(qs.aggregate(total=Sum('amount'))['total'] or 0)
+    return float(queryset.aggregate(total=Sum('amount'))['total'] or 0)
 
 
 def _top_categories_qs(
     type_value: str,
-    user: User,
-    year_start: date,
-    container: 'ApplicationContainer',
-    transaction_repository: TransactionRepository | None = None,
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
 ) -> Any:
-    year_start_dt = timezone.make_aware(datetime.combine(year_start, time.min))
-    if transaction_repository is None:
-        transaction_repository = container.transactions.transaction_repository()
-    if transaction_repository is None:
-        raise ValueError('transaction_repository is None')
-    return transaction_repository.get_top_categories(
-        user,
-        year_start_dt,
-        type_value=type_value,
-        limit=constants.TOP_CATEGORIES_LIMIT,
+    queryset = _filtered_transactions(
+        type_value,
+        users,
+        stats_filter,
+        start=start,
+        end=end,
+    )
+    return (
+        queryset.values('category__id', 'category__name')
+        .annotate(total=Sum('amount'))
+        .order_by('-total')[: constants.TOP_CATEGORIES_LIMIT]
     )
 
 
@@ -338,21 +622,34 @@ def _dates_amounts(
 
 
 def _build_chart(
-    user: User,
-    container: 'ApplicationContainer',
-    transaction_repository: TransactionRepository | None = None,
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
 ) -> ChartDataDict:
-    if transaction_repository is None:
-        transaction_repository = container.transactions.transaction_repository()
-    if transaction_repository is None:
-        raise ValueError('transaction_repository is None')
-    exp_ds = transaction_repository.get_aggregated_by_date(
-        user,
-        type_value=TransactionType.EXPENSE,
+    exp_ds = (
+        _filtered_transactions(
+            TransactionType.EXPENSE,
+            users,
+            stats_filter,
+            start=start,
+            end=end,
+        )
+        .values('date')
+        .annotate(total_amount=Sum('amount'))
+        .order_by('date')
     )
-    inc_ds = transaction_repository.get_aggregated_by_date(
-        user,
-        type_value=TransactionType.INCOME,
+    inc_ds = (
+        _filtered_transactions(
+            TransactionType.INCOME,
+            users,
+            stats_filter,
+            start=start,
+            end=end,
+        )
+        .values('date')
+        .annotate(total_amount=Sum('amount'))
+        .order_by('date')
     )
 
     exp_dates, exp_amts = _dates_amounts(exp_ds)
@@ -395,26 +692,25 @@ def get_dashboard_summary_statistics(
     if cached_stats is not None:
         return cached_stats  # type: ignore[no-any-return]
 
-    transaction_repository = container.transactions.transaction_repository()
-
     now = timezone.now()
     today = now.date()
-    year_start = today.replace(month=1, day=1)
+    stats_filter = StatisticsFilters()
+    start, end = stats_filter.date_range(today)
+    users = [user]
 
     stats: DashboardSummaryStatisticsDict = {
         'months_data': _six_months_data(
-            user,
+            users,
             today,
-            container,
-            transaction_repository,
+            stats_filter,
         ),
         'top_expense_categories': list(
             _top_categories_qs(
                 TransactionType.EXPENSE,
-                user,
-                year_start,
-                container,
-                transaction_repository,
+                users,
+                stats_filter,
+                start,
+                end,
             ),
         ),
     }
@@ -453,29 +749,27 @@ def _balances_and_delta(
 
 
 def _six_months_data(
-    user: User,
+    users: Iterable[User],
     today: date,
-    container: 'ApplicationContainer',
-    transaction_repository: TransactionRepository | None = None,
+    stats_filter: StatisticsFilters,
 ) -> list[MonthDataDict]:
     out = []
 
-    month_ranges = [
-        _month_bounds_for_offset(today, i)
-        for i in range(constants.STATISTICS_MONTHS_COUNT)
-    ]
+    month_ranges = _month_ranges_for_filter(today, stats_filter)
     if month_ranges:
-        period_start = month_ranges[-1][0]
-        period_end = month_ranges[0][1]
+        period_start = month_ranges[0][1]
+        period_end = month_ranges[-1][2]
         expense_by_month = _aggregate_amounts_by_month(
             TransactionType.EXPENSE,
-            user,
+            users,
+            stats_filter,
             period_start,
             period_end,
         )
         income_by_month = _aggregate_amounts_by_month(
             TransactionType.INCOME,
-            user,
+            users,
+            stats_filter,
             period_start,
             period_end,
         )
@@ -483,7 +777,7 @@ def _six_months_data(
         expense_by_month = {}
         income_by_month = {}
 
-    for m_start, m_end in month_ranges:
+    for m_start, range_start, range_end in month_ranges:
         exp_sum = expense_by_month.get(m_start, 0.0)
         inc_sum = income_by_month.get(m_start, 0.0)
         out.append(
@@ -492,11 +786,10 @@ def _six_months_data(
                 'expenses': exp_sum,
                 'income': inc_sum,
                 'savings': inc_sum - exp_sum,
-                'month_start': m_start.isoformat(),
-                'month_end': m_end.isoformat(),
+                'month_start': range_start.isoformat(),
+                'month_end': range_end.isoformat(),
             },
         )
-    out.reverse()
 
     if out:
         first_month_start = str(out[0]['month_start'])
@@ -505,19 +798,17 @@ def _six_months_data(
 
         total_income_before = _sum_amount_for_period(
             TransactionType.INCOME,
-            user,
+            users,
             date(2000, 1, 1),
             period_end_date,
-            container,
-            transaction_repository=transaction_repository,
+            stats_filter,
         )
         total_expense_before = _sum_amount_for_period(
             TransactionType.EXPENSE,
-            user,
+            users,
             date(2000, 1, 1),
             period_end_date,
-            container,
-            transaction_repository=transaction_repository,
+            stats_filter,
         )
 
         running_balance = total_income_before - total_expense_before
@@ -554,50 +845,21 @@ def _six_months_data(
     return out  # type: ignore[return-value]
 
 
-def _calculate_card_date_range(
-    today_month: date,
-) -> tuple[datetime, datetime]:
-    """Calculate date range for card statistics.
-
-    Args:
-        today_month: Current month date.
-
-    Returns:
-        Tuple of (first_month_start, last_month_end) as timezone-aware
-        datetimes.
-    """
-    first_month_date = today_month - relativedelta(
-        months=constants.STATISTICS_YEAR_MONTHS_COUNT - constants.ONE,
-    )
-    first_month_start = timezone.make_aware(
-        datetime.combine(first_month_date.replace(day=1), time.min),
-    )
-    last_month_date = today_month
-    last_day = monthrange(last_month_date.year, last_month_date.month)[1]
-    last_month_end = timezone.make_aware(
-        datetime.combine(
-            last_month_date.replace(day=last_day),
-            time.max,
-        ),
-    )
-    return first_month_start, last_month_end
-
-
 def _aggregate_amounts_by_month(
     type_value: str,
-    user: User,
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
     start: date,
     end: date,
 ) -> dict[date, float]:
     """Aggregate transaction amounts by month for the given period."""
-    start_dt = timezone.make_aware(datetime.combine(start, time.min))
-    end_dt = timezone.make_aware(datetime.combine(end, time.max))
-
     monthly_totals = (
-        Transaction.objects.filter(
-            user=user,
-            type=type_value,
-            date__range=(start_dt, end_dt),
+        _filtered_transactions(
+            type_value,
+            users,
+            stats_filter,
+            start=start,
+            end=end,
         )
         .annotate(month=TruncMonth('date'))
         .values('month')
@@ -780,27 +1042,46 @@ def _build_single_card_month(
 
 def _card_months_block(
     card: Account,
-    today_month: date,
+    today: date,
+    stats_filter: StatisticsFilters,
     account_service: AccountServiceProtocol,
-    transaction_repository: TransactionRepository,
-    receipt_repository: ReceiptRepository,
 ) -> tuple[list[CardMonthDict], list[CardHistoryDict]]:
     """Build months data block for card."""
     now = timezone.now()
-    first_month_start, last_month_end = _calculate_card_date_range(today_month)
+    month_ranges = _month_ranges_for_filter(today, stats_filter)
+    if not month_ranges:
+        return [], []
+    period_start = month_ranges[0][1]
+    period_end = month_ranges[-1][2]
 
-    expenses_by_month = transaction_repository.aggregate_by_month(
-        user=card.user,
-        account=card,
-        start_date=first_month_start,
-        end_date=last_month_end,
-        type_value=TransactionType.EXPENSE,
+    expenses_by_month = (
+        _filter_transaction_queryset(
+            Transaction.objects.filter(
+                user=card.user,
+                account=card,
+                type=TransactionType.EXPENSE,
+            ),
+            stats_filter=stats_filter,
+            type_value=TransactionType.EXPENSE,
+            start=period_start,
+            end=period_end,
+        )
+        .annotate(month=TruncMonth('date'))
+        .values('month')
+        .annotate(total=Sum('amount'))
     )
 
-    receipts_by_month = receipt_repository.filter_by_account_and_date_range(
-        account=card,
-        start_date=first_month_start,
-        end_date=last_month_end,
+    receipts_by_month = (
+        _filtered_receipts(
+            [card.user],
+            stats_filter,
+            period_start,
+            period_end,
+            account=card,
+        )
+        .annotate(month=TruncMonth('receipt_date'))
+        .values('month', 'operation_type')
+        .annotate(total=Sum('total_sum'))
     )
 
     expenses_dict, receipts_dict = _build_expenses_receipts_dicts(
@@ -811,10 +1092,7 @@ def _card_months_block(
     months: list[CardMonthDict] = []
     history: list[CardHistoryDict] = []
 
-    for i in range(constants.STATISTICS_YEAR_MONTHS_COUNT):
-        month_date = today_month - relativedelta(
-            months=constants.STATISTICS_YEAR_MONTHS_COUNT - constants.ONE - i,
-        )
+    for month_date, _range_start, _range_end in month_ranges:
         month_data, final_debt = _build_single_card_month(
             month_date,
             expenses_dict,
@@ -890,12 +1168,13 @@ def _build_payment_schedule(
 
 def _credit_cards_block(
     accounts: QuerySet[Account],
+    stats_filter: StatisticsFilters,
     account_service: AccountServiceProtocol,
-    transaction_repository: TransactionRepository,
-    receipt_repository: ReceiptRepository,
 ) -> list[CreditCardDataDict]:
     out: list[CreditCardDataDict] = []
-    today_month = timezone.now().date().replace(day=1)
+    today = timezone.now().date()
+    today_month = today.replace(day=1)
+    period_start, period_end = stats_filter.date_range(today)
 
     credit_cards = accounts.filter(
         type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT],
@@ -905,16 +1184,22 @@ def _credit_cards_block(
         debt_now = account_service.get_credit_card_debt(card)
         months, history = _card_months_block(
             card,
-            today_month,
+            today,
+            stats_filter,
             account_service=account_service,
-            transaction_repository=transaction_repository,
-            receipt_repository=receipt_repository,
         )
 
         payments_raw = list(
-            transaction_repository.filter_by_account(
-                card,
+            _filter_transaction_queryset(
+                Transaction.objects.filter(
+                    account=card,
+                    user=card.user,
+                    type=TransactionType.INCOME,
+                ),
+                stats_filter=stats_filter,
                 type_value=TransactionType.INCOME,
+                start=period_start,
+                end=period_end,
             ).values('amount', 'date'),
         )
         payments: list[PaymentItemDict] = [
@@ -966,6 +1251,7 @@ def _credit_cards_block(
 def get_user_detailed_statistics(
     user: User,
     container: 'ApplicationContainer',
+    stats_filter: StatisticsFilters,
 ) -> UserDetailedStatisticsDict:
     """
     Получение детальной статистики пользователя с кешированием.
@@ -977,79 +1263,128 @@ def get_user_detailed_statistics(
     Returns:
         Словарь с детальной статистикой пользователя
     """
-    cache_key = get_user_detailed_statistics_cache_key(user.pk)
+    cache_key = get_user_detailed_statistics_cache_key(
+        user.pk,
+        stats_filter.cache_suffix,
+    )
     cached_stats = cache.get(cache_key)
 
     if cached_stats is not None:
         return cached_stats  # type: ignore[no-any-return]
 
-    transaction_repository = container.transactions.transaction_repository()
-    receipt_repository = container.receipts.receipt_repository()
-    account_repository = container.finance_account.account_repository()
-    transfer_money_log_repository = (
-        container.finance_account.transfer_money_log_repository()
-    )
-
     now = timezone.now()
     today = now.date()
+    period_start, period_end = stats_filter.date_range(today)
+    users = _users_for_member_filter(user, container, stats_filter)
 
     months_data = _six_months_data(
-        user,
+        users,
         today,
-        container,
-        transaction_repository,
+        stats_filter,
     )
-    year_start = today.replace(month=1, day=1)
     top_expense_categories = _top_categories_qs(
         TransactionType.EXPENSE,
-        user,
-        year_start,
-        container,
-        transaction_repository,
+        users,
+        stats_filter,
+        period_start,
+        period_end,
     )
     top_income_categories = _top_categories_qs(
         TransactionType.INCOME,
-        user,
-        year_start,
-        container,
-        transaction_repository,
+        users,
+        stats_filter,
+        period_start,
+        period_end,
     )
 
-    receipt_info_by_month = collect_info_receipt(user=user)
+    start_dt = _date_to_aware(period_start)
+    end_dt = _date_to_aware(period_end, end_of_day=True)
+    receipt_info_by_month = collect_info_receipt(
+        user=user,
+        users=users,
+        start=start_dt,
+        end=end_dt,
+        account_ids=stats_filter.account_ids,
+        currency=stats_filter.currency,
+        category_keys=stats_filter.category_keys,
+    )
 
-    incomes = collect_info_income(user)
+    income_category_ids = _category_ids(
+        stats_filter.category_keys,
+        'income-',
+    )
+    expense_category_ids = _category_ids(
+        stats_filter.category_keys,
+        'expense-',
+    )
+    incomes = (
+        collect_info_income(
+            user,
+            users=users,
+            start=start_dt,
+            end=end_dt,
+            account_ids=stats_filter.account_ids,
+            currency=stats_filter.currency,
+            category_ids=income_category_ids,
+        )
+        if not stats_filter.category_keys or income_category_ids
+        else []
+    )
     for it in incomes:
         it['type'] = 'income'  # type: ignore[typeddict-unknown-key]
 
-    expenses = collect_info_expense(user)
+    expenses = (
+        collect_info_expense(
+            user,
+            users=users,
+            start=start_dt,
+            end=end_dt,
+            account_ids=stats_filter.account_ids,
+            currency=stats_filter.currency,
+            category_ids=expense_category_ids,
+        )
+        if not stats_filter.category_keys or expense_category_ids
+        else []
+    )
     for it in expenses:
         it['type'] = 'expense'  # type: ignore[typeddict-unknown-key]
 
     income_expense = sort_expense_income(expenses, incomes)
 
-    transfer_money_log = transfer_money_log_repository.get_by_user_ordered(
-        user=user,
-        limit=constants.TRANSFER_LOG_LIMIT,
+    transfer_money_log = _transfer_logs(
+        users,
+        stats_filter,
+        period_start,
+        period_end,
     )
 
-    accounts = account_repository.get_by_user_with_related(user)
+    account_choices = Account.objects.filter(user__in=users).select_related(
+        'user',
+    )
+    accounts = _filtered_accounts(account_choices, stats_filter)
     balances_by_currency, delta_by_currency = _balances_and_delta(
         accounts,
         today,
     )
 
     chart_combined = _build_chart(
-        user,
-        container,
-        transaction_repository,
+        users,
+        stats_filter,
+        period_start,
+        period_end,
     )
 
     account_service = container.core.account_service()
     credit_cards_data = _credit_cards_block(
         accounts,
+        stats_filter=stats_filter,
         account_service=account_service,
-        transaction_repository=transaction_repository,
-        receipt_repository=receipt_repository,
+    )
+    currency_choices = sorted(
+        {
+            currency
+            for currency in account_choices.values_list('currency', flat=True)
+        },
     )
 
     stats = {
@@ -1065,6 +1400,12 @@ def get_user_detailed_statistics(
         'chart_combined': chart_combined,
         'user': user,
         'credit_cards_data': credit_cards_data,
+        'statistics_filter': stats_filter,
+        'statistics_period_choices': _period_choices(),
+        'statistics_account_choices': account_choices,
+        'statistics_currency_choices': currency_choices,
+        'statistics_category_choices': _category_choices(users),
+        'statistics_member_choices': _member_choices(user, container),
     }
 
     cache.set(cache_key, stats, 600)
