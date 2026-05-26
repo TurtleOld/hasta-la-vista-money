@@ -1,3 +1,208 @@
+.dashboard-app {
+  --dashboard-bg: var(--app-bg);
+  --dashboard-surface: var(--app-surface);
+  --dashboard-surface-2: var(--app-surface-2);
+  --dashboard-border: var(--app-border);
+  --dashboard-text: var(--app-text);
+  --dashboard-muted: var(--app-muted);
+  --dashboard-accent: var(--app-accent);
+  --dashboard-positive: var(--app-positive);
+  --dashboard-negative: var(--app-negative);
+  --dashboard-shadow-soft: 0 4px 24px color-mix(in oklab, var(--dashboard-accent) 8%, transparent), 0 1px 6px rgba(0, 0, 0, 0.04);
+  background:
+    radial-gradient(ellipse 70% 42% at 0% 0%, color-mix(in oklab, var(--dashboard-accent) 11%, transparent), transparent),
+    radial-gradient(ellipse 50% 35% at 100% 0%, color-mix(in oklab, var(--dashboard-positive) 7%, transparent), transparent),
+    var(--dashboard-bg);
+  color: var(--dashboard-text);
+  min-height: calc(100vh - 4rem);
+  padding: 1.5rem 1rem 2rem;
+}
+
+.dashboard-wrap {
+  margin: 0 auto;
+  max-width: 84rem;
+}
+
+.dashboard-header {
+  align-items: flex-end;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-title {
+  align-items: center;
+  display: flex;
+  font-size: clamp(1.8rem, 3vw, 2.25rem);
+  font-weight: 800;
+  gap: 0.75rem;
+  letter-spacing: -0.06em;
+  line-height: 1.05;
+}
+
+.dashboard-title-icon {
+  color: var(--dashboard-accent);
+  height: 2rem;
+  width: 2rem;
+}
+
+.dashboard-subtitle {
+  color: var(--dashboard-muted);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.dashboard-actions,
+.dashboard-toolbar,
+.dashboard-scope {
+  align-items: center;
+  display: flex;
+}
+
+.dashboard-actions {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.dashboard-button {
+  align-items: center;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 700;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0.65rem 1rem;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.dashboard-button:hover {
+  transform: translateY(-1px);
+}
+
+.dashboard-button-primary {
+  background: var(--gradient-brand-diagonal);
+  border-color: transparent;
+  color: var(--app-surface);
+  box-shadow: 0 16px 35px color-mix(in oklab, var(--dashboard-positive) 25%, transparent);
+}
+
+.dashboard-button-secondary {
+  background: var(--dashboard-surface);
+  color: var(--dashboard-text);
+}
+
+.dashboard-toolbar {
+  background: var(--dashboard-surface);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 1.25rem;
+  box-shadow: var(--dashboard-shadow-soft);
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+}
+
+.dashboard-scope {
+  background: var(--dashboard-surface-2);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 999px;
+  padding: 0.25rem;
+}
+
+.dashboard-scope-link {
+  border-radius: 999px;
+  color: var(--dashboard-muted);
+  font-size: 0.875rem;
+  font-weight: 800;
+  padding: 0.55rem 1rem;
+}
+
+.dashboard-scope-link-active {
+  background: var(--dashboard-surface);
+  color: var(--dashboard-accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.dashboard-filter-label {
+  color: var(--dashboard-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboard-select {
+  background: var(--dashboard-surface);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 999px;
+  color: var(--dashboard-text);
+  min-height: 2.5rem;
+  padding: 0.55rem 2.5rem 0.55rem 1rem;
+}
+
+.dashboard-kpi-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 2rem;
+}
+
+.dashboard-kpi-card {
+  background: var(--dashboard-surface);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  display: block;
+  padding: 1.25rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dashboard-kpi-card:hover {
+  box-shadow: var(--dashboard-shadow-soft);
+  transform: translateY(-2px);
+}
+
+.dashboard-kpi-label {
+  color: var(--dashboard-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboard-kpi-value {
+  font-family: var(--font-family-mono);
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  margin-top: 0.5rem;
+}
+
+.dashboard-kpi-footer {
+  align-items: center;
+  color: var(--dashboard-muted);
+  display: flex;
+  font-size: 0.875rem;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.dashboard-kpi-more {
+  color: var(--dashboard-accent);
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.dashboard-kpi-card:hover .dashboard-kpi-more,
+.dashboard-kpi-card:focus .dashboard-kpi-more {
+  opacity: 1;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
@@ -7,8 +212,9 @@
 
 .widget {
   grid-column: span var(--widget-width, 6);
-  background: var(--app-surface);
-  border-radius: 0.75rem;
+  background: var(--dashboard-surface, var(--app-surface));
+  border: 1px solid var(--dashboard-border, var(--app-border));
+  border-radius: 1.25rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
   transition: all 0.3s ease;
   overflow: hidden;
@@ -38,7 +244,7 @@
   align-items: center;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--color-neutral-200);
-  cursor: move;
+  cursor: default;
 }
 
 [data-bs-theme="dark"] .widget-header {
@@ -69,8 +275,16 @@
 }
 
 .widget-controls {
-  display: flex;
+  display: none;
   gap: 0.5rem;
+}
+
+.dashboard-grid.edit-mode .widget-controls {
+  display: flex;
+}
+
+.dashboard-grid.edit-mode .widget-header {
+  cursor: move;
 }
 
 .widget-controls button {
@@ -115,6 +329,15 @@
 }
 
 @media (max-width: 768px) {
+  .dashboard-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-grid {
     grid-template-columns: 1fr;
   }

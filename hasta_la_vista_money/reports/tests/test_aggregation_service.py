@@ -176,6 +176,112 @@ class BudgetChartsTest(TestCase):
         self.assertIn('chart_balance', charts_data)
         self.assertIn('pie_labels', charts_data)
         self.assertIn('pie_values', charts_data)
+        self.assertIn('total_income', charts_data)
+        self.assertIn('total_expense', charts_data)
+        self.assertIn('net_balance', charts_data)
+        self.assertIn('savings_rate', charts_data)
+        self.assertIn('top_expense_category', charts_data)
+        self.assertIn('chart_start_dates', charts_data)
+        self.assertIn('chart_end_dates', charts_data)
+        self.assertIn('pie_category_keys', charts_data)
+
+    def test_budget_charts_returns_totals_and_kpi_data(self) -> None:
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Checking',
+            balance=Decimal('1000.00'),
+        )
+        income_category = Category.objects.create(
+            user=self.user,
+            name='Salary',
+            type=TransactionType.INCOME,
+        )
+        expense_category = Category.objects.create(
+            user=self.user,
+            name='Food',
+            type=TransactionType.EXPENSE,
+        )
+        transaction_date = datetime(
+            2026,
+            1,
+            10,
+            tzinfo=timezone.get_current_timezone(),
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=income_category,
+            type=TransactionType.INCOME,
+            amount=Decimal('1000.00'),
+            date=transaction_date,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=expense_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('250.00'),
+            date=transaction_date,
+        )
+
+        charts_data = budget_charts(self.user)
+
+        self.assertEqual(charts_data['chart_income'], [1000.0])
+        self.assertEqual(charts_data['chart_expense'], [250.0])
+        self.assertEqual(charts_data['chart_balance'], [750.0])
+        self.assertEqual(charts_data['pie_labels'], ['Food'])
+        self.assertEqual(charts_data['pie_values'], [250.0])
+        self.assertEqual(
+            charts_data['pie_category_keys'],
+            [f'{TransactionType.EXPENSE}-{expense_category.pk}'],
+        )
+        self.assertEqual(charts_data['total_income'], 1000.0)
+        self.assertEqual(charts_data['total_expense'], 250.0)
+        self.assertEqual(charts_data['net_balance'], 750.0)
+        self.assertEqual(charts_data['savings_rate'], 75.0)
+        self.assertEqual(charts_data['top_expense_category'], 'Food')
+
+    def test_budget_charts_filters_by_period(self) -> None:
+        account = Account.objects.create(
+            user=self.user,
+            name_account='Checking',
+            balance=Decimal('1000.00'),
+        )
+        income_category = Category.objects.create(
+            user=self.user,
+            name='Salary',
+            type=TransactionType.INCOME,
+        )
+        current_month = timezone.localdate().replace(day=10)
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=income_category,
+            type=TransactionType.INCOME,
+            amount=Decimal('100.00'),
+            date=datetime.combine(
+                current_month,
+                datetime.min.time(),
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=account,
+            category=income_category,
+            type=TransactionType.INCOME,
+            amount=Decimal('300.00'),
+            date=datetime(
+                2020,
+                1,
+                10,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+
+        charts_data = budget_charts(self.user, period='m')
+
+        self.assertEqual(charts_data['total_income'], 100.0)
 
     def test_budget_charts_uses_cache(self) -> None:
         budget_charts(self.user)

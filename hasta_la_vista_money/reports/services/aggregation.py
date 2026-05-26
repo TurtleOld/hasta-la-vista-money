@@ -32,6 +32,33 @@ class BudgetChartsDict(TypedDict):
     chart_balance: list[float]
     pie_labels: list[str]
     pie_values: list[float]
+    total_income: float
+    total_expense: float
+    net_balance: float
+    savings_rate: float
+    top_expense_category: str
+    chart_start_dates: list[str]
+    chart_end_dates: list[str]
+    pie_category_keys: list[str]
+
+
+def report_period_range(period: str) -> tuple[date, date] | None:
+    """Return date range for the reports period filter."""
+    today = timezone.localdate()
+    if period == 'm':
+        return today.replace(day=1), _end_of_month(today)
+    if period == 'q':
+        quarter = (today.month - 1) // 3
+        start = date(today.year, quarter * 3 + 1, 1)
+        return start, _end_of_month(date(today.year, quarter * 3 + 3, 1))
+    if period == 'y':
+        return date(today.year, 1, 1), date(today.year, 12, 31)
+    return None
+
+
+def _end_of_month(value: date) -> date:
+    _, last_day = monthrange(value.year, value.month)
+    return value.replace(day=last_day)
 
 
 def collect_datasets(
@@ -276,12 +303,13 @@ def _pie_for_categories(
     categories: Sequence[Category],
     months: list[date],
     fact_map: dict[int, dict[date, Decimal]],
-) -> tuple[list[str], list[float]]:
+) -> tuple[list[str], list[float], list[str]]:
     """Return labels and values for the expense pie chart."""
     labels: list[str] = []
     values: list[float] = []
+    category_keys: list[str] = []
     if not months or not categories:
-        return labels, values
+        return labels, values, category_keys
     totals: dict[int, Decimal] = defaultdict(lambda: Decimal(0))
     for cat in categories:
         for month in months:
@@ -291,19 +319,28 @@ def _pie_for_categories(
         if total > 0:
             labels.append(cat.name)
             values.append(float(total))
-    return labels, values
+            category_keys.append(f'{TransactionType.EXPENSE}-{cat.pk}')
+    return labels, values, category_keys
 
 
-def budget_charts(user: User) -> BudgetChartsDict:
+def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
     """Build chart data for the reports dashboard."""
-    cache_key = get_reports_budget_charts_cache_key(user.pk)
+    cache_key = f'{get_reports_budget_charts_cache_key(user.pk)}:{period}'
     cached_charts = cache.get(cache_key)
     if cached_charts is not None:
         return cached_charts  # type: ignore[no-any-return]
 
+    period_range = report_period_range(period)
+    transactions_qs = Transaction.objects.filter(user=user)
+    if period_range is not None:
+        start, end = period_range
+        transactions_qs = transactions_qs.filter(
+            date__date__gte=start,
+            date__date__lte=end,
+        )
+
     months_qs = (
-        Transaction.objects.filter(user=user)
-        .annotate(month=TruncMonth('date'))
+        transactions_qs.annotate(month=TruncMonth('date'))
         .values_list('month', flat=True)
         .distinct()
         .order_by('month')
@@ -326,6 +363,8 @@ def budget_charts(user: User) -> BudgetChartsDict:
     )
 
     chart_labels = [m.strftime('%b %Y') for m in months] if months else []
+    chart_start_dates = [m.isoformat() for m in months]
+    chart_end_dates = [_end_of_month(m).isoformat() for m in months]
 
     expense_fact = _fact_map_for_categories(
         user,
@@ -349,10 +388,20 @@ def budget_charts(user: User) -> BudgetChartsDict:
         else []
     )
 
-    pie_labels, pie_values = _pie_for_categories(
+    pie_labels, pie_values, pie_category_keys = _pie_for_categories(
         expense_categories,
         months,
         expense_fact,
+    )
+
+    total_income_sum = sum(total_income)
+    total_expense_sum = sum(total_expense)
+    net_balance = total_income_sum - total_expense_sum
+    savings_rate = (
+        net_balance / total_income_sum * 100 if total_income_sum else 0.0
+    )
+    top_expense_category = (
+        pie_labels[pie_values.index(max(pie_values))] if pie_values else ''
     )
 
     charts_data = {
@@ -362,6 +411,14 @@ def budget_charts(user: User) -> BudgetChartsDict:
         'chart_balance': chart_balance,
         'pie_labels': pie_labels,
         'pie_values': pie_values,
+        'total_income': total_income_sum,
+        'total_expense': total_expense_sum,
+        'net_balance': net_balance,
+        'savings_rate': savings_rate,
+        'top_expense_category': top_expense_category,
+        'chart_start_dates': chart_start_dates,
+        'chart_end_dates': chart_end_dates,
+        'pie_category_keys': pie_category_keys,
     }
     cache.set(cache_key, charts_data, constants.REPORTS_CACHE_TIMEOUT)
     return charts_data

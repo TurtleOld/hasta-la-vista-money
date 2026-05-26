@@ -1,5 +1,6 @@
 """Tests for finance account views."""
 
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
 
@@ -209,6 +210,20 @@ class TestFinancesView(TestCase):
             transactions[0].account_name,
             self.account.name_account,
         )
+
+    def test_finances_filter_accepts_explicit_date_range(self) -> None:
+        request = self.factory.get(
+            '/finance/?date_from=2026-01-01&date_to=2026-01-31',
+        )
+
+        finances_filter = FinancesFilter.from_request(request)
+
+        self.assertEqual(
+            finances_filter.date_range(),
+            (date(2026, 1, 1), date(2026, 1, 31)),
+        )
+        self.assertIn('date_from=2026-01-01', finances_filter.query_string)
+        self.assertIn('date_to=2026-01-31', finances_filter.query_string)
 
 
 class TestAccountCreateView(TestCase):

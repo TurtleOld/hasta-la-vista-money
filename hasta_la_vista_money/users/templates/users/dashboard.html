@@ -8,29 +8,29 @@
 {% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-7xl mx-auto">
-        <div class="mb-8">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+<div class="dashboard-app">
+    <div class="dashboard-wrap">
+        <div>
+            <div class="dashboard-header">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                        <svg class="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <h1 class="dashboard-title">
+                        <svg class="dashboard-title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                         {% translate 'Интерактивный дашборд' %}
                     </h1>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    <p class="dashboard-subtitle">
                         {% translate 'Может содержать ошибки подсчётов' %}
                     </p>
                 </div>
-                <div class="flex flex-wrap gap-3">
-                    <button type="button" id="add-widget-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600">
+                <div class="dashboard-actions">
+                    <button type="button" id="add-widget-btn" class="dashboard-button dashboard-button-primary">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
                         {% translate 'Добавить виджет' %}
                     </button>
-                    <button type="button" id="edit-mode-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    <button type="button" id="edit-mode-btn" class="dashboard-button dashboard-button-secondary">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                         </svg>
@@ -39,15 +39,15 @@
                 </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row sm:items-center gap-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700">
-                <div class="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-1" aria-label="{% translate 'Область данных' %}">
-                    <a class="rounded-lg px-4 py-2 text-sm font-semibold {% if selected_group_id == 'family' %}bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 shadow-sm{% else %}text-gray-500 dark:text-gray-400{% endif %}" href="?group_id=family">{% translate 'Семья' %}</a>
-                    <a class="rounded-lg px-4 py-2 text-sm font-semibold {% if selected_group_id == 'my' %}bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-300 shadow-sm{% else %}text-gray-500 dark:text-gray-400{% endif %}" href="?group_id=my">{% translate 'Мои' %}</a>
+            <div class="dashboard-toolbar">
+                <div class="dashboard-scope" aria-label="{% translate 'Область данных' %}">
+                    <a class="dashboard-scope-link{% if selected_group_id == 'family' %} dashboard-scope-link-active{% endif %}" href="?group_id=family">{% translate 'Семья' %}</a>
+                    <a class="dashboard-scope-link{% if selected_group_id == 'my' %} dashboard-scope-link-active{% endif %}" href="?group_id=my">{% translate 'Мои' %}</a>
                 </div>
-                <label for="period-select" class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                <label for="period-select" class="dashboard-filter-label">
                     {% translate 'Период:' %}
                 </label>
-                <select id="period-select" class="block w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
+                <select id="period-select" class="dashboard-select">
                     <option value="month">{% translate 'Месяц' %}</option>
                     <option value="quarter">{% translate 'Квартал' %}</option>
                     <option value="year">{% translate 'Год' %}</option>
@@ -56,13 +56,13 @@
         </div>
 
         {% if kpi_cards %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8" aria-label="{% translate 'Ключевые показатели месяца' %}">
+        <div class="dashboard-kpi-grid" aria-label="{% translate 'Ключевые показатели месяца' %}">
             {% for card in kpi_cards %}
-            <a href="{{ card.url }}" class="group block bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+            <a href="{{ card.url }}" class="dashboard-kpi-card">
                 <div class="flex items-start justify-between gap-3">
                     <div>
-                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ card.title }}</p>
-                        <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+                        <p class="dashboard-kpi-label">{{ card.title }}</p>
+                        <p class="dashboard-kpi-value">
                             {{ card.value|floatformat:2 }} ₽
                         </p>
                     </div>
@@ -72,9 +72,9 @@
                         </svg>
                     </span>
                 </div>
-                <div class="mt-4 flex items-center justify-between gap-3 text-sm">
-                    <span class="truncate text-gray-600 dark:text-gray-300">{{ card.subtitle }}</span>
-                    <span class="text-blue-600 dark:text-blue-400 font-medium opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100">
+                <div class="dashboard-kpi-footer">
+                    <span class="truncate">{{ card.subtitle }}</span>
+                    <span class="dashboard-kpi-more">
                         {% translate 'Подробнее' %}
                     </span>
                 </div>

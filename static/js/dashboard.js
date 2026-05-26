@@ -35,8 +35,11 @@ class DashboardManager {
                 for (const [dkRaw, dv] of Object.entries(v)) {
                     const dk = String(dkRaw);
                     if (dk === '__proto__' || dk === 'prototype' || dk === 'constructor') continue;
-                    if (!/^[A-Za-z0-9_]+$/.test(dk)) continue;
-                    const dataAttrName = 'data-' + dk.replace(/_/g, '-');
+                    if (!/^[A-Za-z0-9_-]+$/.test(dk)) continue;
+                    const dataAttrName = 'data-' + dk
+                        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+                        .replace(/_/g, '-')
+                        .toLowerCase();
                     node.setAttribute(dataAttrName, String(dv));
                 }
                 continue;
@@ -176,7 +179,6 @@ class DashboardManager {
             addWidgetBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Add widget button clicked');
                 try {
                     this.showWidgetSelectModal();
                 } catch (err) {
@@ -191,7 +193,6 @@ class DashboardManager {
             editModeBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Edit mode button clicked');
                 this.toggleEditMode();
             });
         }
@@ -221,6 +222,7 @@ class DashboardManager {
             const removeBtn = e.target.closest('.btn-remove-widget');
             if (removeBtn) {
                 e.preventDefault();
+                if (!this.editMode) return;
                 const widget = removeBtn.closest('.widget');
                 if (widget) this.removeWidget(widget.dataset.widgetId);
                 return;
@@ -229,6 +231,7 @@ class DashboardManager {
             const configBtn = e.target.closest('.btn-config-widget');
             if (configBtn) {
                 e.preventDefault();
+                if (!this.editMode) return;
                 const widget = configBtn.closest('.widget');
                 const widgetId = widget?.dataset.widgetId;
                 if (widgetId) this.showConfigModal(widgetId);
@@ -294,6 +297,7 @@ class DashboardManager {
         }
 
         this.widgets.forEach((widget) => grid.appendChild(this.createWidgetElement(widget)));
+        grid.classList.toggle('edit-mode', this.editMode);
         this.initSortable();
         this.renderWidgetCharts();
     }
@@ -308,6 +312,7 @@ class DashboardManager {
         title.textContent = this.getWidgetTitle(widget.widget_type);
 
         const controls = this._el('div', { class: 'widget-controls' });
+        controls.hidden = !this.editMode;
         const configBtn = this._el('button', {
             class: 'btn-config-widget text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
             title: 'Настройки',
@@ -733,6 +738,7 @@ class DashboardManager {
             this.sortable = Sortable.create(grid, {
                 animation: 150,
                 handle: '.widget-header',
+                disabled: !this.editMode,
                 onEnd: () => this.updateWidgetPositions(),
             });
         } catch (error) {
@@ -766,7 +772,6 @@ class DashboardManager {
             console.error('Widget select modal not found');
             return;
         }
-        console.log('Showing widget select modal');
         modalElement.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
         this.setupModalCloseHandlers(modalElement);
@@ -886,6 +891,10 @@ class DashboardManager {
         const btn = document.getElementById('edit-mode-btn');
 
         grid?.classList.toggle('edit-mode', this.editMode);
+        this.sortable?.option('disabled', !this.editMode);
+        document.querySelectorAll('.widget-controls').forEach((controls) => {
+            controls.hidden = !this.editMode;
+        });
 
         if (btn) {
             this._clear(btn);
@@ -1011,10 +1020,8 @@ window.DashboardManager = DashboardManager;
             if (typeof Sortable === 'undefined') {
                 console.warn('Sortable.js is not loaded. Drag and drop will not work.');
             }
-            console.log('Initializing DashboardManager...');
             try {
                 window.dashboardManager = new window.DashboardManager();
-                console.log('DashboardManager initialized successfully');
                 return true;
             } catch (error) {
                 console.error('Error initializing DashboardManager:', error);
@@ -1037,10 +1044,7 @@ window.DashboardManager = DashboardManager;
             return;
         }
 
-        if (initDashboard()) {
-            console.log('Dashboard initialized successfully');
-            return;
-        }
+        if (initDashboard()) return;
 
         setTimeout(() => {
             waitForDependencies(attempts + 1);

@@ -4,12 +4,15 @@ This module provides Celery tasks for generating monthly, yearly,
 and user statistics reports.
 """
 
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 import structlog
 from celery import shared_task
 from django.db.models import Avg, Count, Max, Min, Sum
+from django.db.models.functions import TruncMonth
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.receipts.models import Receipt
@@ -211,43 +214,41 @@ def generate_yearly_report(
             end_date=end_date.isoformat(),
         )
 
+        monthly_totals: dict[int, dict[str, Decimal]] = defaultdict(
+            lambda: {
+                TransactionType.INCOME: Decimal(0),
+                TransactionType.EXPENSE: Decimal(0),
+            },
+        )
+        monthly_rows = (
+            Transaction.objects.filter(user=user, date__year=year)
+            .annotate(month=TruncMonth('date'))
+            .values('month', 'type')
+            .annotate(total=Sum('amount'))
+        )
+        for row in monthly_rows:
+            month_value = row['month']
+            if month_value is None:
+                continue
+            month_number = month_value.month
+            monthly_totals[month_number][row['type']] = row['total'] or Decimal(
+                0,
+            )
+
         monthly_data = []
         for month in range(
             constants.NUMBER_FIRST_MONTH_YEAR,
             constants.NUMBER_TWELFTH_MONTH_YEAR + 1,
         ):
-            month_start = datetime(year, month, 1, tzinfo=UTC)
-            if month == constants.NUMBER_TWELFTH_MONTH_YEAR:
-                month_end = datetime(year + 1, 1, 1, tzinfo=UTC) - timedelta(
-                    days=1,
-                )
-            else:
-                month_end = datetime(
-                    year,
-                    month + 1,
-                    1,
-                    tzinfo=UTC,
-                ) - timedelta(days=1)
-
-            month_income = Transaction.objects.filter(
-                user=user,
-                type=TransactionType.INCOME,
-                date__range=(month_start, month_end),
-            ).aggregate(total=Sum('amount'))
-
-            month_expense = Transaction.objects.filter(
-                user=user,
-                type=TransactionType.EXPENSE,
-                date__range=(month_start, month_end),
-            ).aggregate(total=Sum('amount'))
+            month_income = monthly_totals[month][TransactionType.INCOME]
+            month_expense = monthly_totals[month][TransactionType.EXPENSE]
 
             monthly_data.append(
                 {
                     'month': month,
-                    'income': month_income['total'] or 0,
-                    'expense': month_expense['total'] or 0,
-                    'net': (month_income['total'] or 0)
-                    - (month_expense['total'] or 0),
+                    'income': month_income,
+                    'expense': month_expense,
+                    'net': month_income - month_expense,
                 },
             )
 
