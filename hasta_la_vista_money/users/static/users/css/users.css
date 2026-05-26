@@ -8,6 +8,7 @@
   --dashboard-accent: var(--app-accent);
   --dashboard-positive: var(--app-positive);
   --dashboard-negative: var(--app-negative);
+  --dashboard-button-primary-text: var(--app-text);
   --dashboard-shadow-soft: 0 4px 24px color-mix(in oklab, var(--dashboard-accent) 8%, transparent), 0 1px 6px rgba(0, 0, 0, 0.04);
   background:
     radial-gradient(ellipse 70% 42% at 0% 0%, color-mix(in oklab, var(--dashboard-accent) 11%, transparent), transparent),
@@ -16,6 +17,10 @@
   color: var(--dashboard-text);
   min-height: calc(100vh - 4rem);
   padding: 1.5rem 1rem 2rem;
+}
+
+[data-bs-theme="dark"] .dashboard-app {
+  --dashboard-button-primary-text: var(--app-on-accent);
 }
 
 .dashboard-wrap {
@@ -85,7 +90,7 @@
 .dashboard-button-primary {
   background: var(--gradient-brand-diagonal);
   border-color: transparent;
-  color: var(--app-surface);
+  color: var(--dashboard-button-primary-text);
   box-shadow: 0 16px 35px color-mix(in oklab, var(--dashboard-positive) 25%, transparent);
 }
 
