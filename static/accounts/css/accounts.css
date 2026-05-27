@@ -137,6 +137,25 @@
   font-family: var(--font-family-mono);
 }
 
+.accounts-hero-debt {
+  margin-top: 0.625rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  flex-wrap: wrap;
+}
+
+.accounts-hero-debt-label {
+  color: var(--acc-muted);
+}
+
+.accounts-hero-debt-value {
+  font-family: var(--font-family-mono);
+  font-weight: 500;
+  color: var(--acc-negative);
+}
+
 /* ── Page header (title + actions) ──────────────────────────────── */
 .accounts-page-hd {
   display: flex;

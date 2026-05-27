@@ -1822,6 +1822,66 @@ def _payment_schedule_remaining_debt(
     )
 
 
+def compute_total_payment_schedule_debt(
+    accounts: QuerySet[Account],
+    account_service: AccountServiceProtocol,
+) -> Decimal:
+    """Sum ``remaining_debt`` from payment schedules across credit cards.
+
+    Builds the same payment schedule used in the detailed-statistics
+    table ("График платежей по беспроцентному периоду") for every
+    credit account in the queryset, then sums the per-month
+    ``remaining_debt`` values. The result matches the "Осталось"
+    column on the statistics page.
+
+    Args:
+        accounts: QuerySet of accounts to inspect.
+        account_service: Account service used for grace and debt
+            calculations.
+
+    Returns:
+        Non-negative Decimal representing total outstanding debt
+        across credit-card payment schedules.
+    """
+    today = timezone.now().date()
+    stats_filter = StatisticsFilters()
+    period_start, period_end = stats_filter.date_range(today)
+
+    credit_cards = accounts.filter(
+        type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT],
+    )
+
+    total = Decimal(str(constants.ZERO))
+    for card in credit_cards:
+        months, history = _card_months_block(
+            card,
+            today,
+            stats_filter,
+            account_service=account_service,
+        )
+
+        payments_raw = list(
+            TransferMoneyLog.objects.filter(
+                user=card.user,
+                to_account=card,
+                exchange_date__date__gte=period_start,
+                exchange_date__date__lte=period_end,
+            ).values('amount', 'exchange_date'),
+        )
+        payments: list[PaymentItemDict] = [
+            {
+                'amount': Decimal(str(p['amount'])),
+                'date': p['exchange_date'],
+            }
+            for p in payments_raw
+        ]
+        _apply_payments_to_months(months, payments)
+        schedule = _build_payment_schedule(months, history, card)
+        total += _payment_schedule_remaining_debt(schedule)
+
+    return total
+
+
 def _credit_cards_block(
     accounts: QuerySet[Account],
     stats_filter: StatisticsFilters,

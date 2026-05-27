@@ -9,6 +9,11 @@
 {# Out-of-band swaps: refresh hero amount, change-chip, sidebar widgets #}
 <span id="accounts-hero-amt-value" hx-swap-oob="true" class="hide-target">{{ sum_all_accounts_in_group|comma }}<span class="cur">₽</span></span>
 
+<div id="accounts-hero-debt" hx-swap-oob="true" class="accounts-hero-debt{% if not total_credit_debt or total_credit_debt <= 0 %} is-hidden-icon{% endif %}">
+    <span class="accounts-hero-debt-label">{% translate 'Задолженность:' %}</span>
+    <span class="accounts-hero-debt-value hide-target">{{ total_credit_debt|comma }} ₽</span>
+</div>
+
 <div id="accounts-hero-change" hx-swap-oob="true" class="accounts-hero-change">
     {% if balance_trend.has_data %}
         {% if balance_trend.delta_absolute >= 0 %}

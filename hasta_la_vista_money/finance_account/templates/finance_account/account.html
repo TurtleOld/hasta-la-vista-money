@@ -41,6 +41,10 @@
                         <span>{% translate 'Недостаточно данных для расчёта динамики' %}</span>
                     {% endif %}
                 </div>
+                <div id="accounts-hero-debt" class="accounts-hero-debt{% if not total_credit_debt or total_credit_debt <= 0 %} is-hidden-icon{% endif %}">
+                    <span class="accounts-hero-debt-label">{% translate 'Задолженность:' %}</span>
+                    <span class="accounts-hero-debt-value hide-target">{{ total_credit_debt|comma }} ₽</span>
+                </div>
             </div>
             <div></div>
         </section>
