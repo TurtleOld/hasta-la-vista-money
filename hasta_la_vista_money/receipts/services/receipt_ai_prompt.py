@@ -1,22 +1,14 @@
 """Utilities for extracting receipt data from images.
 
-This module provides functions for:
-- image_to_base64: legacy image encoding helper
-- analyze_image_with_ai: extracting receipt data using local inference
-- paginator_custom_view: pagination utility
+This module provides utilities for extracting receipt data from images.
 """
 
 import base64
-from collections.abc import Sequence
-from typing import Any, TypeVar
 
 import structlog
 from decouple import config
 from django.core.cache import cache
 from django.core.files.uploadedfile import UploadedFile
-from django.core.paginator import Page, Paginator
-from django.db.models import QuerySet
-from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.receipts.services.ai_providers import (
@@ -27,8 +19,6 @@ from hasta_la_vista_money.receipts.services.receipt_inference_client import (
     analyze_image_with_receipt_inference,
 )
 
-T = TypeVar('T')
-
 logger = structlog.get_logger(__name__)
 
 __all__ = [
@@ -36,7 +26,6 @@ __all__ = [
     'RateLimitExceededError',
     'analyze_image_with_ai',
     'image_to_base64',
-    'paginator_custom_view',
 ]
 
 
@@ -122,25 +111,3 @@ def analyze_image_with_ai(
     """
     check_ai_rate_limit(user_id)
     return analyze_image_with_receipt_inference(uploaded_file)
-
-
-def paginator_custom_view(
-    request: HttpRequest,
-    queryset: QuerySet[Any] | list[Any],
-    paginate_by: int,
-    page_name: str,
-) -> Page[Sequence[Any]]:
-    """Paginate queryset or list with custom page parameter name.
-
-    Args:
-        request: HTTP request object with GET parameters.
-        queryset: QuerySet or list to paginate.
-        paginate_by: Number of items per page.
-        page_name: Name of the GET parameter for page number.
-
-    Returns:
-        Paginated page object with items.
-    """
-    paginator = Paginator(queryset, paginate_by)
-    num_page = request.GET.get(page_name)
-    return paginator.get_page(num_page)

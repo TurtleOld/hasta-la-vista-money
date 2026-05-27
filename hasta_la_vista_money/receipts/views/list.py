@@ -20,6 +20,7 @@ from django.views.generic import (
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.core.mixins import EntityListViewMixin
+from hasta_la_vista_money.core.pagination import paginator_custom_view
 from hasta_la_vista_money.core.views import (
     BaseEntityFilterView,
 )
@@ -34,7 +35,6 @@ from hasta_la_vista_money.receipts.models import (
     Receipt,
     Seller,
 )
-from hasta_la_vista_money.receipts.services import paginator_custom_view
 from hasta_la_vista_money.receipts.views.base import BaseView
 from hasta_la_vista_money.users.models import User
 

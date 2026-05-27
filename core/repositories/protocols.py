@@ -6,72 +6,12 @@ consistent data access patterns across the application.
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from django.db.models import Model, QuerySet
+from django.db.models import QuerySet
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
     from hasta_la_vista_money.transactions.models import Category, Transaction
     from hasta_la_vista_money.users.models import User
-
-
-@runtime_checkable
-class BaseRepositoryProtocol(Protocol):
-    """Base protocol for repositories.
-
-    Defines common CRUD operations for all repositories.
-    """
-
-    def get(self, **kwargs: object) -> Model:
-        """Get a single model instance.
-
-        Args:
-            **kwargs: Filter criteria.
-
-        Returns:
-            Model instance.
-
-        Raises:
-            Model.DoesNotExist: If instance not found.
-        """
-        ...
-
-    def filter(self, **kwargs: object) -> QuerySet[Model]:
-        """Filter model instances.
-
-        Args:
-            **kwargs: Filter criteria.
-
-        Returns:
-            QuerySet of matching instances.
-        """
-        ...
-
-    def create(self, **kwargs: object) -> Model:
-        """Create a new model instance.
-
-        Args:
-            **kwargs: Model field values.
-
-        Returns:
-            Created Model instance.
-        """
-        ...
-
-    def update_or_create(
-        self,
-        defaults: dict[str, object] | None = None,
-        **kwargs: object,
-    ) -> tuple[Model, bool]:
-        """Update or create a model instance.
-
-        Args:
-            defaults: Values to update if instance exists.
-            **kwargs: Lookup criteria.
-
-        Returns:
-            Tuple of (instance, created) where created is True if new.
-        """
-        ...
 
 
 @runtime_checkable

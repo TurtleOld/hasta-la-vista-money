@@ -78,6 +78,7 @@ THIRD_PARTY_APPS = [
     'locale',
     'rest_framework',
     'rest_framework.authtoken',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
     'rosetta',
     'django_structlog',
@@ -435,11 +436,7 @@ LOGOUT_REDIRECT_URL = '/login'
 
 # CORS settings for mobile app
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in str(config('CORS_ALLOWED_ORIGINS', default='')).split(',')
-    if origin.strip()
-] or [
+_DEV_CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://localhost:8080',
@@ -447,6 +444,11 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
 ]
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in str(config('CORS_ALLOWED_ORIGINS', default='')).split(',')
+    if origin.strip()
+] or (_DEV_CORS_ALLOWED_ORIGINS if DEBUG else [])
 
 # REST Framework
 REST_FRAMEWORK = {
@@ -547,6 +549,8 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_REFRESH_MAX_AGE': (
         config('REFRESH_TOKEN_LIFETIME', default=7, cast=int) * 24 * 60 * 60
     ),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 # Pending receipt expiry in hours (configurable via env)

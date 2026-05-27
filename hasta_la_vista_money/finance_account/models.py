@@ -55,33 +55,7 @@ class AccountQuerySet(models.QuerySet['Account']):
         return self.filter(type_account=type_account)
 
 
-class AccountManager(models.Manager['Account']):
-    """
-    Custom manager for Account model, exposing common filters via QuerySet.
-    """
-
-    def get_queryset(self) -> AccountQuerySet:
-        return AccountQuerySet(self.model, using=self._db)
-
-    def credit(self) -> AccountQuerySet:
-        """Shortcut for Account.objects.credit()."""
-        return self.get_queryset().credit()
-
-    def debit(self) -> AccountQuerySet:
-        """Shortcut for Account.objects.debit()."""
-        return self.get_queryset().debit()
-
-    def by_user(self, user: 'User') -> AccountQuerySet:
-        return self.get_queryset().by_user(user)
-
-    def by_user_with_related(self, user: 'User') -> AccountQuerySet:
-        return self.get_queryset().by_user_with_related(user)
-
-    def by_currency(self, currency: str) -> AccountQuerySet:
-        return self.get_queryset().by_currency(currency)
-
-    def by_type(self, type_account: str) -> AccountQuerySet:
-        return self.get_queryset().by_type(type_account)
+AccountManager = models.Manager.from_queryset(AccountQuerySet)
 
 
 class TimeStampedModel(models.Model):
@@ -184,7 +158,7 @@ class Account(TimeStampedModel):
         ),
     )
 
-    objects = AccountManager.from_queryset(AccountQuerySet)()
+    objects = AccountManager()
 
     class Meta(TimeStampedModel.Meta):
         db_table = 'account'
