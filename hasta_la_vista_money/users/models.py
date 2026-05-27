@@ -132,6 +132,7 @@ class BankStatementUpload(Model):
     processed_transactions = IntegerField(default=0)
     income_count = IntegerField(default=0)
     expense_count = IntegerField(default=0)
+    skipped_count = IntegerField(default=0)
     error_message = TextField(blank=True, default='')
     celery_task_id = CharField(max_length=255, blank=True, default='')
     created_at = DateTimeField(auto_now_add=True)

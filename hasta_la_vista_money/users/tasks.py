@@ -58,7 +58,7 @@ def process_bank_statement_task(
 
         logger.info('Found %d transactions to process', len(transactions))
 
-        income_count, expense_count = _process_transactions(
+        income_count, expense_count, skipped_count = _process_transactions(
             upload,
             transactions,
         )
@@ -69,14 +69,16 @@ def process_bank_statement_task(
         upload.save(update_fields=['status', 'progress'])
 
         logger.info(
-            'Completed: %d income, %d expenses',
+            'Completed: %d income, %d expenses, %d skipped',
             income_count,
             expense_count,
+            skipped_count,
         )
 
         return {
             'income_count': income_count,
             'expense_count': expense_count,
+            'skipped_count': skipped_count,
             'total_count': income_count + expense_count,
         }
 
@@ -128,18 +130,15 @@ def _initialize_upload(
 def _process_transactions(
     upload: BankStatementUpload,
     transactions: list[dict],
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     """Process transactions and create income/expense records.
 
-    Args:
-        upload: Upload instance.
-        transactions: List of parsed transactions.
-
     Returns:
-        Tuple of (income_count, expense_count).
+        Tuple of (income_count, expense_count, skipped_count).
     """
     income_count = 0
     expense_count = 0
+    skipped_count = 0
     batch_size = 10
     total = len(transactions)
 
@@ -148,6 +147,7 @@ def _process_transactions(
             amount = trans['amount']
             description = trans['description']
             trans_date = trans['date']
+            source_ref = trans.get('source_ref')
             abs_amount = abs(amount)
 
             if amount > 0:
@@ -157,19 +157,33 @@ def _process_transactions(
                 type_value = TransactionType.EXPENSE
                 balance_change = -abs_amount
 
-            category, _ = Category.objects.get_or_create(
-                user=upload.user,
-                name=description[:250],
-                type=type_value,
-            )
-            _, created = Transaction.objects.get_or_create(
-                user=upload.user,
+            if _is_duplicate(
                 account=upload.account,
-                category=category,
-                type=type_value,
-                amount=abs_amount,
-                date=trans_date,
-            )
+                user=upload.user,
+                type_value=type_value,
+                abs_amount=abs_amount,
+                trans_date=trans_date,
+                source_ref=source_ref,
+            ):
+                skipped_count += 1
+                created = False
+            else:
+                category, _ = Category.objects.get_or_create(
+                    user=upload.user,
+                    name=description[:250],
+                    type=type_value,
+                )
+                Transaction.objects.create(
+                    user=upload.user,
+                    account=upload.account,
+                    category=category,
+                    type=type_value,
+                    amount=abs_amount,
+                    date=trans_date,
+                    source_ref=source_ref or None,
+                )
+                created = True
+
             if created:
                 Account.objects.filter(pk=upload.account.pk).update(
                     balance=F('balance') + balance_change,
@@ -182,6 +196,7 @@ def _process_transactions(
         upload.processed_transactions = idx + 1
         upload.income_count = income_count
         upload.expense_count = expense_count
+        upload.skipped_count = skipped_count
         upload.progress = int((idx + 1) / total * 100)
 
         # Save progress every batch or on last transaction
@@ -191,6 +206,7 @@ def _process_transactions(
                     'processed_transactions',
                     'income_count',
                     'expense_count',
+                    'skipped_count',
                     'progress',
                 ],
             )
@@ -201,4 +217,51 @@ def _process_transactions(
                 upload.progress,
             )
 
-    return income_count, expense_count
+    return income_count, expense_count, skipped_count
+
+
+def _is_duplicate(
+    *,
+    account: Account,
+    user,
+    type_value: str,
+    abs_amount,
+    trans_date,
+    source_ref: str | None,
+) -> bool:
+    """Return True if this transaction has already been imported.
+
+    When ``source_ref`` is provided we first look for an exact match. If
+    none is found we additionally fall back to ``(account, user, type,
+    amount, date)`` against legacy records that have ``source_ref IS NULL``
+    (created before per-operation refs were stored). When such a legacy
+    record is found we backfill its ``source_ref`` so that subsequent
+    imports match it directly, preventing duplicates.
+    """
+    if source_ref:
+        if Transaction.objects.filter(
+            account=account,
+            source_ref=source_ref,
+        ).exists():
+            return True
+        legacy = Transaction.objects.filter(
+            account=account,
+            user=user,
+            type=type_value,
+            amount=abs_amount,
+            date=trans_date,
+            source_ref__isnull=True,
+        ).first()
+        if legacy is not None:
+            legacy.source_ref = source_ref
+            legacy.save(update_fields=['source_ref'])
+            return True
+        return False
+    return Transaction.objects.filter(
+        account=account,
+        user=user,
+        type=type_value,
+        amount=abs_amount,
+        date=trans_date,
+        source_ref__isnull=True,
+    ).exists()

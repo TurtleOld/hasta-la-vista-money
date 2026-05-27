@@ -16,7 +16,11 @@ from django.utils import timezone
 from faker import Faker
 
 from hasta_la_vista_money.finance_account.models import Account
-from hasta_la_vista_money.transactions.models import Category, TransactionType
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.forms import BankStatementUploadForm
 from hasta_la_vista_money.users.models import BankStatementUpload, User
 from hasta_la_vista_money.users.services.bank_statement import (
@@ -1833,6 +1837,278 @@ class TestBankStatementProcessIntegration(TestCase):
         finally:
             pdf_path.unlink()
 
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.'
+        '_extract_pdf_text_for_detection',
+        return_value='Выписка по счёту кредитной карты',
+    )
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_reimport_skips_existing_by_source_ref(
+        self,
+        mock_camelot: MagicMock,
+        mock_detect: MagicMock,
+    ) -> None:
+        """Re-importing the same Sberbank PDF skips already-loaded ops.
+
+        Uses authcode (source_ref) as the dedup key: the second call must
+        report 0 new income/expense and 2 skipped, without changing the
+        account balance.
+        """
+        mock_df = pd.DataFrame(
+            [
+                [
+                    '18.02.2026 17:11',
+                    'Транспорт',
+                    '73,00 ₽',
+                    '59 016,93 ₽',
+                ],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKA', '', ''],
+                [
+                    '09.02.2026 15:50',
+                    'Перевод на карту',
+                    '+50 546,00 ₽',
+                    '63 493,18 ₽',
+                ],
+                ['09.02.2026 / 552183', 'Перевод от П.', '', ''],
+            ],
+        )
+        mock_table = MagicMock()
+        mock_table.df = mock_df
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as temp_file:
+            temp_file.write(b'%PDF-1.4 mock pdf')
+            pdf_path = Path(temp_file.name)
+
+        try:
+            first = process_bank_statement(
+                pdf_path=pdf_path,
+                account=self.account,
+                user=self.user,
+            )
+            self.assertEqual(first['income_count'], 1)
+            self.assertEqual(first['expense_count'], 1)
+            self.assertEqual(first['skipped_count'], 0)
+
+            balance_after_first = Account.objects.get(
+                pk=self.account.pk,
+            ).balance
+
+            second = process_bank_statement(
+                pdf_path=pdf_path,
+                account=self.account,
+                user=self.user,
+            )
+            self.assertEqual(second['income_count'], 0)
+            self.assertEqual(second['expense_count'], 0)
+            self.assertEqual(second['skipped_count'], 2)
+
+            balance_after_second = Account.objects.get(
+                pk=self.account.pk,
+            ).balance
+            self.assertEqual(balance_after_first, balance_after_second)
+        finally:
+            pdf_path.unlink()
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.'
+        '_extract_pdf_text_for_detection',
+        return_value='Выписка по счёту кредитной карты',
+    )
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_reimport_matches_legacy_records_without_source_ref(
+        self,
+        mock_camelot: MagicMock,
+        mock_detect: MagicMock,
+    ) -> None:
+        """Legacy rows with source_ref=NULL get matched and backfilled.
+
+        Reproduces the migration scenario: a transaction was imported
+        before source_ref existed (stored with NULL). On the next import
+        the parser now extracts source_ref. We must NOT create a duplicate
+        and instead recognise the legacy row by (account, user, type,
+        amount, date) and backfill its source_ref.
+        """
+        # Pre-create a legacy record without source_ref (mimics pre-fix DB)
+        legacy_date = datetime(
+            2026,
+            2,
+            18,
+            17,
+            11,
+            tzinfo=timezone.get_current_timezone(),
+        )
+        legacy_category = Category.objects.create(
+            user=self.user,
+            name='Транспорт',
+            type=TransactionType.EXPENSE,
+        )
+        legacy_tx = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=legacy_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('73.00'),
+            date=legacy_date,
+            source_ref=None,
+        )
+
+        # PDF now produces a row with the same op + source_ref
+        mock_df = pd.DataFrame(
+            [
+                [
+                    '18.02.2026 17:11',
+                    'Транспорт',
+                    '73,00 ₽',
+                    '59 016,93 ₽',
+                ],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKA', '', ''],
+            ],
+        )
+        mock_table = MagicMock()
+        mock_table.df = mock_df
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as temp_file:
+            temp_file.write(b'%PDF-1.4 mock pdf')
+            pdf_path = Path(temp_file.name)
+
+        try:
+            result = process_bank_statement(
+                pdf_path=pdf_path,
+                account=self.account,
+                user=self.user,
+            )
+            self.assertEqual(result['expense_count'], 0)
+            self.assertEqual(result['income_count'], 0)
+            self.assertEqual(result['skipped_count'], 1)
+
+            self.assertEqual(
+                Transaction.objects.filter(
+                    account=self.account,
+                    user=self.user,
+                    amount=Decimal('73.00'),
+                    date=legacy_date,
+                ).count(),
+                1,
+                'No duplicate must be created for the legacy row',
+            )
+            legacy_tx.refresh_from_db()
+            self.assertEqual(
+                legacy_tx.source_ref,
+                '869838',
+                'Legacy row must be backfilled with source_ref',
+            )
+        finally:
+            pdf_path.unlink()
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.'
+        '_extract_pdf_text_for_detection',
+        return_value='Выписка по счёту кредитной карты',
+    )
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_reimport_adds_missing_transaction(
+        self,
+        mock_camelot: MagicMock,
+        mock_detect: MagicMock,
+    ) -> None:
+        """Re-importing after a parser bugfix adds only the newly recovered op.
+
+        Simulates the real scenario: first import misses one transaction
+        (parser bug), second import returns all three. The two already
+        in the DB must be skipped, only the previously-missed one added.
+        """
+        first_df = pd.DataFrame(
+            [
+                [
+                    '18.02.2026 17:11',
+                    'Транспорт',
+                    '73,00 ₽',
+                    '59 016,93 ₽',
+                ],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKA', '', ''],
+                [
+                    '09.02.2026 15:50',
+                    'Перевод на карту',
+                    '+50 546,00 ₽',
+                    '63 493,18 ₽',
+                ],
+                ['09.02.2026 / 552183', 'Перевод от П.', '', ''],
+            ],
+        )
+        second_df = pd.DataFrame(
+            [
+                [
+                    '18.02.2026 17:11',
+                    'Транспорт',
+                    '73,00 ₽',
+                    '59 016,93 ₽',
+                ],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKA', '', ''],
+                [
+                    '09.02.2026 15:50',
+                    'Перевод на карту',
+                    '+50 546,00 ₽',
+                    '63 493,18 ₽',
+                ],
+                ['09.02.2026 / 552183', 'Перевод от П.', '', ''],
+                [
+                    '01.04.2026 16:51',
+                    'Прочие расходы',
+                    '2 958,00 ₽',
+                    '12 851,05 ₽',
+                ],
+                ['01.04.2026 / 311925', 'Aliexpress', '', ''],
+            ],
+        )
+        first_table = MagicMock()
+        first_table.df = first_df
+        second_table = MagicMock()
+        second_table.df = second_df
+        mock_camelot.read_pdf.side_effect = [
+            [first_table],
+            [second_table],
+        ]
+
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as temp_file:
+            temp_file.write(b'%PDF-1.4 mock pdf')
+            pdf_path = Path(temp_file.name)
+
+        try:
+            first = process_bank_statement(
+                pdf_path=pdf_path,
+                account=self.account,
+                user=self.user,
+            )
+            self.assertEqual(
+                first['income_count'] + first['expense_count'],
+                2,
+            )
+
+            second = process_bank_statement(
+                pdf_path=pdf_path,
+                account=self.account,
+                user=self.user,
+            )
+            self.assertEqual(second['skipped_count'], 2)
+            self.assertEqual(second['expense_count'], 1)
+            self.assertEqual(second['income_count'], 0)
+        finally:
+            pdf_path.unlink()
+
 
 class TestBankStatementEdgeCases(TestCase):
     """Edge case tests for bank statement processing."""
@@ -2417,3 +2693,134 @@ class TestSberbankParser(TestCase):
             transactions[0]['description'],
             'Коммунальные платежи, связь, интернет.',
         )
+
+    def test_parse_table_trailing_single_row_transaction(self) -> None:
+        """Last transaction with no row B (cut at page end) is not dropped.
+
+        Regression test: the parser previously used ``while i < len(df) - 1``,
+        which silently skipped the final table row when it was the row A of
+        a transaction whose row B was missing (e.g. the last entry on the
+        last PDF page of a Sberbank statement).
+        """
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                ['18.02.2026 17:11', 'Транспорт', '73,00 ₽', '59 016,93 ₽'],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKA', '', ''],
+                [
+                    '01.04.2026 16:51',
+                    'Прочие расходы',
+                    '2 958,00 ₽',
+                    '12 851,05 ₽',
+                ],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 2)
+        self.assertEqual(transactions[1]['description'], 'Прочие расходы')
+        self.assertEqual(transactions[1]['amount'], Decimal('-2958.00'))
+
+    def test_parse_table_trailing_single_row_only(self) -> None:
+        """A table consisting of a single transaction row is still parsed."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                [
+                    '01.04.2026 16:51',
+                    'Прочие расходы',
+                    '2 958,00 ₽',
+                    '12 851,05 ₽',
+                ],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0]['amount'], Decimal('-2958.00'))
+
+    def test_parse_table_extracts_source_ref_from_row_b(self) -> None:
+        """Authcode from row B becomes the transaction source_ref."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                ['18.02.2026 17:11', 'Транспорт', '73,00 ₽', '59 016,93 ₽'],
+                ['18.02.2026 / 869838', 'MOSCOW STRELKA', '', ''],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0]['source_ref'], '869838')
+
+    def test_parse_table_merged_3col_layout_last_page(self) -> None:
+        """Real 3-column layout from the trailing PDF page is parsed.
+
+        Reproduces Camelot output of the last page of a real Sberbank
+        statement, where col[0] packs date+time+category and col[1]
+        contains only the amount (no ₽ sign).
+        """
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                [
+                    'Выписка по счёту кредитной карты',
+                    '',
+                    'Страница 4 из 4',
+                ],
+                [
+                    'ДАТА ОПЕРАЦИИ (МСК)\nКАТЕГОРИЯ',
+                    'СУММА В РУБЛЯХ',
+                    'ОСТАТОК СРЕДСТВ',
+                ],
+                [
+                    'Дата обработки¹\nОписание операции',
+                    'Сумма в валюте',
+                    '',
+                ],
+                ['и код авторизации', 'операции²', ''],
+                [
+                    '01.04.2026\n16:51\nПрочие расходы',
+                    '2 958,00',
+                    '12 851,05',
+                ],
+                [
+                    '03.04.2026\n311925\n'
+                    'Moscow Aliexpress. Операция по карте ****1234',
+                    '',
+                    '',
+                ],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0]['description'], 'Прочие расходы')
+        self.assertEqual(transactions[0]['amount'], Decimal('-2958.00'))
+        self.assertEqual(transactions[0]['source_ref'], '311925')
+
+    def test_extract_authcode_from_newline_separated(self) -> None:
+        """Authcode is extracted from 'DD.MM.YYYY\\nAUTHCODE\\n...' cells."""
+        parser = self._make_parser()
+        row = pd.Series(
+            [
+                '03.04.2026\n311925\n'
+                'Moscow Aliexpress. Операция по карте ****1234',
+                '',
+                '',
+            ],
+        )
+        self.assertEqual(parser._extract_authcode(row), '311925')
+
+    def test_parse_table_source_ref_is_none_when_no_row_b(self) -> None:
+        """A single-row transaction (no row B) has no source_ref."""
+        parser = self._make_parser()
+        df = self._make_df(
+            [
+                [
+                    '01.04.2026 16:51',
+                    'Прочие расходы',
+                    '2 958,00 ₽',
+                    '12 851,05 ₽',
+                ],
+            ],
+        )
+        transactions = parser._parse_table(df)
+        self.assertEqual(len(transactions), 1)
+        self.assertIsNone(transactions[0]['source_ref'])

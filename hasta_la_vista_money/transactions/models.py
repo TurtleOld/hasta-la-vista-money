@@ -10,6 +10,7 @@ from typing import ClassVar
 
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -113,6 +114,12 @@ class Transaction(models.Model):
         on_delete=models.PROTECT,
         related_name='transactions',
     )
+    source_ref = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        verbose_name=_('Идентификатор операции в выписке'),
+    )
 
     objects = TransactionManager()
 
@@ -126,6 +133,14 @@ class Transaction(models.Model):
             models.Index(fields=['user', 'category']),
             models.Index(fields=['user', 'account']),
             models.Index(fields=['date', 'amount']),
+            models.Index(fields=['account', 'source_ref']),
+        ]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['account', 'source_ref'],
+                condition=Q(source_ref__isnull=False),
+                name='unique_account_source_ref',
+            ),
         ]
 
     def __str__(self) -> str:

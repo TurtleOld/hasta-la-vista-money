@@ -220,7 +220,11 @@
                 progressBar.classList.add('bg-green-600', 'dark:bg-green-500');
                 progressPercent.classList.remove('text-blue-600', 'dark:text-blue-400');
                 progressPercent.classList.add('text-green-600', 'dark:text-green-400');
-                progressStatus.textContent = `${window.bankStatementTranslations.completed} ${data.income_count} ${window.bankStatementTranslations.incomes}, ${data.expense_count} ${window.bankStatementTranslations.expenses}`;
+                let completedText = `${window.bankStatementTranslations.completed} ${data.income_count} ${window.bankStatementTranslations.incomes}, ${data.expense_count} ${window.bankStatementTranslations.expenses}`;
+                if (data.skipped_count && data.skipped_count > 0) {
+                    completedText += `, ${data.skipped_count} ${window.bankStatementTranslations.skipped}`;
+                }
+                progressStatus.textContent = completedText;
 
                 // Safely create icon and text elements using DOM methods
                 while (progressTitle.firstChild) {
