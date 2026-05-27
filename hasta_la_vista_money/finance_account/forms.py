@@ -220,7 +220,7 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         """Initialize transfer form with user-specific account choices.
 
         Sets up form fields with accounts filtered by the specified user
-        and applies Bootstrap styling to all form widgets.
+        and applies Tailwind styling to all form widgets.
 
         Args:
             user: User whose accounts should be available for transfer.
@@ -252,7 +252,7 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
             initial=self.initial.get('to_account', initial_accounts[1]),
         )
 
-        self.add_bootstrap_classes()
+        self.add_tailwind_classes()
 
     def _get_default_transfer_accounts(
         self,
