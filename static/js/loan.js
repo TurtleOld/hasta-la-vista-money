@@ -131,11 +131,11 @@ class LoanManager {
         previewElement.innerHTML = '';
 
         const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-info mt-3';
+        alertDiv.className = 'mt-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100';
 
         const header = document.createElement('h6');
         const icon = document.createElement('i');
-        icon.className = 'bi bi-calculator me-2';
+        icon.className = 'bi bi-calculator mr-2';
         header.appendChild(icon);
         header.appendChild(document.createTextNode('Предварительный расчет'));
         alertDiv.appendChild(header);
@@ -187,13 +187,13 @@ class LoanManager {
                 const modal = document.querySelector(target);
 
                 if (modal) {
-                    const modalBody = modal.querySelector('.modal-body');
+                    const modalBody = modal.querySelector('.loan-modal-body');
                     if (modalBody && !modalBody.querySelector('.loan-loading')) {
                         const loadingDiv = document.createElement('div');
                         loadingDiv.className = 'loan-loading';
 
                         const spinner = document.createElement('div');
-                        spinner.className = 'spinner-border';
+                        spinner.className = 'h-5 w-5 animate-spin rounded-full border-2 border-current border-r-transparent';
 
                         loadingDiv.appendChild(spinner);
                         loadingDiv.appendChild(document.createTextNode('Загрузка...'));
@@ -495,14 +495,18 @@ class LoanManager {
      */
     showNotification(message, type = 'success') {
         const notification = document.createElement('div');
-        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        const tone = type === 'success'
+            ? 'border-green-200 bg-green-50 text-green-900 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100'
+            : 'border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100';
+        notification.className = `fixed rounded-2xl border p-4 pr-10 shadow-lg ${tone}`;
         notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
 
         notification.appendChild(document.createTextNode(message));
         const closeButton = document.createElement('button');
         closeButton.type = 'button';
-        closeButton.className = 'btn-close';
-        closeButton.setAttribute('data-bs-dismiss', 'alert');
+        closeButton.className = 'absolute right-3 top-3 text-lg leading-none opacity-70 hover:opacity-100';
+        closeButton.textContent = '×';
+        closeButton.addEventListener('click', () => notification.remove());
         notification.appendChild(closeButton);
 
         document.body.appendChild(notification);
