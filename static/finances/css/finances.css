@@ -1284,69 +1284,6 @@
   border-left: 2px solid var(--finances-accent);
 }
 
-/* Btn overrides for composer */
-.btn {
-  appearance: none;
-  border-radius: 10px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13.5px;
-  font-weight: 500;
-  padding: 9px 18px;
-  transition: all 0.15s;
-  border: 1px solid transparent;
-  white-space: nowrap;
-}
-
-.btn-ghost {
-  background: var(--finances-surface-2);
-  border-color: var(--finances-border);
-  color: var(--finances-muted);
-}
-
-.btn-ghost:hover {
-  color: var(--finances-text);
-  border-color: var(--border-2);
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--finances-accent), color-mix(in oklab, var(--finances-accent) 70%, var(--color-emerald-400)));
-  color: var(--app-surface);
-  box-shadow: 0 4px 14px color-mix(in oklab, var(--finances-accent) 35%, transparent);
-}
-
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px color-mix(in oklab, var(--finances-accent) 40%, transparent);
-}
-
-.btn-primary:disabled,
-.btn-primary[disabled] {
-  cursor: not-allowed;
-  opacity: 0.45;
-  transform: none;
-  box-shadow: none;
-}
-
-.btn-secondary {
-  background: var(--finances-surface-2);
-  border-color: var(--finances-border);
-  color: var(--finances-text);
-}
-
-.btn-secondary:hover {
-  border-color: var(--border-2);
-  transform: translateY(-1px);
-}
-
-.btn-sm {
-  border-radius: 999px;
-  font-size: 12px;
-  padding: 6px 12px;
-}
-
 .finance-categories-shell {
   margin: 0 auto;
   max-width: 1180px;

@@ -198,13 +198,13 @@
                     <span>{% translate 'выйти' %}</span>
                 </div>
                 <div class="ft-actions">
-                    <a href="{% url 'finances' %}" class="btn btn-ghost">{% translate 'Отмена' %}</a>
-                    <button type="button" class="btn btn-secondary" x-bind:disabled="!isValid"
+                    <a href="{% url 'finances' %}" class="finances-button finances-button-secondary">{% translate 'Отмена' %}</a>
+                    <button type="button" class="finances-button finances-button-secondary" x-bind:disabled="!isValid"
                             x-on:click="submitForm('save_and_add')">
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                         {% translate 'Сохранить и добавить ещё' %}
                     </button>
-                    <button type="submit" class="btn btn-primary" x-bind:disabled="!isValid">
+                    <button type="submit" class="finances-button finances-button-primary" x-bind:disabled="!isValid">
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-10"/></svg>
                         {% translate 'Сохранить' %}
                     </button>

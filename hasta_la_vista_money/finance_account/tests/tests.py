@@ -872,7 +872,7 @@ class TestAddAccountFormRefactored(TestCase):
         for field in form.fields.values():
             if hasattr(field.widget, 'attrs'):
                 self.assertIn(
-                    'form-control',
+                    'rounded-xl',
                     field.widget.attrs.get('class', ''),
                 )
 
@@ -986,9 +986,9 @@ class TestTransferMoneyAccountFormRefactored(TestCase):
             if hasattr(field.widget, 'attrs'):
                 widget_class = field.widget.attrs.get('class', '')
                 self.assertIn(
-                    'form-control',
+                    'rounded-xl',
                     widget_class,
-                    f'Field {field_name} missing form-control class',
+                    f'Field {field_name} missing Tailwind control class',
                 )
 
     def test_form_validation_valid_data(self) -> None:

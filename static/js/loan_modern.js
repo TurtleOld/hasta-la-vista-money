@@ -79,8 +79,8 @@
 
     function setupDropdowns() {
         document.querySelectorAll('[data-dropdown]').forEach(dropdown => {
-            const toggle = dropdown.querySelector('.dropdown-toggle');
-            const menu = dropdown.querySelector('.dropdown-menu');
+            const toggle = dropdown.querySelector('[data-dropdown-toggle]');
+            const menu = dropdown.querySelector('[data-dropdown-menu]');
             if (toggle && menu) {
                 toggle.addEventListener('click', function(e) {
                     e.stopPropagation();

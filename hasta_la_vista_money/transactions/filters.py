@@ -13,6 +13,14 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 
+FORM_CONTROL_CLASS = (
+    'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm '
+    'text-gray-900 shadow-sm transition-colors duration-200 '
+    'placeholder:text-gray-400 focus:border-green-500 focus:outline-none '
+    'focus:ring-2 focus:ring-green-500/30 dark:border-gray-600 '
+    'dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400'
+)
+
 
 class TransactionFilter(django_filters.FilterSet):
     """Filter transactions by type, category, account, and date range."""
@@ -20,19 +28,19 @@ class TransactionFilter(django_filters.FilterSet):
     type = django_filters.ChoiceFilter(
         choices=TransactionType.choices,
         label='',
-        widget=Select(attrs={'class': 'form-control mb-2'}),
+        widget=Select(attrs={'class': f'{FORM_CONTROL_CLASS} mb-2'}),
     )
     category = django_filters.ModelChoiceFilter(
         queryset=Category.objects.all(),
         field_name='category',
         label='',
-        widget=Select(attrs={'class': 'form-control mb-2'}),
+        widget=Select(attrs={'class': f'{FORM_CONTROL_CLASS} mb-2'}),
     )
     date = django_filters.DateFromToRangeFilter(
         label='',
         widget=RangeWidget(
             attrs={
-                'class': 'form-control',
+                'class': FORM_CONTROL_CLASS,
                 'type': 'date',
             },
         ),
@@ -40,7 +48,7 @@ class TransactionFilter(django_filters.FilterSet):
     account = django_filters.ModelChoiceFilter(
         queryset=Account.objects.all(),
         label='',
-        widget=Select(attrs={'class': 'form-control mb-4'}),
+        widget=Select(attrs={'class': f'{FORM_CONTROL_CLASS} mb-4'}),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
