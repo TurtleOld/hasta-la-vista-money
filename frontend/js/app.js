@@ -5,3 +5,4 @@ import '../../static/js/errors_form.js';
 import '../../static/js/header.js';
 import '../../static/js/theme.js';
 import '../../static/js/account_form.js';
+import '../../static/js/budget-forms.js';

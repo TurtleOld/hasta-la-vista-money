@@ -4,6 +4,7 @@ This module provides functions for collecting and organizing financial data
 from the database, including income and expense information filtered by user.
 """
 
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from operator import itemgetter
@@ -11,7 +12,10 @@ from typing import cast
 
 from typing_extensions import TypedDict
 
-from hasta_la_vista_money.transactions.models import TransactionType
+from hasta_la_vista_money.transactions.models import (
+    Transaction,
+    TransactionType,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -30,6 +34,7 @@ class IncomeInfoDict(TypedDict):
     date: datetime | date
     account__name_account: str
     category__name: str
+    user__username: str
     amount: Decimal
 
 
@@ -48,10 +53,19 @@ class ExpenseInfoDict(TypedDict):
     date: datetime | date
     account__name_account: str
     category__name: str
+    user__username: str
     amount: Decimal
 
 
-def collect_info_income(user: User) -> list[IncomeInfoDict]:
+def collect_info_income(
+    user: User,
+    users: Iterable[User] | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    account_ids: list[int] | None = None,
+    currency: str = '',
+    category_ids: list[int] | None = None,
+) -> list[IncomeInfoDict]:
     """Collect income information from database filtered by user.
 
     Retrieves income records for the specified user with related account
@@ -63,23 +77,41 @@ def collect_info_income(user: User) -> list[IncomeInfoDict]:
     Returns:
         List of dictionaries containing income records with related data.
     """
-    queryset = (
-        user.transactions.filter(
-            type=TransactionType.INCOME,
-        )
-        .select_related('user')
-        .values(
-            'id',
-            'date',
-            'account__name_account',
-            'category__name',
-            'amount',
-        )
+    users = users or [user]
+    queryset = Transaction.objects.filter(
+        user__in=users,
+        type=TransactionType.INCOME,
+    ).select_related('user', 'account', 'category')
+    if start is not None:
+        queryset = queryset.filter(date__gte=start)
+    if end is not None:
+        queryset = queryset.filter(date__lte=end)
+    if account_ids:
+        queryset = queryset.filter(account_id__in=account_ids)
+    if currency:
+        queryset = queryset.filter(account__currency=currency)
+    if category_ids:
+        queryset = queryset.filter(category_id__in=category_ids)
+    queryset = queryset.values(
+        'id',
+        'date',
+        'account__name_account',
+        'category__name',
+        'user__username',
+        'amount',
     )
     return cast('list[IncomeInfoDict]', list(queryset))
 
 
-def collect_info_expense(user: User) -> list[ExpenseInfoDict]:
+def collect_info_expense(
+    user: User,
+    users: Iterable[User] | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    account_ids: list[int] | None = None,
+    currency: str = '',
+    category_ids: list[int] | None = None,
+) -> list[ExpenseInfoDict]:
     """Collect expense information from database filtered by user.
 
     Retrieves expense records for the specified user with related account
@@ -91,18 +123,28 @@ def collect_info_expense(user: User) -> list[ExpenseInfoDict]:
     Returns:
         List of dictionaries containing expense records with related data.
     """
-    queryset = (
-        user.transactions.filter(
-            type=TransactionType.EXPENSE,
-        )
-        .select_related('user')
-        .values(
-            'id',
-            'date',
-            'account__name_account',
-            'category__name',
-            'amount',
-        )
+    users = users or [user]
+    queryset = Transaction.objects.filter(
+        user__in=users,
+        type=TransactionType.EXPENSE,
+    ).select_related('user', 'account', 'category')
+    if start is not None:
+        queryset = queryset.filter(date__gte=start)
+    if end is not None:
+        queryset = queryset.filter(date__lte=end)
+    if account_ids:
+        queryset = queryset.filter(account_id__in=account_ids)
+    if currency:
+        queryset = queryset.filter(account__currency=currency)
+    if category_ids:
+        queryset = queryset.filter(category_id__in=category_ids)
+    queryset = queryset.values(
+        'id',
+        'date',
+        'account__name_account',
+        'category__name',
+        'user__username',
+        'amount',
     )
     return cast('list[ExpenseInfoDict]', list(queryset))
 

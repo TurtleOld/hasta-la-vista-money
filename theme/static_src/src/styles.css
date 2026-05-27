@@ -124,6 +124,7 @@
 @import './base.css';
 @import './utilities.css';
 @import './forms.css';
+@import './statistics.css';
 
 @import '../../../hasta_la_vista_money/budget/static/budget/css/budget.css';
 @import '../../../hasta_la_vista_money/loan/static/loan/css/loan.css';

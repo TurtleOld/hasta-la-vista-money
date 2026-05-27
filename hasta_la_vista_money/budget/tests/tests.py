@@ -7,6 +7,7 @@ from django.urls import resolve, reverse
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.budget.apps import BudgetConfig
 from hasta_la_vista_money.budget.models import Budget, DateList, Planning
+from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 
 User = get_user_model()
@@ -78,6 +79,71 @@ class BudgetUrlsTest(TestCase):
         )
 
 
+class BudgetPresentationTest(TestCase):
+    def test_budget_matrix_defaults_to_current_month_window(self) -> None:
+        months = [
+            date(2025, 11, 1),
+            date(2025, 12, 1),
+            date(2026, 1, 1),
+            date(2026, 2, 1),
+            date(2026, 3, 1),
+            date(2026, 4, 1),
+            date(2026, 5, 1),
+            date(2026, 6, 1),
+            date(2026, 7, 1),
+            date(2026, 8, 1),
+            date(2026, 9, 1),
+            date(2026, 10, 1),
+        ]
+
+        context = build_budget_matrix_context(
+            table_type=TransactionType.EXPENSE,
+            months=months,
+            rows=[],
+            total_fact=[0] * len(months),
+            total_plan=[0] * len(months),
+            current_date=date(2026, 5, 26),
+        )
+
+        self.assertEqual(context['budget_visible_start'], constants.SIX)
+        self.assertEqual(context['budget_visible_default'], constants.SIX)
+        self.assertEqual(context['budget_visible_range'], '6')
+        self.assertEqual(context['budget_months'][0], date(2025, 11, 1))
+        self.assertFalse(
+            context['budget_month_columns'][5]['is_visible_default']
+        )
+        self.assertTrue(
+            context['budget_month_columns'][6]['is_visible_default']
+        )
+
+    def test_budget_matrix_all_range_shows_history(self) -> None:
+        months = [
+            date(2026, 1, 1),
+            date(2026, 2, 1),
+            date(2026, 3, 1),
+        ]
+
+        context = build_budget_matrix_context(
+            table_type=TransactionType.EXPENSE,
+            months=months,
+            rows=[],
+            total_fact=[0] * len(months),
+            total_plan=[0] * len(months),
+            current_date=date(2026, 3, 26),
+            selected_range='all',
+        )
+
+        self.assertEqual(context['budget_visible_start'], constants.ZERO)
+        self.assertEqual(context['budget_visible_default'], len(months))
+        self.assertEqual(context['budget_visible_range'], 'all')
+        self.assertTrue(
+            all(
+                column['is_visible_default']
+                for column in context['budget_month_columns']
+            ),
+        )
+
+
 class BudgetViewsTest(TestCase):
     def setUp(self) -> None:
         self.client = Client()
@@ -100,6 +166,35 @@ class BudgetViewsTest(TestCase):
             chart_data = response.context['chart_data']
             self.assertIn('chart_plan_execution_income', chart_data)
             self.assertIn('chart_plan_execution_expense', chart_data)
+
+    def test_expense_table_range_buttons_render(self) -> None:
+        Category.objects.create(
+            user=self.user,
+            name='Food',
+            type=TransactionType.EXPENSE,
+        )
+
+        response = self.client.get(reverse('budget:expense_table'))
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'hx-get="/budget/expenses/?range=6"')
+        self.assertContains(response, 'hx-get="/budget/expenses/?range=all"')
+
+    def test_expense_table_hx_range_all_marks_all_active(self) -> None:
+        Category.objects.create(
+            user=self.user,
+            name='Food',
+            type=TransactionType.EXPENSE,
+        )
+
+        response = self.client.get(
+            f'{reverse("budget:expense_table")}?range=all',
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'data-budget-range="all"', count=0)
+        self.assertContains(response, 'range=all')
 
     def test_generate_date_list_view(self) -> None:
         response = self.client.post(

@@ -1,11 +1,22 @@
+import hashlib
+
 from django.core.cache import cache
 
 PERIOD_TYPES = ('month', 'quarter', 'year')
 
 
-def get_user_detailed_statistics_cache_key(user_id: int) -> str:
+def _user_statistics_version_key(user_id: int) -> str:
+    return f'user_stats_version_{user_id}'
+
+
+def get_user_detailed_statistics_cache_key(
+    user_id: int,
+    suffix: str = 'default',
+) -> str:
     """Return cache key for detailed dashboard statistics."""
-    return f'user_stats_{user_id}'
+    version = cache.get(_user_statistics_version_key(user_id), 1)
+    suffix_hash = hashlib.sha256(suffix.encode()).hexdigest()[:16]
+    return f'user_stats_{user_id}_{version}_{suffix_hash}'
 
 
 def get_dashboard_summary_cache_key(user_id: int) -> str:
@@ -25,7 +36,8 @@ def get_reports_budget_charts_cache_key(user_id: int) -> str:
 
 def invalidate_user_detailed_statistics_cache(user_id: int) -> None:
     """Invalidate cached dashboard and reports data for a user."""
-    cache.delete(get_user_detailed_statistics_cache_key(user_id))
+    version_key = _user_statistics_version_key(user_id)
+    cache.set(version_key, int(cache.get(version_key, 1)) + 1)
     cache.delete(get_dashboard_summary_cache_key(user_id))
     cache.delete(get_reports_budget_charts_cache_key(user_id))
     cache.delete_many(

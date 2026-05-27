@@ -6,554 +6,960 @@
 {% block title %}{% translate 'Детальная статистика' %} - {{ user.username }}{% endblock %}
 
 {% block content %}
-    <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 statistics-page">
-        <div class="mb-6">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <h2 class="text-2xl sm:text-3xl font-heading font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                    <i class="bi bi-graph-up text-green-600 dark:text-green-400"></i>
+<div class="statistics-app" x-data="statisticsPage" x-bind:data-active-tab="activeTab">
+    <div class="statistics-wrap">
+        <div class="statistics-header">
+            <div>
+                <h2 class="statistics-title">
+                    <svg class="statistics-icon statistics-title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 4 4 5-7"></path>
+                    </svg>
                     {% translate 'Детальная статистика' %}
                 </h2>
-                <a href="{% url 'users:profile' user.id %}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors duration-200">
-                    <i class="bi bi-arrow-left"></i>
-                    {% translate 'Назад к профилю' %}
-                </a>
+                <p class="statistics-subtitle">{% translate 'Сводная аналитика по выбранному периоду и семейному контуру' %}</p>
             </div>
+            <a href="{% url 'users:profile' user.id %}" class="statistics-button statistics-button-secondary">
+                <svg class="statistics-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"></path>
+                </svg>
+                {% translate 'Назад к профилю' %}
+            </a>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 statistics-summary">
-            <div class="bg-linear-to-br from-blue-600 to-indigo-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
-                <div class="text-center">
-                    <h5 class="text-sm font-medium text-blue-100 mb-2">{% translate 'Всего счетов' %}</h5>
-                    <h3 class="text-3xl font-bold">{{ accounts.count }}</h3>
-                </div>
-            </div>
-            <div class="bg-linear-to-br from-green-600 to-emerald-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
-                <div class="text-center">
-                    <h5 class="text-sm font-medium text-green-100 mb-2">{% translate 'Общий баланс' %}</h5>
-                    <h3 class="text-lg sm:text-xl font-bold">
-                        {% for currency, balance in balances_by_currency.items %}
-                            {{ balance|comma }} {{ currency }}
-                            {% if not forloop.last %}<br class="hidden sm:block">{% endif %}
+        <form method="get" class="statistics-panel statistics-filter-form">
+            <div class="statistics-filter-grid">
+                <div class="statistics-field">
+                    <label for="statistics-period" class="statistics-label">{% translate 'Период' %}</label>
+                    <select id="statistics-period" name="period" class="statistics-input">
+                        {% for choice in statistics_period_choices %}
+                            <option value="{{ choice.value }}" {% if statistics_filter.period == choice.value %}selected{% endif %}>{{ choice.label }}</option>
                         {% endfor %}
-                    </h3>
+                    </select>
+                </div>
+                <div class="statistics-field">
+                    <label for="statistics-date-from" class="statistics-label">{% translate 'С даты' %}</label>
+                    <input id="statistics-date-from" type="date" name="date_from" value="{{ statistics_filter.date_from|date:'Y-m-d' }}" class="statistics-input">
+                </div>
+                <div class="statistics-field">
+                    <label for="statistics-date-to" class="statistics-label">{% translate 'По дату' %}</label>
+                    <input id="statistics-date-to" type="date" name="date_to" value="{{ statistics_filter.date_to|date:'Y-m-d' }}" class="statistics-input">
+                </div>
+                <div class="statistics-field">
+                    <label for="statistics-currency" class="statistics-label">{% translate 'Валюта' %}</label>
+                    <select id="statistics-currency" name="currency" class="statistics-input">
+                        <option value="">{% translate 'Все валюты' %}</option>
+                        {% for currency in statistics_currency_choices %}
+                            <option value="{{ currency }}" {% if statistics_filter.currency == currency %}selected{% endif %}>{{ currency }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="statistics-field">
+                    <label for="statistics-member" class="statistics-label">{% translate 'Участник' %}</label>
+                    <select id="statistics-member" name="member" class="statistics-input">
+                        {% for choice in statistics_member_choices %}
+                            <option value="{{ choice.value }}" {% if statistics_filter.member == choice.value %}selected{% endif %}>{{ choice.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="statistics-button statistics-button-primary">
+                    <svg class="statistics-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4.5h18l-7 8v5l-4 2v-7l-7-8z"></path>
+                    </svg>
+                    {% translate 'Применить' %}
+                </button>
+                <div class="statistics-field statistics-filter-wide">
+                    <label for="statistics-accounts" class="statistics-label">{% translate 'Счета' %}</label>
+                    <select id="statistics-accounts" name="account" multiple size="4" class="statistics-input statistics-multiselect">
+                        {% for account in statistics_account_choices %}
+                            <option value="{{ account.pk }}" {% if account.pk in statistics_filter.account_ids %}selected{% endif %}>{{ account.name_account }} · {{ account.currency }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="statistics-field statistics-filter-wide">
+                    <label for="statistics-categories" class="statistics-label">{% translate 'Категории' %}</label>
+                    <select id="statistics-categories" name="category" multiple size="4" class="statistics-input statistics-multiselect">
+                        {% for choice in statistics_category_choices %}
+                            <option value="{{ choice.value }}" {% if choice.value in statistics_filter.category_keys %}selected{% endif %}>{{ choice.label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
-            <div class="bg-linear-to-br from-cyan-600 to-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
-                <div class="text-center">
-                    <h5 class="text-sm font-medium text-cyan-100 mb-2">{% translate 'Чеков' %}</h5>
-                    <h3 class="text-3xl font-bold">{{ receipt_info_by_month|length }}</h3>
+            <div class="statistics-filter-footer">
+                <span>{% translate 'Счета и категории можно выбирать с Ctrl/Command.' %}</span>
+                <a href="?{{ statistics_filter.query_string }}{% if statistics_filter.query_string %}&{% endif %}refresh=1">{% translate 'Обновить данные' %}</a>
+                <a href="{% url 'users:statistics_export' %}?{{ statistics_filter.query_string }}">{% translate 'Экспорт CSV' %}</a>
+                {% if statistics_filter.query_string %}
+                    <a href="{{ request.path }}">{% translate 'Сбросить фильтры' %}</a>
+                {% endif %}
+            </div>
+        </form>
+
+        {% if statistics_alerts %}
+            <div class="statistics-panel statistics-section">
+                <div class="statistics-list">
+                    {% for alert in statistics_alerts %}
+                        <div class="statistics-list-row">
+                            <strong>{{ alert.title }}</strong>
+                            <span class="statistics-badge {% if alert.type == 'danger' %}statistics-badge-negative{% elif alert.type == 'warning' %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">{{ alert.message }}</span>
+                        </div>
+                    {% endfor %}
                 </div>
             </div>
-            <div class="bg-linear-to-br from-amber-500 to-orange-500 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 p-6">
-                <div class="text-center">
-                    <h5 class="text-sm font-medium text-amber-100 mb-2">{% translate 'Операций' %}</h5>
-                    <h3 class="text-3xl font-bold">{{ income_expense|length }}</h3>
+        {% endif %}
+
+        <div class="statistics-summary-grid">
+            <div class="statistics-summary-card statistics-summary-info">
+                <p class="statistics-summary-label">{% translate 'Всего счетов' %}</p>
+                <p class="statistics-summary-value">{{ accounts.count }}</p>
+            </div>
+            <div class="statistics-summary-card statistics-summary-positive">
+                <p class="statistics-summary-label">{% translate 'Общий баланс' %}</p>
+                <p class="statistics-summary-value">
+                    {% for currency, balance in balances_by_currency.items %}
+                        {{ balance|comma }} {{ currency }}{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}
+                        0
+                    {% endfor %}
+                </p>
+            </div>
+            <div class="statistics-summary-card statistics-summary-cyan">
+                <p class="statistics-summary-label">{% translate 'Чеков' %}</p>
+                <p class="statistics-summary-value">{{ receipt_info_by_month|length }}</p>
+            </div>
+            <div class="statistics-summary-card statistics-summary-warn">
+                <p class="statistics-summary-label">{% translate 'Операций' %}</p>
+                <p class="statistics-summary-value">{{ income_expense|length }}</p>
+            </div>
+        </div>
+
+        <div class="statistics-panel statistics-section">
+            <div class="statistics-panel-head">
+                <h5 class="statistics-panel-title">{% translate 'Динамика доходов и расходов' %}</h5>
+            </div>
+            <div class="statistics-panel-body">
+                <div class="statistics-chart-box">
+                    <canvas id="incomeExpenseChart" height="300"></canvas>
                 </div>
             </div>
         </div>
 
-        <div class="mb-6">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white">{% translate 'Динамика доходов и расходов' %}</h5>
-                </div>
-                <div class="p-6">
-                    <canvas id="incomeExpenseChart" class="chart-container" height="300"></canvas>
-                </div>
+        <div class="statistics-panel statistics-section">
+            <div class="statistics-tabs" id="statisticsTabs" role="tablist">
+                <button class="statistics-tab-btn" data-tab="monthly" x-on:click="activateTab" type="button" role="tab">{% translate 'Месячная статистика' %}</button>
+                <button class="statistics-tab-btn" data-tab="receipts" x-on:click="activateTab" type="button" role="tab">{% translate 'Статистика по чекам' %}</button>
+                <button class="statistics-tab-btn" data-tab="operations" x-on:click="activateTab" type="button" role="tab">{% translate 'Доходы и расходы' %}</button>
+                <button class="statistics-tab-btn" data-tab="transfers" x-on:click="activateTab" type="button" role="tab">{% translate 'Переводы' %}</button>
+                <button class="statistics-tab-btn" data-tab="categories" x-on:click="activateTab" type="button" role="tab">{% translate 'Топ категорий' %}</button>
+                <button class="statistics-tab-btn" data-tab="creditcards" x-on:click="activateTab" type="button" role="tab">{% translate 'Кредитные карты' %}</button>
+                <button class="statistics-tab-btn" data-tab="budgets" x-on:click="activateTab" type="button" role="tab">{% translate 'Бюджеты' %}</button>
+                <button class="statistics-tab-btn" data-tab="calendar" x-on:click="activateTab" type="button" role="tab">{% translate 'Календарь' %}</button>
             </div>
-        </div>
 
-        <div class="mb-6">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                    <div class="flex flex-wrap gap-2 px-4 sm:px-6 pt-4 overflow-x-auto" id="statisticsTabs" role="tablist">
-                        <button class="statistics-tab-btn active px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400" id="monthly-tab" data-tab-target="monthly" type="button" role="tab">
-                            {% translate 'Месячная статистика' %}
-                        </button>
-                        <button class="statistics-tab-btn px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" id="receipts-tab" data-tab-target="receipts" type="button" role="tab">
-                            {% translate 'Статистика по чекам' %}
-                        </button>
-                        <button class="statistics-tab-btn px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" id="operations-tab" data-tab-target="operations" type="button" role="tab">
-                            {% translate 'Доходы и расходы' %}
-                        </button>
-                        <button class="statistics-tab-btn px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" id="transfers-tab" data-tab-target="transfers" type="button" role="tab">
-                            {% translate 'Переводы' %}
-                        </button>
-                        <button class="statistics-tab-btn px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" id="categories-tab" data-tab-target="categories" type="button" role="tab">
-                            {% translate 'Топ категорий' %}
-                        </button>
-                        <button class="statistics-tab-btn px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" id="creditcards-tab" data-tab-target="creditcards" type="button" role="tab">
-                            Кредитные карты
-                        </button>
+            <div class="statistics-panel-body">
+                <div class="statistics-pane" data-panel="monthly" role="tabpanel">
+                    <div class="statistics-table-wrap">
+                        <table class="statistics-table">
+                            <thead>
+                                <tr>
+                                    <th>{% translate 'Месяц' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'Доходы' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'Расходы' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'Сбережения' %}</th>
+                                    <th class="statistics-cell-center">{% translate 'Процент сбережений' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'План доходов' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'План расходов' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'Отклонение' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for month in months_data %}
+                                    <tr>
+                                        <td>{{ month.month }}</td>
+                                        <td class="statistics-money-positive statistics-cell-right">{{ month.income|comma }} ₽</td>
+                                        <td class="statistics-money-negative statistics-cell-right">{{ month.expenses|comma }} ₽</td>
+                                        <td class="{% if month.savings >= 0 %}statistics-money-positive{% else %}statistics-money-negative{% endif %} statistics-cell-right">{{ month.savings|comma }} ₽</td>
+                                        <td class="statistics-cell-center">
+                                            {% if month.income > 0 %}
+                                                <span class="statistics-badge {% if month.savings >= 0 %}statistics-badge-positive{% else %}statistics-badge-negative{% endif %}">{{ month.savings_percent|floatformat:1 }}%</span>
+                                            {% else %}
+                                                <span class="statistics-badge">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="statistics-cell-right">
+                                            {% if month.planned_income %}{{ month.planned_income|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
+                                        </td>
+                                        <td class="statistics-cell-right">
+                                            {% if month.planned_expenses %}{{ month.planned_expenses|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
+                                        </td>
+                                        <td class="{% if month.deviation >= 0 %}statistics-money-positive{% else %}statistics-money-negative{% endif %} statistics-cell-right">
+                                            {% if month.planned_income or month.planned_expenses %}{{ month.deviation|comma }} ₽{% else %}<span class="statistics-muted">—</span>{% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="p-4 sm:p-6">
-                    <div id="statisticsTabsContent">
-                        <div class="statistics-tab-pane active" id="monthly" role="tabpanel">
-                            <div class="overflow-x-auto">
-                                <table class="w-full border-collapse">
-                                    <thead>
-                                        <tr class="bg-gray-50 dark:bg-gray-900/50">
-                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Месяц' %}</th>
-                                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Доходы' %}</th>
-                                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Расходы' %}</th>
-                                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Сбережения' %}</th>
-                                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Процент сбережений' %}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {% for month in months_data %}
-                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150">
-                                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ month.month }}</td>
-                                                <td class="px-4 py-3 text-sm font-medium text-green-600 dark:text-green-400 text-right">{{ month.income|comma }} ₽</td>
-                                                <td class="px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 text-right">{{ month.expenses|comma }} ₽</td>
-                                                <td class="px-4 py-3 text-sm font-medium {% if month.savings >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %} text-right">
-                                                    {{ month.savings|comma }} ₽
-                                                </td>
-                                                <td class="px-4 py-3 text-center">
-                                                    {% if month.income > 0 %}
-                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if month.savings >= 0 %}bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300{% else %}bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300{% endif %}">
-                                                            {{ month.savings_percent|floatformat:1 }}%
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">-</span>
-                                                    {% endif %}
-                                                </td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
 
-                        <div class="statistics-tab-pane hidden" id="receipts" role="tabpanel">
-                            <div class="overflow-x-auto">
-                                <table class="w-full border-collapse">
-                                    <thead>
-                                        <tr class="bg-gray-50 dark:bg-gray-900/50">
-                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Период' %}</th>
-                                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Количество чеков' %}</th>
-                                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Сумма' %}</th>
-                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Счёт' %}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {% for receipt in receipt_info_by_month %}
-                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150">
-                                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ receipt.month|date:"F Y" }}</td>
-                                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 text-center">{{ receipt.count }}</td>
-                                                <td class="px-4 py-3 text-sm font-semibold text-green-600 dark:text-green-400 text-right">{{ receipt.total_amount|comma }}</td>
-                                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ receipt.account__name_account }}</td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div class="statistics-tab-pane hidden" id="operations" role="tabpanel">
-                            <div class="overflow-x-auto">
-                                <table class="w-full border-collapse">
-                                    <thead>
-                                        <tr class="bg-gray-50 dark:bg-gray-900/50">
-                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Тип' %}</th>
-                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Категория' %}</th>
-                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Дата' %}</th>
-                                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Сумма' %}</th>
-                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">{% translate 'Счёт' %}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                        {% for item in income_expense %}
-                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150">
-                                                <td class="px-4 py-3">
-                                                    {% if item.type == 'income' %}
-                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">💰 {% translate 'Доход' %}</span>
-                                                    {% else %}
-                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">💸 {% translate 'Расход' %}</span>
-                                                    {% endif %}
-                                                </td>
-                                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ item.category__name }}</td>
-                                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ item.date|date:'F Y' }}</td>
-                                                <td class="px-4 py-3 text-sm font-semibold {% if item.type == 'income' %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %} text-right">
-                                                    {{ item.amount|comma }}
-                                                </td>
-                                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ item.account__name_account }}</td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div class="statistics-tab-pane hidden" id="transfers" role="tabpanel">
-                            <div class="space-y-3">
-                                {% for transfer in transfer_money_log %}
-                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150">
-                                        <div class="flex items-center gap-2 flex-wrap">
-                                            <span class="font-semibold text-gray-900 dark:text-white">{{ transfer.from_account.name_account }}</span>
-                                            <i class="bi bi-arrow-right text-gray-400 dark:text-gray-500"></i>
-                                            <span class="font-semibold text-gray-900 dark:text-white">{{ transfer.to_account.name_account }}</span>
-                                        </div>
-                                        <div class="flex items-center gap-3">
-                                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">{{ transfer.amount|comma }}</span>
-                                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ transfer.created_at|date:"d.m.Y H:i" }}</span>
-                                        </div>
+                <div class="statistics-pane" data-panel="receipts" role="tabpanel">
+                    <div class="statistics-category-grid statistics-section">
+                        <div>
+                            <h6 class="statistics-category-title">{% translate 'Топ товаров' %}</h6>
+                            <div class="statistics-list">
+                                {% for product in top_receipt_products %}
+                                    <div class="statistics-list-row">
+                                        <span>{{ product.product_name }}</span>
+                                        <span class="statistics-badge">{{ product.total|comma }} ₽</span>
                                     </div>
                                 {% empty %}
-                                    <div class="text-center py-12 text-gray-500 dark:text-gray-400">
-                                        <i class="bi bi-inbox text-4xl mb-2 block"></i>
-                                        <p>{% translate 'Нет данных о переводах' %}</p>
-                                    </div>
+                                    <p class="statistics-empty">{% translate 'Нет товарной детализации' %}</p>
                                 {% endfor %}
                             </div>
                         </div>
-
-                        <div class="statistics-tab-pane hidden" id="categories" role="tabpanel">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h6 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Топ категорий расходов' %}</h6>
-                                    {% if top_expense_categories %}
-                                        <div class="space-y-2">
-                                            {% for category in top_expense_categories %}
-                                                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150">
-                                                    <span class="text-sm text-gray-900 dark:text-gray-100">{{ category.category__name }}</span>
-                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
-                                                        {{ category.total|comma }} ₽
-                                                    </span>
-                                                </div>
-                                            {% endfor %}
-                                        </div>
-                                    {% else %}
-                                        <p class="text-gray-500 dark:text-gray-400">{% translate 'Нет данных о расходах' %}</p>
-                                    {% endif %}
-                                </div>
-                                <div>
-                                    <h6 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Топ категорий доходов' %}</h6>
-                                    {% if top_income_categories %}
-                                        <div class="space-y-2">
-                                            {% for category in top_income_categories %}
-                                                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150">
-                                                    <span class="text-sm text-gray-900 dark:text-gray-100">{{ category.category__name }}</span>
-                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
-                                                        {{ category.total|comma }} ₽
-                                                    </span>
-                                                </div>
-                                            {% endfor %}
-                                        </div>
-                                    {% else %}
-                                        <p class="text-gray-500 dark:text-gray-400">{% translate 'Нет данных о доходах' %}</p>
-                                    {% endif %}
-                                </div>
+                        <div>
+                            <h6 class="statistics-category-title">{% translate 'Топ магазинов' %}</h6>
+                            <div class="statistics-list">
+                                {% for seller in top_receipt_sellers %}
+                                    <div class="statistics-list-row">
+                                        <span>{{ seller.seller__name_seller|default:'Без продавца' }}</span>
+                                        <span class="statistics-badge">{{ seller.total|comma }} ₽ · {{ seller.count }}</span>
+                                    </div>
+                                {% empty %}
+                                    <p class="statistics-empty">{% translate 'Нет данных по магазинам' %}</p>
+                                {% endfor %}
                             </div>
                         </div>
+                    </div>
+                    <div class="statistics-table-wrap statistics-section">
+                        <input type="search" class="statistics-input statistics-table-search" data-table-search="receipts-table" placeholder="{% translate 'Поиск по чекам' %}">
+                        <table id="receipts-table" class="statistics-table">
+                            <thead>
+                                <tr>
+                                    <th>{% translate 'Месяц' %}</th>
+                                    <th class="statistics-cell-center">{% translate 'Чеков' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'Средний чек' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for average in average_receipts_by_month %}
+                                    <tr>
+                                        <td>{{ average.month|date:'F Y' }}</td>
+                                        <td class="statistics-cell-center">{{ average.count }}</td>
+                                        <td class="statistics-cell-right">{{ average.avg_total|comma }} ₽</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr><td colspan="3" class="statistics-empty">{% translate 'Нет данных о среднем чеке' %}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="statistics-table-wrap">
+                        <table class="statistics-table">
+                            <thead>
+                                <tr>
+                                    <th>{% translate 'Период' %}</th>
+                                    <th class="statistics-cell-center">{% translate 'Количество чеков' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'Сумма' %}</th>
+                                    <th>{% translate 'Счёт' %}</th>
+                                    <th>{% translate 'Кто внёс' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for receipt in receipt_info_by_month %}
+                                    <tr>
+                                        <td>{{ receipt.month|date:'F Y' }}</td>
+                                        <td class="statistics-cell-center">{{ receipt.count }}</td>
+                                        <td class="statistics-money-positive statistics-cell-right">{{ receipt.total_amount|comma }}</td>
+                                        <td>{{ receipt.account__name_account }}</td>
+                                        <td>{{ receipt.user__username }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="statistics-table-wrap statistics-section">
+                        <table class="statistics-table">
+                            <thead>
+                                <tr>
+                                    <th><a href="?{{ statistics_filter.query_string }}&receipts_sort={% if statistics_filter.receipts_sort == 'receipt_date' %}-receipt_date{% else %}receipt_date{% endif %}">{% translate 'Дата' %}</a></th>
+                                    <th>{% translate 'Магазин' %}</th>
+                                    <th>{% translate 'Счёт' %}</th>
+                                    <th>{% translate 'Кто внёс' %}</th>
+                                    <th class="statistics-cell-right"><a href="?{{ statistics_filter.query_string }}&receipts_sort={% if statistics_filter.receipts_sort == 'total_sum' %}-total_sum{% else %}total_sum{% endif %}">{% translate 'Сумма' %}</a></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for receipt in receipt_page %}
+                                    <tr>
+                                        <td>{{ receipt.receipt_date|date:'d.m.Y H:i' }}</td>
+                                        <td>{{ receipt.seller.name_seller|default:'Без продавца' }}</td>
+                                        <td>{{ receipt.account.name_account }}</td>
+                                        <td>{{ receipt.user.username }}</td>
+                                        <td class="statistics-cell-right">{{ receipt.total_sum|comma }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr><td colspan="5" class="statistics-empty">{% translate 'Нет чеков за выбранный период' %}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if receipt_page.has_other_pages %}
+                        <div class="statistics-filter-footer">
+                            {% if receipt_page.has_previous %}<a href="?{{ statistics_filter.query_string }}&receipts_page={{ receipt_page.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
+                            <span>{{ receipt_page.number }} / {{ receipt_page.paginator.num_pages }}</span>
+                            {% if receipt_page.has_next %}<a href="?{{ statistics_filter.query_string }}&receipts_page={{ receipt_page.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
+                        </div>
+                    {% endif %}
+                </div>
 
-                        <div class="statistics-tab-pane hidden" id="creditcards" role="tabpanel">
-                            {% if credit_cards_data %}
-                            <div class="space-y-4" id="creditCardsAccordion">
-                                {% for card in credit_cards_data %}
-                                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-                                    <h2 id="heading{{ forloop.counter }}">
-                                        <button class="credit-card-accordion-btn w-full px-6 py-4 text-left flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200" type="button" data-accordion-target="collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
-                                            <span class="font-medium text-gray-900 dark:text-white">{{ card.name }} — {{ card.limit|comma }} {{ card.currency }} (Долг: {{ card.debt_now|comma }} {{ card.currency }})</span>
-                                            <i class="bi bi-chevron-down text-gray-400 dark:text-gray-500 transition-transform duration-200"></i>
-                                        </button>
-                                    </h2>
-                                    <div id="collapse{{ forloop.counter }}" class="credit-card-accordion-content hidden" aria-labelledby="heading{{ forloop.counter }}">
-                                        <div class="p-6 space-y-4">
-                                            {% if card.current_grace_info %}
-                                            <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                                                <h6 class="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                                                    <i class="bi bi-calendar-check text-blue-600 dark:text-blue-400"></i>
-                                                    Текущий беспроцентный период
+                <div class="statistics-pane" data-panel="operations" role="tabpanel">
+                    <div class="statistics-table-wrap">
+                        <input type="search" class="statistics-input statistics-table-search" data-table-search="operations-table" placeholder="{% translate 'Поиск по операциям' %}">
+                        <table id="operations-table" class="statistics-table">
+                            <thead>
+                                <tr>
+                                    <th>{% translate 'Тип' %}</th>
+                                    <th>{% translate 'Категория' %}</th>
+                                    <th><a href="?{{ statistics_filter.query_string }}&operations_sort={% if statistics_filter.operations_sort == 'date' %}-date{% else %}date{% endif %}">{% translate 'Дата' %}</a></th>
+                                    <th class="statistics-cell-right"><a href="?{{ statistics_filter.query_string }}&operations_sort={% if statistics_filter.operations_sort == 'amount' %}-amount{% else %}amount{% endif %}">{% translate 'Сумма' %}</a></th>
+                                    <th>{% translate 'Счёт' %}</th>
+                                    <th>{% translate 'Кто внёс' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in income_expense_page %}
+                                    <tr>
+                                        <td>
+                                            {% if item.type == 'income' %}
+                                                <span class="statistics-badge statistics-badge-positive">{% translate 'Доход' %}</span>
+                                            {% else %}
+                                                <span class="statistics-badge statistics-badge-negative">{% translate 'Расход' %}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ item.category__name }}</td>
+                                        <td>{{ item.date|date:'d.m.Y' }}</td>
+                                        <td class="{% if item.type == 'income' %}statistics-money-positive{% else %}statistics-money-negative{% endif %} statistics-cell-right">{{ item.amount|comma }}</td>
+                                        <td>{{ item.account__name_account }}</td>
+                                        <td>{{ item.user__username }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if income_expense_page.has_other_pages %}
+                        <div class="statistics-filter-footer">
+                            {% if income_expense_page.has_previous %}<a href="?{{ statistics_filter.query_string }}&operations_page={{ income_expense_page.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
+                            <span>{{ income_expense_page.number }} / {{ income_expense_page.paginator.num_pages }}</span>
+                            {% if income_expense_page.has_next %}<a href="?{{ statistics_filter.query_string }}&operations_page={{ income_expense_page.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="statistics-pane" data-panel="transfers" role="tabpanel">
+                    <input type="search" class="statistics-input statistics-table-search" data-list-search="transfers-list" placeholder="{% translate 'Поиск по переводам' %}">
+                    <div id="transfers-list" class="statistics-list">
+                        {% for transfer in transfer_money_log_page %}
+                            <div class="statistics-list-row">
+                                <div>
+                                    <strong>{{ transfer.from_account.name_account }}</strong>
+                                    <svg class="statistics-icon statistics-title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"></path>
+                                    </svg>
+                                    <strong>{{ transfer.to_account.name_account }}</strong>
+                                </div>
+                                <div>
+                                    <span class="statistics-badge">{{ transfer.amount|comma }}</span>
+                                    <span class="statistics-badge">{{ transfer.created_at|date:'d.m.Y H:i' }}</span>
+                                    <span class="statistics-badge">{{ transfer.user.username }}</span>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="statistics-empty">
+                                <svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13.5h5.25l1.5 3h4.5l1.5-3H21M4.5 5.25h15l1.5 8.25v4.5A1.5 1.5 0 0119.5 19.5h-15A1.5 1.5 0 013 18v-4.5l1.5-8.25z"></path>
+                                </svg>
+                                <p>{% translate 'Нет данных о переводах' %}</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% if transfer_money_log_page.has_other_pages %}
+                        <div class="statistics-filter-footer">
+                            {% if transfer_money_log_page.has_previous %}<a href="?{{ statistics_filter.query_string }}&transfers_page={{ transfer_money_log_page.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
+                            <span>{{ transfer_money_log_page.number }} / {{ transfer_money_log_page.paginator.num_pages }}</span>
+                            {% if transfer_money_log_page.has_next %}<a href="?{{ statistics_filter.query_string }}&transfers_page={{ transfer_money_log_page.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="statistics-pane" data-panel="categories" role="tabpanel">
+                    <div class="statistics-category-grid">
+                        <div>
+                            <h6 class="statistics-category-title">{% translate 'Топ категорий расходов' %}</h6>
+                            <div class="statistics-list">
+                                {% for category in top_expense_categories %}
+                                    <div class="statistics-list-row">
+                                        <div>
+                                            <span>{{ category.category__name }}</span>
+                                            <button class="statistics-button statistics-button-secondary" type="button" data-dialog-open="expense-category-{{ category.category__id }}">{% translate 'Детализация' %}</button>
+                                            <dialog id="expense-category-{{ category.category__id }}" class="statistics-panel">
+                                                <h6 class="statistics-category-title">{{ category.category__name }}</h6>
+                                                {% for child in category.children %}<span class="statistics-badge">{{ child.category__name }}: {{ child.total|comma }} ₽</span>{% endfor %}
+                                                <div class="statistics-table-wrap statistics-section">
+                                                    <table class="statistics-table statistics-table-compact">
+                                                        <thead><tr><th>{% translate 'Дата' %}</th><th>{% translate 'Категория' %}</th><th>{% translate 'Счёт' %}</th><th>{% translate 'Кто внёс' %}</th><th class="statistics-cell-right">{% translate 'Сумма' %}</th></tr></thead>
+                                                        <tbody>
+                                                            {% for transaction in category.transactions %}
+                                                                <tr><td>{{ transaction.date|date:'d.m.Y' }}</td><td>{{ transaction.category__name }}</td><td>{{ transaction.account__name_account }}</td><td>{{ transaction.user__username }}</td><td class="statistics-cell-right">{{ transaction.amount|comma }} ₽</td></tr>
+                                                            {% empty %}
+                                                                <tr><td colspan="5" class="statistics-empty">{% translate 'Нет транзакций' %}</td></tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <button class="statistics-button statistics-button-secondary" type="button" data-dialog-close>{% translate 'Закрыть' %}</button>
+                                            </dialog>
+                                        </div>
+                                        <span class="statistics-badge statistics-badge-negative">{{ category.total|comma }} ₽ · {% translate 'было' %} {{ category.previous_total|comma }} ₽ · {% if category.delta >= 0 %}+{% endif %}{{ category.delta|comma }} ₽{% if category.delta_percent is not None %} ({{ category.delta_percent|floatformat:1 }}%){% endif %}</span>
+                                    </div>
+                                {% empty %}
+                                    <p class="statistics-empty">{% translate 'Нет данных о расходах' %}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="statistics-category-title">{% translate 'Топ категорий доходов' %}</h6>
+                            <div class="statistics-list">
+                                {% for category in top_income_categories %}
+                                    <div class="statistics-list-row">
+                                        <div>
+                                            <span>{{ category.category__name }}</span>
+                                            <button class="statistics-button statistics-button-secondary" type="button" data-dialog-open="income-category-{{ category.category__id }}">{% translate 'Детализация' %}</button>
+                                            <dialog id="income-category-{{ category.category__id }}" class="statistics-panel">
+                                                <h6 class="statistics-category-title">{{ category.category__name }}</h6>
+                                                {% for child in category.children %}<span class="statistics-badge">{{ child.category__name }}: {{ child.total|comma }} ₽</span>{% endfor %}
+                                                <div class="statistics-table-wrap statistics-section">
+                                                    <table class="statistics-table">
+                                                        <thead><tr><th>{% translate 'Дата' %}</th><th>{% translate 'Категория' %}</th><th>{% translate 'Счёт' %}</th><th>{% translate 'Кто внёс' %}</th><th class="statistics-cell-right">{% translate 'Сумма' %}</th></tr></thead>
+                                                        <tbody>
+                                                            {% for transaction in category.transactions %}
+                                                                <tr><td>{{ transaction.date|date:'d.m.Y' }}</td><td>{{ transaction.category__name }}</td><td>{{ transaction.account__name_account }}</td><td>{{ transaction.user__username }}</td><td class="statistics-cell-right">{{ transaction.amount|comma }} ₽</td></tr>
+                                                            {% empty %}
+                                                                <tr><td colspan="5" class="statistics-empty">{% translate 'Нет транзакций' %}</td></tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <button class="statistics-button statistics-button-secondary" type="button" data-dialog-close>{% translate 'Закрыть' %}</button>
+                                            </dialog>
+                                        </div>
+                                        <span class="statistics-badge statistics-badge-positive">{{ category.total|comma }} ₽ · {% translate 'было' %} {{ category.previous_total|comma }} ₽ · {% if category.delta >= 0 %}+{% endif %}{{ category.delta|comma }} ₽{% if category.delta_percent is not None %} ({{ category.delta_percent|floatformat:1 }}%){% endif %}</span>
+                                    </div>
+                                {% empty %}
+                                    <p class="statistics-empty">{% translate 'Нет данных о доходах' %}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="statistics-pane" data-panel="creditcards" role="tabpanel">
+                    {% if credit_cards_data %}
+                        <div class="statistics-summary-grid statistics-section">
+                            <div class="statistics-summary-card {% if credit_cards_summary.overdue_count %}statistics-summary-danger{% elif credit_cards_summary.expiring_count %}statistics-summary-warn{% else %}statistics-summary-positive{% endif %}">
+                                <p class="statistics-summary-label">{% translate 'Грейс под угрозой' %}</p>
+                                <p class="statistics-summary-value">{{ credit_cards_summary.at_risk_count }}</p>
+                            </div>
+                            <div class="statistics-summary-card statistics-summary-warn">
+                                <p class="statistics-summary-label">{% translate 'Просрочено' %}</p>
+                                <p class="statistics-summary-value">{{ credit_cards_summary.overdue_count }}</p>
+                            </div>
+                            <div class="statistics-summary-card statistics-summary-cyan">
+                                <p class="statistics-summary-label">{% translate 'Истекает за 7 дней' %}</p>
+                                <p class="statistics-summary-value">{{ credit_cards_summary.expiring_count }}</p>
+                            </div>
+                            <div class="statistics-summary-card statistics-summary-info">
+                                <p class="statistics-summary-label">{% translate 'Остаток под контролем' %}</p>
+                                <p class="statistics-summary-value">{{ credit_cards_summary.total_remaining_debt|comma }}</p>
+                            </div>
+                        </div>
+                        <div class="statistics-accordion">
+                            {% for card in credit_cards_data %}
+                                <details class="statistics-accordion-item">
+                                    <summary class="statistics-accordion-trigger">
+                                        <span class="statistics-accordion-title">{{ card.name }} · {{ card.limit|comma }} {{ card.currency }} · {% translate 'Долг' %}: {{ card.debt_now|comma }} {{ card.currency }}</span>
+                                        <svg class="statistics-icon statistics-accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 8.25L12 15.75 4.5 8.25"></path>
+                                        </svg>
+                                    </summary>
+                                    <div class="statistics-accordion-body">
+                                        {% if card.current_grace_info %}
+                                            <div class="statistics-info-box">
+                                                <h6 class="statistics-category-title">
+                                                    <svg class="statistics-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 2.75v3.5M16 2.75v3.5M4 9h16M5.5 5.25h13A1.5 1.5 0 0120 6.75v11.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.25V6.75a1.5 1.5 0 011.5-1.5zM9 14l2 2 4-4"></path>
+                                                    </svg>
+                                                    {% translate 'Текущий беспроцентный период' %}
                                                 </h6>
-                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div class="space-y-2">
-                                                        <p class="text-sm"><strong class="text-gray-700 dark:text-gray-300">Период покупок:</strong> <span class="text-gray-900 dark:text-white">{{ card.current_grace_info.purchase_month }}</span></p>
-                                                        <p class="text-sm"><strong class="text-gray-700 dark:text-gray-300">Конец беспроцентного периода:</strong> <span class="text-gray-900 dark:text-white">{{ card.current_grace_info.grace_end|date:'d.m.Y' }}</span></p>
+                                                <div class="statistics-inline-grid">
+                                                    <div>
+                                                        <p><strong>{% translate 'Период покупок:' %}</strong> {{ card.current_grace_info.purchase_month }}</p>
+                                                        <p><strong>{% translate 'Конец беспроцентного периода:' %}</strong> {{ card.current_grace_info.grace_end|date:'d.m.Y' }}</p>
                                                         {% if card.current_grace_info.days_until_due > 0 %}
-                                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">Осталось дней: {{ card.current_grace_info.days_until_due }}</span>
+                                                            <span class="statistics-badge statistics-badge-positive">{% translate 'Осталось дней:' %} {{ card.current_grace_info.days_until_due }}</span>
                                                         {% elif card.current_grace_info.is_overdue %}
-                                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">Просрочено!</span>
+                                                            <span class="statistics-badge statistics-badge-negative">{% translate 'Просрочено' %}</span>
                                                         {% endif %}
                                                     </div>
-                                                    <div class="space-y-2">
-                                                        <p class="text-sm"><strong class="text-gray-700 dark:text-gray-300">Долг за месяц:</strong> <span class="text-gray-900 dark:text-white">{{ card.current_grace_info.debt_for_month|comma }} {{ card.currency }}</span></p>
-                                                        <p class="text-sm"><strong class="text-gray-700 dark:text-gray-300">Платежи за период погашения:</strong> <span class="text-gray-900 dark:text-white">{{ card.current_grace_info.payments_for_period|comma }} {{ card.currency }}</span></p>
-                                                        <p class="text-sm"><strong class="text-gray-700 dark:text-gray-300">Итоговый долг:</strong> <span class="text-gray-900 dark:text-white font-semibold">{{ card.current_grace_info.final_debt|comma }} {{ card.currency }}</span></p>
+                                                    <div>
+                                                        <p><strong>{% translate 'Долг за месяц:' %}</strong> {{ card.current_grace_info.debt_for_month|comma }} {{ card.currency }}</p>
+                                                        <p><strong>{% translate 'Платежи за период:' %}</strong> {{ card.current_grace_info.payments_for_period|comma }} {{ card.currency }}</p>
+                                                        <p><strong>{% translate 'Итоговый долг:' %}</strong> {{ card.current_grace_info.final_debt|comma }} {{ card.currency }}</p>
                                                     </div>
                                                 </div>
                                             </div>
-                                            {% endif %}
+                                        {% endif %}
 
-                                            <div class="overflow-x-auto">
-                                                <table class="w-full border-collapse">
+                                        <div class="statistics-category-grid statistics-section">
+                                            <div class="statistics-info-box">
+                                                <h6 class="statistics-category-title">{% translate 'Утилизация лимита за 12 месяцев' %}</h6>
+                                                {{ card.utilization_chart|json_script:card.utilization_chart_id }}
+                                                <div class="statistics-chart-box statistics-chart-box-small">
+                                                    <canvas class="credit-utilization-chart" data-chart-source="{{ card.utilization_chart_id }}" height="220"></canvas>
+                                                </div>
+                                            </div>
+                                            <div class="statistics-info-box">
+                                                <h6 class="statistics-category-title">{% translate 'Если платить только минимум' %}</h6>
+                                                <div class="statistics-table-wrap">
+                                                    <table class="statistics-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>{% translate 'Месяц' %}</th>
+                                                                <th class="statistics-cell-right">{% translate 'Мин. платёж' %}</th>
+                                                                <th class="statistics-cell-right">{% translate 'Остаток' %}</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for forecast in card.minimum_payment_forecast|slice:':6' %}
+                                                                <tr>
+                                                                    <td>{{ forecast.month }}</td>
+                                                                    <td class="statistics-cell-right">{{ forecast.minimum_payment|comma }} {{ card.currency }}</td>
+                                                                    <td class="statistics-cell-right">{{ forecast.remaining_debt|comma }} {{ card.currency }}</td>
+                                                                </tr>
+                                                            {% empty %}
+                                                                <tr><td colspan="3" class="statistics-empty">{% translate 'Нет текущего долга' %}</td></tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="statistics-table-wrap statistics-section">
+                                            <table class="statistics-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>{% translate 'Лимит' %}</th>
+                                                        <th>{% translate 'Долг' %}</th>
+                                                        <th>{% translate 'Остаток лимита' %}</th>
+                                                        <th>{% translate 'История' %}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td>{{ card.limit|comma }} {{ card.currency }}</td>
+                                                        <td>{{ card.debt_now|comma }} {{ card.currency }}</td>
+                                                        <td>{{ card.limit_left|comma }} {{ card.currency }}</td>
+                                                        <td>
+                                                            {% for h in card.history %}
+                                                                <span class="statistics-badge {% if h.is_overdue %}statistics-badge-negative{% else %}statistics-badge-positive{% endif %}">{{ h.month }}: {{ h.debt|comma }}</span>
+                                                            {% endfor %}
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {% if card.payment_schedule %}
+                                            <div class="statistics-table-wrap statistics-section">
+                                                <h6 class="statistics-category-title">
+                                                    <svg class="statistics-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 2.75v3.5M16 2.75v3.5M4 9h16M5.5 5.25h13A1.5 1.5 0 0120 6.75v11.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.25V6.75a1.5 1.5 0 011.5-1.5zM8 13h.01M12 13h.01M16 13h.01M8 16h.01M12 16h.01"></path>
+                                                    </svg>
+                                                    {% translate 'График платежей по беспроцентному периоду' %}
+                                                </h6>
+                                                <table class="statistics-table">
                                                     <thead>
-                                                        <tr class="bg-gray-50 dark:bg-gray-900/50">
-                                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Лимит</th>
-                                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Долг</th>
-                                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Остаток лимита</th>
-                                                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">История (12 мес.)</th>
+                                                        <tr>
+                                                            <th>{% translate 'Месяц покупок' %}</th>
+                                                            <th class="statistics-cell-right">{% translate 'Сумма покупок' %}</th>
+                                                            <th class="statistics-cell-right">{% translate 'Оплачено' %}</th>
+                                                            <th class="statistics-cell-right">{% translate 'Осталось' %}</th>
+                                                            <th>{% translate 'Дата окончания' %}</th>
+                                                            <th class="statistics-cell-center">{% translate 'Статус' %}</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                                                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700">{{ card.limit|comma }} {{ card.currency }}</td>
-                                                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700">{{ card.debt_now|comma }} {{ card.currency }}</td>
-                                                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700">{{ card.limit_left|comma }} {{ card.currency }}</td>
-                                                            <td class="px-4 py-3 text-sm border-b border-gray-200 dark:border-gray-700">
-                                                                <div class="flex flex-wrap gap-2">
-                                                                    {% for h in card.history %}
-                                                                        <div class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-gray-100 dark:bg-gray-700">
-                                                                            <span class="font-semibold text-gray-700 dark:text-gray-300">{{ h.month }}:</span>
-                                                                            <span class="{% if h.is_overdue %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-                                                                                {{ h.debt|comma }}
-                                                                            </span>
-                                                                            {% if h.is_overdue %}
-                                                                                <i class="bi bi-exclamation-triangle text-red-600 dark:text-red-400" title="Просрочено"></i>
-                                                                            {% endif %}
-                                                                        </div>
-                                                                    {% endfor %}
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                        {% if card.payment_schedule %}
-                                                        <tr>
-                                                            <td colspan="4" class="px-0 py-0">
-                                                                <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-900/50">
-                                                                    <h6 class="text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                                                                        <i class="bi bi-calendar-event text-blue-600 dark:text-blue-400"></i>
-                                                                        График платежей по беспроцентному периоду
-                                                                    </h6>
-                                                                    <div class="overflow-x-auto">
-                                                                        <table class="w-full border-collapse text-sm">
-                                                                            <thead>
-                                                                                <tr class="bg-gray-100 dark:bg-gray-800">
-                                                                                    <th class="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Месяц покупок</th>
-                                                                                    <th class="px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Сумма покупок</th>
-                                                                                    <th class="px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Оплачено</th>
-                                                                                    <th class="px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Осталось</th>
-                                                                                    <th class="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Дата окончания</th>
-                                                                                    <th class="px-3 py-2 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Статус</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                                                                {% for p in card.payment_schedule %}
-                                                                                <tr class="{% if p.is_overdue %}bg-red-50 dark:bg-red-900/20{% elif p.is_paid %}bg-green-50 dark:bg-green-900/20{% else %}hover:bg-gray-50 dark:hover:bg-gray-800/50{% endif %} transition-colors duration-150">
-                                                                                    <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ p.month }}</td>
-                                                                                    <td class="px-3 py-2 text-sm text-gray-900 dark:text-white text-right">{{ p.sum_expense|comma }} {{ card.currency }}</td>
-                                                                                    <td class="px-3 py-2 text-sm font-medium text-green-600 dark:text-green-400 text-right">{{ p.payments_made|comma }} {{ card.currency }}</td>
-                                                                                    <td class="px-3 py-2 text-sm font-medium {% if p.remaining_debt > 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %} text-right">
-                                                                                        {{ p.remaining_debt|comma }} {{ card.currency }}
-                                                                                    </td>
-                                                                                    <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">{{ p.payment_due }}</td>
-                                                                                    <td class="px-3 py-2 text-center">
-                                                                                        {% if p.is_paid %}
-                                                                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">Оплачено</span>
-                                                                                        {% elif p.is_overdue %}
-                                                                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">Просрочено</span>
-                                                                                        {% elif p.days_until_due > 0 %}
-                                                                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">Осталось {{ p.days_until_due }} дн.</span>
-                                                                                        {% else %}
-                                                                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">Неизвестно</span>
-                                                                                        {% endif %}
-                                                                                    </td>
-                                                                                </tr>
-                                                                                {% endfor %}
-                                                                            </tbody>
-                                                                        </table>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                        {% endif %}
+                                                        {% for p in card.payment_schedule %}
+                                                            <tr>
+                                                                <td>{{ p.month }}</td>
+                                                                <td class="statistics-cell-right">{{ p.sum_expense|comma }} {{ card.currency }}</td>
+                                                                <td class="statistics-money-positive statistics-cell-right">{{ p.payments_made|comma }} {{ card.currency }}</td>
+                                                                <td class="{% if p.remaining_debt > 0 %}statistics-money-negative{% else %}statistics-money-positive{% endif %} statistics-cell-right">{{ p.remaining_debt|comma }} {{ card.currency }}</td>
+                                                                <td>{{ p.payment_due }}</td>
+                                                                <td class="statistics-cell-center">
+                                                                    {% if p.is_paid %}
+                                                                        <span class="statistics-badge statistics-badge-positive">{% translate 'Оплачено' %}</span>
+                                                                    {% elif p.is_overdue %}
+                                                                        <span class="statistics-badge statistics-badge-negative">{% translate 'Просрочено' %}</span>
+                                                                    {% elif p.days_until_due > 0 %}
+                                                                        <span class="statistics-badge statistics-badge-warning">{% translate 'Осталось' %} {{ p.days_until_due }} {% translate 'дн.' %}</span>
+                                                                    {% else %}
+                                                                        <span class="statistics-badge">{% translate 'Неизвестно' %}</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                            </tr>
+                                                        {% endfor %}
                                                     </tbody>
                                                 </table>
                                             </div>
+                                        {% endif %}
+                                    </div>
+                                </details>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="statistics-empty">
+                            <svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 6.75A1.75 1.75 0 015.5 5h13a1.75 1.75 0 011.75 1.75v10.5A1.75 1.75 0 0118.5 19h-13a1.75 1.75 0 01-1.75-1.75V6.75zM4 9h16M7 15h3"></path>
+                            </svg>
+                            <p>{% translate 'Нет кредитных карт' %}</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="statistics-pane" data-panel="budgets" role="tabpanel">
+                    {% if budgets_data %}
+                        <div class="statistics-budget-list">
+                            {% for budget in budgets_data %}
+                                <div class="statistics-budget-item">
+                                    <div class="statistics-budget-header">
+                                        <span class="statistics-budget-name">{{ budget.category_name }}</span>
+                                        <span class="statistics-budget-period">{{ budget.period }}</span>
+                                        <span class="statistics-budget-amounts">
+                                            {{ budget.actual_expenses|comma }} ₽ / {{ budget.amount_limit|comma }} ₽
+                                        </span>
+                                        <span class="statistics-badge {% if budget.over_limit %}statistics-badge-negative{% elif budget.near_limit %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">
+                                            {{ budget.usage_percent|floatformat:1 }}%
+                                        </span>
+                                    </div>
+                                    <div class="statistics-progress-track">
+                                        <div class="statistics-progress-fill {% if budget.over_limit %}statistics-progress-over{% elif budget.near_limit %}statistics-progress-warn{% else %}statistics-progress-ok{% endif %}"
+                                             style="width: {% if budget.usage_percent > 100 %}100{% else %}{{ budget.usage_percent|floatformat:0 }}{% endif %}%;">
                                         </div>
+                                        {% if not budget.over_limit %}
+                                            <div class="statistics-progress-threshold" style="left: {{ budget.alert_threshold }}%;"></div>
+                                        {% endif %}
                                     </div>
                                 </div>
-                                {% endfor %}
-                            </div>
-                            {% else %}
-                            <div class="text-center py-12 text-gray-500 dark:text-gray-400">
-                                <i class="bi bi-credit-card text-4xl mb-2 block"></i>
-                                <p>Нет кредитных карт!</p>
-                            </div>
-                            {% endif %}
+                            {% endfor %}
                         </div>
+                    {% else %}
+                        <div class="statistics-empty">
+                            <svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p>{% translate 'Нет бюджетов за выбранный период' %}</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="statistics-pane" data-panel="calendar" role="tabpanel">
+                    <div class="statistics-table-wrap">
+                        <table class="statistics-table">
+                            <thead>
+                                <tr>
+                                    <th>{% translate 'Дата' %}</th>
+                                    <th>{% translate 'Событие' %}</th>
+                                    <th>{% translate 'Тип' %}</th>
+                                    <th class="statistics-cell-right">{% translate 'Сумма' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for event in payment_calendar %}
+                                    <tr>
+                                        <td>{{ event.date|date:'d.m.Y' }}</td>
+                                        <td>{{ event.title }}</td>
+                                        <td>
+                                            <span class="statistics-badge {% if event.is_overdue %}statistics-badge-negative{% elif event.type == 'credit_card' %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">
+                                                {% if event.type == 'credit_card' %}{% translate 'Кредитная карта' %}{% else %}{% translate 'Кредит' %}{% endif %}
+                                            </span>
+                                        </td>
+                                        <td class="statistics-cell-right">{{ event.amount|comma }} {{ event.currency }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr><td colspan="4" class="statistics-empty">{% translate 'Нет предстоящих платежей на ближайшие 6 месяцев' %}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <script nonce="{{ request.csp_nonce }}" src="{% static 'js/chart.umd.min.js' %}"></script>
-    <script nonce="{{ request.csp_nonce }}">
-        document.addEventListener('DOMContentLoaded', function() {
-            const chartData = {{ chart_combined|safe }};
-            const ctx = document.getElementById('incomeExpenseChart');
-            if (ctx && typeof Chart !== 'undefined') {
-                try {
-                    if (!chartData.labels || chartData.labels.length === 0) {
-                        ctx.parentElement.innerHTML = '<div class="text-center text-gray-500 dark:text-gray-400 py-12"><i class="bi bi-graph-up text-5xl mb-3 block"></i><p class="text-lg">Нет данных для отображения графика</p></div>';
-                    } else {
+<script nonce="{{ request.csp_nonce }}" src="{% static 'js/chart.umd.min.js' %}"></script>
+<script nonce="{{ request.csp_nonce }}">
+    document.addEventListener('alpine:init', function() {
+        Alpine.data('statisticsPage', function() {
+            return {
+                activeTab: new URLSearchParams(window.location.search).get('tab') || 'monthly',
+                activateTab: function(event) {
+                    this.activeTab = event.currentTarget.dataset.tab;
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('tab', this.activeTab);
+                    window.history.replaceState({}, '', url.toString());
+                },
+            };
+        });
+    });
 
-                    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark' ||
-                                   (document.documentElement.classList.contains('dark') ||
-                                    window.matchMedia('(prefers-color-scheme: dark)').matches);
-
-                    const chart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: chartData.labels || [],
-                            datasets: [
-                                {
-                                    label: 'Расходы',
-                                    data: chartData.expense_data || [],
-                                    borderColor: 'rgb(220, 38, 38)',
-                                    backgroundColor: 'rgba(220, 38, 38, 0.1)',
-                                    tension: 0.1,
-                                    borderWidth: 2,
-                                    pointRadius: 4,
-                                    pointHoverRadius: 6
-                                },
-                                {
-                                    label: 'Доходы',
-                                    data: chartData.income_data || [],
-                                    borderColor: 'rgb(22, 163, 74)',
-                                    backgroundColor: 'rgba(22, 163, 74, 0.1)',
-                                    tension: 0.1,
-                                    borderWidth: 2,
-                                    pointRadius: 4,
-                                    pointHoverRadius: 6
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            interaction: {
-                                intersect: false,
-                                mode: 'index'
-                            },
-                            plugins: {
-                                title: {
-                                    display: false
-                                },
-                                legend: {
-                                    display: true,
-                                    position: 'top',
-                                    labels: {
-                                        usePointStyle: true,
-                                        padding: 20,
-                                        color: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)'
-                                    }
-                                },
-                                tooltip: {
-                                    backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                                    titleColor: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
-                                    bodyColor: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)',
-                                    borderColor: isDark ? 'rgb(55, 65, 81)' : 'rgb(229, 231, 235)',
-                                    borderWidth: 1,
-                                    callbacks: {
-                                        label: function(context) {
-                                            return context.dataset.label + ': ' + context.parsed.y.toLocaleString('ru-RU') + ' ₽';
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    title: {
-                                        display: true,
-                                        text: 'Сумма (₽)',
-                                        color: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)'
-                                    },
-                                    ticks: {
-                                        color: isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
-                                        callback: function(value) {
-                                            return value.toLocaleString('ru-RU') + ' ₽';
-                                        }
-                                    },
-                                    grid: {
-                                        color: isDark ? 'rgba(55, 65, 81, 0.5)' : 'rgba(229, 231, 235, 0.5)'
-                                    }
-                                },
-                                x: {
-                                    title: {
-                                        display: true,
-                                        text: 'Дата',
-                                        color: isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)'
-                                    },
-                                    ticks: {
-                                        color: isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)'
-                                    },
-                                    grid: {
-                                        color: isDark ? 'rgba(55, 65, 81, 0.5)' : 'rgba(229, 231, 235, 0.5)'
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    }
-                } catch (error) {
-                    console.error('Ошибка при создании графика:', error);
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('[data-table-search]').forEach(function(input) {
+            input.addEventListener('input', function() {
+                const table = document.getElementById(input.dataset.tableSearch);
+                const needle = input.value.toLowerCase();
+                if (!table) {
+                    return;
                 }
-            } else {
-                console.error('Chart.js не загружен или контейнер не найден');
-            }
-
-            const tabButtons = document.querySelectorAll('.statistics-tab-btn');
-            const tabPanes = document.querySelectorAll('.statistics-tab-pane');
-
-            tabButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const targetId = this.getAttribute('data-tab-target');
-
-                    tabButtons.forEach(btn => {
-                        btn.classList.remove('active', 'bg-white', 'dark:bg-gray-800', 'text-green-600', 'dark:text-green-400', 'border-green-600', 'dark:border-green-400', 'border-b-2');
-                        btn.classList.add('text-gray-600', 'dark:text-gray-400');
-                    });
-
-                    tabPanes.forEach(pane => {
-                        pane.classList.add('hidden');
-                        pane.classList.remove('active');
-                    });
-
-                    this.classList.add('active', 'bg-white', 'dark:bg-gray-800', 'text-green-600', 'dark:text-green-400', 'border-b-2', 'border-green-600', 'dark:border-green-400');
-                    this.classList.remove('text-gray-600', 'dark:text-gray-400');
-
-                    const targetPane = document.getElementById(targetId);
-                    if (targetPane) {
-                        targetPane.classList.remove('hidden');
-                        targetPane.classList.add('active');
-                    }
-                });
-            });
-
-            const accordionButtons = document.querySelectorAll('.credit-card-accordion-btn');
-            accordionButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const targetId = this.getAttribute('data-accordion-target');
-                    const content = document.getElementById(targetId);
-                    const icon = this.querySelector('i');
-                    const isExpanded = this.getAttribute('aria-expanded') === 'true';
-
-                    if (content) {
-                        if (isExpanded) {
-                            content.classList.add('hidden');
-                            icon.classList.remove('rotate-180');
-                            this.setAttribute('aria-expanded', 'false');
-                        } else {
-                            content.classList.remove('hidden');
-                            icon.classList.add('rotate-180');
-                            this.setAttribute('aria-expanded', 'true');
-                        }
-                    }
+                table.querySelectorAll('tbody tr').forEach(function(row) {
+                    row.hidden = needle && !row.textContent.toLowerCase().includes(needle);
                 });
             });
         });
-    </script>
+
+        document.querySelectorAll('[data-list-search]').forEach(function(input) {
+            input.addEventListener('input', function() {
+                const list = document.getElementById(input.dataset.listSearch);
+                const needle = input.value.toLowerCase();
+                if (!list) {
+                    return;
+                }
+                list.querySelectorAll('.statistics-list-row').forEach(function(row) {
+                    row.hidden = needle && !row.textContent.toLowerCase().includes(needle);
+                });
+            });
+        });
+
+        document.querySelectorAll('[data-dialog-open]').forEach(function(button) {
+            button.addEventListener('click', function() {
+                const dialog = document.getElementById(button.dataset.dialogOpen);
+                if (dialog && typeof dialog.showModal === 'function') {
+                    dialog.showModal();
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-dialog-close]').forEach(function(button) {
+            button.addEventListener('click', function() {
+                const dialog = button.closest('dialog');
+                if (dialog) {
+                    dialog.close();
+                }
+            });
+        });
+
+        const chartData = {{ chart_combined_json|safe }};
+        const ctx = document.getElementById('incomeExpenseChart');
+        if (!ctx || typeof Chart === 'undefined') {
+            return;
+        }
+        if (!chartData.labels || chartData.labels.length === 0) {
+            ctx.parentElement.innerHTML = '<div class="statistics-empty"><svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 4 4 5-7"></path></svg><p>Нет данных для отображения графика</p></div>';
+            return;
+        }
+
+        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark' || document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const textColor = isDark ? 'rgb(243, 244, 246)' : 'rgb(17, 24, 39)';
+        const mutedColor = isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)';
+        const gridColor = isDark ? 'rgba(55, 65, 81, 0.5)' : 'rgba(229, 231, 235, 0.5)';
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.labels || [],
+                datasets: [
+                    {
+                        label: 'Расходы',
+                        data: chartData.expense_data || [],
+                        borderColor: 'rgb(220, 38, 38)',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                    },
+                    {
+                        label: 'Доходы',
+                        data: chartData.income_data || [],
+                        borderColor: 'rgb(22, 163, 74)',
+                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                    },
+                    {
+                        label: 'Прогноз баланса',
+                        data: chartData.forecast_balance || [],
+                        borderColor: 'rgb(14, 165, 233)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                        borderDash: [6, 6],
+                        tension: 0.25,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                    },
+                    {
+                        label: 'Нижняя граница прогноза',
+                        data: chartData.forecast_lower || [],
+                        borderColor: 'rgba(14, 165, 233, 0.25)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.08)',
+                        borderDash: [2, 6],
+                        pointRadius: 0,
+                        borderWidth: 1,
+                    },
+                    {
+                        label: 'Верхняя граница прогноза',
+                        data: chartData.forecast_upper || [],
+                        borderColor: 'rgba(14, 165, 233, 0.25)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.08)',
+                        borderDash: [2, 6],
+                        pointRadius: 0,
+                        borderWidth: 1,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            color: textColor,
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                        titleColor: textColor,
+                        bodyColor: textColor,
+                        borderColor: isDark ? 'rgb(55, 65, 81)' : 'rgb(229, 231, 235)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString('ru-RU') + ' ₽';
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Сумма (₽)',
+                            color: textColor,
+                        },
+                        ticks: {
+                            color: mutedColor,
+                            callback: function(value) {
+                                return value.toLocaleString('ru-RU') + ' ₽';
+                            },
+                        },
+                        grid: {
+                            color: gridColor,
+                        },
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Дата',
+                            color: textColor,
+                        },
+                        ticks: {
+                            color: mutedColor,
+                        },
+                        grid: {
+                            color: gridColor,
+                        },
+                    },
+                },
+            },
+        });
+
+        document.querySelectorAll('.credit-utilization-chart').forEach(function(canvas) {
+            const source = document.getElementById(canvas.dataset.chartSource);
+            if (!source) {
+                return;
+            }
+            const utilizationData = JSON.parse(source.textContent || '{}');
+            if (!utilizationData.labels || utilizationData.labels.length === 0) {
+                canvas.parentElement.innerHTML = '<p class="statistics-empty">Нет данных по утилизации лимита</p>';
+                return;
+            }
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: utilizationData.labels,
+                    datasets: [
+                        {
+                            label: 'Утилизация лимита, %',
+                            data: utilizationData.values || [],
+                            borderColor: 'rgb(14, 165, 233)',
+                            backgroundColor: 'rgba(14, 165, 233, 0.35)',
+                            borderWidth: 1,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: textColor } },
+                        tooltip: {
+                            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y.toLocaleString('ru-RU') + '%';
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            suggestedMax: 100,
+                            ticks: {
+                                color: mutedColor,
+                                callback: function(value) { return value + '%'; },
+                            },
+                            grid: { color: gridColor },
+                        },
+                        x: {
+                            ticks: { color: mutedColor },
+                            grid: { color: gridColor },
+                        },
+                    },
+                },
+            });
+        });
+    });
+</script>
 {% endblock %}

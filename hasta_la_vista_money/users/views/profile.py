@@ -1,4 +1,6 @@
 import json
+from csv import writer
+from io import StringIO
 from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
@@ -9,6 +11,7 @@ from django.forms import BaseForm
 from django.http import (
     HttpRequest,
     HttpResponse,
+    HttpResponseRedirect,
     JsonResponse,
 )
 from django.urls import reverse_lazy
@@ -24,7 +27,11 @@ from hasta_la_vista_money.users.forms import (
 from hasta_la_vista_money.users.models import (
     User,
 )
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 from hasta_la_vista_money.users.services.detailed_statistics import (
+    StatisticsFilters,
     get_user_detailed_statistics,
 )
 from hasta_la_vista_money.users.services.export import get_user_export_data
@@ -143,18 +150,136 @@ class UserStatisticsView(LoginRequiredMixin, TemplateView):
 
     template_name = 'users/statistics.html'
 
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        if request.GET.get('refresh') == '1' and isinstance(
+            request.user,
+            User,
+        ):
+            invalidate_user_detailed_statistics_cache(request.user.pk)
+            query = request.GET.copy()
+            query.pop('refresh', None)
+            redirect_url = request.path
+            if query:
+                redirect_url = f'{redirect_url}?{query.urlencode()}'
+            return HttpResponseRedirect(redirect_url)
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         user = self.request.user
         request_with_container = cast('RequestWithContainer', self.request)
         if isinstance(user, User):
+            statistics_filter = StatisticsFilters.from_query(self.request.GET)
             context.update(
                 get_user_detailed_statistics(
                     user,
                     container=request_with_container.container,
+                    stats_filter=statistics_filter,
+                    request=self.request,
                 ).items(),
             )
         return context
+
+
+class UserStatisticsExportView(LoginRequiredMixin, View):
+    """Export the currently filtered statistics slice as CSV."""
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        user = request.user
+        if not isinstance(user, User):
+            return HttpResponse('Unauthorized', status=401)
+
+        request_with_container = cast('RequestWithContainer', request)
+        statistics_filter = StatisticsFilters.from_query(request.GET)
+        stats = get_user_detailed_statistics(
+            user,
+            container=request_with_container.container,
+            stats_filter=statistics_filter,
+            request=request,
+        )
+
+        buffer = StringIO()
+        csv_writer = writer(buffer)
+        csv_writer.writerow(
+            ['Раздел', 'Дата/период', 'Тип', 'Описание', 'Сумма'],
+        )
+        for month in stats['months_data']:
+            csv_writer.writerow(
+                ['Месяцы', month['month'], 'Доходы', 'Факт', month['income']],
+            )
+            csv_writer.writerow(
+                [
+                    'Месяцы',
+                    month['month'],
+                    'Расходы',
+                    'Факт',
+                    month['expenses'],
+                ],
+            )
+            csv_writer.writerow(
+                [
+                    'Месяцы',
+                    month['month'],
+                    'Сбережения',
+                    'Факт',
+                    month['savings'],
+                ],
+            )
+
+        for item in stats['income_expense']:
+            csv_writer.writerow(
+                [
+                    'Операции',
+                    item['date'],
+                    item['type'],
+                    '{} / {} / {}'.format(
+                        item['category__name'],
+                        item['account__name_account'],
+                        item['user__username'],
+                    ),
+                    item['amount'],
+                ],
+            )
+
+        for receipt in stats['receipt_page'].paginator.object_list:
+            csv_writer.writerow(
+                [
+                    'Чеки',
+                    receipt.receipt_date,
+                    'receipt',
+                    '{} / {} / {}'.format(
+                        receipt.seller.name_seller if receipt.seller else '',
+                        receipt.account.name_account,
+                        receipt.user.username,
+                    ),
+                    receipt.total_sum,
+                ],
+            )
+
+        for event in stats['payment_calendar']:
+            csv_writer.writerow(
+                [
+                    'Календарь',
+                    event['date'],
+                    event['type'],
+                    event['title'],
+                    event['amount'],
+                ],
+            )
+
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = (
+            'attachment; filename="statistics_{}_{}.csv"'.format(
+                user.username,
+                timezone.now().strftime('%Y%m%d'),
+            )
+        )
+        return response
 
 
 class UserNotificationsView(LoginRequiredMixin, TemplateView):

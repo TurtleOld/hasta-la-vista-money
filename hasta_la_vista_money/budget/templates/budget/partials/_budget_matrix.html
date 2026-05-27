@@ -1,6 +1,9 @@
 {% load i18n %}
 
-<div id="{{ budget_table_id }}" class="budget-matrix-panel" x-data="{ visibleMonths: {{ budget_visible_default|default:0 }}, totalMonths: {{ budget_months|length }} }">
+<div
+    id="{{ budget_table_id }}"
+    class="budget-matrix-panel"
+>
     <div class="budget-matrix-toolbar">
         <div>
             <p class="budget-kicker">{% translate 'План и факт' %}</p>
@@ -9,9 +12,9 @@
             </h2>
         </div>
         <div class="budget-segment" aria-label="{% translate 'Период таблицы' %}">
-            <button type="button" :class="visibleMonths === {{ budget_visible_6 }} ? 'is-active' : ''" @click="visibleMonths = {{ budget_visible_6 }}">{% translate '6 мес.' %}</button>
-            <button type="button" :class="visibleMonths === {{ budget_visible_12 }} ? 'is-active' : ''" @click="visibleMonths = {{ budget_visible_12 }}">{% translate '12 мес.' %}</button>
-            <button type="button" :class="visibleMonths === totalMonths ? 'is-active' : ''" @click="visibleMonths = totalMonths">{% translate 'Все' %}</button>
+            <button type="button" class="{% if budget_visible_range == '6' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?range=6" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate '6 мес.' %}</button>
+            <button type="button" class="{% if budget_visible_range == '12' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?range=12" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate '12 мес.' %}</button>
+            <button type="button" class="{% if budget_visible_range == 'all' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?range=all" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate 'Все' %}</button>
         </div>
     </div>
 
@@ -21,15 +24,15 @@
                 <thead>
                     <tr>
                         <th class="budget-table-header-category" rowspan="2">{% translate 'Категория' %}</th>
-                        {% for month in budget_months %}
-                            <th class="budget-table-header-month" colspan="3" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>{{ month|date:'F Y' }}</th>
+                        {% for column in budget_month_columns %}
+                            <th class="budget-table-header-month" colspan="3" data-budget-month-index="{{ column.index }}" {% if not column.is_visible_default %}hidden{% endif %}>{{ column.month|date:'F Y' }}</th>
                         {% endfor %}
                     </tr>
                     <tr>
-                        {% for month in budget_months %}
-                            <th class="budget-table-header-fact" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>{% translate 'Факт' %}</th>
-                            <th class="budget-table-header-plan" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>{% translate 'План' %}</th>
-                            <th class="budget-table-header-progress" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>{% translate 'Прогресс' %}</th>
+                        {% for column in budget_month_columns %}
+                            <th class="budget-table-header-fact" data-budget-month-index="{{ column.index }}" {% if not column.is_visible_default %}hidden{% endif %}>{% translate 'Факт' %}</th>
+                            <th class="budget-table-header-plan" data-budget-month-index="{{ column.index }}" {% if not column.is_visible_default %}hidden{% endif %}>{% translate 'План' %}</th>
+                            <th class="budget-table-header-progress" data-budget-month-index="{{ column.index }}" {% if not column.is_visible_default %}hidden{% endif %}>{% translate 'Прогресс' %}</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -38,17 +41,18 @@
                         <tr>
                             <td class="budget-table-cell-category">{{ row.category }}</td>
                             {% for cell in row.cells %}
-                                <td class="budget-table-cell-fact" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>{{ cell.fact|floatformat:0 }}</td>
-                                <td class="budget-table-cell-plan" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>
+                                <td class="budget-table-cell-fact" data-budget-month-index="{{ cell.index }}" {% if not cell.is_visible_default %}hidden{% endif %}>{{ cell.fact|floatformat:0 }}</td>
+                                <td class="budget-table-cell-plan" data-budget-month-index="{{ cell.index }}" {% if not cell.is_visible_default %}hidden{% endif %}>
                                     <form class="budget-plan-form">
                                         {% csrf_token %}
                                         <input type="hidden" name="category_id" value="{{ row.category_id }}">
                                         <input type="hidden" name="month" value="{{ cell.month|date:'Y-m-d' }}">
                                         <input type="hidden" name="type" value="{{ budget_table_type }}">
+                                        <input type="hidden" name="range" value="{{ budget_visible_range }}">
                                         <input class="budget-table-input" type="number" min="0" step="0.01" name="amount" value="{% if cell.plan %}{{ cell.plan|floatformat:2 }}{% endif %}" placeholder="0" hx-post="{% url 'budget:save_planning' %}" hx-trigger="change delay:250ms" hx-include="closest form" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">
                                     </form>
                                 </td>
-                                <td class="budget-table-cell-progress" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>
+                                <td class="budget-table-cell-progress" data-budget-month-index="{{ cell.index }}" {% if not cell.is_visible_default %}hidden{% endif %}>
                                     <div class="budget-progress budget-progress-{{ cell.status }}">
                                         <progress value="{{ cell.progress_width|floatformat:0 }}" max="100"></progress>
                                         <span>{{ cell.percent_label }}</span>
@@ -60,9 +64,9 @@
                     <tr class="budget-table-total-row">
                         <td class="budget-table-total-label">{% translate 'Итого' %}</td>
                         {% for cell in budget_total_cells %}
-                            <td class="budget-table-total-cell" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>{{ cell.fact|floatformat:0 }}</td>
-                            <td class="budget-table-total-cell" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>{{ cell.plan|floatformat:0 }}</td>
-                            <td class="budget-table-total-cell" x-show="{{ forloop.counter0 }} >= totalMonths - visibleMonths" x-cloak>
+                            <td class="budget-table-total-cell" data-budget-month-index="{{ cell.index }}" {% if not cell.is_visible_default %}hidden{% endif %}>{{ cell.fact|floatformat:0 }}</td>
+                            <td class="budget-table-total-cell" data-budget-month-index="{{ cell.index }}" {% if not cell.is_visible_default %}hidden{% endif %}>{{ cell.plan|floatformat:0 }}</td>
+                            <td class="budget-table-total-cell" data-budget-month-index="{{ cell.index }}" {% if not cell.is_visible_default %}hidden{% endif %}>
                                 <div class="budget-progress budget-progress-{{ cell.status }}">
                                     <progress value="{{ cell.progress_width|floatformat:0 }}" max="100"></progress>
                                     <span>{{ cell.percent_label }}</span>

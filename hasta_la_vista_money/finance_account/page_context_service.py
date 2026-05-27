@@ -176,7 +176,7 @@ class AccountPageContextService:
         if user.groups.exists():
             accounts_in_group = self.account_repository.get_by_user_and_group(
                 user,
-                None,
+                'family',
             )
             sum_all_accounts_in_group = (
                 self.account_service.get_sum_all_accounts(accounts_in_group)

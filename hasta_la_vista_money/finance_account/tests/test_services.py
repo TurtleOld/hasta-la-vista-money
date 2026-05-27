@@ -77,7 +77,7 @@ class TestAccountServices(TestCase):
         self.assertNotIn(self.account3, accounts)
 
     def test_get_accounts_for_user_or_group_with_group(self) -> None:
-        """Test get_accounts_for_user_or_group with group."""
+        """Owner can see all accounts for an owned family group."""
         group = Group.objects.create(name='Test Group')
         self.user1.groups.add(group)
         self.user2.groups.add(group)
@@ -101,6 +101,32 @@ class TestAccountServices(TestCase):
         self.assertIn(self.account1, accounts)
         self.assertIn(self.account2, accounts)
         self.assertIn(self.account3, accounts)
+
+    def test_get_accounts_for_user_or_group_viewer_group(self) -> None:
+        """Viewer sees only own accounts even when group is selected."""
+        group = Group.objects.create(name='Viewer Group')
+        self.user1.groups.add(group)
+        self.user2.groups.add(group)
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.user1,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.user2,
+            role=FamilyGroupMembership.Role.VIEWER,
+        )
+
+        accounts = self.account_service.get_accounts_for_user_or_group(
+            self.user2,
+            str(group.pk),
+        )
+
+        self.assertEqual(accounts.count(), 1)
+        self.assertIn(self.account3, accounts)
+        self.assertNotIn(self.account1, accounts)
+        self.assertNotIn(self.account2, accounts)
 
     def test_get_accounts_for_user_or_group_invalid_group(self) -> None:
         """Test get_accounts_for_user_or_group with invalid group_id."""

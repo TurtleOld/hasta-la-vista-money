@@ -91,9 +91,9 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 2)
+        self.assertEqual(accounts.count(), 1)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        self.assertNotIn(self.account2, accounts)
         self.assertNotIn(self.account3, accounts)
 
     def test_get_accounts_with_group_id(self) -> None:
@@ -130,9 +130,9 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 2)
+        self.assertEqual(accounts.count(), 1)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        self.assertNotIn(self.account2, accounts)
         self.assertNotIn(self.account3, accounts)
         self.assertNotIn(self.account4, accounts)
 
@@ -149,9 +149,9 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 2)
+        self.assertEqual(accounts.count(), 1)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        self.assertNotIn(self.account2, accounts)
 
     def test_get_accounts_no_accounts(self) -> None:
         """Test get_accounts method for user with no accounts."""
@@ -186,9 +186,9 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 3)
+        self.assertEqual(accounts.count(), 2)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        self.assertNotIn(self.account2, accounts)
         self.assertIn(account_usd, accounts)
 
     def test_get_accounts_account_types(self) -> None:
@@ -208,7 +208,7 @@ class TestGroupAccountMixin(TestCase):
 
         accounts = mixin.get_accounts(self.user1)
 
-        self.assertEqual(accounts.count(), 3)
+        self.assertEqual(accounts.count(), 2)
         self.assertIn(self.account1, accounts)
-        self.assertIn(self.account2, accounts)
+        self.assertNotIn(self.account2, accounts)
         self.assertIn(credit_account, accounts)

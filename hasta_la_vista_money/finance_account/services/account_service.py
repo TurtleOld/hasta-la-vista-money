@@ -22,9 +22,8 @@ from hasta_la_vista_money.finance_account.services.types import (
     GracePeriodInfoDict,
     RaiffeisenbankScheduleDict,
 )
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.groups import (
-    get_family_group_ids,
     user_has_group_access,
 )
 
@@ -122,8 +121,13 @@ class AccountService:
             return [user]
 
         if group_id == 'family':
-            group_ids = get_family_group_ids(user)
-            users = User.objects.filter(groups__id__in=group_ids).distinct()
+            group_ids = FamilyGroupMembership.objects.filter(
+                user=user,
+                role=FamilyGroupMembership.Role.OWNER,
+            ).values_list('group_id', flat=True)
+            users = User.objects.filter(
+                family_memberships__group_id__in=group_ids,
+            ).distinct()
             return list(users) or [user]
 
         if not user_has_group_access(user, group_id):
@@ -134,7 +138,18 @@ class AccountService:
         except Group.DoesNotExist:
             return []
         else:
-            return list(group.user_set.all())
+            is_owner = FamilyGroupMembership.objects.filter(
+                group=group,
+                user=user,
+                role=FamilyGroupMembership.Role.OWNER,
+            ).exists()
+            if not is_owner:
+                return [user]
+            return list(
+                User.objects.filter(
+                    family_memberships__group=group,
+                ).distinct(),
+            )
 
     def get_accounts_for_user_or_group(
         self,

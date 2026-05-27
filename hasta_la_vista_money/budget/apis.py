@@ -44,6 +44,13 @@ def _is_htmx_request(request: Request) -> bool:
     return request.headers.get('HX-Request') == 'true'
 
 
+def _budget_range_from_request(request: Request) -> str:
+    range_value = request.query_params.get('range')
+    if range_value is None:
+        range_value = request.data.get('range')
+    return str(range_value or '6')
+
+
 def _render_budget_matrix(request: Request, table_type: str) -> Any:
     request_with_container = cast('RequestWithContainer', request)
     user = cast('User', request.user)
@@ -69,6 +76,7 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
             rows=data['expense_data'],
             total_fact=data['total_fact_expense'],
             total_plan=data['total_plan_expense'],
+            selected_range=_budget_range_from_request(request),
         )
     else:
         categories = list(get_categories(user, TransactionType.INCOME))
@@ -83,6 +91,7 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
             rows=data['income_data'],
             total_fact=data['total_fact_income'],
             total_plan=data['total_plan_income'],
+            selected_range=_budget_range_from_request(request),
         )
 
     return render(request, 'budget/partials/_budget_matrix.html', context)

@@ -172,7 +172,7 @@ class FinancesFilter:
     date_from: date | None = None
     date_to: date | None = None
     q: str = ''
-    group_id: str = 'family'
+    group_id: str = 'my'
     page: int = 1
 
     @classmethod
@@ -203,7 +203,7 @@ class FinancesFilter:
             date_from=date_from,
             date_to=date_to,
             q=query.get('q', '').strip(),
-            group_id=query.get('group_id', 'family'),
+            group_id=query.get('group_id', 'my'),
             page=int(query.get('page', '1') or 1),
         )
 
@@ -220,7 +220,7 @@ class FinancesFilter:
             or self.date_from
             or self.date_to
             or self.q
-            or self.group_id != 'family',
+            or self.group_id != 'my',
         )
 
     @property
@@ -232,7 +232,7 @@ class FinancesFilter:
             params.append(('type', self.type))
         if self.period != 'm':
             params.append(('period', self.period))
-        if self.group_id != 'family':
+        if self.group_id != 'my':
             params.append(('group_id', self.group_id))
         params.extend(
             ('account', account_id) for account_id in self.account_ids
