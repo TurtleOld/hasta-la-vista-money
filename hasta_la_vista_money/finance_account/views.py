@@ -361,17 +361,20 @@ class FinancesView(LoginRequiredMixin, TemplateView):
         page_obj = Paginator(transactions, paginator).get_page(
             finances_filter.page,
         )
+        page_transactions = list(page_obj.object_list)
 
         context.update(
             {
                 'finances_filter': finances_filter,
                 'accounts': accounts,
                 'finances_categories': categories,
-                'transactions': page_obj.object_list,
+                'transactions': page_transactions,
                 'page_obj': page_obj,
                 'summary': _finances_summary(transactions),
-                'by_day': _group_finances_by_day(transactions),
-                'by_category': _group_finances_by_category(transactions),
+                'by_day': _group_finances_by_day(page_transactions),
+                'by_category': _group_finances_by_category(
+                    page_transactions,
+                ),
                 'selected_group_id': finances_filter.group_id,
                 'base_querystring': finances_filter.query_string,
             },

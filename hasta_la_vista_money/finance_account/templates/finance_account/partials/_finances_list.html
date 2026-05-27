@@ -61,11 +61,19 @@
 {% if page_obj.has_other_pages %}
     <nav class="finances-pagination finances-stream-only" aria-label="{% translate 'Пагинация финансов' %}">
         {% if page_obj.has_previous %}
-            <a class="finances-page-link" hx-get="{% url 'finances' %}?{{ base_querystring }}&page={{ page_obj.previous_page_number }}" hx-target="#finances-results" hx-push-url="true" href="?{{ base_querystring }}&page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>
+            <a class="finances-page-link"
+               hx-get="{% url 'finances' %}?{{ base_querystring }}&page={{ page_obj.previous_page_number }}"
+               hx-target="#finances-results"
+               hx-push-url="true"
+               href="{% url 'finances' %}?{{ base_querystring }}&page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>
         {% endif %}
         <span class="finances-muted">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
         {% if page_obj.has_next %}
-            <a class="finances-page-link" hx-get="{% url 'finances' %}?{{ base_querystring }}&page={{ page_obj.next_page_number }}" hx-target="#finances-results" hx-push-url="true" href="?{{ base_querystring }}&page={{ page_obj.next_page_number }}">{% translate 'Вперёд' %}</a>
+            <a class="finances-page-link"
+               hx-get="{% url 'finances' %}?{{ base_querystring }}&page={{ page_obj.next_page_number }}"
+               hx-target="#finances-results"
+               hx-push-url="true"
+               href="{% url 'finances' %}?{{ base_querystring }}&page={{ page_obj.next_page_number }}">{% translate 'Вперёд' %}</a>
         {% endif %}
     </nav>
 {% endif %}
