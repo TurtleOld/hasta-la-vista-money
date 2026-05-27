@@ -48,6 +48,9 @@ else:
     UserType = get_user_model()
 
 
+JPEG_BYTES = b'\xff\xd8\xff\xe0fake-image-content'
+
+
 class TestReceipt(TestCase):
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
         'users.yaml',
@@ -462,7 +465,7 @@ class TestForms(TestCase):
     def test_upload_image_form_valid(self) -> None:
         test_file = SimpleUploadedFile(
             'test.jpg',
-            b'fake-image-content',
+            JPEG_BYTES,
             content_type='image/jpeg',
         )
 
@@ -822,7 +825,7 @@ class TestUploadImageView(TestCase):
 
         test_file = SimpleUploadedFile(
             'receipt.jpg',
-            b'fake-receipt-image',
+            JPEG_BYTES,
             content_type='image/jpeg',
         )
 

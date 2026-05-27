@@ -30,6 +30,7 @@ SECURE_HSTS_PRELOAD = config(
     default=True,
     cast=bool,
 )
+SECURE_REFERRER_POLICY = 'same-origin'
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(
@@ -51,6 +52,8 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_REFRESH_MAX_AGE': (
         config('REFRESH_TOKEN_LIFETIME', default=7, cast=int) * 24 * 60 * 60
     ),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 LOGGING = {

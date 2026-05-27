@@ -370,6 +370,17 @@ def validate_image_jpg_png(value: UploadedFile) -> None:
         raise ValidationError(
             _('Разрешены только файлы форматов: JPG, JPEG или PNG'),
         )
+    position = value.tell()
+    header = value.read(8)
+    value.seek(position)
+    is_jpeg = header.startswith(b'\xff\xd8\xff')
+    is_png = header == b'\x89PNG\r\n\x1a\n'
+    if (ext in ('.jpg', '.jpeg') and not is_jpeg) or (
+        ext == '.png' and not is_png
+    ):
+        raise ValidationError(
+            _('Содержимое файла не соответствует формату изображения'),
+        )
 
 
 class MultipleFileInput(ClearableFileInput):

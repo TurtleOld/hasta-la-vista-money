@@ -42,6 +42,9 @@ from hasta_la_vista_money.receipts.validators.parsed_receipt import (
 )
 from hasta_la_vista_money.users.models import User
 
+JPEG_BYTES = b'\xff\xd8\xff\xe0sample-bytes'
+PNG_BYTES = b'\x89PNG\r\n\x1a\nsample-bytes'
+
 
 def _fake_payload() -> dict[str, Any]:
     return {
@@ -431,7 +434,7 @@ class UploadImageViewTests(TestCase):
     def test_upload_creates_processing_pending_and_dispatches(self) -> None:
         upload = SimpleUploadedFile(
             'r.jpg',
-            b'sample-bytes',
+            JPEG_BYTES,
             content_type='image/jpeg',
         )
         with mock.patch(
@@ -453,12 +456,12 @@ class UploadImageViewTests(TestCase):
         uploads = [
             SimpleUploadedFile(
                 'r1.jpg',
-                b'sample-bytes-1',
+                JPEG_BYTES + b'-1',
                 content_type='image/jpeg',
             ),
             SimpleUploadedFile(
                 'r2.png',
-                b'sample-bytes-2',
+                PNG_BYTES + b'-2',
                 content_type='image/png',
             ),
         ]
@@ -482,7 +485,7 @@ class UploadImageViewTests(TestCase):
     def test_upload_rejects_duplicate_against_saved_receipt(self) -> None:
         upload = SimpleUploadedFile(
             'r.jpg',
-            b'dup-bytes',
+            JPEG_BYTES + b'-duplicate',
             content_type='image/jpeg',
         )
         image_hash = compute_image_hash(upload)
@@ -505,7 +508,7 @@ class UploadImageViewTests(TestCase):
 
         upload_again = SimpleUploadedFile(
             'r.jpg',
-            b'dup-bytes',
+            JPEG_BYTES + b'-duplicate',
             content_type='image/jpeg',
         )
         with mock.patch(
