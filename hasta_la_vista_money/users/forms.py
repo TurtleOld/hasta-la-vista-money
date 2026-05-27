@@ -17,6 +17,17 @@ from hasta_la_vista_money.users.services.groups import (
     remove_user_from_group,
 )
 
+FORM_CONTROL_CLASS = (
+    'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm '
+    'text-gray-900 shadow-sm transition-colors duration-200 '
+    'placeholder:text-gray-400 focus:border-green-500 focus:outline-none '
+    'focus:ring-2 focus:ring-green-500/30 disabled:cursor-not-allowed '
+    'disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-600 '
+    'dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 '
+    'dark:focus:border-green-400 dark:focus:ring-green-400/30 '
+    'dark:disabled:bg-gray-800'
+)
+
 
 class UserLoginForm(AuthenticationForm):
     """Form for user authentication using username or email."""
@@ -26,7 +37,7 @@ class UserLoginForm(AuthenticationForm):
         label=_('Имя пользователя или Email'),
         widget=forms.TextInput(
             attrs={
-                'class': 'form-control',
+                'class': FORM_CONTROL_CLASS,
             },
         ),
         error_messages={
@@ -38,7 +49,7 @@ class UserLoginForm(AuthenticationForm):
         strip=False,
         widget=PasswordInput(
             attrs={
-                'class': 'form-control',
+                'class': FORM_CONTROL_CLASS,
             },
         ),
         error_messages={
@@ -62,13 +73,13 @@ class RegisterUserForm(UserCreationForm[User]):
             'username': forms.TextInput(
                 attrs={
                     'placeholder': _('Имя пользователя'),
-                    'class': 'form-control',
+                    'class': FORM_CONTROL_CLASS,
                 },
             ),
             'email': forms.EmailInput(
                 attrs={
                     'placeholder': _('Email'),
-                    'class': 'form-control',
+                    'class': FORM_CONTROL_CLASS,
                 },
             ),
         }
@@ -106,25 +117,25 @@ class UpdateUserForm(ModelForm[User]):
         widgets: ClassVar[dict[str, Any]] = {
             'username': forms.TextInput(
                 attrs={
-                    'class': 'form-control',
+                    'class': FORM_CONTROL_CLASS,
                     'placeholder': _('Имя пользователя'),
                 },
             ),
             'email': forms.EmailInput(
                 attrs={
-                    'class': 'form-control',
+                    'class': FORM_CONTROL_CLASS,
                     'placeholder': _('Email'),
                 },
             ),
             'first_name': forms.TextInput(
                 attrs={
-                    'class': 'form-control',
+                    'class': FORM_CONTROL_CLASS,
                     'placeholder': _('Имя'),
                 },
             ),
             'last_name': forms.TextInput(
                 attrs={
-                    'class': 'form-control',
+                    'class': FORM_CONTROL_CLASS,
                     'placeholder': _('Фамилия'),
                 },
             ),
@@ -155,7 +166,7 @@ class GroupCreateForm(ModelForm[Group]):
         widgets: ClassVar[dict[str, Any]] = {
             'name': forms.TextInput(
                 attrs={
-                    'class': 'form-control',
+                    'class': FORM_CONTROL_CLASS,
                     'placeholder': _('Название группы'),
                 },
             ),
@@ -188,7 +199,7 @@ class GroupDeleteForm(forms.Form):
     group = forms.ModelChoiceField(
         queryset=Group.objects.all(),
         label=_('Группа для удаления'),
-        widget=forms.Select(attrs={'class': 'form-select'}),
+        widget=forms.Select(attrs={'class': FORM_CONTROL_CLASS}),
         help_text=_('Выберите группу для удаления.'),
         error_messages={
             'required': _('Пожалуйста, выберите группу.'),
@@ -226,7 +237,7 @@ class UserGroupBaseForm(forms.Form):
     user = forms.ModelChoiceField(
         queryset=User.objects.all(),
         label=_('Пользователь'),
-        widget=forms.Select(attrs={'class': 'form-select'}),
+        widget=forms.Select(attrs={'class': FORM_CONTROL_CLASS}),
         help_text=_('Выберите пользователя.'),
         error_messages={
             'required': _('Пожалуйста, выберите пользователя.'),
@@ -235,7 +246,7 @@ class UserGroupBaseForm(forms.Form):
     group = forms.ModelChoiceField(
         queryset=Group.objects.none(),
         label=_('Группа'),
-        widget=forms.Select(attrs={'class': 'form-select'}),
+        widget=forms.Select(attrs={'class': FORM_CONTROL_CLASS}),
         help_text=_('Выберите группу.'),
         error_messages={
             'required': _('Пожалуйста, выберите группу.'),
@@ -320,7 +331,7 @@ class BankStatementUploadForm(forms.Form):
         label=_('PDF файл выписки'),
         widget=forms.FileInput(
             attrs={
-                'class': 'form-control',
+                'class': FORM_CONTROL_CLASS,
                 'accept': '.pdf',
             },
         ),
@@ -336,7 +347,7 @@ class BankStatementUploadForm(forms.Form):
         self.fields['account'] = forms.ModelChoiceField(
             queryset=Account.objects.filter(user=user),
             label=_('Счёт'),
-            widget=forms.Select(attrs={'class': 'form-select'}),
+            widget=forms.Select(attrs={'class': FORM_CONTROL_CLASS}),
             help_text=_('Выберите счёт, на который будут записаны операции'),
             error_messages={
                 'required': _('Пожалуйста, выберите счёт.'),

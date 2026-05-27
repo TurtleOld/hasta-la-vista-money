@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}Удалить группу{% endblock %}
 {% block content %}
-<div class="container mt-4">
-    <h2>Удалить группу</h2>
+<div class="mx-auto mt-4 max-w-3xl px-4">
+    <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Удалить группу</h2>
     <form method="post">
         {% csrf_token %}
         {% include 'forms/_form.html' with form=form %}
-        <button type="submit" class="btn btn-danger">Удалить</button>
+        <button type="submit" class="inline-flex items-center justify-center rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500/40">Удалить</button>
     </form>
 </div>
 {% endblock %}

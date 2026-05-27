@@ -1,8 +1,8 @@
 """Base form classes and mixins for finance account forms.
 
 This module provides reusable base classes and mixins to reduce code duplication
-and ensure consistent behavior across forms. It includes
-Bootstrap styling mixins,
+    and ensure consistent behavior across forms. It includes
+    Tailwind styling mixins,
 credit field handling, date field configuration, and common validation patterns.
 """
 
@@ -25,26 +25,37 @@ from hasta_la_vista_money.finance_account.models import (
     TransferMoneyLog,
 )
 
+TAILWIND_FORM_CONTROL = (
+    'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm '
+    'text-gray-900 shadow-sm transition-colors duration-200 '
+    'placeholder:text-gray-400 focus:border-green-500 focus:outline-none '
+    'focus:ring-2 focus:ring-green-500/30 disabled:cursor-not-allowed '
+    'disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-600 '
+    'dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 '
+    'dark:focus:border-green-400 dark:focus:ring-green-400/30 '
+    'dark:disabled:bg-gray-800'
+)
 
-class BootstrapFormMixin:
-    """Mixin to add Bootstrap CSS classes to form widgets.
 
-    Automatically applies Bootstrap form-control classes to all form fields
+class TailwindFormMixin:
+    """Mixin to add Tailwind CSS classes to form widgets.
+
+    Automatically applies shared Tailwind input classes to all fields
     to ensure consistent styling across the application.
     """
 
-    def add_bootstrap_classes(self) -> None:
-        """Add Bootstrap CSS classes to all form widgets.
+    def add_tailwind_classes(self) -> None:
+        """Add Tailwind CSS classes to all form widgets.
 
-        Iterates through all form fields and adds the 'form-control' class
-        to their widget attributes if not already present.
+        Iterates through all form fields and appends the shared control class
+        set to their widget attributes if not already present.
         """
         for field in self.fields.values():  # type: ignore[attr-defined]
             if hasattr(field.widget, 'attrs'):
                 current_class = field.widget.attrs.get('class', '')
-                if 'form-control' not in current_class:
+                if TAILWIND_FORM_CONTROL not in current_class:
                     field.widget.attrs['class'] = (
-                        f'{current_class} form-control'.strip()
+                        f'{current_class} {TAILWIND_FORM_CONTROL}'.strip()
                     )
 
 
@@ -82,21 +93,21 @@ class DateFieldMixin:
     """Mixin for forms with date fields.
 
     Provides configuration for date and datetime fields with appropriate
-    HTML5 input types and Bootstrap styling.
+    HTML5 input types and Tailwind styling.
     """
 
     def setup_date_fields(self) -> None:
         """Configure date fields with appropriate widgets.
 
         Sets up payment_due_date with a date input widget and exchange_date
-        with a datetime-local input widget, both with Bootstrap styling.
+        with a datetime-local input widget, both with Tailwind styling.
         """
         if 'payment_due_date' in self.fields:  # type: ignore[attr-defined]
             self.fields['payment_due_date'].widget = DateInput(  # type: ignore[attr-defined]
                 format=constants.HTML5_DATE_INPUT_FORMAT,
                 attrs={
                     'type': 'date',
-                    'class': 'form-control credit-only-field',
+                    'class': f'{TAILWIND_FORM_CONTROL} credit-only-field',
                 },
             )
             self.fields['payment_due_date'].input_formats = [  # type: ignore[attr-defined]
@@ -108,7 +119,7 @@ class DateFieldMixin:
                 format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
                 attrs={
                     'type': 'datetime-local',
-                    'class': 'form-control',
+                    'class': TAILWIND_FORM_CONTROL,
                 },
             )
             self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
@@ -157,28 +168,28 @@ class FormValidationMixin:
 
 
 class BaseAccountForm(
-    BootstrapFormMixin,
+    TailwindFormMixin,
     CreditFieldsMixin,
     ModelForm[Account],
 ):
     """Base form class for account-related forms with common functionality.
 
-    Combines Bootstrap styling, credit field handling, and
+    Combines Tailwind styling, credit field handling, and
     ModelForm functionality
     to provide a consistent foundation for account creation and editing forms.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the form with Bootstrap and credit field styling."""
+        """Initialize the form with Tailwind and credit field styling."""
         super().__init__(*args, **kwargs)
-        self.add_bootstrap_classes()
+        self.add_tailwind_classes()
         self.add_credit_field_classes()
 
 
-class BaseTransferForm(BootstrapFormMixin, ModelForm[TransferMoneyLog]):
+class BaseTransferForm(TailwindFormMixin, ModelForm[TransferMoneyLog]):
     """Base form class for transfer-related forms.
 
-    Provides Bootstrap styling and common field configuration for money
+    Provides Tailwind styling and common field configuration for money
     transfer forms, including amount and notes fields with appropriate widgets.
     """
 
@@ -190,7 +201,7 @@ class BaseTransferForm(BootstrapFormMixin, ModelForm[TransferMoneyLog]):
                 format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
                 attrs={
                     'type': 'datetime-local',
-                    'class': 'form-control',
+                    'class': TAILWIND_FORM_CONTROL,
                 },
             )
             self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
@@ -214,9 +225,9 @@ class BaseTransferForm(BootstrapFormMixin, ModelForm[TransferMoneyLog]):
                     attrs={
                         'rows': 3,
                         'maxlength': constants.TWO_HUNDRED_FIFTY,
-                        'class': 'form-control',
+                        'class': TAILWIND_FORM_CONTROL,
                     },
                 ),
             )
 
-        self.add_bootstrap_classes()
+        self.add_tailwind_classes()

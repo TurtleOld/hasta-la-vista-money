@@ -19,7 +19,7 @@ class NotificationDict(TypedDict):
         type: Notification type ('warning', 'danger', 'success').
         title: Notification title.
         message: Notification message.
-        icon: Bootstrap icon class name.
+        icon: Bootstrap Icons class name.
     """
 
     type: Literal['warning', 'danger', 'success']

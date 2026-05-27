@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
         closeDropdown();
         if (!items.length) return;
         dropdown = document.createElement('div');
-        dropdown.className = 'dropdown-menu show w-100';
+        dropdown.className = 'absolute z-50 w-full rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800';
         dropdown.style.position = 'absolute';
         dropdown.style.top = productInput.offsetTop + productInput.offsetHeight + 'px';
         dropdown.style.left = productInput.offsetLeft + 'px';
@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
         items.forEach(item => {
             const option = document.createElement('button');
             option.type = 'button';
-            option.className = 'dropdown-item';
+            option.className = 'block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 dark:text-gray-200 dark:hover:bg-green-900/30 dark:hover:text-green-200';
             option.textContent = item;
             option.onclick = function () {
                 if (productInput) {
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function removeActive(items) {
-        items.forEach(item => item.classList.remove('active'));
+        items.forEach(item => item.classList.remove('active', 'bg-green-50', 'text-green-700', 'dark:bg-green-900/30', 'dark:text-green-200'));
     }
 
     if (productInput) {
@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         productInput.addEventListener('keydown', function (e) {
-            const items = dropdown ? dropdown.querySelectorAll('.dropdown-item') : [];
+            const items = dropdown ? dropdown.querySelectorAll('button') : [];
             if (e.key === 'ArrowDown') {
                 if (typeof currentFocus !== 'number' || isNaN(currentFocus)) {
                     currentFocus = -1;

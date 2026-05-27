@@ -2,13 +2,13 @@
 {% load i18n %}
 {% block title %}Добавить пользователя в семью{% endblock %}
 {% block content %}
-<div class="container mt-4">
-    <h2>Добавить пользователя в семью</h2>
-    <p class="text-muted">Пользователь получит доступ на просмотр общего семейного баланса и операций.</p>
+<div class="mx-auto mt-4 max-w-3xl px-4">
+    <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Добавить пользователя в семью</h2>
+    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Пользователь получит доступ на просмотр общего семейного баланса и операций.</p>
     <form method="post" id="add-user-to-group-form">
         {% csrf_token %}
         {% include 'forms/_form.html' with form=form %}
-        <button type="submit" class="btn btn-success">{% translate "Добавить" %}</button>
+        <button type="submit" class="inline-flex items-center justify-center rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500/40">{% translate "Добавить" %}</button>
     </form>
 </div>
 {% endblock %}
