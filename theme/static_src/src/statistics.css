@@ -119,6 +119,18 @@
     overflow: hidden;
   }
 
+  dialog.statistics-panel {
+    width: min(960px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+    color: var(--statistics-text);
+    padding: 1.25rem;
+  }
+
+  dialog.statistics-panel::backdrop {
+    background: rgb(15 23 42 / 0.55);
+  }
+
   .statistics-panel + .statistics-panel,
   .statistics-section + .statistics-section {
     margin-top: 1.5rem;
@@ -246,6 +258,10 @@
     background: linear-gradient(135deg, #f59e0b, #f97316);
   }
 
+  .statistics-summary-danger {
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+  }
+
   .statistics-summary-label {
     color: rgba(255, 255, 255, 0.78);
     font-size: 0.75rem;
@@ -268,6 +284,10 @@
 
   .statistics-chart-box {
     height: 20rem;
+  }
+
+  .statistics-chart-box-small {
+    height: 14rem;
   }
 
   .statistics-tabs {
@@ -298,7 +318,9 @@
   .statistics-app[data-active-tab='operations'] .statistics-tab-btn[data-tab='operations'],
   .statistics-app[data-active-tab='transfers'] .statistics-tab-btn[data-tab='transfers'],
   .statistics-app[data-active-tab='categories'] .statistics-tab-btn[data-tab='categories'],
-  .statistics-app[data-active-tab='creditcards'] .statistics-tab-btn[data-tab='creditcards'] {
+  .statistics-app[data-active-tab='creditcards'] .statistics-tab-btn[data-tab='creditcards'],
+  .statistics-app[data-active-tab='budgets'] .statistics-tab-btn[data-tab='budgets'],
+  .statistics-app[data-active-tab='calendar'] .statistics-tab-btn[data-tab='calendar'] {
     background: var(--statistics-surface);
     color: var(--statistics-accent);
   }
@@ -312,7 +334,9 @@
   .statistics-app[data-active-tab='operations'] .statistics-pane[data-panel='operations'],
   .statistics-app[data-active-tab='transfers'] .statistics-pane[data-panel='transfers'],
   .statistics-app[data-active-tab='categories'] .statistics-pane[data-panel='categories'],
-  .statistics-app[data-active-tab='creditcards'] .statistics-pane[data-panel='creditcards'] {
+  .statistics-app[data-active-tab='creditcards'] .statistics-pane[data-panel='creditcards'],
+  .statistics-app[data-active-tab='budgets'] .statistics-pane[data-panel='budgets'],
+  .statistics-app[data-active-tab='calendar'] .statistics-pane[data-panel='calendar'] {
     display: block;
   }
 
@@ -324,6 +348,18 @@
     border-collapse: collapse;
     min-width: 42rem;
     width: 100%;
+  }
+
+  .statistics-table-compact {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .statistics-table-compact th,
+  .statistics-table-compact td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    white-space: nowrap;
   }
 
   .statistics-table th {

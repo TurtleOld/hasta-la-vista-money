@@ -21,7 +21,10 @@ from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_RAIFFEISENBANK,
     SUPPORTED_BANKS,
 )
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.finance_account.services.bank_calculators import (
     create_bank_calculator,
 )
@@ -152,10 +155,22 @@ class CreditCalculationService:
         total_receipt_expense = receipt_aggregation['total_expense'] or 0
         total_receipt_return = receipt_aggregation['total_return'] or 0
 
-        result = (total_expense + total_receipt_expense) - (
-            total_income + total_receipt_return
+        transfer_payments_queryset = TransferMoneyLog.objects.filter(
+            to_account=account,
         )
-        return Decimal(str(result))
+        if start_date_dt and end_date_dt:
+            transfer_payments_queryset = transfer_payments_queryset.filter(
+                exchange_date__range=(start_date_dt, end_date_dt),
+            )
+        total_transfer_payments = (
+            transfer_payments_queryset.aggregate(total=Sum('amount'))['total']
+            or 0
+        )
+
+        result = (total_expense + total_receipt_expense) - (
+            total_income + total_receipt_return + total_transfer_payments
+        )
+        return max(Decimal(str(result)), Decimal(str(constants.ZERO)))
 
     def _find_first_purchase_in_month(
         self,

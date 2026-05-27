@@ -1,8 +1,11 @@
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.users.services.cache import (
@@ -11,6 +14,7 @@ from hasta_la_vista_money.users.services.cache import (
 from hasta_la_vista_money.users.services.detailed_statistics import (
     StatisticsFilters,
     UserDetailedStatisticsDict,
+    _apply_payments_to_months,
     get_user_detailed_statistics,
 )
 
@@ -103,3 +107,38 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         )
 
         self.assertEqual(stats, cached_stats)
+
+
+class CreditCardPaymentScheduleTest(TestCase):
+    """Tests for credit card payment distribution."""
+
+    def test_payments_after_grace_end_do_not_close_month(self) -> None:
+        grace_end = timezone.make_aware(
+            datetime.combine(date(2026, 8, 28), time.max),
+        )
+        months = [
+            {
+                'month': '05.2026',
+                'purchase_start': timezone.now(),
+                'purchase_end': timezone.now(),
+                'grace_end': grace_end,
+                'debt_for_month': 10000.0,
+                'is_overdue': False,
+                'days_until_due': 0,
+                'payments_made': 0.0,
+                'remaining_debt': 0.0,
+                'is_paid': False,
+            },
+        ]
+        payments = [
+            {
+                'amount': Decimal('10000.00'),
+                'date': grace_end + timedelta(days=1),
+            },
+        ]
+
+        _apply_payments_to_months(months, payments)
+
+        self.assertEqual(months[0]['payments_made'], 0.0)
+        self.assertEqual(months[0]['remaining_debt'], 10000.0)
+        self.assertFalse(months[0]['is_paid'])

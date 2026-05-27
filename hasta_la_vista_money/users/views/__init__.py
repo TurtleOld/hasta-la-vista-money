@@ -40,6 +40,7 @@ from hasta_la_vista_money.users.views.profile import (
     SwitchThemeView,
     UpdateUserView,
     UserNotificationsView,
+    UserStatisticsExportView,
     UserStatisticsView,
 )
 
@@ -67,6 +68,7 @@ __all__ = [
     'SwitchThemeView',
     'UpdateUserView',
     'UserNotificationsView',
+    'UserStatisticsExportView',
     'UserStatisticsView',
     'cache',
     'get_dashboard_summary_statistics',

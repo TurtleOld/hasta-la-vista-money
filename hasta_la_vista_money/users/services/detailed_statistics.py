@@ -1,3 +1,4 @@
+import json
 from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Iterable
@@ -9,7 +10,8 @@ from urllib.parse import urlencode
 
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
-from django.db.models import Q, QuerySet, Sum
+from django.core.paginator import Page, Paginator
+from django.db.models import Avg, Count, Q, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from typing_extensions import TypedDict
@@ -35,7 +37,7 @@ from hasta_la_vista_money.finance_account.prepare import (
     collect_info_income,
     sort_expense_income,
 )
-from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.receipts.models import Product, Receipt
 from hasta_la_vista_money.services.views import collect_info_receipt
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -46,6 +48,10 @@ from hasta_la_vista_money.users.models import FamilyGroupMembership, User
 from hasta_la_vista_money.users.services.cache import (
     get_dashboard_summary_cache_key,
     get_user_detailed_statistics_cache_key,
+)
+from hasta_la_vista_money.users.services.forecast import (
+    build_cashflow_forecast,
+    build_payment_calendar,
 )
 from hasta_la_vista_money.users.services.groups import get_family_groups
 
@@ -117,8 +123,11 @@ class ChartDataDict(TypedDict):
     """
 
     labels: list[str]
-    expense_data: list[float]
-    income_data: list[float]
+    expense_data: list[float | None]
+    income_data: list[float | None]
+    forecast_balance: list[float | None]
+    forecast_lower: list[float | None]
+    forecast_upper: list[float | None]
 
 
 class DeltaByCurrencyDict(TypedDict, total=False):
@@ -188,7 +197,7 @@ class PaymentItemDict(TypedDict):
     """
 
     amount: Decimal
-    date: date
+    date: date | datetime
 
 
 class PaymentScheduleItemDict(TypedDict):
@@ -239,6 +248,18 @@ class CreditCardDataDict(TypedDict, total=False):
     card_obj: Account
     limit_left: Decimal
     payment_schedule: list[PaymentScheduleItemDict]
+    utilization_chart: dict[str, list[float] | list[str]]
+    utilization_chart_id: str
+    minimum_payment_forecast: list[dict[str, float | int]]
+
+
+class CreditCardSummaryDict(TypedDict):
+    """Credit card risk summary."""
+
+    overdue_count: int
+    expiring_count: int
+    at_risk_count: int
+    total_remaining_debt: Decimal
 
 
 class IncomeExpenseDict(TypedDict):
@@ -287,6 +308,12 @@ class StatisticsFilters:
     currency: str = ''
     category_keys: list[str] = field(default_factory=list)
     member: str = 'my'
+    operations_page: int = 1
+    transfers_page: int = 1
+    receipts_page: int = 1
+    operations_sort: str = '-date'
+    transfers_sort: str = '-exchange_date'
+    receipts_sort: str = '-receipt_date'
 
     @classmethod
     def from_query(cls, query: Any) -> 'StatisticsFilters':
@@ -305,6 +332,29 @@ class StatisticsFilters:
             currency=query.get('currency', '').strip().upper(),
             category_keys=list(query.getlist('category')),
             member=_normalize_member_filter(query.get('member', 'my')),
+            operations_page=_positive_int(query.get('operations_page')),
+            transfers_page=_positive_int(query.get('transfers_page')),
+            receipts_page=_positive_int(query.get('receipts_page')),
+            operations_sort=_allowed_sort(
+                query.get('operations_sort'),
+                {'date', '-date', 'amount', '-amount'},
+                '-date',
+            ),
+            transfers_sort=_allowed_sort(
+                query.get('transfers_sort'),
+                {'exchange_date', '-exchange_date', 'amount', '-amount'},
+                '-exchange_date',
+            ),
+            receipts_sort=_allowed_sort(
+                query.get('receipts_sort'),
+                {
+                    'receipt_date',
+                    '-receipt_date',
+                    'total_sum',
+                    '-total_sum',
+                },
+                '-receipt_date',
+            ),
         )
 
     @property
@@ -318,28 +368,64 @@ class StatisticsFilters:
                 self.currency,
                 self.category_keys,
                 self.member != 'my',
+                self.operations_page != 1,
+                self.transfers_page != 1,
+                self.receipts_page != 1,
+                self.operations_sort != '-date',
+                self.transfers_sort != '-exchange_date',
+                self.receipts_sort != '-receipt_date',
             ),
         )
 
     @property
     def query_string(self) -> str:
         params: list[tuple[str, str | int]] = []
-        if self.period != '6':
-            params.append(('period', self.period))
-        if self.date_from:
-            params.append(('date_from', self.date_from.isoformat()))
-        if self.date_to:
-            params.append(('date_to', self.date_to.isoformat()))
+        optional_params = [
+            ('period', self.period, self.period != '6'),
+            (
+                'date_from',
+                self.date_from.isoformat() if self.date_from else '',
+                bool(self.date_from),
+            ),
+            (
+                'date_to',
+                self.date_to.isoformat() if self.date_to else '',
+                bool(self.date_to),
+            ),
+            ('currency', self.currency, bool(self.currency)),
+            ('member', self.member, self.member != 'my'),
+            (
+                'operations_page',
+                self.operations_page,
+                self.operations_page != 1,
+            ),
+            ('transfers_page', self.transfers_page, self.transfers_page != 1),
+            ('receipts_page', self.receipts_page, self.receipts_page != 1),
+            (
+                'operations_sort',
+                self.operations_sort,
+                self.operations_sort != '-date',
+            ),
+            (
+                'transfers_sort',
+                self.transfers_sort,
+                self.transfers_sort != '-exchange_date',
+            ),
+            (
+                'receipts_sort',
+                self.receipts_sort,
+                self.receipts_sort != '-receipt_date',
+            ),
+        ]
+        params.extend(
+            (name, value) for name, value, enabled in optional_params if enabled
+        )
         params.extend(
             ('account', account_id) for account_id in self.account_ids
         )
-        if self.currency:
-            params.append(('currency', self.currency))
         params.extend(
             ('category', category_key) for category_key in self.category_keys
         )
-        if self.member != 'my':
-            params.append(('member', self.member))
         return urlencode(params)
 
     @property
@@ -399,6 +485,16 @@ class UserDetailedStatisticsDict(TypedDict):
     statistics_category_choices: list[StatisticsChoiceDict]
     statistics_member_choices: list[StatisticsChoiceDict]
     statistics_members: list[User]
+    statistics_alerts: list[dict[str, Any]]
+    top_receipt_products: list[dict[str, Any]]
+    top_receipt_sellers: list[dict[str, Any]]
+    average_receipts_by_month: list[dict[str, Any]]
+    receipt_page: Page[Receipt]
+    income_expense_page: Page[Any]
+    transfer_money_log_page: Page[TransferMoneyLog]
+    credit_cards_summary: CreditCardSummaryDict
+    payment_calendar: list[dict[str, Any]]
+    chart_combined_json: str
 
 
 def _parse_filter_date(value: str | None) -> date | None:
@@ -408,6 +504,22 @@ def _parse_filter_date(value: str | None) -> date | None:
         return date.fromisoformat(value)
     except ValueError:
         return None
+
+
+def _positive_int(value: str | None) -> int:
+    if value and value.isdigit():
+        return max(1, int(value))
+    return 1
+
+
+def _allowed_sort(
+    value: str | None,
+    allowed_values: set[str],
+    default: str,
+) -> str:
+    if value in allowed_values:
+        return value
+    return default
 
 
 def _normalize_member_filter(value: str | None) -> str:
@@ -545,7 +657,7 @@ def _filter_transaction_queryset(
         queryset = queryset.filter(date__gte=_date_to_aware(start))
     if end is not None:
         queryset = queryset.filter(
-            date__lte=_date_to_aware(end, end_of_day=True)
+            date__lte=_date_to_aware(end, end_of_day=True),
         )
     if stats_filter.account_ids:
         queryset = queryset.filter(account_id__in=stats_filter.account_ids)
@@ -698,6 +810,125 @@ def _top_categories_qs(
     )
 
 
+def _top_categories_with_comparison(
+    type_value: str,
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+) -> list[dict[str, Any]]:
+    current = list(
+        _top_categories_qs(type_value, users, stats_filter, start, end),
+    )
+    period_days = max(constants.ONE, (end - start).days + constants.ONE)
+    previous_end = start - timedelta(days=constants.ONE)
+    previous_start = previous_end - timedelta(days=period_days - constants.ONE)
+    previous = {
+        item['category__id']: float(item['total'] or 0)
+        for item in _top_categories_qs(
+            type_value,
+            users,
+            stats_filter,
+            previous_start,
+            previous_end,
+        )
+    }
+    category_ids = [item['category__id'] for item in current]
+    children = _category_children_totals(
+        type_value,
+        users,
+        stats_filter,
+        start,
+        end,
+        category_ids,
+    )
+    transactions = _category_drilldown_transactions(
+        type_value,
+        users,
+        stats_filter,
+        start,
+        end,
+        category_ids,
+    )
+    for item in current:
+        total = float(item['total'] or 0)
+        previous_total = previous.get(item['category__id'], 0.0)
+        delta = total - previous_total
+        item['previous_total'] = previous_total
+        item['delta'] = delta
+        item['delta_percent'] = (
+            delta / previous_total * constants.PERCENTAGE_MULTIPLIER
+            if previous_total
+            else None
+        )
+        item['children'] = children.get(item['category__id'], [])
+        item['transactions'] = transactions.get(item['category__id'], [])
+    return current
+
+
+def _category_children_totals(
+    type_value: str,
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+    category_ids: list[int],
+) -> dict[int, list[dict[str, Any]]]:
+    if not category_ids:
+        return {}
+    rows = (
+        _filtered_transactions(type_value, users, stats_filter, start, end)
+        .filter(category__parent_category_id__in=category_ids)
+        .values(
+            'category__parent_category_id',
+            'category__id',
+            'category__name',
+        )
+        .annotate(total=Sum('amount'))
+        .order_by('category__parent_category_id', '-total')
+    )
+    result: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        result[row['category__parent_category_id']].append(row)
+    return result
+
+
+def _category_drilldown_transactions(
+    type_value: str,
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+    category_ids: list[int],
+) -> dict[int, list[dict[str, Any]]]:
+    result: dict[int, list[dict[str, Any]]] = {}
+    if not category_ids:
+        return result
+    queryset = _filtered_transactions(
+        type_value,
+        users,
+        stats_filter,
+        start,
+        end,
+    ).select_related('account', 'category', 'user')
+    for category_id in category_ids:
+        result[category_id] = list(
+            queryset.filter(
+                Q(category_id=category_id)
+                | Q(category__parent_category_id=category_id),
+            )
+            .values(
+                'date',
+                'amount',
+                'account__name_account',
+                'category__name',
+                'user__username',
+            )
+            .order_by('-date')[: constants.PAGINATE_BY_DEFAULT],
+        )
+    return result
+
+
 def _dates_amounts(
     dataset: Iterable[dict[str, Any]],
 ) -> tuple[list[str], list[float]]:
@@ -713,6 +944,7 @@ def _build_chart(
     stats_filter: StatisticsFilters,
     start: date,
     end: date,
+    forecast: dict[str, list[float | str | None]] | None = None,
 ) -> ChartDataDict:
     exp_ds = (
         _filtered_transactions(
@@ -746,10 +978,14 @@ def _build_chart(
 
     all_dates = sorted(set(exp_dates + inc_dates))
     if not all_dates:
-        return {'labels': [], 'expense_data': [], 'income_data': []}
+        all_dates = []
 
-    exp_series = [exp_map.get(d, constants.ZERO) for d in all_dates]
-    inc_series = [inc_map.get(d, constants.ZERO) for d in all_dates]
+    exp_series: list[float | None] = [
+        exp_map.get(d, constants.ZERO) for d in all_dates
+    ]
+    inc_series: list[float | None] = [
+        inc_map.get(d, constants.ZERO) for d in all_dates
+    ]
 
     if len(all_dates) == constants.ONE:
         d = date.fromisoformat(all_dates[0])
@@ -761,11 +997,144 @@ def _build_chart(
         exp_series = [constants.ZERO, *exp_series]
         inc_series = [constants.ZERO, *inc_series]
 
+    forecast_labels = [
+        str(label)
+        for label in (forecast or {}).get(
+            'forecast_labels',
+            [],
+        )
+    ]
+    labels = [*all_dates, *forecast_labels]
+    padding = [None] * len(all_dates)
+    forecast_padding = [None] * len(forecast_labels)
+
     return {
-        'labels': all_dates,
-        'expense_data': exp_series,
-        'income_data': inc_series,
+        'labels': labels,
+        'expense_data': [*exp_series, *forecast_padding],
+        'income_data': [*inc_series, *forecast_padding],
+        'forecast_balance': [
+            *padding,
+            *((forecast or {}).get('forecast_balance', [])),
+        ],
+        'forecast_lower': [
+            *padding,
+            *((forecast or {}).get('forecast_lower', [])),
+        ],
+        'forecast_upper': [
+            *padding,
+            *((forecast or {}).get('forecast_upper', [])),
+        ],
     }
+
+
+def _receipt_details(
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    start: date,
+    end: date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    receipts = _filtered_receipts(users, stats_filter, start, end)
+    products = (
+        Product.objects.filter(receipt_products__in=receipts)
+        .values('product_name')
+        .annotate(total=Sum('amount'), quantity=Sum('quantity'))
+        .order_by('-total')[: constants.RECEIPT_RANK_LIMIT]
+    )
+    sellers = (
+        receipts.values('seller__name_seller')
+        .annotate(total=Sum('total_sum'), count=Count('id'))
+        .order_by('-total')[: constants.RECEIPT_RANK_LIMIT]
+    )
+    averages = (
+        receipts.annotate(month=TruncMonth('receipt_date'))
+        .values('month')
+        .annotate(avg_total=Avg('total_sum'), count=Count('id'))
+        .order_by('month')
+    )
+    return list(products), list(sellers), list(averages)
+
+
+def _statistics_alerts(
+    users: Iterable[User],
+    stats_filter: StatisticsFilters,
+    budgets: list[BudgetDataDict],
+    credit_cards: list[CreditCardDataDict],
+    today: date,
+) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+    alerts.extend(
+        [
+            {
+                'type': 'danger' if budget['over_limit'] else 'warning',
+                'title': 'Бюджет',
+                'message': '{}: {:.1f}%'.format(
+                    budget['category_name'],
+                    budget['usage_percent'],
+                ),
+            }
+            for budget in budgets
+            if budget['over_limit'] or budget['near_limit']
+        ],
+    )
+
+    for card in credit_cards:
+        for payment in card.get('payment_schedule', []):
+            if payment['remaining_debt'] <= 0:
+                continue
+            if payment['is_overdue']:
+                alerts.append(
+                    {
+                        'type': 'danger',
+                        'title': 'Кредитная карта',
+                        'message': f'{card["name"]}: грейс просрочен',
+                    },
+                )
+            elif (
+                0
+                < payment['days_until_due']
+                <= constants.NUMBER_SEVENTH_MONTH_YEAR
+            ):
+                alerts.append(
+                    {
+                        'type': 'warning',
+                        'title': 'Кредитная карта',
+                        'message': '{}: до конца грейса {} дн.'.format(
+                            card['name'],
+                            payment['days_until_due'],
+                        ),
+                    },
+                )
+
+    month_start = today.replace(day=1)
+    income = _sum_amount_for_period(
+        TransactionType.INCOME,
+        users,
+        month_start,
+        today,
+        stats_filter,
+    )
+    expenses = _sum_amount_for_period(
+        TransactionType.EXPENSE,
+        users,
+        month_start,
+        today,
+        stats_filter,
+    )
+    if expenses > income:
+        alerts.append(
+            {
+                'type': 'danger',
+                'title': 'Расходы выше доходов',
+                'message': f'Превышение за месяц: {expenses - income:.2f} ₽',
+            },
+        )
+    return alerts[: constants.TEN]
+
+
+def _paginate(queryset: Any, page_number: int) -> Page[Any]:
+    return Paginator(queryset, constants.PAGINATE_BY_DEFAULT).get_page(
+        page_number,
+    )
 
 
 def get_dashboard_summary_statistics(
@@ -1317,8 +1686,6 @@ def _apply_payments_to_months(
     months: list[CardMonthDict],
     payments: list[PaymentItemDict],
 ) -> None:
-    total = sum(float(p['amount']) for p in payments)
-    left = total
     for m in months:
         debt = float(m['debt_for_month'])
         if debt <= constants.ZERO:
@@ -1326,11 +1693,19 @@ def _apply_payments_to_months(
             m['remaining_debt'] = constants.ZERO
             m['is_paid'] = True
             continue
-        paid = min(left, debt)
+        paid_before_due = sum(
+            float(p['amount']) for p in payments if p['date'] <= m['grace_end']
+        )
+        prior_debt = sum(
+            float(prev['debt_for_month'])
+            for prev in months
+            if prev['grace_end'] < m['grace_end']
+        )
+        available_for_month = max(paid_before_due - prior_debt, constants.ZERO)
+        paid = min(available_for_month, debt)
         m['payments_made'] = paid
         m['remaining_debt'] = max(debt - paid, constants.ZERO)
         m['is_paid'] = m['remaining_debt'] <= constants.ZERO
-        left = max(left - paid, constants.ZERO)
 
 
 def _build_payment_schedule(
@@ -1363,6 +1738,90 @@ def _build_payment_schedule(
     return schedule
 
 
+def _credit_card_utilization_chart(
+    history: list[CardHistoryDict],
+    limit: Decimal | None,
+) -> dict[str, list[float] | list[str]]:
+    limit_value = float(limit or 0)
+    labels: list[str] = []
+    values: list[float] = []
+    for item in history[-constants.MONTHS_IN_YEAR :]:
+        labels.append(item['month'])
+        if limit_value <= constants.ZERO:
+            values.append(constants.ZERO)
+            continue
+        values.append(
+            round(
+                max(item['final_debt'], constants.ZERO)
+                / limit_value
+                * constants.PERCENTAGE_MULTIPLIER,
+                2,
+            ),
+        )
+    return {'labels': labels, 'values': values}
+
+
+def _minimum_payment_forecast(
+    debt: Decimal | None,
+) -> list[dict[str, float | int]]:
+    remaining = Decimal(str(max(debt or 0, constants.ZERO)))
+    if remaining <= constants.ZERO:
+        return []
+    forecast: list[dict[str, float | int]] = []
+    for month_number in range(constants.ONE, constants.MONTHS_IN_YEAR + 1):
+        payment = remaining * Decimal(
+            str(constants.SBERBANK_MIN_PAYMENT_PERCENTAGE),
+        )
+        remaining = max(remaining - payment, Decimal(str(constants.ZERO)))
+        forecast.append(
+            {
+                'month': month_number,
+                'minimum_payment': float(payment),
+                'remaining_debt': float(remaining),
+            },
+        )
+        if remaining <= constants.ZERO:
+            break
+    return forecast
+
+
+def _credit_cards_summary(
+    credit_cards: list[CreditCardDataDict],
+) -> CreditCardSummaryDict:
+    overdue_count = 0
+    expiring_count = 0
+    total_remaining_debt = Decimal(str(constants.ZERO))
+    for card in credit_cards:
+        for payment in card.get('payment_schedule', []):
+            remaining_debt = Decimal(str(payment['remaining_debt']))
+            if remaining_debt <= constants.ZERO:
+                continue
+            total_remaining_debt += remaining_debt
+            if payment['is_overdue']:
+                overdue_count += constants.ONE
+            elif (
+                constants.ZERO
+                < payment['days_until_due']
+                <= constants.NUMBER_SEVENTH_MONTH_YEAR
+            ):
+                expiring_count += constants.ONE
+    return {
+        'overdue_count': overdue_count,
+        'expiring_count': expiring_count,
+        'at_risk_count': overdue_count + expiring_count,
+        'total_remaining_debt': total_remaining_debt,
+    }
+
+
+def _payment_schedule_remaining_debt(
+    schedule: list[PaymentScheduleItemDict],
+) -> Decimal:
+    return sum(
+        (Decimal(str(payment['remaining_debt'])) for payment in schedule),
+        Decimal(str(constants.ZERO)),
+    )
+
+
 def _credit_cards_block(
     accounts: QuerySet[Account],
     stats_filter: StatisticsFilters,
@@ -1387,20 +1846,18 @@ def _credit_cards_block(
         )
 
         payments_raw = list(
-            _filter_transaction_queryset(
-                Transaction.objects.filter(
-                    account=card,
-                    user=card.user,
-                    type=TransactionType.INCOME,
-                ),
-                stats_filter=stats_filter,
-                type_value=TransactionType.INCOME,
-                start=period_start,
-                end=period_end,
-            ).values('amount', 'date'),
+            TransferMoneyLog.objects.filter(
+                user=card.user,
+                to_account=card,
+                exchange_date__date__gte=period_start,
+                exchange_date__date__lte=period_end,
+            ).values('amount', 'exchange_date'),
         )
         payments: list[PaymentItemDict] = [
-            {'amount': Decimal(str(p['amount'])), 'date': p['date']}
+            {
+                'amount': Decimal(str(p['amount'])),
+                'date': p['exchange_date'],
+            }
             for p in payments_raw
         ]
         _apply_payments_to_months(months, payments)
@@ -1440,6 +1897,14 @@ def _credit_cards_block(
                 'card_obj': card,
                 'limit_left': limit_left,
                 'payment_schedule': schedule,
+                'utilization_chart': _credit_card_utilization_chart(
+                    history,
+                    card.limit_credit,
+                ),
+                'utilization_chart_id': f'credit-utilization-{card.pk}',
+                'minimum_payment_forecast': _minimum_payment_forecast(
+                    _payment_schedule_remaining_debt(schedule),
+                ),
             },
         )
     return out
@@ -1482,14 +1947,14 @@ def get_user_detailed_statistics(
         stats_filter,
     )
     budgets_data = _budgets_data(users, period_start, period_end)
-    top_expense_categories = _top_categories_qs(
+    top_expense_categories = _top_categories_with_comparison(
         TransactionType.EXPENSE,
         users,
         stats_filter,
         period_start,
         period_end,
     )
-    top_income_categories = _top_categories_qs(
+    top_income_categories = _top_categories_with_comparison(
         TransactionType.INCOME,
         users,
         stats_filter,
@@ -1508,6 +1973,17 @@ def get_user_detailed_statistics(
         currency=stats_filter.currency,
         category_keys=stats_filter.category_keys,
     )
+    receipt_page = _paginate(
+        _filtered_receipts(users, stats_filter, period_start, period_end)
+        .select_related('account', 'user', 'seller')
+        .order_by(stats_filter.receipts_sort),
+        stats_filter.receipts_page,
+    )
+    (
+        top_receipt_products,
+        top_receipt_sellers,
+        average_receipts_by_month,
+    ) = _receipt_details(users, stats_filter, period_start, period_end)
 
     income_category_ids = _category_ids(
         stats_filter.category_keys,
@@ -1550,13 +2026,24 @@ def get_user_detailed_statistics(
         it['type'] = 'expense'  # type: ignore[typeddict-unknown-key]
 
     income_expense = sort_expense_income(expenses, incomes)
+    reverse_operations = stats_filter.operations_sort.startswith('-')
+    operations_sort_key = stats_filter.operations_sort.removeprefix('-')
+    income_expense = sorted(
+        income_expense,
+        key=lambda item: item[operations_sort_key],
+        reverse=reverse_operations,
+    )
+    income_expense_page = _paginate(
+        income_expense,
+        stats_filter.operations_page,
+    )
 
     transfer_money_log = _transfer_logs(
         users,
         stats_filter,
         period_start,
         period_end,
-    )
+    ).order_by(stats_filter.transfers_sort)
 
     account_choices = Account.objects.filter(user__in=users).select_related(
         'user',
@@ -1567,18 +2054,36 @@ def get_user_detailed_statistics(
         today,
     )
 
-    chart_combined = _build_chart(
-        users,
-        stats_filter,
-        period_start,
-        period_end,
-    )
-
     account_service = container.core.account_service()
     credit_cards_data = _credit_cards_block(
         accounts,
         stats_filter=stats_filter,
         account_service=account_service,
+    )
+    cashflow_forecast = build_cashflow_forecast(
+        users=users,
+        accounts=accounts,
+        today=today,
+    )
+    chart_combined = _build_chart(
+        users,
+        stats_filter,
+        period_start,
+        period_end,
+        forecast=cashflow_forecast,
+    )
+    payment_calendar = build_payment_calendar(
+        users=users,
+        credit_cards=credit_cards_data,
+        today=today,
+    )
+    credit_cards_summary = _credit_cards_summary(credit_cards_data)
+    statistics_alerts = _statistics_alerts(
+        users,
+        stats_filter,
+        budgets_data,
+        credit_cards_data,
+        today,
     )
     currency_choices = sorted(
         set(account_choices.values_list('currency', flat=True)),
@@ -1587,17 +2092,28 @@ def get_user_detailed_statistics(
     stats = {
         'months_data': months_data,
         'budgets_data': budgets_data,
-        'top_expense_categories': list(top_expense_categories),
-        'top_income_categories': list(top_income_categories),
+        'top_expense_categories': top_expense_categories,
+        'top_income_categories': top_income_categories,
         'receipt_info_by_month': receipt_info_by_month,
+        'receipt_page': receipt_page,
+        'top_receipt_products': top_receipt_products,
+        'top_receipt_sellers': top_receipt_sellers,
+        'average_receipts_by_month': average_receipts_by_month,
         'income_expense': income_expense,
+        'income_expense_page': income_expense_page,
         'transfer_money_log': transfer_money_log,
+        'transfer_money_log_page': _paginate(
+            transfer_money_log,
+            stats_filter.transfers_page,
+        ),
         'accounts': accounts,
         'balances_by_currency': dict(balances_by_currency),
         'delta_by_currency': delta_by_currency,
         'chart_combined': chart_combined,
+        'chart_combined_json': json.dumps(chart_combined),
         'user': user,
         'credit_cards_data': credit_cards_data,
+        'credit_cards_summary': credit_cards_summary,
         'statistics_filter': stats_filter,
         'statistics_period_choices': _period_choices(),
         'statistics_account_choices': account_choices,
@@ -1605,6 +2121,8 @@ def get_user_detailed_statistics(
         'statistics_category_choices': _category_choices(users),
         'statistics_member_choices': _member_choices(user, request),
         'statistics_members': users,
+        'statistics_alerts': statistics_alerts,
+        'payment_calendar': payment_calendar,
     }
 
     cache.set(cache_key, stats, 600)

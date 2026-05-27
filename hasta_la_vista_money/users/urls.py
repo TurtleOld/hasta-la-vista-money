@@ -17,6 +17,7 @@ from hasta_la_vista_money.users.views import (
     SetPasswordUserView,
     SwitchThemeView,
     UpdateUserView,
+    UserStatisticsExportView,
     UserStatisticsView,
 )
 
@@ -30,6 +31,11 @@ urlpatterns = [
     path('update-user/<int:pk>/', UpdateUserView.as_view(), name='update_user'),
     path('list/users/', ListUsers.as_view(), name='list_users'),
     path('statistics/', UserStatisticsView.as_view(), name='statistics'),
+    path(
+        'statistics/export/',
+        UserStatisticsExportView.as_view(),
+        name='statistics_export',
+    ),
     path('export-data/', ExportUserDataView.as_view(), name='export_data'),
     path('set-theme/', SwitchThemeView.as_view(), name='set_theme'),
     path(
