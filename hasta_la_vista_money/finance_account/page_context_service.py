@@ -11,6 +11,9 @@ from hasta_la_vista_money.finance_account.forms import (
 )
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.detailed_statistics import (
+    compute_total_payment_schedule_debt,
+)
 
 if TYPE_CHECKING:
     from core.protocols.services import AccountServiceProtocol
@@ -181,6 +184,10 @@ class AccountPageContextService:
             sum_all_accounts_in_group = (
                 self.account_service.get_sum_all_accounts(accounts_in_group)
             )
+            total_credit_debt = compute_total_payment_schedule_debt(
+                accounts_in_group,
+                self.account_service,
+            )
         else:
             accounts_user = self.account_repository.get_by_user_with_related(
                 user,
@@ -188,10 +195,15 @@ class AccountPageContextService:
             sum_all_accounts_in_group = (
                 self.account_service.get_sum_all_accounts(accounts_user)
             )
+            total_credit_debt = compute_total_payment_schedule_debt(
+                accounts_user,
+                self.account_service,
+            )
 
         return {
             'sum_all_accounts': sum_all_accounts,
             'sum_all_accounts_in_group': sum_all_accounts_in_group,
+            'total_credit_debt': total_credit_debt,
         }
 
     def _build_balance_trend_context(
