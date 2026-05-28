@@ -113,6 +113,13 @@ class Seller(models.Model):
         null=True,
         max_length=1000,
     )
+    inn = models.CharField(
+        max_length=12,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name='ИНН',
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         null=True,

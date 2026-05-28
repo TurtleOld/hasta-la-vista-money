@@ -28,6 +28,7 @@ def map_fns_receipt_to_receipt_data(payload: dict[str, Any]) -> dict[str, Any]:
             receipt.get('retailPlaceAddress'),
         ),
         'retail_place': retail_place,
+        'inn': _optional_text(receipt.get('userInn')),
         'total_sum': _format_money(receipt.get('totalSum')),
         'operation_type': _parse_int(receipt.get('operationType'), default=1),
         'receipt_date': _format_receipt_date(receipt.get('dateTime')),

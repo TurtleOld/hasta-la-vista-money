@@ -54,6 +54,7 @@ TOP_LEVEL_FIELDS: Final[frozenset[str]] = frozenset(
         'name_seller',
         'retail_place_address',
         'retail_place',
+        'inn',
         'total_sum',
         'operation_type',
         'receipt_date',
@@ -90,6 +91,7 @@ RECEIPT_PARSE_SCHEMA: Final[dict[str, Any]] = {
         'name_seller': {'type': 'string', 'minLength': 1},
         'retail_place_address': {'type': ['string', 'null']},
         'retail_place': {'type': ['string', 'null']},
+        'inn': {'type': ['string', 'null']},
         'total_sum': {'type': ['number', 'string'], 'exclusiveMinimum': 0},
         'operation_type': {'type': ['integer', 'string'], 'enum': [1, 2, 3, 4]},
         'receipt_date': {
@@ -154,6 +156,7 @@ class ReceiptParseResult:
     items: tuple[ReceiptParseItem, ...]
     retail_place_address: str | None = None
     retail_place: str | None = None
+    inn: str | None = None
     number_receipt: int | None = None
     nds10: Decimal | None = None
     nds20: Decimal | None = None
@@ -164,6 +167,7 @@ class ReceiptParseResult:
             'name_seller': self.name_seller,
             'retail_place_address': self.retail_place_address,
             'retail_place': self.retail_place,
+            'inn': self.inn,
             'total_sum': _format_decimal(self.total_sum),
             'operation_type': self.operation_type,
             'receipt_date': self.receipt_date,
@@ -230,6 +234,7 @@ def validate_receipt_parse_payload(
             payload.get('retail_place_address'),
         ),
         retail_place=_parse_optional_text(payload.get('retail_place')),
+        inn=_parse_optional_text(payload.get('inn')),
         total_sum=total_sum,
         operation_type=operation_type,
         receipt_date=receipt_date,

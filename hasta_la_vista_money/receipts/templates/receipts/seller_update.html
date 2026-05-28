@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+{% load csp %}
+
+{% block title %}{% translate 'Редактировать продавца' %}{% endblock %}
+
+
+{% block content %}
+<div class="receipts-app">
+    <div class="receipts-wrap">
+        <header class="receipts-header">
+            <div>
+                <div class="receipts-kicker">{% translate 'Справочник' %}</div>
+                <h1 class="receipts-title">{% translate 'Редактировать продавца' %}</h1>
+                {% if object.inn %}
+                    <div class="receipts-kicker">{% translate 'ИНН' %}: {{ object.inn }}</div>
+                {% endif %}
+            </div>
+            <div class="receipts-actions">
+                <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
+                    <i class="bi bi-arrow-left"></i>
+                    {% translate 'К списку' %}
+                </a>
+            </div>
+        </header>
+
+        <form method="post" class="receipt-review-form">
+            {% csrf_token %}
+
+            <section class="receipts-card">
+                <header class="receipts-card-hd">
+                    <h2><i class="bi bi-shop"></i> {% translate 'Данные продавца' %}</h2>
+                </header>
+
+                {% if form.non_field_errors %}
+                    <div class="receipts-upload-error">
+                        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+                    </div>
+                {% endif %}
+
+                <div class="receipts-section">
+                    <div class="receipt-update-fields">
+                        {% for field in form %}
+                            <div class="receipts-field">
+                                {% include 'forms/_field.html' with field=field %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="receipts-card-ft">
+                    <p class="hint">
+                        <i class="bi bi-info-circle"></i>
+                        {% translate 'Название магазина (retail_place) будет автоматически подставляться для новых чеков этого продавца.' %}
+                    </p>
+                    <div class="ft-actions">
+                        <a href="{% url 'receipts:list' %}" class="receipts-btn receipts-btn-ghost">
+                            <i class="bi bi-x-lg"></i>
+                            {% translate 'Отмена' %}
+                        </a>
+                        <button type="submit" class="receipts-btn receipts-btn-primary">
+                            <i class="bi bi-check2"></i>
+                            {% translate 'Сохранить' %}
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </form>
+    </div>
+</div>
+{% endblock %}

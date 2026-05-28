@@ -33,10 +33,6 @@ from hasta_la_vista_money.receipts.models import (
     Receipt,
     Seller,
 )
-from hasta_la_vista_money.receipts.services import (
-    analyze_image_with_ai,
-    image_to_base64,
-)
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreatorService,
 )
@@ -675,53 +671,6 @@ class TestReceiptAPIs(APITestCase):
             content_type='application/json',
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-
-class TestServices(TestCase):
-    def test_image_to_base64(self) -> None:
-        test_file = SimpleUploadedFile(
-            'test.jpg',
-            b'fake-image-content',
-            content_type='image/jpeg',
-        )
-
-        result = image_to_base64(test_file)
-        self.assertTrue(result.startswith('data:image/jpeg;base64,'))
-        self.assertIn('ZmFrZS1pbWFnZS1jb250ZW50', result)
-
-    @patch(
-        'hasta_la_vista_money.receipts.services.receipt_ai_prompt.'
-        'analyze_image_with_receipt_inference',
-    )
-    def test_analyze_image_with_ai(self, mock_inference: Mock) -> None:
-        mock_inference.return_value = '{"test": "data"}'
-
-        test_file = SimpleUploadedFile(
-            'test.jpg',
-            b'fake-image-content',
-            content_type='image/jpeg',
-        )
-
-        result = analyze_image_with_ai(test_file)
-        self.assertEqual(result, '{"test": "data"}')
-
-        mock_inference.assert_called_once_with(test_file)
-
-    @patch(
-        'hasta_la_vista_money.receipts.services.receipt_ai_prompt.'
-        'analyze_image_with_receipt_inference',
-    )
-    def test_analyze_image_with_ai_error(self, mock_inference: Mock) -> None:
-        mock_inference.side_effect = RuntimeError('Inference Error')
-
-        test_file = SimpleUploadedFile(
-            'test.jpg',
-            b'fake-image-content',
-            content_type='image/jpeg',
-        )
-
-        with self.assertRaises(RuntimeError):
-            analyze_image_with_ai(test_file)
 
 
 class TestUploadImageView(TestCase):

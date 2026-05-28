@@ -23,6 +23,7 @@ from hasta_la_vista_money.receipts.views import (
     ReceiptView,
     ReviewPendingReceiptView,
     SellerCreateView,
+    SellerUpdateView,
     UploadImageView,
 )
 
@@ -34,6 +35,11 @@ urlpatterns = [
         'create_seller/',
         SellerCreateView.as_view(),
         name='create_seller',
+    ),
+    path(
+        'seller/<int:pk>/update/',
+        SellerUpdateView.as_view(),
+        name='update_seller',
     ),
     path('update/<int:pk>/', ReceiptUpdateView.as_view(), name='update'),
     path('view/<int:pk>/', ReceiptDetailView.as_view(), name='view'),

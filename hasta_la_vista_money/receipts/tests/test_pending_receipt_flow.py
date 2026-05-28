@@ -5,8 +5,7 @@ retry / counter views. Inference is always mocked — no network calls.
 """
 
 import io
-import json
-from typing import Any, Self
+from typing import Any
 from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -27,10 +26,6 @@ from hasta_la_vista_money.receipts.models import (
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
     PendingReceiptService,
     compute_image_hash,
-)
-from hasta_la_vista_money.receipts.services.receipt_inference_client import (
-    ReceiptInferenceClient,
-    resolve_upload_content_type,
 )
 from hasta_la_vista_money.receipts.tasks import (
     cleanup_stale_pending_receipts,
@@ -146,7 +141,6 @@ class PendingReceiptServiceHashTests(TestCase):
         self.assertIsNone(match)
 
 
-@override_settings(FNS_ENABLED=False)
 class ProcessPendingReceiptTaskTests(TestCase):
     """The Celery task transitions state and never raises out."""
 
@@ -182,8 +176,8 @@ class ProcessPendingReceiptTaskTests(TestCase):
     def test_task_marks_ready_on_success(self) -> None:
         pending = self._create_pending()
         with mock.patch(
-            'hasta_la_vista_money.receipts.tasks.analyze_image_with_ai',
-            return_value=json.dumps(_fake_payload()),
+            'hasta_la_vista_money.receipts.tasks._run_fns_pipeline',
+            return_value=_fake_payload(),
         ):
             process_pending_receipt(pending.pk)
 
@@ -192,25 +186,11 @@ class ProcessPendingReceiptTaskTests(TestCase):
         self.assertEqual(pending.error_message, '')
         self.assertEqual(pending.receipt_data['name_seller'], 'Shop')
 
-    def test_task_marks_failed_on_invalid_json(self) -> None:
+    def test_task_marks_failed_on_pipeline_error(self) -> None:
         pending = self._create_pending()
         with mock.patch(
-            'hasta_la_vista_money.receipts.tasks.analyze_image_with_ai',
-            return_value='not json at all',
-        ):
-            process_pending_receipt(pending.pk)
-
-        pending.refresh_from_db()
-        self.assertEqual(pending.status, PendingReceiptStatus.FAILED)
-        self.assertNotEqual(pending.error_message, '')
-
-    def test_task_marks_failed_on_invalid_schema(self) -> None:
-        pending = self._create_pending()
-        payload = _fake_payload()
-        payload['items'][0]['price'] = -1
-        with mock.patch(
-            'hasta_la_vista_money.receipts.tasks.analyze_image_with_ai',
-            return_value=json.dumps(payload),
+            'hasta_la_vista_money.receipts.tasks._run_fns_pipeline',
+            side_effect=ValueError('pipeline error'),
         ):
             process_pending_receipt(pending.pk)
 
@@ -290,93 +270,6 @@ class PendingReceiptConversionTests(TestCase):
         )
 
 
-class ReceiptInferenceClientContentTypeTests(TestCase):
-    """Persisted pending files keep a supported MIME type for inference."""
-
-    def setUp(self) -> None:
-        self.user = User.objects.create_user(
-            username='inference-user',
-            password='pass',  # nosec B106: test-only password
-            email='inference@example.com',
-        )
-        self.account = Account.objects.create(
-            user=self.user,
-            name_account='Wallet',
-            balance=1000,
-            currency='RU',
-        )
-        self.service: PendingReceiptService = (
-            ApplicationContainer().receipts.pending_receipt_service()
-        )
-
-    def _create_png_pending(self) -> PendingReceipt:
-        upload = SimpleUploadedFile(
-            'image.png',
-            b'png-bytes',
-            content_type='image/png',
-        )
-        return self.service.create_processing_job(
-            user=self.user,
-            account=self.account,
-            image_file=upload,
-            image_hash=compute_image_hash(upload),
-        )
-
-    def test_resolves_content_type_from_persisted_file_name(self) -> None:
-        pending = self._create_png_pending()
-        pending.refresh_from_db()
-
-        with pending.image_file.open('rb') as image_fp:
-            self.assertEqual(
-                resolve_upload_content_type(image_fp),
-                'image/png',
-            )
-
-    def test_analyze_sends_inferred_content_type_for_persisted_file(
-        self,
-    ) -> None:
-        pending = self._create_png_pending()
-        pending.refresh_from_db()
-        post_calls: list[dict[str, Any]] = []
-
-        class FakeHTTPClient:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                pass
-
-            def __enter__(self) -> Self:
-                return self
-
-            def __exit__(self, *args: object) -> None:
-                pass
-
-            def post(
-                self,
-                url: str,
-                files: dict[str, tuple[str, bytes, str]],
-            ) -> mock.Mock:
-                post_calls.append({'url': url, 'files': files})
-                response = mock.Mock()
-                response.is_success = True
-                response.json.return_value = {
-                    'success': True,
-                    'data': _fake_payload(),
-                }
-                return response
-
-        client = ReceiptInferenceClient()
-        client._base_url = 'http://receipt-inference'
-        with (
-            mock.patch(
-                'hasta_la_vista_money.receipts.services.'
-                'receipt_inference_client.httpx.Client',
-                FakeHTTPClient,
-            ),
-            pending.image_file.open('rb') as image_fp,
-        ):
-            raw = client.analyze(image_fp)
-
-        self.assertEqual(json.loads(raw)['name_seller'], 'Shop')
-        self.assertEqual(post_calls[0]['files']['file'][2], 'image/png')
 
 
 class ReceiptParseValidatorTests(TestCase):
