@@ -299,6 +299,11 @@ class ReceiptForm(ModelForm[Receipt]):
         ),
         widget=Select(attrs={'class': _SELECT_CLASSES}),
     )
+    retail_place = CharField(
+        label=_('Место расчётов'),
+        required=False,
+        widget=TextInput(attrs={'class': _INPUT_CLASSES}),
+    )
     account = ModelChoiceField(
         queryset=Account.objects.none(),
         label=_('Счёт списания'),
@@ -345,6 +350,18 @@ class ReceiptForm(ModelForm[Receipt]):
             attrs={'class': 'total-sum', 'readonly': True},
         ),
     )
+
+    field_order: ClassVar[list[str]] = [
+        'seller',
+        'retail_place',
+        'account',
+        'receipt_date',
+        'number_receipt',
+        'operation_type',
+        'nds10',
+        'nds20',
+        'total_sum',
+    ]
 
     class Meta:
         model = Receipt
