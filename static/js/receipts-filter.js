@@ -1,22 +1,17 @@
 /* eslint-env browser */
-/**
- * Receipt Filter Module
- * Модуль для управления фильтром чеков с автодополнением и множественным выбором товаров
- */
 
 (function() {
     'use strict';
 
-    // Состояние модуля
     const state = {
         selectedProducts: new Set(),
         autocompleteResults: [],
         currentFocus: -1,
         debounceTimer: null,
-        isDropdownVisible: false
+        isDropdownVisible: false,
+        allProductsCache: null,
     };
 
-    // DOM элементы
     const elements = {
         productInput: null,
         selectedProductsContainer: null,
@@ -25,17 +20,13 @@
         selectedProductsInput: null,
         spinner: null,
         filterForm: null,
-        productInputWrapper: null
+        productInputWrapper: null,
     };
 
-    /**
-     * Инициализация модуля
-     */
     function init() {
-        // Инициализируем переключатель фильтра
         initFilterCollapse();
+        initPeriodPresets();
 
-        // Получаем DOM элементы для автодополнения
         elements.productInput = document.getElementById('product-autocomplete');
         elements.selectedProductsContainer = document.getElementById('selected-products-container');
         elements.selectedProductsPlaceholder = document.getElementById('selected-products-placeholder');
@@ -46,50 +37,33 @@
 
         if (!elements.productInput) return;
 
-        // Находим контейнер для позиционирования dropdown
         elements.productInputWrapper = elements.productInput.parentElement;
 
-        // Загружаем выбранные товары из URL параметров
         loadSelectedProductsFromUrl();
-
-        // Добавляем обработчики событий
         attachEventListeners();
+        updateActiveFilterCount();
     }
 
-    /**
-     * Инициализация переключателя фильтра
-     */
     function initFilterCollapse() {
         const filterCollapse = document.getElementById('filterCollapse');
         const toggleButton = document.getElementById('filterToggle');
-        const toggleIcon = document.getElementById('filterToggleIcon');
 
-        if (!filterCollapse || !toggleButton || !toggleIcon) {
-            return;
-        }
-
-        function updateIcon(isExpanded) {
-            toggleIcon.classList.toggle('rotate-180', Boolean(isExpanded));
-        }
+        if (!filterCollapse || !toggleButton) return;
 
         function toggleCollapse() {
-            const isExpanded = !filterCollapse.classList.contains('hidden');
-
+            const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
             if (isExpanded) {
                 filterCollapse.classList.add('hidden');
                 toggleButton.setAttribute('aria-expanded', 'false');
-                updateIcon(false);
             } else {
                 filterCollapse.classList.remove('hidden');
                 toggleButton.setAttribute('aria-expanded', 'true');
-                updateIcon(true);
             }
         }
 
         if (window.location.search.length > 1) {
             filterCollapse.classList.remove('hidden');
             toggleButton.setAttribute('aria-expanded', 'true');
-            updateIcon(true);
         }
 
         toggleButton.addEventListener('click', function(e) {
@@ -98,59 +72,123 @@
         });
     }
 
-    /**
-     * Загрузка выбранных товаров из URL параметров
-     */
-    function loadSelectedProductsFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const productNames = urlParams.get('product_names');
+    function initPeriodPresets() {
+        const chips = document.querySelectorAll('[data-period]');
+        if (!chips.length) return;
 
-        if (productNames) {
-            try {
-                const decoded = decodeURIComponent(productNames);
-                const products = decoded.split(',').map(p => p.trim()).filter(p => p);
-                products.forEach(product => {
-                    state.selectedProducts.add(product);
+        const dateFromInput = document.getElementById('id_receipt_date_0');
+        const dateToInput = document.getElementById('id_receipt_date_1');
+        if (!dateFromInput || !dateToInput) return;
+
+        function formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function getPresetRange(preset) {
+            const today = new Date();
+            const y = today.getFullYear();
+            const mo = today.getMonth();
+            const d = today.getDate();
+
+            switch (preset) {
+                case 'today':
+                    return { from: new Date(y, mo, d), to: new Date(y, mo, d) };
+                case 'week': {
+                    const dow = today.getDay();
+                    const monday = new Date(y, mo, d - ((dow + 6) % 7));
+                    return { from: monday, to: new Date(y, mo, d) };
+                }
+                case 'month':
+                    return { from: new Date(y, mo, 1), to: new Date(y, mo, d) };
+                case 'last_month':
+                    return { from: new Date(y, mo - 1, 1), to: new Date(y, mo, 0) };
+                case 'quarter':
+                    return { from: new Date(y, Math.floor(mo / 3) * 3, 1), to: new Date(y, mo, d) };
+                case 'year':
+                    return { from: new Date(y, 0, 1), to: new Date(y, mo, d) };
+                default:
+                    return null;
+            }
+        }
+
+        chips.forEach(function(chip) {
+            chip.addEventListener('click', function() {
+                const range = getPresetRange(chip.dataset.period);
+                if (!range) return;
+
+                dateFromInput.value = formatDate(range.from);
+                dateToInput.value = formatDate(range.to);
+
+                chips.forEach(c => c.classList.remove('is-active'));
+                chip.classList.add('is-active');
+
+                updateActiveFilterCount();
+            });
+        });
+
+        // Highlight matching chip on page load based on current date values
+        syncPeriodChips(chips, dateFromInput, dateToInput, formatDate, getPresetRange);
+    }
+
+    function syncPeriodChips(chips, dateFromInput, dateToInput, formatDate, getPresetRange) {
+        const curFrom = dateFromInput.value;
+        const curTo = dateToInput.value;
+        if (!curFrom && !curTo) return;
+
+        const presets = ['today', 'week', 'month', 'last_month', 'quarter', 'year'];
+        for (const preset of presets) {
+            const range = getPresetRange(preset);
+            if (!range) continue;
+            if (formatDate(range.from) === curFrom && formatDate(range.to) === curTo) {
+                chips.forEach(function(chip) {
+                    chip.classList.toggle('is-active', chip.dataset.period === preset);
                 });
-                renderSelectedProducts();
-            } catch (e) {
-                console.error('Error loading products from URL:', e);
+                break;
             }
         }
     }
 
-    /**
-     * Добавление обработчиков событий
-     */
-    function attachEventListeners() {
-        // Ввод текста в поле поиска с debounce
-        elements.productInput.addEventListener('input', debounce(handleInput, 300));
+    function loadSelectedProductsFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const productNames = urlParams.get('product_names');
+        if (!productNames) return;
 
-        // Навигация с клавиатуры
-        elements.productInput.addEventListener('keydown', handleKeydown);
-
-        // Потеря фокуса
-        elements.productInput.addEventListener('blur', handleBlur);
-
-        // Получение фокуса
-        elements.productInput.addEventListener('focus', handleFocus);
-
-        // Клик вне dropdown
-        document.addEventListener('click', handleDocumentClick);
-
-        // Отправка формы
-        if (elements.filterForm) {
-            elements.filterForm.addEventListener('submit', handleFormSubmit);
+        try {
+            const products = decodeURIComponent(productNames).split(',').map(p => p.trim()).filter(Boolean);
+            products.forEach(p => state.selectedProducts.add(p));
+            renderSelectedProducts();
+        } catch (e) {
+            console.error('Error loading products from URL:', e);
         }
     }
 
-    /**
-     * Обработка ввода текста
-     */
+    function attachEventListeners() {
+        elements.productInput.addEventListener('input', debounce(handleInput, 300));
+        elements.productInput.addEventListener('keydown', handleKeydown);
+        elements.productInput.addEventListener('blur', handleBlur);
+        elements.productInput.addEventListener('focus', handleFocus);
+        document.addEventListener('click', handleDocumentClick);
+
+        if (elements.filterForm) {
+            elements.filterForm.addEventListener('submit', handleFormSubmit);
+        }
+
+        // Update badge on any filter input change
+        const filterInputs = document.querySelectorAll(
+            '#receipts-filter-form input[type="date"], ' +
+            '#receipts-filter-form input[type="number"], ' +
+            '#receipts-filter-form select'
+        );
+        filterInputs.forEach(function(input) {
+            input.addEventListener('change', updateActiveFilterCount);
+        });
+    }
+
     async function handleInput() {
         const query = elements.productInput.value.trim();
-
-        // Скрываем спиннер
         hideSpinner();
 
         if (query.length === 0) {
@@ -158,34 +196,46 @@
             return;
         }
 
-        // Показываем спиннер
         showSpinner();
-
         try {
             const response = await fetchWithAuth(`/api/receipts/product-autocomplete/?q=${encodeURIComponent(query)}`);
             hideSpinner();
-
-            if (!response.ok) {
-                hideDropdown();
-                return;
-            }
+            if (!response.ok) { hideDropdown(); return; }
 
             const data = await response.json();
-            state.autocompleteResults = (data.results || []).filter(
-                product => !state.selectedProducts.has(product)
-            );
-
-            showDropdown();
+            state.autocompleteResults = (data.results || []).filter(p => !state.selectedProducts.has(p));
+            state.allProductsCache = null;
+            showDropdown(false);
         } catch (e) {
             hideSpinner();
             hideDropdown();
-            console.error('Error fetching autocomplete:', e);
         }
     }
 
-    /**
-     * Обработка нажатий клавиш
-     */
+    async function showAllProducts() {
+        if (elements.productInput.value.trim()) return;
+
+        if (state.allProductsCache) {
+            state.autocompleteResults = state.allProductsCache.filter(p => !state.selectedProducts.has(p));
+            showDropdown(true);
+            return;
+        }
+
+        showSpinner();
+        try {
+            const response = await fetchWithAuth('/api/receipts/product-autocomplete/?q=');
+            hideSpinner();
+            if (!response.ok) return;
+
+            const data = await response.json();
+            state.allProductsCache = data.results || [];
+            state.autocompleteResults = state.allProductsCache.filter(p => !state.selectedProducts.has(p));
+            showDropdown(true);
+        } catch (e) {
+            hideSpinner();
+        }
+    }
+
     function handleKeydown(e) {
         const items = elements.autocompleteDropdown.querySelectorAll('.autocomplete-item');
 
@@ -202,7 +252,6 @@
             if (state.currentFocus > -1 && items[state.currentFocus]) {
                 items[state.currentFocus].click();
             } else if (elements.productInput.value.trim()) {
-                // Добавляем введенный текст как товар
                 addProduct(elements.productInput.value.trim());
                 elements.productInput.value = '';
                 hideDropdown();
@@ -210,298 +259,231 @@
         } else if (e.key === 'Escape') {
             hideDropdown();
         } else if (e.key === 'Backspace' && elements.productInput.value === '' && state.selectedProducts.size > 0) {
-            // Удаляем последний выбранный товар
             const lastProduct = Array.from(state.selectedProducts).pop();
             removeProduct(lastProduct);
         }
     }
 
-    /**
-     * Обработка потери фокуса
-     */
     function handleBlur() {
-        // Задержка перед скрытием dropdown, чтобы успеть обработать клик
-        setTimeout(() => {
-            hideDropdown();
-        }, 200);
+        setTimeout(() => hideDropdown(), 200);
     }
 
-    /**
-     * Обработка получения фокуса
-     */
     function handleFocus() {
-        if (elements.productInput.value.trim()) {
+        const query = elements.productInput.value.trim();
+        if (query) {
             handleInput();
+        } else {
+            showAllProducts();
         }
     }
 
-    /**
-     * Обработка клика вне dropdown
-     */
     function handleDocumentClick(e) {
-        if (!elements.productInput.contains(e.target) &&
-            !elements.autocompleteDropdown.contains(e.target)) {
+        if (!elements.productInput.contains(e.target) && !elements.autocompleteDropdown.contains(e.target)) {
             hideDropdown();
         }
     }
 
-    /**
-     * Обработка отправки формы
-     */
     function handleFormSubmit() {
-        // Обновляем скрытое поле с выбранными товарами
         elements.selectedProductsInput.value = Array.from(state.selectedProducts).join(',');
     }
 
-    /**
-     * Отображение dropdown с результатами
-     */
-    function showDropdown() {
-        if (!state.autocompleteResults.length) {
-            hideDropdown();
-            return;
-        }
+    function showDropdown(isAll) {
+        const wrapperRect = elements.productInputWrapper.getBoundingClientRect();
+        const dropdownComputedStyle = window.getComputedStyle(elements.autocompleteDropdown);
+        const marginTop = parseFloat(dropdownComputedStyle.marginTop) || 4;
+
+        elements.autocompleteDropdown.style.position = 'fixed';
+        elements.autocompleteDropdown.style.left = `${wrapperRect.left}px`;
+        elements.autocompleteDropdown.style.top = `${wrapperRect.bottom + marginTop}px`;
+        elements.autocompleteDropdown.style.width = `${wrapperRect.width}px`;
 
         elements.autocompleteDropdown.innerHTML = '';
 
-        state.autocompleteResults.forEach((product, index) => {
-            const item = document.createElement('div');
-            item.className = 'autocomplete-item px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors duration-150';
-            item.textContent = product;
-            item.dataset.index = index;
-
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                addProduct(product);
-                elements.productInput.value = '';
+        if (!state.autocompleteResults.length) {
+            if (isAll) {
+                const empty = document.createElement('div');
+                empty.className = 'autocomplete-item-empty';
+                empty.textContent = 'Нет товаров для выбора';
+                elements.autocompleteDropdown.appendChild(empty);
+            } else {
                 hideDropdown();
-                elements.productInput.focus();
+                return;
+            }
+        } else {
+            if (isAll) {
+                const header = document.createElement('div');
+                header.className = 'autocomplete-item-header';
+                header.textContent = 'Все товары';
+                elements.autocompleteDropdown.appendChild(header);
+            }
+
+            state.autocompleteResults.forEach((product, index) => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.textContent = product;
+                item.dataset.index = index;
+
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addProduct(product);
+                    elements.productInput.value = '';
+                    // Refresh "all products" view after selection
+                    state.allProductsCache = null;
+                    hideDropdown();
+                    elements.productInput.focus();
+                });
+
+                elements.autocompleteDropdown.appendChild(item);
             });
-
-            elements.autocompleteDropdown.appendChild(item);
-        });
-
-        // Позиционируем dropdown относительно viewport (fixed), чтобы не обрезался родительскими контейнерами
-        // Это гарантирует, что dropdown будет отображаться поверх всех элементов независимо от прокрутки
-        const wrapperRect = elements.productInputWrapper.getBoundingClientRect();
-
-        // Вычисляем margin-top из класса mt-1 (0.25rem) для точного позиционирования
-        // Используем getComputedStyle для получения актуального значения margin
-        const dropdownComputedStyle = window.getComputedStyle(elements.autocompleteDropdown);
-        const marginTop = parseFloat(dropdownComputedStyle.marginTop) || 4; // mt-1 = 0.25rem ≈ 4px
-
-        // Устанавливаем точное позиционирование относительно viewport
-        elements.autocompleteDropdown.style.position = 'fixed';
-        // Левая граница строго соответствует левой границе обертки инпута
-        elements.autocompleteDropdown.style.left = `${wrapperRect.left}px`;
-        // Верхняя граница = нижняя граница обертки + margin-top для идеального выравнивания
-        elements.autocompleteDropdown.style.top = `${wrapperRect.bottom + marginTop}px`;
-        // Ширина строго соответствует ширине обертки инпута
-        elements.autocompleteDropdown.style.width = `${wrapperRect.width}px`;
+        }
 
         elements.autocompleteDropdown.classList.remove('hidden');
         state.isDropdownVisible = true;
         state.currentFocus = -1;
     }
 
-    /**
-     * Скрытие dropdown
-     */
     function hideDropdown() {
         elements.autocompleteDropdown.classList.add('hidden');
         state.isDropdownVisible = false;
         state.currentFocus = -1;
     }
 
-    /**
-     * Установка активного элемента при навигации клавиатурой
-     */
     function setActiveItem(items) {
         removeActive(items);
-
         if (state.currentFocus >= items.length) state.currentFocus = 0;
         if (state.currentFocus < 0) state.currentFocus = items.length - 1;
 
         if (items[state.currentFocus]) {
-            items[state.currentFocus].classList.add('active', 'bg-green-100', 'dark:bg-green-900/30');
+            items[state.currentFocus].classList.add('active');
             items[state.currentFocus].scrollIntoView({ block: 'nearest' });
         }
     }
 
-    /**
-     * Удаление активного класса
-     */
     function removeActive(items) {
-        items.forEach(item => {
-            item.classList.remove('active', 'bg-green-100', 'dark:bg-green-900/30');
-        });
+        items.forEach(item => item.classList.remove('active'));
     }
 
-    /**
-     * Добавление товара в список выбранных
-     */
     function addProduct(productName) {
         if (!productName || state.selectedProducts.has(productName)) return;
-
         state.selectedProducts.add(productName);
         renderSelectedProducts();
+        updateActiveFilterCount();
     }
 
-    /**
-     * Удаление товара из списка выбранных
-     */
     function removeProduct(productName) {
         state.selectedProducts.delete(productName);
         renderSelectedProducts();
+        updateActiveFilterCount();
     }
 
-    /**
-     * Отображение выбранных товаров в виде тегов
-     */
     function renderSelectedProducts() {
-        // Очищаем контейнер
         elements.selectedProductsContainer.innerHTML = '';
 
         if (state.selectedProducts.size === 0) {
-            // Показываем placeholder
             elements.selectedProductsContainer.appendChild(elements.selectedProductsPlaceholder);
             elements.selectedProductsPlaceholder.classList.remove('hidden');
             return;
         }
 
-        // Скрываем placeholder
         elements.selectedProductsPlaceholder.classList.add('hidden');
-
-        // Добавляем теги для каждого товара
         state.selectedProducts.forEach(productName => {
-            const tag = createProductTag(productName);
-            elements.selectedProductsContainer.appendChild(tag);
+            elements.selectedProductsContainer.appendChild(createProductTag(productName));
         });
     }
 
-    /**
-     * Создание тега товара
-     */
     function createProductTag(productName) {
         const tag = document.createElement('div');
-        tag.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-full transition-all duration-200 hover:bg-green-200 dark:hover:bg-green-900/50 group';
+        tag.className = 'receipts-filter-tag';
 
         const nameSpan = document.createElement('span');
         nameSpan.textContent = productName;
-        nameSpan.className = 'max-w-[200px] truncate';
 
-        const removeButton = document.createElement('button');
-        removeButton.type = 'button';
-        removeButton.className = 'flex items-center justify-center w-4 h-4 text-green-600 dark:text-green-500 hover:text-green-800 dark:hover:text-green-300 transition-colors duration-150';
-        removeButton.innerHTML = `
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-        `;
-        removeButton.setAttribute('aria-label', `Удалить ${productName}`);
-        removeButton.addEventListener('click', () => removeProduct(productName));
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'receipts-filter-tag-remove';
+        removeBtn.setAttribute('aria-label', `Удалить ${productName}`);
+        removeBtn.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>';
+        removeBtn.addEventListener('click', () => removeProduct(productName));
 
         tag.appendChild(nameSpan);
-        tag.appendChild(removeButton);
+        tag.appendChild(removeBtn);
 
         return tag;
     }
 
-    /**
-     * Показать спиннер загрузки
-     */
+    function updateActiveFilterCount() {
+        const badge = document.getElementById('receipts-filter-count');
+        if (!badge) return;
+
+        let count = 0;
+
+        const dateInputs = document.querySelectorAll('#receipts-filter-form input[type="date"]');
+        dateInputs.forEach(inp => { if (inp.value) count++; });
+
+        const numberInputs = document.querySelectorAll('#receipts-filter-form input[type="number"]');
+        numberInputs.forEach(inp => { if (inp.value) count++; });
+
+        const selects = document.querySelectorAll('#receipts-filter-form select');
+        selects.forEach(sel => { if (sel.value) count++; });
+
+        count += state.selectedProducts.size;
+
+        if (count > 0) {
+            badge.textContent = count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
     function showSpinner() {
-        if (elements.spinner) {
-            elements.spinner.classList.remove('hidden');
-        }
+        if (elements.spinner) elements.spinner.classList.remove('hidden');
     }
 
-    /**
-     * Скрыть спиннер загрузки
-     */
     function hideSpinner() {
-        if (elements.spinner) {
-            elements.spinner.classList.add('hidden');
-        }
+        if (elements.spinner) elements.spinner.classList.add('hidden');
     }
 
-    /**
-     * Debounce функция
-     */
     function debounce(func, wait) {
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(state.debounceTimer);
-                func(...args);
-            };
+        return function(...args) {
             clearTimeout(state.debounceTimer);
-            state.debounceTimer = setTimeout(later, wait);
+            state.debounceTimer = setTimeout(() => func(...args), wait);
         };
     }
 
-    /**
-     * Список разрешённых путей API для безопасных запросов
-     */
-    const ALLOWED_API_PATHS = [
-        '/api/receipts/product-autocomplete/'
-    ];
+    const ALLOWED_API_PATHS = ['/api/receipts/product-autocomplete/'];
 
-    /**
-     * Проверяет, является ли путь разрешённым для API запросов
-     */
     function isAllowedApiPath(pathname) {
         return ALLOWED_API_PATHS.some(allowed => pathname.startsWith(allowed));
     }
 
-    /**
-     * Fetch с авторизацией
-     */
     async function fetchWithAuth(url, options = {}) {
-        if (!url || typeof url !== 'string') {
-            throw new Error('Invalid URL provided');
-        }
+        if (!url || typeof url !== 'string') throw new Error('Invalid URL');
 
-        // Парсим и валидируем URL
         const urlObj = new URL(url, window.location.origin);
+        if (urlObj.origin !== window.location.origin) throw new Error('URL must be same origin');
+        if (!isAllowedApiPath(urlObj.pathname)) throw new Error('URL path not in allowed list');
 
-        // Проверка same-origin
-        if (urlObj.origin !== window.location.origin) {
-            throw new Error('URL must be from same origin');
-        }
-
-        // Проверка на разрешённые пути API
-        if (!isAllowedApiPath(urlObj.pathname)) {
-            throw new Error('URL path is not in the allowed API paths list');
-        }
-
-        // Используем только pathname и search для построения безопасного URL
         const safeUrl = `${urlObj.pathname}${urlObj.search}`;
-
         options.credentials = 'include';
         options.headers = options.headers || {};
         options.headers['X-Requested-With'] = 'XMLHttpRequest';
 
         let response = await fetch(safeUrl, options);
 
-        // Обработка 401 - попытка обновить токен
         if (response.status === 401) {
-            const tokenRefreshUrl = '/authentication/token/refresh/';
-            const refreshResp = await fetch(tokenRefreshUrl, {
+            const refreshResp = await fetch('/authentication/token/refresh/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include'
+                credentials: 'include',
             });
-
-            if (refreshResp.ok) {
-                return fetch(safeUrl, options);
-            }
+            if (refreshResp.ok) return fetch(safeUrl, options);
         }
 
         return response;
     }
 
-    // Экспорт функций для использования в других модулях
     window.ReceiptsFilter = {
         init,
         addProduct,
@@ -510,10 +492,10 @@
         clearProducts: () => {
             state.selectedProducts.clear();
             renderSelectedProducts();
-        }
+            updateActiveFilterCount();
+        },
     };
 
-    // Инициализация при загрузке DOM
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

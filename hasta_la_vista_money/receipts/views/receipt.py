@@ -215,6 +215,12 @@ class ReceiptUpdateView(
         )
         seller_field.queryset = seller_repository.get_by_user(current_user)
 
+    def get_initial(self) -> dict[str, Any]:
+        initial = super().get_initial()
+        if hasattr(self, 'object') and self.object and self.object.seller:
+            initial['retail_place'] = self.object.seller.retail_place
+        return initial
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context: dict[str, Any] = super().get_context_data(**kwargs)
         receipt_form = self.get_form()
@@ -262,6 +268,13 @@ class ReceiptUpdateView(
                 form=form,
                 product_formset=product_formset,
             )
+
+            seller = form.cleaned_data.get('seller')
+            if seller is not None:
+                seller.retail_place = form.cleaned_data.get(
+                    'retail_place'
+                ) or str(_('Нет данных'))
+                seller.save(update_fields=['retail_place'])
 
             return super().form_valid(form)
         return self.form_invalid(form)

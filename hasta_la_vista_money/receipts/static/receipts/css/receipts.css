@@ -5,13 +5,35 @@
 }
 
 .autocomplete-item {
-  transition: background 0.15s ease, color 0.15s ease;
+  color: var(--receipts-text);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.6rem 1rem;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 .autocomplete-item:hover,
 .autocomplete-item.active {
-  background-color: color-mix(in oklab, var(--receipts-accent) 10%, transparent);
+  background: color-mix(in oklab, var(--receipts-accent) 10%, transparent);
   color: var(--receipts-accent);
+}
+
+.autocomplete-item-header {
+  background: var(--receipts-surface-2);
+  border-bottom: 1px solid color-mix(in oklab, var(--receipts-border) 60%, transparent);
+  color: var(--receipts-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  padding: 0.5rem 1rem 0.4rem;
+  text-transform: uppercase;
+}
+
+.autocomplete-item-empty {
+  color: var(--receipts-muted);
+  font-size: 0.85rem;
+  padding: 0.75rem 1rem;
+  text-align: center;
 }
 
 /* ─── Receipts: shell / layout ─────────────────────────────────────────── */
@@ -177,6 +199,14 @@
   background: color-mix(in oklab, var(--receipts-accent) 8%, var(--receipts-surface));
   border-color: var(--receipts-accent);
   color: var(--receipts-accent);
+}
+
+/* Chip-группа в ячейке summary */
+.receipts-group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
 }
 
 /* Сводка / summary */
@@ -918,6 +948,95 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 1rem 1.25rem;
+}
+
+/* Scope to receipts-app to avoid overriding Tailwind's responsive utilities (e.g. lg:flex on the header nav) */
+.receipts-app .hidden { display: none !important; }
+
+/* Inline icon in filter headings / toggle */
+.receipts-filter-icon {
+  flex-shrink: 0;
+  height: 1rem;
+  width: 1rem;
+}
+
+/* Quick period chips row */
+.receipts-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Multi-field filter grid */
+.receipts-filter-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+}
+
+@media (max-width: 480px) {
+  .receipts-filter-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 360px) {
+  .receipts-filter-grid { grid-template-columns: 1fr; }
+}
+
+/* Active filters count badge (shown on toggle button) */
+.receipts-filter-active-count {
+  align-items: center;
+  background: color-mix(in oklab, var(--receipts-accent) 14%, var(--receipts-surface));
+  border: 1px solid color-mix(in oklab, var(--receipts-accent) 30%, transparent);
+  border-radius: 999px;
+  color: var(--receipts-accent);
+  display: inline-flex;
+  font-family: var(--font-family-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.15rem 0.5rem;
+}
+
+/* Selected product chip tag (created by JS) */
+.receipts-filter-tag {
+  align-items: center;
+  background: color-mix(in oklab, var(--receipts-accent) 12%, var(--receipts-surface));
+  border: 1px solid color-mix(in oklab, var(--receipts-accent) 30%, transparent);
+  border-radius: 999px;
+  color: var(--receipts-accent);
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 600;
+  gap: 0.3rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.75rem;
+  transition: background 0.12s;
+}
+
+.receipts-filter-tag:hover {
+  background: color-mix(in oklab, var(--receipts-accent) 18%, var(--receipts-surface));
+}
+
+.receipts-filter-tag-remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.1rem;
+  justify-content: center;
+  opacity: 0.65;
+  padding: 0;
+  transition: opacity 0.12s;
+  width: 1.1rem;
+}
+
+.receipts-filter-tag-remove:hover { opacity: 1; }
+
+.receipts-filter-tag-remove svg {
+  height: 0.7rem;
+  width: 0.7rem;
 }
 
 /* Upload (drag&drop) */

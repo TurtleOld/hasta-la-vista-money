@@ -23,7 +23,7 @@
             <span class="finances-money">{% if summary.net >= 0 %}+{% endif %}{{ summary.net|floatformat:0 }} ₽</span>
             <span class="finances-money-hidden">•••</span>
         </div>
-        <div class="finances-muted text-sm mt-2">{% translate 'Средний чек' %}: {{ summary.avg_check|floatformat:0 }} ₽</div>
+        <div class="finances-muted text-sm mt-2">{% translate 'Средняя сумма' %}: {{ summary.avg_check|floatformat:0 }} ₽</div>
     </div>
     <div class="finances-summary-cell">
         <div class="finances-label">{% translate 'Последние 14 дней' %}</div>

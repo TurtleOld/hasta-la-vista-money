@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count, QuerySet, Sum, Window
+from django.db.models import Avg, Count, QuerySet, Sum, Window
 from django.db.models.expressions import F
 from django.db.models.functions import RowNumber, TruncMonth
 
@@ -132,6 +132,7 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
             amount_field='total_sum',
         )
         total_receipts: QuerySet[Receipt] = receipt_filter.qs
+        avg_receipt = receipt_filter.qs.aggregate(avg=Avg('total_sum'))['avg']
 
         receipt_info_by_month = (
             receipt_queryset.annotate(
@@ -173,6 +174,7 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         context['receipt_filter'] = receipt_filter
         context['total_receipts'] = total_receipts
         context['total_sum_receipts'] = total_sum_receipts
+        context['avg_receipt'] = avg_receipt
         context['seller_form'] = seller_form
         context['receipt_form'] = receipt_form
         context['product_formset'] = product_formset

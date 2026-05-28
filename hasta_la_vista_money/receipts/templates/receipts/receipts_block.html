@@ -12,7 +12,7 @@
             <header class="receipt-card-head">
                 <div class="receipt-card-head-main">
                     <h3 class="receipt-card-title">
-                        {{ receipt.seller.name_seller|default:unknown_seller }}
+                        {{ receipt.seller.retail_place|default:receipt.seller.name_seller|default:unknown_seller }}
                         {% if receipt.operation_type == 2 %}
                             <span class="receipts-chip is-active" style="--receipts-accent: var(--receipts-negative);">
                                 <i class="bi bi-arrow-return-left"></i>
