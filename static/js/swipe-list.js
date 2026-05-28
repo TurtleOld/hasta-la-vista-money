@@ -24,9 +24,11 @@ const boundContents = new WeakSet();
 
 function isSwipeDisabled(content) {
   const row = content.closest('[data-swipe-row]');
-  return row instanceof HTMLElement
-    && row.classList.contains('swipe-touch-only')
-    && window.matchMedia('(min-width: 769px)').matches;
+  return (
+    row instanceof HTMLElement &&
+    row.classList.contains('swipe-touch-only') &&
+    window.matchMedia('(min-width: 769px)').matches
+  );
 }
 
 /**
@@ -207,13 +209,13 @@ export function bindSwipeContent(content, options = {}) {
 
   const row = content.closest('[data-swipe-row]');
   if (row) {
-    row.querySelectorAll('[data-swipe-actions] a, [data-swipe-actions] button').forEach(
-      (action) => {
+    row
+      .querySelectorAll('[data-swipe-actions] a, [data-swipe-actions] button')
+      .forEach((action) => {
         action.addEventListener('click', () => {
           resetContent(content);
         });
-      },
-    );
+      });
   }
 }
 
