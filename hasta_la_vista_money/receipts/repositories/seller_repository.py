@@ -38,7 +38,10 @@ class SellerRepository:
         Returns:
             Seller: Seller instance (created or updated).
         """
-        lookup = {'user': user, 'inn': inn} if inn else {'user': user, 'name_seller': name_seller}
+        if inn:
+            lookup = {'user': user, 'inn': inn}
+        else:
+            lookup = {'user': user, 'name_seller': name_seller}
         all_defaults = dict(defaults or {})
         if inn:
             all_defaults.setdefault('name_seller', name_seller)

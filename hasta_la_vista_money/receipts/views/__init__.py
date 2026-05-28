@@ -15,7 +15,10 @@ from hasta_la_vista_money.receipts.views.receipt import (
     ReceiptUpdateView,
 )
 from hasta_la_vista_money.receipts.views.review import ReviewPendingReceiptView
-from hasta_la_vista_money.receipts.views.seller import SellerCreateView, SellerUpdateView
+from hasta_la_vista_money.receipts.views.seller import (
+    SellerCreateView,
+    SellerUpdateView,
+)
 from hasta_la_vista_money.receipts.views.upload import UploadImageView
 
 __all__ = [

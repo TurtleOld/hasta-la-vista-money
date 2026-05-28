@@ -5,12 +5,14 @@ PendingReceipt + uploaded image. All inference, parsing and state transitions
 live here so the work survives the user closing the page.
 """
 
+import json
 from datetime import timedelta
 from typing import Any
 
 import structlog
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
+from django.conf import settings
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
