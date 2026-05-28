@@ -1,0 +1,6 @@
+node_modules/
+static/js/dist/
+static/js/**/*.min.js
+static/js/driver.js
+static/js/tex-mml-chtml.js
+staticfiles/

@@ -215,12 +215,17 @@ document.addEventListener('DOMContentLoaded', () => {
           {
             label: config.dataset.balanceLabel,
             data: chartBalance,
-            borderColor: minBalance < 0 ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)',
-            backgroundColor: minBalance < 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+            borderColor:
+              minBalance < 0 ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)',
+            backgroundColor:
+              minBalance < 0
+                ? 'rgba(239, 68, 68, 0.1)'
+                : 'rgba(34, 197, 94, 0.1)',
             borderWidth: 3,
             fill: true,
             tension: 0.4,
-            pointBackgroundColor: minBalance < 0 ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)',
+            pointBackgroundColor:
+              minBalance < 0 ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)',
             pointBorderColor: isDarkMode ? '#1f2937' : '#ffffff',
             pointBorderWidth: 2,
             pointRadius: 5,
@@ -254,14 +259,16 @@ document.addEventListener('DOMContentLoaded', () => {
             min: minBalance - padding,
             max: maxBalance + padding,
             grid: {
-              color: (context) => context.tick.value === 0 ? borderColor : gridColor,
-              lineWidth: (context) => context.tick.value === 0 ? 2 : 1,
+              color: (context) =>
+                context.tick.value === 0 ? borderColor : gridColor,
+              lineWidth: (context) => (context.tick.value === 0 ? 2 : 1),
               drawBorder: false,
             },
             ticks: {
               color: textColor,
               font: { size: 11 },
-              callback: (value) => `${value >= 0 ? '+' : ''}${value.toLocaleString('ru-RU')}`,
+              callback: (value) =>
+                `${value >= 0 ? '+' : ''}${value.toLocaleString('ru-RU')}`,
             },
           },
         },
@@ -273,10 +280,13 @@ document.addEventListener('DOMContentLoaded', () => {
               label: (context) => {
                 const value = context.parsed.y;
                 const sign = value >= 0 ? '+' : '';
-                return `${config.dataset.balanceTooltipLabel} ${sign}${value.toLocaleString('ru-RU', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}`;
+                return `${config.dataset.balanceTooltipLabel} ${sign}${value.toLocaleString(
+                  'ru-RU',
+                  {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  },
+                )}`;
               },
             },
           },
@@ -284,7 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
       },
     });
   } else {
-    balanceChartEl.parentElement.innerHTML = emptyState(config.dataset.noBalanceTitle);
+    balanceChartEl.parentElement.innerHTML = emptyState(
+      config.dataset.noBalanceTitle,
+    );
   }
 
   if (!pieChartEl) {
@@ -343,7 +355,8 @@ document.addEventListener('DOMContentLoaded', () => {
               const label = context.label || '';
               const value = context.parsed || 0;
               const total = context.dataset.data.reduce((a, b) => a + b, 0);
-              const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+              const percentage =
+                total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
               return `${label}: ${value.toLocaleString('ru-RU', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,

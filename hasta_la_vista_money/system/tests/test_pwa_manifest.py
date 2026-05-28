@@ -81,9 +81,9 @@ class ServiceWorkerTests(TestCase):
         self.assertContains(response, 'Нет подключения к интернету')
 
     def test_app_bundle_registers_service_worker(self) -> None:
-        app_path = Path(settings.BASE_DIR) / 'frontend' / 'js' / 'app.js'
+        app_path = Path(settings.BASE_DIR) / 'static' / 'js' / 'app.js'
         service_worker_path = (
-            Path(settings.BASE_DIR) / 'frontend' / 'js' / 'service-worker.js'
+            Path(settings.BASE_DIR) / 'static' / 'js' / 'service-worker.js'
         )
 
         app_content = app_path.read_text(encoding='utf-8')

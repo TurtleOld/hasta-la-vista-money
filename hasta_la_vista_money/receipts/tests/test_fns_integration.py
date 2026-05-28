@@ -491,7 +491,6 @@ class ProcessPendingReceiptFNSTests(TestCase):
             'История',
         )
 
-
     def test_task_marks_failed_when_qr_missing(self) -> None:
         pending = self._create_pending()
         with mock.patch(

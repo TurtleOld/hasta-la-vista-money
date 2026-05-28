@@ -771,11 +771,15 @@ def get_categories(
         error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
     scope_users = _scope_users(user, users)
-    return Category.objects.filter(
-        user__in=scope_users,
-        type=type_value,
-        parent_category=None,
-    ).select_related('user').order_by('user__username', 'name')
+    return (
+        Category.objects.filter(
+            user__in=scope_users,
+            type=type_value,
+            parent_category=None,
+        )
+        .select_related('user')
+        .order_by('user__username', 'name')
+    )
 
 
 def _validate_budget_inputs(

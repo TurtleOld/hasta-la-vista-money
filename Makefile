@@ -7,11 +7,13 @@
 
 lint:
 	@cd hasta_la_vista_money && echo "Running flake8 check..." && uv run flake8 . --select=WPS
+	@echo "Running ESLint..." && npm run lint:js
 
 format:
 	@cd hasta_la_vista_money && echo "Running ruff..." && uv run ruff format && uv run ruff check --fix
 	@cd config && echo "Running ruff on config..." && uv run ruff format && uv run ruff check --fix
 	@cd core && echo "Running ruff on core..." && uv run ruff format && uv run ruff check --fix
+	@echo "Running Prettier..." && npm run format:js
 
 pre-commit:
 	@echo "Running pre-commit on all files..." && uv run pre-commit run --all-files
@@ -105,4 +107,4 @@ check:
 	@uv run mypy . && uv run pyright
 
 help:
-	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js\\n  test / coverage\\n  export-api-schema / docs\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)')"
+	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js\\n  test / coverage\\n  export-api-schema / docs\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)\\n\\nJS scripts:\\n  npm run lint:js\\n  npm run format:js\\n  npm run format:js:check')"

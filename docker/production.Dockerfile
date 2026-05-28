@@ -21,7 +21,6 @@ RUN npm run build
 WORKDIR /app
 
 COPY package.json package-lock.json esbuild.config.mjs ./
-COPY frontend/ ./frontend/
 
 RUN --mount=type=cache,target=/root/.npm npm ci && npm run build:js
 
