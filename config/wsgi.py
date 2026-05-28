@@ -11,8 +11,6 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-from config.containers import ApplicationContainer
-
 os.environ.setdefault(
     'DJANGO_SETTINGS_MODULE',
     'config.django.base',
@@ -20,13 +18,14 @@ os.environ.setdefault(
 
 application = get_wsgi_application()
 
+from config.containers import ApplicationContainer  # noqa: E402
+
 container = ApplicationContainer()
 container.wire(
     modules=[
         'hasta_la_vista_money.loan.services.loan_calculation',
         'hasta_la_vista_money.loan.views',
         'hasta_la_vista_money.receipts.services.receipt_creator',
-        'hasta_la_vista_money.receipts.services.receipt_import',
         'hasta_la_vista_money.receipts.services.receipt_updater',
         'hasta_la_vista_money.users.services.detailed_statistics',
         'hasta_la_vista_money.finance_account.models',

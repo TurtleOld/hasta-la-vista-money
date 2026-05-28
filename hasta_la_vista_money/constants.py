@@ -14,9 +14,9 @@ Constants are organized by domain for better maintainability:
 - Configuration values
 """
 
+from datetime import date, datetime
 from typing import Final
 
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 # ============================================================================
@@ -380,8 +380,8 @@ HTML5_DATETIME_LOCAL_INPUT_FORMATS: Final[tuple[str, ...]] = (
 # ============================================================================
 # Date values calculated at runtime
 
-TODAY = timezone.now().date()
-CURRENT_YEAR = timezone.now().year
+TODAY: Final = date.today()
+CURRENT_YEAR: Final = datetime.now().year
 
 # ============================================================================
 # Month Name Mappings

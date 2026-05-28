@@ -271,7 +271,9 @@ class ReceiptUpdateView(
 
             seller = form.cleaned_data.get('seller')
             if seller is not None:
-                seller.retail_place = form.cleaned_data.get('retail_place') or None
+                seller.retail_place = form.cleaned_data.get(
+                    'retail_place'
+                ) or str(_('Нет данных'))
                 seller.save(update_fields=['retail_place'])
 
             return super().form_valid(form)
