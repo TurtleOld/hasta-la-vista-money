@@ -67,6 +67,34 @@ class BankStatementParseError(Exception):
     """Exception raised when parsing bank statement fails."""
 
 
+def _dedup_transactions(
+    transactions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Remove duplicate transactions within a single parsed statement.
+
+    Transactions with the same non-empty ``source_ref`` are considered
+    duplicates regardless of other fields. Transactions without a
+    ``source_ref`` fall back to ``(date, amount, description)``.
+    """
+    seen_refs: set[str] = set()
+    seen_tuples: set[tuple[str, str, str]] = set()
+    unique: list[dict[str, Any]] = []
+    for t in transactions:
+        ref = t.get('source_ref')
+        if ref:
+            if ref in seen_refs:
+                continue
+            seen_refs.add(ref)
+            unique.append(t)
+            continue
+        key = (str(t['date']), str(t['amount']), t['description'])
+        if key in seen_tuples:
+            continue
+        seen_tuples.add(key)
+        unique.append(t)
+    return unique
+
+
 # ---------------------------------------------------------------------------
 # Abstract base
 # ---------------------------------------------------------------------------
@@ -233,15 +261,7 @@ class _GenericBankParser(BaseBankStatementParser):
                 t for t in transactions if t['amount'] != Decimal(0)
             ]
 
-            # Remove duplicates based on (date, amount, description)
-            seen: set[tuple[str, str, str]] = set()
-            unique_transactions: list[dict[str, Any]] = []
-            for t in transactions:
-                key = (str(t['date']), str(t['amount']), t['description'])
-                if key not in seen:
-                    seen.add(key)
-                    unique_transactions.append(t)
-            transactions = unique_transactions
+            transactions = _dedup_transactions(transactions)
 
             logger.info(
                 'Parsing complete. Total transactions: %d (after dedup)',
@@ -316,7 +336,12 @@ class _GenericBankParser(BaseBankStatementParser):
             'date': date,
             'amount': amount,
             'description': description[:250],
+            'source_ref': self._extract_source_ref(row),
         }
+
+    def _extract_source_ref(self, row: pd.Series) -> str | None:
+        """Return a stable per-bank operation id, or None if unavailable."""
+        return None
 
     def _extract_amount_from_row(self, row: pd.Series) -> Decimal | None:
         for col_idx in range(2, len(row)):
@@ -418,6 +443,18 @@ class _RaiffeisenBankParser(_GenericBankParser):
     def _get_description_column_index(self, row: pd.Series) -> int:
         return RAIFFEISEN_DESCRIPTION_COL
 
+    def _extract_source_ref(self, row: pd.Series) -> str | None:
+        """Return Raiffeisen document number from col[2] if numeric."""
+        if len(row) <= RAIFFEISEN_DOC_COL:
+            return None
+        text = str(row.iloc[RAIFFEISEN_DOC_COL]).strip()
+        if not text or text == 'nan':
+            return None
+        match = re.search(r'(\d{3,})', text)
+        if match:
+            return match.group(1)
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Sberbank credit card parser
@@ -462,15 +499,7 @@ class _SberbankParser(BaseBankStatementParser):
                 t for t in transactions if t['amount'] != Decimal(0)
             ]
 
-            # Remove duplicates based on (date, amount, description)
-            seen: set[tuple[str, str, str]] = set()
-            unique_transactions: list[dict[str, Any]] = []
-            for t in transactions:
-                key = (str(t['date']), str(t['amount']), t['description'])
-                if key not in seen:
-                    seen.add(key)
-                    unique_transactions.append(t)
-            transactions = unique_transactions
+            transactions = _dedup_transactions(transactions)
 
             logger.info(
                 'Parsing complete. Total transactions: %d (after dedup)',
@@ -544,7 +573,7 @@ class _SberbankParser(BaseBankStatementParser):
         )
         i = data_start
 
-        while i < len(df) - 1:
+        while i < len(df):
             result = self._parse_sberbank_row_pair(
                 df,
                 i,
@@ -562,9 +591,13 @@ class _SberbankParser(BaseBankStatementParser):
         merged_col: bool,
         transactions: list[dict[str, Any]],
     ) -> int:
-        """Parse a pair of Sberbank rows and return next index."""
+        """Parse a pair of Sberbank rows and return next index.
+
+        Handles the edge case where row A is the last row in the table
+        (no row B available) by treating the transaction as single-row.
+        """
         row_a = df.iloc[i]
-        row_b = df.iloc[i + 1]
+        row_b = df.iloc[i + 1] if i + 1 < len(df) else None
 
         date = self._extract_date(
             str(row_a.iloc[SBERBANK_DATE_COL])
@@ -584,42 +617,72 @@ class _SberbankParser(BaseBankStatementParser):
             )
         return self._parse_standard_layout(row_a, row_b, i, date, transactions)
 
+    def _extract_authcode(self, row: pd.Series | None) -> str | None:
+        """Extract Sberbank authorization code from a row B-like cell.
+
+        Row B's date column may have one of two shapes:
+        * ``'DD.MM.YYYY / 869838'`` — older layouts.
+        * ``'DD.MM.YYYY\\n869838\\n<description>'`` — the merged 3-column
+          layout used on the last page of multi-page statements.
+        The 3-7 digit number after the date uniquely identifies the
+        transaction within the account.
+        """
+        if row is None or len(row) <= SBERBANK_DATE_COL:
+            return None
+        text = str(row.iloc[SBERBANK_DATE_COL])
+        if not text or text == 'nan':
+            return None
+        match = re.search(r'\d{2}\.\d{2}\.\d{4}[\s/\n]+(\d{3,7})\b', text)
+        if match:
+            return match.group(1)
+        return None
+
     def _parse_merged_layout(
         self,
         row_a: pd.Series,
-        row_b: pd.Series,
+        row_b: pd.Series | None,
         i: int,
         date: datetime,
         transactions: list[dict[str, Any]],
     ) -> int:
-        """Parse 3-column merged layout."""
-        col1_text = (
+        """Parse 3-column merged layout used on the last PDF page.
+
+        The merged layout packs row A into:
+        * col[0]: ``'DD.MM.YYYY\\nHH:MM\\nCategory'``
+        * col[1]: amount, e.g. ``'2 958,00'`` (no ₽ sign)
+        * col[2]: balance
+
+        Row B (continuation) carries the authcode in col[0] as
+        ``'DD.MM.YYYY\\nAUTHCODE\\nDescription'``.
+        """
+        col0_text = (
+            str(row_a.iloc[SBERBANK_DATE_COL]).strip()
+            if len(row_a) > SBERBANK_DATE_COL
+            else ''
+        )
+        if col0_text == 'nan':
+            col0_text = ''
+
+        category = self._extract_category_from_merged_col0(col0_text)
+        amount_text = (
             str(row_a.iloc[SBERBANK_CATEGORY_COL]).strip()
             if len(row_a) > SBERBANK_CATEGORY_COL
             else ''
         )
-        if col1_text == 'nan':
-            col1_text = ''
+        if amount_text == 'nan':
+            amount_text = ''
 
-        parts = col1_text.split('\n', 1)
-        category = parts[0].strip() if parts else ''
-        amount_text = parts[1].strip() if len(parts) > 1 else ''
-
-        row_b_has_date = (
-            self._extract_date(
-                str(row_b.iloc[SBERBANK_DATE_COL]) if len(row_b) > 0 else '',
-            )
-            is not None
-        )
-        if row_b_has_date:
+        if row_b is None:
             self._add_transaction_if_valid(
                 transactions,
                 date,
                 amount_text,
                 category,
+                None,
             )
             return i + 1
 
+        source_ref = self._extract_authcode(row_b)
         amount = self._extract_sberbank_amount(amount_text)
         if amount is not None and amount != Decimal(0):
             transactions.append(
@@ -627,26 +690,46 @@ class _SberbankParser(BaseBankStatementParser):
                     'date': date,
                     'amount': amount,
                     'description': (category or 'Операция')[:250],
+                    'source_ref': source_ref,
                 },
             )
         return i + 2
 
+    def _extract_category_from_merged_col0(self, text: str) -> str:
+        """Return the category line from a merged col[0] cell.
+
+        Strips the leading ``DD.MM.YYYY`` date and ``HH:MM`` time lines and
+        returns whatever follows them. Returns '' if no category line is
+        present.
+        """
+        if not text:
+            return ''
+        cleaned = re.sub(r'^\s*\d{2}\.\d{2}\.\d{4}\s*\n?', '', text)
+        cleaned = re.sub(r'^\s*\d{2}:\d{2}\s*\n?', '', cleaned)
+        return cleaned.strip()
+
     def _parse_standard_layout(
         self,
         row_a: pd.Series,
-        row_b: pd.Series,
+        row_b: pd.Series | None,
         i: int,
         date: datetime,
         transactions: list[dict[str, Any]],
     ) -> int:
-        """Parse 4-column standard layout."""
-        row_b_amount = (
-            str(row_b.iloc[SBERBANK_AMOUNT_COL])
-            if len(row_b) > SBERBANK_AMOUNT_COL
-            else ''
-        )
-        if row_b_amount not in ('', 'nan'):
-            return i + 1
+        """Parse 4-column standard layout.
+
+        When row_b is None (row_a is the last row in the table) the
+        transaction is treated as single-row: still emit it, just without
+        the row B continuation.
+        """
+        if row_b is not None:
+            row_b_amount = (
+                str(row_b.iloc[SBERBANK_AMOUNT_COL])
+                if len(row_b) > SBERBANK_AMOUNT_COL
+                else ''
+            )
+            if row_b_amount not in ('', 'nan'):
+                return i + 1
 
         category = (
             str(row_a.iloc[SBERBANK_CATEGORY_COL]).strip()
@@ -661,6 +744,7 @@ class _SberbankParser(BaseBankStatementParser):
             if len(row_a) > SBERBANK_AMOUNT_COL
             else ''
         )
+        source_ref = self._extract_authcode(row_b)
         amount = self._extract_sberbank_amount(amount_text)
         if amount is not None and amount != Decimal(0):
             transactions.append(
@@ -668,9 +752,10 @@ class _SberbankParser(BaseBankStatementParser):
                     'date': date,
                     'amount': amount,
                     'description': (category or 'Операция')[:250],
+                    'source_ref': source_ref,
                 },
             )
-        return i + 2
+        return i + 2 if row_b is not None else i + 1
 
     def _add_transaction_if_valid(
         self,
@@ -678,6 +763,7 @@ class _SberbankParser(BaseBankStatementParser):
         date: datetime,
         amount_text: str,
         category: str,
+        source_ref: str | None,
     ) -> None:
         """Add transaction to list if amount is valid and non-zero."""
         amount = self._extract_sberbank_amount(amount_text)
@@ -687,6 +773,7 @@ class _SberbankParser(BaseBankStatementParser):
                     'date': date,
                     'amount': amount,
                     'description': (category or 'Операция')[:250],
+                    'source_ref': source_ref,
                 },
             )
 
@@ -828,7 +915,8 @@ def process_bank_statement(
         user: User who owns the account.
 
     Returns:
-        Dictionary with income_count, expense_count, total_count.
+        Dictionary with income_count, expense_count, skipped_count,
+        total_count.
 
     Raises:
         BankStatementParseError: If parsing fails.
@@ -839,6 +927,7 @@ def process_bank_statement(
 
     income_count = 0
     expense_count = 0
+    skipped_count = 0
 
     for idx, trans in enumerate(transactions):
         if idx % 10 == 0:
@@ -850,11 +939,24 @@ def process_bank_statement(
         amount = trans['amount']
         description = trans['description']
         trans_date = trans['date']
+        source_ref = trans.get('source_ref')
+        abs_amount = abs(amount)
 
         if amount > 0:
             type_value = TransactionType.INCOME
         else:
             type_value = TransactionType.EXPENSE
+
+        if _transaction_already_exists(
+            account=account,
+            user=user,
+            type_value=type_value,
+            abs_amount=abs_amount,
+            trans_date=trans_date,
+            source_ref=source_ref,
+        ):
+            skipped_count += 1
+            continue
 
         category = _get_or_create_category(user, description, type_value)
         Transaction.objects.create(
@@ -862,29 +964,79 @@ def process_bank_statement(
             account=account,
             category=category,
             type=type_value,
-            amount=abs(amount),
+            amount=abs_amount,
             date=trans_date,
+            source_ref=source_ref or None,
         )
         if type_value == TransactionType.INCOME:
-            account.balance += abs(amount)
+            account.balance += abs_amount
             income_count += 1
         else:
-            account.balance -= abs(amount)
+            account.balance -= abs_amount
             expense_count += 1
 
     # Save account balance after all transactions
     account.save()
 
     logger.info(
-        'Finished processing: %d income, %d expenses',
+        'Finished processing: %d income, %d expenses, %d skipped',
         income_count,
         expense_count,
+        skipped_count,
     )
     return {
         'income_count': income_count,
         'expense_count': expense_count,
+        'skipped_count': skipped_count,
         'total_count': income_count + expense_count,
     }
+
+
+def _transaction_already_exists(
+    *,
+    account: Account,
+    user: User,
+    type_value: str,
+    abs_amount: Decimal,
+    trans_date: datetime,
+    source_ref: str | None,
+) -> bool:
+    """Check whether the transaction has already been imported.
+
+    When ``source_ref`` is provided we first look for an exact match. If
+    none is found we additionally fall back to ``(account, user, type,
+    amount, date)`` against legacy records that have ``source_ref IS NULL``
+    (created before per-operation refs were stored). When such a legacy
+    record is found we backfill its ``source_ref`` so that subsequent
+    imports match it directly, preventing duplicates.
+    """
+    if source_ref:
+        if Transaction.objects.filter(
+            account=account,
+            source_ref=source_ref,
+        ).exists():
+            return True
+        legacy = Transaction.objects.filter(
+            account=account,
+            user=user,
+            type=type_value,
+            amount=abs_amount,
+            date=trans_date,
+            source_ref__isnull=True,
+        ).first()
+        if legacy is not None:
+            legacy.source_ref = source_ref
+            legacy.save(update_fields=['source_ref'])
+            return True
+        return False
+    return Transaction.objects.filter(
+        account=account,
+        user=user,
+        type=type_value,
+        amount=abs_amount,
+        date=trans_date,
+        source_ref__isnull=True,
+    ).exists()
 
 
 def _get_or_create_category(

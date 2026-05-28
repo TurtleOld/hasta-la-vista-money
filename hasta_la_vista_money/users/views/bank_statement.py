@@ -159,6 +159,7 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                     'processed_transactions': upload.processed_transactions,
                     'income_count': upload.income_count,
                     'expense_count': upload.expense_count,
+                    'skipped_count': upload.skipped_count,
                     'error_message': upload.error_message,
                 },
             )
