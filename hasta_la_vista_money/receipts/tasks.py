@@ -5,8 +5,8 @@ PendingReceipt + uploaded image. All inference, parsing and state transitions
 live here so the work survives the user closing the page.
 """
 
-from datetime import timedelta
 import json
+from datetime import timedelta
 from typing import Any
 
 import structlog
@@ -23,6 +23,10 @@ from hasta_la_vista_money.receipts.models import (
 from hasta_la_vista_money.receipts.repositories import ReceiptRepository
 from hasta_la_vista_money.receipts.repositories.seller_repository import (
     SellerRepository,
+)
+from hasta_la_vista_money.receipts.services.ai_providers import (
+    ModelUnavailableError,
+    RateLimitExceededError,
 )
 from hasta_la_vista_money.receipts.services.category_classifier import (
     ReceiptItemCategoryService,
@@ -48,10 +52,6 @@ from hasta_la_vista_money.receipts.services.fns_qr import (
 )
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
     PendingReceiptService,
-)
-from hasta_la_vista_money.receipts.services.ai_providers import (
-    ModelUnavailableError,
-    RateLimitExceededError,
 )
 from hasta_la_vista_money.receipts.validators.parsed_receipt import (
     ReceiptParseValidationError,
