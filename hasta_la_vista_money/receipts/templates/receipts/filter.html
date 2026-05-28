@@ -9,66 +9,101 @@
                 aria-controls="filterCollapse"
                 aria-label="{% translate 'Переключить фильтр' %}">
             <span class="receipts-filter-toggle-label">
-                <i class="bi bi-funnel"></i>
+                <svg class="receipts-filter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4.5h18l-7 8v5l-4 2v-7l-7-8z"></path>
+                </svg>
                 {% translate 'Фильтр чеков' %}
+                <span id="receipts-filter-count" class="receipts-filter-active-count hidden"></span>
             </span>
-            <i id="filterToggleIcon" class="bi bi-chevron-down receipts-filter-toggle-icon"></i>
+            <svg id="filterToggleIcon" class="receipts-filter-icon receipts-filter-toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 8.25l-7.5 7.5-7.5-7.5"></path>
+            </svg>
         </button>
 
         <div id="filterCollapse" class="receipts-filter-body hidden">
             <form id="receipts-filter-form" action="" method="get" autocomplete="off" class="receipts-filter-form">
-                {% csrf_token %}
 
                 <div class="receipts-section">
                     <h3>
-                        <i class="bi bi-calendar3"></i>
-                        {% translate 'Период' %}
+                        <svg class="receipts-filter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"></path>
+                        </svg>
+                        {% translate 'Быстрый период' %}
                     </h3>
-                    {% include 'forms/_field.html' with field=receipt_filter.form.receipt_date %}
+                    <div class="receipts-filter-chips">
+                        <button type="button" class="receipts-chip" data-period="today">{% translate 'Сегодня' %}</button>
+                        <button type="button" class="receipts-chip" data-period="week">{% translate 'Эта неделя' %}</button>
+                        <button type="button" class="receipts-chip" data-period="month">{% translate 'Этот месяц' %}</button>
+                        <button type="button" class="receipts-chip" data-period="last_month">{% translate 'Прошлый месяц' %}</button>
+                        <button type="button" class="receipts-chip" data-period="quarter">{% translate 'Квартал' %}</button>
+                        <button type="button" class="receipts-chip" data-period="year">{% translate 'Год' %}</button>
+                    </div>
                 </div>
 
                 <div class="receipts-section">
-                    <h3>
-                        <i class="bi bi-cash-coin"></i>
-                        {% translate 'Сумма' %}
-                    </h3>
-                    <div class="receipts-grid-2">
+                    <div class="receipts-filter-grid">
                         <div class="receipts-field">
-                            <span class="receipts-label">{% translate 'От' %}</span>
-                            {% include 'forms/_field.html' with field=receipt_filter.form.total_sum_min %}
+                            <label for="id_receipt_date_0" class="receipts-label">{% translate 'С даты' %}</label>
+                            <input id="id_receipt_date_0" type="date" name="receipt_date_0"
+                                   value="{{ request.GET.receipt_date_0 }}"
+                                   class="receipts-filter-input">
                         </div>
                         <div class="receipts-field">
-                            <span class="receipts-label">{% translate 'До' %}</span>
-                            {% include 'forms/_field.html' with field=receipt_filter.form.total_sum_max %}
+                            <label for="id_receipt_date_1" class="receipts-label">{% translate 'По дату' %}</label>
+                            <input id="id_receipt_date_1" type="date" name="receipt_date_1"
+                                   value="{{ request.GET.receipt_date_1 }}"
+                                   class="receipts-filter-input">
+                        </div>
+                        <div class="receipts-field">
+                            <label for="id_total_sum_min" class="receipts-label">{% translate 'Сумма от' %}</label>
+                            <input id="id_total_sum_min" type="number" name="total_sum_min"
+                                   value="{{ request.GET.total_sum_min }}"
+                                   placeholder="{% translate 'Любая' %}"
+                                   min="0" step="1"
+                                   class="receipts-filter-input">
+                        </div>
+                        <div class="receipts-field">
+                            <label for="id_total_sum_max" class="receipts-label">{% translate 'Сумма до' %}</label>
+                            <input id="id_total_sum_max" type="number" name="total_sum_max"
+                                   value="{{ request.GET.total_sum_max }}"
+                                   placeholder="{% translate 'Любая' %}"
+                                   min="0" step="1"
+                                   class="receipts-filter-input">
+                        </div>
+                        <div class="receipts-field">
+                            <label for="id_name_seller" class="receipts-label">{% translate 'Продавец' %}</label>
+                            <select id="id_name_seller" name="name_seller" class="receipts-filter-input">
+                                <option value="">{% translate 'Все продавцы' %}</option>
+                                {% for seller in receipt_filter.filters.name_seller.queryset %}
+                                    <option value="{{ seller.pk }}" {% if request.GET.name_seller == seller.pk|stringformat:'s' %}selected{% endif %}>{{ seller }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="receipts-field">
+                            <label for="id_account" class="receipts-label">{% translate 'Счёт' %}</label>
+                            <select id="id_account" name="account" class="receipts-filter-input">
+                                <option value="">{% translate 'Все счета' %}</option>
+                                {% for account in receipt_filter.filters.account.queryset %}
+                                    <option value="{{ account.pk }}" {% if request.GET.account == account.pk|stringformat:'s' %}selected{% endif %}>{{ account.name_account }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
                 </div>
 
                 <div class="receipts-section">
                     <h3>
-                        <i class="bi bi-shop"></i>
-                        {% translate 'Продавец' %}
-                    </h3>
-                    {% include 'forms/_field.html' with field=receipt_filter.form.name_seller %}
-                </div>
-
-                <div class="receipts-section">
-                    <h3>
-                        <i class="bi bi-bag"></i>
+                        <svg class="receipts-filter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z"></path>
+                        </svg>
                         {% translate 'Товары' %}
-                        <span class="opt">{% translate 'несколько' %}</span>
+                        <span class="opt">{% translate 'несколько — нажмите для списка' %}</span>
                     </h3>
-                    <div id="selected-products-container" class="receipts-filter-selected">
-                        <span id="selected-products-placeholder" class="receipts-filter-placeholder">
-                            {% translate 'Выберите товары для фильтрации' %}
-                        </span>
-                    </div>
-                    <div class="product-input-wrapper receipts-filter-autocomplete">
+                    <div class="receipts-filter-autocomplete">
                         <input type="text"
                                id="product-autocomplete"
-                               name="product_name"
                                class="receipts-filter-input"
-                               placeholder="{% translate 'Начните вводить название товара…' %}"
+                               placeholder="{% translate 'Начните вводить или нажмите, чтобы выбрать из списка…' %}"
                                autocomplete="off">
                         <svg id="product-input-spinner" class="receipts-filter-spinner hidden" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -77,15 +112,24 @@
                         <div id="product-autocomplete-dropdown" class="receipts-filter-dropdown hidden"></div>
                         <input type="hidden" id="selected-products-input" name="product_names" value="">
                     </div>
+                    <div id="selected-products-container" class="receipts-filter-selected">
+                        <span id="selected-products-placeholder" class="receipts-filter-placeholder">
+                            {% translate 'Выберите товары для фильтрации' %}
+                        </span>
+                    </div>
                 </div>
 
                 <div class="receipts-filter-actions">
                     <button type="submit" class="receipts-button receipts-button-primary">
-                        <i class="bi bi-funnel-fill"></i>
-                        {% translate 'Фильтровать' %}
+                        <svg class="receipts-filter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4.5h18l-7 8v5l-4 2v-7l-7-8z"></path>
+                        </svg>
+                        {% translate 'Применить' %}
                     </button>
                     <a href="?" class="receipts-button receipts-button-secondary">
-                        <i class="bi bi-x-circle"></i>
+                        <svg class="receipts-filter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
                         {% translate 'Сбросить' %}
                     </a>
                 </div>
