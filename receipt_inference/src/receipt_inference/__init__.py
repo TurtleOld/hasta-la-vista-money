@@ -1,1 +1,0 @@
-"""Receipt inference service package."""

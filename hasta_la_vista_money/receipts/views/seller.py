@@ -8,6 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import (
     CreateView,
+    UpdateView,
 )
 
 from hasta_la_vista_money import constants
@@ -75,3 +76,27 @@ class SellerCreateView(
 
     def get_success_url(self) -> str:
         return str(reverse_lazy('receipts:list'))
+
+
+class SellerUpdateView(
+    LoginRequiredMixin,
+    SuccessMessageMixin[SellerForm],
+    UpdateView[Seller, SellerForm],
+    UserAuthMixin,
+):
+    model = Seller
+    form_class: type[SellerForm] = SellerForm
+    template_name = 'receipts/seller_update.html'
+
+    def get_queryset(self):
+        return Seller.objects.filter(user=self.request.user)
+
+    def get_success_url(self) -> str:
+        return str(reverse_lazy('receipts:list'))
+
+    def form_valid(self, form: SellerForm) -> HttpResponse:
+        messages.success(
+            self.request,
+            constants.SUCCESS_MESSAGE_UPDATE_SELLER,
+        )
+        return super().form_valid(form)

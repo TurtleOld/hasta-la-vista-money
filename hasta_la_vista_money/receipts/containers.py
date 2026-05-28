@@ -4,7 +4,6 @@ from hasta_la_vista_money.receipts.protocols.services import (
     PendingReceiptServiceProtocol,
     ReceiptCreatorServiceProtocol,
     ReceiptDeleterServiceProtocol,
-    ReceiptImportServiceProtocol,
     ReceiptUpdaterServiceProtocol,
 )
 from hasta_la_vista_money.receipts.repositories import (
@@ -20,9 +19,6 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 )
 from hasta_la_vista_money.receipts.services.receipt_deleter import (
     ReceiptDeleterService,
-)
-from hasta_la_vista_money.receipts.services.receipt_import import (
-    ReceiptImportService,
 )
 from hasta_la_vista_money.receipts.services.receipt_updater import (
     ReceiptUpdaterService,
@@ -46,13 +42,6 @@ class ReceiptsContainer(containers.DeclarativeContainer):
         product_repository=product_repository,
         receipt_repository=receipt_repository,
         seller_repository=seller_repository,
-    )
-    receipt_import_service: providers.Factory[ReceiptImportServiceProtocol] = (
-        providers.Factory(
-            ReceiptImportService,
-            receipt_repository=receipt_repository,
-            receipt_creator_service=receipt_creator_service,
-        )
     )
     receipt_updater_service: providers.Factory[
         ReceiptUpdaterServiceProtocol

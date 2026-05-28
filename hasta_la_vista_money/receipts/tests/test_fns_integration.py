@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import json
 import sys
 import types
 from typing import Any, Self
@@ -439,9 +438,7 @@ class ProcessPendingReceiptFNSTests(TestCase):
             image_hash=compute_image_hash(upload),
         )
 
-    def test_task_marks_ready_from_fns_without_ocr_when_retail_place_exists(
-        self,
-    ) -> None:
+    def test_task_marks_ready_from_fns(self) -> None:
         pending = self._create_pending()
         with (
             mock.patch(
@@ -454,9 +451,6 @@ class ProcessPendingReceiptFNSTests(TestCase):
                 'hasta_la_vista_money.receipts.tasks.FNSClient.fetch_receipt',
                 return_value=_fns_payload(),
             ),
-            mock.patch(
-                'hasta_la_vista_money.receipts.tasks.analyze_image_with_ai',
-            ) as analyze_mock,
         ):
             process_pending_receipt(pending.pk)
 
@@ -468,7 +462,6 @@ class ProcessPendingReceiptFNSTests(TestCase):
             DEFAULT_PRODUCT_CATEGORY,
         )
         self.assertIn('_fns_raw', pending.receipt_data)
-        analyze_mock.assert_not_called()
 
     def test_task_applies_history_category_to_fns_items(self) -> None:
         Product.objects.create(
@@ -498,30 +491,6 @@ class ProcessPendingReceiptFNSTests(TestCase):
             'История',
         )
 
-    def test_task_uses_ocr_only_for_empty_retail_place(self) -> None:
-        pending = self._create_pending()
-        with (
-            mock.patch(
-                'hasta_la_vista_money.receipts.tasks.QRCodeExtractor.extract',
-                return_value=parse_fns_qr(
-                    't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1',
-                ),
-            ),
-            mock.patch(
-                'hasta_la_vista_money.receipts.tasks.FNSClient.fetch_receipt',
-                return_value=_fns_payload(retail_place=''),
-            ),
-            mock.patch(
-                'hasta_la_vista_money.receipts.tasks.analyze_image_with_ai',
-                return_value=json.dumps(_fake_payload()),
-            ) as analyze_mock,
-        ):
-            process_pending_receipt(pending.pk)
-
-        pending.refresh_from_db()
-        self.assertEqual(pending.status, PendingReceiptStatus.READY)
-        self.assertEqual(pending.receipt_data['name_seller'], 'OCR Shop')
-        analyze_mock.assert_called_once()
 
     def test_task_marks_failed_when_qr_missing(self) -> None:
         pending = self._create_pending()

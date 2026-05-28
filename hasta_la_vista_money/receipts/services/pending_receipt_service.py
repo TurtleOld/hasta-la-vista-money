@@ -335,6 +335,7 @@ class PendingReceiptService:
                 ),
                 retail_place_address=receipt_data.get('retail_place_address'),
                 retail_place=receipt_data.get('retail_place'),
+                inn=receipt_data.get('inn'),
             ),
             products_data=receipt_data.get('items', []),
         )

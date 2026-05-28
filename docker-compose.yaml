@@ -65,8 +65,6 @@ services:
       ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
       ERROR_TRACKING_ENVIRONMENT: ${ERROR_TRACKING_ENVIRONMENT:-development}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
-      RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-http://receipt-inference:8010}
-      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-1500}
     depends_on:
       redis:
         condition: service_started
@@ -97,8 +95,6 @@ services:
     environment:
       SECRET_KEY: ${SECRET_KEY:-change_me}
       REDIS_LOCATION: ${REDIS_LOCATION:-redis://redis:6379/0}
-      RECEIPT_INFERENCE_URL: ${RECEIPT_INFERENCE_URL:-http://receipt-inference:8010}
-      RECEIPT_INFERENCE_TIMEOUT: ${RECEIPT_INFERENCE_TIMEOUT:-1500}
     depends_on:
       redis:
         condition: service_started
@@ -137,43 +133,6 @@ services:
       - default
     restart: unless-stopped
 
-  receipt-inference:
-    build:
-      context: ./
-      dockerfile: receipt_inference/Dockerfile
-    image: ghcr.io/turtleold/hasta-la-vista-money:receipt-inference-main
-    environment:
-      RECEIPT_INFERENCE_HOST: ${RECEIPT_INFERENCE_HOST:-0.0.0.0}
-      RECEIPT_INFERENCE_PORT: ${RECEIPT_INFERENCE_PORT:-8010}
-      RECEIPT_INFERENCE_LOG_LEVEL: ${RECEIPT_INFERENCE_LOG_LEVEL:-debug}
-      RECEIPT_INFERENCE_BACKEND: ${RECEIPT_INFERENCE_BACKEND:-paddleocr_vl}
-      RECEIPT_INFERENCE_MAX_CONCURRENCY: ${RECEIPT_INFERENCE_MAX_CONCURRENCY:-1}
-      OCR_THREADS: ${OCR_THREADS:-2}
-      PADDLEOCR_VL_MODEL_NAME: ${PADDLEOCR_VL_MODEL_NAME:-}
-      MAX_IMAGE_DIMENSION: ${MAX_IMAGE_DIMENSION:-1600}
-      MIN_OCR_IMAGE_WIDTH: ${MIN_OCR_IMAGE_WIDTH:-768}
-      JPEG_QUALITY: ${JPEG_QUALITY:-85}
-      OPTIMIZE_JPEG: ${OPTIMIZE_JPEG:-false}
-      OCR_LANGUAGE: ${OCR_LANGUAGE:-ru}
-      OCR_MIN_CONFIDENCE: ${OCR_MIN_CONFIDENCE:-0.5}
-      OCR_DETECTION_MODEL_NAME: ${OCR_DETECTION_MODEL_NAME:-}
-      OCR_RECOGNITION_MODEL_NAME: ${OCR_RECOGNITION_MODEL_NAME:-}
-      OCR_USE_ANGLE_CLS: ${OCR_USE_ANGLE_CLS:-false}
-      OCR_ENABLE_MKLDNN: ${OCR_ENABLE_MKLDNN:-true}
-      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: ${PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK:-True}
-    volumes:
-      - ./receipt_inference:/app/receipt_inference
-      - paddleocr_cache:/home/appuser/.paddlex
-    ports:
-      - "8010:8010"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/ready', timeout=5).read()"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
-    restart: unless-stopped
-
   nginx:
     image: nginx:alpine
     ports:
@@ -195,7 +154,6 @@ volumes:
   staticfiles_data:
   redis_data:
   media_data:
-  paddleocr_cache:
 
 networks:
   default:

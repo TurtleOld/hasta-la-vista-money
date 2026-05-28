@@ -221,6 +221,7 @@ class ReceiptCreatorService:
         return self.seller_repository.update_or_create_seller(
             user=user,
             name_seller=name_seller,
+            inn=seller_data.inn or None,
             defaults={
                 'retail_place_address': seller_data.retail_place_address
                 or str(_('Нет данных')),
@@ -281,11 +282,13 @@ class SellerCreateData:
         name_seller: Seller name.
         retail_place_address: Optional retail place address.
         retail_place: Optional retail place name.
+        inn: Optional seller INN used as the primary lookup key.
     """
 
     name_seller: str
     retail_place_address: str | None = None
     retail_place: str | None = None
+    inn: str | None = None
 
 
 @dataclass

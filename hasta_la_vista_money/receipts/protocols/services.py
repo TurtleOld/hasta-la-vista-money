@@ -4,10 +4,8 @@ This module defines Protocol interfaces for receipt-related services,
 enabling dependency injection and type checking.
 """
 
-from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
-from django.core.files.uploadedfile import UploadedFile
 from django.forms import BaseFormSet
 
 from hasta_la_vista_money.finance_account.models import Account
@@ -16,9 +14,6 @@ from hasta_la_vista_money.receipts.models import PendingReceipt, Receipt, Seller
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
     SellerCreateData,
-)
-from hasta_la_vista_money.receipts.services.receipt_import import (
-    ReceiptImportResult,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -75,24 +70,6 @@ class ReceiptDeleterServiceProtocol(Protocol):
     """Protocol for receipt deletion service interface."""
 
     def delete_receipt(self, *, user: User, receipt: Receipt) -> None: ...
-
-
-@runtime_checkable
-class ReceiptImportServiceProtocol(Protocol):
-    """Protocol for receipt import service interface.
-
-    Defines the contract for importing receipts from uploaded images
-    or other sources.
-    """
-
-    def process_uploaded_image(
-        self,
-        *,
-        user: User,
-        account: Account,
-        uploaded_file: UploadedFile,
-        image_analysis_function: Callable[[UploadedFile], str] | None = None,
-    ) -> ReceiptImportResult: ...
 
 
 @runtime_checkable
