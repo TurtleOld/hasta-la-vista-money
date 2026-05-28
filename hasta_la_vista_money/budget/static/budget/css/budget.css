@@ -27,6 +27,7 @@
 
 .budget-header,
 .budget-actions,
+.budget-scope,
 .budget-panel-head,
 .budget-matrix-toolbar,
 .budget-segment,
@@ -72,6 +73,64 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   justify-content: flex-end;
+}
+
+.budget-scope {
+  align-items: flex-start;
+  background: color-mix(in oklab, var(--budget-surface) 72%, transparent);
+  border: 1px solid var(--budget-border);
+  border-radius: 1.25rem;
+  box-shadow: var(--budget-shadow-soft);
+  flex-direction: column;
+  gap: 0.65rem;
+  justify-content: center;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.budget-scope .budget-kicker {
+  margin: 0;
+}
+
+.budget-scope-head span {
+  color: var(--budget-muted);
+  display: block;
+  font-size: 0.82rem;
+  margin-top: 0.2rem;
+}
+
+.budget-scope-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.budget-scope-chip {
+  align-items: center;
+  background: var(--budget-surface-2);
+  border: 1px solid var(--budget-border);
+  border-radius: 999px;
+  color: var(--budget-muted);
+  display: inline-flex;
+  font-size: 0.88rem;
+  font-weight: 800;
+  min-height: 2.35rem;
+  padding: 0.55rem 0.9rem;
+  text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.budget-scope-chip:hover {
+  border-color: color-mix(in oklab, var(--budget-accent) 35%, var(--budget-border));
+  color: var(--budget-text);
+  transform: translateY(-1px);
+}
+
+.budget-scope-chip.is-active {
+  background: var(--gradient-brand-diagonal);
+  border-color: transparent;
+  box-shadow: var(--shadow-app-button);
+  color: var(--app-on-accent);
 }
 
 .budget-button {
@@ -343,6 +402,7 @@
   padding: 0.25rem;
 }
 
+.budget-segment a,
 .budget-segment button {
   background: transparent;
   border: 0;
@@ -352,8 +412,10 @@
   font-size: 0.82rem;
   font-weight: 800;
   padding: 0.5rem 0.8rem;
+  text-decoration: none;
 }
 
+.budget-segment a.is-active,
 .budget-segment button.is-active {
   background: var(--budget-surface);
   color: var(--budget-text);
@@ -458,6 +520,7 @@
   }
 
   .budget-actions,
+  .budget-scope,
   .budget-category-limit-form {
     grid-template-columns: 1fr;
     justify-content: stretch;

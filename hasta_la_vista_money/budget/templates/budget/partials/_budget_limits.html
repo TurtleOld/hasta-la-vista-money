@@ -30,6 +30,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="month" value="{{ item.period|date:'Y-m-d' }}">
                         <input type="hidden" name="category_id" value="">
+                        <input type="hidden" name="scope" value="{{ budget_scope }}">
                         <label>
                             <span>{% translate 'Общий лимит' %}</span>
                             <input type="number" min="0" step="0.01" name="amount_limit" value="{% if item.limit %}{{ item.limit|floatformat:2 }}{% endif %}" placeholder="0" hx-post="{% url 'budget:save_limit' %}" hx-trigger="change delay:250ms" hx-include="closest form" hx-target="#budget-limits-panel" hx-swap="outerHTML">
@@ -60,6 +61,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="month" value="{{ item.period|date:'Y-m-d' }}">
                         <input type="hidden" name="category_id" value="{{ item.category_id }}">
+                        <input type="hidden" name="scope" value="{{ budget_scope }}">
                         <label>
                             <span>{% translate 'Лимит категории' %}</span>
                             <input type="number" min="0" step="0.01" name="amount_limit" value="{% if item.limit %}{{ item.limit|floatformat:2 }}{% endif %}" placeholder="0" hx-post="{% url 'budget:save_limit' %}" hx-trigger="change delay:250ms" hx-include="closest form" hx-target="#budget-limits-panel" hx-swap="outerHTML">

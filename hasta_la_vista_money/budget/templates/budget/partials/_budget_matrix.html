@@ -12,9 +12,9 @@
             </h2>
         </div>
         <div class="budget-segment" aria-label="{% translate 'Период таблицы' %}">
-            <button type="button" class="{% if budget_visible_range == '6' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?range=6" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate '6 мес.' %}</button>
-            <button type="button" class="{% if budget_visible_range == '12' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?range=12" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate '12 мес.' %}</button>
-            <button type="button" class="{% if budget_visible_range == 'all' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?range=all" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate 'Все' %}</button>
+            <button type="button" class="{% if budget_visible_range == '6' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?scope={{ budget_scope }}&range=6" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate '6 мес.' %}</button>
+            <button type="button" class="{% if budget_visible_range == '12' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?scope={{ budget_scope }}&range=12" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate '12 мес.' %}</button>
+            <button type="button" class="{% if budget_visible_range == 'all' %}is-active{% endif %}" hx-get="{% url budget_table_url_name %}?scope={{ budget_scope }}&range=all" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">{% translate 'Все' %}</button>
         </div>
     </div>
 
@@ -49,6 +49,7 @@
                                         <input type="hidden" name="month" value="{{ cell.month|date:'Y-m-d' }}">
                                         <input type="hidden" name="type" value="{{ budget_table_type }}">
                                         <input type="hidden" name="range" value="{{ budget_visible_range }}">
+                                        <input type="hidden" name="scope" value="{{ budget_scope }}">
                                         <input class="budget-table-input" type="number" min="0" step="0.01" name="amount" value="{% if cell.plan %}{{ cell.plan|floatformat:2 }}{% endif %}" placeholder="0" hx-post="{% url 'budget:save_planning' %}" hx-trigger="change delay:250ms" hx-include="closest form" hx-target="#{{ budget_table_id }}" hx-swap="outerHTML">
                                     </form>
                                 </td>

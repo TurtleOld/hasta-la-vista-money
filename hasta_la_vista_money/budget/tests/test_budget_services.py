@@ -2,11 +2,12 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils import timezone
 
 from config.containers import ApplicationContainer
-from hasta_la_vista_money.budget.models import Budget, DateList
+from hasta_la_vista_money.budget.models import Budget, DateList, Planning
 from hasta_la_vista_money.budget.services.budget import (
     BudgetDataError,
     get_categories,
@@ -17,6 +18,7 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
+from hasta_la_vista_money.users.models import FamilyGroupMembership
 
 User = get_user_model()
 
@@ -189,6 +191,68 @@ class BudgetServicesTestCase(TestCase):
         )
 
         self.assertEqual(data['expense_data'][0]['fact'][0], 125)
+
+    def test_aggregate_expense_table_includes_family_users(self) -> None:
+        member = User.objects.create_user(
+            username='family_member',
+            password='pass',  # nosec B106: test-only password
+        )
+        group = Group.objects.create(name='Budget Family')
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.user,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=member,
+        )
+        member_category = Category.objects.create(
+            user=member,
+            name='Family groceries',
+            type=TransactionType.EXPENSE,
+        )
+        member_account = Account.objects.create(
+            user=member,
+            name_account='Family card',
+        )
+        Transaction.objects.create(
+            user=member,
+            account=member_account,
+            category=member_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('240.00'),
+            date=datetime(
+                2026,
+                1,
+                12,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+        Planning.objects.create(
+            user=member,
+            category=member_category,
+            date=date(2026, 1, 1),
+            amount=Decimal('300.00'),
+            planning_type=TransactionType.EXPENSE,
+        )
+
+        data = self.budget_service.aggregate_expense_table(
+            user=self.user,
+            users=[self.user, member],
+            months=self.months,
+            expense_categories=[member_category],
+        )
+        family_row = data['expense_data'][0]
+
+        self.assertEqual(
+            family_row['category'],
+            'family_member: Family groceries',
+        )
+        self.assertEqual(family_row['fact'][0], 240)
+        self.assertEqual(family_row['plan'][0], 300)
 
     def test_aggregate_budget_limit_overview(self) -> None:
         Budget.objects.create(

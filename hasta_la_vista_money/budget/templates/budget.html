@@ -14,11 +14,23 @@
                 <p class="budget-lead">{% translate 'Сверяйте фактические расходы с планом, задавайте месячные лимиты и отслеживайте зоны риска.' %}</p>
             </div>
             <div class="budget-actions">
-                <a id="budget-expense-table-btn" href="{% url 'budget:expense_table' %}" class="budget-button budget-button-secondary budget-button-expense">{% translate 'Таблица расходов' %}</a>
-                <a id="budget-income-table-btn" href="{% url 'budget:income_table' %}" class="budget-button budget-button-secondary budget-button-income">{% translate 'Таблица доходов' %}</a>
+                <a id="budget-expense-table-btn" href="{% url 'budget:expense_table' %}?scope={{ budget_scope }}" class="budget-button budget-button-secondary budget-button-expense">{% translate 'Таблица расходов' %}</a>
+                <a id="budget-income-table-btn" href="{% url 'budget:income_table' %}?scope={{ budget_scope }}" class="budget-button budget-button-secondary budget-button-income">{% translate 'Таблица доходов' %}</a>
                 <a id="budget-reports-btn" href="{% url 'reports:list' %}" class="budget-button budget-button-secondary">{% translate 'Отчёты' %}</a>
             </div>
         </header>
+
+        <nav class="budget-scope" aria-label="{% translate 'Область бюджета' %}">
+            <div class="budget-scope-head">
+                <p class="budget-kicker">{% translate 'Группа' %}</p>
+                <span>{% translate 'Выберите, чьи операции учитывать в бюджете' %}</span>
+            </div>
+            <div class="budget-scope-chips">
+                {% for choice in budget_scope_choices %}
+                    <a class="budget-scope-chip {% if choice.value == budget_scope %}is-active{% endif %}" href="?scope={{ choice.value }}">{{ choice.label }}</a>
+                {% endfor %}
+            </div>
+        </nav>
 
         <section class="budget-summary">
             <div class="budget-summary-cell">
@@ -49,6 +61,7 @@
                         </div>
                         <form id="generate-dates-form" class="budget-generate-form" hx-post="{% url 'budget:generate_date' %}" hx-swap="none">
                             {% csrf_token %}
+                            <input type="hidden" name="scope" value="{{ budget_scope }}">
                             <button id="budget-add-months-btn" type="submit" class="budget-button budget-button-primary">{% translate 'Добавить месяцы' %}</button>
                         </form>
                     </div>
