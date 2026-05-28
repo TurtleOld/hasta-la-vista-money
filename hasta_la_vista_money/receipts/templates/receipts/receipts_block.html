@@ -8,71 +8,100 @@
 
     {% for receipt in receipts %}
         {% translate 'Неизвестный продавец' as unknown_seller %}
-        <article class="receipt-card{% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %} receipt-card-shared{% endif %}">
-            <header class="receipt-card-head">
-                <div class="receipt-card-head-main">
-                    <h3 class="receipt-card-title">
-                        {{ receipt.seller.retail_place|default:receipt.seller.name_seller|default:unknown_seller }}
-                        {% if receipt.operation_type == 2 %}
-                            <span class="receipts-chip is-active" style="--receipts-accent: var(--receipts-negative);">
-                                <i class="bi bi-arrow-return-left"></i>
-                                {% translate 'Возврат' %}
-                            </span>
-                        {% endif %}
-                    </h3>
-                    <div class="receipt-card-meta">
-                        <i class="bi bi-calendar-event"></i>
-                        {{ receipt.receipt_date|date:"d.m.Y H:i" }}
-                    </div>
-                    {% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %}
-                        <div class="receipt-card-owner">
-                            <i class="bi bi-person"></i>
-                            {% translate 'Владелец:' %} {{ receipt.user.username }}
-                        </div>
-                    {% endif %}
-                </div>
-                <div class="receipt-card-amount receipts-amount receipts-positive">
-                    {{ receipt.total_sum|comma }} <span class="receipt-card-currency">₽</span>
-                </div>
-            </header>
-
-            <div class="receipt-card-products">
-                <div class="receipts-label">{% translate 'Товары' %}</div>
-                <div class="receipt-card-tags">
-                    {% for product in receipt.product.all|slice:":3" %}
-                        <span class="receipts-cat-chip">
-                            <span class="dot"><i class="bi bi-bag"></i></span>
-                            {{ product.product_name|truncatechars:20 }}
-                        </span>
-                    {% endfor %}
-                    {% if receipt.product.all|length > 3 %}
-                        <span class="receipts-cat-chip">+{{ receipt.product.all|length|add:"-3" }}</span>
-                    {% endif %}
-                </div>
-            </div>
-
-            <footer class="receipt-card-actions receipts-row-actions">
-                <a href="{% url 'receipts:view' receipt.id %}" class="receipts-chip">
-                    <i class="bi bi-eye"></i>
-                    {% translate 'Просмотр' %}
+        <article class="receipt-card{% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %} receipt-card-shared{% endif %}" data-swipe-row>
+            <div class="receipt-card-swipe-actions" data-swipe-actions aria-hidden="true">
+                <a href="{% url 'receipts:view' receipt.id %}"
+                   class="swipe-action-btn is-neutral"
+                   aria-label="{% translate 'Просмотр' %}"
+                   title="{% translate 'Просмотр' %}">
+                    {% include 'partials/_swipe_icons.html' with icon='view' %}
                 </a>
-                <a href="{% url 'receipts:update' receipt.id %}" class="receipts-chip">
-                    <i class="bi bi-pencil"></i>
-                    {% translate 'Редактировать' %}
+                <a href="{% url 'receipts:update' receipt.id %}"
+                   class="swipe-action-btn is-accent"
+                   aria-label="{% translate 'Изменить' %}"
+                   title="{% translate 'Изменить' %}">
+                    {% include 'partials/_swipe_icons.html' with icon='edit' %}
                 </a>
                 <form class="form-remove-receipt-button" action="{% url 'receipts:delete' receipt.id %}" method="post">
                     {% csrf_token %}
                     <input type="hidden" name="receipt_id" value="{{ receipt.id }}">
-                    <button class="receipts-chip receipt-card-delete"
+                    <button class="swipe-action-btn is-danger"
                             data-nonce="{{ request.csp_nonce }}"
                             type="submit"
                             name="delete_receipt_button"
-                            title="{% translate 'Удалить чек' %}">
-                        <i class="bi bi-trash"></i>
-                        {% translate 'Удалить' %}
+                            aria-label="{% translate 'Удалить' %}"
+                            title="{% translate 'Удалить' %}">
+                        {% include 'partials/_swipe_icons.html' with icon='delete' %}
                     </button>
                 </form>
-            </footer>
+            </div>
+
+            <div class="receipt-card-content" data-swipe-content>
+                <header class="receipt-card-head">
+                    <div class="receipt-card-head-main">
+                        <h3 class="receipt-card-title">
+                            {{ receipt.seller.retail_place|default:receipt.seller.name_seller|default:unknown_seller }}
+                            {% if receipt.operation_type == 2 %}
+                                <span class="receipts-chip is-active" style="--receipts-accent: var(--receipts-negative);">
+                                    <i class="bi bi-arrow-return-left"></i>
+                                    {% translate 'Возврат' %}
+                                </span>
+                            {% endif %}
+                        </h3>
+                        <div class="receipt-card-meta">
+                            <i class="bi bi-calendar-event"></i>
+                            {{ receipt.receipt_date|date:"d.m.Y H:i" }}
+                        </div>
+                        {% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %}
+                            <div class="receipt-card-owner">
+                                <i class="bi bi-person"></i>
+                                {% translate 'Владелец:' %} {{ receipt.user.username }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="receipt-card-amount receipts-amount receipts-positive">
+                        {{ receipt.total_sum|comma }} <span class="receipt-card-currency">₽</span>
+                    </div>
+                </header>
+
+                <div class="receipt-card-products">
+                    <div class="receipts-label">{% translate 'Товары' %}</div>
+                    <div class="receipt-card-tags">
+                        {% for product in receipt.product.all|slice:":3" %}
+                            <span class="receipts-cat-chip">
+                                <span class="dot"><i class="bi bi-bag"></i></span>
+                                {{ product.product_name|truncatechars:20 }}
+                            </span>
+                        {% endfor %}
+                        {% if receipt.product.all|length > 3 %}
+                            <span class="receipts-cat-chip">+{{ receipt.product.all|length|add:"-3" }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <footer class="receipt-card-actions receipts-row-actions swipe-hide-mobile">
+                    <a href="{% url 'receipts:view' receipt.id %}" class="receipts-chip">
+                        <i class="bi bi-eye"></i>
+                        {% translate 'Просмотр' %}
+                    </a>
+                    <a href="{% url 'receipts:update' receipt.id %}" class="receipts-chip">
+                        <i class="bi bi-pencil"></i>
+                        {% translate 'Редактировать' %}
+                    </a>
+                    <form class="form-remove-receipt-button" action="{% url 'receipts:delete' receipt.id %}" method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="receipt_id" value="{{ receipt.id }}">
+                        <button class="receipts-chip receipt-card-delete"
+                                data-nonce="{{ request.csp_nonce }}"
+                                type="submit"
+                                name="delete_receipt_button"
+                                title="{% translate 'Удалить чек' %}">
+                            <i class="bi bi-trash"></i>
+                            {% translate 'Удалить' %}
+                        </button>
+                    </form>
+                </footer>
+            </div>
         </article>
     {% endfor %}
 </div>

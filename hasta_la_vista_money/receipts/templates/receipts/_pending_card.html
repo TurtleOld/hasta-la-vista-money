@@ -1,7 +1,7 @@
 {% load i18n %}
 {% load comma %}
 
-<article class="pending-card pending-card-{{ pending.status }}">
+<article class="pending-card pending-card-{{ pending.status }}"{% if pending.status != 'processing' %} data-swipe-row{% endif %}>
     {% if pending.status == 'processing' %}
         <header class="pending-card-head">
             <div class="pending-card-icon pending-card-icon-spin">
@@ -23,68 +23,111 @@
         </header>
 
     {% elif pending.status == 'ready' %}
-        <header class="pending-card-head">
-            <div class="pending-card-body">
-                <h3 class="pending-card-title pending-card-title-ready">
-                    {{ pending.receipt_data.name_seller|default:'Неизвестный продавец' }}
-                </h3>
-                <div class="pending-card-meta">
-                    <i class="bi bi-calendar-event"></i>
-                    {{ pending.receipt_data.receipt_date|default:'—' }}
-                </div>
-                <p class="pending-card-warning">
-                    {% translate 'Чек обработан, но не сохранён, проверьте корректность данных и сохраните чек.' %}
-                </p>
-            </div>
-            <div class="pending-card-amount receipts-amount receipts-positive">
-                {{ pending.receipt_data.total_sum|default:0|comma }}
-                <span class="pending-card-currency">₽</span>
-            </div>
-        </header>
-        <footer class="pending-card-actions receipts-row-actions">
-            <a href="{% url 'receipts:review' pending.id %}" class="receipts-button receipts-button-primary">
-                <i class="bi bi-check2-circle"></i>
-                {% translate 'Проверить и сохранить' %}
+        <div class="pending-card-swipe-actions" data-swipe-actions aria-hidden="true">
+            <a href="{% url 'receipts:review' pending.id %}"
+               class="swipe-action-btn is-accent"
+               aria-label="{% translate 'Проверить' %}"
+               title="{% translate 'Проверить' %}">
+                {% include 'partials/_swipe_icons.html' with icon='check' %}
             </a>
             <form action="{% url 'receipts:pending_delete' pending.id %}" method="post">
                 {% csrf_token %}
-                <button type="submit" class="receipts-chip pending-card-delete">
-                    <i class="bi bi-trash"></i>
-                    {% translate 'Удалить' %}
+                <button type="submit"
+                        class="swipe-action-btn is-danger"
+                        aria-label="{% translate 'Удалить' %}"
+                        title="{% translate 'Удалить' %}">
+                    {% include 'partials/_swipe_icons.html' with icon='delete' %}
                 </button>
             </form>
-        </footer>
+        </div>
+        <div class="pending-card-content" data-swipe-content>
+            <header class="pending-card-head">
+                <div class="pending-card-body">
+                    <h3 class="pending-card-title pending-card-title-ready">
+                        {{ pending.receipt_data.name_seller|default:'Неизвестный продавец' }}
+                    </h3>
+                    <div class="pending-card-meta">
+                        <i class="bi bi-calendar-event"></i>
+                        {{ pending.receipt_data.receipt_date|default:'—' }}
+                    </div>
+                    <p class="pending-card-warning">
+                        {% translate 'Чек обработан, но не сохранён, проверьте корректность данных и сохраните чек.' %}
+                    </p>
+                </div>
+                <div class="pending-card-amount receipts-amount receipts-positive">
+                    {{ pending.receipt_data.total_sum|default:0|comma }}
+                    <span class="pending-card-currency">₽</span>
+                </div>
+            </header>
+            <footer class="pending-card-actions receipts-row-actions swipe-hide-mobile">
+                <a href="{% url 'receipts:review' pending.id %}" class="receipts-button receipts-button-primary">
+                    <i class="bi bi-check2-circle"></i>
+                    {% translate 'Проверить и сохранить' %}
+                </a>
+                <form action="{% url 'receipts:pending_delete' pending.id %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="receipts-chip pending-card-delete">
+                        <i class="bi bi-trash"></i>
+                        {% translate 'Удалить' %}
+                    </button>
+                </form>
+            </footer>
+        </div>
 
     {% else %}
-        <header class="pending-card-head">
-            <div class="pending-card-body">
-                <p class="pending-card-error">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    {% translate 'Ошибка обработки чека:' %} {{ pending.error_message|default:'неизвестная причина' }}
-                </p>
-                <div class="pending-card-meta">
-                    <i class="bi bi-calendar-event"></i>
-                    {% translate 'Загружено:' %} {{ pending.created_at|date:"d.m.Y H:i" }}
-                </div>
-            </div>
-        </header>
-        <footer class="pending-card-actions receipts-row-actions">
+        <div class="pending-card-swipe-actions" data-swipe-actions aria-hidden="true">
             {% if pending.image_file %}
                 <form action="{% url 'receipts:pending_retry' pending.id %}" method="post">
                     {% csrf_token %}
-                    <button type="submit" class="receipts-chip pending-card-retry">
-                        <i class="bi bi-arrow-clockwise"></i>
-                        {% translate 'Повторить' %}
+                    <button type="submit"
+                            class="swipe-action-btn is-accent"
+                            aria-label="{% translate 'Повторить' %}"
+                            title="{% translate 'Повторить' %}">
+                        {% include 'partials/_swipe_icons.html' with icon='retry' %}
                     </button>
                 </form>
             {% endif %}
             <form action="{% url 'receipts:pending_delete' pending.id %}" method="post">
                 {% csrf_token %}
-                <button type="submit" class="receipts-chip pending-card-delete">
-                    <i class="bi bi-trash"></i>
-                    {% translate 'Удалить' %}
+                <button type="submit"
+                        class="swipe-action-btn is-danger"
+                        aria-label="{% translate 'Удалить' %}"
+                        title="{% translate 'Удалить' %}">
+                    {% include 'partials/_swipe_icons.html' with icon='delete' %}
                 </button>
             </form>
-        </footer>
+        </div>
+        <div class="pending-card-content" data-swipe-content>
+            <header class="pending-card-head">
+                <div class="pending-card-body">
+                    <p class="pending-card-error">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        {% translate 'Ошибка обработки чека:' %} {{ pending.error_message|default:'неизвестная причина' }}
+                    </p>
+                    <div class="pending-card-meta">
+                        <i class="bi bi-calendar-event"></i>
+                        {% translate 'Загружено:' %} {{ pending.created_at|date:"d.m.Y H:i" }}
+                    </div>
+                </div>
+            </header>
+            <footer class="pending-card-actions receipts-row-actions swipe-hide-mobile">
+                {% if pending.image_file %}
+                    <form action="{% url 'receipts:pending_retry' pending.id %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="receipts-chip pending-card-retry">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            {% translate 'Повторить' %}
+                        </button>
+                    </form>
+                {% endif %}
+                <form action="{% url 'receipts:pending_delete' pending.id %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="receipts-chip pending-card-delete">
+                        <i class="bi bi-trash"></i>
+                        {% translate 'Удалить' %}
+                    </button>
+                </form>
+            </footer>
+        </div>
     {% endif %}
 </article>

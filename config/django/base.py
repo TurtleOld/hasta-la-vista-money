@@ -1,3 +1,4 @@
+import mimetypes
 import os
 import sys
 from datetime import timedelta
@@ -17,6 +18,7 @@ from config.django.validator_env import EnvironmentValidator
 from config.settings.debug_toolbar.setup import DebugToolbarSetup
 
 django_stubs_ext.monkeypatch()
+mimetypes.add_type('application/manifest+json', '.webmanifest')
 
 
 def _is_testing() -> bool:
@@ -359,6 +361,9 @@ WHITENOISE_MAX_AGE = 31536000  # 1 year
 WHITENOISE_INDEX_FILE = True
 WHITENOISE_ROOT = BASE_DIR / 'staticfiles'
 WHITENOISE_BROTLI = True
+WHITENOISE_MIMETYPES = {
+    '.webmanifest': 'application/manifest+json',
+}
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

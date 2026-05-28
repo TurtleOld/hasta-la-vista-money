@@ -1,0 +1,96 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#059669">
+    <title>{% translate 'Нет подключения' %} - HLVM</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            --bg: #ffffff;
+            --text: #111827;
+            --muted: #6b7280;
+            --accent: #059669;
+            --surface: #f3f4f6;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #1f2937;
+                --text: #f9fafb;
+                --muted: #9ca3af;
+                --surface: #374151;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            align-items: center;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            font-family: system-ui, sans-serif;
+            justify-content: center;
+            margin: 0;
+            min-height: 100vh;
+            padding: 1.5rem;
+        }
+
+        .offline-card {
+            background: var(--surface);
+            border-radius: 1.5rem;
+            max-width: 24rem;
+            padding: 2rem;
+            text-align: center;
+            width: 100%;
+        }
+
+        .offline-icon {
+            color: var(--accent);
+            font-size: 2.5rem;
+            line-height: 1;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            margin: 0 0 0.75rem;
+        }
+
+        p {
+            color: var(--muted);
+            line-height: 1.5;
+            margin: 0 0 1.5rem;
+        }
+
+        button {
+            appearance: none;
+            background: var(--accent);
+            border: 0;
+            border-radius: 999px;
+            color: #ffffff;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 600;
+            padding: 0.75rem 1.25rem;
+        }
+    </style>
+</head>
+<body>
+    <main class="offline-card">
+        <div class="offline-icon" aria-hidden="true">↻</div>
+        <h1>{% translate 'Нет подключения к интернету' %}</h1>
+        <p>
+            {% translate 'Проверьте сеть и попробуйте снова. Ранее открытые страницы могут быть доступны из кеша.' %}
+        </p>
+        <button type="button" onclick="window.location.reload()">
+            {% translate 'Повторить' %}
+        </button>
+    </main>
+</body>
+</html>
