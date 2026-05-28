@@ -47,24 +47,26 @@
             </div>
             <div class="receipts-summary-cell">
                 <div class="receipts-label">{% translate 'Группа чеков' %}</div>
-                <div>
-                    <select id="receipt-group-select"
-                            name="group_id"
-                            class="receipts-chip"
-                            aria-label="{% translate 'Группа чеков' %}">
-                        <option value="my" {% if not request.GET.group_id or request.GET.group_id == 'my' %}selected{% endif %}>{% translate 'Мои' %}</option>
-                        {% for group in user_groups %}
-                            <option value="{{ group.id }}" {% if request.GET.group_id == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="receipts-group-chips">
+                    <button type="button"
+                            class="receipts-chip {% if not request.GET.group_id or request.GET.group_id == 'my' %}is-active{% endif %}"
+                            data-group-id="my">{% translate 'Мои' %}</button>
+                    {% for group in user_groups %}
+                        <button type="button"
+                                class="receipts-chip {% if request.GET.group_id == group.id|stringformat:'s' %}is-active{% endif %}"
+                                data-group-id="{{ group.id }}">{{ group.name }}</button>
+                    {% endfor %}
                 </div>
             </div>
             <div class="receipts-summary-cell">
-                <div class="receipts-label">{% translate 'В обработке' %}</div>
-                <span id="pending-receipts-counter"
-                      hx-get="{% url 'receipts:pending_counter' %}"
-                      hx-trigger="load, every 5s"
-                      hx-swap="innerHTML"></span>
+                <div class="receipts-label">{% translate 'Средняя сумма' %}</div>
+                <div class="receipts-amount">
+                    {% if avg_receipt is not None %}
+                        {{ avg_receipt|comma }} ₽
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
             </div>
         </section>
 
@@ -96,20 +98,4 @@
     {% load static %}
     {% load word_hash %}
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/dist/pages/receipts.js' %}?v={% word_hash %}"></script>
-    <script nonce="{{request.csp_nonce}}">
-        document.body.addEventListener('htmx:afterSwap', function (event) {
-            if (event.target.id !== 'pending-receipts-counter') {
-                return;
-            }
-
-            const countElement = document.getElementById('pending-receipts-count-value');
-            const count = countElement ? parseInt(countElement.textContent || '0', 10) : 0;
-            const previousCount = parseInt(event.target.dataset.previousCount || '0', 10);
-            event.target.dataset.previousCount = String(count);
-
-            if (previousCount > 0 && count === 0) {
-                window.location.reload();
-            }
-        });
-    </script>
 {% endblock %}

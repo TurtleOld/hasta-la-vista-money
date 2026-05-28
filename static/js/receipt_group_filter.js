@@ -1,8 +1,8 @@
 document.addEventListener('DOMContentLoaded', function () {
     'use strict';
 
-    const groupSelect = document.getElementById('receipt-group-select');
-    if (!groupSelect) return;
+    const groupChips = document.querySelectorAll('[data-group-id]');
+    if (!groupChips.length) return;
 
     let isLoading = false;
     let pendingRequest = null;
@@ -340,15 +340,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const debouncedLoadReceipts = debounce(loadReceiptsBlock, 300);
 
-    const currentGroupId = getGroupIdFromQuery();
-    if (groupSelect.value !== currentGroupId) {
-        groupSelect.value = currentGroupId;
-    }
-
-    groupSelect.addEventListener('change', function () {
-        const selectedGroup = this.value;
-        updateGroupIdInUrl(selectedGroup);
-        debouncedLoadReceipts(selectedGroup);
+    groupChips.forEach(function(chip) {
+        chip.addEventListener('click', function() {
+            const selectedGroup = this.dataset.groupId;
+            groupChips.forEach(function(c) { c.classList.remove('is-active'); });
+            this.classList.add('is-active');
+            updateGroupIdInUrl(selectedGroup);
+            debouncedLoadReceipts(selectedGroup);
+        });
     });
 
 });
