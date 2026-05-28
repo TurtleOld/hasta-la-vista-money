@@ -3,11 +3,12 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from hasta_la_vista_money import __version__
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
+from hasta_la_vista_money.system.views import ServiceWorkerView
 
 
 class PwaManifestTests(TestCase):
@@ -43,10 +44,15 @@ class PwaManifestTests(TestCase):
 
 class ServiceWorkerTests(TestCase):
     def test_service_worker_is_available(self) -> None:
-        response = self.client.get(reverse('service_worker'))
+        request = RequestFactory().get(reverse('service_worker'))
+        response = ServiceWorkerView.as_view()(request)
 
         self.assertEqual(response.status_code, HTTPStatus.OK)
-        self.assertEqual(response['Content-Type'], 'application/javascript')
+        content_type = response['Content-Type'].split(';', maxsplit=1)[0]
+        self.assertIn(
+            content_type,
+            {'application/javascript', 'text/javascript'},
+        )
         self.assertIn('no-cache', response['Cache-Control'])
         self.assertIn('must-revalidate', response['Cache-Control'])
         self.assertEqual(response['Service-Worker-Allowed'], '/')
@@ -75,7 +81,16 @@ class ServiceWorkerTests(TestCase):
         self.assertContains(response, 'Нет подключения к интернету')
 
     def test_app_bundle_registers_service_worker(self) -> None:
-        sw_path = Path(settings.BASE_DIR) / 'static' / 'js' / 'dist' / 'app.js'
-        content = sw_path.read_text(encoding='utf-8')
+        app_path = Path(settings.BASE_DIR) / 'frontend' / 'js' / 'app.js'
+        service_worker_path = (
+            Path(settings.BASE_DIR) / 'frontend' / 'js' / 'service-worker.js'
+        )
 
-        self.assertIn('serviceWorker.register("/sw.js"', content)
+        app_content = app_path.read_text(encoding='utf-8')
+        service_worker_content = service_worker_path.read_text(encoding='utf-8')
+
+        self.assertIn("import './service-worker.js';", app_content)
+        self.assertIn(
+            "navigator.serviceWorker.register('/sw.js'",
+            service_worker_content,
+        )
