@@ -35,7 +35,7 @@ FORM_CONTROL_CLASS = (
     'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm '
     'text-gray-900 shadow-sm transition-colors duration-200 '
     'placeholder:text-gray-400 focus:border-green-500 focus:outline-none '
-    'focus:ring-2 focus:ring-green-500/30 dark:border-gray-600 '
+    'focus:ring-0 dark:border-gray-600 '
     'dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400'
 )
 

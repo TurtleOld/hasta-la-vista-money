@@ -243,9 +243,23 @@ class FinancesFilter:
         if self.min_amount:
             params.append(('min_amount', self.min_amount))
         if self.date_from:
-            params.append(('date_from', self.date_from.isoformat()))
+            params.append(
+                (
+                    'date_from',
+                    self.date_from.strftime(
+                        constants.HTML5_DATE_INPUT_FORMAT,
+                    ),
+                ),
+            )
         if self.date_to:
-            params.append(('date_to', self.date_to.isoformat()))
+            params.append(
+                (
+                    'date_to',
+                    self.date_to.strftime(
+                        constants.HTML5_DATE_INPUT_FORMAT,
+                    ),
+                ),
+            )
         if self.q:
             params.append(('q', self.q))
         return urlencode(params)
@@ -304,9 +318,13 @@ def _parse_filter_date(value: str | None) -> date | None:
     if not value:
         return None
 
+    normalized_value = value.strip()
     try:
-        return date.fromisoformat(value)
-    except ValueError:
+        if '/' in normalized_value:
+            day, month, year = normalized_value.split('/')
+            return date(int(year), int(month), int(day))
+        return date.fromisoformat(normalized_value)
+    except (TypeError, ValueError):
         return None
 
 

@@ -222,8 +222,8 @@ class TestFinancesView(TestCase):
             finances_filter.date_range(),
             (date(2026, 1, 1), date(2026, 1, 31)),
         )
-        self.assertIn('date_from=2026-01-01', finances_filter.query_string)
-        self.assertIn('date_to=2026-01-31', finances_filter.query_string)
+        self.assertIn('date_from=01%2F01%2F2026', finances_filter.query_string)
+        self.assertIn('date_to=31%2F01%2F2026', finances_filter.query_string)
 
 
 class TestAccountCreateView(TestCase):

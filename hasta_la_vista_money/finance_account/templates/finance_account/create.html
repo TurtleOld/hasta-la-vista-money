@@ -157,7 +157,7 @@
                         <div class="cmp-field">
                             <div class="cmp-input">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
-                                <input type="date" x-model="date">
+                                <input type="text" x-model="date" placeholder="DD/MM/YYYY">
                             </div>
                             <div class="date-quick">
                                 <button type="button" x-bind:data-on="isToday" x-on:click="setDateOffset(0)">{% translate 'Сегодня' %}</button>
@@ -265,6 +265,52 @@
 {% block extra_js %}
 <script nonce="{{ request.csp_nonce }}">
     document.addEventListener('alpine:init', () => {
+        function toIsoDateString(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function toDisplayDateString(date) {
+            const d = String(date.getDate()).padStart(2, '0');
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const y = date.getFullYear();
+            return `${d}/${m}/${y}`;
+        }
+
+        function parseDateInput(value) {
+            if (!value) return null;
+
+            const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (isoMatch) return value;
+
+            const ruMatch = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (!ruMatch) return null;
+
+            const day = Number(ruMatch[1]);
+            const month = Number(ruMatch[2]);
+            const year = Number(ruMatch[3]);
+            const candidate = new Date(year, month - 1, day);
+
+            if (
+                candidate.getFullYear() !== year ||
+                candidate.getMonth() !== month - 1 ||
+                candidate.getDate() !== day
+            ) {
+                return null;
+            }
+
+            return `${ruMatch[3]}-${ruMatch[2]}-${ruMatch[1]}`;
+        }
+
+        function formatDateForDisplay(value) {
+            const parsed = parseDateInput(value);
+            if (!parsed) return value;
+            const [year, month, day] = parsed.split('-');
+            return `${day}/${month}/${year}`;
+        }
+
         Alpine.data('composerPage', () => ({
             type:                 'expense',
             amount:               '',
@@ -272,7 +318,7 @@
             accountId:            null,
             selectedCategoryName: '',
             selectedAccountName:  '',
-            date:                 new Date().toISOString().slice(0, 10),
+            date:                 toDisplayDateString(new Date()),
             time:                 new Date().toTimeString().slice(0, 5),
             note:                 '',
 
@@ -306,24 +352,28 @@
             },
 
             /* ── Computed: дата ── */
+            get dateIso() {
+                return parseDateInput(this.date);
+            },
             get datetimeLocal() {
-                return this.date + 'T' + this.time;
+                return this.dateIso ? this.dateIso + 'T' + this.time : '';
             },
             get formattedDatetime() {
+                if (!this.dateIso) return '';
                 try {
-                    return new Date(this.date + 'T' + this.time).toLocaleString('ru-RU', {
+                    return new Date(this.dateIso + 'T' + this.time).toLocaleString('ru-RU', {
                         weekday: 'short', day: 'numeric', month: 'short',
                         hour: '2-digit', minute: '2-digit',
                     });
                 } catch (e) { return ''; }
             },
             get isToday() {
-                return this.date === new Date().toISOString().slice(0, 10) ? true : null;
+                return this.dateIso === toIsoDateString(new Date()) ? true : null;
             },
             get isYesterday() {
                 const y = new Date();
                 y.setDate(y.getDate() - 1);
-                return this.date === y.toISOString().slice(0, 10) ? true : null;
+                return this.dateIso === toIsoDateString(y) ? true : null;
             },
 
             /* ── Computed: превью ── */
@@ -335,7 +385,7 @@
                 return sign + new Intl.NumberFormat('ru-RU').format(Math.round(parseFloat(this.amount) || 0));
             },
             get previewDate() {
-                return this.date + ' · ' + this.time;
+                return formatDateForDisplay(this.date) + ' · ' + this.time;
             },
             get noteOrDash() {
                 return this.note || '—';
@@ -343,7 +393,12 @@
 
             /* ── Computed: валидация ── */
             get isValid() {
-                return !!(parseFloat(this.amount) > 0 && this.categoryId && this.accountId);
+                return !!(
+                    parseFloat(this.amount) > 0 &&
+                    this.categoryId &&
+                    this.accountId &&
+                    this.dateIso
+                );
             },
 
             /* ── Методы: вызываются с литеральными аргументами из шаблона ── */
@@ -366,7 +421,10 @@
             setDateOffset(days) {
                 const d = new Date();
                 d.setDate(d.getDate() + days);
-                this.date = d.toISOString().slice(0, 10);
+                this.date = toDisplayDateString(d);
+            },
+            normalizeDateInput() {
+                this.date = formatDateForDisplay(this.date);
             },
             sanitizeAmount() {
                 this.amount = this.amount.replace(/[^\d.,]/g, '').replace(',', '.');
@@ -405,7 +463,7 @@
                 }
                 const date = params.get('date');
                 if (date) {
-                    this.date = date;
+                    this.date = formatDateForDisplay(date);
                 }
                 const time = params.get('time');
                 if (time) {
@@ -415,6 +473,7 @@
 
             init() {
                 this.prefillFromQuery();
+                this.$watch('date', () => this.normalizeDateInput());
                 window.addEventListener('keydown', (e) => {
                     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                         e.preventDefault();

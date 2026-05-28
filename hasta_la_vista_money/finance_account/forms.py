@@ -85,7 +85,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         label=_('Дата платежа'),
         help_text=_('Введите дату платежа'),
         required=False,
-        input_formats=[constants.HTML5_DATE_INPUT_FORMAT],
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
     )
 
     grace_period_days = IntegerField(

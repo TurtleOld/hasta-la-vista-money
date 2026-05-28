@@ -1134,13 +1134,22 @@
 .cmp-input select {
   flex: 1;
   min-width: 0;
-  background: transparent;
-  border: 0;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   outline: none;
+  box-shadow: none !important;
   color: var(--finances-text);
   font-family: inherit;
   font-size: 13.5px;
   padding: 8px 0;
+}
+
+.cmp-input input:focus,
+.cmp-input textarea:focus,
+.cmp-input select:focus {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .cmp-input.tall {
