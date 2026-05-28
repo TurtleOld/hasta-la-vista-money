@@ -1,12 +1,19 @@
 {
   "scripts": {
     "build:js": "node esbuild.config.mjs",
-    "watch:js": "node esbuild.config.mjs --watch"
+    "watch:js": "node esbuild.config.mjs --watch",
+    "lint:js": "eslint \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/pages/**/*.js\" esbuild.config.mjs eslint.config.mjs",
+    "format:js": "prettier --write \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/pages/**/*.js\" \"*.mjs\" package.json",
+    "format:js:check": "prettier --check \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/pages/**/*.js\" \"*.mjs\" package.json"
   },
   "dependencies": {
     "driver.js": "^1.4.0"
   },
   "devDependencies": {
-    "esbuild": "^0.27.0"
+    "@eslint/js": "^10.0.1",
+    "esbuild": "^0.27.0",
+    "eslint": "^10.4.0",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3"
   }
 }
