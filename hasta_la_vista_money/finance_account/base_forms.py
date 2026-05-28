@@ -104,10 +104,10 @@ class DateFieldMixin:
         """
         if 'payment_due_date' in self.fields:  # type: ignore[attr-defined]
             self.fields['payment_due_date'].widget = DateInput(  # type: ignore[attr-defined]
-                format=constants.HTML5_DATE_INPUT_FORMAT,
+                format='%Y-%m-%d',
                 attrs={
-                    'type': 'text',
-                    'placeholder': 'DD/MM/YYYY',
+                    'type': 'date',
+                    'lang': 'ru-RU',
                     'class': f'{TAILWIND_FORM_CONTROL} credit-only-field',
                 },
             )
