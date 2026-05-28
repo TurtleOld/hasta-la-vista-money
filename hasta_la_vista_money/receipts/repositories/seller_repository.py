@@ -16,26 +16,38 @@ class SellerRepository:
     Provides methods for accessing and manipulating seller data.
     """
 
+    def find_by_inn(self, user: User, inn: str) -> Seller | None:
+        """Return the seller matching the given INN for this user, or None."""
+        return Seller.objects.filter(user=user, inn=inn).first()
+
     def update_or_create_seller(
         self,
         user: User,
         name_seller: str,
+        inn: str | None = None,
         defaults: dict[str, object] | None = None,
     ) -> Seller:
-        """Create or update seller.
+        """Create or update seller, using INN as the primary key when available.
 
         Args:
             user: User instance who owns the seller.
             name_seller: Name of the seller.
+            inn: Optional seller INN used as lookup key when provided.
             defaults: Dictionary of field values to update if seller exists.
 
         Returns:
             Seller: Seller instance (created or updated).
         """
+        if inn:
+            lookup = {'user': user, 'inn': inn}
+        else:
+            lookup = {'user': user, 'name_seller': name_seller}
+        all_defaults = dict(defaults or {})
+        if inn:
+            all_defaults.setdefault('name_seller', name_seller)
         seller, _ = Seller.objects.update_or_create(
-            user=user,
-            name_seller=name_seller,
-            defaults=defaults or {},
+            **lookup,
+            defaults=all_defaults,
         )
         return seller
 

@@ -34,11 +34,6 @@ jobs:
             latest_tag: latest
             tag_prefix: ""
             platforms: linux/amd64
-          - image_name: ${{ github.repository }}
-            dockerfile: receipt_inference/Dockerfile
-            latest_tag: receipt-inference-latest
-            tag_prefix: receipt-inference-
-            platforms: linux/amd64
 
     steps:
       - name: Checkout repository

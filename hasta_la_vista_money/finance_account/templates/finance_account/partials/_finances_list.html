@@ -47,7 +47,7 @@
             <div class="finances-side-list">
                 {% for tx in category.items|slice:':3' %}
                     <div class="finances-side-item finances-muted">
-                        <span>{{ tx.date|date:'d.m' }} · {{ tx.account_name }}</span>
+                        <span>{{ tx.date|date:'d.m.Y' }} · {{ tx.account_name }}</span>
                         <span>{% if tx.amount > 0 %}+{% else %}-{% endif %}{{ tx.abs_amount|floatformat:0 }} ₽</span>
                     </div>
                 {% endfor %}

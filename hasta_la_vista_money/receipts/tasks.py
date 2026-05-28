@@ -6,9 +6,8 @@ live here so the work survives the user closing the page.
 """
 
 import json
-import re
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any
 
 import structlog
 from celery import shared_task
@@ -22,7 +21,13 @@ from hasta_la_vista_money.receipts.models import (
     PendingReceiptStatus,
 )
 from hasta_la_vista_money.receipts.repositories import ReceiptRepository
-from hasta_la_vista_money.receipts.services import analyze_image_with_ai
+from hasta_la_vista_money.receipts.repositories.seller_repository import (
+    SellerRepository,
+)
+from hasta_la_vista_money.receipts.services.ai_providers import (
+    ModelUnavailableError,
+    RateLimitExceededError,
+)
 from hasta_la_vista_money.receipts.services.category_classifier import (
     ReceiptItemCategoryService,
 )
@@ -48,17 +53,10 @@ from hasta_la_vista_money.receipts.services.fns_qr import (
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
     PendingReceiptService,
 )
-from hasta_la_vista_money.receipts.services.receipt_ai_prompt import (
-    ModelUnavailableError,
-    RateLimitExceededError,
-)
 from hasta_la_vista_money.receipts.validators.parsed_receipt import (
     ReceiptParseValidationError,
     validate_receipt_parse_payload,
 )
-
-if TYPE_CHECKING:
-    from django.core.files.uploadedfile import UploadedFile
 
 logger = structlog.get_logger(__name__)
 
@@ -168,60 +166,6 @@ def _build_service() -> PendingReceiptService:
     )
 
 
-_JSON_CODE_BLOCK_RE = re.compile(r'```(?:json)?\s*({.*?})\s*```', re.DOTALL)
-
-
-def _parse_inference_payload(raw: str) -> dict[str, Any]:
-    """Parse inference response into a dict, stripping markdown fences.
-
-    Args:
-        raw: JSON string returned by ``analyze_image_with_ai`` (possibly
-            wrapped in a Markdown code fence).
-
-    Returns:
-        Parsed receipt dictionary.
-
-    Raises:
-        ValueError: When the payload is empty.
-        json.JSONDecodeError: When the payload is not valid JSON.
-    """
-    if not raw:
-        raise ValueError('Empty inference response')
-    match = _JSON_CODE_BLOCK_RE.search(raw)
-    cleaned = match.group(1) if match else raw.strip()
-    payload = json.loads(cleaned)
-    if not isinstance(payload, dict):
-        raise ValueError('Inference response must be a JSON object')
-    return validate_receipt_parse_payload(payload).to_dict()
-
-
-def _run_inference(pending: PendingReceipt) -> dict[str, Any]:
-    """Open the stored image and run the configured inference backend."""
-    with pending.image_file.open('rb') as image_fp:
-        uploaded_file = cast('UploadedFile', image_fp)
-        raw = analyze_image_with_ai(uploaded_file, user_id=pending.user_id)
-    return _parse_inference_payload(raw)
-
-
-def _extract_seller_name_with_ocr(pending: PendingReceipt) -> str | None:
-    """Use local OCR/AI only as seller-name fallback, not full parsing."""
-    try:
-        with pending.image_file.open('rb') as image_fp:
-            uploaded_file = cast('UploadedFile', image_fp)
-            raw = analyze_image_with_ai(uploaded_file, user_id=pending.user_id)
-        payload = _parse_inference_payload(raw)
-    except Exception:
-        logger.warning(
-            'pending_receipt_ocr_seller_fallback_failed',
-            pending_receipt_id=pending.pk,
-            exc_info=True,
-        )
-        return None
-
-    seller_name = str(payload.get('name_seller', '')).strip()
-    return seller_name or None
-
-
 def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
     """Process a pending receipt through QR -> FNS -> mapper pipeline."""
     with pending.image_file.open('rb') as image_fp:
@@ -233,10 +177,12 @@ def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
         user=pending.user,
         items=receipt_data.get('items', []),
     )
-    if not receipt_data.get('retail_place'):
-        seller_name = _extract_seller_name_with_ocr(pending)
-        if seller_name:
-            receipt_data['name_seller'] = seller_name
+
+    inn = receipt_data.get('inn')
+    if inn and not receipt_data.get('retail_place'):
+        seller = SellerRepository().find_by_inn(user=pending.user, inn=inn)
+        if seller and seller.retail_place not in (None, '', 'Нет данных'):
+            receipt_data['retail_place'] = seller.retail_place
 
     validated = validate_receipt_parse_payload(receipt_data).to_dict()
     validated['_fns_raw'] = fns_payload
@@ -244,10 +190,8 @@ def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
 
 
 def _run_processing_pipeline(pending: PendingReceipt) -> dict[str, Any]:
-    """Run the configured pending receipt processing pipeline."""
-    if getattr(settings, 'FNS_ENABLED', False):
-        return _run_fns_pipeline(pending)
-    return _run_inference(pending)
+    """Run the FNS receipt processing pipeline."""
+    return _run_fns_pipeline(pending)
 
 
 def _classify_failure(exc: Exception) -> tuple[str, str]:
