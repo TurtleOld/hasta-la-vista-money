@@ -44,19 +44,16 @@
 .finance-account-page h1,
 .finance-account-page h2,
 .finance-account-page h3,
-.finance-account-page .text-gray-900,
-.finance-account-page .dark\:text-white {
+.finance-account-page .text-gray-900 {
   color: var(--app-text) !important;
 }
 
 .finance-account-page .text-gray-600,
-.finance-account-page .text-gray-500,
-.finance-account-page .dark\:text-gray-400 {
+.finance-account-page .text-gray-500 {
   color: var(--app-muted) !important;
 }
 
 .finance-account-page .bg-white,
-.finance-account-page .dark\:bg-gray-800,
 .finance-account-page .card-total-balance,
 .finance-account-page #balance-trend-widget,
 .finance-account-page #sum-all-groups-accounts,
@@ -75,34 +72,25 @@
 
 .finance-account-page .bg-linear-to-r.from-green-50,
 .finance-account-page .bg-linear-to-r.from-purple-50,
-.finance-account-page .dark\:from-green-900\/30,
-.finance-account-page .dark\:from-purple-900\/30,
 .finance-account-page .card-total-balance {
   background: var(--app-surface-2) !important;
 }
 
-.finance-account-page .bg-linear-to-br.from-green-100,
-.finance-account-page .dark\:from-green-900\/40,
-.finance-account-page .dark\:from-green-800\/50 {
+.finance-account-page .bg-linear-to-br.from-green-100 {
   background: color-mix(in oklab, var(--app-accent) 14%, var(--app-surface)) !important;
 }
 
 .finance-account-page .border-gray-200,
 .finance-account-page .border-gray-200\/50,
-.finance-account-page .border-gray-300,
-.finance-account-page .dark\:border-gray-700,
-.finance-account-page .dark\:border-gray-700\/50,
-.finance-account-page .dark\:border-gray-600 {
+.finance-account-page .border-gray-300 {
   border-color: var(--app-border) !important;
 }
 
-.finance-account-page .text-green-600,
-.finance-account-page .dark\:text-green-400 {
+.finance-account-page .text-green-600 {
   color: var(--app-positive) !important;
 }
 
-.finance-account-page .text-red-600,
-.finance-account-page .dark\:text-red-400 {
+.finance-account-page .text-red-600 {
   color: var(--app-negative) !important;
 }
 
@@ -116,24 +104,19 @@
 }
 
 .finance-account-page a.bg-white,
-.finance-account-page a.dark\:bg-gray-800,
-.finance-account-page a.bg-gray-100,
-.finance-account-page a.dark\:bg-gray-700 {
+.finance-account-page a.bg-gray-100 {
   background: var(--app-surface) !important;
   border-color: var(--app-border) !important;
 }
 
 .finance-account-page a.bg-white:hover,
-.finance-account-page a.dark\:bg-gray-800:hover,
-.finance-account-page a.bg-gray-100:hover,
-.finance-account-page a.dark\:bg-gray-700:hover {
+.finance-account-page a.bg-gray-100:hover {
   background: var(--app-surface-2) !important;
 }
 
 .finance-account-page select,
 .finance-account-page input:not([type='checkbox']):not([type='radio']):not([type='file']),
-.finance-account-page textarea,
-.finance-account-page .dark\:bg-gray-700 {
+.finance-account-page textarea {
   background-color: var(--app-surface) !important;
   border-color: var(--app-border) !important;
   color: var(--app-text) !important;
@@ -143,11 +126,7 @@
 .finance-account-page .bg-gray-100,
 .finance-account-page .bg-blue-50,
 .finance-account-page .bg-blue-100,
-.finance-account-page .bg-purple-100,
-.finance-account-page .dark\:bg-gray-700,
-.finance-account-page .dark\:bg-gray-700\/50,
-.finance-account-page .dark\:bg-blue-900\/30,
-.finance-account-page .dark\:bg-purple-900\/30 {
+.finance-account-page .bg-purple-100 {
   background-color: var(--app-surface-2) !important;
 }
 

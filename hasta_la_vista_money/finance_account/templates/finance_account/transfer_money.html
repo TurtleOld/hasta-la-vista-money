@@ -53,7 +53,7 @@
                 </a>
             </div>
             <div class="p-6 sm:p-8">
-                <form method="post" action="{% url 'finance_account:transfer_money' %}" class="space-y-5 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
+                <form method="post" action="{% url 'finance_account:transfer_money' %}" class="space-y-5">
                     {% csrf_token %}
                     {% if form %}
                     <div class="space-y-1.5{% if form.from_account.errors %} has-error{% endif %}">

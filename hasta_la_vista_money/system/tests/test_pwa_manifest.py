@@ -61,7 +61,7 @@ class ServiceWorkerTests(TestCase):
     def test_precache_payload_contains_core_assets(self) -> None:
         payload = get_pwa_precache_payload()
 
-        self.assertEqual(payload['version'], __version__)
+        self.assertTrue(payload['version'].startswith(f'{__version__}-'))
         self.assertEqual(payload['offline_url'], reverse('offline'))
         self.assertIn('/static/css/styles.min.css', payload['precache'])
         self.assertIn('/static/js/dist/app.js', payload['precache'])
@@ -71,7 +71,7 @@ class ServiceWorkerTests(TestCase):
 
         self.assertEqual(response.status_code, HTTPStatus.OK)
         data = response.json()
-        self.assertEqual(data['version'], __version__)
+        self.assertTrue(data['version'].startswith(f'{__version__}-'))
         self.assertIn('/offline/', data['precache'])
 
     def test_offline_page_is_available(self) -> None:

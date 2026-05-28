@@ -1,6 +1,10 @@
 const META_CACHE = 'hlvm-meta';
 const STATIC_CACHE_PREFIX = 'hlvm-static-';
 const PAGES_CACHE_PREFIX = 'hlvm-pages-';
+const META_REFRESH_TTL_MS = 60 * 1000;
+
+let latestMetaPromise = null;
+let latestMetaCheckedAt = 0;
 
 async function readMeta() {
   const cache = await caches.open(META_CACHE);
@@ -32,6 +36,63 @@ function pagesCacheName(version) {
   return PAGES_CACHE_PREFIX + version;
 }
 
+async function fetchPrecachePayload() {
+  const response = await fetch('/sw-precache.json', { cache: 'no-store' });
+  return response.json();
+}
+
+async function deleteOutdatedCaches(meta) {
+  const allowed = new Set([
+    META_CACHE,
+    staticCacheName(meta.version),
+    pagesCacheName(meta.version),
+  ]);
+  const keys = await caches.keys();
+  await Promise.all(
+    keys
+      .filter((key) => !allowed.has(key))
+      .filter(
+        (key) =>
+          key.startsWith(STATIC_CACHE_PREFIX)
+          || key.startsWith(PAGES_CACHE_PREFIX),
+      )
+      .map((key) => caches.delete(key)),
+  );
+}
+
+async function ensureFreshMeta() {
+  const payload = await fetchPrecachePayload();
+  const currentMeta = await readMeta();
+
+  if (currentMeta?.version === payload.version) {
+    return currentMeta;
+  }
+
+  await writeMeta(payload);
+  const staticCache = await caches.open(staticCacheName(payload.version));
+  await staticCache.addAll(payload.precache);
+  await caches.open(pagesCacheName(payload.version));
+  await deleteOutdatedCaches(payload);
+
+  return {
+    version: payload.version,
+    offline_url: payload.offline_url,
+  };
+}
+
+function getLatestMeta(options = {}) {
+  const now = Date.now();
+  if (
+    options.force
+    || !latestMetaPromise
+    || now - latestMetaCheckedAt > META_REFRESH_TTL_MS
+  ) {
+    latestMetaCheckedAt = now;
+    latestMetaPromise = ensureFreshMeta().catch(() => readMeta());
+  }
+  return latestMetaPromise;
+}
+
 function isNavigationRequest(request) {
   if (request.mode === 'navigate') {
     return true;
@@ -54,8 +115,7 @@ function shouldBypassCache(pathname) {
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    fetch('/sw-precache.json', { cache: 'no-store' })
-      .then((response) => response.json())
+    fetchPrecachePayload()
       .then(async (payload) => {
         await writeMeta(payload);
         const staticCache = await caches.open(staticCacheName(payload.version));
@@ -68,28 +128,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    readMeta()
-      .then(async (meta) => {
-        if (!meta) {
-          return;
-        }
-        const allowed = new Set([
-          META_CACHE,
-          staticCacheName(meta.version),
-          pagesCacheName(meta.version),
-        ]);
-        const keys = await caches.keys();
-        await Promise.all(
-          keys
-            .filter((key) => !allowed.has(key))
-            .filter(
-              (key) =>
-                key.startsWith(STATIC_CACHE_PREFIX)
-                || key.startsWith(PAGES_CACHE_PREFIX),
-            )
-            .map((key) => caches.delete(key)),
-        );
-      })
+    getLatestMeta({ force: true })
       .then(() => self.clients.claim()),
   );
 });
@@ -110,7 +149,13 @@ self.addEventListener('fetch', (event) => {
 
   if (url.pathname.startsWith('/static/')) {
     event.respondWith(
-      caches.match(request, { ignoreSearch: true }).then((cached) => {
+      getLatestMeta().then(async (meta) => {
+        const staticCache = meta
+          ? await caches.open(staticCacheName(meta.version))
+          : null;
+        const cached = staticCache
+          ? await staticCache.match(request, { ignoreSearch: true })
+          : await caches.match(request, { ignoreSearch: true });
         if (cached) {
           return cached;
         }
@@ -119,12 +164,12 @@ self.addEventListener('fetch', (event) => {
             return response;
           }
           const copy = response.clone();
-          readMeta().then((meta) => {
-            if (!meta) {
+          getLatestMeta().then((freshMeta) => {
+            if (!freshMeta) {
               return;
             }
             caches
-              .open(staticCacheName(meta.version))
+              .open(staticCacheName(freshMeta.version))
               .then((cache) => cache.put(request, copy));
           });
           return response;
@@ -139,7 +184,8 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    fetch(request)
+    getLatestMeta({ force: true })
+      .then(() => fetch(request))
       .then((response) => {
         if (!response.ok) {
           return response;
