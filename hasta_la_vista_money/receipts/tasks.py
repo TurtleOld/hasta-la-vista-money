@@ -5,8 +5,8 @@ PendingReceipt + uploaded image. All inference, parsing and state transitions
 live here so the work survives the user closing the page.
 """
 
-import json
 from datetime import timedelta
+import json
 from typing import Any
 
 import structlog
