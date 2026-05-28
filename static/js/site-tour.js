@@ -90,26 +90,6 @@
             return;
         }
 
-
-        // Helper function to toggle user dropdown menu
-        function toggleUserDropdown(show = true) {
-            const button = document.getElementById('userDropdownButton');
-            const menu = document.getElementById('userDropdownMenu');
-            const arrow = document.getElementById('userDropdownArrow');
-
-            if (!button || !menu || !arrow) return;
-
-            if (show) {
-                menu.classList.remove('hidden');
-                button.setAttribute('aria-expanded', 'true');
-                arrow.style.transform = 'rotate(180deg)';
-            } else {
-                menu.classList.add('hidden');
-                button.setAttribute('aria-expanded', 'false');
-                arrow.style.transform = 'rotate(0deg)';
-            }
-        }
-
         // Helper function to toggle receipt filter
         function toggleReceiptFilter(show = true) {
             const filterCollapse = document.getElementById('filterCollapse');
@@ -198,39 +178,9 @@
                 element: '#user-menu',
                 popover: {
                     title: 'Меню пользователя',
-                    description: 'Управление вашим аккаунтом и выход',
+                    description: 'Здесь можно сменить тему и перейти в профиль. Выход из аккаунта перенесен в настройки профиля.',
                     side: 'bottom',
                     align: 'start'
-                },
-                onHighlightStarted: () => {
-                    toggleUserDropdown(false);
-                }
-            },
-            {
-                element: '#userDropdownMenu li:nth-child(1) a',
-                popover: {
-                    title: 'Профиль',
-                    description: 'Перейти в ваш профиль для изменения настроек',
-                    side: 'left',
-                    align: 'start'
-                },
-                onHighlightStarted: () => {
-                    toggleUserDropdown(true);
-                }
-            },
-            {
-                element: '#userDropdownMenu li:nth-child(3) button',
-                popover: {
-                    title: 'Выход',
-                    description: 'Выйти из вашего аккаунта',
-                    side: 'left',
-                    align: 'start'
-                },
-                onHighlightStarted: () => {
-                    toggleUserDropdown(true);
-                },
-                onDeselected: () => {
-                    toggleUserDropdown(false);
                 }
             }
         ];

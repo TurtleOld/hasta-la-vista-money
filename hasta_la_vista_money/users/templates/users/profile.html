@@ -99,6 +99,13 @@
                                             <i class="bi bi-key"></i>
                                             <span>{% translate 'Изменить пароль' %}</span>
                                         </a>
+                                        <form action="{% url 'logout' %}" method="post" class="profile-action-form">
+                                            {% csrf_token %}
+                                            <button class="profile-action-link profile-action-link-danger profile-action-button" type="submit">
+                                                <i class="bi bi-box-arrow-right"></i>
+                                                <span>{% translate 'Выйти из аккаунта' %}</span>
+                                            </button>
+                                        </form>
                                     </div>
 
                                     <div class="profile-section profile-section-divider">

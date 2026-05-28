@@ -422,6 +422,23 @@
   color: var(--profile-accent);
 }
 
+.profile-action-form {
+  margin: 0;
+}
+
+.profile-action-link-danger {
+  border-color: color-mix(in oklab, var(--profile-negative) 30%, var(--profile-border));
+  color: var(--profile-negative);
+}
+
+.profile-action-link-danger i {
+  color: var(--profile-negative);
+}
+
+.profile-action-link-danger:hover {
+  background: color-mix(in oklab, var(--profile-negative) 7%, var(--profile-surface));
+}
+
 .profile-action-link-muted {
   border-color: var(--profile-border);
   color: var(--profile-muted);
