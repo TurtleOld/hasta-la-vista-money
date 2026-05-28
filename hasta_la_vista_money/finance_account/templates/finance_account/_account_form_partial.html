@@ -1,6 +1,6 @@
 {% load i18n %}
 
-<form method="POST" action="{{ action_url }}" hx-post="{{ action_url }}" hx-target="#form-container" hx-swap="outerHTML" class="space-y-4 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300">
+<form method="POST" action="{{ action_url }}" hx-post="{{ action_url }}" hx-target="#form-container" hx-swap="outerHTML" class="space-y-4">
     {% csrf_token %}
     {% for field in form %}
         <div class="space-y-1.5">

@@ -15,7 +15,7 @@
                     </h2>
                 </div>
                 <div class="p-6 sm:p-8">
-                    <form id="change-account-form" class="space-y-5 dark:[&_label]:text-white dark:[&_small]:text-gray-300 dark:[&_.form-text]:text-gray-300 dark:[&_.help-block]:text-gray-300 dark:[&_.text-muted]:text-gray-300 dark:[&_span.text-muted]:text-gray-300" method="post">
+                    <form id="change-account-form" class="space-y-5" method="post">
                         {% csrf_token %}
                         {% if add_account_form %}
                         {% for field in add_account_form %}
