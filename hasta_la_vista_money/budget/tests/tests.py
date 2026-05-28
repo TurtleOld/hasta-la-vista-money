@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 from django.urls import resolve, reverse
 
@@ -9,6 +10,7 @@ from hasta_la_vista_money.budget.apps import BudgetConfig
 from hasta_la_vista_money.budget.models import Budget, DateList, Planning
 from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
 from hasta_la_vista_money.transactions.models import Category, TransactionType
+from hasta_la_vista_money.users.models import FamilyGroupMembership
 
 User = get_user_model()
 
@@ -167,6 +169,13 @@ class BudgetViewsTest(TestCase):
             self.assertIn('chart_plan_execution_income', chart_data)
             self.assertIn('chart_plan_execution_expense', chart_data)
 
+    def test_budget_view_renders_family_scope_choice(self) -> None:
+        response = self.client.get(reverse('budget:list'))
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertContains(response, 'Семья')
+        self.assertContains(response, '?scope=family')
+
     def test_expense_table_range_buttons_render(self) -> None:
         Category.objects.create(
             user=self.user,
@@ -177,8 +186,14 @@ class BudgetViewsTest(TestCase):
         response = self.client.get(reverse('budget:expense_table'))
 
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
-        self.assertContains(response, 'hx-get="/budget/expenses/?range=6"')
-        self.assertContains(response, 'hx-get="/budget/expenses/?range=all"')
+        self.assertContains(
+            response,
+            'hx-get="/budget/expenses/?scope=my&range=6"',
+        )
+        self.assertContains(
+            response,
+            'hx-get="/budget/expenses/?scope=my&range=all"',
+        )
 
     def test_expense_table_hx_range_all_marks_all_active(self) -> None:
         Category.objects.create(
@@ -225,6 +240,45 @@ class BudgetViewsTest(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertIn('success', response.json())
         self.assertIn('amount', response.json())
+
+    def test_save_planning_family_scope_uses_category_owner(self) -> None:
+        member = User.objects.create_user(
+            username='family-member',
+            password='pass',  # nosec B106: test-only password
+        )
+        group = Group.objects.create(name='Budget family')
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.user,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+        FamilyGroupMembership.objects.create(group=group, user=member)
+        category = Category.objects.create(
+            user=member,
+            name='Shared food',
+            type=TransactionType.EXPENSE,
+        )
+
+        response = self.client.post(
+            reverse('budget:save_planning'),
+            {
+                'category_id': category.id,
+                'month': self.date.isoformat(),
+                'type': TransactionType.EXPENSE,
+                'amount': 321,
+                'scope': 'family',
+            },
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertTrue(
+            Planning.objects.filter(
+                user=member,
+                category=category,
+                amount=321,
+            ).exists(),
+        )
 
     def test_save_budget_limit_post(self) -> None:
         category = Category.objects.create(

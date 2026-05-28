@@ -7,9 +7,10 @@ After the income/expense merge this service depends on a single
 
 from calendar import monthrange
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncMonth
@@ -24,6 +25,9 @@ from hasta_la_vista_money.budget.repositories import (
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.transactions.repositories import TransactionRepository
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.budget.models import Budget
 
 
 class ExpenseDataRowDict(TypedDict):
@@ -171,6 +175,25 @@ def _get_root_id_by_category_id(
     return root_id_by_category_id
 
 
+def _scope_users(user: User, users: Iterable[User] | None = None) -> list[User]:
+    return list(users) if users is not None else [user]
+
+
+def _should_show_category_owner(
+    categories: list[Category],
+    users: Iterable[User] | None = None,
+) -> bool:
+    if users is not None and len({user.pk for user in users}) > 1:
+        return True
+    return len({category.user_id for category in categories}) > 1
+
+
+def _category_label(category: Category, include_owner: bool) -> str:
+    if not include_owner:
+        return category.name
+    return f'{category.user.username}: {category.name}'
+
+
 def _build_budget_progress(
     period: date,
     category: str,
@@ -226,6 +249,7 @@ class BudgetService:
         months: list[date],
         categories: list[Category],
         type_value: str,
+        users: Iterable[User] | None = None,
     ) -> dict[int, dict[date, int]]:
         if not months:
             return {}
@@ -239,9 +263,10 @@ class BudgetService:
             return {}
 
         start_date, end_date = _month_range(months)
+        scope_users = _scope_users(user, users)
         rows = (
             self.transaction_repository.filter(
-                user=user,
+                user__in=scope_users,
                 type=type_value,
                 category_id__in=category_ids,
                 date__gte=start_date,
@@ -272,6 +297,7 @@ class BudgetService:
         months: list[date],
         categories: list[Category],
         type_value: str,
+        users: Iterable[User] | None = None,
     ) -> dict[int, dict[date, Decimal]]:
         if not months:
             return {}
@@ -285,9 +311,10 @@ class BudgetService:
             return {}
 
         start_date, end_date = _month_range(months)
+        scope_users = _scope_users(user, users)
         rows = (
             self.transaction_repository.filter(
-                user=user,
+                user__in=scope_users,
                 type=type_value,
                 category_id__in=category_ids,
                 date__gte=start_date,
@@ -318,6 +345,7 @@ class BudgetService:
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        users: Iterable[User] | None = None,
     ) -> BudgetLimitOverviewDict:
         """Aggregate monthly and category expense-limit progress."""
         if not months:
@@ -332,47 +360,71 @@ class BudgetService:
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            users=users,
         )
+        scope_users = _scope_users(user, users)
         budgets = self.budget_repository.filter(
-            user=user,
+            user__in=scope_users,
             period__in=months,
         )
-        budget_by_key = {
-            (budget.period, budget.category_id): budget for budget in budgets
-        }
+        budget_by_key: dict[tuple[date, int], Budget] = {}
+        monthly_limit_by_period: dict[date, Decimal] = defaultdict(
+            lambda: Decimal(0),
+        )
+        monthly_threshold_by_period: dict[date, int] = defaultdict(
+            lambda: constants.EIGHTY,
+        )
+        for budget in budgets:
+            if budget.category_id is None:
+                monthly_limit_by_period[budget.period] += budget.amount_limit
+                monthly_threshold_by_period[budget.period] = max(
+                    monthly_threshold_by_period[budget.period],
+                    budget.alert_threshold,
+                )
+            else:
+                budget_by_key[(budget.period, budget.category_id)] = budget
         monthly_limits = []
         for month in months:
             fact = sum(
                 (fact_map[cat.pk][month] for cat in expense_categories),
                 Decimal(0),
             )
-            budget = budget_by_key.get((month, None))
             monthly_limits.append(
                 _build_budget_progress(
                     period=month,
                     category='Общий лимит',
                     category_id=None,
                     fact=fact,
-                    limit=budget.amount_limit if budget else Decimal(0),
-                    alert_threshold=(
-                        budget.alert_threshold if budget else constants.EIGHTY
-                    ),
+                    limit=monthly_limit_by_period[month],
+                    alert_threshold=monthly_threshold_by_period[month],
                 ),
             )
 
         current_month = months[-1]
         category_limits = []
+        include_owner = _should_show_category_owner(
+            expense_categories,
+            scope_users,
+        )
         for category in expense_categories:
-            budget = budget_by_key.get((current_month, category.pk))
+            category_budget = budget_by_key.get(
+                (current_month, category.pk),
+            )
             category_limits.append(
                 _build_budget_progress(
                     period=current_month,
-                    category=category.name,
+                    category=_category_label(category, include_owner),
                     category_id=category.pk,
                     fact=fact_map[category.pk][current_month],
-                    limit=budget.amount_limit if budget else Decimal(0),
+                    limit=(
+                        category_budget.amount_limit
+                        if category_budget is not None
+                        else Decimal(0)
+                    ),
                     alert_threshold=(
-                        budget.alert_threshold if budget else constants.EIGHTY
+                        category_budget.alert_threshold
+                        if category_budget is not None
+                        else constants.EIGHTY
                     ),
                 ),
             )
@@ -389,9 +441,11 @@ class BudgetService:
         months: list[date],
         categories: list[Category],
         type_value: str,
+        users: Iterable[User] | None = None,
     ) -> dict[int, dict[date, int]]:
+        scope_users = _scope_users(user, users)
         plans = self.planning_repository.filter(
-            user=user,
+            user__in=scope_users,
             date__in=months,
             planning_type=type_value,
             category__in=categories,
@@ -411,9 +465,11 @@ class BudgetService:
         months: list[date],
         categories: list[Category],
         type_value: str,
+        users: Iterable[User] | None = None,
     ) -> dict[int, dict[date, Decimal]]:
+        scope_users = _scope_users(user, users)
         plans = self.planning_repository.filter(
-            user=user,
+            user__in=scope_users,
             date__in=months,
             planning_type=type_value,
             category__in=categories,
@@ -435,6 +491,7 @@ class BudgetService:
         months: list[date],
         expense_categories: list[Category],
         income_categories: list[Category],
+        users: Iterable[User] | None = None,
     ) -> AggregateBudgetDataDict:
         """Aggregate all budget data for the dashboard context."""
         _validate_budget_inputs(
@@ -443,18 +500,29 @@ class BudgetService:
             expense_categories,
             income_categories,
         )
+        scope_users = _scope_users(user, users)
+        show_expense_owner = _should_show_category_owner(
+            expense_categories,
+            scope_users,
+        )
+        show_income_owner = _should_show_category_owner(
+            income_categories,
+            scope_users,
+        )
 
         expense_fact_map = self._get_fact_map_int(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            users=users,
         )
         expense_plan_map = self._get_plan_map_int(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            users=users,
         )
 
         total_fact_expense, total_plan_expense = _calculate_expense_totals(
@@ -468,6 +536,7 @@ class BudgetService:
             expense_plan_map,
             months,
             expense_categories,
+            include_owner=show_expense_owner,
         )
 
         income_fact_map = self._get_fact_map_decimal(
@@ -475,12 +544,14 @@ class BudgetService:
             months,
             income_categories,
             TransactionType.INCOME,
+            users=users,
         )
         income_plan_map = self._get_plan_map_decimal(
             user,
             months,
             income_categories,
             TransactionType.INCOME,
+            users=users,
         )
         total_fact_income, total_plan_income = _calculate_income_totals(
             income_fact_map,
@@ -493,6 +564,7 @@ class BudgetService:
             income_plan_map,
             months,
             income_categories,
+            include_owner=show_income_owner,
         )
 
         chart_data = _build_chart_data(
@@ -509,6 +581,7 @@ class BudgetService:
                 user=user,
                 months=months,
                 expense_categories=expense_categories,
+                users=users,
             ),
             'months': months,
             'expense_data': expense_data,
@@ -524,21 +597,25 @@ class BudgetService:
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        users: Iterable[User] | None = None,
     ) -> AggregateExpenseTableDict:
         """Aggregate data for the expense table view."""
         _validate_expense_table_inputs(user, months, expense_categories)
+        scope_users = _scope_users(user, users)
 
         expense_fact_map = self._get_fact_map_int(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            users=users,
         )
         expense_plan_map = self._get_plan_map_int(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            users=users,
         )
 
         expense_data, total_fact_expense, total_plan_expense = (
@@ -547,6 +624,10 @@ class BudgetService:
                 expense_plan_map,
                 months,
                 expense_categories,
+                include_owner=_should_show_category_owner(
+                    expense_categories,
+                    scope_users,
+                ),
             )
         )
 
@@ -562,21 +643,25 @@ class BudgetService:
         user: User,
         months: list[date],
         income_categories: list[Category],
+        users: Iterable[User] | None = None,
     ) -> AggregateIncomeTableDict:
         """Aggregate data for the income table view."""
         _validate_income_table_inputs(user, months, income_categories)
+        scope_users = _scope_users(user, users)
 
         income_fact_map = self._get_fact_map_decimal(
             user,
             months,
             income_categories,
             TransactionType.INCOME,
+            users=users,
         )
         income_plan_map = self._get_plan_map_decimal(
             user,
             months,
             income_categories,
             TransactionType.INCOME,
+            users=users,
         )
 
         income_data, total_fact_income, total_plan_income = (
@@ -585,6 +670,10 @@ class BudgetService:
                 income_plan_map,
                 months,
                 income_categories,
+                include_owner=_should_show_category_owner(
+                    income_categories,
+                    scope_users,
+                ),
             )
         )
 
@@ -600,21 +689,25 @@ class BudgetService:
         user: User,
         months: list[date],
         expense_categories: list[Category],
+        users: Iterable[User] | None = None,
     ) -> AggregateExpenseApiDict:
         """Aggregate data for the expense API endpoint."""
         _validate_expense_api_inputs(user, months, expense_categories)
+        scope_users = _scope_users(user, users)
 
         expense_fact_map = self._get_fact_map_int(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            users=users,
         )
         expense_plan_map = self._get_plan_map_int(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
+            users=users,
         )
 
         data = _build_expense_api_data(
@@ -622,6 +715,10 @@ class BudgetService:
             expense_plan_map,
             months,
             expense_categories,
+            include_owner=_should_show_category_owner(
+                expense_categories,
+                scope_users,
+            ),
         )
         return {'months': [m.isoformat() for m in months], 'data': data}
 
@@ -630,21 +727,25 @@ class BudgetService:
         user: User,
         months: list[date],
         income_categories: list[Category],
+        users: Iterable[User] | None = None,
     ) -> AggregateIncomeApiDict:
         """Aggregate data for the income API endpoint."""
         _validate_income_api_inputs(user, months, income_categories)
+        scope_users = _scope_users(user, users)
 
         income_fact_map = self._get_fact_map_decimal(
             user,
             months,
             income_categories,
             TransactionType.INCOME,
+            users=users,
         )
         income_plan_map = self._get_plan_map_decimal(
             user,
             months,
             income_categories,
             TransactionType.INCOME,
+            users=users,
         )
 
         data = _build_income_api_data(
@@ -652,6 +753,10 @@ class BudgetService:
             income_plan_map,
             months,
             income_categories,
+            include_owner=_should_show_category_owner(
+                income_categories,
+                scope_users,
+            ),
         )
         return {'months': [m.isoformat() for m in months], 'data': data}
 
@@ -659,15 +764,18 @@ class BudgetService:
 def get_categories(
     user: User | None,
     type_value: str,
+    users: Iterable[User] | None = None,
 ) -> QuerySet[Category, Category]:
     """Return root categories for a user filtered by type."""
     if user is None:
         error_msg = 'User is required.'
         raise BudgetDataError(error_msg)
-    return user.categories.filter(
+    scope_users = _scope_users(user, users)
+    return Category.objects.filter(
+        user__in=scope_users,
         type=type_value,
         parent_category=None,
-    ).order_by('name')
+    ).select_related('user').order_by('user__username', 'name')
 
 
 def _validate_budget_inputs(
@@ -706,11 +814,12 @@ def _build_expense_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[Category],
+    include_owner: bool = False,
 ) -> list[ExpenseDataRowDict]:
     expense_data = []
     for cat in expense_categories:
         row: ExpenseDataRowDict = {
-            'category': cat.name,
+            'category': _category_label(cat, include_owner),
             'category_id': cat.pk,
             'fact': [],
             'plan': [],
@@ -753,11 +862,12 @@ def _build_income_data(
     income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[Category],
+    include_owner: bool = False,
 ) -> list[IncomeDataRowDict]:
     income_data = []
     for cat in income_categories:
         row: IncomeDataRowDict = {
-            'category': cat.name,
+            'category': _category_label(cat, include_owner),
             'category_id': cat.pk,
             'fact': [],
             'plan': [],
@@ -841,6 +951,7 @@ def _build_expense_table_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[Category],
+    include_owner: bool = False,
 ) -> tuple[list[ExpenseDataRowDict], list[int], list[int]]:
     expense_data = []
     total_fact_expense = [0] * len(months)
@@ -848,7 +959,7 @@ def _build_expense_table_data(
 
     for cat in expense_categories:
         row: ExpenseDataRowDict = {
-            'category': cat.name,
+            'category': _category_label(cat, include_owner),
             'category_id': cat.pk,
             'fact': [],
             'plan': [],
@@ -892,6 +1003,7 @@ def _build_income_table_data(
     income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[Category],
+    include_owner: bool = False,
 ) -> tuple[list[IncomeDataRowDict], list[Decimal], list[Decimal]]:
     income_data = []
     total_fact_income = [Decimal(0)] * len(months)
@@ -899,7 +1011,7 @@ def _build_income_table_data(
 
     for cat in income_categories:
         row: IncomeDataRowDict = {
-            'category': cat.name,
+            'category': _category_label(cat, include_owner),
             'category_id': cat.pk,
             'fact': [],
             'plan': [],
@@ -943,11 +1055,12 @@ def _build_income_api_data(
     income_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     income_categories: list[Category],
+    include_owner: bool = False,
 ) -> list[dict[str, Any]]:
     data = []
     for cat in income_categories:
         row: dict[str, Any] = {
-            'category': cat.name,
+            'category': _category_label(cat, include_owner),
             'category_id': cat.pk,
         }
         for m in months:
@@ -972,11 +1085,12 @@ def _build_expense_api_data(
     expense_plan_map: dict[int, dict[date, int]],
     months: list[date],
     expense_categories: list[Category],
+    include_owner: bool = False,
 ) -> list[dict[str, Any]]:
     data = []
     for cat in expense_categories:
         row: dict[str, Any] = {
-            'category': cat.name,
+            'category': _category_label(cat, include_owner),
             'category_id': cat.pk,
         }
         for m in months:

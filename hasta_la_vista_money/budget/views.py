@@ -29,10 +29,89 @@ from hasta_la_vista_money.budget.services.budget import (
 from hasta_la_vista_money.services.generate_dates import generate_date_list
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.transactions.repositories import TransactionRepository
-from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.models import FamilyGroupMembership, User
+from hasta_la_vista_money.users.services.groups import get_family_groups
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
+
+
+class BudgetScopeChoiceDict(TypedDict):
+    value: str
+    label: str
+
+
+class BudgetPageContextDict(TypedDict):
+    user: User
+    months: list[date]
+    expense_categories: list[Category]
+    income_categories: list[Category]
+    scope_users: list[User]
+    budget_scope: str
+    budget_scope_choices: list[BudgetScopeChoiceDict]
+
+
+def _normalize_budget_scope(value: str | None) -> str:
+    if value == 'family':
+        return 'family'
+    return 'my'
+
+
+def _owned_family_group_ids(user: User) -> list[int]:
+    return list(
+        FamilyGroupMembership.objects.filter(
+            user=user,
+            role=FamilyGroupMembership.Role.OWNER,
+        ).values_list('group_id', flat=True),
+    )
+
+
+def _family_users_for_budget(user: User) -> list[User]:
+    group_ids = _owned_family_group_ids(user)
+    if not group_ids:
+        return [user]
+    return list(
+        User.objects.filter(family_memberships__group_id__in=group_ids)
+        .distinct()
+        .order_by('username'),
+    ) or [user]
+
+
+def _scope_choices(
+    user: User,
+    request: Any,
+) -> list[BudgetScopeChoiceDict]:
+    family_groups = get_family_groups(user, request)
+    has_owned_family = any(
+        group['role'] == FamilyGroupMembership.Role.OWNER
+        for group in family_groups
+    )
+    choices: list[BudgetScopeChoiceDict] = [
+        {'value': 'my', 'label': 'Мой бюджет'},
+    ]
+    if has_owned_family:
+        choices.append({'value': 'family', 'label': 'Семья'})
+    return choices
+
+
+def _resolve_budget_scope(
+    user: User,
+    request: Any,
+) -> tuple[str, list[User], list[BudgetScopeChoiceDict]]:
+    choices = _scope_choices(user, request)
+    allowed_scopes = {choice['value'] for choice in choices}
+    raw_scope = request.GET.get('scope')
+    request_data = getattr(request, 'data', None)
+    request_data_get = getattr(request_data, 'get', None)
+    if raw_scope is None and callable(request_data_get):
+        raw_scope = request_data_get('scope')
+    scope = _normalize_budget_scope(raw_scope)
+    if scope not in allowed_scopes:
+        scope = 'my'
+    scope_users = (
+        _family_users_for_budget(user) if scope == 'family' else [user]
+    )
+    return scope, scope_users, choices
 
 
 def get_fact_amount(
@@ -85,18 +164,37 @@ class BudgetContextMixin:
 
     def get_budget_context(
         self,
-    ) -> tuple[User, list[date], list[Category], list[Category]]:
+    ) -> BudgetPageContextDict:
         request_obj = getattr(self, 'request', None)
         if request_obj is None:
             raise AttributeError('request attribute is required')
         request = cast('RequestWithContainer', request_obj)
         user = get_object_or_404(User, username=request.user)
+        budget_scope, scope_users, budget_scope_choices = _resolve_budget_scope(
+            user,
+            request,
+        )
         date_list_repository = request.container.budget.date_list_repository()
-        list_dates = date_list_repository.get_by_user_ordered(user)
-        months = [d.date.replace(day=1) for d in list_dates]
-        expense_categories = list(get_categories(user, 'expense'))
-        income_categories = list(get_categories(user, 'income'))
-        return user, months, expense_categories, income_categories
+        dates = date_list_repository.filter(user__in=scope_users).values_list(
+            'date',
+            flat=True,
+        )
+        months = sorted({month.replace(day=1) for month in dates})
+        expense_categories = list(
+            get_categories(user, 'expense', users=scope_users),
+        )
+        income_categories = list(
+            get_categories(user, 'income', users=scope_users),
+        )
+        return {
+            'user': user,
+            'months': months,
+            'expense_categories': expense_categories,
+            'income_categories': income_categories,
+            'scope_users': scope_users,
+            'budget_scope': budget_scope,
+            'budget_scope_choices': budget_scope_choices,
+        }
 
 
 class BudgetView(
@@ -110,19 +208,24 @@ class BudgetView(
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        user, months, expense_categories, income_categories = (
-            self.get_budget_context()
-        )
+        budget_context = self.get_budget_context()
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
         data = budget_service.aggregate_budget_data(
-            user=user,
-            months=months,
-            expense_categories=expense_categories,
-            income_categories=income_categories,
+            user=budget_context['user'],
+            months=budget_context['months'],
+            expense_categories=budget_context['expense_categories'],
+            income_categories=budget_context['income_categories'],
+            users=budget_context['scope_users'],
         )
         context.update(data)
         context.update(context['chart_data'])
+        context.update(
+            {
+                'budget_scope': budget_context['budget_scope'],
+                'budget_scope_choices': budget_context['budget_scope_choices'],
+            },
+        )
         context.update(
             {
                 'current_plan_expense': data['total_plan_expense'][-1]
@@ -158,13 +261,14 @@ class ExpenseTableView(
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        user, months, expense_categories, _ = self.get_budget_context()
+        budget_context = self.get_budget_context()
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
         data = budget_service.aggregate_expense_table(
-            user=user,
-            months=months,
-            expense_categories=expense_categories,
+            user=budget_context['user'],
+            months=budget_context['months'],
+            expense_categories=budget_context['expense_categories'],
+            users=budget_context['scope_users'],
         )
         context.update(data)
         context.update(
@@ -176,6 +280,12 @@ class ExpenseTableView(
                 total_plan=data['total_plan_expense'],
                 selected_range=self.request.GET.get('range', '6'),
             ),
+        )
+        context.update(
+            {
+                'budget_scope': budget_context['budget_scope'],
+                'budget_scope_choices': budget_context['budget_scope_choices'],
+            },
         )
         return context
 
@@ -196,13 +306,14 @@ class IncomeTableView(
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        user, months, _, income_categories = self.get_budget_context()
+        budget_context = self.get_budget_context()
         request = cast('RequestWithContainer', self.request)
         budget_service = request.container.budget.budget_service()
         data = budget_service.aggregate_income_table(
-            user=user,
-            months=months,
-            income_categories=income_categories,
+            user=budget_context['user'],
+            months=budget_context['months'],
+            income_categories=budget_context['income_categories'],
+            users=budget_context['scope_users'],
         )
         context.update(data)
         context.update(
@@ -214,6 +325,12 @@ class IncomeTableView(
                 total_plan=data['total_plan_income'],
                 selected_range=self.request.GET.get('range', '6'),
             ),
+        )
+        context.update(
+            {
+                'budget_scope': budget_context['budget_scope'],
+                'budget_scope_choices': budget_context['budget_scope_choices'],
+            },
         )
         return context
 
@@ -284,12 +401,21 @@ class ExpenseBudgetAPIView(APIView):
     def get(self, request: Any, *args: Any, **kwargs: Any) -> Response:
         user = request.user
         request_with_container = cast('RequestWithContainer', request)
+        _budget_scope, scope_users, _choices = _resolve_budget_scope(
+            user,
+            request,
+        )
         date_list_repository = (
             request_with_container.container.budget.date_list_repository()
         )
-        list_dates = date_list_repository.get_by_user_ordered(user)
-        months = [d.date.replace(day=1) for d in list_dates]
-        expense_categories = list(get_categories(user, 'expense'))
+        dates = date_list_repository.filter(user__in=scope_users).values_list(
+            'date',
+            flat=True,
+        )
+        months = sorted({month.replace(day=1) for month in dates})
+        expense_categories = list(
+            get_categories(user, 'expense', users=scope_users),
+        )
         budget_service = (
             request_with_container.container.budget.budget_service()
         )
@@ -297,6 +423,7 @@ class ExpenseBudgetAPIView(APIView):
             user=user,
             months=months,
             expense_categories=expense_categories,
+            users=scope_users,
         )
         return Response(data)
 
@@ -339,12 +466,21 @@ class IncomeBudgetAPIView(APIView):
     def get(self, request: Any, *args: Any, **kwargs: Any) -> Response:
         user = request.user
         request_with_container = cast('RequestWithContainer', request)
+        _budget_scope, scope_users, _choices = _resolve_budget_scope(
+            user,
+            request,
+        )
         date_list_repository = (
             request_with_container.container.budget.date_list_repository()
         )
-        list_dates = date_list_repository.get_by_user_ordered(user)
-        months = [d.date.replace(day=1) for d in list_dates]
-        income_categories = list(get_categories(user, 'income'))
+        dates = date_list_repository.filter(user__in=scope_users).values_list(
+            'date',
+            flat=True,
+        )
+        months = sorted({month.replace(day=1) for month in dates})
+        income_categories = list(
+            get_categories(user, 'income', users=scope_users),
+        )
         budget_service = (
             request_with_container.container.budget.budget_service()
         )
@@ -352,5 +488,6 @@ class IncomeBudgetAPIView(APIView):
             user=user,
             months=months,
             income_categories=income_categories,
+            users=scope_users,
         )
         return Response(data)

@@ -28,6 +28,7 @@ from hasta_la_vista_money.authentication.authentication import (
 )
 from hasta_la_vista_money.budget.presentation import build_budget_matrix_context
 from hasta_la_vista_money.budget.services.budget import get_categories
+from hasta_la_vista_money.budget.views import _resolve_budget_scope
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -54,21 +55,29 @@ def _budget_range_from_request(request: Request) -> str:
 def _render_budget_matrix(request: Request, table_type: str) -> Any:
     request_with_container = cast('RequestWithContainer', request)
     user = cast('User', request.user)
+    budget_scope, scope_users, budget_scope_choices = _resolve_budget_scope(
+        user,
+        request,
+    )
     date_list_repository = (
         request_with_container.container.budget.date_list_repository()
     )
-    months = [
-        d.date.replace(day=1)
-        for d in date_list_repository.get_by_user_ordered(user)
-    ]
+    dates = date_list_repository.filter(user__in=scope_users).values_list(
+        'date',
+        flat=True,
+    )
+    months = sorted({month.replace(day=1) for month in dates})
     budget_service = request_with_container.container.budget.budget_service()
 
     if table_type == TransactionType.EXPENSE:
-        categories = list(get_categories(user, TransactionType.EXPENSE))
+        categories = list(
+            get_categories(user, TransactionType.EXPENSE, users=scope_users),
+        )
         data = budget_service.aggregate_expense_table(
             user=user,
             months=months,
             expense_categories=categories,
+            users=scope_users,
         )
         context = build_budget_matrix_context(
             table_type=TransactionType.EXPENSE,
@@ -79,11 +88,14 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
             selected_range=_budget_range_from_request(request),
         )
     else:
-        categories = list(get_categories(user, TransactionType.INCOME))
+        categories = list(
+            get_categories(user, TransactionType.INCOME, users=scope_users),
+        )
         data = budget_service.aggregate_income_table(
             user=user,
             months=months,
             income_categories=categories,
+            users=scope_users,
         )
         context = build_budget_matrix_context(
             table_type=TransactionType.INCOME,
@@ -94,27 +106,43 @@ def _render_budget_matrix(request: Request, table_type: str) -> Any:
             selected_range=_budget_range_from_request(request),
         )
 
+    context.update(
+        {
+            'budget_scope': budget_scope,
+            'budget_scope_choices': budget_scope_choices,
+        },
+    )
     return render(request, 'budget/partials/_budget_matrix.html', context)
 
 
 def _render_budget_limits(request: Request) -> Any:
     request_with_container = cast('RequestWithContainer', request)
     user = cast('User', request.user)
+    budget_scope, scope_users, budget_scope_choices = _resolve_budget_scope(
+        user,
+        request,
+    )
     date_list_repository = (
         request_with_container.container.budget.date_list_repository()
     )
-    months = [
-        d.date.replace(day=1)
-        for d in date_list_repository.get_by_user_ordered(user)
-    ]
-    expense_categories = list(get_categories(user, TransactionType.EXPENSE))
+    dates = date_list_repository.filter(user__in=scope_users).values_list(
+        'date',
+        flat=True,
+    )
+    months = sorted({month.replace(day=1) for month in dates})
+    expense_categories = list(
+        get_categories(user, TransactionType.EXPENSE, users=scope_users),
+    )
     budget_service = request_with_container.container.budget.budget_service()
     context = {
         'budget_limit_overview': budget_service.aggregate_budget_limit_overview(
             user=user,
             months=months,
             expense_categories=expense_categories,
+            users=scope_users,
         ),
+        'budget_scope': budget_scope,
+        'budget_scope_choices': budget_scope_choices,
     }
     return render(request, 'budget/partials/_budget_limits.html', context)
 
@@ -239,7 +267,7 @@ class ChangePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         request: Request,
         *args: Any,
         **kwargs: Any,
-    ) -> Response:
+    ) -> Response | Any:
         """Change planning.
 
         Args:
@@ -325,7 +353,7 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         request: Request,
         *args: Any,
         **kwargs: Any,
-    ) -> Response:
+    ) -> Response | Any:
         """Save planning.
 
         Args:
@@ -342,6 +370,10 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         """
         request_with_container = cast('RequestWithContainer', request)
         user = cast('User', request.user)
+        budget_scope, scope_users, _choices = _resolve_budget_scope(
+            user,
+            request,
+        )
 
         try:
             month = date.fromisoformat(request.data['month'])
@@ -361,14 +393,18 @@ class SavePlanningAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
             request_with_container.container.budget.planning_repository()
         )
 
-        category = get_object_or_404(
-            Category,
-            id=request.data['category_id'],
-            user=user,
-            type=type_,
-        )
+        category_lookup: dict[str, Any] = {
+            'id': request.data['category_id'],
+            'type': type_,
+        }
+        if budget_scope == 'family':
+            category_lookup['user__in'] = scope_users
+        else:
+            category_lookup['user'] = user
+        category = get_object_or_404(Category, **category_lookup)
+        planning_user = category.user if budget_scope == 'family' else user
         plan, created = planning_repository.get_or_create_planning(
-            user=user,
+            user=planning_user,
             category=category,
             date=month,
             planning_type=type_,
@@ -434,6 +470,10 @@ class SaveBudgetLimitAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
     ) -> Response | Any:
         request_with_container = cast('RequestWithContainer', request)
         user = cast('User', request.user)
+        budget_scope, scope_users, _choices = _resolve_budget_scope(
+            user,
+            request,
+        )
 
         try:
             month = date.fromisoformat(request.data['month']).replace(day=1)
@@ -476,19 +516,24 @@ class SaveBudgetLimitAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 
         raw_category_id = request.data.get('category_id')
         category = None
+        budget_user = user
         if raw_category_id:
-            category = get_object_or_404(
-                Category,
-                id=raw_category_id,
-                user=user,
-                type=TransactionType.EXPENSE,
-            )
+            category_lookup = {
+                'id': raw_category_id,
+                'type': TransactionType.EXPENSE,
+            }
+            if budget_scope == 'family':
+                category_lookup['user__in'] = scope_users
+            else:
+                category_lookup['user'] = user
+            category = get_object_or_404(Category, **category_lookup)
+            budget_user = category.user
 
         budget_repository = (
             request_with_container.container.budget.budget_repository()
         )
         budget, created = budget_repository.get_or_create_budget(
-            user=user,
+            user=budget_user,
             period=month,
             category=category,
             defaults={
