@@ -949,53 +949,37 @@
 }
 
 .accounts-row-actions {
-  position: absolute;
-  inset: 0 0 0 auto;
+  --swipe-accent: color-mix(in oklab, var(--acc-accent) 36%, var(--acc-surface-2));
+  --swipe-danger: color-mix(in oklab, var(--acc-negative) 40%, var(--acc-surface-2));
+  --swipe-surface-2: var(--acc-surface-2);
+  align-items: center;
   display: flex;
-  align-items: stretch;
+  gap: 0.35rem;
+  inset: 0 0.5rem 0 auto;
+  padding-inline: 0.15rem;
+  position: absolute;
   z-index: 0;
 }
 
 .accounts-row-action {
   appearance: none;
   border: 0;
-  width: 4rem;
-  display: grid;
-  place-items: center;
-  gap: 0.25rem;
-  color: var(--acc-text);
-  font-size: 0.6875rem;
-  font-weight: 500;
   cursor: pointer;
-  background: var(--acc-surface-2);
-  text-decoration: none;
-  padding: 0;
   font-family: inherit;
-  transition: filter 0.15s ease;
-}
-
-.accounts-row-action svg {
-  width: 16px;
-  height: 16px;
+  padding: 0;
+  text-decoration: none;
 }
 
 .accounts-row-action.transfer {
-  background: color-mix(in oklab, var(--acc-accent) 36%, var(--acc-surface-2));
   color: var(--acc-text);
 }
 
 .accounts-row-action.edit {
-  background: var(--acc-surface-2);
   color: var(--acc-text-2, var(--acc-text));
 }
 
 .accounts-row-action.delete {
-  background: color-mix(in oklab, var(--acc-negative) 40%, var(--acc-surface-2));
   color: var(--acc-text);
-}
-
-.accounts-row-action:hover {
-  filter: brightness(1.1);
 }
 
 .accounts-row-content {

@@ -575,10 +575,24 @@
   box-shadow: var(--receipts-shadow-panel);
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0;
   overflow: hidden;
-  padding: 1.1rem 1.15rem;
+  padding: 0;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.receipt-card-content[data-swipe-content] {
+  background: var(--receipts-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.1rem 1.15rem;
+}
+
+.receipt-card-swipe-actions {
+  --swipe-accent: color-mix(in oklab, var(--receipts-accent) 36%, var(--receipts-surface-2));
+  --swipe-danger: color-mix(in oklab, var(--receipts-negative) 40%, var(--receipts-surface-2));
+  --swipe-surface-2: var(--receipts-surface-2);
 }
 
 .receipt-card:hover {
@@ -678,6 +692,25 @@
   box-shadow: var(--receipts-shadow-panel);
   display: flex;
   flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.pending-card-content[data-swipe-content] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.1rem 1.15rem;
+}
+
+.pending-card-swipe-actions {
+  --swipe-accent: color-mix(in oklab, var(--receipts-accent) 36%, var(--receipts-surface-2));
+  --swipe-danger: color-mix(in oklab, var(--receipts-negative) 40%, var(--receipts-surface-2));
+  --swipe-surface-2: var(--receipts-surface-2);
+}
+
+.pending-card-processing {
   gap: 0.85rem;
   padding: 1.1rem 1.15rem;
 }

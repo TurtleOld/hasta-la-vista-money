@@ -87,7 +87,7 @@
   gap: 0.5rem;
 }
 
-.finances-row-actions button {
+.finances-row-actions-inline button {
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -104,8 +104,8 @@
   display: contents;
 }
 
-.finances-row-actions a,
-.finances-row-actions button {
+.finances-row-actions-inline a,
+.finances-row-actions-inline button {
   align-items: center;
   border-radius: 0.375rem;
   display: flex;
@@ -115,8 +115,8 @@
   width: 1.75rem;
 }
 
-.finances-row-actions a:hover,
-.finances-row-actions button:hover {
+.finances-row-actions-inline a:hover,
+.finances-row-actions-inline button:hover {
   background: var(--finances-surface-2);
 }
 
@@ -443,8 +443,7 @@
   gap: 1rem;
 }
 
-.finances-list-head,
-.finances-row {
+.finances-list-head {
   display: grid;
   gap: 0.8rem;
   grid-template-columns: 2.6rem minmax(0, 1fr) minmax(8rem, 0.7fr) 8rem 7rem 5.5rem;
@@ -464,8 +463,44 @@
   align-items: center;
   border-bottom: 1px solid var(--finances-border);
   min-height: 3.7rem;
-  padding: 0.75rem 1rem;
+  padding: 0;
   position: relative;
+}
+
+.finances-row-content[data-swipe-content] {
+  align-items: center;
+  background: var(--finances-surface);
+  box-sizing: border-box;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 2.6rem minmax(0, 1fr) minmax(8rem, 0.7fr) 8rem 7rem 5.5rem;
+  min-height: 3.7rem;
+  padding: 0.75rem 1rem;
+  width: 100%;
+}
+
+.finances-row-content[data-swipe-content] > div:nth-child(2) {
+  min-width: 0;
+}
+
+.finances-row-actions-swipe {
+  --swipe-accent: color-mix(in oklab, var(--finances-accent) 36%, var(--finances-surface-2));
+  --swipe-danger: color-mix(in oklab, var(--finances-negative) 40%, var(--finances-surface-2));
+  --swipe-surface-2: var(--finances-surface-2);
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 0;
+}
+
+.finances-row-actions-swipe form {
+  display: flex;
+  margin: 0;
+}
+
+.finances-row-actions-inline svg {
+  height: 1rem;
+  width: 1rem;
 }
 
 .finances-row:last-child {
@@ -643,19 +678,28 @@
   }
 }
 
+@media (min-width: 769px) {
+  .finances-row-actions-swipe {
+    display: none;
+  }
+
+  .finances-row.swipe-touch-only [data-swipe-content] {
+    cursor: default;
+  }
+}
+
 @media (max-width: 768px) {
   .finances-list-head {
     display: none;
   }
 
-  .finances-row {
+  .finances-row-content[data-swipe-content] {
     grid-template-columns: 2.6rem minmax(0, 1fr) auto;
   }
 
   .finances-row-account,
   .finances-row-date,
-  .finances-row-user,
-  .finances-row-actions {
+  .finances-row-user {
     display: none;
   }
 

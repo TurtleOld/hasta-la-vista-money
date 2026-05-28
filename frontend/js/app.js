@@ -1,3 +1,5 @@
+import './service-worker.js';
+import './swipe-list.js';
 import '../../static/js/notifications.js';
 import '../../static/js/tokens.js';
 import '../../static/js/script.js';

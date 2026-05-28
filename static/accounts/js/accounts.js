@@ -247,100 +247,6 @@
   }
 
   /* ──────────────────────────────────────────────────────────────
-   * Swipe cards (PointerEvents)
-   * ────────────────────────────────────────────────────────────── */
-  const SWIPE_REVEAL = 192;
-  const SWIPE_SLOP = 8;
-
-  function bindSwipeRow(content) {
-    if (!content || content.dataset.swipeBound === '1') return;
-    content.dataset.swipeBound = '1';
-
-    let state = {
-      pointerId: null,
-      startX: 0,
-      startY: 0,
-      currentX: 0,
-      offset: 0,
-      swiping: false,
-      locked: false,
-    };
-
-    function setTransform(x, animated) {
-      content.style.transform = 'translate3d(' + x + 'px, 0, 0)';
-      content.style.transition = animated
-        ? 'transform .25s cubic-bezier(.3,.8,.4,1)'
-        : 'none';
-    }
-
-    content.addEventListener('pointerdown', (event) => {
-      if (event.pointerType !== 'touch' && event.pointerType !== 'pen') {
-        if (event.button !== 0) return;
-      }
-      state.pointerId = event.pointerId;
-      state.startX = event.clientX;
-      state.startY = event.clientY;
-      state.currentX = event.clientX;
-      state.locked = false;
-      state.swiping = false;
-    });
-
-    content.addEventListener('pointermove', (event) => {
-      if (state.pointerId !== event.pointerId) return;
-      const dx = event.clientX - state.startX;
-      const dy = event.clientY - state.startY;
-      if (!state.locked) {
-        if (Math.abs(dx) < SWIPE_SLOP && Math.abs(dy) < SWIPE_SLOP) return;
-        if (Math.abs(dy) > Math.abs(dx)) {
-          /* Vertical scroll — cancel swipe gesture. */
-          state.pointerId = null;
-          return;
-        }
-        state.locked = true;
-        state.swiping = true;
-        content.classList.add('swiping');
-        try { content.setPointerCapture(event.pointerId); } catch (_e) { /* ignore */ }
-      }
-      let next = state.offset + dx;
-      if (next > 0) next = 0;
-      if (next < -SWIPE_REVEAL) next = -SWIPE_REVEAL;
-      state.currentX = next;
-      setTransform(next, false);
-      event.preventDefault();
-    }, { passive: false });
-
-    function release(event) {
-      if (state.pointerId !== event.pointerId) return;
-      try { content.releasePointerCapture(event.pointerId); } catch (_e) { /* ignore */ }
-      state.pointerId = null;
-      if (!state.swiping) return;
-      content.classList.remove('swiping');
-      state.swiping = false;
-      const snap = state.currentX < -SWIPE_REVEAL / 2 ? -SWIPE_REVEAL : 0;
-      state.offset = snap;
-      setTransform(snap, true);
-    }
-
-    content.addEventListener('pointerup', release);
-    content.addEventListener('pointercancel', release);
-
-    /* Click on an action closes the row. */
-    const row = content.closest('.accounts-row');
-    if (row) {
-      row.querySelectorAll('.accounts-row-action').forEach((action) => {
-        action.addEventListener('click', () => {
-          state.offset = 0;
-          setTransform(0, true);
-        });
-      });
-    }
-  }
-
-  function initSwipeCards() {
-    document.querySelectorAll('.accounts-row-content').forEach(bindSwipeRow);
-  }
-
-  /* ──────────────────────────────────────────────────────────────
    * Toast
    * ────────────────────────────────────────────────────────────── */
   const toastState = { timer: null };
@@ -500,11 +406,7 @@
         window.BalanceTrendWidget.init();
       }
       applyHideBalance();
-      initSwipeCards();
     });
-
-    /* Touch swipe for account rows (PointerEvents). */
-    initSwipeCards();
 
     /* Delegated clicks for FAB, eye, drawer outside, tabs, group chips. */
     document.addEventListener('click', (event) => {

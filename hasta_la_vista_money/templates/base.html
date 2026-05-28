@@ -14,7 +14,15 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <meta name="theme-color" content="#059669">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="HLVM">
+        <link nonce="{{request.csp_nonce}}" rel="manifest" href="{% static 'manifest.webmanifest' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
+        <link nonce="{{request.csp_nonce}}" rel="apple-touch-icon" href="{% static 'img/pwa/apple-touch-icon.png' %}?v={% word_hash %}">
+        <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/swipe-list.css' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.googleapis.com">
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link nonce="{{request.csp_nonce}}" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@300;400;500;600;700&family=Geist:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@700&family=Gloria+Hallelujah&display=swap" rel="stylesheet">

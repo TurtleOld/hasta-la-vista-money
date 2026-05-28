@@ -1,0 +1,105 @@
+[data-swipe-row] {
+  overflow: hidden;
+  position: relative;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+[data-swipe-actions] form {
+  display: flex;
+  margin: 0;
+}
+
+[data-swipe-actions] {
+  align-items: center;
+  display: flex;
+  gap: 0.35rem;
+  inset: 0 0.5rem 0 auto;
+  padding-inline: 0.15rem;
+  position: absolute;
+  z-index: 0;
+}
+
+[data-swipe-content] {
+  background: inherit;
+  cursor: grab;
+  position: relative;
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.25s cubic-bezier(0.3, 0.8, 0.4, 1);
+  z-index: 1;
+}
+
+[data-swipe-content].swiping {
+  cursor: grabbing;
+  transition: none;
+}
+
+.swipe-action-btn {
+  align-items: center;
+  appearance: none;
+  border: 0;
+  border-radius: 0.9rem;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 2.75rem;
+  justify-content: center;
+  padding: 0;
+  text-decoration: none;
+  transition: filter 0.15s ease, transform 0.15s ease;
+  width: 2.75rem;
+}
+
+.swipe-action-btn svg {
+  flex-shrink: 0;
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+.swipe-action-btn:active {
+  transform: scale(0.96);
+}
+
+.swipe-action-btn.is-neutral {
+  background: var(--swipe-surface-2, rgba(148, 163, 184, 0.22));
+  color: var(--swipe-neutral-fg, inherit);
+}
+
+.swipe-action-btn.is-accent {
+  background: var(--swipe-accent, rgba(16, 185, 129, 0.38));
+  color: var(--swipe-accent-fg, #ecfdf5);
+}
+
+.swipe-action-btn.is-danger {
+  background: var(--swipe-danger, rgba(239, 68, 68, 0.38));
+  color: var(--swipe-danger-fg, #fef2f2);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .swipe-action-btn:hover {
+    filter: brightness(1.08);
+  }
+
+  [data-swipe-row]:not(.swipe-touch-only):hover [data-swipe-content]:not(.swiping) {
+    transform: translate3d(calc(-1 * var(--swipe-reveal, 12rem)), 0, 0);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  [data-swipe-row]:not(.swipe-touch-only):hover [data-swipe-content]:not(.swiping) {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (max-width: 768px) {
+  .swipe-hide-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .swipe-hide-desktop {
+    display: none !important;
+  }
+}

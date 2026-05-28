@@ -19,7 +19,10 @@ from hasta_la_vista_money.finance_account.views import (
 )
 from hasta_la_vista_money.system.views import (
     HealthCheckView,
+    OfflineView,
     ReadinessCheckView,
+    ServiceWorkerPrecacheView,
+    ServiceWorkerView,
 )
 from hasta_la_vista_money.users.views import (
     IndexView,
@@ -76,12 +79,32 @@ async def debug_static_serve(request, path: str):
     static_file = finders.find(path)
     if not static_file:
         raise Http404
-    return await _serve_file(Path(static_file))
+    if path.endswith('.webmanifest'):
+        content_type = 'application/manifest+json'
+        encoding = None
+    else:
+        content_type, encoding = mimetypes.guess_type(path)
+    stat_result = await asyncio.to_thread(Path(static_file).stat)
+    response = StreamingHttpResponse(
+        _file_iterator(Path(static_file)),
+        content_type=content_type or 'application/octet-stream',
+    )
+    response['Content-Length'] = str(stat_result.st_size)
+    if encoding:
+        response['Content-Encoding'] = encoding
+    return response
 
 
 urlpatterns = [
     path('healthz/', HealthCheckView.as_view(), name='healthz'),
     path('readyz/', ReadinessCheckView.as_view(), name='readyz'),
+    path('sw.js', ServiceWorkerView.as_view(), name='service_worker'),
+    path(
+        'sw-precache.json',
+        ServiceWorkerPrecacheView.as_view(),
+        name='service_worker_precache',
+    ),
+    path('offline/', OfflineView.as_view(), name='offline'),
     re_path(
         r'^users/',
         include(
