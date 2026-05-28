@@ -118,6 +118,12 @@
     {% endif %}
 
 
+    {% if user.is_authenticated %}
+    <script nonce="{{request.csp_nonce}}">
+        window.userIsAuthenticated = true;
+    </script>
+    <script nonce="{{request.csp_nonce}}" src="{% static 'js/driver.js' %}?v={% word_hash %}"></script>
+    {% endif %}
 {% compress js %}
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/htmx.min.js' %}"></script>
     <script src="{% static 'js/dist/app.js' %}?v={% word_hash %}"></script>
