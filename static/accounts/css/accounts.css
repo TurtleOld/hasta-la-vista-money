@@ -961,6 +961,11 @@
   z-index: 0;
 }
 
+.accounts-row-actions form {
+  display: flex;
+  margin: 0;
+}
+
 .accounts-row-action {
   appearance: none;
   border: 0;
@@ -968,6 +973,13 @@
   font-family: inherit;
   padding: 0;
   text-decoration: none;
+}
+
+.accounts-row-action.swipe-action-btn {
+  border-radius: 1rem;
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
 }
 
 .accounts-row-action.transfer {

@@ -22,6 +22,13 @@ const swipeStates = new WeakMap();
 /** @type {WeakSet<HTMLElement>} */
 const boundContents = new WeakSet();
 
+function isSwipeDisabled(content) {
+  const row = content.closest('[data-swipe-row]');
+  return row instanceof HTMLElement
+    && row.classList.contains('swipe-touch-only')
+    && window.matchMedia('(min-width: 769px)').matches;
+}
+
 /**
  * @param {HTMLElement} content
  * @returns {number}
@@ -109,6 +116,10 @@ export function bindSwipeContent(content, options = {}) {
   swipeStates.set(content, state);
 
   content.addEventListener('pointerdown', (event) => {
+    if (isSwipeDisabled(content)) {
+      resetContent(content);
+      return;
+    }
     if (event.pointerType !== 'touch' && event.pointerType !== 'pen') {
       if (event.button !== 0) {
         return;
@@ -126,6 +137,10 @@ export function bindSwipeContent(content, options = {}) {
   content.addEventListener(
     'pointermove',
     (event) => {
+      if (isSwipeDisabled(content)) {
+        resetContent(content);
+        return;
+      }
       if (state.pointerId !== event.pointerId) {
         return;
       }
