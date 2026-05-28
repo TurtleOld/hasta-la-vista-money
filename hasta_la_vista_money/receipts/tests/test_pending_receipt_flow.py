@@ -270,8 +270,6 @@ class PendingReceiptConversionTests(TestCase):
         )
 
 
-
-
 class ReceiptParseValidatorTests(TestCase):
     """Receipt-inference payload validation."""
 
