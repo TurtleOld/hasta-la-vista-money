@@ -22,7 +22,8 @@
             'income',
             'loan',
             'reports',
-            'finance_account'
+            'finance_account',
+            'profile'
         ]);
 
         function getCurrentPage() {
@@ -46,6 +47,8 @@
                 return 'reports';
             } else if (pathname.includes('/finance_account')) {
                 return 'finance_account';
+            } else if (pathname.includes('/users/profile/')) {
+                return 'profile';
             }
 
             return 'unknown';
@@ -605,6 +608,35 @@
                 }
             ],
             reports: [
+            ],
+            profile: [
+                {
+                    element: '.profile-hero-card',
+                    popover: {
+                        title: 'Профиль пользователя',
+                        description: 'Здесь отображаются основные данные аккаунта: имя, email и дата регистрации.',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#personal-tab',
+                    popover: {
+                        title: 'Персональная информация',
+                        description: 'На этой вкладке можно обновить данные профиля и посмотреть группы, в которых вы состоите.',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#settings-tab',
+                    popover: {
+                        title: 'Настройки',
+                        description: 'Здесь находятся безопасность, семейный доступ, управление данными и переключатель тура по сайту.',
+                        side: 'bottom',
+                        align: 'end'
+                    }
+                }
             ]
         };
 
@@ -706,7 +738,11 @@
         function startTour() {
             // Check if tour is globally disabled
             if (isTourGloballyDisabled()) {
-                return;
+                return false;
+            }
+
+            if (tourSteps.length === 0) {
+                return false;
             }
 
             // Check if all required elements exist
@@ -715,18 +751,24 @@
             if (missingElements.length > 0) {
                 // Don't start tour if essential elements are missing
                 if (missingElements.length === tourSteps.length) {
-                    return;
+                    return false;
                 }
             }
 
             try {
                 const validSteps = tourSteps.filter(step => document.querySelector(step.element));
+                if (validSteps.length === 0) {
+                    return false;
+                }
+
                 const enhancedSteps = enhancePopoverWithCheckbox(validSteps);
 
                 driver.setSteps(enhancedSteps);
                 driver.drive(0);
+                return true;
             } catch (error) {
                 console.error('[SiteTour] Error starting tour:', error);
+                return false;
             }
         }
 
@@ -746,11 +788,11 @@
         window.SiteTour = {
             start: startTour,
             restart: () => {
-                startTour();
+                return startTour();
             },
             enableTour: () => {
                 enableTourGlobally();
-                startTour();
+                return startTour();
             },
             disableTour: () => {
                 disableTourGlobally();
@@ -761,7 +803,7 @@
                 } catch (error) {
                     console.warn('[SiteTour] Could not clear localStorage:', error);
                 }
-                startTour();
+                return startTour();
             },
             driver: driver,
             currentPage: validatedPage

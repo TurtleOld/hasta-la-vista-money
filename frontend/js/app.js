@@ -6,3 +6,5 @@ import '../../static/js/header.js';
 import '../../static/js/theme.js';
 import '../../static/js/account_form.js';
 import '../../static/js/budget-forms.js';
+import '../../static/js/site-tour.js';
+import '../../static/js/tour-controls.js';
