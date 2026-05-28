@@ -2,340 +2,170 @@
 {% load i18n %}
 {% load static %}
 {% load comma %}
+{% load word_hash %}
 
 {% block title %}{% translate 'Личный кабинет пользователя ' %}
     {{ user.username }}{% endblock %}
 
 {% block content %}
-    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-7xl mx-auto space-y-6">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div class="p-6">
-                    <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-                        <div class="shrink-0">
-                            <div class="profile-avatar-circle">
-                                {{ user.username|first|upper }}
-                            </div>
-                        </div>
-                        <div class="flex-1 text-center sm:text-left">
-                            <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
-                                {{ user.get_full_name|default:user.username }}
-                            </h2>
-                            <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                                <p class="flex items-center justify-center sm:justify-start">
-                                    <i class="bi bi-envelope"></i>
-                                    <span>{{ user.email|default:"Email не указан" }}</span>
-                                </p>
-                                <p class="flex items-center justify-center sm:justify-start">
-                                    <i class="bi bi-calendar"></i>
-                                    <span>{% translate 'Зарегистрирован' %}: {{ user.date_joined|date:"d.m.Y" }}</span>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+    <div class="profile-app">
+        <div class="profile-wrap">
+            <header class="profile-page-header">
+                <div>
+                    <p class="profile-kicker">{% translate 'Личный кабинет' %}</p>
+                    <h1 class="profile-title">{% translate 'Профиль пользователя' %}</h1>
                 </div>
-            </div>
+            </header>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-linear-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-blue-100 text-sm font-medium mb-1">{% translate 'Общий баланс' %}</p>
-                            <p class="text-2xl font-bold">{{ user_statistics.total_balance|comma }} ₽</p>
-                        </div>
-                        <div class="bg-white/20 rounded-full p-3">
-                            <i class="bi bi-wallet text-2xl"></i>
+            <section class="profile-hero-card" aria-label="{% translate 'Пользователь' %}">
+                <div class="profile-identity">
+                    <div class="profile-avatar-circle">
+                        {{ user.username|first|upper }}
+                    </div>
+                    <div class="profile-identity-body">
+                        <h2 class="profile-user-name">
+                            {{ user.get_full_name|default:user.username }}
+                        </h2>
+                        <div class="profile-user-meta">
+                            <p>
+                                <i class="bi bi-envelope"></i>
+                                <span>{{ user.email|default:"Email не указан" }}</span>
+                            </p>
+                            <p>
+                                <i class="bi bi-calendar"></i>
+                                <span>{% translate 'Зарегистрирован' %}: {{ user.date_joined|date:"d.m.Y" }}</span>
+                            </p>
                         </div>
                     </div>
                 </div>
-                <div class="bg-linear-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-green-100 text-sm font-medium mb-1">{% translate 'Доходы (месяц)' %}</p>
-                            <p class="text-2xl font-bold">{{ user_statistics.current_month_income|comma }} ₽</p>
-                        </div>
-                        <div class="bg-white/20 rounded-full p-3">
-                            <i class="bi bi-arrow-up-circle text-2xl"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-linear-to-br from-red-500 to-red-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-red-100 text-sm font-medium mb-1">{% translate 'Расходы (месяц)' %}</p>
-                            <p class="text-2xl font-bold">{{ user_statistics.current_month_expenses|comma }} ₽</p>
-                        </div>
-                        <div class="bg-white/20 rounded-full p-3">
-                            <i class="bi bi-arrow-down-circle text-2xl"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="{% if user_statistics.monthly_savings >= 0 %}bg-linear-to-br from-cyan-500 to-cyan-600{% else %}bg-linear-to-br from-yellow-500 to-yellow-600{% endif %} text-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="{% if user_statistics.monthly_savings >= 0 %}text-cyan-100{% else %}text-yellow-100{% endif %} text-sm font-medium mb-1">{% translate 'Сбережения' %}</p>
-                            <p class="text-2xl font-bold">{{ user_statistics.monthly_savings|comma }} ₽</p>
-                        </div>
-                        <div class="bg-white/20 rounded-full p-3">
-                            <i class="bi bi-piggy-bank text-2xl"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            </section>
 
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div class="border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex flex-wrap -mb-px" id="profileTabs" role="tablist">
-                        <button class="profile-tab-button active" id="personal-tab" data-tab-target="personal" type="button" role="tab" aria-selected="true" aria-controls="personal">
-                            <i class="bi bi-person mr-2"></i>
-                            <span>{% translate 'Персональная информация' %}</span>
-                        </button>
-                        <button class="profile-tab-button" id="statistics-tab" data-tab-target="statistics" type="button" role="tab" aria-selected="false" aria-controls="statistics">
-                            <i class="bi bi-graph-up mr-2"></i>
-                            <span>{% translate 'Статистика' %}</span>
-                        </button>
-                        <button class="profile-tab-button" id="recent-tab" data-tab-target="recent" type="button" role="tab" aria-selected="false" aria-controls="recent">
-                            <i class="bi bi-clock-history mr-2"></i>
-                            <span>{% translate 'Последние операции' %}</span>
-                        </button>
-                        <button class="profile-tab-button" id="settings-tab" data-tab-target="settings" type="button" role="tab" aria-selected="false" aria-controls="settings">
-                            <i class="bi bi-gear mr-2"></i>
-                            <span>{% translate 'Настройки' %}</span>
-                        </button>
-                    </div>
+            <section class="profile-panel">
+                <div class="profile-tabs" id="profileTabs" role="tablist">
+                    <button class="profile-tab-button active" id="personal-tab" data-tab-target="personal" type="button" role="tab" aria-selected="true" aria-controls="personal">
+                        <i class="bi bi-person"></i>
+                        <span>{% translate 'Персональная информация' %}</span>
+                    </button>
+                    <button class="profile-tab-button" id="settings-tab" data-tab-target="settings" type="button" role="tab" aria-selected="false" aria-controls="settings">
+                        <i class="bi bi-gear"></i>
+                        <span>{% translate 'Настройки' %}</span>
+                    </button>
                 </div>
-                <div class="p-6">
+
+                <div class="profile-panel-body">
                     <div id="profileTabsContent">
                         <div class="profile-tab-content active" id="personal" role="tabpanel" aria-labelledby="personal-tab">
                             <form class="ajax-form" method="POST" action="{% url 'users:update_user' user.id %}">
                                 {% csrf_token %}
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="profile-form-grid">
                                     {% for field in user_update %}
                                         <div class="form-group {% if field.errors %}has-error{% endif %}">
                                             {% include 'forms/_field.html' with field=field %}
                                             {% if field.errors %}
                                                 {% for error in field.errors %}
-                                                    <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+                                                    <p class="profile-field-error">{{ error }}</p>
                                                 {% endfor %}
                                             {% endif %}
                                         </div>
                                     {% endfor %}
                                 </div>
-                                <div class="mt-6">
-                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Мои группы' %}</h5>
-                                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                        <ul class="divide-y divide-gray-200 dark:divide-gray-600">
+
+                                <div class="profile-section">
+                                    <h2 class="profile-section-title">{% translate 'Мои группы' %}</h2>
+                                    <div class="profile-list-card">
+                                        <ul class="profile-list">
                                             {% for group in user_update.instance.groups.all %}
-                                                <li class="px-4 py-3 text-gray-900 dark:text-gray-100">{{ group.name }}</li>
+                                                <li class="profile-list-row">{{ group.name }}</li>
                                             {% empty %}
-                                                <li class="px-4 py-3 text-gray-500 dark:text-gray-400">{% translate 'Вы не состоите ни в одной группе' %}</li>
+                                                <li class="profile-list-row profile-muted">{% translate 'Вы не состоите ни в одной группе' %}</li>
                                             {% endfor %}
                                         </ul>
                                     </div>
                                 </div>
-                                <div class="mt-6">
-                                    <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600">
-                                        <i class="bi bi-check-circle"></i>
-                                        <span>{% translate 'Сохранить изменения' %}</span>
-                                    </button>
-                                </div>
+
+                                <button type="submit" class="profile-button profile-button-primary">
+                                    <i class="bi bi-check-circle"></i>
+                                    <span>{% translate 'Сохранить изменения' %}</span>
+                                </button>
                             </form>
                         </div>
 
-                        <div class="profile-tab-content" id="statistics" role="tabpanel" aria-labelledby="statistics-tab">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Общая информация' %}</h5>
-                                    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                        <ul class="divide-y divide-gray-200 dark:divide-gray-600">
-                                            <li class="px-4 py-3 flex items-center justify-between">
-                                                <span class="text-gray-700 dark:text-gray-300">{% translate 'Количество счетов' %}</span>
-                                                <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm font-medium rounded-full">{{ user_statistics.accounts_count }}</span>
-                                            </li>
-                                            <li class="px-4 py-3 flex items-center justify-between">
-                                                <span class="text-gray-700 dark:text-gray-300">{% translate 'Количество чеков' %}</span>
-                                                <span class="px-3 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300 text-sm font-medium rounded-full">{{ user_statistics.receipts_count }}</span>
-                                            </li>
-                                            <li class="px-4 py-3 flex items-center justify-between">
-                                                <span class="text-gray-700 dark:text-gray-300">{% translate 'Сравнение с прошлым месяцем' %}</span>
-                                                <span class="px-3 py-1 {% if user_statistics.monthly_savings > user_statistics.last_month_savings %}bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300{% else %}bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300{% endif %} text-sm font-medium rounded-full flex items-center gap-1">
-                                                    {% if user_statistics.monthly_savings > user_statistics.last_month_savings %}
-                                                        <i class="bi bi-arrow-up"></i>
-                                                    {% else %}
-                                                        <i class="bi bi-arrow-down"></i>
-                                                    {% endif %}
-                                                </span>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                    <div class="mt-4">
-                                        <a href="{% url 'users:statistics' %}" class="inline-flex items-center gap-2 px-4 py-2 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-200">
-                                            <i class="bi bi-graph-up"></i>
-                                            <span>{% translate 'Детальная статистика' %}</span>
-                                        </a>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Топ категорий расходов (текущий месяц)' %}</h5>
-                                    {% if user_statistics.top_expense_categories %}
-                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                            <ul class="divide-y divide-gray-200 dark:divide-gray-600">
-                                                {% for category in user_statistics.top_expense_categories %}
-                                                    <li class="px-4 py-3 flex items-center justify-between">
-                                                        <span class="text-gray-900 dark:text-gray-100">{{ category.category__name }}</span>
-                                                        <span class="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-sm font-medium rounded-full">
-                                                            {{ category.total|comma }} ₽
-                                                        </span>
-                                                    </li>
-                                                {% endfor %}
-                                            </ul>
-                                        </div>
-                                    {% else %}
-                                        <p class="text-gray-500 dark:text-gray-400">{% translate 'Нет данных о расходах за текущий месяц' %}</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="profile-tab-content" id="recent" role="tabpanel" aria-labelledby="recent-tab">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Последние расходы' %}</h5>
-                                    {% if user_statistics.recent_expenses %}
-                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
-                                            {% for expense in user_statistics.recent_expenses %}
-                                                <div class="p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
-                                                    <div class="flex items-start justify-between mb-2">
-                                                        <h6 class="font-medium text-gray-900 dark:text-white">{{ expense.category.name }}</h6>
-                                                        <span class="text-red-600 dark:text-red-400 font-semibold">{{ expense.amount|comma }} ₽</span>
-                                                    </div>
-                                                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">{{ expense.account.name_account }}</p>
-                                                    <p class="text-xs text-gray-500 dark:text-gray-500">{{ expense.date|date:"d.m.Y" }}</p>
-                                                </div>
-                                            {% endfor %}
-                                        </div>
-                                    {% else %}
-                                        <p class="text-gray-500 dark:text-gray-400">{% translate 'Нет данных о расходах' %}</p>
-                                    {% endif %}
-                                </div>
-                                <div>
-                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Последние доходы' %}</h5>
-                                    {% if user_statistics.recent_incomes %}
-                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
-                                            {% for income in user_statistics.recent_incomes %}
-                                                <div class="p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
-                                                    <div class="flex items-start justify-between mb-2">
-                                                        <h6 class="font-medium text-gray-900 dark:text-white">{{ income.category.name }}</h6>
-                                                        <span class="text-green-600 dark:text-green-400 font-semibold">{{ income.amount|comma }} ₽</span>
-                                                    </div>
-                                                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">{{ income.account.name_account }}</p>
-                                                    <p class="text-xs text-gray-500 dark:text-gray-500">{{ income.date|date:"d.m.Y" }}</p>
-                                                </div>
-                                            {% endfor %}
-                                        </div>
-                                    {% else %}
-                                        <p class="text-gray-500 dark:text-gray-400">{% translate 'Нет данных о доходах' %}</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
                         <div class="profile-tab-content" id="settings" role="tabpanel" aria-labelledby="settings-tab">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Безопасность' %}</h5>
-                                    <div class="space-y-3">
-                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:password' %}">
+                            <div class="profile-content-grid">
+                                <section class="profile-section-card">
+                                    <h2 class="profile-section-title">{% translate 'Безопасность' %}</h2>
+                                    <div class="profile-action-list">
+                                        <a class="profile-action-link" href="{% url 'users:password' %}">
                                             <i class="bi bi-key"></i>
                                             <span>{% translate 'Изменить пароль' %}</span>
                                         </a>
-                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-cyan-300 dark:border-cyan-600 text-cyan-700 dark:text-cyan-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-cyan-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'finance_account:list' %}">
-                                            <i class="bi bi-wallet"></i>
-                                            <span>{% translate 'Управление счетами' %}</span>
-                                        </a>
-                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-green-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'reports:list' %}">
-                                            <i class="bi bi-graph-up"></i>
-                                            <span>{% translate 'Отчеты и аналитика' %}</span>
-                                        </a>
-                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-purple-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:bank_statement_upload' %}">
-                                            <i class="bi bi-file-earmark-pdf"></i>
-                                            <span>{% translate 'Загрузка банковских выписок' %}</span>
-                                        </a>
                                     </div>
-                                    <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                                        <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Семейный доступ' %}</h5>
+
+                                    <div class="profile-section profile-section-divider">
+                                        <h2 class="profile-section-title">{% translate 'Семейный доступ' %}</h2>
                                         {% if family_groups %}
-                                            <div class="space-y-3 mb-4">
+                                            <div class="profile-family-list">
                                                 {% for group in family_groups %}
-                                                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-                                                        <div class="flex items-center justify-between gap-3">
+                                                    <article class="profile-family-card">
+                                                        <div class="profile-family-head">
                                                             <div>
-                                                                <p class="font-semibold text-gray-900 dark:text-white">{{ group.name }}</p>
-                                                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ group.role_label }}</p>
+                                                                <h3>{{ group.name }}</h3>
+                                                                <p>{{ group.role_label }}</p>
                                                             </div>
-                                                            <a class="text-sm font-semibold text-green-700 dark:text-green-300" href="{% url 'finances' %}">{% translate 'Открыть' %}</a>
                                                         </div>
                                                         {% if group.invite_url %}
-                                                            <label class="mt-3 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{% translate 'Ссылка приглашения' %}</label>
-                                                            <input class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100" value="{{ group.invite_url }}" readonly>
-                                                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{% translate 'Отправьте эту ссылку члену семьи. После входа в аккаунт он присоединится к семейному доступу.' %}</p>
+                                                            <label>{% translate 'Ссылка приглашения' %}</label>
+                                                            <input class="profile-copy-input" value="{{ group.invite_url }}" readonly>
+                                                            <p class="profile-help-text">{% translate 'Отправьте эту ссылку члену семьи. После входа в аккаунт он присоединится к семейному доступу.' %}</p>
                                                         {% endif %}
-                                                    </div>
+                                                    </article>
                                                 {% endfor %}
                                             </div>
                                         {% endif %}
-                                        <div class="space-y-3">
-                                            <a class="flex items-center gap-3 w-full px-4 py-3 border border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-green-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:add_user' %}">
+                                        <div class="profile-action-list">
+                                            <a class="profile-action-link" href="{% url 'users:groups:add_user' %}">
                                                 <i class="bi bi-person-plus"></i>
                                                 <span>{% translate "Добавить пользователя в семью" %}</span>
                                             </a>
-                                            <a class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:groups:delete_user' %}">
+                                            <a class="profile-action-link" href="{% url 'users:groups:delete_user' %}">
                                                 <i class="bi bi-person-dash"></i>
                                                 <span>{% translate "Удалить пользователя из семьи" %}</span>
                                             </a>
                                         </div>
                                     </div>
-                                </div>
-                                <div>
-                                    <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Быстрые действия' %}</h5>
-                                    <div class="space-y-3">
-                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-emerald-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'finances_create' %}">
-                                            <i class="bi bi-plus-circle"></i>
-                                            <span>{% translate 'Добавить операцию' %}</span>
+                                </section>
+
+                                <section class="profile-section-card">
+                                    <h2 class="profile-section-title">{% translate 'Управление данными' %}</h2>
+                                    <div class="profile-action-list">
+                                        <a class="profile-action-link" href="{% url 'users:bank_statement_upload' %}">
+                                            <i class="bi bi-file-earmark-pdf"></i>
+                                            <span>{% translate 'Загрузка банковских выписок' %}</span>
                                         </a>
-                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-yellow-300 dark:border-yellow-600 text-yellow-700 dark:text-yellow-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-yellow-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'receipts:list' %}">
-                                            <i class="bi bi-receipt"></i>
-                                            <span>{% translate 'Добавить чек' %}</span>
-                                        </a>
-                                        <a class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200" href="{% url 'users:export_data' %}">
+                                        <a class="profile-action-link" href="{% url 'users:export_data' %}">
                                             <i class="bi bi-download"></i>
                                             <span>{% translate 'Экспорт данных' %}</span>
                                         </a>
                                     </div>
-                                    <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                                        <h5 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% translate 'Тур' %}</h5>
-                                        <button id="site-tour-on"
-                                            class="flex items-center gap-3 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+
+                                    <div class="profile-section profile-section-divider">
+                                        <h2 class="profile-section-title">{% translate 'Тур' %}</h2>
+                                        <button id="site-tour-on" class="profile-action-link profile-action-button" type="button">
+                                            <i class="bi bi-signpost-2"></i>
                                             <span id="site-tour-label-enable" class="hidden">{% translate 'Включить тур по сайту' %}</span>
                                             <span id="site-tour-label-disable" class="hidden">{% translate 'Отключить тур по сайту' %}</span>
                                         </button>
                                     </div>
-                                </div>
+                                </section>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 {% endblock %}
 
 {% block extra_js %}
-    {% load static %}
-    {% load word_hash %}
-    <script nonce="{{request.csp_nonce}}">
-        window.userIsAuthenticated = true;
-    </script>
-    <script nonce="{{request.csp_nonce}}" src="{% static 'js/driver.js' %}?v={% word_hash %}"></script>
     <script nonce="{{request.csp_nonce}}" src="{% static 'js/dist/pages/profile.js' %}?v={% word_hash %}"></script>
 {% endblock %}
