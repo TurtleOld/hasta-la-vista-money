@@ -13,6 +13,9 @@ from hasta_la_vista_money.authentication.authentication import (
 )
 from hasta_la_vista_money.users.factories import UserFactoryTyped
 
+TEST_PASSWORD = 'testpassword123'  # nosec B105
+WRONG_PASSWORD = 'wrongpassword'  # nosec B105
+
 
 class CookieTokenObtainPairViewTestCase(TestCase):
     """Test cases for CookieTokenObtainPairView"""
@@ -21,7 +24,7 @@ class CookieTokenObtainPairViewTestCase(TestCase):
         """Set up test data."""
         self.client = APIClient()
         self.user = UserFactoryTyped()
-        self.user.set_password('testpassword123')
+        self.user.set_password(TEST_PASSWORD)
         self.user.save()
         self.url = '/authentication/token/'
         self.auth_cookie_name = settings.SIMPLE_JWT['AUTH_COOKIE']
@@ -33,7 +36,7 @@ class CookieTokenObtainPairViewTestCase(TestCase):
             self.url,
             {
                 'username': self.user.username,
-                'password': 'testpassword123',
+                'password': TEST_PASSWORD,
             },
             format='json',
         )
@@ -52,7 +55,7 @@ class CookieTokenObtainPairViewTestCase(TestCase):
             self.url,
             {
                 'username': self.user.username,
-                'password': 'testpassword123',
+                'password': TEST_PASSWORD,
             },
             format='json',
         )
@@ -67,7 +70,7 @@ class CookieTokenObtainPairViewTestCase(TestCase):
             self.url,
             {
                 'username': self.user.username,
-                'password': 'wrongpassword',
+                'password': WRONG_PASSWORD,
             },
             format='json',
         )
@@ -252,7 +255,7 @@ class AuthorizationHeaderTestCase(TestCase):
         """Set up test data."""
         self.client = APIClient()
         self.user = UserFactoryTyped()
-        self.user.set_password('testpassword123')
+        self.user.set_password(TEST_PASSWORD)
         self.user.save()
 
     def test_obtain_token_then_use_in_header(self) -> None:
@@ -261,7 +264,7 @@ class AuthorizationHeaderTestCase(TestCase):
             '/authentication/token/',
             {
                 'username': self.user.username,
-                'password': 'testpassword123',
+                'password': TEST_PASSWORD,
             },
             format='json',
         )

@@ -21,6 +21,8 @@ else:
     UserType = get_user_model()
 
 User = get_user_model()
+TEST_PASSWORD = 'testpassword'  # nosec B105
+WRONG_PASSWORD = 'wrongpassword'  # nosec B105
 
 
 def _dummy_get_response(_request: HttpRequest) -> HttpResponse:
@@ -40,7 +42,7 @@ class LoginUserServiceTest(TestCase):
             raise ValueError(error_msg)
         self.assertIsInstance(user, User)
         self.user: UserType = user
-        self.user.set_password('testpassword')
+        self.user.set_password(TEST_PASSWORD)
         self.user.save()
 
     def get_request(self) -> HttpRequest:
@@ -56,7 +58,7 @@ class LoginUserServiceTest(TestCase):
             request,
             data={
                 'username': str(self.user.get_username()),
-                'password': 'testpassword',
+                'password': TEST_PASSWORD,
             },
         )
         form.is_valid()
@@ -72,7 +74,7 @@ class LoginUserServiceTest(TestCase):
             request,
             data={
                 'username': str(self.user.get_username()),
-                'password': 'wrongpassword',
+                'password': WRONG_PASSWORD,
             },
         )
         form.is_valid()
@@ -85,7 +87,7 @@ class LoginUserServiceTest(TestCase):
             request,
             data={
                 'username': 'nonexistent_user',
-                'password': 'testpassword',
+                'password': TEST_PASSWORD,
             },
         )
         form.is_valid()
@@ -101,7 +103,7 @@ class LoginUserServiceTest(TestCase):
             request,
             data={
                 'username': str(self.user.get_username()),
-                'password': 'testpassword',
+                'password': TEST_PASSWORD,
             },
         )
         form.is_valid()
@@ -124,7 +126,7 @@ class LoginUserServiceTest(TestCase):
             request,
             data={
                 'username': str(self.user.get_username()),
-                'password': 'testpassword',
+                'password': TEST_PASSWORD,
             },
         )
         form.is_valid()
@@ -148,7 +150,7 @@ class LoginUserServiceTest(TestCase):
             request,
             data={
                 'username': str(self.user.get_username()),
-                'password': 'testpassword',
+                'password': TEST_PASSWORD,
             },
         )
         form.is_valid()
@@ -170,7 +172,7 @@ class LoginUserServiceTest(TestCase):
             request,
             data={
                 'username': str(self.user.get_username()),
-                'password': 'testpassword',
+                'password': TEST_PASSWORD,
             },
         )
         form.is_valid()
@@ -194,7 +196,7 @@ class LoginUserServiceTest(TestCase):
             request,
             data={
                 'username': str(self.user.get_username()),
-                'password': 'testpassword',
+                'password': TEST_PASSWORD,
             },
         )
         form.is_valid()
@@ -216,7 +218,7 @@ class LoginUserServiceTest(TestCase):
         request: HttpRequest = self.get_request()
         form: AuthenticationForm = AuthenticationForm(
             request,
-            data={'password': 'testpassword'},
+            data={'password': TEST_PASSWORD},
         )
         form.is_valid()
 
