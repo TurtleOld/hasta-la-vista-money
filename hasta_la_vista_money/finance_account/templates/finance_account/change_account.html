@@ -1,58 +1,61 @@
 {% extends 'base.html' %}
 {% load i18n %}
+{% load static %}
+{% load word_hash %}
 
 {% block title %}{% translate 'Изменить счёт' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'accounts/css/accounts.css' %}?v={% word_hash %}">
+{% endblock %}
+
 {% block content %}
-    <div class="finance-account-page min-h-screen bg-linear-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-8 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-2xl mx-auto">
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden backdrop-blur-sm">
-                <div class="bg-linear-to-r from-green-600 to-emerald-600 dark:from-green-700 dark:to-emerald-700 px-6 py-5">
-                    <h2 class="text-xl font-bold text-white flex items-center gap-2.5">
-                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
-                        <span>{% translate 'Изменить счёт' %}</span>
-                    </h2>
-                </div>
-                <div class="p-6 sm:p-8">
-                    <form id="change-account-form" class="space-y-5" method="post">
-                        {% csrf_token %}
-                        {% if add_account_form %}
-                        {% for field in add_account_form %}
-                        <div class="space-y-1.5{% if field.errors %} has-error{% endif %}{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} credit-only-field-container{% endif %}"{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} data-credit-field="true"{% endif %}>
+<main class="accounts-app accounts-form-app">
+    <div class="accounts-composer-crumb">
+        <a href="{% url 'finance_account:list' %}">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+            {% translate 'Счета' %}
+        </a>
+        <span class="sep">·</span>
+        <b>{% translate 'Изменить счёт' %}</b>
+    </div>
+
+    <div class="accounts-composer-shell">
+        <form id="change-account-form" class="accounts-composer-card" method="post">
+            {% csrf_token %}
+            <div class="accounts-composer-hd">
+                <h1>{% translate 'Изменить счёт' %}</h1>
+                <span class="meta">{% translate 'параметры счёта' %}</span>
+            </div>
+
+            <div class="accounts-cmp-body">
+                {% if add_account_form.non_field_errors %}
+                    <div class="accounts-form-errors">{{ add_account_form.non_field_errors }}</div>
+                {% endif %}
+                {% for field in add_account_form %}
+                    <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} credit-only-field-container{% endif %}"{% if field.name == 'limit_credit' or field.name == 'payment_due_date' or field.name == 'bank' or field.name == 'grace_period_days' %} data-credit-field="true"{% endif %}>
+                        <h3>
+                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>
+                            {{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}
+                        </h3>
+                        <div class="accounts-cmp-input">
                             {% include 'forms/_field.html' with field=field %}
-                            {% if field.errors %}
-                            <div class="text-sm text-red-600 dark:text-red-400 mt-1.5 flex items-start gap-1.5">
-                                <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                                <div class="flex flex-col gap-0.5">
-                                    {% for error in field.errors %}
-                                    <span>{{ error }}</span>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            {% endif %}
                         </div>
-                        {% endfor %}
-                        {% endif %}
-                        <div class="flex flex-wrap items-center gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                            <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-medium rounded-xl shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
-                                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                </svg>
-                                <span>{% translate 'Сохранить' %}</span>
-                            </button>
-                            <a href="{% url 'finance_account:list' %}" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium rounded-xl border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
-                                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                                </svg>
-                                <span>{% translate 'Отмена' %}</span>
-                            </a>
-                        </div>
-                    </form>
+                    </section>
+                {% endfor %}
+            </div>
+
+            <div class="accounts-composer-ft">
+                <div class="hint">{% translate 'Изменение счёта сохранит связанную историю операций.' %}</div>
+                <div class="ft-actions">
+                    <a href="{% url 'finance_account:list' %}" class="accounts-form-button accounts-form-button-secondary">{% translate 'Отмена' %}</a>
+                    <button type="submit" class="accounts-form-button accounts-form-button-primary">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                        {% translate 'Сохранить' %}
+                    </button>
                 </div>
             </div>
-        </div>
+        </form>
     </div>
+</main>
 {% endblock %}

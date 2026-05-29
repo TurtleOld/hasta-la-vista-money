@@ -27,6 +27,7 @@
         <link nonce="{{request.csp_nonce}}" rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link nonce="{{request.csp_nonce}}" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@300;400;500;600;700&family=Geist:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@700&family=Gloria+Hallelujah&display=swap" rel="stylesheet">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'css/styles.min.css' %}?v={% word_hash %}">
+        <link nonce="{{request.csp_nonce}}" rel="stylesheet" type="text/css" href="{% static 'js/dist/app.css' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="stylesheet" href="{% static 'css/driver.css' %}">
         <meta name="htmx-config" content='{"inlineStyleNonce":"{{ request.csp_nonce }}"}'>
         {% block extra_head %}

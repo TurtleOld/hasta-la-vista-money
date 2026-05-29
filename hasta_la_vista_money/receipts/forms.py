@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -82,7 +82,8 @@ class ReceiptFilter(django_filters.FilterSet):
         widget=widgets.RangeWidget(
             attrs={
                 'class': _INPUT_CLASSES,
-                'type': 'date',
+                'type': 'text',
+                'placeholder': 'DD/MM/YYYY',
             },
         ),
     )
@@ -120,6 +121,17 @@ class ReceiptFilter(django_filters.FilterSet):
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        data = kwargs.get('data')
+        if data is not None:
+            mutable_data = data.copy()
+            for key in ('receipt_date_0', 'receipt_date_1'):
+                normalized = self._normalize_date_query_value(
+                    mutable_data.get(key),
+                )
+                if normalized is not None:
+                    mutable_data[key] = normalized
+            kwargs['data'] = mutable_data
+
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
@@ -138,6 +150,19 @@ class ReceiptFilter(django_filters.FilterSet):
             .select_related('user')
             .only('id', 'name_account', 'user__id')
         )
+
+    @staticmethod
+    def _normalize_date_query_value(value: str | None) -> str | None:
+        if not value:
+            return value
+        normalized_value = value.strip()
+        try:
+            if '/' in normalized_value:
+                day, month, year = normalized_value.split('/')
+                return date(int(year), int(month), int(day)).isoformat()
+            return date.fromisoformat(normalized_value).isoformat()
+        except (TypeError, ValueError):
+            return value
 
     @property
     def qs(self) -> Any:
@@ -319,7 +344,12 @@ class ReceiptForm(ModelForm[Receipt]):
         input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         widget=DateTimeInput(
             format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
-            attrs={'type': 'datetime-local', 'class': _INPUT_CLASSES},
+            attrs={
+                'type': 'datetime-local',
+                'class': _INPUT_CLASSES,
+                'data-flatpickr': 'true',
+                'data-flatpickr-mode': 'datetime',
+            },
         ),
     )
     operation_type = ChoiceField(
@@ -470,6 +500,8 @@ class PendingReceiptReviewForm(Form):
             attrs={
                 'class': _INPUT_CLASSES,
                 'type': 'datetime-local',
+                'data-flatpickr': 'true',
+                'data-flatpickr-mode': 'datetime',
             },
             format='%Y-%m-%dT%H:%M',
         ),

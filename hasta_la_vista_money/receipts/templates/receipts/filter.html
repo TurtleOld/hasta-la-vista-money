@@ -44,14 +44,16 @@
                     <div class="receipts-filter-grid">
                         <div class="receipts-field">
                             <label for="id_receipt_date_0" class="receipts-label">{% translate 'С даты' %}</label>
-                            <input id="id_receipt_date_0" type="date" name="receipt_date_0"
+                            <input id="id_receipt_date_0" type="text" name="receipt_date_0"
                                    value="{{ request.GET.receipt_date_0 }}"
+                                   placeholder="DD/MM/YYYY"
                                    class="receipts-filter-input">
                         </div>
                         <div class="receipts-field">
                             <label for="id_receipt_date_1" class="receipts-label">{% translate 'По дату' %}</label>
-                            <input id="id_receipt_date_1" type="date" name="receipt_date_1"
+                            <input id="id_receipt_date_1" type="text" name="receipt_date_1"
                                    value="{{ request.GET.receipt_date_1 }}"
+                                   placeholder="DD/MM/YYYY"
                                    class="receipts-filter-input">
                         </div>
                         <div class="receipts-field">

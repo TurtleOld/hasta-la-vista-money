@@ -38,11 +38,11 @@
                 </div>
                 <div class="statistics-field">
                     <label for="statistics-date-from" class="statistics-label">{% translate 'С даты' %}</label>
-                    <input id="statistics-date-from" type="date" name="date_from" value="{{ statistics_filter.date_from|date:'Y-m-d' }}" class="statistics-input">
+                    <input id="statistics-date-from" type="text" name="date_from" value="{{ statistics_filter.date_from|date:'d/m/Y' }}" placeholder="DD/MM/YYYY" class="statistics-input">
                 </div>
                 <div class="statistics-field">
                     <label for="statistics-date-to" class="statistics-label">{% translate 'По дату' %}</label>
-                    <input id="statistics-date-to" type="date" name="date_to" value="{{ statistics_filter.date_to|date:'Y-m-d' }}" class="statistics-input">
+                    <input id="statistics-date-to" type="text" name="date_to" value="{{ statistics_filter.date_to|date:'d/m/Y' }}" placeholder="DD/MM/YYYY" class="statistics-input">
                 </div>
                 <div class="statistics-field">
                     <label for="statistics-currency" class="statistics-label">{% translate 'Валюта' %}</label>

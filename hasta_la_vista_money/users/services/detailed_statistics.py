@@ -384,12 +384,24 @@ class StatisticsFilters:
             ('period', self.period, self.period != '6'),
             (
                 'date_from',
-                self.date_from.isoformat() if self.date_from else '',
+                (
+                    self.date_from.strftime(
+                        constants.HTML5_DATE_INPUT_FORMAT,
+                    )
+                    if self.date_from
+                    else ''
+                ),
                 bool(self.date_from),
             ),
             (
                 'date_to',
-                self.date_to.isoformat() if self.date_to else '',
+                (
+                    self.date_to.strftime(
+                        constants.HTML5_DATE_INPUT_FORMAT,
+                    )
+                    if self.date_to
+                    else ''
+                ),
                 bool(self.date_to),
             ),
             ('currency', self.currency, bool(self.currency)),
@@ -500,9 +512,13 @@ class UserDetailedStatisticsDict(TypedDict):
 def _parse_filter_date(value: str | None) -> date | None:
     if not value:
         return None
+    normalized_value = value.strip()
     try:
-        return date.fromisoformat(value)
-    except ValueError:
+        if '/' in normalized_value:
+            day, month, year = normalized_value.split('/')
+            return date(int(year), int(month), int(day))
+        return date.fromisoformat(normalized_value)
+    except (TypeError, ValueError):
         return None
 
 

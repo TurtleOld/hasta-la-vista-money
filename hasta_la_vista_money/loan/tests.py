@@ -155,7 +155,7 @@ class TestLoan(TestCase):
         form = LoanForm(
             data={
                 'type_loan': 'Annuity',
-                'date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'date': timezone.now().strftime('%Y-%m-%d'),
                 'loan_amount': constants.TEST_LOAN_AMOUNT_MEDIUM,
                 'annual_interest_rate': constants.TEST_INTEREST_RATE_MEDIUM,
                 'period_loan': constants.TEST_PERIOD_LONG,
@@ -190,7 +190,7 @@ class TestLoan(TestCase):
         form = LoanForm(
             data={
                 'type_loan': 'Annuity',
-                'date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+                'date': timezone.now().strftime('%Y-%m-%d'),
                 'loan_amount': 10000,
                 'annual_interest_rate': 5.5,
                 'period_loan': 12,

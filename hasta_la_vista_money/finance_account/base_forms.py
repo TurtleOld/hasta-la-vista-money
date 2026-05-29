@@ -104,15 +104,18 @@ class DateFieldMixin:
         """
         if 'payment_due_date' in self.fields:  # type: ignore[attr-defined]
             self.fields['payment_due_date'].widget = DateInput(  # type: ignore[attr-defined]
-                format=constants.HTML5_DATE_INPUT_FORMAT,
+                format='%Y-%m-%d',
                 attrs={
                     'type': 'date',
+                    'lang': 'ru-RU',
                     'class': f'{TAILWIND_FORM_CONTROL} credit-only-field',
+                    'data-flatpickr': 'true',
+                    'data-flatpickr-mode': 'date',
                 },
             )
-            self.fields['payment_due_date'].input_formats = [  # type: ignore[attr-defined]
-                constants.HTML5_DATE_INPUT_FORMAT,
-            ]
+            self.fields['payment_due_date'].input_formats = list(  # type: ignore[attr-defined]
+                constants.HTML5_DATE_INPUT_FORMATS,
+            )
 
         if 'exchange_date' in self.fields:  # type: ignore[attr-defined]
             self.fields['exchange_date'].widget = DateTimeInput(  # type: ignore[attr-defined]
@@ -120,6 +123,8 @@ class DateFieldMixin:
                 attrs={
                     'type': 'datetime-local',
                     'class': TAILWIND_FORM_CONTROL,
+                    'data-flatpickr': 'true',
+                    'data-flatpickr-mode': 'datetime',
                 },
             )
             self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
@@ -202,6 +207,8 @@ class BaseTransferForm(TailwindFormMixin, ModelForm[TransferMoneyLog]):
                 attrs={
                     'type': 'datetime-local',
                     'class': TAILWIND_FORM_CONTROL,
+                    'data-flatpickr': 'true',
+                    'data-flatpickr-mode': 'datetime',
                 },
             )
             self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]

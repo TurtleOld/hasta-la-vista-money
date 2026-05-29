@@ -10,3 +10,4 @@ import './account_form.js';
 import './budget-forms.js';
 import './site-tour.js';
 import './tour-controls.js';
+import './flatpickr-init.js';

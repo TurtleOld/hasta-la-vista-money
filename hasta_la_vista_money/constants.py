@@ -368,7 +368,11 @@ DIFF_LAST_PAYMENT_100K_12M: Final = 8416.67
 # ============================================================================
 # Format strings for date and time input/output
 
-HTML5_DATE_INPUT_FORMAT: Final = '%Y-%m-%d'
+HTML5_DATE_INPUT_FORMAT: Final = '%d/%m/%Y'
+HTML5_DATE_INPUT_FORMATS: Final[tuple[str, ...]] = (
+    '%d/%m/%Y',
+    '%Y-%m-%d',
+)
 HTML5_DATETIME_LOCAL_INPUT_FORMAT: Final = '%Y-%m-%dT%H:%M'
 HTML5_DATETIME_LOCAL_INPUT_FORMATS: Final[tuple[str, ...]] = (
     '%Y-%m-%dT%H:%M',

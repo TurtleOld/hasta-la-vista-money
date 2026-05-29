@@ -4,11 +4,14 @@ This module provides forms for loan management including loan creation
 and payment forms.
 """
 
+from datetime import date, datetime, time
 from typing import Any, ClassVar
 
 from django.db.models import QuerySet
 from django.forms import (
     ChoiceField,
+    DateField,
+    DateInput,
     DateTimeField,
     DateTimeInput,
     DecimalField,
@@ -18,6 +21,7 @@ from django.forms import (
     NumberInput,
     Select,
 )
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -27,17 +31,20 @@ from hasta_la_vista_money.users.models import User
 
 
 class LoanForm(ModelForm[Loan]):
-    date = DateTimeField(
+    date = DateField(
         label=_('Дата'),
-        widget=DateTimeInput(
-            format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+        widget=DateInput(
+            format='%Y-%m-%d',
             attrs={
-                'type': 'datetime-local',
+                'type': 'date',
                 'class': 'loan-form-datetime',
+                'data-flatpickr': 'true',
+                'data-flatpickr-mode': 'date',
+                'placeholder': 'ДД.ММ.ГГГГ',
             },
         ),
-        input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
-        help_text=_('Укажите дату начала кредита'),
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        help_text=_('Укажите дату начала кредита (без времени)'),
     )
 
     type_loan = ChoiceField(
@@ -103,8 +110,18 @@ class LoanForm(ModelForm[Loan]):
         cd = self.cleaned_data
         form = super().save(commit=False)
         loan_amount = cd.get('loan_amount')
+        loan_date = cd.get('date')
         if loan_amount is None:
             raise ValueError('loan_amount is required')
+        if loan_date is None:
+            raise ValueError('date is required')
+
+        if isinstance(loan_date, date):
+            # The UI collects only a calendar date; persist midnight
+            # in the current timezone for DateTimeField compatibility.
+            form.date = timezone.make_aware(
+                datetime.combine(loan_date, time.min),
+            )
         form.user = self.request_user
         if commit:
             form.save()
@@ -119,6 +136,8 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
             attrs={
                 'type': 'datetime-local',
                 'class': 'loan-form-datetime',
+                'data-flatpickr': 'true',
+                'data-flatpickr-mode': 'datetime',
             },
         ),
         input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
