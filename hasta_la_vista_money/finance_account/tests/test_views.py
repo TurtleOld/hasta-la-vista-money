@@ -225,6 +225,20 @@ class TestFinancesView(TestCase):
         self.assertIn('date_from=01%2F01%2F2026', finances_filter.query_string)
         self.assertIn('date_to=31%2F01%2F2026', finances_filter.query_string)
 
+    def test_finances_filter_accepts_legacy_date_aliases(self) -> None:
+        request = self.factory.get(
+            '/finance/?date_after=2026-02-01&date_before=2026-02-28',
+        )
+
+        finances_filter = FinancesFilter.from_request(request)
+
+        self.assertEqual(
+            finances_filter.date_range(),
+            (date(2026, 2, 1), date(2026, 2, 28)),
+        )
+        self.assertIn('date_from=01%2F02%2F2026', finances_filter.query_string)
+        self.assertIn('date_to=28%2F02%2F2026', finances_filter.query_string)
+
 
 class TestAccountCreateView(TestCase):
     """Test cases for AccountCreateView."""

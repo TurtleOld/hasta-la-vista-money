@@ -181,6 +181,8 @@ class FinancesFilter:
         """Build filter object from request query parameters."""
 
         query = request.GET
+        date_from_raw = query.get('date_from') or query.get('date_after')
+        date_to_raw = query.get('date_to') or query.get('date_before')
         min_amount = None
         if query.get('min_amount'):
             try:
@@ -188,8 +190,8 @@ class FinancesFilter:
             except InvalidOperation:
                 min_amount = None
 
-        date_from = _parse_filter_date(query.get('date_from'))
-        date_to = _parse_filter_date(query.get('date_to'))
+        date_from = _parse_filter_date(date_from_raw)
+        date_to = _parse_filter_date(date_to_raw)
 
         return cls(
             type=query.get('type', 'all'),

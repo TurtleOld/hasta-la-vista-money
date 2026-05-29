@@ -104,7 +104,7 @@ class DateFieldMixin:
         """
         if 'payment_due_date' in self.fields:  # type: ignore[attr-defined]
             self.fields['payment_due_date'].widget = DateInput(  # type: ignore[attr-defined]
-                format='%Y-%m-%d',
+                format=constants.HTML5_DATE_INPUT_FORMAT,
                 attrs={
                     'type': 'date',
                     'lang': 'ru-RU',
