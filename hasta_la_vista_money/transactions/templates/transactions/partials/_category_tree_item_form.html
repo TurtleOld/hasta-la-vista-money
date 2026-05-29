@@ -1,0 +1,54 @@
+{% load i18n %}
+
+<article class="finance-category-item finance-category-level-{{ level }}" style="--cat-level: {{ level }};">
+    <form method="post"
+          class="finance-category-row finance-category-inline-form"
+          hx-post="{% url 'transactions:update_category' category.id %}?inline=1"
+          hx-target="closest article"
+          hx-swap="outerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="inline" value="1">
+        {{ form.type }}
+        {% if category.parent_category %}
+            <input type="hidden" name="parent_category" value="{{ category.parent_category }}">
+        {% else %}
+            <input type="hidden" name="parent_category" value="">
+        {% endif %}
+        <span class="dot">
+            {% if category_type == 'income' %}
+                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            {% else %}
+                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+            {% endif %}
+        </span>
+        <div class="finance-category-name finance-category-inline-name">
+            <label for="{{ form.name.id_for_label }}" class="sr-only">{% translate 'Название категории' %}</label>
+            {{ form.name }}
+            {% if form.name.errors %}
+                <span>{{ form.name.errors|join:', ' }}</span>
+            {% elif category.total_children_count %}
+                <span>{{ category.total_children_count }} {% translate 'подкат.' %}</span>
+            {% endif %}
+        </div>
+        <div class="finance-category-actions">
+            <button type="submit" title="{% translate 'Сохранить категорию' %}">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+            <button type="button"
+                    title="{% translate 'Отмена' %}"
+                    hx-get="{% url 'transactions:update_category' category.id %}?inline=1"
+                    hx-target="closest article"
+                    hx-swap="outerHTML">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
+    </form>
+
+    {% if category.children %}
+        <div class="finance-category-children">
+            {% for child in category.children %}
+                {% include 'finance_account/partials/_category_tree_item.html' with category=child category_type=category_type level=level|add:1 %}
+            {% endfor %}
+        </div>
+    {% endif %}
+</article>
