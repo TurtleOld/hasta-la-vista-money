@@ -41,12 +41,17 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
     ]
 
     def setUp(self) -> None:
+        cache.clear()
         user = User.objects.first()
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
         self.user: UserType = user
+
+    def tearDown(self) -> None:
+        cache.clear()
+        super().tearDown()
 
     def test_get_user_detailed_statistics(self) -> None:
         container = ApplicationContainer()
