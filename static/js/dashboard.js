@@ -357,6 +357,8 @@ class DashboardManager {
         switch (widgetType) {
             case 'balance': return 'Баланс счетов';
             case 'expenses_chart': return 'График расходов';
+            case 'expense_heatmap': return 'Тепловая карта расходов';
+            case 'hot_budget_categories': return 'Горячие категории';
             case 'income_chart': return 'График доходов';
             case 'comparison': return 'Сравнение периодов';
             case 'trend': return 'Динамика и прогнозы';
@@ -383,6 +385,9 @@ class DashboardManager {
                 chart = this.renderWidgetChart(widget, chartId);
                 if (chart) {
                     this.charts.set(widget.id, chart);
+                } else if (this.isDataOnlyWidget(widget.widget_type)) {
+                    // Data-only widgets render HTML directly and do not return chart instances.
+                    this.charts.delete(widget.id);
                 } else {
                     contentDiv?.classList.add('error');
                     this._clear(contentDiv);
@@ -413,6 +418,11 @@ class DashboardManager {
         });
     }
 
+    isDataOnlyWidget(widgetType) {
+        return widgetType === 'recent_transactions'
+            || widgetType === 'hot_budget_categories';
+    }
+
     renderWidgetChart(widget, containerId) {
         if (!window.initChart || !window.chartConfigs) {
             console.error('Chart utilities not loaded');
@@ -424,6 +434,8 @@ class DashboardManager {
         switch (widget.widget_type) {
             case 'balance': return this.renderBalanceChart(widget, containerId, initChart, chartConfigs);
             case 'expenses_chart': return this.renderExpensesChart(widget, containerId, initChart, chartConfigs);
+            case 'expense_heatmap': return this.renderExpenseHeatmap(widget, containerId, initChart, chartConfigs);
+            case 'hot_budget_categories': return this.renderHotBudgetCategories(widget, containerId);
             case 'income_chart': return this.renderIncomeChart(widget, containerId, initChart, chartConfigs);
             case 'comparison': return this.renderComparisonChart(widget, containerId, initChart, chartConfigs);
             case 'trend': return this.renderTrendChart(widget, containerId, initChart, chartConfigs);
@@ -483,6 +495,154 @@ class DashboardManager {
         const chart = initChart(containerId, config);
         window.addDrillDownHandler?.(chart, (params) => this.openPeriodList('expense', params));
         return chart;
+    }
+
+    renderExpenseHeatmap(widget, containerId, initChart, chartConfigs) {
+        const config = JSON.parse(JSON.stringify(chartConfigs.expenseHeatmap));
+        const rawData = this.analyticsData?.expense_heatmap || [];
+        if (!Array.isArray(rawData)) return null;
+        config.calendar.range = this.getCurrentPeriodRange();
+
+        const maxValue = rawData.reduce((max, item) => {
+            const value = Number(item?.[1] || 0);
+            return value > max ? value : max;
+        }, 0);
+        config.visualMap.max = maxValue > 0 ? maxValue : 1;
+        config.series[0].data = rawData;
+
+        if (rawData.length > 0) {
+            const dates = rawData
+                .map((item) => item?.[0])
+                .filter((item) => typeof item === 'string')
+                .sort();
+            if (dates.length > 0) {
+                config.calendar.range = [dates[0], dates[dates.length - 1]];
+            }
+        }
+
+        const chart = initChart(containerId, config);
+        window.addDrillDownHandler?.(chart, (params) => this.openHeatmapDayList(params));
+        return chart;
+    }
+
+    getCurrentPeriodRange() {
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        let start = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        if (this.period === 'year') {
+            start = new Date(now.getFullYear(), 0, 1);
+        } else if (this.period === 'quarter') {
+            const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+            start = new Date(now.getFullYear(), quarterStartMonth, 1);
+        }
+
+        return [start.toISOString().slice(0, 10), today];
+    }
+
+    openHeatmapDayList(params) {
+        const value = params?.value;
+        const selectedDate = Array.isArray(value) ? value[0] : null;
+        const basePath = this.clickThrough?.expense_list_url;
+        if (!basePath || typeof selectedDate !== 'string') return;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) return;
+
+        window.location.href = this._buildNavigationURL(basePath, {
+            date_from: selectedDate,
+            date_to: selectedDate,
+        });
+    }
+
+    renderHotBudgetCategories(widget, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return null;
+        this._clear(container);
+
+        try {
+            const hotCategories = this.analyticsData?.hot_budget_categories || [];
+            if (!Array.isArray(hotCategories) || hotCategories.length === 0) {
+                const emptyDiv = this._el('div', { class: 'text-center text-gray-500 dark:text-gray-400 py-8' });
+                const emptyP = this._el('p', { class: 'mt-2 font-medium' });
+                emptyP.textContent = 'Все категории в пределах лимитов';
+                emptyDiv.appendChild(emptyP);
+                container.appendChild(emptyDiv);
+                return null;
+            }
+
+            const normalizedItems = hotCategories.filter((item) => item && typeof item === 'object');
+            if (normalizedItems.length === 0) {
+                const fallback = this._el('p', { class: 'text-sm text-gray-500 dark:text-gray-400 py-6 text-center' });
+                fallback.textContent = 'Нет данных для отображения';
+                container.appendChild(fallback);
+                return null;
+            }
+
+            const basePath = this.clickThrough?.expense_list_url;
+            const list = this._el('div', { class: 'divide-y divide-gray-200 dark:divide-gray-700' });
+
+            normalizedItems.forEach((item) => {
+                const status = item.status === 'over' ? 'over' : 'warning';
+                const statusClass = status === 'over'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-amber-600 dark:text-amber-400';
+                const badgeText = status === 'over' ? 'Лимит превышен' : 'Почти лимит';
+                const percentNumber = Number(item.percent || 0);
+                const safePercent = Number.isFinite(percentNumber) ? percentNumber : 0;
+                const percentText = safePercent.toFixed(1) + '%';
+
+                const row = this._el('div', { class: 'py-3 px-2' });
+                const top = this._el('div', { class: 'flex items-start justify-between gap-3' });
+                const title = this._el('button', {
+                    type: 'button',
+                    class: 'text-left font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400'
+                }, item.category || 'Категория');
+                title.addEventListener('click', () => {
+                    if (!basePath || !item.category_id) return;
+                    window.location.href = this._buildNavigationURL(basePath, {
+                        category: item.category_id,
+                    });
+                });
+                const badge = this._el('span', {
+                    class: `text-xs font-semibold ${statusClass}`
+                }, `${badgeText} (${percentText})`);
+                top.appendChild(title);
+                top.appendChild(badge);
+
+                const limit = Number(item.limit || 0);
+                const fact = Number(item.fact || 0);
+                const safeLimit = Number.isFinite(limit) ? limit : 0;
+                const safeFact = Number.isFinite(fact) ? fact : 0;
+                const summary = this._el(
+                    'p',
+                    { class: 'mt-1 text-sm text-gray-600 dark:text-gray-400' },
+                    `${safeFact.toLocaleString('ru-RU')} ₽ из ${safeLimit.toLocaleString('ru-RU')} ₽`,
+                );
+
+                const progressWrap = this._el('div', { class: 'mt-2 h-2 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden' });
+                const progress = this._el('div', {
+                    class: status === 'over'
+                        ? 'h-full bg-red-500'
+                        : 'h-full bg-amber-500',
+                    style: {
+                        width: `${Math.min(safePercent, 100)}%`,
+                    },
+                });
+                progressWrap.appendChild(progress);
+
+                row.appendChild(top);
+                row.appendChild(summary);
+                row.appendChild(progressWrap);
+                list.appendChild(row);
+            });
+
+            container.appendChild(list);
+        } catch (error) {
+            console.error('Error rendering hot budget categories:', error);
+            const fallback = this._el('p', { class: 'text-sm text-gray-500 dark:text-gray-400 py-6 text-center' });
+            fallback.textContent = 'Не удалось загрузить данные категорий';
+            container.appendChild(fallback);
+        }
+        return null;
     }
 
     renderIncomeChart(widget, containerId, initChart, chartConfigs) {
@@ -687,8 +847,8 @@ class DashboardManager {
         if (!basePath) return;
 
         window.location.href = this._buildNavigationURL(basePath, {
-            date_after: month.month_start,
-            date_before: month.month_end,
+            date_from: month.month_start,
+            date_to: month.month_end,
         });
     }
 

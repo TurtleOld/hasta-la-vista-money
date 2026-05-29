@@ -34,7 +34,7 @@ class LoanForm(ModelForm[Loan]):
     date = DateField(
         label=_('Дата'),
         widget=DateInput(
-            format='%Y-%m-%d',
+            format=constants.HTML5_DATE_INPUT_FORMAT,
             attrs={
                 'type': 'date',
                 'class': 'loan-form-datetime',
