@@ -30,66 +30,7 @@
             </div>
         </header>
 
-        <section class="receipts-summary" aria-label="{% translate 'Сводка по чекам' %}">
-            <div class="receipts-summary-cell">
-                <div class="receipts-label">{% translate 'Количество чеков' %}</div>
-                <div class="receipts-amount">{{ total_receipts.count|default:0 }}</div>
-            </div>
-            <div class="receipts-summary-cell">
-                <div class="receipts-label">{% translate 'Общая сумма' %}</div>
-                <div class="receipts-amount receipts-positive">
-                    {% if total_sum_receipts.total is not None %}
-                        {{ total_sum_receipts.total|comma }} ₽
-                    {% else %}
-                        0 ₽
-                    {% endif %}
-                </div>
-            </div>
-            <div class="receipts-summary-cell">
-                <div class="receipts-label">{% translate 'Группа чеков' %}</div>
-                <div class="receipts-group-chips">
-                    <button type="button"
-                            class="receipts-chip {% if not request.GET.group_id or request.GET.group_id == 'my' %}is-active{% endif %}"
-                            data-group-id="my">{% translate 'Мои' %}</button>
-                    {% for group in user_groups %}
-                        <button type="button"
-                                class="receipts-chip {% if request.GET.group_id == group.id|stringformat:'s' %}is-active{% endif %}"
-                                data-group-id="{{ group.id }}">{{ group.name }}</button>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="receipts-summary-cell">
-                <div class="receipts-label">{% translate 'Средняя сумма' %}</div>
-                <div class="receipts-amount">
-                    {% if avg_receipt is not None %}
-                        {{ avg_receipt|comma }} ₽
-                    {% else %}
-                        —
-                    {% endif %}
-                </div>
-            </div>
-        </section>
-
-        <div class="receipts-toolbar">
-            <div class="receipts-pills">
-                <a class="receipts-chip" href="{% url 'receipts:products' %}">
-                    <i class="bi bi-star"></i>
-                    {% translate 'Часто покупаемые товары' %}
-                </a>
-                <a class="receipts-chip" href="{% url 'receipts:create_seller' %}">
-                    <i class="bi bi-shop"></i>
-                    {% translate 'Добавить продавца' %}
-                </a>
-                <a class="receipts-chip is-active" href="{% url 'receipts:upload' %}">
-                    <i class="bi bi-camera"></i>
-                    {% translate 'Добавить чек из изображения' %}
-                </a>
-            </div>
-        </div>
-
-        <div id="receipts-block">
-            {% include 'receipts/receipts_block.html' %}
-        </div>
+        {% include 'receipts/partials/_results.html' %}
     </div>
 </div>
 {% endblock %}

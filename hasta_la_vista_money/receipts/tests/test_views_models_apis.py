@@ -69,6 +69,28 @@ class TestReceipt(TestCase):
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
+    def test_receipt_list_htmx_returns_block_template(self) -> None:
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse_lazy('receipts:list'),
+            HTTP_HX_REQUEST='true',
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertTemplateUsed(response, 'receipts/partials/_results.html')
+
+    def test_receipt_list_context_has_group_query_params(self) -> None:
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse_lazy('receipts:list'),
+            {
+                'group_id': 'my',
+                'receipts': '2',
+            },
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertIn('pagination_querystring', response.context)
+        self.assertIn('group_querystring', response.context)
+
     def test_receipt_create(self) -> None:
         self.client.force_login(self.user)
         url = reverse_lazy('receipts:create')

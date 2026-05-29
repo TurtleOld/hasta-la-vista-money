@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.http import QueryDict
 from django.test import TestCase
 from django.utils import timezone
 
@@ -40,12 +41,17 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
     ]
 
     def setUp(self) -> None:
+        cache.clear()
         user = User.objects.first()
         if user is None:
             msg: str = 'No user found in fixtures'
             raise ValueError(msg)
         self.assertIsInstance(user, User)
         self.user: UserType = user
+
+    def tearDown(self) -> None:
+        cache.clear()
+        super().tearDown()
 
     def test_get_user_detailed_statistics(self) -> None:
         container = ApplicationContainer()
@@ -107,6 +113,112 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         )
 
         self.assertEqual(stats, cached_stats)
+
+    def test_statistics_filters_include_server_side_search_fields(self) -> None:
+        query = QueryDict(
+            'operations_search=salary&transfers_search=sber'
+            '&receipts_search=pyaterochka',
+        )
+        stats_filter = StatisticsFilters.from_query(query)
+
+        self.assertEqual(stats_filter.operations_search, 'salary')
+        self.assertEqual(stats_filter.transfers_search, 'sber')
+        self.assertEqual(stats_filter.receipts_search, 'pyaterochka')
+        self.assertIn('operations_search=salary', stats_filter.query_string)
+        self.assertIn('transfers_search=sber', stats_filter.query_string)
+        self.assertIn('receipts_search=pyaterochka', stats_filter.query_string)
+
+    def test_receipts_search_filters_receipt_page(self) -> None:
+        container = ApplicationContainer()
+        base_filter = StatisticsFilters(
+            period='range',
+            date_from=date(2000, 1, 1),
+            date_to=timezone.localdate(),
+        )
+        base_stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=base_filter,
+        )
+        base_receipts = list(base_stats['receipt_page'].paginator.object_list)
+        self.assertTrue(base_receipts)
+
+        first_receipt = base_receipts[0]
+        search_value = first_receipt.account.name_account
+        filtered_stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=StatisticsFilters(
+                period='range',
+                date_from=date(2000, 1, 1),
+                date_to=timezone.localdate(),
+                receipts_search=search_value,
+            ),
+        )
+
+        filtered_receipts = list(
+            filtered_stats['receipt_page'].paginator.object_list
+        )
+        self.assertTrue(filtered_receipts)
+        for receipt in filtered_receipts:
+            self.assertIn(
+                search_value.lower(),
+                receipt.account.name_account.lower(),
+            )
+
+    def test_operations_search_filters_income_expense(self) -> None:
+        container = ApplicationContainer()
+        base_filter = StatisticsFilters(
+            period='range',
+            date_from=date(2000, 1, 1),
+            date_to=timezone.localdate(),
+        )
+        base_stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=base_filter,
+        )
+        base_operations = base_stats['income_expense']
+        self.assertTrue(base_operations)
+
+        first_operation = base_operations[0]
+        search_value = str(first_operation['category__name'])
+        filtered_stats = get_user_detailed_statistics(
+            self.user,
+            container=container,
+            stats_filter=StatisticsFilters(
+                period='range',
+                date_from=date(2000, 1, 1),
+                date_to=timezone.localdate(),
+                operations_search=search_value,
+            ),
+        )
+
+        filtered_operations = filtered_stats['income_expense']
+        self.assertTrue(filtered_operations)
+        for operation in filtered_operations:
+            self.assertIn(
+                search_value.lower(),
+                str(operation['category__name']).lower(),
+            )
+
+    def test_statistics_template_contains_htmx_server_side_controls(
+        self,
+    ) -> None:
+        self.client.force_login(self.user)
+        response = self.client.get('/users/statistics/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="statistics-content"')
+        self.assertContains(response, 'id="statistics-results"')
+        self.assertContains(
+            response, 'class="statistics-panel statistics-filter-form"'
+        )
+        self.assertContains(response, 'hx-target="#statistics-content"')
+        self.assertContains(response, 'name="operations_search"')
+        self.assertContains(response, 'name="transfers_search"')
+        self.assertContains(response, 'name="receipts_search"')
+        self.assertContains(response, 'hx-target="#statistics-results"')
 
 
 class CreditCardPaymentScheduleTest(TestCase):

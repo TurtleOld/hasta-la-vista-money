@@ -47,6 +47,11 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
     filterset_class: type[ReceiptFilter] = ReceiptFilter
     template_name: str = 'receipts/receipts.html'
 
+    def get_template_names(self) -> list[str]:
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['receipts/partials/_results.html']
+        return [self.template_name]
+
     def get_queryset(self) -> QuerySet[Receipt]:
         request = self.get_request_with_container()
         receipt_repository = request.container.receipts.receipt_repository()
@@ -66,53 +71,49 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
             receipt_repository.filter(pk__in=[]),
         )
 
-    def get_context_data(
+    def _resolve_user_and_group(
         self,
-        *,
-        object_list: Any = None,
-        **kwargs: object,
-    ) -> dict[str, object]:
-        request = self.get_request_with_container()
+        request: 'RequestWithContainer',
+    ) -> tuple[User, str]:
         user = get_object_or_404(
             User.objects.prefetch_related('groups'),
             username=request.user,
         )
         group_id = request.GET.get('group_id') or 'my'
+        return user, group_id
 
-        receipt_queryset: QuerySet[Receipt]
-        seller_queryset: QuerySet[Seller]
-        account_queryset: QuerySet[Account]
-
+    def _group_querysets(
+        self,
+        request: 'RequestWithContainer',
+        user: User,
+        group_id: str,
+    ) -> tuple[QuerySet[Receipt], QuerySet[Seller], QuerySet['Account']]:
         receipt_repository = request.container.receipts.receipt_repository()
         seller_repository = request.container.receipts.seller_repository()
         account_repository = (
             request.container.finance_account.account_repository()
         )
-
         account_service = request.container.core.account_service()
         users_in_group = account_service.get_users_for_group(user, group_id)
 
         if users_in_group:
-            receipt_queryset = receipt_repository.get_by_users_with_related(
-                users_in_group,
+            return (
+                receipt_repository.get_by_users_with_related(users_in_group),
+                seller_repository.unique_by_name_for_users(users_in_group),
+                account_repository.get_by_user_and_group(user, group_id),
             )
-            seller_queryset = seller_repository.unique_by_name_for_users(
-                users_in_group,
-            )
-            account_queryset = account_repository.get_by_user_and_group(
-                user,
-                group_id,
-            )
-        else:
-            receipt_queryset = receipt_repository.filter(pk__in=[])
-            seller_queryset = seller_repository.filter(pk__in=[])
-            account_queryset = account_repository.filter(pk__in=[])
-
-        seller_form = SellerForm()
-        receipt_filter = self.get_filtered_queryset(
-            ReceiptFilter,
-            receipt_queryset,
+        return (
+            receipt_repository.filter(pk__in=[]),
+            seller_repository.filter(pk__in=[]),
+            account_repository.filter(pk__in=[]),
         )
+
+    def _build_receipt_form(
+        self,
+        *,
+        account_queryset: QuerySet['Account'],
+        seller_queryset: QuerySet[Seller],
+    ) -> ReceiptForm:
         receipt_form = ReceiptForm()
         account_field = cast(
             'ModelChoiceField[Account]',
@@ -124,17 +125,13 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
             receipt_form.fields['seller'],
         )
         seller_field.queryset = seller_queryset
+        return receipt_form
 
-        product_formset = ProductFormSet()
-
-        total_sum_receipts = self.calculate_total_amount(
-            receipt_filter.qs,
-            amount_field='total_sum',
-        )
-        total_receipts: QuerySet[Receipt] = receipt_filter.qs
-        avg_receipt = receipt_filter.qs.aggregate(avg=Avg('total_sum'))['avg']
-
-        receipt_info_by_month = (
+    def _receipt_info_by_month(
+        self,
+        receipt_queryset: QuerySet[Receipt],
+    ) -> QuerySet[Any]:
+        return (
             receipt_queryset.annotate(
                 month=TruncMonth('receipt_date'),
             )
@@ -149,21 +146,80 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
             .order_by('-month')
         )
 
+    def _paginate_statistics(
+        self,
+        *,
+        total_receipts: QuerySet[Receipt],
+        receipt_info_by_month: QuerySet[Any],
+    ) -> tuple[Any, Any]:
         paginate_by_value = (
             self.paginate_by if self.paginate_by is not None else 10
         )
-        page_receipts: Any = paginator_custom_view(
+        page_receipts = paginator_custom_view(
             self.request,
             total_receipts,
             paginate_by_value,
             'receipts',
         )
-
-        pages_receipt_table: Any = paginator_custom_view(
+        pages_receipt_table = paginator_custom_view(
             self.request,
             receipt_info_by_month,
             paginate_by_value,
             'receipts',
+        )
+        return page_receipts, pages_receipt_table
+
+    def _context_querystrings(
+        self,
+        request: 'RequestWithContainer',
+    ) -> tuple[str, str]:
+        pagination_query = request.GET.copy()
+        pagination_query.pop('receipts', None)
+        group_query = request.GET.copy()
+        group_query.pop('group_id', None)
+        group_query.pop('receipts', None)
+        return pagination_query.urlencode(), group_query.urlencode()
+
+    def get_context_data(
+        self,
+        *,
+        object_list: Any = None,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        request = self.get_request_with_container()
+        user, group_id = self._resolve_user_and_group(request)
+        receipt_queryset, seller_queryset, account_queryset = (
+            self._group_querysets(
+                request,
+                user,
+                group_id,
+            )
+        )
+        seller_form = SellerForm()
+        receipt_filter = self.get_filtered_queryset(
+            ReceiptFilter,
+            receipt_queryset,
+        )
+        receipt_form = self._build_receipt_form(
+            account_queryset=account_queryset,
+            seller_queryset=seller_queryset,
+        )
+        product_formset = ProductFormSet()
+        total_sum_receipts = self.calculate_total_amount(
+            receipt_filter.qs,
+            amount_field='total_sum',
+        )
+        total_receipts: QuerySet[Receipt] = receipt_filter.qs
+        avg_receipt = receipt_filter.qs.aggregate(avg=Avg('total_sum'))['avg']
+        receipt_info_by_month = self._receipt_info_by_month(
+            receipt_queryset,
+        )
+        page_receipts, pages_receipt_table = self._paginate_statistics(
+            total_receipts=total_receipts,
+            receipt_info_by_month=receipt_info_by_month,
+        )
+        pagination_querystring, group_querystring = (
+            self._context_querystrings(request)
         )
 
         context: dict[str, object] = super().get_context_data(
@@ -180,6 +236,9 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         context['product_formset'] = product_formset
         context['receipt_info_by_month'] = pages_receipt_table
         context['user_groups'] = user.groups.all()
+        context['selected_group_id'] = group_id
+        context['pagination_querystring'] = pagination_querystring
+        context['group_querystring'] = group_querystring
         context['pending_receipts'] = (
             PendingReceipt.objects.filter(
                 user=request.user,

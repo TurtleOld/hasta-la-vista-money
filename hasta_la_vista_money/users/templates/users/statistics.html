@@ -26,7 +26,17 @@
             </a>
         </div>
 
-        <form method="get" class="statistics-panel statistics-filter-form">
+        <form
+            method="get"
+            action="{% url 'users:statistics' %}"
+            class="statistics-panel statistics-filter-form"
+            hx-get="{% url 'users:statistics' %}"
+            hx-target="#statistics-content"
+            hx-select="#statistics-content"
+            hx-swap="outerHTML"
+            hx-push-url="true"
+            hx-include="#statistics-active-tab"
+        >
             <div class="statistics-filter-grid">
                 <div class="statistics-field">
                     <label for="statistics-period" class="statistics-label">{% translate 'Период' %}</label>
@@ -94,54 +104,58 @@
             </div>
         </form>
 
-        {% if statistics_alerts %}
-            <div class="statistics-panel statistics-section">
-                <div class="statistics-list">
-                    {% for alert in statistics_alerts %}
-                        <div class="statistics-list-row">
-                            <strong>{{ alert.title }}</strong>
-                            <span class="statistics-badge {% if alert.type == 'danger' %}statistics-badge-negative{% elif alert.type == 'warning' %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">{{ alert.message }}</span>
-                        </div>
-                    {% endfor %}
+        <input id="statistics-active-tab" type="hidden" name="tab" x-model="activeTab">
+
+        <div id="statistics-content">
+            {% if statistics_alerts %}
+                <div class="statistics-panel statistics-section">
+                    <div class="statistics-list">
+                        {% for alert in statistics_alerts %}
+                            <div class="statistics-list-row">
+                                <strong>{{ alert.title }}</strong>
+                                <span class="statistics-badge {% if alert.type == 'danger' %}statistics-badge-negative{% elif alert.type == 'warning' %}statistics-badge-warning{% else %}statistics-badge-positive{% endif %}">{{ alert.message }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="statistics-summary-grid">
+                <div class="statistics-summary-card statistics-summary-info">
+                    <p class="statistics-summary-label">{% translate 'Всего счетов' %}</p>
+                    <p class="statistics-summary-value">{{ accounts.count }}</p>
+                </div>
+                <div class="statistics-summary-card statistics-summary-positive">
+                    <p class="statistics-summary-label">{% translate 'Общий баланс' %}</p>
+                    <p class="statistics-summary-value">
+                        {% for currency, balance in balances_by_currency.items %}
+                            {{ balance|comma }} {{ currency }}{% if not forloop.last %}<br>{% endif %}
+                        {% empty %}
+                            0
+                        {% endfor %}
+                    </p>
+                </div>
+                <div class="statistics-summary-card statistics-summary-cyan">
+                    <p class="statistics-summary-label">{% translate 'Чеков' %}</p>
+                    <p class="statistics-summary-value">{{ receipt_info_by_month|length }}</p>
+                </div>
+                <div class="statistics-summary-card statistics-summary-warn">
+                    <p class="statistics-summary-label">{% translate 'Операций' %}</p>
+                    <p class="statistics-summary-value">{{ income_expense|length }}</p>
                 </div>
             </div>
-        {% endif %}
 
-        <div class="statistics-summary-grid">
-            <div class="statistics-summary-card statistics-summary-info">
-                <p class="statistics-summary-label">{% translate 'Всего счетов' %}</p>
-                <p class="statistics-summary-value">{{ accounts.count }}</p>
-            </div>
-            <div class="statistics-summary-card statistics-summary-positive">
-                <p class="statistics-summary-label">{% translate 'Общий баланс' %}</p>
-                <p class="statistics-summary-value">
-                    {% for currency, balance in balances_by_currency.items %}
-                        {{ balance|comma }} {{ currency }}{% if not forloop.last %}<br>{% endif %}
-                    {% empty %}
-                        0
-                    {% endfor %}
-                </p>
-            </div>
-            <div class="statistics-summary-card statistics-summary-cyan">
-                <p class="statistics-summary-label">{% translate 'Чеков' %}</p>
-                <p class="statistics-summary-value">{{ receipt_info_by_month|length }}</p>
-            </div>
-            <div class="statistics-summary-card statistics-summary-warn">
-                <p class="statistics-summary-label">{% translate 'Операций' %}</p>
-                <p class="statistics-summary-value">{{ income_expense|length }}</p>
-            </div>
-        </div>
-
-        <div class="statistics-panel statistics-section">
-            <div class="statistics-panel-head">
-                <h5 class="statistics-panel-title">{% translate 'Динамика доходов и расходов' %}</h5>
-            </div>
-            <div class="statistics-panel-body">
-                <div class="statistics-chart-box">
-                    <canvas id="incomeExpenseChart" height="300"></canvas>
+            <div id="statistics-results" class="statistics-panel statistics-section">
+                <div class="statistics-panel-head">
+                    <h5 class="statistics-panel-title">{% translate 'Динамика доходов и расходов' %}</h5>
+                </div>
+                <div class="statistics-panel-body">
+                    {{ chart_combined|json_script:'statistics-chart-data' }}
+                    <div class="statistics-chart-box">
+                        <canvas id="incomeExpenseChart" height="300"></canvas>
+                    </div>
                 </div>
             </div>
-        </div>
 
         <div class="statistics-panel statistics-section">
             <div class="statistics-tabs" id="statisticsTabs" role="tablist">
@@ -231,7 +245,20 @@
                         </div>
                     </div>
                     <div class="statistics-table-wrap statistics-section">
-                        <input type="search" class="statistics-input statistics-table-search" data-table-search="receipts-table" placeholder="{% translate 'Поиск по чекам' %}">
+                        <input
+                            type="search"
+                            name="receipts_search"
+                            value="{{ statistics_filter.receipts_search }}"
+                            class="statistics-input statistics-table-search"
+                            placeholder="{% translate 'Поиск по чекам' %}"
+                            hx-get="{% url 'users:statistics' %}"
+                            hx-trigger="input changed delay:400ms, search"
+                            hx-target="#statistics-results"
+                            hx-select="#statistics-results"
+                            hx-swap="outerHTML"
+                            hx-push-url="true"
+                            hx-include=".statistics-filter-form, #statistics-active-tab"
+                        >
                         <table id="receipts-table" class="statistics-table">
                             <thead>
                                 <tr>
@@ -281,11 +308,31 @@
                         <table class="statistics-table">
                             <thead>
                                 <tr>
-                                    <th><a href="?{{ statistics_filter.query_string }}&receipts_sort={% if statistics_filter.receipts_sort == 'receipt_date' %}-receipt_date{% else %}receipt_date{% endif %}">{% translate 'Дата' %}</a></th>
+                                    <th>
+                                        <a
+                                            href="?{{ statistics_filter.query_string }}&receipts_sort={% if statistics_filter.receipts_sort == 'receipt_date' %}-receipt_date{% else %}receipt_date{% endif %}"
+                                            hx-get="?{{ statistics_filter.query_string }}&receipts_sort={% if statistics_filter.receipts_sort == 'receipt_date' %}-receipt_date{% else %}receipt_date{% endif %}"
+                                            hx-target="#statistics-results"
+                                            hx-select="#statistics-results"
+                                            hx-swap="outerHTML"
+                                            hx-push-url="true"
+                                            hx-include="#statistics-active-tab"
+                                        >{% translate 'Дата' %}</a>
+                                    </th>
                                     <th>{% translate 'Магазин' %}</th>
                                     <th>{% translate 'Счёт' %}</th>
                                     <th>{% translate 'Кто внёс' %}</th>
-                                    <th class="statistics-cell-right"><a href="?{{ statistics_filter.query_string }}&receipts_sort={% if statistics_filter.receipts_sort == 'total_sum' %}-total_sum{% else %}total_sum{% endif %}">{% translate 'Сумма' %}</a></th>
+                                    <th class="statistics-cell-right">
+                                        <a
+                                            href="?{{ statistics_filter.query_string }}&receipts_sort={% if statistics_filter.receipts_sort == 'total_sum' %}-total_sum{% else %}total_sum{% endif %}"
+                                            hx-get="?{{ statistics_filter.query_string }}&receipts_sort={% if statistics_filter.receipts_sort == 'total_sum' %}-total_sum{% else %}total_sum{% endif %}"
+                                            hx-target="#statistics-results"
+                                            hx-select="#statistics-results"
+                                            hx-swap="outerHTML"
+                                            hx-push-url="true"
+                                            hx-include="#statistics-active-tab"
+                                        >{% translate 'Сумма' %}</a>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -305,23 +352,76 @@
                     </div>
                     {% if receipt_page.has_other_pages %}
                         <div class="statistics-filter-footer">
-                            {% if receipt_page.has_previous %}<a href="?{{ statistics_filter.query_string }}&receipts_page={{ receipt_page.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
+                            {% if receipt_page.has_previous %}
+                                <a
+                                    href="?{{ statistics_filter.query_string }}&receipts_page={{ receipt_page.previous_page_number }}"
+                                    hx-get="?{{ statistics_filter.query_string }}&receipts_page={{ receipt_page.previous_page_number }}"
+                                    hx-target="#statistics-results"
+                                    hx-select="#statistics-results"
+                                    hx-swap="outerHTML"
+                                    hx-push-url="true"
+                                    hx-include="#statistics-active-tab"
+                                >{% translate 'Назад' %}</a>
+                            {% endif %}
                             <span>{{ receipt_page.number }} / {{ receipt_page.paginator.num_pages }}</span>
-                            {% if receipt_page.has_next %}<a href="?{{ statistics_filter.query_string }}&receipts_page={{ receipt_page.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
+                            {% if receipt_page.has_next %}
+                                <a
+                                    href="?{{ statistics_filter.query_string }}&receipts_page={{ receipt_page.next_page_number }}"
+                                    hx-get="?{{ statistics_filter.query_string }}&receipts_page={{ receipt_page.next_page_number }}"
+                                    hx-target="#statistics-results"
+                                    hx-select="#statistics-results"
+                                    hx-swap="outerHTML"
+                                    hx-push-url="true"
+                                    hx-include="#statistics-active-tab"
+                                >{% translate 'Вперёд' %}</a>
+                            {% endif %}
                         </div>
                     {% endif %}
                 </div>
 
                 <div class="statistics-pane" data-panel="operations" role="tabpanel">
                     <div class="statistics-table-wrap">
-                        <input type="search" class="statistics-input statistics-table-search" data-table-search="operations-table" placeholder="{% translate 'Поиск по операциям' %}">
+                        <input
+                            type="search"
+                            name="operations_search"
+                            value="{{ statistics_filter.operations_search }}"
+                            class="statistics-input statistics-table-search"
+                            placeholder="{% translate 'Поиск по операциям' %}"
+                            hx-get="{% url 'users:statistics' %}"
+                            hx-trigger="input changed delay:400ms, search"
+                            hx-target="#statistics-results"
+                            hx-select="#statistics-results"
+                            hx-swap="outerHTML"
+                            hx-push-url="true"
+                            hx-include=".statistics-filter-form, #statistics-active-tab"
+                        >
                         <table id="operations-table" class="statistics-table">
                             <thead>
                                 <tr>
                                     <th>{% translate 'Тип' %}</th>
                                     <th>{% translate 'Категория' %}</th>
-                                    <th><a href="?{{ statistics_filter.query_string }}&operations_sort={% if statistics_filter.operations_sort == 'date' %}-date{% else %}date{% endif %}">{% translate 'Дата' %}</a></th>
-                                    <th class="statistics-cell-right"><a href="?{{ statistics_filter.query_string }}&operations_sort={% if statistics_filter.operations_sort == 'amount' %}-amount{% else %}amount{% endif %}">{% translate 'Сумма' %}</a></th>
+                                    <th>
+                                        <a
+                                            href="?{{ statistics_filter.query_string }}&operations_sort={% if statistics_filter.operations_sort == 'date' %}-date{% else %}date{% endif %}"
+                                            hx-get="?{{ statistics_filter.query_string }}&operations_sort={% if statistics_filter.operations_sort == 'date' %}-date{% else %}date{% endif %}"
+                                            hx-target="#statistics-results"
+                                            hx-select="#statistics-results"
+                                            hx-swap="outerHTML"
+                                            hx-push-url="true"
+                                            hx-include="#statistics-active-tab"
+                                        >{% translate 'Дата' %}</a>
+                                    </th>
+                                    <th class="statistics-cell-right">
+                                        <a
+                                            href="?{{ statistics_filter.query_string }}&operations_sort={% if statistics_filter.operations_sort == 'amount' %}-amount{% else %}amount{% endif %}"
+                                            hx-get="?{{ statistics_filter.query_string }}&operations_sort={% if statistics_filter.operations_sort == 'amount' %}-amount{% else %}amount{% endif %}"
+                                            hx-target="#statistics-results"
+                                            hx-select="#statistics-results"
+                                            hx-swap="outerHTML"
+                                            hx-push-url="true"
+                                            hx-include="#statistics-active-tab"
+                                        >{% translate 'Сумма' %}</a>
+                                    </th>
                                     <th>{% translate 'Счёт' %}</th>
                                     <th>{% translate 'Кто внёс' %}</th>
                                 </tr>
@@ -348,15 +448,48 @@
                     </div>
                     {% if income_expense_page.has_other_pages %}
                         <div class="statistics-filter-footer">
-                            {% if income_expense_page.has_previous %}<a href="?{{ statistics_filter.query_string }}&operations_page={{ income_expense_page.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
+                            {% if income_expense_page.has_previous %}
+                                <a
+                                    href="?{{ statistics_filter.query_string }}&operations_page={{ income_expense_page.previous_page_number }}"
+                                    hx-get="?{{ statistics_filter.query_string }}&operations_page={{ income_expense_page.previous_page_number }}"
+                                    hx-target="#statistics-results"
+                                    hx-select="#statistics-results"
+                                    hx-swap="outerHTML"
+                                    hx-push-url="true"
+                                    hx-include="#statistics-active-tab"
+                                >{% translate 'Назад' %}</a>
+                            {% endif %}
                             <span>{{ income_expense_page.number }} / {{ income_expense_page.paginator.num_pages }}</span>
-                            {% if income_expense_page.has_next %}<a href="?{{ statistics_filter.query_string }}&operations_page={{ income_expense_page.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
+                            {% if income_expense_page.has_next %}
+                                <a
+                                    href="?{{ statistics_filter.query_string }}&operations_page={{ income_expense_page.next_page_number }}"
+                                    hx-get="?{{ statistics_filter.query_string }}&operations_page={{ income_expense_page.next_page_number }}"
+                                    hx-target="#statistics-results"
+                                    hx-select="#statistics-results"
+                                    hx-swap="outerHTML"
+                                    hx-push-url="true"
+                                    hx-include="#statistics-active-tab"
+                                >{% translate 'Вперёд' %}</a>
+                            {% endif %}
                         </div>
                     {% endif %}
                 </div>
 
                 <div class="statistics-pane" data-panel="transfers" role="tabpanel">
-                    <input type="search" class="statistics-input statistics-table-search" data-list-search="transfers-list" placeholder="{% translate 'Поиск по переводам' %}">
+                    <input
+                        type="search"
+                        name="transfers_search"
+                        value="{{ statistics_filter.transfers_search }}"
+                        class="statistics-input statistics-table-search"
+                        placeholder="{% translate 'Поиск по переводам' %}"
+                        hx-get="{% url 'users:statistics' %}"
+                        hx-trigger="input changed delay:400ms, search"
+                        hx-target="#statistics-results"
+                        hx-select="#statistics-results"
+                        hx-swap="outerHTML"
+                        hx-push-url="true"
+                        hx-include=".statistics-filter-form, #statistics-active-tab"
+                    >
                     <div id="transfers-list" class="statistics-list">
                         {% for transfer in transfer_money_log_page %}
                             <div class="statistics-list-row">
@@ -384,9 +517,29 @@
                     </div>
                     {% if transfer_money_log_page.has_other_pages %}
                         <div class="statistics-filter-footer">
-                            {% if transfer_money_log_page.has_previous %}<a href="?{{ statistics_filter.query_string }}&transfers_page={{ transfer_money_log_page.previous_page_number }}">{% translate 'Назад' %}</a>{% endif %}
+                            {% if transfer_money_log_page.has_previous %}
+                                <a
+                                    href="?{{ statistics_filter.query_string }}&transfers_page={{ transfer_money_log_page.previous_page_number }}"
+                                    hx-get="?{{ statistics_filter.query_string }}&transfers_page={{ transfer_money_log_page.previous_page_number }}"
+                                    hx-target="#statistics-results"
+                                    hx-select="#statistics-results"
+                                    hx-swap="outerHTML"
+                                    hx-push-url="true"
+                                    hx-include="#statistics-active-tab"
+                                >{% translate 'Назад' %}</a>
+                            {% endif %}
                             <span>{{ transfer_money_log_page.number }} / {{ transfer_money_log_page.paginator.num_pages }}</span>
-                            {% if transfer_money_log_page.has_next %}<a href="?{{ statistics_filter.query_string }}&transfers_page={{ transfer_money_log_page.next_page_number }}">{% translate 'Вперёд' %}</a>{% endif %}
+                            {% if transfer_money_log_page.has_next %}
+                                <a
+                                    href="?{{ statistics_filter.query_string }}&transfers_page={{ transfer_money_log_page.next_page_number }}"
+                                    hx-get="?{{ statistics_filter.query_string }}&transfers_page={{ transfer_money_log_page.next_page_number }}"
+                                    hx-target="#statistics-results"
+                                    hx-select="#statistics-results"
+                                    hx-swap="outerHTML"
+                                    hx-push-url="true"
+                                    hx-include="#statistics-active-tab"
+                                >{% translate 'Вперёд' %}</a>
+                            {% endif %}
                         </div>
                     {% endif %}
                 </div>
@@ -724,55 +877,26 @@
         });
     });
 
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('[data-table-search]').forEach(function(input) {
-            input.addEventListener('input', function() {
-                const table = document.getElementById(input.dataset.tableSearch);
-                const needle = input.value.toLowerCase();
-                if (!table) {
-                    return;
-                }
-                table.querySelectorAll('tbody tr').forEach(function(row) {
-                    row.hidden = needle && !row.textContent.toLowerCase().includes(needle);
-                });
-            });
-        });
+    function readStatisticsChartData() {
+        const source = document.getElementById('statistics-chart-data');
+        if (!source || !source.textContent) {
+            return null;
+        }
+        try {
+            return JSON.parse(source.textContent);
+        } catch (error) {
+            return null;
+        }
+    }
 
-        document.querySelectorAll('[data-list-search]').forEach(function(input) {
-            input.addEventListener('input', function() {
-                const list = document.getElementById(input.dataset.listSearch);
-                const needle = input.value.toLowerCase();
-                if (!list) {
-                    return;
-                }
-                list.querySelectorAll('.statistics-list-row').forEach(function(row) {
-                    row.hidden = needle && !row.textContent.toLowerCase().includes(needle);
-                });
-            });
-        });
-
-        document.querySelectorAll('[data-dialog-open]').forEach(function(button) {
-            button.addEventListener('click', function() {
-                const dialog = document.getElementById(button.dataset.dialogOpen);
-                if (dialog && typeof dialog.showModal === 'function') {
-                    dialog.showModal();
-                }
-            });
-        });
-
-        document.querySelectorAll('[data-dialog-close]').forEach(function(button) {
-            button.addEventListener('click', function() {
-                const dialog = button.closest('dialog');
-                if (dialog) {
-                    dialog.close();
-                }
-            });
-        });
-
-        const chartData = {{ chart_combined_json|safe }};
+    function renderStatisticsCharts() {
+        const chartData = readStatisticsChartData();
         const ctx = document.getElementById('incomeExpenseChart');
-        if (!ctx || typeof Chart === 'undefined') {
+        if (!ctx || typeof Chart === 'undefined' || !chartData) {
             return;
+        }
+        if (ctx._statisticsChart && typeof ctx._statisticsChart.destroy === 'function') {
+            ctx._statisticsChart.destroy();
         }
         if (!chartData.labels || chartData.labels.length === 0) {
             ctx.parentElement.innerHTML = '<div class="statistics-empty"><svg class="statistics-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M7 14l3-3 4 4 5-7"></path></svg><p>Нет данных для отображения графика</p></div>';
@@ -784,7 +908,7 @@
         const mutedColor = isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)';
         const gridColor = isDark ? 'rgba(55, 65, 81, 0.5)' : 'rgba(229, 231, 235, 0.5)';
 
-        new Chart(ctx, {
+        ctx._statisticsChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: chartData.labels || [],
@@ -912,7 +1036,10 @@
                 canvas.parentElement.innerHTML = '<p class="statistics-empty">Нет данных по утилизации лимита</p>';
                 return;
             }
-            new Chart(canvas, {
+            if (canvas._statisticsChart && typeof canvas._statisticsChart.destroy === 'function') {
+                canvas._statisticsChart.destroy();
+            }
+            canvas._statisticsChart = new Chart(canvas, {
                 type: 'bar',
                 data: {
                     labels: utilizationData.labels,
@@ -960,6 +1087,40 @@
                 },
             });
         });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('click', function(event) {
+            const openButton = event.target.closest('[data-dialog-open]');
+            if (openButton) {
+                const dialog = document.getElementById(
+                    openButton.dataset.dialogOpen,
+                );
+                if (dialog && typeof dialog.showModal === 'function') {
+                    dialog.showModal();
+                }
+                return;
+            }
+
+            const closeButton = event.target.closest('[data-dialog-close]');
+            if (closeButton) {
+                const dialog = closeButton.closest('dialog');
+                if (dialog) {
+                    dialog.close();
+                }
+            }
+        });
+        renderStatisticsCharts();
+    });
+
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        const target = event.detail && event.detail.target;
+        if (!target) {
+            return;
+        }
+        if (target.id === 'statistics-results' || target.id === 'statistics-content') {
+            renderStatisticsCharts();
+        }
     });
 </script>
 {% endblock %}

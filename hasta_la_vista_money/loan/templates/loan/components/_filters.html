@@ -7,36 +7,65 @@
         </h6>
     </div>
     <div class="loan-card-body">
-        <div class="grid gap-4 md:grid-cols-12">
+        <form id="loan-filters-form" data-server-side-filters="true" class="grid gap-4 md:grid-cols-12" method="get">
             <div class="md:col-span-4">
                 <label for="loan-search" class="block text-sm font-medium text-gray-700 dark:text-gray-200">{% translate 'Поиск по номеру' %}</label>
                 <div class="mt-1 flex rounded-xl border border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-700">
                     <span class="inline-flex items-center px-3 text-gray-400"><i class="bi bi-search"></i></span>
-                    <input type="text" class="w-full rounded-r-xl border-0 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/30 dark:text-white" id="loan-search" placeholder="{% translate 'Введите номер кредита...' %}">
+                    <input type="text"
+                           class="w-full rounded-r-xl border-0 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/30 dark:text-white"
+                           id="loan-search"
+                           name="q"
+                           value="{{ loan_query }}"
+                           placeholder="{% translate 'Введите номер кредита...' %}"
+                           hx-get="{% url 'loan:list' %}"
+                           hx-trigger="keyup changed delay:350ms, search"
+                           hx-include="#loan-filters-form"
+                           hx-target="#loan-results"
+                           hx-push-url="true">
                 </div>
             </div>
             <div class="md:col-span-3">
                 <label for="status-filter" class="block text-sm font-medium text-gray-700 dark:text-gray-200">{% translate 'Статус' %}</label>
-                <select class="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/30 dark:border-gray-600 dark:bg-gray-700 dark:text-white" id="status-filter">
-                    <option value="all">{% translate 'Все кредиты' %}</option>
-                    <option value="Аннуитетный">{% translate 'Аннуитетные' %}</option>
-                    <option value="Дифференцированный">{% translate 'Дифференцированные' %}</option>
+                <select class="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/30 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        id="status-filter"
+                        name="status"
+                        hx-get="{% url 'loan:list' %}"
+                        hx-trigger="change"
+                        hx-include="#loan-filters-form"
+                        hx-target="#loan-results"
+                        hx-push-url="true">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>{% translate 'Все кредиты' %}</option>
+                    <option value="annuity" {% if status_filter == 'annuity' %}selected{% endif %}>{% translate 'Аннуитетные' %}</option>
+                    <option value="differentiated" {% if status_filter == 'differentiated' %}selected{% endif %}>{% translate 'Дифференцированные' %}</option>
                 </select>
             </div>
             <div class="md:col-span-3">
                 <label for="sort-loans" class="block text-sm font-medium text-gray-700 dark:text-gray-200">{% translate 'Сортировка' %}</label>
-                <select class="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/30 dark:border-gray-600 dark:bg-gray-700 dark:text-white" id="sort-loans">
-                    <option value="default">{% translate 'По умолчанию' %}</option>
-                    <option value="amount">{% translate 'По сумме (убывание)' %}</option>
-                    <option value="rate">{% translate 'По ставке (убывание)' %}</option>
-                    <option value="period">{% translate 'По сроку (возрастание)' %}</option>
+                <select class="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/30 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        id="sort-loans"
+                        name="sort"
+                        hx-get="{% url 'loan:list' %}"
+                        hx-trigger="change"
+                        hx-include="#loan-filters-form"
+                        hx-target="#loan-results"
+                        hx-push-url="true">
+                    <option value="default" {% if sort_filter == 'default' %}selected{% endif %}>{% translate 'По умолчанию' %}</option>
+                    <option value="amount" {% if sort_filter == 'amount' %}selected{% endif %}>{% translate 'По сумме (убывание)' %}</option>
+                    <option value="rate" {% if sort_filter == 'rate' %}selected{% endif %}>{% translate 'По ставке (убывание)' %}</option>
+                    <option value="period" {% if sort_filter == 'period' %}selected{% endif %}>{% translate 'По сроку (возрастание)' %}</option>
                 </select>
             </div>
             <div class="flex items-end md:col-span-2">
-                <button class="loan-button loan-button-secondary w-full" id="clear-filters">
+                <a class="loan-button loan-button-secondary w-full text-center"
+                   id="clear-filters"
+                   href="{% url 'loan:list' %}"
+                   hx-get="{% url 'loan:list' %}"
+                   hx-target="#loan-results"
+                   hx-push-url="true">
                     <i class="bi bi-x-circle mr-1"></i>{% translate 'Сбросить' %}
-                </button>
+                </a>
             </div>
-        </div>
+        </form>
     </div>
 </div>

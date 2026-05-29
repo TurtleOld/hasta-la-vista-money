@@ -566,7 +566,6 @@ PENDING_RECEIPT_EXPIRY_HOURS: int = config(
 )
 
 # FNS mobile API integration for official receipt data by QR code.
-FNS_ENABLED: bool = config('FNS_ENABLED', default=False, cast=bool)
 FNS_BASE_URL: str = config(
     'FNS_BASE_URL',
     default='https://irkkt-mobile.nalog.ru:8888/v2',

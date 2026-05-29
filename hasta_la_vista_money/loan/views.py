@@ -1,12 +1,13 @@
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlencode
 
 import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import QuerySet, Sum
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -33,33 +34,96 @@ logger = structlog.get_logger(__name__)
 class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
     model = Loan
     template_name = 'loan/loan.html'
+    context_object_name = 'loan'
+    paginate_by = constants.PAGINATE_BY_DEFAULT
     no_permission_url = reverse_lazy('login')
+
+    def get_template_names(self) -> list[str]:
+        if self.request.headers.get('HX-Request') == 'true':
+            return ['loan/components/_loan_results.html']
+        return [self.template_name]
+
+    def get_queryset(self) -> QuerySet[Loan]:
+        user = cast('User', self.request.user)
+        queryset = (
+            user.loan_users.select_related('account')
+            .prefetch_related('payment_schedule_loans')
+            .all()
+        )
+        query = (self.request.GET.get('q') or '').strip()
+        if query:
+            if query.isdigit():
+                queryset = queryset.filter(pk=int(query))
+            else:
+                queryset = queryset.none()
+
+        status = self.request.GET.get('status') or 'all'
+        if status == 'annuity':
+            queryset = queryset.filter(type_loan='Annuity')
+        elif status == 'differentiated':
+            queryset = queryset.filter(type_loan='Differentiated')
+
+        sort = self.request.GET.get('sort') or 'default'
+        if sort == 'amount':
+            queryset = queryset.order_by('-loan_amount', '-id')
+        elif sort == 'rate':
+            queryset = queryset.order_by('-annual_interest_rate', '-id')
+        elif sort == 'period':
+            queryset = queryset.order_by('period_loan', '-id')
+        return queryset
+
+    def _base_querystring(self) -> str:
+        params: list[tuple[str, str]] = []
+        if self.request.GET.get('q'):
+            params.append(('q', self.request.GET['q'].strip()))
+        status = self.request.GET.get('status') or 'all'
+        if status != 'all':
+            params.append(('status', status))
+        sort = self.request.GET.get('sort') or 'default'
+        if sort != 'default':
+            params.append(('sort', sort))
+        return urlencode(params)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         request = cast('RequestWithContainer', self.request)
         user = get_object_or_404(User, username=request.user)
         loan_form = LoanForm()
         payment_make_loan_form = PaymentMakeLoanForm(user=user)
-        loan = (
-            user.loan_users.select_related('account')
-            .prefetch_related('payment_schedule_loans')
-            .all()
-        )
-        result_calculate = user.payment_schedule_users.select_related(
-            'loan',
-        ).all()
+        loan = kwargs.get('object_list', self.object_list)
+        loan_list = list(loan)
+        loan_ids = [loan_item.pk for loan_item in loan_list]
+
+        result_calculate = user.payment_schedule_users.select_related('loan')
+        if loan_ids:
+            result_calculate = result_calculate.filter(loan_id__in=loan_ids)
+        else:
+            result_calculate = result_calculate.none()
+
         payment_make_loan = user.payment_make_loan_users.select_related(
             'account',
             'loan',
-        ).all()
+        )
+        if loan_ids:
+            payment_make_loan = payment_make_loan.filter(loan_id__in=loan_ids)
+        else:
+            payment_make_loan = payment_make_loan.none()
 
-        total_loan_amount = sum(loan_item.loan_amount for loan_item in loan)
+        filtered_queryset = self.get_queryset()
+        total_loan_amount = filtered_queryset.aggregate(
+            total=Sum('loan_amount')
+        )['total'] or Decimal(0)
+        total_loans_count = filtered_queryset.count()
+        has_any_loans = user.loan_users.exists()
 
-        loan_list = list(loan)
-        if loan_list:
-            loan_ids = [loan_item.pk for loan_item in loan_list]
+        if total_loans_count:
+            filtered_ids = list(
+                filtered_queryset.values_list('pk', flat=True),
+            )
+            amounts_by_loan = dict(
+                filtered_queryset.values_list('pk', 'loan_amount'),
+            )
             payments_by_loan = (
-                PaymentSchedule.objects.filter(loan_id__in=loan_ids)
+                PaymentSchedule.objects.filter(loan_id__in=filtered_ids)
                 .values('loan_id')
                 .annotate(total=Sum('monthly_payment'))
             )
@@ -68,9 +132,9 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
                 for item in payments_by_loan
             }
             total_overpayment = sum(
-                payments_dict.get(loan_item.pk, Decimal(0))
-                - loan_item.loan_amount
-                for loan_item in loan_list
+                payments_dict.get(loan_id, Decimal(0))
+                - amounts_by_loan.get(loan_id, Decimal(0))
+                for loan_id in filtered_ids
             )
         else:
             total_overpayment = Decimal(0)
@@ -83,6 +147,12 @@ class LoanView(LoginRequiredMixin, SuccessMessageMixin[Any], ListView[Loan]):
         context['payment_make_loan'] = payment_make_loan
         context['total_loan_amount'] = total_loan_amount
         context['total_overpayment'] = total_overpayment
+        context['total_loans_count'] = total_loans_count
+        context['has_any_loans'] = has_any_loans
+        context['loan_query'] = (self.request.GET.get('q') or '').strip()
+        context['status_filter'] = self.request.GET.get('status') or 'all'
+        context['sort_filter'] = self.request.GET.get('sort') or 'default'
+        context['base_querystring'] = self._base_querystring()
 
         return context
 

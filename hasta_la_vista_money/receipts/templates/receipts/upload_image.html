@@ -51,7 +51,10 @@
                         <div class="receipts-dropzone-text">
                             <strong>{% translate 'Перетащите изображение сюда или нажмите для выбора' %}</strong>
                             <span>{% translate 'JPG, JPEG или PNG, до 5 МБ' %}</span>
-                            <span id="selected-file-name" class="receipts-dropzone-filename" x-text="selectedFileLabel"></span>
+                            <span id="selected-file-name" class="receipts-dropzone-filename" x-show="hasFiles" x-cloak>
+                                <span x-text="selectedFileLabel"></span>
+                                <span class="receipts-dropzone-status">{% translate '(Файл добавлен. Отправке в обработку)' %}</span>
+                            </span>
                         </div>
                     </label>
 
@@ -63,15 +66,6 @@
                            multiple
                            x-ref="fileInput"
                            x-on:change="handleInputChange">
-
-                    <div id="upload-preview" class="receipts-upload-preview" aria-live="polite" x-show="hasFiles" x-cloak>
-                        <template x-for="file in files" x-bind:key="file.previewUrl">
-                            <div class="receipts-upload-thumb">
-                                <img x-bind:src="file.previewUrl" x-bind:alt="file.name">
-                                <div class="receipts-upload-thumb-name" x-text="file.name"></div>
-                            </div>
-                        </template>
-                    </div>
 
                     <div id="upload-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
                 </div>
