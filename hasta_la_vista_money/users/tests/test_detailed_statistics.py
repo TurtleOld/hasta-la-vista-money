@@ -130,10 +130,15 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
 
     def test_receipts_search_filters_receipt_page(self) -> None:
         container = ApplicationContainer()
+        base_filter = StatisticsFilters(
+            period='range',
+            date_from=date(2000, 1, 1),
+            date_to=date.today(),
+        )
         base_stats = get_user_detailed_statistics(
             self.user,
             container=container,
-            stats_filter=StatisticsFilters(),
+            stats_filter=base_filter,
         )
         base_receipts = list(base_stats['receipt_page'].paginator.object_list)
         self.assertTrue(base_receipts)
@@ -143,7 +148,12 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         filtered_stats = get_user_detailed_statistics(
             self.user,
             container=container,
-            stats_filter=StatisticsFilters(receipts_search=search_value),
+            stats_filter=StatisticsFilters(
+                period='range',
+                date_from=date(2000, 1, 1),
+                date_to=date.today(),
+                receipts_search=search_value,
+            ),
         )
 
         filtered_receipts = list(
@@ -158,10 +168,15 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
 
     def test_operations_search_filters_income_expense(self) -> None:
         container = ApplicationContainer()
+        base_filter = StatisticsFilters(
+            period='range',
+            date_from=date(2000, 1, 1),
+            date_to=date.today(),
+        )
         base_stats = get_user_detailed_statistics(
             self.user,
             container=container,
-            stats_filter=StatisticsFilters(),
+            stats_filter=base_filter,
         )
         base_operations = base_stats['income_expense']
         self.assertTrue(base_operations)
@@ -171,7 +186,12 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         filtered_stats = get_user_detailed_statistics(
             self.user,
             container=container,
-            stats_filter=StatisticsFilters(operations_search=search_value),
+            stats_filter=StatisticsFilters(
+                period='range',
+                date_from=date(2000, 1, 1),
+                date_to=date.today(),
+                operations_search=search_value,
+            ),
         )
 
         filtered_operations = filtered_stats['income_expense']
