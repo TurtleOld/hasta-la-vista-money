@@ -84,6 +84,46 @@ class CategoryCRUDViewsTest(TestCase):
         category.refresh_from_db()
         self.assertEqual(category.name, 'Новое')
 
+    def test_update_get_htmx_renders_inline_form(self) -> None:
+        category = Category.objects.create(
+            user=self.user,
+            name='Редактируемая',
+            type=TransactionType.EXPENSE,
+        )
+        response = self.client.get(
+            reverse('transactions:update_category', args=[category.pk])
+            + '?inline=1',
+            HTTP_HX_REQUEST='true',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(
+            response,
+            'transactions/partials/_category_tree_item_form.html',
+        )
+        self.assertContains(response, 'hx-post')
+
+    def test_update_post_htmx_returns_inline_item(self) -> None:
+        category = Category.objects.create(
+            user=self.user,
+            name='Старое',
+            type=TransactionType.EXPENSE,
+        )
+        response = self.client.post(
+            reverse('transactions:update_category', args=[category.pk])
+            + '?inline=1',
+            data={
+                'name': 'Новое',
+                'type': 'expense',
+                'parent_category': '',
+                'inline': '1',
+            },
+            HTTP_HX_REQUEST='true',
+        )
+        self.assertEqual(response.status_code, 200)
+        category.refresh_from_db()
+        self.assertEqual(category.name, 'Новое')
+        self.assertContains(response, 'finance-category-row')
+
     def test_update_rejects_foreign_category(self) -> None:
         other = User.objects.create_user(
             username='other',

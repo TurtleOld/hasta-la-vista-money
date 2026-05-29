@@ -9,14 +9,23 @@
                 <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
             {% endif %}
         </span>
-        <div class="finance-category-name">
+        <button type="button"
+                class="finance-category-name"
+                title="{% translate 'Редактировать категорию' %}"
+                hx-get="{% url 'transactions:update_category' category.id %}?inline=1"
+                hx-target="closest article"
+                hx-swap="outerHTML">
             <strong>{{ category.name }}</strong>
             {% if category.total_children_count %}
                 <span>{{ category.total_children_count }} {% translate 'подкат.' %}</span>
             {% endif %}
-        </div>
+        </button>
         <div class="finance-category-actions">
-            <a href="{% url 'transactions:update_category' category.id %}" title="{% translate 'Редактировать категорию' %}">
+            <a href="{% url 'transactions:update_category' category.id %}"
+               title="{% translate 'Редактировать категорию' %}"
+               hx-get="{% url 'transactions:update_category' category.id %}?inline=1"
+               hx-target="closest article"
+               hx-swap="outerHTML">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </a>
             <form method="post" action="{% url 'transactions:delete_category' category.id %}">
