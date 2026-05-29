@@ -344,7 +344,12 @@ class ReceiptForm(ModelForm[Receipt]):
         input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),
         widget=DateTimeInput(
             format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
-            attrs={'type': 'datetime-local', 'class': _INPUT_CLASSES},
+            attrs={
+                'type': 'datetime-local',
+                'class': _INPUT_CLASSES,
+                'data-flatpickr': 'true',
+                'data-flatpickr-mode': 'datetime',
+            },
         ),
     )
     operation_type = ChoiceField(
@@ -495,6 +500,8 @@ class PendingReceiptReviewForm(Form):
             attrs={
                 'class': _INPUT_CLASSES,
                 'type': 'datetime-local',
+                'data-flatpickr': 'true',
+                'data-flatpickr-mode': 'datetime',
             },
             format='%Y-%m-%dT%H:%M',
         ),

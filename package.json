@@ -7,7 +7,8 @@
     "format:js:check": "prettier --check \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/pages/**/*.js\" \"*.mjs\" package.json"
   },
   "dependencies": {
-    "driver.js": "^1.4.0"
+    "driver.js": "^1.4.0",
+    "flatpickr": "^4.6.13"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

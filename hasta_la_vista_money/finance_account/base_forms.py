@@ -109,6 +109,8 @@ class DateFieldMixin:
                     'type': 'date',
                     'lang': 'ru-RU',
                     'class': f'{TAILWIND_FORM_CONTROL} credit-only-field',
+                    'data-flatpickr': 'true',
+                    'data-flatpickr-mode': 'date',
                 },
             )
             self.fields['payment_due_date'].input_formats = list(  # type: ignore[attr-defined]
@@ -121,6 +123,8 @@ class DateFieldMixin:
                 attrs={
                     'type': 'datetime-local',
                     'class': TAILWIND_FORM_CONTROL,
+                    'data-flatpickr': 'true',
+                    'data-flatpickr-mode': 'datetime',
                 },
             )
             self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
@@ -203,6 +207,8 @@ class BaseTransferForm(TailwindFormMixin, ModelForm[TransferMoneyLog]):
                 attrs={
                     'type': 'datetime-local',
                     'class': TAILWIND_FORM_CONTROL,
+                    'data-flatpickr': 'true',
+                    'data-flatpickr-mode': 'datetime',
                 },
             )
             self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]

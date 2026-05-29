@@ -22,6 +22,7 @@ from django.db.models import QuerySet
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -425,6 +426,7 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
                 'income_categories': income_categories,
                 'expense_categories': expense_categories,
                 'accounts': accounts,
+                'server_today_iso': timezone.localdate().isoformat(),
             },
         )
         return context

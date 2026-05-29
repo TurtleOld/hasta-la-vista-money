@@ -65,12 +65,15 @@ class TransactionForm(
         help_text=_('Выберите счёт операции'),
     )
     date = DateTimeField(
-        label=_('Дата'),
+        label=_('Дата и время'),
         widget=DateTimeInput(
             format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
             attrs={
                 'type': 'datetime-local',
                 'class': FORM_CONTROL_CLASS,
+                'data-flatpickr': 'true',
+                'data-flatpickr-mode': 'datetime',
+                'placeholder': 'ДД.ММ.ГГГГ ЧЧ:ММ',
             },
         ),
         input_formats=list(constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS),

@@ -147,29 +147,28 @@
                     </div>
                 </section>
 
-                <!-- Дата / Время -->
+                <!-- Дата и время -->
                 <section class="cmp-section">
                     <h3>
                         <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
                         {% translate 'Когда' %}
                     </h3>
-                    <div class="cmp-grid-2">
-                        <div class="cmp-field">
-                            <div class="cmp-input">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
-                                <input type="text" x-model="date" placeholder="DD/MM/YYYY">
-                            </div>
-                            <div class="date-quick">
-                                <button type="button" x-bind:data-on="isToday" x-on:click="setDateOffset(0)">{% translate 'Сегодня' %}</button>
-                                <button type="button" x-bind:data-on="isYesterday" x-on:click="setDateOffset(-1)">{% translate 'Вчера' %}</button>
-                                <button type="button" x-on:click="setDateOffset(-2)">{% translate 'Позавчера' %}</button>
-                            </div>
+                    <div class="cmp-field">
+                        <div class="cmp-input">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                            <input
+                                type="text"
+                                x-ref="datetimeInput"
+                                x-model="datetimeLocal"
+                                data-flatpickr="true"
+                                data-flatpickr-mode="datetime"
+                                placeholder="ДД.ММ.ГГГГ ЧЧ:ММ"
+                            >
                         </div>
-                        <div class="cmp-field">
-                            <div class="cmp-input">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                                <input type="time" x-model="time">
-                            </div>
+                        <div class="date-quick">
+                            <button type="button" x-bind:data-on="isToday" x-on:click="setDateOffset(0)">{% translate 'Сегодня' %}</button>
+                            <button type="button" x-bind:data-on="isYesterday" x-on:click="setDateOffset(-1)">{% translate 'Вчера' %}</button>
+                            <button type="button" x-bind:data-on="isDayBeforeYesterday" x-on:click="setDateOffset(-2)">{% translate 'Позавчера' %}</button>
                         </div>
                     </div>
                 </section>
@@ -259,6 +258,7 @@
     window.LABEL_EXPENSE = "{% translate 'Расход' %}";
     window.LABEL_TO      = "{% translate 'Куда' %}";
     window.LABEL_FROM    = "{% translate 'Откуда' %}";
+    window.SERVER_TODAY_ISO = "{{ server_today_iso }}";
 </script>
 {% endblock %}
 
@@ -272,6 +272,38 @@
             return `${y}-${m}-${d}`;
         }
 
+        function toIsoDatetimeLocalString(date) {
+            const isoDate = toIsoDateString(date);
+            const h = String(date.getHours()).padStart(2, '0');
+            const i = String(date.getMinutes()).padStart(2, '0');
+            return `${isoDate}T${h}:${i}`;
+        }
+
+        function parseIsoDateString(value) {
+            if (!value) return null;
+            const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return null;
+            return {
+                year: Number(match[1]),
+                month: Number(match[2]),
+                day: Number(match[3]),
+            };
+        }
+
+        function getServerTodayIso() {
+            const parsed = parseIsoDateString(window.SERVER_TODAY_ISO || '');
+            if (parsed) {
+                return window.SERVER_TODAY_ISO;
+            }
+            return toIsoDateString(new Date());
+        }
+
+        function toDateFromIso(isoValue) {
+            const parsed = parseIsoDateString(isoValue);
+            if (!parsed) return new Date();
+            return new Date(parsed.year, parsed.month - 1, parsed.day);
+        }
+
         function toDisplayDateString(date) {
             const d = String(date.getDate()).padStart(2, '0');
             const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -279,36 +311,48 @@
             return `${d}/${m}/${y}`;
         }
 
-        function parseDateInput(value) {
+        function splitDatetimeLocal(value) {
             if (!value) return null;
-
-            const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-            if (isoMatch) return value;
-
-            const ruMatch = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-            if (!ruMatch) return null;
-
-            const day = Number(ruMatch[1]);
-            const month = Number(ruMatch[2]);
-            const year = Number(ruMatch[3]);
-            const candidate = new Date(year, month - 1, day);
-
-            if (
-                candidate.getFullYear() !== year ||
-                candidate.getMonth() !== month - 1 ||
-                candidate.getDate() !== day
-            ) {
-                return null;
-            }
-
-            return `${ruMatch[3]}-${ruMatch[2]}-${ruMatch[1]}`;
+            const match = value.match(
+                /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)$/,
+            );
+            if (!match) return null;
+            return {
+                year: Number(match[1]),
+                month: Number(match[2]),
+                day: Number(match[3]),
+                hours: Number(match[4]),
+                minutes: Number(match[5]),
+                dateIso: `${match[1]}-${match[2]}-${match[3]}`,
+                time: `${match[4]}:${match[5]}`,
+            };
         }
 
-        function formatDateForDisplay(value) {
-            const parsed = parseDateInput(value);
-            if (!parsed) return value;
-            const [year, month, day] = parsed.split('-');
-            return `${day}/${month}/${year}`;
+        function parseDateParam(value) {
+            if (!value) return null;
+            const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (isoMatch) return value;
+            const slashMatch = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (slashMatch) {
+                return `${slashMatch[3]}-${slashMatch[2]}-${slashMatch[1]}`;
+            }
+            const dotMatch = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+            if (dotMatch) {
+                return `${dotMatch[3]}-${dotMatch[2]}-${dotMatch[1]}`;
+            }
+            return null;
+        }
+
+        function parseTimeParam(value) {
+            if (!value) return null;
+            const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+            return match ? `${match[1]}:${match[2]}` : null;
+        }
+
+        function formatDatetimeForDisplay(value) {
+            const parsed = splitDatetimeLocal(value);
+            if (!parsed) return '';
+            return `${toDisplayDateString(new Date(parsed.year, parsed.month - 1, parsed.day))} · ${parsed.time}`;
         }
 
         Alpine.data('composerPage', () => ({
@@ -318,8 +362,8 @@
             accountId:            null,
             selectedCategoryName: '',
             selectedAccountName:  '',
-            date:                 toDisplayDateString(new Date()),
-            time:                 new Date().toTimeString().slice(0, 5),
+            serverTodayIso:       getServerTodayIso(),
+            datetimeLocal:        '',
             note:                 '',
 
             /* ── Computed: тип ── */
@@ -353,27 +397,31 @@
 
             /* ── Computed: дата ── */
             get dateIso() {
-                return parseDateInput(this.date);
-            },
-            get datetimeLocal() {
-                return this.dateIso ? this.dateIso + 'T' + this.time : '';
+                const parsed = splitDatetimeLocal(this.datetimeLocal);
+                return parsed ? parsed.dateIso : '';
             },
             get formattedDatetime() {
-                if (!this.dateIso) return '';
+                const parsed = splitDatetimeLocal(this.datetimeLocal);
+                if (!parsed) return '';
                 try {
-                    return new Date(this.dateIso + 'T' + this.time).toLocaleString('ru-RU', {
+                    return new Date(this.datetimeLocal).toLocaleString('ru-RU', {
                         weekday: 'short', day: 'numeric', month: 'short',
                         hour: '2-digit', minute: '2-digit',
                     });
                 } catch (e) { return ''; }
             },
             get isToday() {
-                return this.dateIso === toIsoDateString(new Date()) ? true : null;
+                return this.dateIso === this.serverTodayIso ? true : null;
             },
             get isYesterday() {
-                const y = new Date();
+                const y = toDateFromIso(this.serverTodayIso);
                 y.setDate(y.getDate() - 1);
                 return this.dateIso === toIsoDateString(y) ? true : null;
+            },
+            get isDayBeforeYesterday() {
+                const dby = toDateFromIso(this.serverTodayIso);
+                dby.setDate(dby.getDate() - 2);
+                return this.dateIso === toIsoDateString(dby) ? true : null;
             },
 
             /* ── Computed: превью ── */
@@ -385,7 +433,7 @@
                 return sign + new Intl.NumberFormat('ru-RU').format(Math.round(parseFloat(this.amount) || 0));
             },
             get previewDate() {
-                return formatDateForDisplay(this.date) + ' · ' + this.time;
+                return formatDatetimeForDisplay(this.datetimeLocal);
             },
             get noteOrDash() {
                 return this.note || '—';
@@ -397,7 +445,7 @@
                     parseFloat(this.amount) > 0 &&
                     this.categoryId &&
                     this.accountId &&
-                    this.dateIso
+                    splitDatetimeLocal(this.datetimeLocal)
                 );
             },
 
@@ -419,12 +467,14 @@
                 this.amount = val;
             },
             setDateOffset(days) {
-                const d = new Date();
-                d.setDate(d.getDate() + days);
-                this.date = toDisplayDateString(d);
-            },
-            normalizeDateInput() {
-                this.date = formatDateForDisplay(this.date);
+                const baseDate = toDateFromIso(this.serverTodayIso);
+                const parsed = splitDatetimeLocal(this.datetimeLocal);
+                const hours = parsed ? parsed.hours : new Date().getHours();
+                const minutes = parsed ? parsed.minutes : new Date().getMinutes();
+                baseDate.setDate(baseDate.getDate() + days);
+                baseDate.setHours(hours, minutes, 0, 0);
+                this.datetimeLocal = toIsoDatetimeLocalString(baseDate);
+                this.syncFlatpickr();
             },
             sanitizeAmount() {
                 this.amount = this.amount.replace(/[^\d.,]/g, '').replace(',', '.');
@@ -462,18 +512,40 @@
                     }
                 }
                 const date = params.get('date');
-                if (date) {
-                    this.date = formatDateForDisplay(date);
-                }
                 const time = params.get('time');
-                if (time) {
-                    this.time = time;
+                if (date || time) {
+                    const parsedDate = parseDateParam(date);
+                    const parsedTime = parseTimeParam(time);
+                    if (parsedDate) {
+                        this.datetimeLocal = `${parsedDate}T${parsedTime || '00:00'}`;
+                    }
+                }
+                const datetime = params.get('datetime');
+                if (datetime && splitDatetimeLocal(datetime)) {
+                    this.datetimeLocal = datetime;
                 }
             },
 
+            syncFlatpickr() {
+                const input = this.$refs.datetimeInput;
+                const parsed = splitDatetimeLocal(this.datetimeLocal);
+                if (!input || !parsed || !input._flatpickr) {
+                    return;
+                }
+                input._flatpickr.setDate(this.datetimeLocal, false, 'Y-m-d\\TH:i');
+            },
+
             init() {
+                if (!this.datetimeLocal) {
+                    const now = new Date();
+                    const baseDate = toDateFromIso(this.serverTodayIso);
+                    baseDate.setHours(now.getHours(), now.getMinutes(), 0, 0);
+                    this.datetimeLocal = toIsoDatetimeLocalString(baseDate);
+                }
                 this.prefillFromQuery();
-                this.$watch('date', () => this.normalizeDateInput());
+                this.$nextTick(() => {
+                    this.syncFlatpickr();
+                });
                 window.addEventListener('keydown', (e) => {
                     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                         e.preventDefault();
