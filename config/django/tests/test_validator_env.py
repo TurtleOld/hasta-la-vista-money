@@ -4,6 +4,8 @@ from django.test import SimpleTestCase
 
 from config.django.validator_env import EnvironmentValidator
 
+TEST_SECRET_KEY = 'secret'  # nosec B105
+
 
 class EnvironmentValidatorTest(SimpleTestCase):
     def test_validate_returns_true_for_ci_environment(self) -> None:
@@ -52,7 +54,7 @@ class EnvironmentValidatorTest(SimpleTestCase):
             default: str = '',
         ) -> str | bool:
             values: dict[str, object] = {
-                'SECRET_KEY': 'secret',
+                'SECRET_KEY': TEST_SECRET_KEY,
                 'ALLOWED_HOSTS': 'localhost',
                 'DATABASE_URL': 'sqlite://:memory:',
                 'POSTGRES_PASSWORD': '',
@@ -82,7 +84,7 @@ class EnvironmentValidatorTest(SimpleTestCase):
             default: str = '',
         ) -> str | bool:
             values: dict[str, object] = {
-                'SECRET_KEY': 'secret',
+                'SECRET_KEY': TEST_SECRET_KEY,
                 'ALLOWED_HOSTS': 'localhost',
                 'DATABASE_URL': '',
                 'POSTGRES_PASSWORD': '',

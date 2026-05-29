@@ -8,6 +8,8 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.users.models import User
 
 LENGTH_PASSWORD: int = 12
+TEST_PASSWORD = 'testpassword'  # nosec B105
+WRONG_PASSWORD = 'wrongpassword'  # nosec B105
 
 
 class TestUser(TestCase):
@@ -54,14 +56,14 @@ class TestUser(TestCase):
     def test_login_user_redirect_after_success(self) -> None:
         """Test successful redirect after login."""
         url = reverse_lazy('login')
-        self.user1.set_password('testpassword')
+        self.user1.set_password(TEST_PASSWORD)
         self.user1.save()
 
         response = self.client.post(
             url,
             {
                 'username': str(self.user1.username),
-                'password': 'testpassword',
+                'password': TEST_PASSWORD,
             },
             follow=False,
         )
@@ -75,7 +77,7 @@ class TestUser(TestCase):
             url,
             {
                 'username': 'testuser',
-                'password': 'wrongpassword',
+                'password': WRONG_PASSWORD,
             },
         )
 
@@ -94,7 +96,7 @@ class TestUser(TestCase):
             url,
             {
                 'username': '',
-                'password': '',
+                'password': '',  # nosec B105
             },
         )
         self.assertEqual(response.status_code, 200)

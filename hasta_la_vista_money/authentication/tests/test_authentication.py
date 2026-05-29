@@ -21,6 +21,15 @@ from hasta_la_vista_money.users.factories import (
 )
 from hasta_la_vista_money.users.models import User as UserModel
 
+WRONG_JWT_SECRET = 'wrong_secret'  # nosec B105
+TEST_ACCESS_TOKEN = 'test_access_token'  # nosec B105
+TEST_REFRESH_TOKEN = 'test_refresh_token'  # nosec B105
+TEST_TOKEN = 'test_token'  # nosec B105
+SOME_TOKEN = 'some_token'  # nosec B105
+INVALID_TOKEN = 'invalid.token.here'  # nosec B105
+UNICODE_TOKEN = 'test_token_with_unicode'  # nosec B105
+SPECIAL_TOKEN = 'token!@#$%^&*()'  # nosec B105
+
 
 class CookieJWTAuthenticationTestCase(TestCase):
     """Test cases for CookieJWTAuthentication class.
@@ -61,7 +70,7 @@ class CookieJWTAuthenticationTestCase(TestCase):
             'iat': timezone.now(),
             'token_type': 'access',
         }
-        return jwt.encode(payload, 'wrong_secret', algorithm='HS256')
+        return jwt.encode(payload, WRONG_JWT_SECRET, algorithm='HS256')
 
     def _create_token_without_user_id(self) -> str:
         """Create a token without user_id in payload."""
@@ -165,7 +174,7 @@ class CookieJWTAuthenticationTestCase(TestCase):
     ) -> None:
         """Test that Authorization header is ignored when cookie is present."""
         valid_token = self._create_valid_token(self.user)
-        invalid_token = 'invalid.token.here'
+        invalid_token = INVALID_TOKEN
 
         request = self.factory.get('/')
         request.COOKIES[self.auth_cookie_name] = valid_token
@@ -207,7 +216,7 @@ class CookieJWTAuthenticationTestCase(TestCase):
             ),
         ):
             request = self.factory.get('/')
-            request.COOKIES[self.auth_cookie_name] = 'some_token'
+            request.COOKIES[self.auth_cookie_name] = SOME_TOKEN
 
             with self.assertRaises(TypeError) as context:
                 self.auth.authenticate(request)  # type: ignore[arg-type]
@@ -230,8 +239,8 @@ class CookieSecurityTestCase(TestCase):
     def test_set_auth_cookies_security_attributes(self) -> None:
         """Test that cookies are set with correct security attributes."""
         response = HttpResponse()
-        access_token = 'test_access_token'
-        refresh_token = 'test_refresh_token'
+        access_token = TEST_ACCESS_TOKEN
+        refresh_token = TEST_REFRESH_TOKEN
 
         result = set_auth_cookies(response, access_token, refresh_token)
 
@@ -263,7 +272,7 @@ class CookieSecurityTestCase(TestCase):
     def test_set_auth_cookies_no_refresh_token(self) -> None:
         """Test setting only access token without refresh token."""
         response = HttpResponse()
-        access_token = 'test_access_token'
+        access_token = TEST_ACCESS_TOKEN
 
         result = set_auth_cookies(response, access_token)
 
@@ -290,7 +299,7 @@ class CookieSecurityTestCase(TestCase):
         """Test that getting token from cookie works correctly."""
         factory = RequestFactory()
         request = factory.get('/')
-        token = 'test_token'
+        token = TEST_TOKEN
         request.COOKIES[self.auth_cookie_name] = token
 
         result = get_token_from_cookie(request)
@@ -308,7 +317,7 @@ class CookieSecurityTestCase(TestCase):
         """Test that getting refresh token from cookie works correctly."""
         factory = RequestFactory()
         request = factory.get('/')
-        token = 'test_refresh_token'
+        token = TEST_REFRESH_TOKEN
         request.COOKIES[self.refresh_cookie_name] = token
 
         result = get_refresh_token_from_cookie(request)
@@ -403,7 +412,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
         request = self.factory.get('/')
         request.COOKIES[self.auth_cookie_name] = str(valid_token)
-        request.COOKIES[f'{self.auth_cookie_name}_backup'] = 'invalid_token'
+        request.COOKIES[f'{self.auth_cookie_name}_backup'] = INVALID_TOKEN
 
         result = self.auth.authenticate(request)  # type: ignore[arg-type]
         self.assertIsNotNone(result)
@@ -414,7 +423,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
     def test_authenticate_unicode_cookie_value(self) -> None:
         """Test that cookie with unicode characters returns None."""
         request = self.factory.get('/')
-        request.COOKIES[self.auth_cookie_name] = 'test_token_with_unicode'
+        request.COOKIES[self.auth_cookie_name] = UNICODE_TOKEN
 
         result = self.auth.authenticate(request)  # type: ignore[arg-type]
         self.assertIsNone(result)
@@ -430,7 +439,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
     def test_authenticate_special_characters_cookie_value(self) -> None:
         """Test that cookie with special characters returns None."""
         request = self.factory.get('/')
-        request.COOKIES[self.auth_cookie_name] = 'token!@#$%^&*()'
+        request.COOKIES[self.auth_cookie_name] = SPECIAL_TOKEN
 
         result = self.auth.authenticate(request)  # type: ignore[arg-type]
         self.assertIsNone(result)

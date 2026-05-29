@@ -28,6 +28,13 @@ if TYPE_CHECKING:
 else:
     User = UserModel
 
+TEST_TOKEN = 'test_token'  # nosec B105
+TEST_REFRESH_TOKEN = 'test_refresh_token'  # nosec B105
+INVALID_TOKEN = 'invalid_token'  # nosec B105
+SOME_TOKEN = 'some_token'  # nosec B105
+UNICODE_TOKEN = 'test_token_with_unicode'  # nosec B105
+SPECIAL_TOKEN = 'token!@#$%^&*()'  # nosec B105
+
 
 class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
     """Test cases for CookieJWTAuthentication edge cases.
@@ -111,7 +118,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
 
         request = self.factory.get('/')
         request.COOKIES[self.auth_cookie_name] = str(valid_token)
-        request.COOKIES[f'{self.auth_cookie_name}_backup'] = 'invalid_token'
+        request.COOKIES[f'{self.auth_cookie_name}_backup'] = INVALID_TOKEN
 
         result = self.auth.authenticate(request)  # type: ignore[arg-type]
         self.assertIsNotNone(result)
@@ -122,7 +129,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
     def test_authenticate_unicode_cookie_value(self) -> None:
         """Test that cookie with unicode characters returns None."""
         request = self.factory.get('/')
-        request.COOKIES[self.auth_cookie_name] = 'test_token_with_unicode'
+        request.COOKIES[self.auth_cookie_name] = UNICODE_TOKEN
 
         result = self.auth.authenticate(request)  # type: ignore[arg-type]
         self.assertIsNone(result)
@@ -138,7 +145,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
     def test_authenticate_special_characters_cookie_value(self) -> None:
         """Test that cookie with special characters returns None."""
         request = self.factory.get('/')
-        request.COOKIES[self.auth_cookie_name] = 'token!@#$%^&*()'
+        request.COOKIES[self.auth_cookie_name] = SPECIAL_TOKEN
 
         result = self.auth.authenticate(request)  # type: ignore[arg-type]
         self.assertIsNone(result)
@@ -362,7 +369,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
             side_effect=RuntimeError('Token validation error'),
         ):
             request = self.factory.get('/')
-            request.COOKIES[self.auth_cookie_name] = 'some_token'
+            request.COOKIES[self.auth_cookie_name] = SOME_TOKEN
 
             result = self.auth.authenticate(request)  # type: ignore[arg-type]
             self.assertIsNone(result)
@@ -375,7 +382,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
             side_effect=TypeError('Type error'),
         ):
             request = self.factory.get('/')
-            request.COOKIES[self.auth_cookie_name] = 'some_token'
+            request.COOKIES[self.auth_cookie_name] = SOME_TOKEN
 
             result = self.auth.authenticate(request)  # type: ignore[arg-type]
             self.assertIsNone(result)
@@ -388,7 +395,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
             side_effect=ValueError('Value error'),
         ):
             request = self.factory.get('/')
-            request.COOKIES[self.auth_cookie_name] = 'some_token'
+            request.COOKIES[self.auth_cookie_name] = SOME_TOKEN
 
             result = self.auth.authenticate(request)  # type: ignore[arg-type]
             self.assertIsNone(result)
@@ -401,7 +408,7 @@ class CookieJWTAuthenticationEdgeCasesTestCase(TestCase):
             side_effect=KeyError('Key error'),
         ):
             request = self.factory.get('/')
-            request.COOKIES[self.auth_cookie_name] = 'some_token'
+            request.COOKIES[self.auth_cookie_name] = SOME_TOKEN
 
             result = self.auth.authenticate(request)  # type: ignore[arg-type]
             self.assertIsNone(result)
@@ -456,34 +463,34 @@ class CookieUtilityFunctionsTestCase(TestCase):
     def test_get_token_from_cookie_with_django_request(self) -> None:
         """Test get_token_from_cookie with Django HttpRequest."""
         request = HttpRequest()
-        request.COOKIES = {self.auth_cookie_name: 'test_token'}
+        request.COOKIES = {self.auth_cookie_name: TEST_TOKEN}
 
         result = get_token_from_cookie(request)
-        self.assertEqual(result, 'test_token')
+        self.assertEqual(result, TEST_TOKEN)
 
     def test_get_token_from_cookie_with_drf_request(self) -> None:
         """Test get_token_from_cookie with DRF Request."""
         request = Request(self.factory.get('/'))
-        request.COOKIES[self.auth_cookie_name] = 'test_token'
+        request.COOKIES[self.auth_cookie_name] = TEST_TOKEN
 
         result = get_token_from_cookie(request)
-        self.assertEqual(result, 'test_token')
+        self.assertEqual(result, TEST_TOKEN)
 
     def test_get_refresh_token_from_cookie_with_django_request(self) -> None:
         """Test get_refresh_token_from_cookie with Django HttpRequest."""
         request = HttpRequest()
-        request.COOKIES = {self.refresh_cookie_name: 'test_refresh_token'}
+        request.COOKIES = {self.refresh_cookie_name: TEST_REFRESH_TOKEN}
 
         result = get_refresh_token_from_cookie(request)
-        self.assertEqual(result, 'test_refresh_token')
+        self.assertEqual(result, TEST_REFRESH_TOKEN)
 
     def test_get_refresh_token_from_cookie_with_drf_request(self) -> None:
         """Test get_refresh_token_from_cookie with DRF Request."""
         request = Request(self.factory.get('/'))
-        request.COOKIES[self.refresh_cookie_name] = 'test_refresh_token'
+        request.COOKIES[self.refresh_cookie_name] = TEST_REFRESH_TOKEN
 
         result = get_refresh_token_from_cookie(request)
-        self.assertEqual(result, 'test_refresh_token')
+        self.assertEqual(result, TEST_REFRESH_TOKEN)
 
     def test_clear_auth_cookies_with_nonexistent_cookies(self) -> None:
         """Test that clear_auth_cookies doesn't fail with missing cookies."""
@@ -512,10 +519,10 @@ class CookieUtilityFunctionsTestCase(TestCase):
     def test_cookie_functions_with_mock_request(self) -> None:
         """Test that cookie functions work with mock request."""
         mock_request = Mock()
-        mock_request.COOKIES = {self.auth_cookie_name: 'test_token'}
+        mock_request.COOKIES = {self.auth_cookie_name: TEST_TOKEN}
 
         result = get_token_from_cookie(mock_request)
-        self.assertEqual(result, 'test_token')
+        self.assertEqual(result, TEST_TOKEN)
 
     def test_cookie_functions_with_request_without_cookies(self) -> None:
         """Test cookie functions return None for request without COOKIES."""
