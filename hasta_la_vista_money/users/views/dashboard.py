@@ -9,18 +9,21 @@ from urllib.parse import urlencode
 
 from dateutil.parser import parse as parse_date
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Sum
+from django.db.models.functions import TruncDate
 from django.http import (
     HttpRequest,
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import TemplateView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.budget.services.budget import get_categories
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -44,6 +47,7 @@ from hasta_la_vista_money.users.services.detailed_statistics import (
     DashboardSummaryStatisticsDict,
     MonthDataDict,
 )
+from hasta_la_vista_money.users.utils.date_utils import get_period_dates
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -142,6 +146,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context['available_widgets'] = [
             {'type': 'balance', 'name': 'Баланс счетов'},
             {'type': 'expenses_chart', 'name': 'График расходов'},
+            {'type': 'expense_heatmap', 'name': 'Тепловая карта расходов'},
+            {'type': 'hot_budget_categories', 'name': 'Горячие категории'},
             {'type': 'income_chart', 'name': 'График доходов'},
             {'type': 'comparison', 'name': 'Сравнение периодов'},
             {'type': 'trend', 'name': 'Динамика и прогнозы'},
@@ -382,6 +388,80 @@ class DashboardDataView(LoginRequiredMixin, View):
 
         return transactions[: constants.RECENT_ITEMS_LIMIT]
 
+    def _get_expense_heatmap_data(
+        self,
+        user: User,
+        period: str,
+    ) -> list[list[Any]]:
+        """Return daily expense totals for the current selected period."""
+        period_dates = get_period_dates(period_type=period)
+        current_start = period_dates['current_start']
+        current_end = period_dates['current_end']
+
+        grouped_expenses = (
+            Transaction.objects.filter(
+                user=user,
+                type=TransactionType.EXPENSE,
+                date__gte=current_start,
+                date__lte=current_end,
+            )
+            .annotate(day=TruncDate('date'))
+            .values('day')
+            .annotate(total=Sum('amount'))
+            .order_by('day')
+        )
+
+        return [
+            [item['day'].isoformat(), float(item['total'] or 0)]
+            for item in grouped_expenses
+            if item['day'] is not None
+        ]
+
+    def _get_hot_budget_categories(
+        self,
+        request: HttpRequest,
+        user: User,
+    ) -> list[dict[str, Any]]:
+        """Return over-limit and near-limit categories for current month."""
+        request_with_container = cast('RequestWithContainer', request)
+        budget_service = request_with_container.container.budget.budget_service()
+        month_start = timezone.localdate().replace(day=1)
+        expense_categories = list(
+            get_categories(user, TransactionType.EXPENSE, users=[user]),
+        )
+        overview = budget_service.aggregate_budget_limit_overview(
+            user=user,
+            months=[month_start],
+            expense_categories=expense_categories,
+            users=[user],
+        )
+        hot_categories = [
+            category
+            for category in overview['category_limits']
+            if category['status'] in {'warning', 'over'}
+        ]
+        hot_categories.sort(
+            key=lambda item: (
+                item['status'] == 'over',
+                item['percent'],
+            ),
+            reverse=True,
+        )
+
+        return [
+            {
+                'category': item['category'],
+                'category_id': item['category_id'],
+                'fact': float(item['fact']),
+                'limit': float(item['limit']),
+                'remaining': float(item['remaining']),
+                'percent': round(float(item['percent']), 1),
+                'status': item['status'],
+                'alert_threshold': item['alert_threshold'],
+            }
+            for item in hot_categories[: constants.TOP_CATEGORIES_LIMIT]
+        ]
+
     def get(
         self,
         request: HttpRequest,
@@ -429,6 +509,14 @@ class DashboardDataView(LoginRequiredMixin, View):
                 'analytics': {
                     'stats': serializable_stats,
                     'trends': trends,
+                    'expense_heatmap': self._get_expense_heatmap_data(
+                        user,
+                        period,
+                    ),
+                    'hot_budget_categories': self._get_hot_budget_categories(
+                        request,
+                        user,
+                    ),
                 },
                 'comparison': comparison_data,
                 'recent_transactions': recent_transactions,

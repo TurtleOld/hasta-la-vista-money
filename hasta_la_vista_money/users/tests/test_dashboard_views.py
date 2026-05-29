@@ -134,6 +134,8 @@ class DashboardDataViewTest(TestCase):
         self.assertIn('analytics', data)
         self.assertIn('stats', data['analytics'])
         self.assertIn('trends', data['analytics'])
+        self.assertIn('expense_heatmap', data['analytics'])
+        self.assertIn('hot_budget_categories', data['analytics'])
 
     def test_dashboard_data_view_contains_recent_transactions(self) -> None:
         """Test that response contains recent transactions."""

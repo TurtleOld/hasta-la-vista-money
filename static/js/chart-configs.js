@@ -67,6 +67,62 @@ const chartConfigs = {
         },
     },
 
+    expenseHeatmap: {
+        tooltip: {
+            position: 'top',
+            formatter: function (params) {
+                const value = params.value || [];
+                const date = value[0] || '';
+                const amount = Number(value[1] || 0).toLocaleString('ru-RU', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                });
+                return date
+                    + '<br/>Расходы: ' + amount + ' ₽'
+                    + '<br/><span style="opacity:0.8">Нажмите, чтобы открыть операции за день</span>';
+            },
+        },
+        visualMap: {
+            min: 0,
+            max: 0,
+            calculable: true,
+            orient: 'horizontal',
+            left: 'center',
+            bottom: 0,
+            inRange: {
+                color: ['#e2e8f0', '#fbbf24', '#f97316', '#ef4444'],
+            },
+        },
+        calendar: {
+            top: 20,
+            left: 25,
+            right: 25,
+            cellSize: ['auto', 16],
+            orient: 'horizontal',
+            splitLine: {
+                show: true,
+                lineStyle: {
+                    color: '#d1d5db',
+                    width: 1,
+                    type: 'solid',
+                },
+            },
+            yearLabel: { show: false },
+            dayLabel: {
+                firstDay: 1,
+                nameMap: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
+            },
+            monthLabel: { nameMap: 'ru' },
+        },
+        series: [
+            {
+                type: 'heatmap',
+                coordinateSystem: 'calendar',
+                data: [],
+            },
+        ],
+    },
+
     incomeTrend: {
         tooltip: {
             trigger: 'axis',
