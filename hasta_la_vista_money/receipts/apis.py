@@ -8,6 +8,7 @@ import decimal
 import json
 from typing import TYPE_CHECKING, Any, cast
 
+import structlog
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import QuerySet
@@ -56,6 +57,8 @@ from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
 )
+
+logger = structlog.get_logger(__name__)
 
 
 @extend_schema(
@@ -363,8 +366,13 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
             elif isinstance(error, DjangoValidationError):
                 error_message = str(error)
             return self._error_response(error_message)
-        except (ValueError, TypeError, decimal.InvalidOperation) as error:
-            return self._error_response(str(error))
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            logger.exception(
+                'Failed to create receipt due to invalid request data',
+            )
+            return self._error_response(
+                'Некорректные значения в данных чека',
+            )
 
     def _handle_receipt_creation(
         self,

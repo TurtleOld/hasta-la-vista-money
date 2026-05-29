@@ -672,6 +672,49 @@ class TestReceiptAPIs(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_receipt_create_api_hides_internal_exception_details(
+        self,
+    ) -> None:
+        url = reverse_lazy('receipts:receipt_api_create')
+        data: dict[str, Any] = {
+            'user': self.user.pk,
+            'finance_account': self.account.pk,
+            'receipt_date': '2023-06-28T21:24:00Z',
+            'total_sum': '500.00',
+            'number_receipt': '12345',
+            'operation_type': 1,
+            'seller': {
+                'name_seller': 'Продавец через API',
+                'retail_place_address': 'ул. API, 1',
+                'retail_place': 'Магазин API',
+            },
+            'product': [
+                {
+                    'product_name': 'Продукт 1',
+                    'price': '100.00',
+                    'quantity': '1',
+                    'amount': '100.00',
+                },
+            ],
+        }
+
+        with patch(
+            'hasta_la_vista_money.receipts.apis.'
+            'ReceiptCreateAPIView._handle_receipt_creation',
+            side_effect=ValueError('db_password=super_secret'),
+        ):
+            response = self.client.post(
+                url,
+                json.dumps(data),
+                content_type='application/json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json()['detail'],
+            'Некорректные значения в данных чека',
+        )
+
 
 class TestUploadImageView(TestCase):
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
