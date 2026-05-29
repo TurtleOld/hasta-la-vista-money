@@ -424,7 +424,9 @@ class DashboardDataView(LoginRequiredMixin, View):
     ) -> list[dict[str, Any]]:
         """Return over-limit and near-limit categories for current month."""
         request_with_container = cast('RequestWithContainer', request)
-        budget_service = request_with_container.container.budget.budget_service()
+        budget_service = (
+            request_with_container.container.budget.budget_service()
+        )
         month_start = timezone.localdate().replace(day=1)
         expense_categories = list(
             get_categories(user, TransactionType.EXPENSE, users=[user]),
