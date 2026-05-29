@@ -18,7 +18,7 @@ hasta_la_vista_money/receipts/
 ├── forms.py              # Формы
 ├── serializers.py        # API сериализаторы
 ├── urls.py               # URL маршруты
-├── services.py           # Бизнес-логика и ИИ
+├── services.py           # Бизнес-логика и интеграция с ФНС
 ├── apis.py               # API представления
 ├── tests.py              # Тесты
 ├── migrations/           # Миграции БД
@@ -41,8 +41,8 @@ class ReceiptDeleteView(DeleteView):     # Удаление чека
 class UploadImageView(FormView):         # Загрузка изображений
 
 # Сервисы
-def analyze_image_with_ai():     # ИИ-обработка
-def image_to_base64():           # Кодирование изображений
+def process_pending_receipt():   # QR + FNS processing
+def map_fns_receipt_to_receipt_data():  # Маппинг данных ФНС
 ```
 
 ## Модели данных
@@ -161,13 +161,15 @@ def create_receipt(request, receipt_form, product_formset, seller):
         return receipt
 ```
 
-### ИИ-обработка изображений
+### Обработка изображений через QR + ФНС
 
 ```python
-def analyze_image_with_ai(image_base64: UploadedFile):
-    """Обработка изображения чека с помощью ИИ."""
-    check_ai_rate_limit(user_id)
-    return analyze_image_with_receipt_inference(image_base64)
+def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
+    """Обработка изображения: QR -> ФНС -> маппинг."""
+    with pending.image_file.open('rb') as image_fp:
+        qr_data = QRCodeExtractor().extract(image_fp)
+    fns_payload = FNSClient().fetch_receipt(qr_data.raw)
+    return map_fns_receipt_to_receipt_data(fns_payload)
 ```
 
 ## API разработка
@@ -509,9 +511,17 @@ def handle_receipt_error(error, context):
 ### Переменные окружения
 
 ```bash
-# ИИ-сервис
-RECEIPT_INFERENCE_URL=http://receipt-inference:8010
-RECEIPT_INFERENCE_TIMEOUT=420
+# Обязательные переменные ФНС
+FNS_INN=123456789012
+FNS_PASSWORD=your-fns-password
+FNS_CLIENT_SECRET=your-fns-client-secret
+
+# Опциональные параметры интеграции
+FNS_BASE_URL=https://irkkt-mobile.nalog.ru:8888/v2
+FNS_TIMEOUT_SECONDS=10
+FNS_POLL_ATTEMPTS=5
+FNS_POLL_INTERVAL_SECONDS=1
+FNS_SESSION_CACHE_TTL_SECONDS=3600
 
 # Настройки обработки
 RECEIPT_MAX_FILE_SIZE=10485760  # 10 МБ

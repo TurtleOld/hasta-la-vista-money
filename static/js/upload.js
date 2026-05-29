@@ -15,7 +15,7 @@ function registerReceiptUploadPage(Alpine) {
                     return '';
                 }
                 if (this.files.length === 1) {
-                    return this.files[0].name;
+                    return this.files[0].relativePath;
                 }
                 return 'Выбрано файлов: ' + this.files.length;
             },
@@ -78,7 +78,6 @@ function registerReceiptUploadPage(Alpine) {
             },
 
             applyFiles(fileList) {
-                this.revokePreviewUrls();
                 const selectedFiles = Array.from(fileList || []);
                 if (!selectedFiles.length) {
                     this.files = [];
@@ -105,7 +104,7 @@ function registerReceiptUploadPage(Alpine) {
                 this.errorMessage = '';
                 this.files = selectedFiles.map(file => ({
                     name: file.name || 'Изображение',
-                    previewUrl: URL.createObjectURL(file),
+                    relativePath: file.webkitRelativePath || file.name || 'Изображение',
                 }));
             },
 
@@ -127,14 +126,6 @@ function registerReceiptUploadPage(Alpine) {
                 if (this.$refs.fileInput) {
                     this.$refs.fileInput.value = '';
                 }
-            },
-
-            revokePreviewUrls() {
-                this.files.forEach(file => {
-                    if (file.previewUrl) {
-                        URL.revokeObjectURL(file.previewUrl);
-                    }
-                });
             },
 
             fileLooksLikeImage(file) {

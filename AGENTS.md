@@ -16,8 +16,11 @@
 - **Кеширование**: Redis (продакшен), LocMemCache (разработка)
 - **Аутентификация**: JWT (djangorestframework-simplejwt)
 - **Dependency Injection**: dependency-injector
-- **AI**: локальный `receipt-inference` для обработки чеков
+- **Чеки**: QR-flow через интеграцию с API ФНС
 - **Frontend**: Bootstrap 5, Chart.js, jQuery, HTMX
+
+Для обработки чеков через ФНС должны быть заданы:
+`FNS_INN`, `FNS_PASSWORD`, `FNS_CLIENT_SECRET`.
 
 ---
 
@@ -36,7 +39,7 @@ hasta_la_vista_money/
 ├── finance_account/        # Финансовые счета
 ├── income/                 # Управление доходами
 ├── loan/                   # Кредиты и займы
-├── receipts/               # Обработка чеков (включая AI)
+├── receipts/               # Обработка чеков (QR + ФНС)
 ├── reports/                # Отчеты и аналитика
 ├── users/                  # Управление пользователями
 └── core/                   # Общие компоненты

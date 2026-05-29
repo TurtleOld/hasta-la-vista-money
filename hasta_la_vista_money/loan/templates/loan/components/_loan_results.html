@@ -1,0 +1,326 @@
+{% load i18n %}
+
+{% if loan %}
+    <div class="loan-grid">
+        {% for item_loan in loan %}
+            <div class="loan-card">
+                <div class="loan-card-head">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="mb-2 text-xl font-semibold">{% translate 'Кредит №' %} {{ item_loan.pk }}</div>
+                            <div class="inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-medium backdrop-blur-sm">
+                                {{ item_loan.get_type_loan_display }}
+                            </div>
+                        </div>
+                        <div class="relative" x-data="{ dropdownOpen: false }" @click.outside="dropdownOpen = false">
+                            <button type="button" @click.stop="dropdownOpen = !dropdownOpen" class="rounded-lg p-2 text-white transition-colors hover:bg-white/20">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                </svg>
+                            </button>
+                            <ul x-show="dropdownOpen" x-cloak class="loan-dropdown absolute right-0 top-full z-10 mt-2 w-48">
+                                <li>
+                                    <a href="#" @click.prevent="$store.loanModal.open('loan-{{ item_loan.pk }}')" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                        </svg>
+                                        {% translate 'Просмотр' %}
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#" @click.prevent="$store.loanModal.open('payment-{{ item_loan.pk }}')" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                        </svg>
+                                        {% translate 'Внести платеж' %}
+                                    </a>
+                                </li>
+                                <li><hr class="my-1 border-gray-200 dark:border-gray-600"></li>
+                                <li>
+                                    <form method="post" action="{{ item_loan.get_absolute_url }}" class="inline">
+                                        {% csrf_token %}
+                                        <button type="submit" name="delete_loan_button" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                            </svg>
+                                            {% translate 'Удалить' %}
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="loan-card-body">
+                    <div class="loan-mini-grid mb-5">
+                        <div class="loan-mini-card text-center">
+                            <div class="loan-label">{% translate 'Сумма кредита' %}</div>
+                            <div class="loan-money loan-positive">{{ item_loan.loan_amount|floatformat:0 }} ₽</div>
+                        </div>
+                        <div class="loan-mini-card text-center">
+                            <div class="loan-label">{% translate 'Ставка' %}</div>
+                            <div class="loan-money loan-warning">{{ item_loan.annual_interest_rate }}%</div>
+                        </div>
+                        <div class="loan-mini-card text-center">
+                            <div class="loan-label">{% translate 'Срок' %}</div>
+                            <div class="loan-money loan-info-color">{{ item_loan.period_loan }} {% translate 'мес.' %}</div>
+                        </div>
+                    </div>
+
+                    <div class="loan-return-box">
+                        <div class="mb-2 flex items-center justify-between">
+                            <span class="text-sm text-gray-600 dark:text-gray-400">{% translate 'Общая сумма к возврату:' %}</span>
+                            <span class="font-bold text-gray-900 dark:text-gray-100">{{ item_loan.calculate_total_amount_loan_with_interest|floatformat:0 }} ₽</span>
+                        </div>
+                        <div class="flex items-center justify-between border-t border-gray-200 pt-2 dark:border-gray-600">
+                            <span class="text-sm text-gray-600 dark:text-gray-400">{% translate 'Переплата:' %}</span>
+                            <span class="font-bold text-red-600 dark:text-red-400">{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }} ₽</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="loan-card-foot">
+                    <div class="flex gap-2">
+                        <button type="button" @click="$store.loanModal.open('loan-{{ item_loan.pk }}')" class="loan-button loan-button-primary flex-1">
+                            <svg class="mr-1 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            {% translate 'График' %}
+                        </button>
+                        <button type="button" @click="$store.loanModal.open('payment-{{ item_loan.pk }}')" class="loan-button loan-button-info flex-1">
+                            <svg class="mr-1 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            {% translate 'Платеж' %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if page_obj.has_other_pages %}
+        <nav class="mt-6 flex items-center justify-center gap-3" aria-label="{% translate 'Пагинация кредитов' %}">
+            {% if page_obj.has_previous %}
+                <a class="loan-button loan-button-secondary"
+                   {% if base_querystring %}
+                   hx-get="{% url 'loan:list' %}?{{ base_querystring }}&page={{ page_obj.previous_page_number }}"
+                   href="{% url 'loan:list' %}?{{ base_querystring }}&page={{ page_obj.previous_page_number }}"
+                   {% else %}
+                   hx-get="{% url 'loan:list' %}?page={{ page_obj.previous_page_number }}"
+                   href="{% url 'loan:list' %}?page={{ page_obj.previous_page_number }}"
+                   {% endif %}
+                   hx-target="#loan-results"
+                   hx-push-url="true">{% translate 'Назад' %}</a>
+            {% endif %}
+            <span class="text-sm text-gray-600 dark:text-gray-400">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+                <a class="loan-button loan-button-secondary"
+                   {% if base_querystring %}
+                   hx-get="{% url 'loan:list' %}?{{ base_querystring }}&page={{ page_obj.next_page_number }}"
+                   href="{% url 'loan:list' %}?{{ base_querystring }}&page={{ page_obj.next_page_number }}"
+                   {% else %}
+                   hx-get="{% url 'loan:list' %}?page={{ page_obj.next_page_number }}"
+                   href="{% url 'loan:list' %}?page={{ page_obj.next_page_number }}"
+                   {% endif %}
+                   hx-target="#loan-results"
+                   hx-push-url="true">{% translate 'Вперёд' %}</a>
+            {% endif %}
+        </nav>
+    {% endif %}
+{% elif has_any_loans %}
+    <div class="loan-empty flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 p-10 text-center dark:border-gray-600">
+        <div class="mb-3 text-2xl font-semibold text-gray-900 dark:text-gray-100">{% translate 'По вашему фильтру кредиты не найдены' %}</div>
+        <div class="text-gray-500 dark:text-gray-400">{% translate 'Измените параметры фильтра или сбросьте их' %}</div>
+    </div>
+{% else %}
+    <div id="loans-list" class="loan-empty flex flex-col items-center justify-center">
+        <div class="mb-4 text-6xl text-gray-300 dark:text-gray-600">
+            <svg class="mx-auto h-24 w-24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+            </svg>
+        </div>
+        <div class="mb-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">{% translate 'У вас пока нет кредитов' %}</div>
+        <div class="mb-8 text-gray-500 dark:text-gray-400">{% translate 'Добавьте свой первый кредит для начала отслеживания' %}</div>
+        <a href="{% url 'loan:create' %}" class="loan-button loan-button-primary">
+            <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            {% translate 'Добавить кредит' %}
+        </a>
+    </div>
+{% endif %}
+
+{% for item_loan in loan %}
+    <div x-cloak x-show="$store.loanModal.current === 'loan-{{ item_loan.pk }}'" @click.self="$store.loanModal.close()" @keydown.escape.window="$store.loanModal.close()" class="loan-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="loan-modal-panel relative w-full max-w-6xl">
+            <div class="loan-modal-head">
+                <div class="flex items-center justify-between">
+                    <h3 class="flex items-center gap-2 text-xl font-semibold">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                        </svg>
+                        {% translate 'Кредит №' %} {{ item_loan.pk }}
+                    </h3>
+                    <button type="button" @click="$store.loanModal.close()" class="rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="loan-modal-body max-h-[calc(90vh-120px)] overflow-y-auto">
+                <div class="mb-6 grid gap-6 md:grid-cols-2">
+                    <div class="loan-mini-card">
+                        <h6 class="mb-4 flex items-center gap-2 text-lg font-semibold text-green-600 dark:text-green-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            {% translate 'Основная информация' %}
+                        </h6>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Сумма' %}</div>
+                                <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ item_loan.loan_amount|floatformat:0 }} ₽</div>
+                            </div>
+                            <div>
+                                <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Ставка' %}</div>
+                                <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ item_loan.annual_interest_rate }}%</div>
+                            </div>
+                            <div>
+                                <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Срок' %}</div>
+                                <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ item_loan.period_loan }} {% translate 'мес.' %}</div>
+                            </div>
+                            <div>
+                                <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Тип' %}</div>
+                                <div class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ item_loan.get_type_loan_display }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="loan-mini-card">
+                        <h6 class="mb-4 flex items-center gap-2 text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            {% translate 'Финансовая сводка' %}
+                        </h6>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'К возврату' %}</div>
+                                <div class="text-lg font-bold text-green-600 dark:text-green-400">{{ item_loan.calculate_total_amount_loan_with_interest|floatformat:0 }} ₽</div>
+                            </div>
+                            <div>
+                                <div class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{% translate 'Переплата' %}</div>
+                                <div class="text-lg font-bold text-red-600 dark:text-red-400">{{ item_loan.calculate_sum_monthly_payment|floatformat:2 }} ₽</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="loan-table-wrap">
+                    <div class="loan-card-head text-center">
+                        <h3 class="flex items-center justify-center gap-2 text-xl font-semibold">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            {% translate 'График платежей' %}
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="loan-table">
+                            <thead>
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Месяц' %}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Остаток' %}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Ежемесячный платеж' %}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Проценты' %}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Основной долг' %}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">{% translate 'Статус' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+                                {% for payment in result_calculate %}
+                                    {% if payment.loan.id == item_loan.pk %}
+                                        <tr class="{% for payment_make in payment_make_loan %}{% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}is-paid{% endif %}{% endfor %}">
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{{ payment.date|date:"d.m.Y" }}</td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ payment.balance|floatformat:0 }} ₽</td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">{{ payment.monthly_payment|floatformat:2 }} ₽</td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ payment.interest|floatformat:0 }} ₽</td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ payment.principal_payment|floatformat:0 }} ₽</td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-sm">
+                                                {% for payment_make in payment_make_loan %}
+                                                    {% if payment_make.loan_id == item_loan.pk and payment_make.date.year == payment.date.year and payment_make.date.month == payment.date.month %}
+                                                        <span class="loan-badge">{% translate 'Оплачен' %}</span>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="loan-modal-foot flex items-center justify-end gap-3">
+                <button type="button" @click="$store.loanModal.close()" class="loan-button loan-button-secondary">{% translate 'Закрыть' %}</button>
+                <button type="button" @click="$store.loanModal.open('payment-{{ item_loan.pk }}')" class="loan-button loan-button-primary">
+                    <svg class="mr-2 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                    {% translate 'Внести платеж' %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div x-cloak x-show="$store.loanModal.current === 'payment-{{ item_loan.pk }}'" @click.self="$store.loanModal.close()" @keydown.escape.window="$store.loanModal.close()" class="loan-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="loan-modal-panel relative w-full max-w-2xl">
+            <div class="loan-modal-head">
+                <div class="flex items-center justify-between">
+                    <h3 class="flex items-center gap-2 text-xl font-semibold">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        {% translate 'Внести платеж по кредиту №' %}{{ item_loan.pk }}
+                    </h3>
+                    <button type="button" @click="$store.loanModal.close()" class="rounded-lg p-2 text-white transition-colors hover:bg-white/20" aria-label="Close">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="loan-modal-body max-h-[calc(90vh-120px)] overflow-y-auto">
+                {{ payment_make_loan_form.media }}
+                <form id="payment-form-{{ item_loan.pk }}" class="ajax-form space-y-4" method="POST" action="{% url 'loan:payment_create' %}">
+                    {% csrf_token %}
+                    {% if payment_make_loan_form %}
+                        {% for field in payment_make_loan_form %}
+                            <div class="{% if field.errors %}has-error{% endif %}">
+                                {% include 'forms/_field.html' with field=field %}
+                                {% if field.errors %}
+                                    {% for error in field.errors %}
+                                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </form>
+            </div>
+            <div class="loan-modal-foot flex items-center justify-end gap-3">
+                <button type="button" @click="$store.loanModal.close()" class="loan-button loan-button-secondary">{% translate 'Отмена' %}</button>
+                <button type="submit" form="payment-form-{{ item_loan.pk }}" class="loan-button loan-button-primary">
+                    <svg class="mr-2 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {% translate 'Добавить платеж' %}
+                </button>
+            </div>
+        </div>
+    </div>
+{% endfor %}

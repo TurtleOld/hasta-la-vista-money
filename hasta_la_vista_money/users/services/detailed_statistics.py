@@ -314,6 +314,9 @@ class StatisticsFilters:
     operations_sort: str = '-date'
     transfers_sort: str = '-exchange_date'
     receipts_sort: str = '-receipt_date'
+    operations_search: str = ''
+    transfers_search: str = ''
+    receipts_search: str = ''
 
     @classmethod
     def from_query(cls, query: Any) -> 'StatisticsFilters':
@@ -355,6 +358,9 @@ class StatisticsFilters:
                 },
                 '-receipt_date',
             ),
+            operations_search=query.get('operations_search', '').strip(),
+            transfers_search=query.get('transfers_search', '').strip(),
+            receipts_search=query.get('receipts_search', '').strip(),
         )
 
     @property
@@ -374,6 +380,9 @@ class StatisticsFilters:
                 self.operations_sort != '-date',
                 self.transfers_sort != '-exchange_date',
                 self.receipts_sort != '-receipt_date',
+                bool(self.operations_search),
+                bool(self.transfers_search),
+                bool(self.receipts_search),
             ),
         )
 
@@ -427,6 +436,21 @@ class StatisticsFilters:
                 'receipts_sort',
                 self.receipts_sort,
                 self.receipts_sort != '-receipt_date',
+            ),
+            (
+                'operations_search',
+                self.operations_search,
+                bool(self.operations_search),
+            ),
+            (
+                'transfers_search',
+                self.transfers_search,
+                bool(self.transfers_search),
+            ),
+            (
+                'receipts_search',
+                self.receipts_search,
+                bool(self.receipts_search),
             ),
         ]
         params.extend(
@@ -723,6 +747,16 @@ def _filtered_receipts(
         queryset = queryset.filter(account_id__in=stats_filter.account_ids)
     if stats_filter.currency:
         queryset = queryset.filter(account__currency=stats_filter.currency)
+    if stats_filter.receipts_search:
+        search = stats_filter.receipts_search
+        lookup = (
+            Q(seller__name_seller__icontains=search)
+            | Q(account__name_account__icontains=search)
+            | Q(user__username__icontains=search)
+        )
+        if search.isdigit():
+            lookup |= Q(number_receipt=int(search))
+        queryset = queryset.filter(lookup)
     if (
         stats_filter.category_keys
         and 'receipt' not in stats_filter.category_keys
@@ -785,7 +819,33 @@ def _transfer_logs(
             Q(from_account__currency=stats_filter.currency)
             | Q(to_account__currency=stats_filter.currency),
         )
+    if stats_filter.transfers_search:
+        search = stats_filter.transfers_search
+        queryset = queryset.filter(
+            Q(from_account__name_account__icontains=search)
+            | Q(to_account__name_account__icontains=search)
+            | Q(user__username__icontains=search),
+        )
     return queryset
+
+
+def _match_income_expense_search(
+    item: IncomeExpenseDict,
+    search_value: str,
+) -> bool:
+    needle = search_value.lower().strip()
+    if not needle:
+        return True
+    values = [
+        str(item.get('category__name', '')),
+        str(item.get('account__name_account', '')),
+        str(item.get('user__username', '')),
+        str(item.get('type', '')),
+        str(item.get('date', '')),
+        str(item.get('amount', '')),
+    ]
+    haystack = ' '.join(values).lower()
+    return needle in haystack
 
 
 def _sum_amount_for_period(
@@ -2109,6 +2169,15 @@ def get_user_detailed_statistics(
         key=lambda item: item[operations_sort_key],
         reverse=reverse_operations,
     )
+    if stats_filter.operations_search:
+        income_expense = [
+            item
+            for item in income_expense
+            if _match_income_expense_search(
+                item,
+                stats_filter.operations_search,
+            )
+        ]
     income_expense_page = _paginate(
         income_expense,
         stats_filter.operations_page,

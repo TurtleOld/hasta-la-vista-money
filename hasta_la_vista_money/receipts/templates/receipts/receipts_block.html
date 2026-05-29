@@ -8,7 +8,7 @@
 
     {% for receipt in receipts %}
         {% translate 'Неизвестный продавец' as unknown_seller %}
-        <article class="receipt-card{% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %} receipt-card-shared{% endif %}" data-swipe-row>
+        <article class="receipt-card swipe-touch-only{% if request.GET.group_id and request.GET.group_id != 'my' and receipt.user != request.user %} receipt-card-shared{% endif %}" data-swipe-row>
             <div class="receipt-card-swipe-actions" data-swipe-actions aria-hidden="true">
                 <a href="{% url 'receipts:view' receipt.id %}"
                    class="swipe-action-btn is-neutral"
@@ -109,7 +109,16 @@
 {% if receipts.has_other_pages %}
 <nav class="receipts-pagination" aria-label="{% translate 'Пагинация чеков' %}">
     {% if receipts.has_previous %}
-        <a class="receipts-page-link" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}{{ key }}={{ value }}&{% endif %}{% endfor %}receipts={{ receipts.previous_page_number }}">
+        <a class="receipts-page-link"
+           {% if pagination_querystring %}
+           href="?{{ pagination_querystring }}&receipts={{ receipts.previous_page_number }}"
+           hx-get="{% url 'receipts:list' %}?{{ pagination_querystring }}&receipts={{ receipts.previous_page_number }}"
+           {% else %}
+           href="?receipts={{ receipts.previous_page_number }}"
+           hx-get="{% url 'receipts:list' %}?receipts={{ receipts.previous_page_number }}"
+           {% endif %}
+           hx-target="#receipts-results"
+           hx-push-url="true">
             <i class="bi bi-chevron-left"></i>
         </a>
     {% endif %}
@@ -117,11 +126,29 @@
         {% if receipts.number == page_number %}
             <span class="receipts-page-link is-active">{{ page_number }}</span>
         {% elif page_number >= receipts.number|add:-2 and page_number <= receipts.number|add:2 %}
-            <a class="receipts-page-link" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}{{ key }}={{ value }}&{% endif %}{% endfor %}receipts={{ page_number }}">{{ page_number }}</a>
+            <a class="receipts-page-link"
+               {% if pagination_querystring %}
+               href="?{{ pagination_querystring }}&receipts={{ page_number }}"
+               hx-get="{% url 'receipts:list' %}?{{ pagination_querystring }}&receipts={{ page_number }}"
+               {% else %}
+               href="?receipts={{ page_number }}"
+               hx-get="{% url 'receipts:list' %}?receipts={{ page_number }}"
+               {% endif %}
+               hx-target="#receipts-results"
+               hx-push-url="true">{{ page_number }}</a>
         {% endif %}
     {% endfor %}
     {% if receipts.has_next %}
-        <a class="receipts-page-link" href="?{% for key, value in request.GET.items %}{% if key != 'receipts' %}{{ key }}={{ value }}&{% endif %}{% endfor %}receipts={{ receipts.next_page_number }}">
+        <a class="receipts-page-link"
+           {% if pagination_querystring %}
+           href="?{{ pagination_querystring }}&receipts={{ receipts.next_page_number }}"
+           hx-get="{% url 'receipts:list' %}?{{ pagination_querystring }}&receipts={{ receipts.next_page_number }}"
+           {% else %}
+           href="?receipts={{ receipts.next_page_number }}"
+           hx-get="{% url 'receipts:list' %}?receipts={{ receipts.next_page_number }}"
+           {% endif %}
+           hx-target="#receipts-results"
+           hx-push-url="true">
             <i class="bi bi-chevron-right"></i>
         </a>
     {% endif %}

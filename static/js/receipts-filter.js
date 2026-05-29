@@ -24,24 +24,45 @@
     };
 
     function init() {
-        initFilterCollapse();
-        initPeriodPresets();
-
+        elements.filterForm = document.getElementById('receipts-filter-form');
         elements.productInput = document.getElementById('product-autocomplete');
         elements.selectedProductsContainer = document.getElementById('selected-products-container');
         elements.selectedProductsPlaceholder = document.getElementById('selected-products-placeholder');
         elements.autocompleteDropdown = document.getElementById('product-autocomplete-dropdown');
         elements.selectedProductsInput = document.getElementById('selected-products-input');
         elements.spinner = document.getElementById('product-input-spinner');
-        elements.filterForm = document.getElementById('receipts-filter-form');
+
+        loadSelectedProductsFromUrl();
+        initFilterCollapse();
+        initPeriodPresets();
+        initGroupChips();
 
         if (!elements.productInput) return;
 
         elements.productInputWrapper = elements.productInput.parentElement;
 
-        loadSelectedProductsFromUrl();
         attachEventListeners();
         updateActiveFilterCount();
+    }
+
+    function initGroupChips() {
+        document.addEventListener('click', function(event) {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const chip = target.closest('.receipts-group-chips a[href][hx-get]');
+            if (!(chip instanceof HTMLAnchorElement)) return;
+
+            const hiddenGroupInput = document.querySelector(
+                '#receipts-filter-form input[name="group_id"]',
+            );
+            if (!(hiddenGroupInput instanceof HTMLInputElement)) return;
+            try {
+                const url = new URL(chip.href, window.location.origin);
+                hiddenGroupInput.value = url.searchParams.get('group_id') || 'my';
+            } catch (e) {
+                hiddenGroupInput.value = 'my';
+            }
+        });
     }
 
     function initFilterCollapse() {
@@ -61,10 +82,9 @@
             }
         }
 
-        if (window.location.search.length > 1) {
-            filterCollapse.classList.remove('hidden');
-            toggleButton.setAttribute('aria-expanded', 'true');
-        }
+        // Keep collapsed by default; user opens it manually via #filterToggle.
+        filterCollapse.classList.add('hidden');
+        toggleButton.setAttribute('aria-expanded', 'false');
 
         toggleButton.addEventListener('click', function(e) {
             e.preventDefault();

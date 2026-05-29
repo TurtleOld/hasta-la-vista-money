@@ -1,7 +1,7 @@
 {% load i18n %}
 {% load comma %}
 
-<article class="pending-card pending-card-{{ pending.status }}"{% if pending.status != 'processing' %} data-swipe-row{% endif %}>
+<article class="pending-card pending-card-{{ pending.status }}{% if pending.status != 'processing' %} swipe-touch-only{% endif %}"{% if pending.status != 'processing' %} data-swipe-row{% endif %}>
     {% if pending.status == 'processing' %}
         <header class="pending-card-head">
             <div class="pending-card-icon pending-card-icon-spin">

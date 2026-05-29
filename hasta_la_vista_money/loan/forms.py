@@ -19,7 +19,6 @@ from django.forms import (
     ModelChoiceField,
     ModelForm,
     NumberInput,
-    Select,
 )
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -93,8 +92,8 @@ class LoanForm(ModelForm[Loan]):
         input_classes = 'loan-form-input'
         select_classes = 'loan-form-select'
 
-        self.fields['type_loan'].widget = Select(
-            attrs={'class': select_classes},
+        self.fields['type_loan'].widget.attrs.update(
+            {'class': select_classes},
         )
         self.fields['loan_amount'].widget = NumberInput(
             attrs={'class': input_classes, 'step': '0.01'},

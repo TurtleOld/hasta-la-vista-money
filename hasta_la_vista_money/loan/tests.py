@@ -98,6 +98,28 @@ class TestLoan(TestCase):
         response = self.client.get(reverse_lazy('loan:list'))
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
 
+    def test_list_loan_filters_by_query_param(self) -> None:
+        """Test loan list filters by loan id query."""
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse_lazy('loan:list'),
+            {'q': str(self.loan1.pk)},
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        loans = list(response.context['loan'])
+        self.assertEqual(len(loans), 1)
+        self.assertEqual(loans[0].pk, self.loan1.pk)
+
+    def test_list_loan_htmx_renders_results_partial(self) -> None:
+        """Test loan list returns HTMX results partial."""
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse_lazy('loan:list'),
+            HTTP_HX_REQUEST='true',
+        )
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertTemplateUsed(response, 'loan/components/_loan_results.html')
+
     def test_create_annuity_loan(self) -> None:
         """Test annuity loan creation."""
         self.client.force_login(self.user)
@@ -408,6 +430,15 @@ class TestLoan(TestCase):
         self.assertIn('loan_amount', form.fields)
         self.assertIn('annual_interest_rate', form.fields)
         self.assertIn('period_loan', form.fields)
+
+    def test_loan_form_type_choices_present(self) -> None:
+        """Test type_loan select keeps predefined choices."""
+        form = LoanForm(user=self.user)
+        type_choices = [
+            choice[0] for choice in form.fields['type_loan'].choices
+        ]
+        self.assertIn('Annuity', type_choices)
+        self.assertIn('Differentiated', type_choices)
 
     def test_payment_make_loan_form_field_configuration(self) -> None:
         """Test PaymentMakeLoanForm field configuration."""

@@ -216,6 +216,12 @@ class LoanManager {
      * Настройка фильтров
      */
     setupFilters() {
+        const serverFilters = document.querySelector(
+            '#loan-filters-form[data-server-side-filters="true"]',
+        );
+        if (serverFilters) {
+            return;
+        }
         const statusFilter = document.getElementById('status-filter');
         if (statusFilter) {
             statusFilter.addEventListener('change', (e) => {

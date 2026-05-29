@@ -400,7 +400,6 @@ class FNSClientTests(TestCase):
 
 @override_settings(
     CACHES=TEST_CACHES,
-    FNS_ENABLED=True,
     FNS_INN='123456789012',
     FNS_PASSWORD='password',  # nosec B106: test-only password
     FNS_CLIENT_SECRET='secret',  # nosec B106: test-only secret

@@ -1,0 +1,79 @@
+{% load i18n %}
+{% load comma %}
+
+<section id="receipts-results">
+    <section class="receipts-summary" aria-label="{% translate 'Сводка по чекам' %}">
+        <div class="receipts-summary-cell">
+            <div class="receipts-label">{% translate 'Количество чеков' %}</div>
+            <div class="receipts-amount">{{ total_receipts.count|default:0 }}</div>
+        </div>
+        <div class="receipts-summary-cell">
+            <div class="receipts-label">{% translate 'Общая сумма' %}</div>
+            <div class="receipts-amount receipts-positive">
+                {% if total_sum_receipts.total is not None %}
+                    {{ total_sum_receipts.total|comma }} ₽
+                {% else %}
+                    0 ₽
+                {% endif %}
+            </div>
+        </div>
+        <div class="receipts-summary-cell">
+            <div class="receipts-label">{% translate 'Группа чеков' %}</div>
+            <div class="receipts-group-chips">
+                <a class="receipts-chip {% if selected_group_id == 'my' %}is-active{% endif %}"
+                   {% if group_querystring %}
+                   href="{% url 'receipts:list' %}?{{ group_querystring }}&group_id=my"
+                   hx-get="{% url 'receipts:list' %}?{{ group_querystring }}&group_id=my"
+                   {% else %}
+                   href="{% url 'receipts:list' %}?group_id=my"
+                   hx-get="{% url 'receipts:list' %}?group_id=my"
+                   {% endif %}
+                   hx-target="#receipts-results"
+                   hx-push-url="true">{% translate 'Мои' %}</a>
+                {% for group in user_groups %}
+                    <a class="receipts-chip {% if selected_group_id == group.id|stringformat:'s' %}is-active{% endif %}"
+                       {% if group_querystring %}
+                       href="{% url 'receipts:list' %}?{{ group_querystring }}&group_id={{ group.id }}"
+                       hx-get="{% url 'receipts:list' %}?{{ group_querystring }}&group_id={{ group.id }}"
+                       {% else %}
+                       href="{% url 'receipts:list' %}?group_id={{ group.id }}"
+                       hx-get="{% url 'receipts:list' %}?group_id={{ group.id }}"
+                       {% endif %}
+                       hx-target="#receipts-results"
+                       hx-push-url="true">{{ group.name }}</a>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="receipts-summary-cell">
+            <div class="receipts-label">{% translate 'Средняя сумма' %}</div>
+            <div class="receipts-amount">
+                {% if avg_receipt is not None %}
+                    {{ avg_receipt|comma }} ₽
+                {% else %}
+                    —
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <div class="receipts-toolbar">
+        <div class="receipts-pills">
+            <a class="receipts-chip" href="{% url 'receipts:products' %}">
+                <i class="bi bi-star"></i>
+                {% translate 'Часто покупаемые товары' %}
+            </a>
+            <a class="receipts-chip" href="{% url 'receipts:create_seller' %}">
+                <i class="bi bi-shop"></i>
+                {% translate 'Добавить продавца' %}
+            </a>
+            <a class="receipts-chip is-active" href="{% url 'receipts:upload' %}">
+                <i class="bi bi-camera"></i>
+                {% translate 'Добавить чек из изображения' %}
+            </a>
+        </div>
+    </div>
+
+    <div id="receipts-block">
+        {% include 'receipts/receipts_block.html' %}
+    </div>
+</section>

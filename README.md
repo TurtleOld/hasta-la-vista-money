@@ -45,8 +45,8 @@
 - Экспорт данных в JSON
 
 ### 🧾 Обработка чеков
-- Распознавание чеков с помощью AI
-- Импорт данных через QR-коды
+- Импорт данных через QR-коды чеков
+- Получение официальных данных через API ФНС
 - Ручное добавление покупок
 - Анализ по продавцам и товарам
 
@@ -86,7 +86,7 @@
 | **База данных** | PostgreSQL, SQLite (локальный fallback без `DATABASE_URL`/`POSTGRES_*`) |
 | **Кеширование и очереди** | Redis, django-redis, django-celery-beat, LocMemCache для локального fallback |
 | **API** | RESTful API, OpenAPI schema, Swagger UI |
-| **Контейнеризация** | Docker, Docker Compose, Nginx, отдельный OCR/LLM-сервис для чеков |
+| **Контейнеризация** | Docker, Docker Compose, Nginx |
 | **Безопасность** | CSP, CSRF, JWT аутентификация, django-axes |
 | **Мониторинг** | django-structlog, файловые/stdout-логи, Django Debug Toolbar |
 | **Локализация** | i18n, полная поддержка русского языка |
@@ -97,8 +97,8 @@
 
 ### Минимальные требования
 - Docker и Docker Compose
-- Несколько ГБ свободного места для Docker-образов, PostgreSQL/Redis и OCR-моделей
-- От 4 ГБ оперативной памяти для локального Docker-запуска; production OCR/LLM-сервисы требуют больше ресурсов
+- Несколько ГБ свободного места для Docker-образов, PostgreSQL и Redis
+- От 4 ГБ оперативной памяти для локального Docker-запуска
 
 ### Установка за 3 шага
 
@@ -122,7 +122,7 @@ docker compose up -d
 
 **Готово!** После сборки и запуска контейнеров откройте браузер и перейдите по адресу [http://127.0.0.1:8090](http://127.0.0.1:8090)
 
-> 💡 **Совет:** Стандартный `docker-compose.yaml` поднимает PostgreSQL, Redis, Celery worker/beat, веб-приложение, Nginx и сервис распознавания чеков. SQLite используется только как fallback при прямом локальном запуске без `DATABASE_URL` и `POSTGRES_*`.
+> 💡 **Совет:** Стандартный `docker-compose.yaml` поднимает PostgreSQL, Redis, Celery worker/beat, веб-приложение и Nginx. SQLite используется только как fallback при прямом локальном запуске без `DATABASE_URL` и `POSTGRES_*`.
 
 > 🔒 **Важно:** Блок выше описывает быстрый локальный/self-hosted запуск, а не production minimum. Для production self-hosted используйте отдельное руководство: [docs/docs/production_self_hosted.md](docs/docs/production_self_hosted.md)
 
@@ -168,15 +168,20 @@ docker compose up -d
 | `REFRESH_TOKEN_LIFETIME` | Время жизни JWT refresh token в днях | `7` |
 | `LANGUAGE_CODE` | Язык интерфейса | `ru-RU` |
 | `TIME_ZONE` | Часовой пояс | `Europe/Moscow` |
-| `RECEIPT_INFERENCE_URL` | URL внутреннего сервиса OCR/LLM для чеков | `http://receipt-inference:8010` |
-| `RECEIPT_INFERENCE_TIMEOUT` | Таймаут обработки чеков в секундах | `420` |
-| `AI_RATE_LIMIT_PER_USER`, `AI_RATE_LIMIT_GLOBAL`, `AI_RATE_LIMIT_WINDOW` | Лимиты AI-обработки чеков | `10`, `100`, `60` |
+| `FNS_BASE_URL` | Базовый URL API ФНС для чеков | `https://irkkt-mobile.nalog.ru:8888/v2` |
+| `FNS_INN` | ИНН аккаунта ФНС для запроса чеков | - |
+| `FNS_PASSWORD` | Пароль аккаунта ФНС | - |
+| `FNS_CLIENT_SECRET` | Client secret API ФНС | - |
+| `FNS_TIMEOUT_SECONDS` | Таймаут запросов к API ФНС (сек) | `10` |
+| `FNS_POLL_ATTEMPTS` | Количество попыток опроса тикета ФНС | `5` |
+| `FNS_POLL_INTERVAL_SECONDS` | Интервал опроса тикета ФНС (сек) | `1` |
+| `FNS_SESSION_CACHE_TTL_SECONDS` | TTL кеша сессии ФНС (сек) | `3600` |
 
 ### Дополнительные возможности
 
 - **PostgreSQL**: Docker Compose поднимает PostgreSQL по умолчанию; SQLite остается fallback для прямого локального запуска
 - **Redis и Celery**: Redis используется для кеша, сессий, rate limiting, django-axes и брокера/результатов Celery
-- **AI для чеков**: Внутренний `receipt-inference` сервис выполняет OCR/LLM-обработку без внешнего LLM fallback
+- **Чеки через ФНС**: Из изображения извлекается QR-код, затем чек подтягивается из API ФНС и маппится в модель приложения
 - **Мониторинг ошибок**: структурированные логи через `django-structlog` без внешних observability-сервисов
 
 ### Минимум для production при самостоятельном размещении
@@ -193,7 +198,7 @@ docker compose up -d
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` для встроенного PostgreSQL в `docker-compose.prod.yaml`
 - `DATABASE_URL`, если используется внешняя PostgreSQL вместо встроенного сервиса `db`
 - переменные cookie и transport security: `SESSION_COOKIE_SECURE`, `SESSION_COOKIE_HTTPONLY`, `SESSION_COOKIE_SAMESITE`, `CSRF_COOKIE_SECURE`, `SECURE_SSL_REDIRECT`, `SECURE_CONTENT_TYPE_NOSNIFF`, `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD`
-- `RECEIPT_INFERENCE_URL`, `RECEIPT_INFERENCE_TIMEOUT` и параметры `LLAMA_*`/`OCR_*`, если включена обработка чеков через bundled inference services
+- `FNS_INN`, `FNS_PASSWORD`, `FNS_CLIENT_SECRET` для обработки чеков по QR-коду через API ФНС
 
 Секреты не должны храниться в репозитории или поддерживаться вручную в локальном `.env` на сервере без контроля изменений. Для production-развертывания при самостоятельном размещении `.env` должен формироваться на этапе деплоя из CI/CD secrets, менеджера секретов или зашифрованной системы управления конфигурацией.
 

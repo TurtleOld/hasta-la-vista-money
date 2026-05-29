@@ -1127,6 +1127,12 @@
   font-size: 0.78rem;
 }
 
+.receipts-dropzone-status {
+  color: var(--receipts-positive);
+  font-family: inherit;
+  margin-left: 0.35rem;
+}
+
 .receipts-upload-preview {
   display: grid;
   gap: 0.75rem;
