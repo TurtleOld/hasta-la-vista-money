@@ -133,7 +133,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         base_filter = StatisticsFilters(
             period='range',
             date_from=date(2000, 1, 1),
-            date_to=date.today(),
+            date_to=timezone.localdate(),
         )
         base_stats = get_user_detailed_statistics(
             self.user,
@@ -151,7 +151,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
             stats_filter=StatisticsFilters(
                 period='range',
                 date_from=date(2000, 1, 1),
-                date_to=date.today(),
+                date_to=timezone.localdate(),
                 receipts_search=search_value,
             ),
         )
@@ -171,7 +171,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         base_filter = StatisticsFilters(
             period='range',
             date_from=date(2000, 1, 1),
-            date_to=date.today(),
+            date_to=timezone.localdate(),
         )
         base_stats = get_user_detailed_statistics(
             self.user,
@@ -189,7 +189,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
             stats_filter=StatisticsFilters(
                 period='range',
                 date_from=date(2000, 1, 1),
-                date_to=date.today(),
+                date_to=timezone.localdate(),
                 operations_search=search_value,
             ),
         )
