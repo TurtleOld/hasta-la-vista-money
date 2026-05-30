@@ -375,6 +375,8 @@ CSP_CDN_URLS = [
     'https://htmx.org',
     'https://cdn.datatables.net',
     'https://cdnjs.cloudflare.com',
+]
+CSP_STYLE_URLS = [
     'https://fonts.googleapis.com',
 ]
 CSP_FONT_URLS = [
@@ -412,6 +414,15 @@ CONTENT_SECURITY_POLICY = {
             NONCE,
             BASE_URL,
             *CSP_CDN_URLS,
+            *CSP_STYLE_URLS,
+            *additional_script_src,
+        ],
+        'style-src-elem': [
+            SELF,
+            NONCE,
+            BASE_URL,
+            *CSP_CDN_URLS,
+            *CSP_STYLE_URLS,
             *additional_script_src,
         ],
         'style-src-attr': [
