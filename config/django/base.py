@@ -385,64 +385,76 @@ CSP_FONT_URLS = [
 additional_script_src = list(
     filter(None, str(config('URL_CSP_SCRIPT_SRC', default='')).split(',')),
 )
+default_src = [
+    SELF,
+    NONCE,
+    BASE_URL,
+    *CSP_CDN_URLS,
+    *additional_script_src,
+]
+script_src = [
+    SELF,
+    NONCE,
+    BASE_URL,
+    *CSP_CDN_URLS,
+    *additional_script_src,
+]
+img_src = [
+    SELF,
+    NONCE,
+    'data:',
+    BASE_URL,
+    *CSP_CDN_URLS,
+]
+style_src = [
+    SELF,
+    NONCE,
+    BASE_URL,
+    *CSP_CDN_URLS,
+    *CSP_STYLE_URLS,
+    *additional_script_src,
+]
+font_src = [
+    SELF,
+    NONCE,
+    BASE_URL,
+    *CSP_CDN_URLS,
+    *CSP_FONT_URLS,
+    *additional_script_src,
+]
+frame_ancestors = [
+    SELF,
+    *CSP_CDN_URLS,
+    *additional_script_src,
+]
+style_src_attr = [
+    "'unsafe-inline'",
+]
+
+# django-csp (v4+) settings
 CONTENT_SECURITY_POLICY = {
     'EXCLUDE_URL_PREFIXES': ['/admin'],
     'DIRECTIVES': {
-        'default-src': [
-            SELF,
-            NONCE,
-            BASE_URL,
-            *CSP_CDN_URLS,
-            *additional_script_src,
-        ],
-        'script-src': [
-            SELF,
-            NONCE,
-            BASE_URL,
-            *CSP_CDN_URLS,
-            *additional_script_src,
-        ],
-        'img-src': [
-            SELF,
-            NONCE,
-            'data:',
-            BASE_URL,
-            *CSP_CDN_URLS,
-        ],
-        'style-src': [
-            SELF,
-            NONCE,
-            BASE_URL,
-            *CSP_CDN_URLS,
-            *CSP_STYLE_URLS,
-            *additional_script_src,
-        ],
-        'style-src-elem': [
-            SELF,
-            NONCE,
-            BASE_URL,
-            *CSP_CDN_URLS,
-            *CSP_STYLE_URLS,
-            *additional_script_src,
-        ],
-        'style-src-attr': [
-            "'unsafe-inline'",
-        ],
-        'font-src': [
-            SELF,
-            NONCE,
-            BASE_URL,
-            *CSP_CDN_URLS,
-            *CSP_FONT_URLS,
-            *additional_script_src,
-        ],
-        'frame-ancestors': [
-            SELF,
-            *CSP_CDN_URLS,
-            *additional_script_src,
-        ],
+        'default-src': default_src,
+        'script-src': script_src,
+        'img-src': img_src,
+        'style-src': style_src,
+        'style-src-elem': style_src,
+        'style-src-attr': style_src_attr,
+        'font-src': font_src,
+        'frame-ancestors': frame_ancestors,
     },
 }
+
+# django-csp (legacy) compatibility settings
+CSP_EXCLUDE_URL_PREFIXES = ['/admin']
+CSP_DEFAULT_SRC = tuple(default_src)
+CSP_SCRIPT_SRC = tuple(script_src)
+CSP_IMG_SRC = tuple(img_src)
+CSP_STYLE_SRC = tuple(style_src)
+CSP_FONT_SRC = tuple(font_src)
+CSP_FRAME_ANCESTORS = tuple(frame_ancestors)
+CSP_STYLE_SRC_ATTR = tuple(style_src_attr)
 
 # Authentication and user settings
 AUTH_USER_MODEL = 'users.User'
