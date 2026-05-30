@@ -446,15 +446,6 @@ CONTENT_SECURITY_POLICY = {
     },
 }
 
-# django-csp (legacy) compatibility settings
-CSP_EXCLUDE_URL_PREFIXES = ['/admin']
-CSP_DEFAULT_SRC = tuple(default_src)
-CSP_SCRIPT_SRC = tuple(script_src)
-CSP_IMG_SRC = tuple(img_src)
-CSP_STYLE_SRC = tuple(style_src)
-CSP_FONT_SRC = tuple(font_src)
-CSP_FRAME_ANCESTORS = tuple(frame_ancestors)
-CSP_STYLE_SRC_ATTR = tuple(style_src_attr)
 
 # Authentication and user settings
 AUTH_USER_MODEL = 'users.User'
