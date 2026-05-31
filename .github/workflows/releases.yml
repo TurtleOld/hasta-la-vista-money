@@ -1,61 +1,39 @@
-name: Create Release
-
-permissions:
-  contents: write
+name: Release Please
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      tag_name:
-        type: string
-        description: 'Tag name for the release'
-        default: "auto"
-      release_title:
-        type: string
-        description: 'Title of the release'
-        default: 'Release'
-      prerelease:
-        type: boolean
-        description: 'Is this a pre-release?'
-        default: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
-  release:
-    runs-on: docker
-    container:
-      image: git.pavlovteam.ru/turtleold/ci-base:latest
-      credentials:
-        username: ${{ secrets.REGISTRY_USER }}
-        password: ${{ secrets.REGISTRY_TOKEN }}
-
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@v6
+      - name: Create release PR or GitHub release
+        id: release
+        uses: googleapis/release-please-action@v4
         with:
-          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
-      - name: Generate changelog
-        id: changelog
-        run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREVIOUS_TAG" ]; then
-            CHANGELOG=$(git log --pretty=format:"* %s (%an)" | head -n 10)
-          else
-            CHANGELOG=$(git log $PREVIOUS_TAG..HEAD --pretty=format:"* %s (%an)")
-          fi
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create release
-        run: |
-          curl -s -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            "$GITHUB_API_URL/repos/${{ github.repository }}/releases" \
-            -d "{
-              \"tag_name\": \"${{ github.ref_name }}\",
-              \"name\": \"${{ inputs.release_title || github.ref_name }}\",
-              \"body\": $(echo '${{ steps.changelog.outputs.changelog }}' | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read
+  docker:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/docker-publish.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      tag_name: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
