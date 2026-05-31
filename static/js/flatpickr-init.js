@@ -18,6 +18,42 @@ function buildFlatpickrOptions(element) {
     };
   }
 
+  if (mode === 'range') {
+    const fromId = element.dataset.flatpickrFrom;
+    const toId   = element.dataset.flatpickrTo;
+    const formEl = element.closest('form');
+
+    const fromInput = fromId ? document.getElementById(fromId) : null;
+    const toInput   = toId   ? document.getElementById(toId)   : null;
+
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const bothSet = fromInput?.value && toInput?.value;
+
+    return {
+      locale: Russian,
+      mode: 'range',
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd.m.Y',
+      defaultDate: bothSet ? [fromInput.value, toInput.value] : undefined,
+      onChange(selectedDates) {
+        if (selectedDates.length === 2) {
+          if (fromInput) fromInput.value = fmt(selectedDates[0]);
+          if (toInput)   toInput.value   = fmt(selectedDates[1]);
+          formEl?.submit();
+        }
+      },
+      onClose(selectedDates) {
+        if (selectedDates.length === 0) {
+          if (fromInput) fromInput.value = '';
+          if (toInput)   toInput.value   = '';
+        }
+      },
+    };
+  }
+
   return {
     locale: Russian,
     dateFormat: 'Y-m-d',
@@ -45,8 +81,22 @@ export function initializeFlatpickr(rootElement = document) {
   });
 }
 
+function initializeAutosubmit(rootElement = document) {
+  const root =
+    rootElement instanceof Element || rootElement instanceof Document
+      ? rootElement
+      : document;
+
+  root.querySelectorAll('select[data-autosubmit]').forEach((select) => {
+    if (select._autosubmit) return;
+    select._autosubmit = true;
+    select.addEventListener('change', () => select.closest('form')?.submit());
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initializeFlatpickr();
+  initializeAutosubmit();
 });
 
 const bodyElement = document.body;

@@ -176,6 +176,10 @@ urlpatterns = [
         include('hasta_la_vista_money.budget.urls', namespace='budget'),
     ),
     path(
+        'system/',
+        include('hasta_la_vista_money.system.urls', namespace='system'),
+    ),
+    path(
         'api/',
         include('hasta_la_vista_money.api.urls', namespace='api'),
         name='api',
