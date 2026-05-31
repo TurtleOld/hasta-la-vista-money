@@ -6,15 +6,11 @@ permissions:
   id-token: write
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag_name:
+        type: string
+        required: true
 
 env:
   REGISTRY: ghcr.io
@@ -38,9 +34,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag_name }}
 
       - name: Install cosign
-        if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@v4.1.2
         with:
           cosign-release: 'v2.2.4'
@@ -49,7 +46,6 @@ jobs:
         uses: docker/setup-buildx-action@v4.0.0
 
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4.1.0
         with:
           registry: ${{ env.REGISTRY }}
@@ -62,19 +58,16 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ matrix.image.image_name }}
           tags: |
-            type=ref,event=branch,prefix=${{ matrix.image.tag_prefix }}
-            type=ref,event=pr,prefix=${{ matrix.image.tag_prefix }}pr-
-            type=semver,pattern=${{ matrix.image.tag_prefix }}{{version}}
-            type=semver,pattern=${{ matrix.image.tag_prefix }}{{major}}.{{minor}}
-            type=sha,prefix=${{ matrix.image.tag_prefix }}sha-,format=short
-            type=raw,value=${{ matrix.image.latest_tag }},enable={{is_default_branch}}
+            type=semver,pattern=${{ matrix.image.tag_prefix }}{{version}},value=${{ inputs.tag_name }}
+            type=semver,pattern=${{ matrix.image.tag_prefix }}{{major}}.{{minor}},value=${{ inputs.tag_name }}
+            type=raw,value=${{ matrix.image.latest_tag }}
 
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@83bfd93ab480705a7b99a2ed02765137f5ab55ba
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -83,7 +76,6 @@ jobs:
           platforms: ${{ matrix.image.platforms }}
 
       - name: Sign the published Docker image
-        if: ${{ github.event_name != 'pull_request' }}
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
