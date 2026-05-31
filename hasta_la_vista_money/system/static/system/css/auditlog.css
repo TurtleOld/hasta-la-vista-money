@@ -1,0 +1,453 @@
+.audit-app {
+  --audit-bg: var(--app-bg);
+  --audit-surface: var(--app-surface);
+  --audit-surface-2: var(--app-surface-2);
+  --audit-border: var(--app-border);
+  --audit-text: var(--app-text);
+  --audit-muted: var(--app-muted);
+  --audit-accent: var(--app-accent);
+  --audit-positive: var(--app-positive);
+  --audit-negative: var(--app-negative);
+  --audit-halo: color-mix(in oklab, var(--audit-accent) 10%, transparent);
+  --audit-shadow-soft: 0 4px 24px color-mix(in oklab, var(--audit-accent) 8%, transparent), 0 1px 6px rgba(0,0,0,.04);
+  --audit-shadow-panel: 0 2px 16px color-mix(in oklab, var(--audit-accent) 6%, transparent), 0 1px 4px rgba(0,0,0,.04);
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, var(--audit-halo), transparent),
+    var(--audit-bg);
+  color: var(--audit-text);
+  min-height: calc(100vh - 4rem);
+  padding-bottom: 2rem;
+}
+
+.dark .audit-app {
+  --audit-halo: color-mix(in oklab, var(--audit-accent) 9%, transparent);
+  --audit-shadow-soft: 0 4px 32px rgba(0,0,0,.3);
+  --audit-shadow-panel: 0 2px 20px rgba(0,0,0,.25);
+}
+
+.audit-wrap {
+  margin: 0 auto;
+  max-width: 84rem;
+  padding: 0 1rem;
+}
+
+.audit-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 2.1rem 0 1.1rem;
+}
+
+.audit-kicker {
+  color: var(--audit-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.audit-title {
+  font-size: clamp(1.8rem, 3vw, 2.15rem);
+  font-weight: 800;
+  letter-spacing: -0.06em;
+  line-height: 1.05;
+}
+
+.audit-muted {
+  color: var(--audit-muted);
+  font-size: 0.875rem;
+}
+
+.audit-filters {
+  margin-bottom: 1rem;
+}
+
+.audit-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.audit-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.audit-filter-label {
+  color: var(--audit-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.audit-select-wrap,
+.audit-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.audit-select {
+  appearance: none;
+  background: var(--audit-surface);
+  border: 1px solid var(--audit-border);
+  border-radius: 0.875rem;
+  color: var(--audit-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  height: 2.4rem;
+  padding: 0 2.2rem 0 0.9rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 13rem;
+}
+
+.audit-select:focus {
+  border-color: var(--audit-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--audit-accent) 15%, transparent);
+}
+
+.audit-select-icon {
+  color: var(--audit-muted);
+  height: 1rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0.65rem;
+  width: 1rem;
+}
+
+.audit-input-wrap {
+  background: var(--audit-surface);
+  border: 1px solid var(--audit-border);
+  border-radius: 0.875rem;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.audit-input-wrap:focus-within {
+  border-color: var(--audit-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--audit-accent) 15%, transparent);
+}
+
+.audit-input-icon {
+  color: var(--audit-muted);
+  flex-shrink: 0;
+  height: 1rem;
+  width: 1rem;
+}
+
+.audit-input {
+  appearance: none;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--audit-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  height: 2.4rem;
+  outline: none !important;
+  padding: 0;
+  width: 9rem;
+}
+
+.audit-input-range {
+  width: 16rem;
+  cursor: pointer;
+}
+
+.audit-reset-btn {
+  align-items: center;
+  background: var(--audit-surface);
+  border: 1px solid var(--audit-border);
+  border-radius: 0.875rem;
+  color: var(--audit-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 700;
+  gap: 0.4rem;
+  height: 2.4rem;
+  padding: 0 0.9rem;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.audit-reset-btn svg {
+  height: 0.85rem;
+  width: 0.85rem;
+}
+
+.audit-reset-btn:hover {
+  background: color-mix(in oklab, var(--audit-negative) 8%, var(--audit-surface));
+  border-color: color-mix(in oklab, var(--audit-negative) 35%, var(--audit-border));
+  color: var(--audit-negative);
+}
+
+.audit-panel {
+  background: var(--audit-surface);
+  border: 1px solid var(--audit-border);
+  border-radius: 1.5rem;
+  overflow: hidden;
+  box-shadow: var(--audit-shadow-panel);
+  margin-bottom: 2rem;
+}
+
+.dark .audit-panel {
+  box-shadow: var(--audit-shadow-panel);
+}
+
+.audit-list-head {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr) minmax(0, 2fr) 9rem;
+  gap: 0.8rem;
+  border-bottom: 1px solid var(--audit-border);
+  color: var(--audit-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.85rem 1.25rem;
+  text-transform: uppercase;
+}
+
+.audit-row {
+  border-bottom: 1px solid var(--audit-border);
+  transition: background 0.12s;
+}
+
+.audit-row:last-child {
+  border-bottom: 0;
+}
+
+.audit-row:hover .audit-row-content {
+  background: color-mix(in oklab, var(--audit-accent) 4%, var(--audit-surface));
+}
+
+.audit-row-content {
+  align-items: start;
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr) minmax(0, 2fr) 9rem;
+  gap: 0.8rem;
+  min-height: 3.4rem;
+  padding: 0.85rem 1.25rem;
+}
+
+.audit-badge {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 800;
+  gap: 0.3rem;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.6rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.audit-badge-create {
+  background: color-mix(in oklab, var(--audit-positive) 14%, var(--audit-surface-2));
+  color: var(--audit-positive);
+}
+
+.audit-badge-update {
+  background: color-mix(in oklab, var(--audit-accent) 14%, var(--audit-surface-2));
+  color: var(--audit-accent);
+}
+
+.audit-badge-delete {
+  background: color-mix(in oklab, var(--audit-negative) 14%, var(--audit-surface-2));
+  color: var(--audit-negative);
+}
+
+.audit-row-model {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.audit-model-name {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-model-pk {
+  color: var(--audit-muted);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+}
+
+.audit-diff-cell {
+  min-width: 0;
+}
+
+.audit-diff-count {
+  color: var(--audit-muted);
+  font-size: 0.8rem;
+}
+
+.audit-diff-deleted {
+  color: var(--audit-negative);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.audit-diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.audit-diff-item {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  gap: 0.3rem;
+  color: var(--audit-muted);
+}
+
+.audit-diff-field {
+  background: color-mix(in oklab, var(--audit-accent) 10%, var(--audit-surface-2));
+  border-radius: 4px;
+  color: var(--audit-accent);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+}
+
+.audit-diff-old {
+  color: var(--audit-negative);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.72rem;
+  max-width: 12rem;
+  overflow: hidden;
+  text-decoration: line-through;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-diff-new {
+  color: var(--audit-positive);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.72rem;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-row-date {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-align: right;
+}
+
+.audit-date-primary {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.audit-date-time {
+  color: var(--audit-muted);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.7rem;
+}
+
+.audit-pagination {
+  align-items: center;
+  border-top: 1px solid var(--audit-border);
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.audit-page-link {
+  align-items: center;
+  border: 1px solid var(--audit-border);
+  border-radius: 0.75rem;
+  color: var(--audit-text);
+  display: flex;
+  height: 2.2rem;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+  width: 2.2rem;
+}
+
+.audit-page-link:hover {
+  background: var(--audit-surface-2);
+  border-color: var(--audit-accent);
+}
+
+.audit-page-info {
+  color: var(--audit-muted);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.8rem;
+  padding: 0 0.5rem;
+}
+
+.audit-empty {
+  align-items: center;
+  color: var(--audit-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 4rem 1rem;
+  text-align: center;
+}
+
+.audit-empty-icon {
+  opacity: 0.35;
+}
+
+@media (max-width: 768px) {
+  .audit-list-head {
+    display: none;
+  }
+
+  .audit-row-content {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .audit-row-content > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .audit-row-date {
+    text-align: right;
+  }
+
+  .audit-filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .audit-select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .audit-input-wrap {
+    width: 100%;
+  }
+
+  .audit-input {
+    width: 100%;
+  }
+}

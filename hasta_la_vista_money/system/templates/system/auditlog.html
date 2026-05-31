@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate 'История изменений' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'system/css/auditlog.css' %}">
+{% endblock %}
+
+{% block content %}
+<main class="audit-app">
+    <div class="audit-wrap">
+
+        <header class="audit-header">
+            <div>
+                <h1 class="audit-title">{% translate 'История изменений' %}</h1>
+                <p class="audit-muted mt-3">
+                    {{ paginator.count }} {% translate 'записей' %}
+                </p>
+            </div>
+        </header>
+
+        <form method="get" class="audit-filters" id="audit-filter-form">
+            <div class="audit-filter-row">
+                <div class="audit-filter-group">
+                    <label class="audit-filter-label" for="id_model">{% translate 'Модель' %}</label>
+                    <div class="audit-select-wrap">
+                        <select name="model" id="id_model" class="audit-select" data-autosubmit>
+                            {% for value, label in model_choices %}
+                                <option value="{{ value }}" {% if filter.model == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <svg class="audit-select-icon" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="audit-filter-group">
+                    <label class="audit-filter-label" for="id_action">{% translate 'Действие' %}</label>
+                    <div class="audit-select-wrap">
+                        <select name="action" id="id_action" class="audit-select" data-autosubmit>
+                            <option value="" {% if not filter.action %}selected{% endif %}>{% translate 'Все действия' %}</option>
+                            {% for value, label in action_choices %}
+                                <option value="{{ value }}" {% if filter.action == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <svg class="audit-select-icon" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="audit-filter-group">
+                    <label class="audit-filter-label" for="id_date_range">{% translate 'Период' %}</label>
+                    <div class="audit-input-wrap">
+                        <svg class="audit-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <input type="text" id="id_date_range" class="audit-input audit-input-range"
+                               placeholder="{% translate 'Выберите период' %}"
+                               autocomplete="off" readonly
+                               data-flatpickr data-flatpickr-mode="range"
+                               data-flatpickr-from="id_date_from"
+                               data-flatpickr-to="id_date_to">
+                    </div>
+                    <input type="hidden" name="date_from" id="id_date_from" value="{{ filter.date_from }}">
+                    <input type="hidden" name="date_to" id="id_date_to" value="{{ filter.date_to }}">
+                </div>
+
+                {% if filter.model or filter.action or filter.date_from or filter.date_to %}
+                <a href="{% url 'system:auditlog' %}" class="audit-reset-btn" title="{% translate 'Сбросить фильтры' %}">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    {% translate 'Сбросить' %}
+                </a>
+                {% endif %}
+            </div>
+        </form>
+
+        <div class="audit-panel">
+            {% if entries %}
+            <div class="audit-list-head">
+                <div>{% translate 'Действие' %}</div>
+                <div>{% translate 'Модель / ID' %}</div>
+                <div>{% translate 'Изменения' %}</div>
+                <div>{% translate 'Дата' %}</div>
+            </div>
+
+            {% for entry in entries %}
+            <div class="audit-row">
+                <div class="audit-row-content">
+                    <div>
+                        <span class="audit-badge audit-badge-{{ entry.action }}">
+                            {% if entry.action == 'create' %}
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                            {% elif entry.action == 'update' %}
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            {% else %}
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                            {% endif %}
+                            {{ entry.get_action_display }}
+                        </span>
+                    </div>
+
+                    <div class="audit-row-model">
+                        <span class="audit-model-name">{{ entry.model_name }}</span>
+                        <span class="audit-model-pk">#{{ entry.object_pk }}</span>
+                    </div>
+
+                    <div class="audit-diff-cell">
+                        {% if entry.action == 'create' %}
+                            <span class="audit-diff-count">
+                                {{ entry.diff.created|length }} {% translate 'полей' %}
+                            </span>
+                        {% elif entry.action == 'delete' %}
+                            <span class="audit-diff-deleted">{% translate 'Удалено' %}</span>
+                        {% elif entry.diff %}
+                            <div class="audit-diff-list">
+                                {% for field_name, change in entry.diff.items %}
+                                <div class="audit-diff-item">
+                                    <span class="audit-diff-field">{{ field_name }}</span>
+                                    <span class="audit-diff-old">{{ change.old|default:"—" }}</span>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                    <span class="audit-diff-new">{{ change.new|default:"—" }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span class="audit-muted">—</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="audit-row-date">
+                        <span class="audit-date-primary">{{ entry.created_at|date:"d.m.Y" }}</span>
+                        <span class="audit-date-time">{{ entry.created_at|date:"H:i:s" }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            {% if is_paginated %}
+            <div class="audit-pagination">
+                {% if page_obj.has_previous %}
+                    <a class="audit-page-link" href="?{% if filter.model %}model={{ filter.model }}&{% endif %}{% if filter.action %}action={{ filter.action }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </a>
+                {% endif %}
+
+                <span class="audit-page-info">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                </span>
+
+                {% if page_obj.has_next %}
+                    <a class="audit-page-link" href="?{% if filter.model %}model={{ filter.model }}&{% endif %}{% if filter.action %}action={{ filter.action }}&{% endif %}{% if filter.date_from %}date_from={{ filter.date_from }}&{% endif %}{% if filter.date_to %}date_to={{ filter.date_to }}&{% endif %}page={{ page_obj.next_page_number }}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="audit-empty">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="audit-empty-icon">
+                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <p>{% translate 'Записей не найдено' %}</p>
+                {% if filter.model or filter.action or filter.date_from or filter.date_to %}
+                    <a href="{% url 'system:auditlog' %}" class="audit-reset-btn mt-3">{% translate 'Сбросить фильтры' %}</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</main>
+{% endblock %}
