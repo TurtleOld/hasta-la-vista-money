@@ -4,8 +4,10 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import django_filters
 from django.contrib.auth import get_user_model
+from django.contrib.postgres.search import SearchQuery, SearchVector
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
+from django.db import connection
 from django.db.models import Min, Q, QuerySet
 from django.forms import (
     CharField,
@@ -119,6 +121,17 @@ class ReceiptFilter(django_filters.FilterSet):
             },
         ),
     )
+    search = django_filters.CharFilter(
+        method='filter_by_search',
+        label='',
+        widget=TextInput(
+            attrs={
+                'class': _INPUT_CLASSES,
+                'autocomplete': 'off',
+                'placeholder': _('Продавец, категория или товар'),
+            },
+        ),
+    )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         data = kwargs.get('data')
@@ -206,6 +219,54 @@ class ReceiptFilter(django_filters.FilterSet):
 
         return queryset.filter(q_objects).distinct()
 
+    def filter_by_search(
+        self,
+        queryset: QuerySet[Receipt],
+        field_name: str,
+        value: str,
+    ) -> QuerySet[Receipt]:
+        search_value = value.strip()
+        if not search_value:
+            return queryset
+
+        if connection.vendor != 'postgresql':
+            needle = search_value.casefold()
+            matching_ids = []
+            for receipt in queryset.select_related('seller').prefetch_related(
+                'product',
+            ):
+                seller_name = ''
+                if receipt.seller is not None:
+                    seller_name = receipt.seller.name_seller
+                product_values = [
+                    f'{product.product_name} {product.category}'
+                    for product in receipt.product.all()
+                ]
+                haystack = f'{seller_name} {" ".join(product_values)}'
+                if needle in haystack.casefold():
+                    matching_ids.append(receipt.pk)
+            return queryset.filter(pk__in=matching_ids).distinct()
+
+        search_query = SearchQuery(
+            search_value,
+            config='russian',
+            search_type='websearch',
+        )
+        matching_sellers = Seller.objects.annotate(
+            search=SearchVector('name_seller', config='russian'),
+        ).filter(search=search_query)
+        matching_products = Product.objects.annotate(
+            search=SearchVector(
+                'product_name',
+                'category',
+                config='russian',
+            ),
+        ).filter(search=search_query)
+
+        return queryset.filter(
+            Q(seller__in=matching_sellers) | Q(product__in=matching_products),
+        ).distinct()
+
     class Meta:
         model = Receipt
         fields: ClassVar[list[str]] = [
@@ -215,6 +276,7 @@ class ReceiptFilter(django_filters.FilterSet):
             'total_sum_min',
             'total_sum_max',
             'product_names',
+            'search',
         ]
 
 

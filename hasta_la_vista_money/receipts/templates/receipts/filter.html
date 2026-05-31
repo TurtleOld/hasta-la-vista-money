@@ -51,6 +51,13 @@
                 <div class="receipts-section">
                     <div class="receipts-filter-grid">
                         <div class="receipts-field">
+                            <label for="id_search" class="receipts-label">{% translate 'Поиск' %}</label>
+                            <input id="id_search" type="text" name="search"
+                                   value="{{ request.GET.search }}"
+                                   placeholder="{% translate 'Продавец, категория или товар' %}"
+                                   class="receipts-filter-input">
+                        </div>
+                        <div class="receipts-field">
                             <label for="id_receipt_date_0" class="receipts-label">{% translate 'С даты' %}</label>
                             <input id="id_receipt_date_0" type="text" name="receipt_date_0"
                                    value="{{ request.GET.receipt_date_0 }}"
@@ -138,6 +145,7 @@
                     </button>
                     <a href="{% url 'receipts:list' %}{% if selected_group_id and selected_group_id != 'my' %}?group_id={{ selected_group_id }}{% endif %}"
                        class="receipts-button receipts-button-secondary"
+                       data-reset-receipts-filters="true"
                        hx-get="{% url 'receipts:list' %}{% if selected_group_id and selected_group_id != 'my' %}?group_id={{ selected_group_id }}{% endif %}"
                        hx-target="#receipts-results"
                        hx-push-url="true">

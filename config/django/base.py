@@ -105,6 +105,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.sessions',
     'django.contrib.staticfiles',
+    'django.contrib.postgres',
     *LOCAL_APPS,
     *THIRD_PARTY_APPS,
 ]

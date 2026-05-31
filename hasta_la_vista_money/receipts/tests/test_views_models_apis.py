@@ -514,6 +514,51 @@ class TestReceiptFilter(TestCase):
         self.account = Account.objects.get(pk=1)
         self.seller = Seller.objects.get(pk=1)
 
+    def _filtered_ids(
+        self,
+        search: str,
+        queryset: Any | None = None,
+    ) -> set[int]:
+        if queryset is None:
+            queryset = Receipt.objects.all()
+        receipt_filter = ReceiptFilter(
+            data={'search': search},
+            queryset=queryset,
+            user=self.user,
+        )
+        return set(receipt_filter.qs.values_list('id', flat=True))
+
+    def _create_receipt(
+        self,
+        *,
+        product_name: str,
+        category: str = '',
+        seller_name: str = 'Тестовый продавец поиска',
+    ) -> Receipt:
+        seller = Seller.objects.create(
+            user=self.user,
+            name_seller=seller_name,
+        )
+        product = Product.objects.create(
+            user=self.user,
+            product_name=product_name,
+            category=category,
+            price=Decimal('10.00'),
+            quantity=Decimal('1.00'),
+            amount=Decimal('10.00'),
+        )
+        receipt = Receipt.objects.create(
+            user=self.user,
+            account=self.account,
+            seller=seller,
+            receipt_date=timezone.now(),
+            number_receipt=123456,
+            operation_type=1,
+            total_sum=Decimal('10.00'),
+        )
+        receipt.product.add(product)
+        return receipt
+
     def test_filter_by_seller(self) -> None:
         filter_data = {'name_seller': self.seller.pk}
         receipt_filter = ReceiptFilter(
@@ -552,6 +597,37 @@ class TestReceiptFilter(TestCase):
         for receipt in filtered_qs:
             self.assertGreaterEqual(receipt.receipt_date.year, 2023)
             self.assertLessEqual(receipt.receipt_date.year, 2023)
+
+    def test_search_filters_by_product_name(self) -> None:
+        receipt = self._create_receipt(product_name='Гречневый хлеб')
+
+        self.assertIn(receipt.id, self._filtered_ids('гречневый'))
+
+    def test_search_filters_by_product_category(self) -> None:
+        receipt = self._create_receipt(
+            product_name='Йогурт питьевой',
+            category='Молочные продукты',
+        )
+
+        self.assertIn(receipt.id, self._filtered_ids('молочные'))
+
+    def test_search_filters_by_seller_name(self) -> None:
+        receipt = self._create_receipt(
+            product_name='Пакет',
+            seller_name='Фермерская лавка',
+        )
+
+        self.assertIn(receipt.id, self._filtered_ids('фермерская'))
+
+    def test_search_keeps_base_queryset_scope(self) -> None:
+        receipt = self._create_receipt(product_name='Матча латте')
+
+        filtered_ids = self._filtered_ids(
+            'матча',
+            queryset=Receipt.objects.exclude(pk=receipt.pk),
+        )
+
+        self.assertNotIn(receipt.id, filtered_ids)
 
 
 class TestReceiptAPIs(APITestCase):
