@@ -1,11 +1,10 @@
-import asyncio
 import mimetypes
 from pathlib import Path
 
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.staticfiles import finders
-from django.http import Http404, StreamingHttpResponse
+from django.http import FileResponse, Http404
 from django.urls import include, path, re_path
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -31,38 +30,30 @@ from hasta_la_vista_money.users.views import (
 )
 
 
-async def _file_iterator(
+def _serve_file(
     file_path: Path,
-    chunk_size: int = 64 * 1024,
-):
-    file_handle = await asyncio.to_thread(file_path.open, 'rb')
-    try:
-        while True:
-            chunk = await asyncio.to_thread(file_handle.read, chunk_size)
-            if not chunk:
-                break
-            yield chunk
-    finally:
-        await asyncio.to_thread(file_handle.close)
-
-
-async def _serve_file(file_path: Path) -> StreamingHttpResponse:
+    content_type: str | None = None,
+) -> FileResponse:
     if not file_path.exists() or file_path.is_dir():
         raise Http404
 
-    content_type, encoding = mimetypes.guess_type(file_path.name)
-    stat_result = await asyncio.to_thread(file_path.stat)
-    response = StreamingHttpResponse(
-        _file_iterator(file_path),
+    guessed_content_type, encoding = mimetypes.guess_type(file_path.name)
+    response = FileResponse(
+        file_path.open('rb'),
         content_type=content_type or 'application/octet-stream',
     )
+    if content_type is None:
+        response['Content-Type'] = (
+            guessed_content_type or 'application/octet-stream'
+        )
+    stat_result = file_path.stat()
     response['Content-Length'] = str(stat_result.st_size)
     if encoding:
         response['Content-Encoding'] = encoding
     return response
 
 
-async def debug_media_serve(request, path: str):
+def debug_media_serve(request, path: str):
     del request
     media_root = Path(settings.MEDIA_ROOT)
     file_path = (media_root / path).resolve()
@@ -71,28 +62,19 @@ async def debug_media_serve(request, path: str):
         and file_path != media_root.resolve()
     ):
         raise Http404
-    return await _serve_file(file_path)
+    return _serve_file(file_path)
 
 
-async def debug_static_serve(request, path: str):
+def debug_static_serve(request, path: str):
     del request
     static_file = finders.find(path)
     if not static_file:
         raise Http404
     if path.endswith('.webmanifest'):
         content_type = 'application/manifest+json'
-        encoding = None
     else:
-        content_type, encoding = mimetypes.guess_type(path)
-    stat_result = await asyncio.to_thread(Path(static_file).stat)
-    response = StreamingHttpResponse(
-        _file_iterator(Path(static_file)),
-        content_type=content_type or 'application/octet-stream',
-    )
-    response['Content-Length'] = str(stat_result.st_size)
-    if encoding:
-        response['Content-Encoding'] = encoding
-    return response
+        content_type = None
+    return _serve_file(Path(static_file), content_type=content_type)
 
 
 urlpatterns = [
@@ -202,6 +184,8 @@ if settings.DEBUG:
     urlpatterns += [
         path('__reload__/', include('django_browser_reload.urls')),
     ]
+
+if settings.DEBUG or settings.IS_TESTING:
     urlpatterns += [
         re_path(r'^media/(?P<path>.*)$', debug_media_serve),
         re_path(r'^static/(?P<path>.*)$', debug_static_serve),
