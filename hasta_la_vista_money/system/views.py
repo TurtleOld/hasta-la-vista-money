@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.staticfiles import finders
 from django.core.cache import cache
 from django.db import connection
@@ -9,9 +10,10 @@ from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
-from django.views.generic import TemplateView
+from django.views.generic import ListView, TemplateView
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
 
 
@@ -94,3 +96,50 @@ class ServiceWorkerPrecacheView(View):
 @method_decorator(never_cache, name='dispatch')
 class OfflineView(TemplateView):
     template_name = 'system/offline.html'
+
+
+AUDIT_PAGE_SIZE = 30
+
+AUDITED_MODEL_CHOICES = [
+    ('', 'Все модели'),
+    ('finance_account.Transaction', 'Транзакции'),
+    ('receipts.Receipt', 'Чеки'),
+    ('finance_account.TransferMoneyLog', 'Переводы'),
+    ('finance_account.Account', 'Счета'),
+]
+
+
+class AuditLogView(LoginRequiredMixin, ListView):
+    template_name = 'system/auditlog.html'
+    context_object_name = 'entries'
+    paginate_by = AUDIT_PAGE_SIZE
+
+    def get_queryset(self):
+        qs = AuditLog.objects.filter(
+            user=self.request.user,
+        ).select_related('user')
+        model = self.request.GET.get('model', '')
+        date_from = self.request.GET.get('date_from', '')
+        date_to = self.request.GET.get('date_to', '')
+        action = self.request.GET.get('action', '')
+        if model:
+            qs = qs.filter(model_name=model)
+        if action:
+            qs = qs.filter(action=action)
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['model_choices'] = AUDITED_MODEL_CHOICES
+        ctx['action_choices'] = AuditLog.Action.choices
+        ctx['filter'] = {
+            'model': self.request.GET.get('model', ''),
+            'action': self.request.GET.get('action', ''),
+            'date_from': self.request.GET.get('date_from', ''),
+            'date_to': self.request.GET.get('date_to', ''),
+        }
+        return ctx
