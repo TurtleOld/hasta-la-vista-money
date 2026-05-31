@@ -12,7 +12,10 @@ from django.utils import timezone
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
 from hasta_la_vista_money.finance_account.factories import AccountFactory
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
 from hasta_la_vista_money.finance_account.tests.helpers import (
     setup_container_for_request,
 )
@@ -103,6 +106,40 @@ class TestAccountView(TestCase):
         self.assertIn('transfer_money_log', context)
         self.assertIn('sum_all_accounts', context)
         self.assertIn('sum_all_accounts_in_group', context)
+
+    def test_last_operations_include_transfers(self) -> None:
+        from_account = Account.objects.get(pk=1)
+        to_account = Account.objects.get(pk=2)
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=from_account,
+            to_account=to_account,
+            amount=Decimal('125.00'),
+            exchange_date=timezone.now(),
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('finance_account:list'))
+
+        operations = [
+            item
+            for day in response.context['last_operations']
+            for item in day.items
+        ]
+        transfer_operation = next(
+            item for item in operations if item.key == f'transfer-{transfer.pk}'
+        )
+        self.assertEqual(transfer_operation.source, 'transfer')
+        self.assertEqual(transfer_operation.amount, Decimal())
+        self.assertEqual(transfer_operation.transfer_amount, transfer.amount)
+        self.assertEqual(
+            transfer_operation.transfer_from_account_name,
+            from_account.name_account,
+        )
+        self.assertEqual(
+            transfer_operation.transfer_to_account_name,
+            to_account.name_account,
+        )
 
 
 class TestFinancesView(TestCase):

@@ -5,7 +5,7 @@
     <div class="accounts-ops-day">
         <span>{{ day.label }}</span>
         <span class="hide-target sum {% if day.total > 0 %}pos{% endif %}">
-            {% if day.total > 0 %}+{% endif %}{{ day.total|floatformat:0|comma }} ₽
+            {% if day.total > 0 %}+{% endif %}{{ day.total|comma }} ₽
         </span>
     </div>
     {% for op in day.items %}
@@ -13,6 +13,8 @@
             <div class="accounts-op-ico">
                 {% if op.source == 'income' %}
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h15a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/><path d="M3 7l3-3h11a2 2 0 012 2v1"/><circle cx="16" cy="13" r="1.5" fill="currentColor"/></svg>
+                {% elif op.source == 'transfer' %}
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h14l-3-3"/><path d="M20 16H6l3 3"/></svg>
                 {% else %}
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M3 4h2l2 11h12l2-8H7"/></svg>
                 {% endif %}
@@ -20,7 +22,11 @@
             <div class="accounts-op-mid">
                 <div class="accounts-op-name">{{ op.category_name }}</div>
                 <div class="accounts-op-meta">
-                    <span>{{ op.account_name }}</span>
+                    {% if op.source == 'transfer' %}
+                        <span>{{ op.transfer_from_account_name }} → {{ op.transfer_to_account_name }}</span>
+                    {% else %}
+                        <span>{{ op.account_name }}</span>
+                    {% endif %}
                     <span class="sep"></span>
                     <span>{{ op.user_name }}</span>
                     <span class="sep"></span>
@@ -28,9 +34,15 @@
                 </div>
             </div>
             <div class="accounts-op-right">
-                <div class="hide-target accounts-op-amt {% if op.amount > 0 %}pos{% else %}neg{% endif %}">
-                    {% if op.amount > 0 %}+{% endif %}{{ op.amount|floatformat:0|comma }} ₽
-                </div>
+                {% if op.source == 'transfer' %}
+                    <div class="hide-target accounts-op-amt">
+                        {{ op.transfer_amount|comma }} ₽
+                    </div>
+                {% else %}
+                    <div class="hide-target accounts-op-amt {% if op.amount > 0 %}pos{% else %}neg{% endif %}">
+                        {% if op.amount > 0 %}+{% endif %}{{ op.amount|comma }} ₽
+                    </div>
+                {% endif %}
             </div>
         </a>
     {% endfor %}

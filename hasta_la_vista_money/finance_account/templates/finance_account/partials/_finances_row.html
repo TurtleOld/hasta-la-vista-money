@@ -60,7 +60,7 @@
         </div>
         <div class="finances-row-account finances-muted">{{ tx.account_name }}</div>
         <div class="text-right font-bold {% if tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
-            <span class="finances-money">{% if tx.amount > 0 %}+{% else %}-{% endif %}{{ tx.abs_amount|floatformat:0 }} ₽</span>
+            <span class="finances-money">{% if tx.amount > 0 %}+{% else %}-{% endif %}{{ tx.abs_amount|floatformat:2 }} ₽</span>
             <span class="finances-money-hidden">•••</span>
         </div>
         <div class="finances-row-date finances-muted">{{ tx.date|date:'d.m.Y' }}</div>

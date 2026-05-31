@@ -50,6 +50,7 @@ from hasta_la_vista_money.finance_account.forms import (
 from hasta_la_vista_money.finance_account.mixins import GroupAccountMixin
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    TransferMoneyLog,
 )
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import get_cached_category_tree
@@ -100,6 +101,9 @@ class FinancesTransaction:
     delete_url: str
     can_edit: bool
     is_receipt: bool = False
+    transfer_amount: Decimal | None = None
+    transfer_from_account_name: str = ''
+    transfer_to_account_name: str = ''
 
     @property
     def abs_amount(self) -> Decimal:
@@ -845,6 +849,36 @@ def _build_transaction_row(
     )
 
 
+def _build_transfer_row(
+    transfer: TransferMoneyLog,
+    current_user: User,
+) -> FinancesTransaction:
+    from_account_name = str(_('Удалённый счёт'))
+    to_account_name = str(_('Удалённый счёт'))
+    if transfer.from_account is not None:
+        from_account_name = transfer.from_account.name_account
+    if transfer.to_account is not None:
+        to_account_name = transfer.to_account.name_account
+    return FinancesTransaction(
+        key=f'transfer-{transfer.pk}',
+        source='transfer',
+        source_id=transfer.pk,
+        date=transfer.exchange_date,
+        amount=Decimal(),
+        category_name=str(_('Перевод')),
+        category_key='transfer',
+        account_name=from_account_name,
+        user_name=transfer.user.username,
+        edit_url=reverse('finance_account:transfer_money'),
+        copy_url='',
+        delete_url='',
+        can_edit=transfer.user_id == current_user.pk,
+        transfer_amount=transfer.amount,
+        transfer_from_account_name=from_account_name,
+        transfer_to_account_name=to_account_name,
+    )
+
+
 def _receipt_transactions(
     request: 'WSGIRequestWithContainer',
     users: list[User],
@@ -1033,7 +1067,7 @@ def _recent_transactions(
     users: Iterable[User],
     limit: int = 12,
 ) -> list[FinancesDayGroup]:
-    """Return latest income+expense transactions grouped by day.
+    """Return latest transactions and transfers grouped by day.
 
     Used by the accounts dashboard to show the "last operations" widget
     without applying any date/category filters.
@@ -1044,11 +1078,19 @@ def _recent_transactions(
         .select_related('account', 'category', 'user')
         .order_by('-date')[:limit]
     )
+    transfer_qs = (
+        TransferMoneyLog.objects.filter(user__in=user_list)
+        .select_related('from_account', 'to_account', 'user')
+        .order_by('-exchange_date')[:limit]
+    )
 
     transactions = [
         _build_transaction_row(transaction_obj, current_user)
         for transaction_obj in transaction_qs
     ]
+    transactions.extend(
+        _build_transfer_row(transfer, current_user) for transfer in transfer_qs
+    )
     transactions.sort(key=lambda item: item.date, reverse=True)
     return _group_finances_by_day(transactions[:limit])
 
