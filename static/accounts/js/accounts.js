@@ -114,7 +114,7 @@
     if (submitEl) {
       submitEl.disabled = (
         drawerState.submitting ||
-        !drawerState.amount ||
+        !hasValidDrawerAmount() ||
         !drawerState.accountId ||
         !drawerState.categoryId
       );
@@ -238,8 +238,39 @@
     syncDrawerCategorySelect();
   }
 
+  function normalizeDrawerAmount(value) {
+    const normalizedValue = String(value || '').replace(/,/g, '.');
+    let result = '';
+    let hasSeparator = false;
+
+    for (const char of normalizedValue) {
+      if (/\d/.test(char)) {
+        result += char;
+      } else if (char === '.' && !hasSeparator) {
+        result += result ? '.' : '0.';
+        hasSeparator = true;
+      }
+    }
+
+    if (!hasSeparator) return result;
+
+    const [whole, fraction = ''] = result.split('.');
+    return `${whole}.${fraction.slice(0, 2)}`;
+  }
+
+  function normalizedSubmitAmount() {
+    return drawerState.amount.endsWith('.')
+      ? drawerState.amount.slice(0, -1)
+      : drawerState.amount;
+  }
+
+  function hasValidDrawerAmount() {
+    const amount = normalizedSubmitAmount();
+    return amount && Number.parseFloat(amount) > 0;
+  }
+
   function setDrawerAmount(value) {
-    const cleaned = String(value || '').replace(/[^\d]/g, '');
+    const cleaned = normalizeDrawerAmount(value);
     drawerState.amount = cleaned;
     const input = drawerAmountInput();
     if (input && input.value !== cleaned) input.value = cleaned;
@@ -272,7 +303,7 @@
     event.preventDefault();
     if (
       drawerState.submitting ||
-      !drawerState.amount ||
+      !hasValidDrawerAmount() ||
       !drawerState.accountId ||
       !drawerState.categoryId
     ) return;
@@ -281,7 +312,7 @@
 
     const formData = new FormData();
     formData.append('operation_type', drawerState.type);
-    formData.append('amount', drawerState.amount);
+    formData.append('amount', normalizedSubmitAmount());
     formData.append('account', drawerState.accountId);
     formData.append('category', drawerState.categoryId);
     formData.append('date', formatLocalDateTime(new Date()));
@@ -300,7 +331,7 @@
 
       if (response.ok || response.redirected) {
         const sign = drawerState.type === 'income' ? '+' : '−';
-        showToast({ message: sign + drawerState.amount + ' ₽' });
+        showToast({ message: sign + normalizedSubmitAmount() + ' ₽' });
         drawerState.amount = '';
         const input = drawerAmountInput();
         if (input) input.value = '';

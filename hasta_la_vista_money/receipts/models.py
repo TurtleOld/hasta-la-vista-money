@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from typing import Any, ClassVar
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector
 from django.db import models
 from django.db.models import Min
 from django.urls import reverse_lazy
@@ -126,6 +128,14 @@ class Seller(models.Model):
         blank=True,
         verbose_name='Date created',
     )
+
+    class Meta:
+        indexes: ClassVar[list[models.Index]] = [
+            GinIndex(
+                SearchVector('name_seller', config='russian'),
+                name='receipts_seller_search_gin',
+            ),
+        ]
 
     def __str__(self) -> str:
         """Return string representation of the seller.
@@ -256,6 +266,18 @@ class Product(models.Model):
         blank=True,
         verbose_name='Date created',
     )
+
+    class Meta:
+        indexes: ClassVar[list[models.Index]] = [
+            GinIndex(
+                SearchVector(
+                    'product_name',
+                    'category',
+                    config='russian',
+                ),
+                name='receipts_product_search_gin',
+            ),
+        ]
 
     def __str__(self) -> str:
         """Return string representation of the product.

@@ -218,8 +218,8 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
             total_receipts=total_receipts,
             receipt_info_by_month=receipt_info_by_month,
         )
-        pagination_querystring, group_querystring = (
-            self._context_querystrings(request)
+        pagination_querystring, group_querystring = self._context_querystrings(
+            request,
         )
 
         context: dict[str, object] = super().get_context_data(

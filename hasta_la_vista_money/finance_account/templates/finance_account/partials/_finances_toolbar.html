@@ -77,7 +77,7 @@
 
     <div class="finances-pop-wrap">
         <button type="button" class="finances-chip {% if finances_filter.min_amount %}is-active{% endif %}" data-finances-pop-button="amount">
-            {% translate 'Сумма' %}: {% if finances_filter.min_amount %}≥ {{ finances_filter.min_amount|floatformat:0 }} ₽{% else %}{% translate 'любая' %}{% endif %}
+            {% translate 'Сумма' %}: {% if finances_filter.min_amount %}≥ {{ finances_filter.min_amount|floatformat:2 }} ₽{% else %}{% translate 'любая' %}{% endif %}
         </button>
         <div class="finances-pop" data-finances-pop="amount">
             <div class="finances-pop-title">{% translate 'Минимум' %}</div>

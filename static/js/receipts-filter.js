@@ -196,10 +196,16 @@
             elements.filterForm.addEventListener('submit', handleFormSubmit);
         }
 
+        const resetLink = document.querySelector('[data-reset-receipts-filters="true"]');
+        if (resetLink) {
+            resetLink.addEventListener('click', handleFilterReset);
+        }
+
         // Update badge on any filter input change
         const filterInputs = document.querySelectorAll(
             '#receipts-filter-form input[name="receipt_date_0"], ' +
             '#receipts-filter-form input[name="receipt_date_1"], ' +
+            '#receipts-filter-form input[name="search"], ' +
             '#receipts-filter-form input[type="number"], ' +
             '#receipts-filter-form select'
         );
@@ -306,6 +312,18 @@
 
     function handleFormSubmit() {
         elements.selectedProductsInput.value = Array.from(state.selectedProducts).join(',');
+    }
+
+    function handleFilterReset() {
+        if (!elements.filterForm) return;
+
+        elements.filterForm.reset();
+        state.selectedProducts.clear();
+        elements.selectedProductsInput.value = '';
+        elements.productInput.value = '';
+        hideDropdown();
+        renderSelectedProducts();
+        updateActiveFilterCount();
     }
 
     function showDropdown(isAll) {
@@ -444,6 +462,11 @@
             '#receipts-filter-form input[name="receipt_date_1"]',
         );
         dateInputs.forEach(inp => { if (inp.value) count++; });
+
+        const searchInput = document.querySelector(
+            '#receipts-filter-form input[name="search"]',
+        );
+        if (searchInput && searchInput.value) count++;
 
         const numberInputs = document.querySelectorAll('#receipts-filter-form input[type="number"]');
         numberInputs.forEach(inp => { if (inp.value) count++; });

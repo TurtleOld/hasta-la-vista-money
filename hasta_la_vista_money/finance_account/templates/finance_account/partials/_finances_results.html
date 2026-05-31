@@ -19,7 +19,7 @@
                     <div class="finances-side-item">
                         <span>{{ category.name }}</span>
                         <strong class="{% if category.total > 0 %}finances-positive{% else %}finances-negative{% endif %}">
-                            {% if category.total > 0 %}+{% else %}-{% endif %}{{ category.total|floatformat:0|cut:'-' }} ₽
+                            {% if category.total > 0 %}+{% else %}-{% endif %}{{ category.total|floatformat:2|cut:'-' }} ₽
                         </strong>
                     </div>
                 {% empty %}

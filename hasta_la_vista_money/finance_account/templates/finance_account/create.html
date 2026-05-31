@@ -430,7 +430,10 @@
             },
             get previewAmount() {
                 const sign = this.type === 'income' ? '+' : '−';
-                return sign + new Intl.NumberFormat('ru-RU').format(Math.round(parseFloat(this.amount) || 0));
+                return sign + new Intl.NumberFormat('ru-RU', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                }).format(parseFloat(this.amount) || 0);
             },
             get previewDate() {
                 return formatDatetimeForDisplay(this.datetimeLocal);
