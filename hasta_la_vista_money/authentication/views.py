@@ -16,6 +16,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
+from hasta_la_vista_money.api.throttling import LoginRateThrottle
 from hasta_la_vista_money.authentication.authentication import (
     clear_auth_cookies,
     get_refresh_token_from_cookie,
@@ -101,6 +102,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
     """Custom token obtain view that sets HttpOnly cookies and returns JSON"""
 
     schema = AutoSchema()
+    throttle_classes = (LoginRateThrottle,)
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         try:

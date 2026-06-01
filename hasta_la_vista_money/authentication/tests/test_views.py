@@ -2,15 +2,18 @@ from datetime import timedelta
 
 import jwt
 from django.conf import settings
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from hasta_la_vista_money.api.throttling import LoginRateThrottle
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
+from hasta_la_vista_money.authentication.views import CookieTokenObtainPairView
 from hasta_la_vista_money.users.factories import UserFactoryTyped
 
 TEST_PASSWORD = 'testpassword123'  # nosec B105
@@ -76,6 +79,55 @@ class CookieTokenObtainPairViewTestCase(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_obtain_tokens_uses_login_rate_throttle(self) -> None:
+        """Test that token obtain endpoint uses login throttling."""
+        self.assertEqual(
+            CookieTokenObtainPairView.throttle_classes,
+            (LoginRateThrottle,),
+        )
+
+    def test_obtain_tokens_throttled_after_login_rate_limit(self) -> None:
+        """Test that token obtain endpoint applies login rate limit."""
+        throttle_rates = LoginRateThrottle.THROTTLE_RATES
+        LoginRateThrottle.THROTTLE_RATES = {'login': '2/min'}
+        cache.clear()
+
+        try:
+            response1 = self.client.post(
+                self.url,
+                {
+                    'username': self.user.username,
+                    'password': WRONG_PASSWORD,
+                },
+                format='json',
+            )
+            response2 = self.client.post(
+                self.url,
+                {
+                    'username': self.user.username,
+                    'password': WRONG_PASSWORD,
+                },
+                format='json',
+            )
+            response3 = self.client.post(
+                self.url,
+                {
+                    'username': self.user.username,
+                    'password': WRONG_PASSWORD,
+                },
+                format='json',
+            )
+        finally:
+            LoginRateThrottle.THROTTLE_RATES = throttle_rates
+            cache.clear()
+
+        self.assertEqual(response1.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response2.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(
+            response3.status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
 
 
 class CookieTokenRefreshViewTestCase(TestCase):
