@@ -776,6 +776,10 @@
   color: var(--receipts-positive);
 }
 
+.pending-card-ready_with_warning .pending-card-title-ready {
+  color: #b45309;
+}
+
 .pending-card-text {
   color: var(--receipts-muted);
   font-size: 0.85rem;
@@ -1225,6 +1229,23 @@
   color: var(--receipts-negative);
   font-size: 0.75rem;
   margin-top: 0.25rem;
+}
+
+.receipt-review-warning {
+  align-items: flex-start;
+  background: color-mix(in oklab, #f59e0b 12%, var(--receipts-surface));
+  border: 1px solid color-mix(in oklab, #f59e0b 45%, var(--receipts-border));
+  border-radius: 0.9rem;
+  color: #92400e;
+  display: flex;
+  font-size: 0.9rem;
+  font-weight: 700;
+  gap: 0.55rem;
+  padding: 0.8rem 1rem;
+}
+
+.dark .receipt-review-warning {
+  color: #fbbf24;
 }
 
 .receipt-review-table-wrap {
