@@ -1,6 +1,6 @@
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import django_filters
 from django.contrib.auth import get_user_model
@@ -26,9 +26,9 @@ from django.forms import (
     formset_factory,
 )
 from django.forms.fields import IntegerField
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_filters import widgets
+from PIL import Image, UnidentifiedImageError
 
 if TYPE_CHECKING:
     from django.forms.formsets import BaseFormSet as BaseFormSetType
@@ -44,6 +44,10 @@ from hasta_la_vista_money.receipts.models import (
     Product,
     Receipt,
     Seller,
+)
+from hasta_la_vista_money.receipts.parsers.date_parser import (
+    ReceiptDateParseError,
+    ReceiptDateParser,
 )
 
 _INPUT_CLASSES = (
@@ -443,7 +447,7 @@ class ReceiptForm(ModelForm[Receipt]):
         ),
     )
 
-    field_order: ClassVar[list[str]] = [
+    field_order = [
         'seller',
         'retail_place',
         'account',
@@ -490,6 +494,16 @@ def validate_image_jpg_png(value: UploadedFile) -> None:
         raise ValidationError(
             _('Содержимое файла не соответствует формату изображения'),
         )
+    try:
+        value.seek(0)
+        with Image.open(value) as image:
+            image.verify()
+    except (OSError, SyntaxError, UnidentifiedImageError) as exc:
+        raise ValidationError(
+            _('Содержимое файла не соответствует формату изображения'),
+        ) from exc
+    finally:
+        value.seek(position)
 
 
 class MultipleFileInput(ClearableFileInput):
@@ -644,26 +658,22 @@ class PendingReceiptReviewForm(Form):
             **kwargs: Keyword arguments.
         """
         super().__init__(*args, **kwargs)
+        account_field = cast(
+            'ModelChoiceField[Account]',
+            self.fields['account'],
+        )
         if user is not None:
-            self.fields['account'].queryset = Account.objects.filter(user=user)
+            account_field.queryset = Account.objects.filter(user=user)
         if account is not None:
-            self.fields['account'].initial = account
+            account_field.initial = account
         if receipt_data:
             receipt_date_str = receipt_data.get('receipt_date', '')
             if receipt_date_str:
                 try:
-                    day, month, year = receipt_date_str.split(' ')[0].split('.')
-                    hour, minute = receipt_date_str.split(' ')[1].split(':')
-                    receipt_date = datetime(
-                        int(year),
-                        int(month),
-                        int(day),
-                        int(hour),
-                        int(minute),
-                        tzinfo=timezone.get_current_timezone(),
-                    )
-                    self.fields['receipt_date'].initial = receipt_date
-                except (ValueError, IndexError):
+                    self.fields[
+                        'receipt_date'
+                    ].initial = ReceiptDateParser.parse(receipt_date_str)
+                except ReceiptDateParseError:
                     self.fields['receipt_date'].initial = receipt_date_str
 
             self.fields['name_seller'].initial = receipt_data.get('name_seller')
