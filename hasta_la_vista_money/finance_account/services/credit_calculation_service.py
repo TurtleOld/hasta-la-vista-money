@@ -172,6 +172,83 @@ class CreditCalculationService:
         )
         return max(Decimal(str(result)), Decimal(str(constants.ZERO)))
 
+    def get_credit_card_payments(
+        self,
+        account: Account,
+        start_date: date | datetime | None = None,
+        end_date: date | datetime | None = None,
+    ) -> Decimal:
+        """Calculate total payments (repayments) made to a credit card.
+
+        Sums transfers to account, income transactions, and receipt returns
+        for the specified period. Used to calculate how much debt has been
+        repaid within the grace period.
+
+        Args:
+            account: Credit card account.
+            start_date: Optional start date for the period.
+            end_date: Optional end date for the period.
+
+        Returns:
+            Total payments amount as Decimal.
+        """
+        start_date_dt: datetime | None = None
+        end_date_dt: datetime | None = None
+
+        if start_date and end_date:
+            if isinstance(start_date, datetime):
+                start_date_dt = start_date
+            elif isinstance(start_date, date):
+                start_date_dt = timezone.make_aware(
+                    datetime.combine(start_date, time.min),
+                )
+            if isinstance(end_date, datetime):
+                end_date_dt = end_date
+            elif isinstance(end_date, date):
+                end_date_dt = timezone.make_aware(
+                    datetime.combine(end_date, time.max),
+                )
+
+        income_queryset = self.transaction_repository.filter(
+            account=account,
+            type=TransactionType.INCOME,
+        )
+        receipts_queryset = self.receipt_repository.filter(account=account)
+        transfer_queryset = TransferMoneyLog.objects.filter(to_account=account)
+
+        if start_date_dt and end_date_dt:
+            income_queryset = income_queryset.filter(
+                date__range=(start_date_dt, end_date_dt),
+            )
+            receipts_queryset = receipts_queryset.filter(
+                receipt_date__range=(start_date_dt, end_date_dt),
+            )
+            transfer_queryset = transfer_queryset.filter(
+                exchange_date__range=(start_date_dt, end_date_dt),
+            )
+
+        total_income = (
+            income_queryset.aggregate(total=Sum('amount'))['total'] or 0
+        )
+        total_return = (
+            receipts_queryset.aggregate(
+                total=Coalesce(
+                    Sum(
+                        'total_sum',
+                        filter=Q(operation_type=RECEIPT_OPERATION_RETURN),
+                    ),
+                    0,
+                    output_field=DecimalField(),
+                ),
+            )['total']
+            or 0
+        )
+        total_transfers = (
+            transfer_queryset.aggregate(total=Sum('amount'))['total'] or 0
+        )
+
+        return Decimal(str(total_income + total_return + total_transfers))
+
     def _find_first_purchase_in_month(
         self,
         account: Account,
@@ -296,36 +373,33 @@ class CreditCalculationService:
             account: Account to calculate debt for.
             purchase_start: Start of purchase period.
             purchase_end: End of purchase period.
-            payments_start: Start of payments period.
-            payments_end: End of payments period.
+            payments_start: Start of payments period (unused, kept for compat).
+            payments_end: End of grace period.
 
         Returns:
-            Tuple of (purchase_period_debt, payment_period_debt, total_debt).
+            Tuple of (purchase_period_debt, payments_made, final_debt).
         """
         purchase_period_debt = self.get_credit_card_debt(
             account,
             purchase_start,
             purchase_end,
-        )
+        ) or Decimal(str(constants.ZERO))
 
         if account.bank in SUPPORTED_BANKS:
-            payment_period_debt = self.get_credit_card_debt(
+            payments_made = self.get_credit_card_payments(
                 account,
-                payments_start,
+                purchase_start,
                 payments_end,
             )
         else:
-            payment_period_debt = Decimal(str(constants.ZERO))
+            payments_made = Decimal(str(constants.ZERO))
 
-        total_debt = (purchase_period_debt or constants.ZERO) + (
-            payment_period_debt or constants.ZERO
+        final_debt = max(
+            purchase_period_debt - payments_made,
+            Decimal(str(constants.ZERO)),
         )
 
-        return (  # type: ignore[return-value]
-            purchase_period_debt or constants.ZERO,
-            payment_period_debt or constants.ZERO,
-            total_debt,
-        )
+        return purchase_period_debt, payments_made, final_debt
 
     def _ensure_timezone_aware(self, dt: datetime) -> datetime:
         """Ensure datetime is timezone aware.
