@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from decimal import Decimal
+from io import BytesIO
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 from unittest.mock import MagicMock, Mock, patch
 
@@ -11,6 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse_lazy
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -29,6 +31,7 @@ from hasta_la_vista_money.receipts.forms import (
 )
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
+    PendingReceiptStatus,
     Product,
     Receipt,
     Seller,
@@ -44,7 +47,17 @@ else:
     UserType = get_user_model()
 
 
-JPEG_BYTES = b'\xff\xd8\xff\xe0fake-image-content'
+def _image_bytes(image_format: str) -> bytes:
+    image_bytes = BytesIO()
+    Image.new('RGB', (1, 1), 'white').save(
+        image_bytes,
+        format=image_format,
+    )
+    return image_bytes.getvalue()
+
+
+JPEG_BYTES = _image_bytes('JPEG')
+PNG_BYTES = _image_bytes('PNG')
 
 
 class TestReceipt(TestCase):
@@ -498,6 +511,40 @@ class TestForms(TestCase):
         )
 
         self.assertTrue(form.is_valid())
+
+    def test_upload_image_form_rejects_corrupt_jpeg(self) -> None:
+        test_file = SimpleUploadedFile(
+            'test.jpg',
+            b'\xff\xd8\xff\xe0fake-image-content',
+            content_type='image/jpeg',
+        )
+
+        form = UploadImageForm(
+            user=self.user,
+            data={'account': self.account.pk},
+            files={'file': test_file},
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_upload_image_form_rejects_extension_signature_mismatch(
+        self,
+    ) -> None:
+        test_file = SimpleUploadedFile(
+            'test.jpg',
+            PNG_BYTES,
+            content_type='image/jpeg',
+        )
+
+        form = UploadImageForm(
+            user=self.user,
+            data={'account': self.account.pk},
+            files={'file': test_file},
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
 
 
 class TestReceiptFilter(TestCase):
@@ -1074,6 +1121,28 @@ class TestReviewPendingReceiptView(TestCase):
         self.assertEqual(
             response.context['pending_receipt'].pk,
             self.pending_receipt.pk,
+        )
+
+    def test_review_pending_receipt_view_shows_total_warning(self) -> None:
+        self.pending_receipt.status = PendingReceiptStatus.READY_WITH_WARNING
+        self.pending_receipt.receipt_data = {
+            **self.receipt_data,
+            'total_sum': '180.00',
+        }
+        self.pending_receipt.save(update_fields=['status', 'receipt_data'])
+        self.client.force_login(self.user)
+        url = reverse_lazy(
+            'receipts:review',
+            kwargs={'pk': self.pending_receipt.pk},
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        self.assertTrue(response.context['total_sum_warning'])
+        self.assertContains(
+            response,
+            'Сумма позиций отличается от итога чека больше чем на 5%',
         )
 
     def test_review_pending_receipt_view_unauthorized(self) -> None:

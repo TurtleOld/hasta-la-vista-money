@@ -462,6 +462,30 @@ class ProcessPendingReceiptFNSTests(TestCase):
         )
         self.assertIn('_fns_raw', pending.receipt_data)
 
+    def test_task_marks_ready_with_warning_from_fns_mismatch(self) -> None:
+        pending = self._create_pending()
+        payload = _fns_payload()
+        payload['document']['receipt']['totalSum'] = 15000
+        with (
+            mock.patch(
+                'hasta_la_vista_money.receipts.tasks.QRCodeExtractor.extract',
+                return_value=parse_fns_qr(
+                    't=20260525T1200&s=150.00&fn=1&i=2&fp=3&n=1',
+                ),
+            ),
+            mock.patch(
+                'hasta_la_vista_money.receipts.tasks.FNSClient.fetch_receipt',
+                return_value=payload,
+            ),
+        ):
+            process_pending_receipt(pending.pk)
+
+        pending.refresh_from_db()
+        self.assertEqual(
+            pending.status,
+            PendingReceiptStatus.READY_WITH_WARNING,
+        )
+
     def test_task_applies_history_category_to_fns_items(self) -> None:
         Product.objects.create(
             user=self.user,

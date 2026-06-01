@@ -5,6 +5,7 @@ retry / counter views. Inference is always mocked — no network calls.
 """
 
 import io
+from decimal import Decimal
 from typing import Any
 from unittest import mock
 
@@ -12,6 +13,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
@@ -37,8 +39,17 @@ from hasta_la_vista_money.receipts.validators.parsed_receipt import (
 )
 from hasta_la_vista_money.users.models import User
 
-JPEG_BYTES = b'\xff\xd8\xff\xe0sample-bytes'
-PNG_BYTES = b'\x89PNG\r\n\x1a\nsample-bytes'
+
+def _image_bytes(image_format: str, color: str = 'white') -> bytes:
+    image_bytes = io.BytesIO()
+    Image.new('RGB', (1, 1), color).save(image_bytes, format=image_format)
+    return image_bytes.getvalue()
+
+
+JPEG_BYTES = _image_bytes('JPEG')
+JPEG_BYTES_ALT = _image_bytes('JPEG', 'red')
+JPEG_BYTES_DUPLICATE = _image_bytes('JPEG', 'blue')
+PNG_BYTES = _image_bytes('PNG', 'green')
 
 
 def _fake_payload() -> dict[str, Any]:
@@ -186,6 +197,23 @@ class ProcessPendingReceiptTaskTests(TestCase):
         self.assertEqual(pending.error_message, '')
         self.assertEqual(pending.receipt_data['name_seller'], 'Shop')
 
+    def test_task_marks_ready_with_warning_on_total_mismatch(self) -> None:
+        pending = self._create_pending()
+        payload = _fake_payload()
+        payload['total_sum'] = 120.0
+        with mock.patch(
+            'hasta_la_vista_money.receipts.tasks._run_fns_pipeline',
+            return_value=payload,
+        ):
+            process_pending_receipt(pending.pk)
+
+        pending.refresh_from_db()
+        self.assertEqual(
+            pending.status,
+            PendingReceiptStatus.READY_WITH_WARNING,
+        )
+        self.assertEqual(pending.error_message, '')
+
     def test_task_marks_failed_on_pipeline_error(self) -> None:
         pending = self._create_pending()
         with mock.patch(
@@ -260,6 +288,10 @@ class PendingReceiptConversionTests(TestCase):
         products = list(
             Product.objects.filter(receipt_products=receipt).order_by('pk'),
         )
+        self.assertEqual(
+            timezone.localtime(receipt.receipt_date).strftime('%d.%m.%Y %H:%M'),
+            payload['receipt_date'],
+        )
         self.assertEqual(len(products), 2)
         self.assertEqual(
             [product.product_name for product in products],
@@ -282,6 +314,21 @@ class ReceiptParseValidatorTests(TestCase):
         self.assertEqual(normalized['operation_type'], 1)
         self.assertEqual(normalized['items'][0]['amount'], '100.00')
 
+    def test_short_year_receipt_date_is_normalized(self) -> None:
+        payload = _fake_payload()
+        payload['receipt_date'] = '20.05.23 14:30'
+
+        result = validate_receipt_parse_payload(payload)
+
+        self.assertEqual(result.receipt_date, '20.05.2023 14:30')
+
+    def test_rejects_invalid_receipt_date(self) -> None:
+        payload = _fake_payload()
+        payload['receipt_date'] = '2023/05/20 14:30'
+
+        with self.assertRaises(ReceiptParseValidationError):
+            validate_receipt_parse_payload(payload)
+
     def test_rejects_missing_required_field(self) -> None:
         payload = _fake_payload()
         del payload['receipt_date']
@@ -296,12 +343,13 @@ class ReceiptParseValidatorTests(TestCase):
         with self.assertRaises(ReceiptParseValidationError):
             validate_receipt_parse_payload(payload)
 
-    def test_rejects_total_sum_mismatch(self) -> None:
+    def test_allows_total_sum_mismatch_for_review_warning(self) -> None:
         payload = _fake_payload()
         payload['total_sum'] = '150.00'
 
-        with self.assertRaises(ReceiptParseValidationError):
-            validate_receipt_parse_payload(payload)
+        result = validate_receipt_parse_payload(payload)
+
+        self.assertEqual(result.total_sum, Decimal('150.00'))
 
 
 class UploadImageViewTests(TestCase):
@@ -347,12 +395,12 @@ class UploadImageViewTests(TestCase):
         uploads = [
             SimpleUploadedFile(
                 'r1.jpg',
-                JPEG_BYTES + b'-1',
+                JPEG_BYTES_ALT,
                 content_type='image/jpeg',
             ),
             SimpleUploadedFile(
                 'r2.png',
-                PNG_BYTES + b'-2',
+                PNG_BYTES,
                 content_type='image/png',
             ),
         ]
@@ -376,7 +424,7 @@ class UploadImageViewTests(TestCase):
     def test_upload_rejects_duplicate_against_saved_receipt(self) -> None:
         upload = SimpleUploadedFile(
             'r.jpg',
-            JPEG_BYTES + b'-duplicate',
+            JPEG_BYTES_DUPLICATE,
             content_type='image/jpeg',
         )
         image_hash = compute_image_hash(upload)
@@ -399,7 +447,7 @@ class UploadImageViewTests(TestCase):
 
         upload_again = SimpleUploadedFile(
             'r.jpg',
-            JPEG_BYTES + b'-duplicate',
+            JPEG_BYTES_DUPLICATE,
             content_type='image/jpeg',
         )
         with mock.patch(
@@ -411,6 +459,26 @@ class UploadImageViewTests(TestCase):
             )
 
         self.assertRedirects(response, reverse('receipts:list'))
+        self.assertFalse(
+            PendingReceipt.objects.filter(user=self.user).exists(),
+        )
+        task_mock.delay.assert_not_called()
+
+    def test_upload_rejects_corrupt_image_before_dispatch(self) -> None:
+        upload = SimpleUploadedFile(
+            'r.jpg',
+            b'\xff\xd8\xff\xe0sample-bytes',
+            content_type='image/jpeg',
+        )
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_pending_receipt',
+        ) as task_mock:
+            response = self.client.post(
+                reverse('receipts:upload'),
+                {'file': upload, 'account': self.account.pk},
+            )
+
+        self.assertEqual(response.status_code, 200)
         self.assertFalse(
             PendingReceipt.objects.filter(user=self.user).exists(),
         )
