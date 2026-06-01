@@ -1,5 +1,21 @@
 # История изменений
 
+## [2.1.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.0.0...v2.1.0) (2026-06-01)
+
+
+### Features
+
+* **api:** integrate login rate throttling into token obtain view ([8894a57](https://github.com/TurtleOld/hasta-la-vista-money/commit/8894a57f5e2a9df72e1b7fd034b2edd695afd708))
+* **api:** integrate login rate throttling into token obtain view ([d88894a](https://github.com/TurtleOld/hasta-la-vista-money/commit/d88894a69783bcd86233e29a3f8415932d485c4a))
+* **receipts:** improve pending receipt validation ([e1f0e4a](https://github.com/TurtleOld/hasta-la-vista-money/commit/e1f0e4a2d66669512dc14ce523b6229b8537525b))
+* **receipts:** show pending receipt warnings ([f91b1a0](https://github.com/TurtleOld/hasta-la-vista-money/commit/f91b1a088e17a06941914b3c98ccfc2a23765424))
+
+
+### Bug Fixes
+
+* **sberbank:** correct grace period debt calculation ([2c3a63a](https://github.com/TurtleOld/hasta-la-vista-money/commit/2c3a63aaca2f89a7d0f89f63c9c199f0ccdf0a09))
+* **sberbank:** correct grace period debt calculation ([70d05a9](https://github.com/TurtleOld/hasta-la-vista-money/commit/70d05a9d7377fa64d20089a96148b7ee29111289))
+
 ## [2.0.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v1.10.0...v2.0.0) (2026-05-31)
 
 
