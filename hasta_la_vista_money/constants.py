@@ -84,6 +84,7 @@ ERROR_MODEL_UNAVAILABLE: Final = _(
 # ============================================================================
 
 RECEIPT_CATEGORY_NAME: Final = _('Покупки по чекам')
+PENDING_RECEIPT_TOTAL_WARNING_RATIO: Final = 0.05
 
 # ============================================================================
 # User Messages - Authentication

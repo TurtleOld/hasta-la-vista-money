@@ -1,14 +1,13 @@
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django.db import transaction
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.repositories.protocols import ReceiptRepositoryProtocol
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
@@ -16,6 +15,7 @@ from hasta_la_vista_money.receipts.models import (
     Receipt,
     ReceiptImageHash,
 )
+from hasta_la_vista_money.receipts.parsers.date_parser import ReceiptDateParser
 from hasta_la_vista_money.receipts.services.receipt_creator import (
     ReceiptCreateData,
     ReceiptCreatorService,
@@ -24,6 +24,9 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 from hasta_la_vista_money.users.models import User
 
 _HASH_CHUNK_SIZE = 64 * 1024
+_TOTAL_WARNING_RATIO = Decimal(
+    str(constants.PENDING_RECEIPT_TOTAL_WARNING_RATIO),
+)
 
 
 @dataclass(frozen=True)
@@ -106,6 +109,7 @@ class PendingReceiptService:
         active_statuses = [
             PendingReceiptStatus.PROCESSING,
             PendingReceiptStatus.READY,
+            PendingReceiptStatus.READY_WITH_WARNING,
         ]
         pending = (
             PendingReceipt.objects.filter(
@@ -189,7 +193,7 @@ class PendingReceiptService:
             Updated PendingReceipt instance.
         """
         pending_receipt.receipt_data = receipt_data
-        pending_receipt.status = PendingReceiptStatus.READY
+        pending_receipt.status = self._status_for_receipt_data(receipt_data)
         pending_receipt.error_message = ''
         pending_receipt.save(
             update_fields=['receipt_data', 'status', 'error_message'],
@@ -252,7 +256,8 @@ class PendingReceiptService:
             Updated PendingReceipt instance.
         """
         pending_receipt.receipt_data = receipt_data
-        update_fields = ['receipt_data']
+        pending_receipt.status = self._status_for_receipt_data(receipt_data)
+        update_fields = ['receipt_data', 'status']
         if account is not None:
             pending_receipt.account = account
             update_fields.append('account')
@@ -283,7 +288,7 @@ class PendingReceiptService:
             user=user,
             account=account,
             receipt_data=receipt_data,
-            status=PendingReceiptStatus.READY,
+            status=self._status_for_receipt_data(receipt_data),
         )
 
     @transaction.atomic
@@ -311,7 +316,7 @@ class PendingReceiptService:
         if not receipt_date_str:
             raise ValueError('receipt_date is required')
 
-        receipt_date = self._parse_receipt_date(receipt_date_str)
+        receipt_date = ReceiptDateParser.parse(receipt_date_str)
         total_sum = Decimal(str(receipt_data.get('total_sum', 0)))
 
         receipt = self.receipt_creator_service.create_receipt_with_products(
@@ -361,65 +366,6 @@ class PendingReceiptService:
             image_field.delete(save=False)
         pending_receipt.delete()
 
-    def _parse_receipt_date(self, date_str: str) -> datetime:
-        """Parse receipt date string to datetime.
-
-        Args:
-            date_str: Date string in DD.MM.YYYY HH:MM format.
-
-        Returns:
-            Timezone-aware datetime instance.
-        """
-        try:
-            day, month, year = date_str.split(' ', maxsplit=1)[0].split('.')
-            hour, minute = date_str.split(' ')[1].split(':')
-            return datetime(
-                int(year),
-                int(month),
-                int(day),
-                int(hour),
-                int(minute),
-                tzinfo=timezone.get_current_timezone(),
-            )
-        except (ValueError, IndexError):
-            normalized_date = self._normalize_date(date_str)
-            day, month, year = normalized_date.split(' ')[0].split('.')
-            hour, minute = normalized_date.split(' ')[1].split(':')
-            return datetime(
-                int(year),
-                int(month),
-                int(day),
-                int(hour),
-                int(minute),
-                tzinfo=timezone.get_current_timezone(),
-            )
-
-    def _normalize_date(self, date_str: str) -> str:
-        """Normalize date string to standard format.
-
-        Args:
-            date_str: Date string in various formats.
-
-        Returns:
-            Normalized date string in DD.MM.YYYY HH:MM format.
-        """
-        try:
-            day, month, year = date_str.split(' ', maxsplit=1)[0].split('.')
-            hour, minute = date_str.split(' ')[1].split(':')
-            aware_dt = datetime(
-                int(year),
-                int(month),
-                int(day),
-                int(hour),
-                int(minute),
-                tzinfo=timezone.get_current_timezone(),
-            )
-            return aware_dt.strftime('%d.%m.%Y %H:%M')
-        except ValueError:
-            day, month, year_short, time = date_str.replace(' ', '.').split('.')
-            current_century = str(timezone.now().year)[:2]
-            return f'{day}.{month}.{current_century}{year_short} {time}'
-
     def _convert_to_optional_decimal(
         self,
         value: str | float | None,
@@ -435,6 +381,40 @@ class PendingReceiptService:
         if value is None:
             return None
         return Decimal(str(value))
+
+    def _status_for_receipt_data(
+        self,
+        receipt_data: dict[str, Any],
+    ) -> PendingReceiptStatus:
+        if self._has_total_sum_warning(receipt_data):
+            return PendingReceiptStatus.READY_WITH_WARNING
+        return PendingReceiptStatus.READY
+
+    def _has_total_sum_warning(self, receipt_data: dict[str, Any]) -> bool:
+        try:
+            total_sum = self._parse_decimal(receipt_data.get('total_sum'))
+            items = receipt_data.get('items', [])
+            if not isinstance(items, list):
+                return False
+            items_total = sum(
+                (
+                    self._parse_decimal(item.get('amount'))
+                    for item in items
+                    if isinstance(item, dict)
+                ),
+                Decimal(0),
+            )
+        except (InvalidOperation, TypeError, ValueError):
+            return False
+
+        if total_sum <= 0 or items_total <= 0:
+            return False
+        return abs(total_sum - items_total) > total_sum * _TOTAL_WARNING_RATIO
+
+    def _parse_decimal(self, value: Any) -> Decimal:
+        if isinstance(value, bool) or value is None:
+            raise ValueError
+        return Decimal(str(value).replace(',', '.').replace(' ', ''))
 
 
 __all__ = [

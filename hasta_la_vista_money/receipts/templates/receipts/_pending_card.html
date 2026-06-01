@@ -22,7 +22,7 @@
             </div>
         </header>
 
-    {% elif pending.status == 'ready' %}
+    {% elif pending.status == 'ready' or pending.status == 'ready_with_warning' %}
         <div class="pending-card-swipe-actions" data-swipe-actions aria-hidden="true">
             <a href="{% url 'receipts:review' pending.id %}"
                class="swipe-action-btn is-accent"
@@ -50,9 +50,15 @@
                         <i class="bi bi-calendar-event"></i>
                         {{ pending.receipt_data.receipt_date|default:'—' }}
                     </div>
-                    <p class="pending-card-warning">
-                        {% translate 'Чек обработан, но не сохранён, проверьте корректность данных и сохраните чек.' %}
-                    </p>
+                    {% if pending.status == 'ready_with_warning' %}
+                        <p class="pending-card-warning">
+                            {% translate 'Сумма позиций отличается от итога чека больше чем на 5%. Проверьте данные перед сохранением.' %}
+                        </p>
+                    {% else %}
+                        <p class="pending-card-warning">
+                            {% translate 'Чек обработан, но не сохранён, проверьте корректность данных и сохраните чек.' %}
+                        </p>
+                    {% endif %}
                 </div>
                 <div class="pending-card-amount receipts-amount receipts-positive">
                     {{ pending.receipt_data.total_sum|default:0|comma }}

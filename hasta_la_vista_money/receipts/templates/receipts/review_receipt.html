@@ -32,6 +32,13 @@
                 <div class="receipts-upload-error">{{ form.non_field_errors }}</div>
             {% endif %}
 
+            {% if total_sum_warning %}
+                <div class="receipt-review-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span>{% translate 'Сумма позиций отличается от итога чека больше чем на 5%. Проверьте итоговую сумму и позиции перед сохранением.' %}</span>
+                </div>
+            {% endif %}
+
             <div class="receipt-review-grid">
                 {% if pending_receipt.image_file %}
                     <aside class="receipts-side-card receipt-review-photo">

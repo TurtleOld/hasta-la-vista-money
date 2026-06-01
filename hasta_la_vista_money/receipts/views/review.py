@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from django.contrib import messages
@@ -33,6 +33,10 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
+_REVIEWABLE_STATUSES = {
+    PendingReceiptStatus.READY,
+    PendingReceiptStatus.READY_WITH_WARNING,
+}
 
 
 class ReviewPendingReceiptView(
@@ -43,10 +47,10 @@ class ReviewPendingReceiptView(
     """View for reviewing and editing pending receipt before final save."""
 
     template_name = 'receipts/review_receipt.html'
-    success_url: ClassVar[str] = cast(
+    success_url = cast(
         'str',
         reverse_lazy('receipts:list'),
-    )  # type: ignore[misc]
+    )
 
     def dispatch(
         self,
@@ -80,7 +84,7 @@ class ReviewPendingReceiptView(
             )
             pending_receipt.delete()
             return redirect('receipts:upload')
-        if pending_receipt.status != PendingReceiptStatus.READY:
+        if pending_receipt.status not in _REVIEWABLE_STATUSES:
             messages.error(
                 request,
                 _(
@@ -89,7 +93,7 @@ class ReviewPendingReceiptView(
                 ),
             )
             return redirect('receipts:list')
-        return super().dispatch(request, *args, **kwargs)
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def get_form_class(self) -> type[Form]:
         """Get form class for pending receipt review.
@@ -125,8 +129,11 @@ class ReviewPendingReceiptView(
         context = super().get_context_data(**kwargs)
         pending_receipt = self.get_pending_receipt()
         context['pending_receipt'] = pending_receipt
+        context['total_sum_warning'] = (
+            pending_receipt.status == PendingReceiptStatus.READY_WITH_WARNING
+        )
 
-        receipt_data = pending_receipt.receipt_data
+        receipt_data = pending_receipt.receipt_data or {}
         products_data = receipt_data.get('items', [])
 
         if self.request.method == 'POST':

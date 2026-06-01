@@ -512,6 +512,7 @@ class PendingReceiptStatus(models.TextChoices):
 
     PROCESSING = 'processing', _('В обработке')
     READY = 'ready', _('Готов к проверке')
+    READY_WITH_WARNING = 'ready_with_warning', _('Готов с предупреждением')
     FAILED = 'failed', _('Ошибка обработки')
 
 
@@ -526,7 +527,7 @@ class PendingReceipt(models.Model):
     Attributes:
         user: Foreign key to the User who uploaded the receipt.
         account: Foreign key to the Account used for this receipt.
-        status: Lifecycle status (processing, ready, failed).
+        status: Lifecycle status.
         image_file: Source image stored in MEDIA_ROOT for background processing
             and retries; deleted on conversion or manual removal.
         image_hash: SHA-256 hex digest of the source image for deduplication.
@@ -594,7 +595,7 @@ class PendingReceipt(models.Model):
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to set expires_at if not provided."""
-        if not self.expires_at:
+        if getattr(self, 'expires_at', None) is None:
             self.expires_at = timezone.now() + timedelta(
                 hours=settings.PENDING_RECEIPT_EXPIRY_HOURS,
             )

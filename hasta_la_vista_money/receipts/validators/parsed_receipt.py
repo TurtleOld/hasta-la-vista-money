@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Final
+
+from hasta_la_vista_money.receipts.parsers.date_parser import (
+    ReceiptDateParseError,
+    ReceiptDateParser,
+)
 
 
 class ReceiptParseValidationError(ValueError):
@@ -80,8 +84,6 @@ REQUIRED_ITEM_FIELDS: Final[frozenset[str]] = frozenset(
     {'product_name', 'price', 'quantity', 'amount'},
 )
 ALLOWED_OPERATION_TYPES: Final[frozenset[int]] = frozenset({1, 2, 3, 4})
-TOTAL_SUM_TOLERANCE_RATIO: Final[Decimal] = Decimal('0.02')
-TOTAL_SUM_TOLERANCE_MIN: Final[Decimal] = Decimal('1.00')
 
 RECEIPT_PARSE_SCHEMA: Final[dict[str, Any]] = {
     'type': 'object',
@@ -211,7 +213,7 @@ def validate_receipt_parse_payload(
             user_message=_USER_MSG_BAD_TOTAL,
         )
 
-    _validate_items_total(total_sum, items)
+    _validate_items_total(items)
 
     operation_type = _parse_int(
         payload.get('operation_type'),
@@ -312,25 +314,11 @@ def _validate_item(value: Any, *, index: int) -> ReceiptParseItem:
     )
 
 
-def _validate_items_total(
-    total_sum: Decimal,
-    items: tuple[ReceiptParseItem, ...],
-) -> None:
+def _validate_items_total(items: tuple[ReceiptParseItem, ...]) -> None:
     items_total = sum((item.amount for item in items), Decimal(0))
     if items_total <= 0:
         raise ReceiptParseValidationError(
             'receipt.items total must be positive',
-            user_message=_USER_MSG_TOTAL_MISMATCH,
-        )
-
-    allowed_diff = max(
-        total_sum * TOTAL_SUM_TOLERANCE_RATIO,
-        TOTAL_SUM_TOLERANCE_MIN,
-    )
-    if abs(total_sum - items_total) > allowed_diff:
-        raise ReceiptParseValidationError(
-            'receipt.total_sum differs from receipt.items total by more '
-            'than 2%',
             user_message=_USER_MSG_TOTAL_MISMATCH,
         )
 
@@ -453,16 +441,13 @@ def _parse_receipt_date(value: Any) -> str:
         'receipt.receipt_date',
         user_message=_USER_MSG_BAD_DATE,
     )
-    for date_format in ('%d.%m.%Y %H:%M', '%d.%m.%y %H:%M'):
-        try:
-            parsed = datetime.strptime(text, date_format).replace(tzinfo=UTC)
-        except ValueError:
-            continue
-        return parsed.strftime('%d.%m.%Y %H:%M')
-    raise ReceiptParseValidationError(
-        'receipt.receipt_date must be parseable as DD.MM.YYYY HH:MM',
-        user_message=_USER_MSG_BAD_DATE,
-    )
+    try:
+        return ReceiptDateParser.normalize(text)
+    except ReceiptDateParseError as exc:
+        raise ReceiptParseValidationError(
+            'receipt.receipt_date must be parseable as DD.MM.YYYY HH:MM',
+            user_message=_USER_MSG_BAD_DATE,
+        ) from exc
 
 
 def _format_decimal(value: Decimal) -> str:
