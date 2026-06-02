@@ -86,10 +86,17 @@ class ReceiptCreatorService:
         """
 
         account_balance = self.account_repository.get_by_id(account.pk)
-        self.account_service.apply_receipt_spend(
-            account_balance,
-            receipt_data.total_sum,
-        )
+        is_refund = receipt_data.operation_type in {2, 4}
+        if is_refund:
+            self.account_service.refund_to_account(
+                account_balance,
+                receipt_data.total_sum,
+            )
+        else:
+            self.account_service.apply_receipt_spend(
+                account_balance,
+                receipt_data.total_sum,
+            )
 
         if seller_id is not None:
             try:
@@ -165,7 +172,11 @@ class ReceiptCreatorService:
         if account_balance.user != user:
             return None
 
-        self.account_service.apply_receipt_spend(account_balance, total_sum)
+        is_refund = receipt.operation_type in {2, 4}
+        if is_refund:
+            self.account_service.refund_to_account(account_balance, total_sum)
+        else:
+            self.account_service.apply_receipt_spend(account_balance, total_sum)
 
         receipt.user = user
         receipt.seller = seller

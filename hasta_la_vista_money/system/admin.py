@@ -5,13 +5,21 @@ from hasta_la_vista_money.system.models import AuditLog
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
-    list_display = ('created_at', 'user', 'model_name', 'object_pk', 'action')
+    list_display = (
+        'created_at',
+        'user',
+        'model_name',
+        'object_pk',
+        'object_name',
+        'action',
+    )
     list_filter = ('action', 'model_name', 'created_at')
     list_select_related = ('user',)
     readonly_fields = (
         'user',
         'model_name',
         'object_pk',
+        'object_name',
         'action',
         'diff',
         'created_at',

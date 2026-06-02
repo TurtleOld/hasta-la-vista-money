@@ -522,6 +522,64 @@ if not cached_data:
 
 ---
 
+## 📝 Правила коммитов (Conventional Commits)
+
+Проект использует [Conventional Commits](https://www.conventionalcommits.org/) для автоматического управления версиями через **Release Please**.
+
+### Формат коммита
+
+```
+<type>(<scope>): <description>
+```
+
+**Важно:** тип и описание — строчными буквами, двоеточие обязательно. Release Please **игнорирует** коммиты без этого формата.
+
+### Типы коммитов
+
+| Тип | Описание | Влияние на версию |
+|---|---|---|
+| `feat` | Новая функциональность | MINOR (2.1.0 → 2.2.0) |
+| `fix` | Исправление бага | PATCH (2.1.0 → 2.1.1) |
+| `chore` | Обслуживание, зависимости | нет |
+| `docs` | Документация | нет |
+| `test` | Тесты | нет |
+| `refactor` | Рефакторинг без новой функциональности | нет |
+| `perf` | Оптимизация производительности | нет |
+| `ci` | Изменения CI/CD | нет |
+
+Для **BREAKING CHANGE** (MAJOR) добавляйте `!` после типа: `feat!: ...` или указывайте `BREAKING CHANGE:` в теле коммита.
+
+### Примеры
+
+```bash
+# ✅ Правильно
+git commit -m "fix(sberbank): correct grace period debt calculation"
+git commit -m "feat(receipts): add QR code validation"
+git commit -m "fix: prevent negative balance on account withdrawal"
+
+# ❌ Неправильно — Release Please проигнорирует
+git commit -m "Fix Sberbank grace period debt calculation"
+git commit -m "Fixed bug in receipts"
+git commit -m "FEAT: add new feature"
+```
+
+### Scope (необязательный, но рекомендуемый)
+
+Используйте название Django-приложения: `finance_account`, `receipts`, `expense`, `income`, `loan`, `budget`, `api`, `auth`.
+
+### Если коммит не попал в Release Please PR
+
+Если коммит был смерджен без правильного формата и не появился в Release Please PR — добавьте пустой коммит с корректным сообщением:
+
+```bash
+git commit --allow-empty -m "fix(sberbank): correct grace period debt calculation"
+git push
+```
+
+Release Please подхватит его при следующем запуске и обновит PR с changelog.
+
+---
+
 ## 📖 Дополнительные ресурсы
 
 - [Документация проекта](https://hasta-la-vista-money.readthedocs.io/)

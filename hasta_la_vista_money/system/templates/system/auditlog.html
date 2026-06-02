@@ -84,7 +84,7 @@
             {% if entries %}
             <div class="audit-list-head">
                 <div>{% translate 'Действие' %}</div>
-                <div>{% translate 'Модель / ID' %}</div>
+                <div>{% translate 'Объект' %}</div>
                 <div>{% translate 'Изменения' %}</div>
                 <div>{% translate 'Дата' %}</div>
             </div>
@@ -107,14 +107,32 @@
 
                     <div class="audit-row-model">
                         <span class="audit-model-name">{{ entry.model_name }}</span>
-                        <span class="audit-model-pk">#{{ entry.object_pk }}</span>
+                        {% if entry.object_name %}
+                            <span class="audit-model-object-name">{{ entry.object_name }}</span>
+                        {% else %}
+                            <span class="audit-model-pk">#{{ entry.object_pk }}</span>
+                        {% endif %}
                     </div>
 
                     <div class="audit-diff-cell">
-                        {% if entry.action == 'create' %}
-                            <span class="audit-diff-count">
-                                {{ entry.diff.created|length }} {% translate 'полей' %}
-                            </span>
+                        {% if entry.action == 'create' and entry.diff.created %}
+                            <div class="audit-diff-list">
+                                {% for field_name, value in entry.diff.created.items %}
+                                <div class="audit-diff-item audit-diff-item--create">
+                                    <span class="audit-diff-field">{{ field_name }}</span>
+                                    <span class="audit-diff-new">{{ value|default:"—" }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% elif entry.action == 'delete' and entry.diff.deleted %}
+                            <div class="audit-diff-list">
+                                {% for field_name, value in entry.diff.deleted.items %}
+                                <div class="audit-diff-item audit-diff-item--delete">
+                                    <span class="audit-diff-field">{{ field_name }}</span>
+                                    <span class="audit-diff-old">{{ value|default:"—" }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
                         {% elif entry.action == 'delete' %}
                             <span class="audit-diff-deleted">{% translate 'Удалено' %}</span>
                         {% elif entry.diff %}
