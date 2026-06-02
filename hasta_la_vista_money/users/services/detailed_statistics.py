@@ -1758,9 +1758,72 @@ def _card_months_block(
     return months, history
 
 
+def _collect_card_payments(
+    card: Account,
+    period_start: date,
+    period_end: date,
+) -> list[PaymentItemDict]:
+    """Collect all credit-card repayments in the period.
+
+    Includes both TransferMoneyLog entries (canonical repayments) and
+    income transactions, since users sometimes record repayments as
+    income rather than inter-account transfers.
+    """
+    transfers = list(
+        TransferMoneyLog.objects.filter(
+            user=card.user,
+            to_account=card,
+            exchange_date__date__gte=period_start,
+            exchange_date__date__lte=period_end,
+        ).values('amount', 'exchange_date'),
+    )
+    income_txns = list(
+        Transaction.objects.filter(
+            user=card.user,
+            account=card,
+            type=TransactionType.INCOME,
+            date__date__gte=period_start,
+            date__date__lte=period_end,
+        ).values('amount', 'date'),
+    )
+    return [
+        {'amount': Decimal(str(p['amount'])), 'date': p['exchange_date']}
+        for p in transfers
+    ] + [
+        {'amount': Decimal(str(p['amount'])), 'date': p['date']}
+        for p in income_txns
+    ]
+
+
+def _pre_period_debt_for_card(
+    card: Account,
+    payments: list[PaymentItemDict],
+    months: list[CardMonthDict],
+) -> float:
+    """Compute the credit-card debt that existed before the tracked period.
+
+    Uses the current account balance as an anchor:
+        debt_at_period_start =
+            (limit - balance) + period_income - period_expenses
+
+    Payments are applied to this old debt first; only the surplus is
+    available to reduce current-period month balances.
+    """
+    limit = float(card.limit_credit or 0)
+    if limit <= constants.ZERO:
+        return constants.ZERO
+    total_income = sum(float(p['amount']) for p in payments)
+    total_expenses = sum(float(m['debt_for_month']) for m in months)
+    return max(
+        limit - float(card.balance) + total_income - total_expenses,
+        constants.ZERO,
+    )
+
+
 def _apply_payments_to_months(
     months: list[CardMonthDict],
     payments: list[PaymentItemDict],
+    pre_period_debt: float = 0.0,
 ) -> None:
     for m in months:
         debt = float(m['debt_for_month'])
@@ -1772,7 +1835,7 @@ def _apply_payments_to_months(
         paid_before_due = sum(
             float(p['amount']) for p in payments if p['date'] <= m['grace_end']
         )
-        prior_debt = sum(
+        prior_debt = pre_period_debt + sum(
             float(prev['debt_for_month'])
             for prev in months
             if prev['grace_end'] < m['grace_end']
@@ -1936,22 +1999,9 @@ def compute_total_payment_schedule_debt(
             account_service=account_service,
         )
 
-        payments_raw = list(
-            TransferMoneyLog.objects.filter(
-                user=card.user,
-                to_account=card,
-                exchange_date__date__gte=period_start,
-                exchange_date__date__lte=period_end,
-            ).values('amount', 'exchange_date'),
-        )
-        payments: list[PaymentItemDict] = [
-            {
-                'amount': Decimal(str(p['amount'])),
-                'date': p['exchange_date'],
-            }
-            for p in payments_raw
-        ]
-        _apply_payments_to_months(months, payments)
+        payments = _collect_card_payments(card, period_start, period_end)
+        pre_period_debt = _pre_period_debt_for_card(card, payments, months)
+        _apply_payments_to_months(months, payments, pre_period_debt)
         schedule = _build_payment_schedule(months, history, card)
         total += _payment_schedule_remaining_debt(schedule)
 
@@ -1981,22 +2031,9 @@ def _credit_cards_block(
             account_service=account_service,
         )
 
-        payments_raw = list(
-            TransferMoneyLog.objects.filter(
-                user=card.user,
-                to_account=card,
-                exchange_date__date__gte=period_start,
-                exchange_date__date__lte=period_end,
-            ).values('amount', 'exchange_date'),
-        )
-        payments: list[PaymentItemDict] = [
-            {
-                'amount': Decimal(str(p['amount'])),
-                'date': p['exchange_date'],
-            }
-            for p in payments_raw
-        ]
-        _apply_payments_to_months(months, payments)
+        payments = _collect_card_payments(card, period_start, period_end)
+        pre_period_debt = _pre_period_debt_for_card(card, payments, months)
+        _apply_payments_to_months(months, payments, pre_period_debt)
         schedule = _build_payment_schedule(months, history, card)
 
         current_info = account_service.calculate_grace_period_info(
