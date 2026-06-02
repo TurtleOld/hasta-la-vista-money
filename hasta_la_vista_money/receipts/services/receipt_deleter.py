@@ -16,11 +16,18 @@ class ReceiptDeleterService:
 
     @transaction.atomic
     def delete_receipt(self, *, user: User, receipt: Receipt) -> None:
-        """Delete receipt and refund its total through BalanceService."""
-        self.account_service.refund_to_account(
-            receipt.account,
-            receipt.total_sum,
-        )
+        """Delete receipt and reverse its balance effect."""
+        is_refund = receipt.operation_type in {2, 4}
+        if is_refund:
+            self.account_service.apply_receipt_spend(
+                receipt.account,
+                receipt.total_sum,
+            )
+        else:
+            self.account_service.refund_to_account(
+                receipt.account,
+                receipt.total_sum,
+            )
 
         for product in receipt.product.all():
             product.delete()
