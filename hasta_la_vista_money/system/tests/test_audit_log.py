@@ -21,7 +21,8 @@ class AuditLogTests(TestCase):
             action=AuditLog.Action.CREATE,
         )
         self.assertEqual(audit_log.user, user)
-        self.assertEqual(audit_log.diff['created']['balance'], '100.00')
+        self.assertEqual(audit_log.object_name, account.name_account)
+        self.assertEqual(audit_log.diff['created']['Баланс'], '100.00')
 
     def test_audit_log_created_for_financial_model_update(self) -> None:
         user = User.objects.create_user(username='audit-user')
@@ -36,7 +37,7 @@ class AuditLogTests(TestCase):
             action=AuditLog.Action.UPDATE,
         )
         self.assertEqual(
-            audit_log.diff['balance'],
+            audit_log.diff['Баланс'],
             {'old': '100.00', 'new': '75.50'},
         )
 
@@ -53,4 +54,4 @@ class AuditLogTests(TestCase):
             action=AuditLog.Action.DELETE,
         )
         self.assertEqual(audit_log.user, user)
-        self.assertEqual(audit_log.diff['deleted']['balance'], '100.00')
+        self.assertEqual(audit_log.diff['deleted']['Баланс'], '100.00')

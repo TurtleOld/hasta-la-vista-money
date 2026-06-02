@@ -287,6 +287,15 @@
   font-size: 0.7rem;
 }
 
+.audit-model-object-name {
+  color: var(--audit-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .audit-diff-cell {
   min-width: 0;
 }
@@ -315,6 +324,16 @@
   font-size: 0.75rem;
   gap: 0.3rem;
   color: var(--audit-muted);
+}
+
+.audit-diff-item--create .audit-diff-new {
+  text-decoration: none;
+}
+
+.audit-diff-item--delete .audit-diff-old {
+  text-decoration: none;
+  color: var(--audit-negative);
+  opacity: 0.85;
 }
 
 .audit-diff-field {

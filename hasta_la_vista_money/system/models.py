@@ -33,6 +33,12 @@ class AuditLog(models.Model):
         max_length=constants.ONE_HUNDRED,
         verbose_name=_('ID объекта'),
     )
+    object_name = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        blank=True,
+        default='',
+        verbose_name=_('Название объекта'),
+    )
     action = models.CharField(
         max_length=constants.TWENTY,
         choices=Action.choices,
