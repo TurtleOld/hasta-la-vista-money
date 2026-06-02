@@ -1803,7 +1803,8 @@ def _pre_period_debt_for_card(
     """Compute the credit-card debt that existed before the tracked period.
 
     Uses the current account balance as an anchor:
-        debt_at_period_start = (limit - balance) + period_income - period_expenses
+        debt_at_period_start =
+            (limit - balance) + period_income - period_expenses
 
     Payments are applied to this old debt first; only the surplus is
     available to reduce current-period month balances.
