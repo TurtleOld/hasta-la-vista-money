@@ -1,5 +1,14 @@
 # История изменений
 
+## [2.1.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.1.0...v2.1.1) (2026-06-02)
+
+
+### Bug Fixes
+
+* **finances:** fix E501 line too long in _pre_period_debt_for_card docstring ([ae9488f](https://github.com/TurtleOld/hasta-la-vista-money/commit/ae9488fcdd3d72cefcae113d45964def894deb83))
+* **finances:** include income repayments and pre-period debt in credit card payment schedule ([b11dd2c](https://github.com/TurtleOld/hasta-la-vista-money/commit/b11dd2c9e615d425e3a198fd9e3ed247bdbc6b41))
+* **finances:** include income repayments and pre-period debt in credit card payment schedule ([f3534cc](https://github.com/TurtleOld/hasta-la-vista-money/commit/f3534cc2075a2ac48606851cbbf5ce64113ce4a0))
+
 ## [2.1.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.0.0...v2.1.0) (2026-06-01)
 
 
