@@ -1,5 +1,22 @@
 # История изменений
 
+## [2.2.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.1.1...v2.2.0) (2026-06-02)
+
+
+### Features
+
+* **system:** enrich audit log with object names and human-readable field labels ([4c8a5ba](https://github.com/TurtleOld/hasta-la-vista-money/commit/4c8a5bacd5946dca7ec0da1764b900f79120c797))
+
+
+### Bug Fixes
+
+* **receipts:** apply refund to balance for return receipt operation types ([30a4e6a](https://github.com/TurtleOld/hasta-la-vista-money/commit/30a4e6add610a69c2a7bf8af70fd491c9b82ed01))
+
+
+### Documentation
+
+* **agents:** update AGENTS.md ([29ccdc4](https://github.com/TurtleOld/hasta-la-vista-money/commit/29ccdc4b37d7efcce502ada442fe16b067bef570))
+
 ## [2.1.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.1.0...v2.1.1) (2026-06-02)
 
 
