@@ -64,32 +64,26 @@ class TransactionServiceTest(TestCase):
         )
 
     def test_add_income_increases_account_balance(self) -> None:
-        with patch(
-            'hasta_la_vista_money.transactions.services.transaction_ops.invalidate_user_detailed_statistics_cache',
-        ):
-            self.service.add_transaction(
-                user=self.user,
-                account=self.account,
-                category=self.income_category,
-                amount=Decimal('500.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.INCOME,
-            )
+        self.service.add_transaction(
+            user=self.user,
+            account=self.account,
+            category=self.income_category,
+            amount=Decimal('500.00'),
+            transaction_date=date(2026, 4, 1),
+            type_value=TransactionType.INCOME,
+        )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1500.00'))
 
     def test_add_expense_decreases_account_balance(self) -> None:
-        with patch(
-            'hasta_la_vista_money.transactions.services.transaction_ops.invalidate_user_detailed_statistics_cache',
-        ):
-            self.service.add_transaction(
-                user=self.user,
-                account=self.account,
-                category=self.expense_category,
-                amount=Decimal('200.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.EXPENSE,
-            )
+        self.service.add_transaction(
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('200.00'),
+            transaction_date=date(2026, 4, 1),
+            type_value=TransactionType.EXPENSE,
+        )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('800.00'))
 
@@ -121,41 +115,35 @@ class TransactionServiceTest(TestCase):
             )
 
     def test_update_changes_amount_and_reverses_old(self) -> None:
-        with patch(
-            'hasta_la_vista_money.transactions.services.transaction_ops.invalidate_user_detailed_statistics_cache',
-        ):
-            tx = self.service.add_transaction(
-                user=self.user,
-                account=self.account,
-                category=self.expense_category,
-                amount=Decimal('200.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.EXPENSE,
-            )
-            self.service.update_transaction(
-                user=self.user,
-                transaction_obj=tx,
-                account=self.account,
-                category=self.expense_category,
-                amount=Decimal('300.00'),
-                transaction_date=date(2026, 4, 2),
-                type_value=TransactionType.EXPENSE,
-            )
+        tx = self.service.add_transaction(
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('200.00'),
+            transaction_date=date(2026, 4, 1),
+            type_value=TransactionType.EXPENSE,
+        )
+        self.service.update_transaction(
+            user=self.user,
+            transaction_obj=tx,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('300.00'),
+            transaction_date=date(2026, 4, 2),
+            type_value=TransactionType.EXPENSE,
+        )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('700.00'))
 
     def test_update_rejects_foreign_transaction(self) -> None:
-        with patch(
-            'hasta_la_vista_money.transactions.services.transaction_ops.invalidate_user_detailed_statistics_cache',
-        ):
-            tx = self.service.add_transaction(
-                user=self.user,
-                account=self.account,
-                category=self.income_category,
-                amount=Decimal('10.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.INCOME,
-            )
+        tx = self.service.add_transaction(
+            user=self.user,
+            account=self.account,
+            category=self.income_category,
+            amount=Decimal('10.00'),
+            transaction_date=date(2026, 4, 1),
+            type_value=TransactionType.INCOME,
+        )
         other = User.objects.create_user(
             username='ext',
             password=TEST_PASSWORD,
@@ -173,21 +161,18 @@ class TransactionServiceTest(TestCase):
             )
 
     def test_delete_reverses_balance(self) -> None:
-        with patch(
-            'hasta_la_vista_money.transactions.services.transaction_ops.invalidate_user_detailed_statistics_cache',
-        ):
-            tx = self.service.add_transaction(
-                user=self.user,
-                account=self.account,
-                category=self.income_category,
-                amount=Decimal('100.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.INCOME,
-            )
-            self.service.delete_transaction(
-                user=self.user,
-                transaction_obj=tx,
-            )
+        tx = self.service.add_transaction(
+            user=self.user,
+            account=self.account,
+            category=self.income_category,
+            amount=Decimal('100.00'),
+            transaction_date=date(2026, 4, 1),
+            type_value=TransactionType.INCOME,
+        )
+        self.service.delete_transaction(
+            user=self.user,
+            transaction_obj=tx,
+        )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1000.00'))
 
@@ -212,21 +197,18 @@ class TransactionServiceTest(TestCase):
             )
 
     def test_copy_duplicates_transaction_and_adjusts_balance(self) -> None:
-        with patch(
-            'hasta_la_vista_money.transactions.services.transaction_ops.invalidate_user_detailed_statistics_cache',
-        ):
-            original = self.service.add_transaction(
-                user=self.user,
-                account=self.account,
-                category=self.income_category,
-                amount=Decimal('100.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.INCOME,
-            )
-            duplicate = self.service.copy_transaction(
-                user=self.user,
-                transaction_id=original.pk,
-            )
+        original = self.service.add_transaction(
+            user=self.user,
+            account=self.account,
+            category=self.income_category,
+            amount=Decimal('100.00'),
+            transaction_date=date(2026, 4, 1),
+            type_value=TransactionType.INCOME,
+        )
+        duplicate = self.service.copy_transaction(
+            user=self.user,
+            transaction_id=original.pk,
+        )
         self.assertEqual(duplicate.amount, original.amount)
         self.assertNotEqual(duplicate.pk, original.pk)
         self.account.refresh_from_db()
@@ -258,26 +240,23 @@ class TransactionServiceTest(TestCase):
         second_account.balance = Decimal('500.00')
         second_account.save()
 
-        with patch(
-            'hasta_la_vista_money.transactions.services.transaction_ops.invalidate_user_detailed_statistics_cache',
-        ):
-            tx = self.service.add_transaction(
-                user=self.user,
-                account=self.account,
-                category=self.expense_category,
-                amount=Decimal('100.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.EXPENSE,
-            )
-            self.service.update_transaction(
-                user=self.user,
-                transaction_obj=tx,
-                account=second_account,
-                category=self.expense_category,
-                amount=Decimal('100.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.EXPENSE,
-            )
+        tx = self.service.add_transaction(
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('100.00'),
+            transaction_date=date(2026, 4, 1),
+            type_value=TransactionType.EXPENSE,
+        )
+        self.service.update_transaction(
+            user=self.user,
+            transaction_obj=tx,
+            account=second_account,
+            category=self.expense_category,
+            amount=Decimal('100.00'),
+            transaction_date=date(2026, 4, 1),
+            type_value=TransactionType.EXPENSE,
+        )
 
         self.account.refresh_from_db()
         second_account.refresh_from_db()
@@ -316,17 +295,11 @@ class CategoryServiceTest(TestCase):
 
     def test_create_category_persists_and_invalidates_cache(self) -> None:
         form = self._build_form('Аренда', TransactionType.EXPENSE)
-        with (
-            patch(
-                'hasta_la_vista_money.transactions.services.category_ops.invalidate_user_detailed_statistics_cache',
-            ) as invalidate,
-            patch(
-                'hasta_la_vista_money.transactions.services.category_ops.cache.delete',
-            ) as cache_delete,
-        ):
+        with patch(
+            'hasta_la_vista_money.transactions.services.category_ops.cache.delete',
+        ) as cache_delete:
             created = self.service.create_category(self.user, form)
         self.assertTrue(Category.objects.filter(pk=created.pk).exists())
-        invalidate.assert_called_once_with(self.user.pk)
         self.assertEqual(cache_delete.call_count, 5)
 
     def test_update_category_changes_name(self) -> None:
@@ -336,8 +309,5 @@ class CategoryServiceTest(TestCase):
             type=TransactionType.EXPENSE,
         )
         form = self._build_form('Новое', TransactionType.EXPENSE)
-        with patch(
-            'hasta_la_vista_money.transactions.services.category_ops.invalidate_user_detailed_statistics_cache',
-        ):
-            updated = self.service.update_category(self.user, original, form)
+        updated = self.service.update_category(self.user, original, form)
         self.assertEqual(updated.name, 'Новое')

@@ -131,6 +131,9 @@ known-first-party = ["hasta_la_vista_money"]
   "PLC0415",  # circular import broken by lazy import
   "E501",     # long import lines due to lazy import workaround
 ]
+"**/users/apps.py" = [
+  "PLC0415",  # signals import must be deferred to ready()
+]
 "**/tests/*.py" = [
   "S101", # asserts
   "S105", # hardcoded passwords

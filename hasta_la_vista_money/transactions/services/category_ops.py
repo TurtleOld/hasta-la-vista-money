@@ -7,9 +7,6 @@ from django.core.cache import cache
 from hasta_la_vista_money.transactions.forms import CategoryForm
 from hasta_la_vista_money.transactions.models import Category
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.cache import (
-    invalidate_user_detailed_statistics_cache,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.transactions.repositories.category_repository import (  # noqa: E501
@@ -44,7 +41,6 @@ class CategoryService:
             parent_category=instance.parent_category,
         )
         self._invalidate_tree_cache(user, new_category.type)
-        invalidate_user_detailed_statistics_cache(user.pk)
         return new_category
 
     def update_category(
@@ -60,5 +56,4 @@ class CategoryService:
             category.type = form.cleaned_data['type']
         category.save()
         self._invalidate_tree_cache(user, category.type)
-        invalidate_user_detailed_statistics_cache(user.pk)
         return category

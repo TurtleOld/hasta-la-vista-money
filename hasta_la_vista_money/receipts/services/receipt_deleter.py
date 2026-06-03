@@ -3,9 +3,6 @@ from django.db import transaction
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.cache import (
-    invalidate_user_detailed_statistics_cache,
-)
 
 
 class ReceiptDeleterService:
@@ -33,6 +30,3 @@ class ReceiptDeleterService:
             product.delete()
 
         receipt.delete()
-        transaction.on_commit(
-            lambda: invalidate_user_detailed_statistics_cache(user.pk),
-        )

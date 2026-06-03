@@ -22,9 +22,6 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.cache import (
-    invalidate_user_detailed_statistics_cache,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.transactions.repositories.transaction_repository import (  # noqa: E501
@@ -118,9 +115,6 @@ class TransactionService:
                 type=type_value,
             )
             self._apply_balance_for_create(account, amount, type_value)
-            db_transaction.on_commit(
-                lambda: invalidate_user_detailed_statistics_cache(user.pk),
-            )
         return new_transaction
 
     def update_transaction(
@@ -166,9 +160,6 @@ class TransactionService:
                 date_value = timezone.make_aware(date_value)
             transaction_obj.date = date_value
             transaction_obj.save()
-            db_transaction.on_commit(
-                lambda: invalidate_user_detailed_statistics_cache(user.pk),
-            )
         return transaction_obj
 
     def delete_transaction(
@@ -186,9 +177,6 @@ class TransactionService:
                 transaction_obj.type,
             )
             transaction_obj.delete()
-            db_transaction.on_commit(
-                lambda: invalidate_user_detailed_statistics_cache(user.pk),
-            )
 
     def copy_transaction(
         self,
@@ -215,8 +203,5 @@ class TransactionService:
                 new_transaction.account,
                 new_transaction.amount,
                 new_transaction.type,
-            )
-            db_transaction.on_commit(
-                lambda: invalidate_user_detailed_statistics_cache(user.pk),
             )
         return new_transaction
