@@ -109,6 +109,20 @@ class BalanceService:
         """
         return old_account.pk == new_account.pk
 
+    def apply_balance_delta(self, account: Account, delta: Decimal) -> Account:
+        """Apply a pre-computed signed delta to the account balance and save.
+
+        Args:
+            account: Account to update.
+            delta: Signed amount (positive = income, negative = expense).
+
+        Returns:
+            Updated Account instance.
+        """
+        account.balance += delta
+        account.save(update_fields=['balance'])
+        return account
+
     def reconcile_account_balances(
         self,
         old_account: Account,

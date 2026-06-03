@@ -8,8 +8,10 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.services.balance_service import (
+    BalanceService,
+)
 from hasta_la_vista_money.finance_account.validators import (
-    validate_account_balance,
     validate_different_accounts,
     validate_positive_amount,
 )
@@ -42,6 +44,7 @@ class TransferService:
                 operations.
         """
         self.transfer_money_log_repository = transfer_money_log_repository
+        self._balance_service = BalanceService()
 
     @transaction.atomic
     def transfer_money(
@@ -72,12 +75,9 @@ class TransferService:
         """
         validate_positive_amount(amount)
         validate_different_accounts(from_account, to_account)
-        validate_account_balance(from_account, amount)
 
-        from_account.balance -= amount
-        to_account.balance += amount
-        from_account.save(update_fields=['balance'])
-        to_account.save(update_fields=['balance'])
+        self._balance_service.apply_receipt_spend(from_account, amount)
+        self._balance_service.refund_to_account(to_account, amount)
 
         transfer_log = self.transfer_money_log_repository.create_log(
             user=user,

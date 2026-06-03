@@ -22,9 +22,9 @@ from django.utils import timezone
 from pdfminer.high_level import extract_text  # type: ignore[import-untyped]
 from pdfminer.pdfparser import PDFSyntaxError
 
-if TYPE_CHECKING:
-    import pandas as pd
-
+from hasta_la_vista_money.finance_account.services.balance_service import (
+    BalanceService,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -32,6 +32,8 @@ from hasta_la_vista_money.transactions.models import (
 )
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.users.models import User
 
@@ -928,6 +930,7 @@ def process_bank_statement(
     income_count = 0
     expense_count = 0
     skipped_count = 0
+    balance_delta = Decimal(0)
 
     for idx, trans in enumerate(transactions):
         if idx % 10 == 0:
@@ -969,14 +972,14 @@ def process_bank_statement(
             source_ref=source_ref or None,
         )
         if type_value == TransactionType.INCOME:
-            account.balance += abs_amount
+            balance_delta += abs_amount
             income_count += 1
         else:
-            account.balance -= abs_amount
+            balance_delta -= abs_amount
             expense_count += 1
 
-    # Save account balance after all transactions
-    account.save()
+    if balance_delta != Decimal(0):
+        BalanceService().apply_balance_delta(account, balance_delta)
 
     logger.info(
         'Finished processing: %d income, %d expenses, %d skipped',
