@@ -15,9 +15,6 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.transactions.forms import CategoryForm
 from hasta_la_vista_money.transactions.models import Category, TransactionType
-from hasta_la_vista_money.users.services.cache import (
-    invalidate_user_detailed_statistics_cache,
-)
 
 
 def _category_type(value: str | None) -> str:
@@ -90,7 +87,6 @@ class CategoryCreateView(
         category.type = self.get_category_type()
         category.save()
         _clear_category_cache(self.request.user.pk, category.type)
-        invalidate_user_detailed_statistics_cache(self.request.user.pk)
         messages.success(self.request, _('Категория успешно добавлена.'))
         return redirect(self.success_url)
 
@@ -156,7 +152,7 @@ class CategoryUpdateView(
                     'parent_category',
                     'parent_category__name',
                 )
-                .order_by('parent_category_id')
+                .order_by('parent_category_id'),
             ),
             depth=3,
         )
@@ -219,7 +215,6 @@ class CategoryUpdateView(
         category.type = self.get_object().type
         category.save()
         _clear_category_cache(self.request.user.pk, category.type)
-        invalidate_user_detailed_statistics_cache(self.request.user.pk)
         if self.is_inline_request():
             return self._render_inline_item(category=category)
         messages.success(self.request, _('Категория успешно обновлена.'))
@@ -256,6 +251,5 @@ class CategoryDeleteView(LoginRequiredMixin, DeleteView[Category, Any]):
             )
             return redirect(self.success_url)
         _clear_category_cache(self.request.user.pk, category_type)
-        invalidate_user_detailed_statistics_cache(self.request.user.pk)
         messages.success(self.request, _('Категория успешно удалена.'))
         return redirect(self.success_url)

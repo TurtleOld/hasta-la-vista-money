@@ -61,9 +61,6 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
-from hasta_la_vista_money.users.services.cache import (
-    invalidate_user_detailed_statistics_cache,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import (
@@ -1311,7 +1308,6 @@ class AccountCreateView(
                 raise TypeError('User must be authenticated')
             account.user = request.user
             account.save()
-            invalidate_user_detailed_statistics_cache(request.user.pk)
             messages.success(request, self.success_message)
             return HttpResponseRedirect(self.get_success_url())
         except Exception:
@@ -1399,7 +1395,6 @@ class ChangeAccountView(
                 raise TypeError('User must be authenticated')
             account.user = request.user
             account.save()
-            invalidate_user_detailed_statistics_cache(request.user.pk)
             messages.success(request, self.success_message)
             return HttpResponseRedirect(str(self.get_success_url()))
         except ValidationError as e:
