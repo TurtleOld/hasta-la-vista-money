@@ -127,6 +127,10 @@ external = [ "WPS" ]
 known-first-party = ["hasta_la_vista_money"]
 
 [tool.ruff.lint.per-file-ignores]
+"**/monthly_statistics_service.py" = [
+  "PLC0415",  # circular import broken by lazy import
+  "E501",     # long import lines due to lazy import workaround
+]
 "**/tests/*.py" = [
   "S101", # asserts
   "S105", # hardcoded passwords
