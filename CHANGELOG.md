@@ -1,5 +1,18 @@
 # История изменений
 
+## [2.3.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.2.0...v2.3.0) (2026-06-03)
+
+
+### Features
+
+* **users:** add expires_at to FamilyInvite model ([#843](https://github.com/TurtleOld/hasta-la-vista-money/issues/843)) ([0ab004a](https://github.com/TurtleOld/hasta-la-vista-money/commit/0ab004a4bb5efd24d9d7c3926018ad49aa69f689))
+
+
+### Documentation
+
+* **readme:** refresh project overview and documentation links ([83640d2](https://github.com/TurtleOld/hasta-la-vista-money/commit/83640d29e496562ab06a8ed4c82bc7b8be781af4))
+* **readme:** refresh project overview and documentation links ([6706f8f](https://github.com/TurtleOld/hasta-la-vista-money/commit/6706f8fc41fedc60ac88897386d03f95b520bd30))
+
 ## [2.2.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.1.1...v2.2.0) (2026-06-02)
 
 
