@@ -13,10 +13,10 @@ from django.http import (
     HttpResponseBase,
     JsonResponse,
 )
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import CreateView
+from django.views.generic import CreateView, View
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.authentication.authentication import (
@@ -24,15 +24,21 @@ from hasta_la_vista_money.authentication.authentication import (
     set_auth_cookies,
 )
 from hasta_la_vista_money.users.forms import (
+    RegisterByInviteForm,
     RegisterUserForm,
     UserLoginForm,
 )
 from hasta_la_vista_money.users.models import (
+    FamilyInvite,
     User,
 )
 from hasta_la_vista_money.users.services.auth import login_user
+from hasta_la_vista_money.users.services.groups import accept_family_invite
 from hasta_la_vista_money.users.services.password import set_user_password
-from hasta_la_vista_money.users.services.registration import register_user
+from hasta_la_vista_money.users.services.registration import (
+    register_invited_user,
+    register_user,
+)
 
 
 class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
@@ -44,6 +50,9 @@ class LoginUser(SuccessMessageMixin[UserLoginForm], LoginView):
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to after successful login."""
+        next_url = self.request.GET.get('next') or self.request.POST.get('next')
+        if next_url:
+            return next_url
         return '/finance_account/'
 
     def dispatch(
@@ -193,6 +202,72 @@ class CreateUser(
         register_user(form)
         cache.delete('has_superuser')
         return response
+
+
+class RegisterByInviteView(View):
+    """Registration page for users arriving via a family-group invite token."""
+
+    template_name = 'users/register_by_invite.html'
+
+    def _get_invite(self, token: str) -> FamilyInvite | None:
+        invite = (
+            FamilyInvite.objects.filter(token=token, is_active=True)
+            .select_related('group')
+            .first()
+        )
+        if invite is None or invite.is_expired():
+            return None
+        return invite
+
+    def get(
+        self,
+        request: HttpRequest,
+        token: str,
+    ) -> HttpResponse:
+        if request.user.is_authenticated:
+            return redirect('users:groups:join', token=token)
+        invite = self._get_invite(token)
+        if invite is None:
+            messages.error(
+                request,
+                _('Ссылка приглашения недействительна или истекла.'),
+            )
+            return redirect('users:login')
+        form = RegisterByInviteForm()
+        return render(
+            request,
+            self.template_name,
+            {'form': form, 'invite': invite, 'token': token},
+        )
+
+    def post(
+        self,
+        request: HttpRequest,
+        token: str,
+    ) -> HttpResponse:
+        if request.user.is_authenticated:
+            return redirect('users:groups:join', token=token)
+        invite = self._get_invite(token)
+        if invite is None:
+            messages.error(
+                request,
+                _('Ссылка приглашения недействительна или истекла.'),
+            )
+            return redirect('users:login')
+        form = RegisterByInviteForm(request.POST)
+        if form.is_valid():
+            user = register_invited_user(form)
+            accept_family_invite(user, token)
+            messages.success(
+                request,
+                _('Аккаунт создан. Войдите, чтобы продолжить.'),
+            )
+            return redirect('users:login')
+        return render(
+            request,
+            self.template_name,
+            {'form': form, 'invite': invite, 'token': token},
+        )
 
 
 class SetPasswordUserView(LoginRequiredMixin, PasswordChangeView):

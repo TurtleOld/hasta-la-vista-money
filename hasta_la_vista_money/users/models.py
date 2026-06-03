@@ -23,6 +23,7 @@ from django.db.models import (
     TextField,
     UniqueConstraint,
 )
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
@@ -211,8 +212,13 @@ class FamilyInvite(Model):
         default=FamilyGroupMembership.Role.VIEWER,
     )
     is_active = BooleanField(default=True)
+    expires_at = DateTimeField(null=True, blank=True)
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
+
+    def is_expired(self) -> bool:
+        """Return True if the invite has passed its expiry date."""
+        return self.expires_at is not None and timezone.now() > self.expires_at
 
     class Meta:
         ordering = ['-created_at']

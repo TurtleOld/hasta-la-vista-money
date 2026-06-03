@@ -149,13 +149,18 @@ class DeleteUserFromGroupView(
         )
 
 
-class JoinFamilyGroupView(LoginRequiredMixin, View):
+class JoinFamilyGroupView(View):
     """Join a family group by share link."""
 
     def get(self, request, token: str) -> HttpResponse:
+        if not request.user.is_authenticated:
+            return redirect('users:groups:register_by_invite', token=token)
         group = accept_family_invite(request.user, token)
         if group is None:
-            messages.error(request, _('Ссылка приглашения недействительна.'))
+            messages.error(
+                request,
+                _('Ссылка приглашения недействительна или истекла.'),
+            )
         else:
             messages.success(
                 request,

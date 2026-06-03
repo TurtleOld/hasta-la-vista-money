@@ -97,6 +97,41 @@ class RegisterUserForm(UserCreationForm[User]):
         }
 
 
+class RegisterByInviteForm(UserCreationForm[User]):
+    """Registration form used when joining via an invite token."""
+
+    class Meta(TypedModelMeta):
+        model: ClassVar[type[User]] = User
+        fields: ClassVar[list[str]] = [
+            'username',
+            'email',
+            'password1',
+            'password2',
+        ]
+        widgets: ClassVar[dict[str, Any]] = {
+            'username': forms.TextInput(
+                attrs={
+                    'placeholder': _('Имя пользователя'),
+                    'class': FORM_CONTROL_CLASS,
+                },
+            ),
+            'email': forms.EmailInput(
+                attrs={
+                    'placeholder': _('Email'),
+                    'class': FORM_CONTROL_CLASS,
+                },
+            ),
+        }
+        help_texts: ClassVar[dict[str, Any]] = {
+            'username': _('Только буквы, цифры и @/./+/-/_'),
+        }
+        error_messages: ClassVar[dict[str, dict[str, Any]]] = {
+            'username': {
+                'required': _('Пожалуйста, введите имя пользователя.'),
+            },
+        }
+
+
 class UpdateUserForm(ModelForm[User]):
     """Form for updating user profile information."""
 
