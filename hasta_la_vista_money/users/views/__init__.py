@@ -13,6 +13,7 @@ from hasta_la_vista_money.users.views.auth import (
     CreateUser,
     LoginUser,
     LogoutUser,
+    RegisterByInviteView,
     SetPasswordUserView,
 )
 from hasta_la_vista_money.users.views.bank_statement import (
@@ -64,6 +65,7 @@ __all__ = [
     'ListUsers',
     'LoginUser',
     'LogoutUser',
+    'RegisterByInviteView',
     'SetPasswordUserView',
     'SwitchThemeView',
     'UpdateUserView',

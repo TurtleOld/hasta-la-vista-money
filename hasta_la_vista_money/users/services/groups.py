@@ -297,7 +297,7 @@ def accept_family_invite(user: User, token: str) -> Group | None:
         .select_related('group')
         .first()
     )
-    if invite is None:
+    if invite is None or invite.is_expired():
         return None
     user.groups.add(invite.group)
     membership = FamilyGroupMembership.objects.filter(
