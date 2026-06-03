@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
@@ -6,16 +7,19 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpRequest, HttpResponse
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 
 from hasta_la_vista_money.users.forms import (
     AddUserToGroupForm,
     DeleteUserFromGroupForm,
     GroupCreateForm,
     GroupDeleteForm,
+    RegisterByInviteForm,
 )
 from hasta_la_vista_money.users.models import FamilyGroupMembership
 from hasta_la_vista_money.users.services.groups import (
     GroupDict,
+    accept_family_invite,
     create_group,
     delete_group,
     get_family_groups,
@@ -23,6 +27,9 @@ from hasta_la_vista_money.users.services.groups import (
     get_or_create_family_invite,
     get_user_groups,
     user_has_group_access,
+)
+from hasta_la_vista_money.users.services.registration import (
+    register_invited_user,
 )
 
 if TYPE_CHECKING:
@@ -135,3 +142,124 @@ class GroupsServiceTest(TestCase):
             FamilyGroupMembership.Role.OWNER,
         )
         self.assertIn(invite.token, family_groups[0]['invite_url'] or '')
+
+
+class InviteExpiryTest(TestCase):
+    """Tests for invite expiry logic."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    def setUp(self) -> None:
+        user = User.objects.first()
+        if user is None:
+            raise ValueError('No user found in fixtures')
+        self.user: UserType = user
+        self.group: Group = Group.objects.create(name='ExpiryTestGroup')
+        self.user.groups.add(self.group)
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=self.user,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+
+    def test_expired_invite_is_rejected(self) -> None:
+        invite = get_or_create_family_invite(self.group, self.user)
+        invite.expires_at = timezone.now() - timedelta(hours=1)
+        invite.save(update_fields=['expires_at'])
+
+        second_user_data = {
+            'username': 'invited_user',
+            'email': 'invited@example.com',
+            'password1': 'StrongPassword123',
+            'password2': 'StrongPassword123',
+        }
+        form = RegisterByInviteForm(data=second_user_data)
+        self.assertTrue(form.is_valid())
+        second_user = register_invited_user(form)
+
+        result = accept_family_invite(second_user, invite.token)
+        self.assertIsNone(result)
+        self.assertNotIn(self.group, second_user.groups.all())
+
+    def test_valid_invite_registers_and_joins(self) -> None:
+        invite = get_or_create_family_invite(self.group, self.user)
+        invite.expires_at = timezone.now() + timedelta(days=7)
+        invite.save(update_fields=['expires_at'])
+
+        second_user_data = {
+            'username': 'invited_valid',
+            'email': 'valid@example.com',
+            'password1': 'StrongPassword123',
+            'password2': 'StrongPassword123',
+        }
+        form = RegisterByInviteForm(data=second_user_data)
+        self.assertTrue(form.is_valid())
+        second_user = register_invited_user(form)
+
+        self.assertFalse(second_user.is_superuser)
+        self.assertFalse(second_user.is_staff)
+
+        result = accept_family_invite(second_user, invite.token)
+        self.assertIsNotNone(result)
+        self.assertIn(self.group, second_user.groups.all())
+        self.assertTrue(
+            FamilyGroupMembership.objects.filter(
+                group=self.group,
+                user=second_user,
+                role=FamilyGroupMembership.Role.VIEWER,
+            ).exists(),
+        )
+
+
+class RegisterByInviteViewTest(TestCase):
+    """Tests for RegisterByInviteView."""
+
+    fixtures: list[str] = ['users.yaml']
+
+    def setUp(self) -> None:
+        owner = User.objects.first()
+        if owner is None:
+            raise ValueError('No user found in fixtures')
+        self.owner: UserType = owner
+        self.group: Group = Group.objects.create(name='ViewTestGroup')
+        self.owner.groups.add(self.group)
+        FamilyGroupMembership.objects.create(
+            group=self.group,
+            user=self.owner,
+            role=FamilyGroupMembership.Role.OWNER,
+        )
+        self.invite = get_or_create_family_invite(self.group, self.owner)
+
+    def test_get_shows_registration_form(self) -> None:
+        url = f'/users/groups/register/{self.invite.token}/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.group.name)
+
+    def test_invalid_token_redirects_to_login(self) -> None:
+        response = self.client.get('/users/groups/register/invalidtoken123/')
+        self.assertRedirects(response, '/users/login/')
+
+    def test_post_creates_user_and_joins_group(self) -> None:
+        url = f'/users/groups/register/{self.invite.token}/'
+        data = {
+            'username': 'newmember',
+            'email': 'newmember@example.com',
+            'password1': 'StrongPassword123',
+            'password2': 'StrongPassword123',
+        }
+        response = self.client.post(url, data)
+        self.assertRedirects(response, '/users/login/')
+        new_user = User.objects.get(username='newmember')
+        self.assertFalse(new_user.is_superuser)
+        self.assertIn(self.group, new_user.groups.all())
+
+    def test_authenticated_user_is_redirected_to_join(self) -> None:
+        self.client.force_login(self.owner)
+        url = f'/users/groups/register/{self.invite.token}/'
+        response = self.client.get(url)
+        self.assertRedirects(
+            response,
+            f'/users/groups/join/{self.invite.token}/',
+            fetch_redirect_response=False,
+        )

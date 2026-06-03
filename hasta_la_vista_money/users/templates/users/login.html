@@ -29,6 +29,9 @@
         <div class="auth-card">
             <form method="post" class="auth-form" novalidate>
                 {% csrf_token %}
+                {% if request.GET.next %}
+                    <input type="hidden" name="next" value="{{ request.GET.next }}">
+                {% endif %}
 
                 {% if user_login_form %}
                     {% for hidden in user_login_form.hidden_fields %}
