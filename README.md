@@ -7,107 +7,116 @@
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Django](https://img.shields.io/badge/Django-6.0-green.svg)](https://www.djangoproject.com/)
 
-**[🇺🇸 English version](ENGLISH.md)** | **[📚 Документация](https://hasta-la-vista-money.readthedocs.io/)**
+**[🇺🇸 English version](ENGLISH.md)** | **[📚 Документация](https://deepwiki.com/TurtleOld/hasta-la-vista-money)**
 
 ---
 
-## 🎯 О проекте
+## Содержание
 
-**Hasta La Vista, Money!** — это современная система управления личными финансами с открытым исходным кодом для самостоятельного развертывания. Получите полный контроль над своими финансовыми данными с мощными инструментами аналитики и планирования бюджета.
-
-### ✨ Почему Hasta La Vista, Money?
-
-- 🏠 **Self-hosted** — полный контроль над данными и инфраструктурой
-- 🔓 **Open Source** — прозрачный код, свободная лицензия Apache 2.0
-- 🔒 **Приватность** — ваши финансовые данные остаются только на вашем сервере
-- 🚀 **Простое развертывание** — запуск в один клик через Docker Compose
-- 🌐 **Поддержка русского языка** — полностью локализованный интерфейс
+- [О проекте](#о-проекте)
+- [Возможности](#возможности)
+- [Технологический стек](#технологический-стек)
+- [Быстрый старт](#быстрый-старт)
+- [Конфигурация](#конфигурация)
+- [Безопасность](#безопасность)
+- [Участие в разработке](#участие-в-разработке)
+- [Сообщество и поддержка](#сообщество-и-поддержка)
+- [Лицензия](#лицензия)
 
 ---
 
-## 💡 Основные возможности
+## О проекте
 
-<table>
-<tr>
-<td width="50%">
+**Hasta La Vista, Money!** — современная система управления личными финансами с открытым исходным кодом для самостоятельного развёртывания. Получите полный контроль над своими финансовыми данными с мощными инструментами аналитики, учёта кредитов и планирования бюджета.
 
-### 💳 Финансовый учет
-- Управление множественными счетами
-- Поддержка различных валют
-- Учет доходов и расходов
-- Иерархическая категоризация
-- История всех операций
+### Почему Hasta La Vista, Money?
 
-### 📊 Аналитика и отчеты
-- Детальная статистика по периодам
-- Интерактивные графики и диаграммы
+- **Self-hosted** — полный контроль над данными и инфраструктурой
+- **Open Source** — прозрачный код, свободная лицензия Apache 2.0
+- **Приватность** — ваши финансовые данные остаются только на вашем сервере
+- **Простое развёртывание** — запуск через Docker Compose в несколько команд
+- **Русский язык** — полностью локализованный интерфейс
+- **Audit log** — неизменяемый журнал всех операций с читаемыми метками полей
+
+---
+
+## Возможности
+
+### Финансовый учёт
+
+- Управление множеством счетов с поддержкой различных валют
+- Учёт доходов и расходов через единую модель транзакций
+- Иерархические категории
+- Полная история всех операций
+
+### Обработка чеков
+
+- Импорт по QR-коду чека
+- Получение данных через API ФНС
+- Ручное добавление покупок
+- Возврат чека с корректировкой баланса
+
+### Аналитика и отчёты
+
+- Статистика по периодам
+- Интерактивные графики (Chart.js)
 - Анализ расходов по категориям
 - Экспорт данных в JSON
 
-### 🧾 Обработка чеков
-- Импорт данных через QR-коды чеков
-- Получение официальных данных через API ФНС
-- Ручное добавление покупок
-- Анализ по продавцам и товарам
+### Бюджетирование
 
-</td>
-<td width="50%">
-
-### 📈 Бюджетирование
 - Планирование доходов и расходов
-- Сравнение планов с фактом
-- Отслеживание выполнения бюджета
-- Умные уведомления о лимитах
+- Сравнение план/факт
+- Уведомления о превышении лимитов
 
-### 👤 Персональный профиль
-- Дашборд с общей статистикой
-- Детальная аналитика за 6 месяцев
-- Топ категорий расходов
-- Рекомендации по оптимизации
+### Кредиты и займы
 
-### 🔔 Система уведомлений
-- Предупреждения о низком балансе
-- Алерты о превышении расходов
-- Поощрения за сбережения
-- Персональные рекомендации
+- Учёт кредитов и займов
+- Расчёт графика погашений с поддержкой льготного периода
 
-</td>
-</tr>
-</table>
+### Безопасность и аудит
+
+- Неизменяемый audit log с именами объектов и читаемыми метками полей
+- Rate limiting и защита от брутфорса (django-axes)
+- JWT + сессионная аутентификация
+- CSRF, XSS, CSP, HSTS, Secure cookies
 
 ---
 
-## 🛠 Технологический стек
+## Технологический стек
 
 | Компонент | Технологии |
-|-----------|-----------|
-| **Backend** | Django 6.0, Python 3.12.7+ (Docker: Python 3.13), Django REST Framework, Celery |
-| **Frontend** | Tailwind CSS 4, DaisyUI, Chart.js, jQuery, HTMX |
-| **База данных** | PostgreSQL, SQLite (локальный fallback без `DATABASE_URL`/`POSTGRES_*`) |
-| **Кеширование и очереди** | Redis, django-redis, django-celery-beat, LocMemCache для локального fallback |
-| **API** | RESTful API, OpenAPI schema, Swagger UI |
+| --- | --- |
+| **Backend** | Django 6.0.5, Python 3.12.7+, Django REST Framework 3.15, Celery 5.4 |
+| **ASGI-сервер** | Granian 2.3+ (HTTP/2, TLS) |
+| **Frontend** | Tailwind CSS v4, DaisyUI 5, Chart.js, HTMX, driver.js, flatpickr |
+| **База данных** | PostgreSQL 18 (Docker), SQLite (локальный fallback) |
+| **Кеш и очереди** | Redis 8, django-redis, django-celery-beat |
+| **API** | RESTful, OpenAPI schema (drf-spectacular), Swagger UI |
 | **Контейнеризация** | Docker, Docker Compose, Nginx |
-| **Безопасность** | CSP, CSRF, JWT аутентификация, django-axes |
-| **Мониторинг** | django-structlog, файловые/stdout-логи, Django Debug Toolbar |
+| **Безопасность** | CSP, CSRF, JWT, django-axes, CORS, HSTS |
+| **Качество кода** | mypy (strict), ruff, pre-commit, coverage ≥ 85% |
+| **Мониторинг** | django-structlog (структурированные логи) |
 | **Локализация** | i18n, полная поддержка русского языка |
 
 ---
 
-## 🚀 Быстрый старт
+## Быстрый старт
 
-### Минимальные требования
+### Требования
+
 - Docker и Docker Compose
-- Несколько ГБ свободного места для Docker-образов, PostgreSQL и Redis
-- От 4 ГБ оперативной памяти для локального Docker-запуска
+- Несколько ГБ свободного места (Docker-образы, PostgreSQL, Redis)
+- От 1 ГБ оперативной памяти
 
-### Установка за 3 шага
+### Запуск за 3 шага
 
 ```bash
 # 1. Клонируйте репозиторий
 git clone https://github.com/TurtleOld/hasta-la-vista-money.git
 cd hasta-la-vista-money
 
-# 2. Создайте файл .env с минимальными локальными настройками
+# 2. Создайте файл .env
 cat > .env << EOF
 SECRET_KEY=$(openssl rand -base64 50)
 DEBUG=false
@@ -120,257 +129,175 @@ EOF
 docker compose up -d
 ```
 
-**Готово!** После сборки и запуска контейнеров откройте браузер и перейдите по адресу [http://127.0.0.1:8090](http://127.0.0.1:8090)
+Откройте браузер и перейдите по адресу [http://127.0.0.1:8090](http://127.0.0.1:8090).
 
-> 💡 **Совет:** Стандартный `docker-compose.yaml` поднимает PostgreSQL, Redis, Celery worker/beat, веб-приложение и Nginx. SQLite используется только как fallback при прямом локальном запуске без `DATABASE_URL` и `POSTGRES_*`.
+> `docker-compose.yaml` поднимает PostgreSQL, Redis, Celery worker/beat, веб-приложение и Nginx. SQLite используется только как fallback при прямом локальном запуске без `DATABASE_URL`.
 
-> 🔒 **Важно:** Блок выше описывает быстрый локальный/self-hosted запуск, а не production minimum. Для production self-hosted используйте отдельное руководство: [docs/docs/production_self_hosted.md](docs/docs/production_self_hosted.md)
-
-### Первые шаги
-
-1. Зарегистрируйте аккаунт администратора
-2. Создайте свой первый финансовый счет
-3. Добавьте категории доходов и расходов
-4. Начните вести учет финансов!
-
-> 📚 **Полная документация по установке и настройке:** [hasta-la-vista-money.readthedocs.io](https://hasta-la-vista-money.readthedocs.io/)
-
----
-
-## ⚙️ Конфигурация
-
-Приложение настраивается через переменные окружения в файле `.env`:
-
-### Основные переменные
-
-| Переменная | Описание | Значение по умолчанию |
-|-----------|----------|----------------------|
-| `SECRET_KEY` | Секретный ключ Django (обязательно) | - |
-| `DJANGO_SETTINGS_MODULE` | Модуль настроек Django; для production используйте `config.django.prod` | `config.django.base` |
-| `DEBUG` | Режим отладки | `false` |
-| `ALLOWED_HOSTS` | Разрешенные production-хосты | - |
-| `BASE_URL` | Базовый URL приложения | `http://127.0.0.1:8000/` |
-| `CSRF_TRUSTED_ORIGINS` | Доверенные HTTPS-источники для CSRF | - |
-| `DATABASE_URL` | URL внешней PostgreSQL, если не используется встроенный `db` из Compose | - |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Параметры встроенной PostgreSQL в `docker-compose.prod.yaml` | `hlvm`, `postgres`, `postgres` |
-| `REDIS_LOCATION` | URL Redis для кеширования, сессий и Celery в production | - |
-| `SESSION_COOKIE_SECURE` | Флаг `Secure` для session cookie | `true` |
-| `SESSION_COOKIE_HTTPONLY` | Флаг `HttpOnly` для session cookie | `true` |
-| `SESSION_COOKIE_SAMESITE` | Политика `SameSite` для session cookie | `Lax` |
-| `SESSION_COOKIE_AGE` | Время жизни session cookie в секундах | `31536000` |
-| `CSRF_COOKIE_SECURE` | Флаг `Secure` для CSRF cookie | `true` |
-| `SECURE_SSL_REDIRECT` | Принудительное перенаправление на HTTPS | `true` |
-| `SECURE_CONTENT_TYPE_NOSNIFF` | Заголовок защиты от MIME-sniffing | `true` |
-| `SECURE_HSTS_SECONDS` | Значение `max-age` для HSTS | `31536000` |
-| `SECURE_HSTS_INCLUDE_SUBDOMAINS` | HSTS для поддоменов | `true` |
-| `SECURE_HSTS_PRELOAD` | Предзагрузка HSTS | `true` |
-| `ACCESS_TOKEN_LIFETIME` | Время жизни JWT access token в минутах | `60` |
-| `REFRESH_TOKEN_LIFETIME` | Время жизни JWT refresh token в днях | `7` |
-| `LANGUAGE_CODE` | Язык интерфейса | `ru-RU` |
-| `TIME_ZONE` | Часовой пояс | `Europe/Moscow` |
-| `FNS_BASE_URL` | Базовый URL API ФНС для чеков | `https://irkkt-mobile.nalog.ru:8888/v2` |
-| `FNS_INN` | ИНН аккаунта ФНС для запроса чеков | - |
-| `FNS_PASSWORD` | Пароль аккаунта ФНС | - |
-| `FNS_CLIENT_SECRET` | Client secret API ФНС | - |
-| `FNS_TIMEOUT_SECONDS` | Таймаут запросов к API ФНС (сек) | `10` |
-| `FNS_POLL_ATTEMPTS` | Количество попыток опроса тикета ФНС | `5` |
-| `FNS_POLL_INTERVAL_SECONDS` | Интервал опроса тикета ФНС (сек) | `1` |
-| `FNS_SESSION_CACHE_TTL_SECONDS` | TTL кеша сессии ФНС (сек) | `3600` |
-
-### Дополнительные возможности
-
-- **PostgreSQL**: Docker Compose поднимает PostgreSQL по умолчанию; SQLite остается fallback для прямого локального запуска
-- **Redis и Celery**: Redis используется для кеша, сессий, rate limiting, django-axes и брокера/результатов Celery
-- **Чеки через ФНС**: Из изображения извлекается QR-код, затем чек подтягивается из API ФНС и маппится в модель приложения
-- **Мониторинг ошибок**: структурированные логи через `django-structlog` без внешних observability-сервисов
-
-### Минимум для production при самостоятельном размещении
-
-Для `docker-compose.prod.yaml` минимальный набор production-переменных включает:
-
-- `SECRET_KEY`
-- `DJANGO_SETTINGS_MODULE=config.django.prod`
-- `DEBUG=false`
-- `ALLOWED_HOSTS`
-- `BASE_URL`
-- `CSRF_TRUSTED_ORIGINS`
-- `REDIS_LOCATION`
-- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` для встроенного PostgreSQL в `docker-compose.prod.yaml`
-- `DATABASE_URL`, если используется внешняя PostgreSQL вместо встроенного сервиса `db`
-- переменные cookie и transport security: `SESSION_COOKIE_SECURE`, `SESSION_COOKIE_HTTPONLY`, `SESSION_COOKIE_SAMESITE`, `CSRF_COOKIE_SECURE`, `SECURE_SSL_REDIRECT`, `SECURE_CONTENT_TYPE_NOSNIFF`, `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD`
-- `FNS_INN`, `FNS_PASSWORD`, `FNS_CLIENT_SECRET` для обработки чеков по QR-коду через API ФНС
-
-Секреты не должны храниться в репозитории или поддерживаться вручную в локальном `.env` на сервере без контроля изменений. Для production-развертывания при самостоятельном размещении `.env` должен формироваться на этапе деплоя из CI/CD secrets, менеджера секретов или зашифрованной системы управления конфигурацией.
-
-Подробный чек-лист production-развертывания: [docs/docs/production_self_hosted.md](docs/docs/production_self_hosted.md)
-
-#### Redis — Кеширование для производительности
-
-Redis используется в продакшене для кеширования, сессий и фоновых задач:
-
-**Что кешируется:**
-
-- Дерево категорий (TTL: 5 минут)
-- Статистика пользователя (TTL: 10 минут)
-- Список финансовых счетов (TTL: 5 минут)
-- Сессии пользователей
-- Rate limiting для API
-- Защита от брутфорса (django-axes)
-- Брокер и backend результатов Celery
-
-**Настройка для продакшена:**
+### Production-развёртывание
 
 ```bash
-# В .env файле добавьте:
-REDIS_LOCATION=redis://redis:6379/0
-DEBUG=false
-```
-
-**Запуск с Redis:**
-
-```bash
-# Используйте продакшен конфигурацию
 docker compose -f docker-compose.prod.yaml up -d
 ```
 
-**Проверка работы Redis:**
+Production-образ берётся из `ghcr.io/turtleold/hasta-la-vista-money:main`.
 
-```bash
-# Подключение к Redis
-docker exec -it hlvm-prod-redis-1 redis-cli ping
-# Должно вернуть: PONG
+### Первые шаги
 
-# Просмотр кешированных ключей
-docker exec -it hlvm-prod-redis-1 redis-cli KEYS "hlvm:*"
+1. Зарегистрируйте аккаунт
+2. Создайте финансовый счёт
+3. Добавьте категории доходов и расходов
+4. Начните вести учёт!
+
+---
+
+## Конфигурация
+
+Приложение настраивается через переменные окружения в файле `.env`.
+
+### Основные переменные
+
+| Переменная | Описание | По умолчанию |
+| --- | --- | --- |
+| `SECRET_KEY` | Секретный ключ Django (обязательно) | — |
+| `DJANGO_SETTINGS_MODULE` | Модуль настроек; для production: `config.django.prod` | `config.django.base` |
+| `DEBUG` | Режим отладки | `false` |
+| `ALLOWED_HOSTS` | Разрешённые хосты | — |
+| `BASE_URL` | Базовый URL приложения | `http://127.0.0.1:8000/` |
+| `CSRF_TRUSTED_ORIGINS` | Доверенные источники для CSRF | — |
+| `DATABASE_URL` | URL внешней PostgreSQL | — |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Параметры встроенной PostgreSQL | `hlvm`, `postgres`, `postgres` |
+| `REDIS_LOCATION` | URL Redis | — |
+| `SESSION_COOKIE_SECURE` | Флаг `Secure` для session cookie | `true` |
+| `CSRF_COOKIE_SECURE` | Флаг `Secure` для CSRF cookie | `true` |
+| `SECURE_SSL_REDIRECT` | Принудительный редирект на HTTPS | `true` |
+| `SECURE_HSTS_SECONDS` | Значение `max-age` для HSTS | `31536000` |
+| `ACCESS_TOKEN_LIFETIME` | Время жизни JWT access token (минуты) | `60` |
+| `REFRESH_TOKEN_LIFETIME` | Время жизни JWT refresh token (дни) | `7` |
+| `LANGUAGE_CODE` | Язык интерфейса | `ru-RU` |
+| `TIME_ZONE` | Часовой пояс | `Europe/Moscow` |
+| `FNS_BASE_URL` | Базовый URL API ФНС | `https://irkkt-mobile.nalog.ru:8888/v2` |
+| `FNS_INN` | ИНН аккаунта ФНС | — |
+| `FNS_PASSWORD` | Пароль аккаунта ФНС | — |
+| `FNS_CLIENT_SECRET` | Client secret API ФНС | — |
+| `FNS_TIMEOUT_SECONDS` | Таймаут запросов к ФНС (сек) | `10` |
+
+### Минимум для production
+
+```text
+SECRET_KEY
+DJANGO_SETTINGS_MODULE=config.django.prod
+DEBUG=false
+ALLOWED_HOSTS
+BASE_URL
+CSRF_TRUSTED_ORIGINS
+REDIS_LOCATION
+POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+SESSION_COOKIE_SECURE, CSRF_COOKIE_SECURE, SECURE_SSL_REDIRECT
+SECURE_HSTS_SECONDS, SECURE_HSTS_INCLUDE_SUBDOMAINS, SECURE_HSTS_PRELOAD
+FNS_INN, FNS_PASSWORD, FNS_CLIENT_SECRET  # для обработки чеков
 ```
 
-> 📘 **Подробная документация по кешированию:** [docs/docs/cache.md](docs/docs/cache.md)
+### Redis
 
-> 📖 **Полный список переменных и примеры конфигурации:** [Документация по настройке](https://hasta-la-vista-money.readthedocs.io/)
+Redis используется для кеширования, сессий, rate limiting и брокера задач Celery.
 
----
+Что кешируется:
 
-## 🔒 Безопасность
+- Дерево категорий (TTL: 5 минут)
+- Статистика пользователя (TTL: 10 минут)
+- Список счетов (TTL: 5 минут)
+- Сессии пользователей
 
-Приложение включает множество механизмов защиты:
-
-- ✅ Защита от CSRF и XSS атак
-- ✅ Content Security Policy (CSP)
-- ✅ JWT аутентификация для API
-- ✅ Валидация всех входных данных
-- ✅ Защита от SQL-инъекций через Django ORM
-- ✅ Rate limiting для API (django-axes)
-- ✅ Безопасное хранение паролей через password hashers Django
-- ✅ Docker контейнеры работают от непривилегированного пользователя (appuser)
-- ✅ Минимальные права доступа к файлам и директориям
-- ✅ Права доступа настроены для статических файлов и логов
+```bash
+# Проверка работы Redis
+docker exec -it hlvm-prod-redis-1 redis-cli ping
+# Ответ: PONG
+```
 
 ---
 
-## 📚 Документация
+## Безопасность
 
-Полная документация размещена на **[Read the Docs](https://hasta-la-vista-money.readthedocs.io/)**:
-
-- 📖 [Руководство пользователя](https://hasta-la-vista-money.readthedocs.io/) — начало работы, функции, примеры использования
-- 🛠 [Руководство разработчика](https://hasta-la-vista-money.readthedocs.io/contribute/) — архитектура, разработка, тестирование
-- 🔌 [API документация](https://hasta-la-vista-money.readthedocs.io/api/) — REST API, эндпоинты, примеры запросов
-
-В запущенном приложении также доступны:
-
-- OpenAPI schema: `/api/schema/`
-- Swagger UI: `/api/schema/swagger-ui/`
-- Экспорт схемы в документацию: `make export-api-schema`
+- Защита от CSRF и XSS атак
+- Content Security Policy (CSP)
+- JWT-аутентификация для API
+- Защита от SQL-инъекций через Django ORM
+- Rate limiting (django-axes)
+- Безопасное хранение паролей через password hashers Django
+- Docker-контейнеры работают от непривилегированного пользователя `appuser`
+- HSTS, Secure cookies, HTTPS redirect
 
 ---
 
-## 🤝 Участие в разработке
+## Участие в разработке
 
-Мы приветствуем любой вклад в проект! Вот как вы можете помочь:
-
-### Способы участия
-
-- 🐛 **Сообщить о баге** — создайте [Issue](https://github.com/TurtleOld/hasta-la-vista-money/issues)
-- 💡 **Предложить улучшение** — опишите свою идею в [Discussions](https://github.com/TurtleOld/hasta-la-vista-money/discussions)
-- 🔧 **Исправить проблему** — создайте Pull Request
-- 📝 **Улучшить документацию** — docs всегда нуждаются в обновлениях
-- 🌍 **Добавить перевод** — помогите локализовать приложение
-
-### Процесс разработки
+### Процесс
 
 ```bash
 # 1. Форкните и клонируйте репозиторий
 git clone https://github.com/YOUR_USERNAME/hasta-la-vista-money.git
 
-# 2. Создайте ветку для новой функции
+# 2. Создайте ветку
 git checkout -b feature/amazing-feature
 
-# 3. Установите зависимости для разработки
+# 3. Установите зависимости
 make install
 
-# 4. Внесите изменения и протестируйте
+# 4. Протестируйте изменения
 make test
 
 # 5. Создайте Pull Request
 ```
 
-### ⚠️ Важная информация о uv.lock
+### Полезные команды (Makefile)
 
-**`uv.lock` не хранится в репозитории!** Этот файл генерируется автоматически:
-
-- **В GitHub Actions:** при сборке Docker образов
-- **В Docker:** если файл отсутствует, он создается автоматически
-- **Локальная разработка:** генерируется командой `make install` или `uv sync --dev`
-
-Причины такого подхода:
-- ✅ Избежание конфликтов при работе в команде
-- ✅ Автоматическая генерация для разных платформ (linux/amd64, linux/arm64)
-- ✅ Чистый репозиторий без больших lock-файлов
-- ✅ Воспроизводимость через `pyproject.toml`
-
-**Для локальной разработки:**
 ```bash
-# При первом запуске генерируется uv.lock автоматически
-make install
-
-# Если нужно обновить зависимости:
-uv lock --upgrade
+make install             # установка зависимостей (uv)
+make test                # запуск тестов
+make coverage            # отчёт о покрытии (порог: 85%)
+make lint                # проверка ruff + mypy
+make format              # форматирование кода
+make migrate             # применение миграций
+make staticfiles         # сборка статики
+make build-js            # сборка CSS/JS (Tailwind v4)
+make export-api-schema   # экспорт OpenAPI схемы
 ```
 
-> 📋 **Подробнее:** [Руководство контрибьютора](https://hasta-la-vista-money.readthedocs.io/contribute/)
+### Важно: uv.lock
+
+`uv.lock` не хранится в репозитории — генерируется автоматически при сборке Docker-образов и при `make install`. Для обновления зависимостей: `uv lock --upgrade`.
 
 ---
 
-## 💬 Сообщество и поддержка
+## API документация
 
-- 💬 [GitHub Discussions](https://github.com/TurtleOld/hasta-la-vista-money/discussions) — обсуждения, вопросы, идеи
-- 🐛 [Issue Tracker](https://github.com/TurtleOld/hasta-la-vista-money/issues) — баги и запросы на функции
-- 📧 [Email](mailto:dev@pavlovteam.ru) — прямая связь с разработчиком
+В запущенном приложении доступны:
+
+- OpenAPI schema: `/api/schema/`
+- Swagger UI: `/api/schema/swagger-ui/`
 
 ---
 
-## 📄 Лицензия
+## Сообщество и поддержка
+
+- [GitHub Discussions](https://github.com/TurtleOld/hasta-la-vista-money/discussions) — обсуждения, вопросы, идеи
+- [Issue Tracker](https://github.com/TurtleOld/hasta-la-vista-money/issues) — баги и запросы на функции
+- [DeepWiki](https://deepwiki.com/TurtleOld/hasta-la-vista-money) — документация проекта
+
+---
+
+## Лицензия
 
 Проект распространяется под лицензией **Apache License 2.0**.
 См. файл [LICENSE](LICENSE) для подробностей.
 
-```
+```text
 Copyright 2022-2025 Alexander Pavlov (TurtleOld)
 Licensed under the Apache License, Version 2.0
 ```
 
 ---
 
-## ⭐ Поддержите проект
+**Hasta La Vista, Money!** — ваш надёжный помощник в управлении личными финансами!
 
-Если вам нравится **Hasta La Vista, Money!**, поставьте ⭐ на GitHub!
-Это помогает другим пользователям найти проект.
-
----
-
-<div align="center">
-
-**Hasta La Vista, Money!** — ваш надежный помощник в управлении личными финансами! 💪
-
-[📖 Документация](https://hasta-la-vista-money.readthedocs.io/) • [🐛 Баг-репорты](https://github.com/TurtleOld/hasta-la-vista-money/issues)
-
-</div>
+[📚 Документация](https://deepwiki.com/TurtleOld/hasta-la-vista-money) • [🐛 Баг-репорты](https://github.com/TurtleOld/hasta-la-vista-money/issues) • [💬 Обсуждения](https://github.com/TurtleOld/hasta-la-vista-money/discussions)
