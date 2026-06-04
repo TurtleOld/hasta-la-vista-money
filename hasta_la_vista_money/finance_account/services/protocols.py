@@ -6,6 +6,7 @@ from typing import Protocol, runtime_checkable
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
+    BalanceReconcileCommand,
     GracePeriodInfoDict,
     RaiffeisenbankScheduleDict,
 )
@@ -131,10 +132,7 @@ class BalanceServiceProtocol(Protocol):
 
     def reconcile_account_balances(
         self,
-        old_account: Account,
-        new_account: Account,
-        old_total_sum: Decimal,
-        new_total_sum: Decimal,
+        command: BalanceReconcileCommand,
     ) -> None:
         """Reconcile account balances when amount or account changes.
 

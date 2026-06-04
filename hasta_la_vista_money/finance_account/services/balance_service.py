@@ -3,6 +3,9 @@
 from decimal import Decimal
 
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.services.types import (
+    BalanceReconcileCommand,
+)
 from hasta_la_vista_money.finance_account.validators import (
     validate_account_balance,
     validate_positive_amount,
@@ -125,10 +128,7 @@ class BalanceService:
 
     def reconcile_account_balances(
         self,
-        old_account: Account,
-        new_account: Account,
-        old_total_sum: Decimal,
-        new_total_sum: Decimal,
+        command: BalanceReconcileCommand,
     ) -> None:
         """Reconcile account balances when amount or account changes.
 
@@ -142,16 +142,19 @@ class BalanceService:
             old_total_sum: Total amount before change.
             new_total_sum: Total amount after change.
         """
-        if self._should_adjust_same_account(old_account, new_account):
+        if self._should_adjust_same_account(
+            command.old_account,
+            command.new_account,
+        ):
             self._adjust_balance_on_same_account(
-                old_account,
-                old_total_sum,
-                new_total_sum,
+                command.old_account,
+                command.old_total_sum,
+                command.new_total_sum,
             )
         else:
             self._adjust_balance_on_account_change(
-                old_account,
-                new_account,
-                old_total_sum,
-                new_total_sum,
+                command.old_account,
+                command.new_account,
+                command.old_total_sum,
+                command.new_total_sum,
             )

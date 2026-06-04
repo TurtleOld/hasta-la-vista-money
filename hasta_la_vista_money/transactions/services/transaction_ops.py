@@ -16,6 +16,10 @@ from django.utils.translation import gettext_lazy as _
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.transactions.commands import (
+    CreateTransactionCommand,
+    UpdateTransactionCommand,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -93,60 +97,64 @@ class TransactionService:
 
     def add_transaction(
         self,
-        *,
-        user: User,
-        account: Account,
-        category: Category,
-        amount: Decimal,
-        transaction_date: date,
-        type_value: str,
+        command: CreateTransactionCommand,
     ) -> Transaction:
         """Create a new transaction and adjust the account balance."""
-        self._validate_account_owner(user, account)
-        self._validate_type_matches_category(type_value, category)
+        self._validate_account_owner(command.user, command.account)
+        self._validate_type_matches_category(
+            command.type_value,
+            command.category,
+        )
 
         with db_transaction.atomic():
             new_transaction = self.transaction_repository.create_transaction(
-                user=user,
-                account=account,
-                category=category,
-                amount=amount,
-                date=transaction_date,
-                type=type_value,
+                user=command.user,
+                account=command.account,
+                category=command.category,
+                amount=command.amount,
+                date=command.transaction_date,
+                type=command.type_value,
             )
-            self._apply_balance_for_create(account, amount, type_value)
+            self._apply_balance_for_create(
+                command.account,
+                command.amount,
+                command.type_value,
+            )
         return new_transaction
 
     def update_transaction(
         self,
-        *,
-        user: User,
-        transaction_obj: Transaction,
-        account: Account,
-        category: Category,
-        amount: Decimal,
-        transaction_date: date,
-        type_value: str,
+        command: UpdateTransactionCommand,
     ) -> Transaction:
         """Update a transaction and reconcile balances on both accounts."""
-        self._validate_transaction_owner(user, transaction_obj)
-        self._validate_account_owner(user, account)
-        self._validate_type_matches_category(type_value, category)
+        self._validate_transaction_owner(
+            command.user,
+            command.transaction_obj,
+        )
+        self._validate_account_owner(command.user, command.account)
+        self._validate_type_matches_category(
+            command.type_value,
+            command.category,
+        )
 
         with db_transaction.atomic():
-            old_account = transaction_obj.account
-            old_amount = transaction_obj.amount
-            old_type = transaction_obj.type
+            old_account = command.transaction_obj.account
+            old_amount = command.transaction_obj.amount
+            old_type = command.transaction_obj.type
 
             self._apply_balance_for_delete(old_account, old_amount, old_type)
-            self._apply_balance_for_create(account, amount, type_value)
+            self._apply_balance_for_create(
+                command.account,
+                command.amount,
+                command.type_value,
+            )
 
-            transaction_obj.account = account
-            transaction_obj.category = category
-            transaction_obj.amount = amount
-            transaction_obj.type = type_value
+            command.transaction_obj.account = command.account
+            command.transaction_obj.category = command.category
+            command.transaction_obj.amount = command.amount
+            command.transaction_obj.type = command.type_value
 
-            date_value = transaction_date
+            date_value = command.transaction_date
             if isinstance(date_value, date) and not isinstance(
                 date_value,
                 datetime,
@@ -158,9 +166,9 @@ class TransactionService:
                 date_value,
             ):
                 date_value = timezone.make_aware(date_value)
-            transaction_obj.date = date_value
-            transaction_obj.save()
-        return transaction_obj
+            command.transaction_obj.date = date_value
+            command.transaction_obj.save()
+        return command.transaction_obj
 
     def delete_transaction(
         self,

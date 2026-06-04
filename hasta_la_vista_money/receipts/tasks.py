@@ -16,11 +16,14 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
 )
-from hasta_la_vista_money.receipts.repositories import ReceiptRepository
+from hasta_la_vista_money.receipts.protocols.services import (
+    PendingReceiptServiceProtocol,
+)
 from hasta_la_vista_money.receipts.repositories.seller_repository import (
     SellerRepository,
 )
@@ -49,9 +52,6 @@ from hasta_la_vista_money.receipts.services.fns_qr import (
     QRCodeDecodeError,
     QRCodeExtractor,
     QRCodeNotFoundError,
-)
-from hasta_la_vista_money.receipts.services.pending_receipt_service import (
-    PendingReceiptService,
 )
 from hasta_la_vista_money.receipts.validators.parsed_receipt import (
     ReceiptParseValidationError,
@@ -150,20 +150,9 @@ _FAILURE_RULES = (
 )
 
 
-def _build_service() -> PendingReceiptService:
-    """Construct PendingReceiptService outside the DI container.
-
-    Celery workers run without a Django request, so the runtime container is
-    unavailable. The background flow only needs ``mark_ready``/``mark_failed``
-    and ``delete_with_file``, none of which touch ``ReceiptCreatorService`` —
-    so we pass ``None`` for it. Conversion to a final Receipt happens later
-    in the request-bound ReviewPendingReceiptView, where the container is
-    available.
-    """
-    return PendingReceiptService(
-        receipt_creator_service=None,  # type: ignore[arg-type]
-        receipt_repository=ReceiptRepository(),
-    )
+def _get_pending_receipt_service() -> PendingReceiptServiceProtocol:
+    """Resolve PendingReceiptService through the application DI container."""
+    return ApplicationContainer().receipts.pending_receipt_service()
 
 
 def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
@@ -241,7 +230,7 @@ def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
         )
         return
 
-    service = _build_service()
+    service = _get_pending_receipt_service()
 
     if not pending.image_file:
         service.mark_failed(
@@ -282,7 +271,7 @@ def cleanup_stale_pending_receipts() -> dict[str, int]:
     Returns:
         Dict with counts of recovered and purged rows for logging.
     """
-    service = _build_service()
+    service = _get_pending_receipt_service()
     now = timezone.now()
     hard_limit_seconds = int(
         getattr(settings, 'CELERY_TASK_TIME_LIMIT', 30 * 60),

@@ -6,6 +6,9 @@ repositories and services.
 
 from dependency_injector import containers, providers
 
+from hasta_la_vista_money.users.protocols.services import (
+    UserStatisticsServiceProtocol,
+)
 from hasta_la_vista_money.users.repositories.statistics_repository import (
     StatisticsRepository,
 )
@@ -22,7 +25,9 @@ class UsersContainer(containers.DeclarativeContainer):
 
     statistics_repository = providers.Singleton(StatisticsRepository)
 
-    user_statistics_service = providers.Factory(
+    user_statistics_service: providers.Factory[
+        UserStatisticsServiceProtocol
+    ] = providers.Factory(
         UserStatisticsService,
         statistics_repository=statistics_repository,
     )

@@ -1,6 +1,23 @@
-from datetime import datetime
-from decimal import Decimal
-from typing import TypedDict
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from datetime import datetime
+    from decimal import Decimal
+
+    from hasta_la_vista_money.finance_account.models import Account
+
+
+@dataclass(frozen=True, kw_only=True)
+class BalanceReconcileCommand:
+    """Input data required to reconcile balances after account changes."""
+
+    old_account: Account
+    new_account: Account
+    old_total_sum: Decimal
+    new_total_sum: Decimal
 
 
 class GracePeriodInfoDict(TypedDict, total=False):
