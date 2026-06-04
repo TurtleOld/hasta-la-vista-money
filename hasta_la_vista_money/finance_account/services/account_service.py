@@ -19,6 +19,7 @@ from hasta_la_vista_money.finance_account.services.credit_calculation_service im
     CreditCalculationService,
 )
 from hasta_la_vista_money.finance_account.services.types import (
+    BalanceReconcileCommand,
     GracePeriodInfoDict,
     RaiffeisenbankScheduleDict,
 )
@@ -232,10 +233,7 @@ class AccountService:
 
     def reconcile_account_balances(
         self,
-        old_account: Account,
-        new_account: Account,
-        old_total_sum: Decimal,
-        new_total_sum: Decimal,
+        command: BalanceReconcileCommand,
     ) -> None:
         """Reconcile account balances when amount or account changes.
 
@@ -249,12 +247,7 @@ class AccountService:
             old_total_sum: Total amount before change.
             new_total_sum: Total amount after change.
         """
-        return self.balance_service.reconcile_account_balances(
-            old_account,
-            new_account,
-            old_total_sum,
-            new_total_sum,
-        )
+        return self.balance_service.reconcile_account_balances(command)
 
     # Credit card calculations - delegated to CreditCalculationService
     def get_credit_card_debt(

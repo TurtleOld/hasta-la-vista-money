@@ -38,6 +38,7 @@ from hasta_la_vista_money.finance_account.services.transfer_service import (
     TransferService,
 )
 from hasta_la_vista_money.finance_account.services.types import (
+    BalanceReconcileCommand,
     GracePeriodInfoDict,
     PaymentScheduleItemDict,
     PaymentScheduleStatementDict,
@@ -51,6 +52,7 @@ __all__ = [
     'BANK_SBERBANK',
     'SUPPORTED_BANKS',
     'AccountService',
+    'BalanceReconcileCommand',
     'BalanceService',
     'BalanceServiceProtocol',
     'BalanceTrendService',

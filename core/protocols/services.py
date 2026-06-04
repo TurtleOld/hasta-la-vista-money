@@ -1,13 +1,15 @@
-from datetime import date, datetime
-from decimal import Decimal
-from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
+from __future__ import annotations
 
-from django.db.models import QuerySet
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
+    from datetime import date, datetime
+    from decimal import Decimal
+
+    from django.db.models import QuerySet
+
     from hasta_la_vista_money.finance_account.models import (
         Account,
         TransferMoneyLog,
@@ -16,6 +18,10 @@ if TYPE_CHECKING:
         GracePeriodInfoDict,
         RaiffeisenbankScheduleDict,
     )
+    from hasta_la_vista_money.finance_account.services.types import (
+        BalanceReconcileCommand,
+    )
+    from hasta_la_vista_money.users.models import User
 
 
 @runtime_checkable
@@ -26,7 +32,7 @@ class AccountServiceProtocol(Protocol):
     management, credit card calculations, and user group handling.
     """
 
-    def get_user_accounts(self, user: User) -> list['Account']:
+    def get_user_accounts(self, user: User) -> list[Account]:
         """Get all accounts for a user.
 
         Args:
@@ -39,7 +45,7 @@ class AccountServiceProtocol(Protocol):
 
     def get_account_by_id(
         self, account_id: int, user: User
-    ) -> Optional['Account']:
+    ) -> Account | None:
         """Get account by ID for a user.
 
         Args:
@@ -53,7 +59,7 @@ class AccountServiceProtocol(Protocol):
 
     def get_credit_card_debt(
         self,
-        account: 'Account',
+        account: Account,
         start_date: date | datetime | None = None,
         end_date: date | datetime | None = None,
     ) -> Decimal | None:
@@ -71,9 +77,9 @@ class AccountServiceProtocol(Protocol):
 
     def calculate_grace_period_info(
         self,
-        account: 'Account',
+        account: Account,
         purchase_month: date | datetime,
-    ) -> 'GracePeriodInfoDict':
+    ) -> GracePeriodInfoDict:
         """Calculate grace period information.
 
         Args:
@@ -87,9 +93,9 @@ class AccountServiceProtocol(Protocol):
 
     def calculate_raiffeisenbank_payment_schedule(
         self,
-        account: 'Account',
+        account: Account,
         purchase_month: date | datetime,
-    ) -> 'RaiffeisenbankScheduleDict':
+    ) -> RaiffeisenbankScheduleDict:
         """Calculate Raiffeisenbank payment schedule.
 
         Args:
@@ -102,8 +108,8 @@ class AccountServiceProtocol(Protocol):
         ...
 
     def apply_receipt_spend(
-        self, account: 'Account', amount: Decimal
-    ) -> 'Account':
+        self, account: Account, amount: Decimal
+    ) -> Account:
         """Apply spending to account balance.
 
         Args:
@@ -116,8 +122,8 @@ class AccountServiceProtocol(Protocol):
         ...
 
     def refund_to_account(
-        self, account: 'Account', amount: Decimal
-    ) -> 'Account':
+        self, account: Account, amount: Decimal
+    ) -> Account:
         """Refund amount to account balance.
 
         Args:
@@ -131,10 +137,7 @@ class AccountServiceProtocol(Protocol):
 
     def reconcile_account_balances(
         self,
-        old_account: 'Account',
-        new_account: 'Account',
-        old_total_sum: Decimal,
-        new_total_sum: Decimal,
+        command: BalanceReconcileCommand,
     ) -> None:
         """Reconcile account balances when transaction changes.
 
@@ -150,7 +153,7 @@ class AccountServiceProtocol(Protocol):
         self,
         user: User,
         limit: int = constants.TRANSFER_MONEY_LOG_LIMIT,
-    ) -> QuerySet['TransferMoneyLog']:
+    ) -> QuerySet[TransferMoneyLog]:
         """Get transfer logs for a user.
 
         Args:
@@ -182,7 +185,7 @@ class AccountServiceProtocol(Protocol):
         self,
         user: User,
         group_id: str | None = None,
-    ) -> QuerySet['Account']:
+    ) -> QuerySet[Account]:
         """Get accounts for user or group.
 
         Args:
@@ -194,7 +197,7 @@ class AccountServiceProtocol(Protocol):
         """
         ...
 
-    def get_sum_all_accounts(self, accounts: QuerySet['Account']) -> Decimal:
+    def get_sum_all_accounts(self, accounts: QuerySet[Account]) -> Decimal:
         """Calculate total balance for accounts.
 
         Args:
