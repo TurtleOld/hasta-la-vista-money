@@ -522,6 +522,42 @@ if not cached_data:
 
 ---
 
+## 🌿 Правила именования веток
+
+AI-агенты должны создавать ветки только по предсказуемому формату,
+совместимому с Conventional Commits и Release Please:
+
+```
+<type>/<scope>-<short-description>
+```
+
+**Правила:**
+- `type` должен быть одним из типов Conventional Commits: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `perf`, `ci`
+- `scope` должен отражать приложение или область изменений: `finance_account`, `receipts`, `expense`, `income`, `loan`, `budget`, `api`, `auth`, `commands`, `ci`, `release`
+- `short-description` пишется на английском, в lowercase kebab-case
+- В названии ветки запрещены пробелы, заглавные буквы, подчёркивания, кириллица и произвольные разделители
+- Название ветки должно отражать суть задачи, а не быть произвольным заголовком или дословной фразой пользователя
+
+**Примеры:**
+```bash
+# ✅ Правильно
+fix/transactions-static-mobile-layout
+refactor/commands-service-protocols
+feat/receipts-qr-validation
+ci/release-please-title-check
+
+# ❌ Неправильно
+Refactor/service protocols commands
+fix transactions layout
+some-random-branch
+правка-чеков
+```
+
+При создании веток через Agent Manager или другие инструменты агент обязан
+использовать этот же формат в `branchName`.
+
+---
+
 ## 📝 Правила коммитов (Conventional Commits)
 
 Проект использует [Conventional Commits](https://www.conventionalcommits.org/) для автоматического управления версиями через **Release Please**.
