@@ -54,6 +54,10 @@ from hasta_la_vista_money.finance_account.models import (
 )
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.services.views import get_cached_category_tree
+from hasta_la_vista_money.transactions.commands import (
+    CreateTransactionCommand,
+    UpdateTransactionCommand,
+)
 from hasta_la_vista_money.transactions.forms import TransactionForm
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -521,12 +525,14 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
                 typed_request.container.transactions.transaction_service()
             )
             transaction_service.add_transaction(
-                user=request.user,
-                account=cd['account'],
-                category=cd['category'],
-                amount=cd['amount'],
-                transaction_date=cd['date'],
-                type_value=type_value,
+                CreateTransactionCommand(
+                    user=request.user,
+                    account=cd['account'],
+                    category=cd['category'],
+                    amount=cd['amount'],
+                    transaction_date=cd['date'],
+                    type_value=type_value,
+                ),
             )
             success_message = (
                 constants.SUCCESS_INCOME_ADDED
@@ -584,13 +590,15 @@ class TransactionUpdateView(
         cd = form.cleaned_data
         try:
             request.container.transactions.transaction_service().update_transaction(
-                user=request.user,
-                transaction_obj=self.get_object(),
-                account=cd['account'],
-                category=cd['category'],
-                amount=cd['amount'],
-                transaction_date=cd['date'],
-                type_value=cd['type'],
+                UpdateTransactionCommand(
+                    user=request.user,
+                    transaction_obj=self.get_object(),
+                    account=cd['account'],
+                    category=cd['category'],
+                    amount=cd['amount'],
+                    transaction_date=cd['date'],
+                    type_value=cd['type'],
+                ),
             )
             messages.success(request, _('Операция успешно обновлена.'))
             return HttpResponseRedirect(str(self.success_url))

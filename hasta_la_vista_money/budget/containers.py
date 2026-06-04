@@ -1,5 +1,6 @@
 from dependency_injector import containers, providers
 
+from hasta_la_vista_money.budget.protocols.services import BudgetServiceProtocol
 from hasta_la_vista_money.budget.repositories import (
     BudgetRepository,
     DateListRepository,
@@ -15,9 +16,11 @@ class BudgetContainer(containers.DeclarativeContainer):
     date_list_repository = providers.Singleton(DateListRepository)
     budget_repository = providers.Singleton(BudgetRepository)
 
-    budget_service = providers.Factory(
-        BudgetService,
-        transaction_repository=transactions.transaction_repository,
-        planning_repository=planning_repository,
-        budget_repository=budget_repository,
+    budget_service: providers.Factory[BudgetServiceProtocol] = (
+        providers.Factory(
+            BudgetService,
+            transaction_repository=transactions.transaction_repository,
+            planning_repository=planning_repository,
+            budget_repository=budget_repository,
+        )
     )
