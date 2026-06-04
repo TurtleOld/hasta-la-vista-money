@@ -25,6 +25,7 @@
     var(--finances-bg);
   color: var(--finances-text);
   min-height: calc(100vh - 4rem);
+  overflow-x: hidden;
   padding-bottom: 2rem;
 }
 
@@ -867,17 +868,20 @@
   text-align: center;
   border-bottom: 1px solid var(--finances-border);
   background: radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--type-c, var(--finances-accent)) 7%, transparent), transparent 60%);
+  overflow-x: hidden;
 }
 
 .cmp-amt-input {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: baseline;
   gap: 10px;
   font-family: var(--font-mono);
+  margin: 0 auto;
   position: relative;
-  justify-content: center;
+  justify-content: stretch;
   max-width: 100%;
-  width: 100%;
+  width: min(100%, 32rem);
 }
 
 .cmp-amt-input .sign {
@@ -907,7 +911,7 @@
   text-align: center;
   padding: 0;
   caret-color: var(--finances-accent);
-  width: min(12ch, calc(100vw - 120px));
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   line-height: 1;
@@ -1624,7 +1628,6 @@
 @media (max-width: 600px) {
   .cmp-amt-input input {
     font-size: 56px;
-    width: min(8ch, calc(100vw - 120px));
   }
 
   .cmp-amt-input .sign {
