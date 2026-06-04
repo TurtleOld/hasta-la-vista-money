@@ -10,6 +10,10 @@ from django.test import TestCase
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.transactions.commands import (
+    CreateTransactionCommand,
+    UpdateTransactionCommand,
+)
 from hasta_la_vista_money.transactions.forms import CategoryForm
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -63,26 +67,72 @@ class TransactionServiceTest(TestCase):
             transaction_repository=TransactionRepository(),
         )
 
+    def _create_command(
+        self,
+        *,
+        amount: Decimal,
+        type_value: str,
+        user: User | None = None,
+        account: Account | None = None,
+        category: Category | None = None,
+        transaction_date: date = date(2026, 4, 1),
+    ) -> CreateTransactionCommand:
+        return CreateTransactionCommand(
+            user=user or self.user,
+            account=account or self.account,
+            category=category
+            or (
+                self.income_category
+                if type_value == TransactionType.INCOME
+                else self.expense_category
+            ),
+            amount=amount,
+            transaction_date=transaction_date,
+            type_value=type_value,
+        )
+
+    def _update_command(
+        self,
+        *,
+        transaction_obj: Transaction,
+        amount: Decimal,
+        type_value: str,
+        user: User | None = None,
+        account: Account | None = None,
+        category: Category | None = None,
+        transaction_date: date = date(2026, 4, 2),
+    ) -> UpdateTransactionCommand:
+        return UpdateTransactionCommand(
+            user=user or self.user,
+            transaction_obj=transaction_obj,
+            account=account or self.account,
+            category=category
+            or (
+                self.income_category
+                if type_value == TransactionType.INCOME
+                else self.expense_category
+            ),
+            amount=amount,
+            transaction_date=transaction_date,
+            type_value=type_value,
+        )
+
     def test_add_income_increases_account_balance(self) -> None:
         self.service.add_transaction(
-            user=self.user,
-            account=self.account,
-            category=self.income_category,
-            amount=Decimal('500.00'),
-            transaction_date=date(2026, 4, 1),
-            type_value=TransactionType.INCOME,
+            self._create_command(
+                amount=Decimal('500.00'),
+                type_value=TransactionType.INCOME,
+            ),
         )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1500.00'))
 
     def test_add_expense_decreases_account_balance(self) -> None:
         self.service.add_transaction(
-            user=self.user,
-            account=self.account,
-            category=self.expense_category,
-            amount=Decimal('200.00'),
-            transaction_date=date(2026, 4, 1),
-            type_value=TransactionType.EXPENSE,
+            self._create_command(
+                amount=Decimal('200.00'),
+                type_value=TransactionType.EXPENSE,
+            ),
         )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('800.00'))
@@ -95,54 +145,46 @@ class TransactionServiceTest(TestCase):
         )
         with self.assertRaises(PermissionDenied):
             self.service.add_transaction(
-                user=other,
-                account=self.account,
-                category=self.income_category,
-                amount=Decimal('1.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.INCOME,
+                self._create_command(
+                    user=other,
+                    amount=Decimal('1.00'),
+                    type_value=TransactionType.INCOME,
+                ),
             )
 
     def test_add_rejects_type_mismatched_category(self) -> None:
         with self.assertRaises(ValueError):
             self.service.add_transaction(
-                user=self.user,
-                account=self.account,
-                category=self.expense_category,
-                amount=Decimal('1.00'),
-                transaction_date=date(2026, 4, 1),
-                type_value=TransactionType.INCOME,
+                self._create_command(
+                    category=self.expense_category,
+                    amount=Decimal('1.00'),
+                    type_value=TransactionType.INCOME,
+                ),
             )
 
     def test_update_changes_amount_and_reverses_old(self) -> None:
         tx = self.service.add_transaction(
-            user=self.user,
-            account=self.account,
-            category=self.expense_category,
-            amount=Decimal('200.00'),
-            transaction_date=date(2026, 4, 1),
-            type_value=TransactionType.EXPENSE,
+            self._create_command(
+                amount=Decimal('200.00'),
+                type_value=TransactionType.EXPENSE,
+            ),
         )
         self.service.update_transaction(
-            user=self.user,
-            transaction_obj=tx,
-            account=self.account,
-            category=self.expense_category,
-            amount=Decimal('300.00'),
-            transaction_date=date(2026, 4, 2),
-            type_value=TransactionType.EXPENSE,
+            self._update_command(
+                transaction_obj=tx,
+                amount=Decimal('300.00'),
+                type_value=TransactionType.EXPENSE,
+            ),
         )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('700.00'))
 
     def test_update_rejects_foreign_transaction(self) -> None:
         tx = self.service.add_transaction(
-            user=self.user,
-            account=self.account,
-            category=self.income_category,
-            amount=Decimal('10.00'),
-            transaction_date=date(2026, 4, 1),
-            type_value=TransactionType.INCOME,
+            self._create_command(
+                amount=Decimal('10.00'),
+                type_value=TransactionType.INCOME,
+            ),
         )
         other = User.objects.create_user(
             username='ext',
@@ -151,23 +193,20 @@ class TransactionServiceTest(TestCase):
         )
         with self.assertRaises(PermissionDenied):
             self.service.update_transaction(
-                user=other,
-                transaction_obj=tx,
-                account=self.account,
-                category=self.income_category,
-                amount=Decimal('20.00'),
-                transaction_date=date(2026, 4, 2),
-                type_value=TransactionType.INCOME,
+                self._update_command(
+                    user=other,
+                    transaction_obj=tx,
+                    amount=Decimal('20.00'),
+                    type_value=TransactionType.INCOME,
+                ),
             )
 
     def test_delete_reverses_balance(self) -> None:
         tx = self.service.add_transaction(
-            user=self.user,
-            account=self.account,
-            category=self.income_category,
-            amount=Decimal('100.00'),
-            transaction_date=date(2026, 4, 1),
-            type_value=TransactionType.INCOME,
+            self._create_command(
+                amount=Decimal('100.00'),
+                type_value=TransactionType.INCOME,
+            ),
         )
         self.service.delete_transaction(
             user=self.user,
@@ -198,12 +237,10 @@ class TransactionServiceTest(TestCase):
 
     def test_copy_duplicates_transaction_and_adjusts_balance(self) -> None:
         original = self.service.add_transaction(
-            user=self.user,
-            account=self.account,
-            category=self.income_category,
-            amount=Decimal('100.00'),
-            transaction_date=date(2026, 4, 1),
-            type_value=TransactionType.INCOME,
+            self._create_command(
+                amount=Decimal('100.00'),
+                type_value=TransactionType.INCOME,
+            ),
         )
         duplicate = self.service.copy_transaction(
             user=self.user,
@@ -241,21 +278,19 @@ class TransactionServiceTest(TestCase):
         second_account.save()
 
         tx = self.service.add_transaction(
-            user=self.user,
-            account=self.account,
-            category=self.expense_category,
-            amount=Decimal('100.00'),
-            transaction_date=date(2026, 4, 1),
-            type_value=TransactionType.EXPENSE,
+            self._create_command(
+                amount=Decimal('100.00'),
+                type_value=TransactionType.EXPENSE,
+            ),
         )
         self.service.update_transaction(
-            user=self.user,
-            transaction_obj=tx,
-            account=second_account,
-            category=self.expense_category,
-            amount=Decimal('100.00'),
-            transaction_date=date(2026, 4, 1),
-            type_value=TransactionType.EXPENSE,
+            self._update_command(
+                transaction_obj=tx,
+                account=second_account,
+                amount=Decimal('100.00'),
+                transaction_date=date(2026, 4, 1),
+                type_value=TransactionType.EXPENSE,
+            ),
         )
 
         self.account.refresh_from_db()
