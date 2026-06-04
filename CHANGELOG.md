@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.3.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.3.0...v2.3.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* correct transactions static mobile layout ([#847](https://github.com/TurtleOld/hasta-la-vista-money/issues/847)) ([5fd05ef](https://github.com/TurtleOld/hasta-la-vista-money/commit/5fd05efa42b08df19b1eaecabef6e55e7844a7c8))
+
 ## [2.3.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.2.0...v2.3.0) (2026-06-03)
 
 
