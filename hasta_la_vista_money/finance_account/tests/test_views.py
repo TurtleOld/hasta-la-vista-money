@@ -248,6 +248,90 @@ class TestFinancesView(TestCase):
             self.account.name_account,
         )
 
+    def test_finances_include_transfers_as_neutral_operations(self) -> None:
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=self.other_account,
+            amount=Decimal('75.00'),
+            exchange_date=timezone.now(),
+            notes='Card to cash',
+        )
+        request = self.factory.get('/finance/?type=transfer')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(type='transfer'),
+        )
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0].key, f'transfer-{transfer.pk}')
+        self.assertEqual(transactions[0].amount, Decimal())
+        self.assertEqual(transactions[0].abs_amount, Decimal('75.00'))
+        self.assertTrue(transactions[0].is_transfer)
+        self.assertEqual(
+            transactions[0].transfer_from_account_name,
+            self.account.name_account,
+        )
+        self.assertEqual(
+            transactions[0].transfer_to_account_name,
+            self.other_account.name_account,
+        )
+
+    def test_finances_filter_transfers_by_account(self) -> None:
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=self.other_account,
+            amount=Decimal('80.00'),
+            exchange_date=timezone.now(),
+        )
+        request = self.factory.get('/finance/')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(
+                type='transfer',
+                account_ids=[self.other_account.pk],
+            ),
+        )
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0].key, f'transfer-{transfer.pk}')
+
+    def test_transfer_delete_view_reverses_balances(self) -> None:
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=self.other_account,
+            amount=Decimal('90.00'),
+            exchange_date=timezone.now(),
+        )
+        self.account.balance = Decimal('910.00')
+        self.account.save(update_fields=['balance'])
+        self.other_account.balance = Decimal('1090.00')
+        self.other_account.save(update_fields=['balance'])
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('finance_account:transfer_delete', args=[transfer.pk]),
+        )
+
+        self.assertRedirects(response, reverse('finances'))
+        self.account.refresh_from_db()
+        self.other_account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(self.other_account.balance, Decimal('1000.00'))
+        self.assertFalse(
+            TransferMoneyLog.objects.filter(pk=transfer.pk).exists(),
+        )
+
     def test_finances_filter_accepts_explicit_date_range(self) -> None:
         request = self.factory.get(
             '/finance/?date_from=2026-01-01&date_to=2026-01-31',
