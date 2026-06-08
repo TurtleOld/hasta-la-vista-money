@@ -58,7 +58,7 @@ class TransferMoneyLogRepository:
             'user',
         )
         if for_update:
-            queryset = queryset.select_for_update()
+            queryset = queryset.select_for_update(of=('self',))
         return queryset.get(pk=log_id, user=user)
 
     def get_by_user(self, user: User) -> QuerySet[TransferMoneyLog]:
