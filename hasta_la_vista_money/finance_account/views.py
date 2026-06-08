@@ -18,6 +18,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db import models
 from django.db.models import QuerySet
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -110,13 +111,23 @@ class FinancesTransaction:
     def abs_amount(self) -> Decimal:
         """Return amount without sign."""
 
+        if self.is_transfer and self.transfer_amount is not None:
+            return self.transfer_amount
         return abs(self.amount)
 
     @property
     def type(self) -> str:
         """Return transaction type for UI state."""
 
+        if self.is_transfer:
+            return 'transfer'
         return 'income' if self.amount >= 0 else 'expense'
+
+    @property
+    def is_transfer(self) -> bool:
+        """Return whether this row represents an account transfer."""
+
+        return self.source == 'transfer'
 
 
 @dataclass(frozen=True)
@@ -660,6 +671,37 @@ class TransactionDeleteView(LoginRequiredMixin, View):
         return redirect('finances')
 
 
+class TransferDeleteView(LoginRequiredMixin, View):
+    """Delete a transfer and return to finances."""
+
+    def post(
+        self,
+        request: 'RequestWithContainer',
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        transfer_id = kwargs.get('pk')
+        if transfer_id is None:
+            messages.error(request, _('Некорректный идентификатор перевода.'))
+            return redirect('finances')
+        try:
+            (
+                request.container.finance_account.transfer_service().delete_transfer(
+                    transfer_id=int(transfer_id),
+                    user=request.user,
+                )
+            )
+            messages.success(request, _('Перевод успешно удалён.'))
+        except (
+            ValidationError,
+            ValueError,
+            TypeError,
+            PermissionDenied,
+        ) as error:
+            messages.error(request, str(error))
+        return redirect('finances')
+
+
 class FinancesCategoryView(LoginRequiredMixin, TemplateView):
     """Combined category settings page for finance operations."""
 
@@ -728,6 +770,11 @@ def _finances_categories(users: Iterable[User]) -> list[FinancesCategoryChoice]:
                 name=str(RECEIPT_CATEGORY_NAME),
                 type='expense',
             ),
+            FinancesCategoryChoice(
+                key='transfer',
+                name=str(_('Перевод')),
+                type='transfer',
+            ),
         ],
     )
     return sorted(categories, key=lambda item: (item.type, item.name))
@@ -781,6 +828,14 @@ def _finances_transactions(
         )
         transactions.extend(
             _receipt_transactions(request, users, finances_filter),
+        )
+    if finances_filter.type in {'all', 'transfer'}:
+        transactions.extend(
+            _transfer_transactions(
+                current_user=request.user,
+                users=users,
+                finances_filter=finances_filter,
+            ),
         )
     return sorted(transactions, key=lambda item: item.date, reverse=True)
 
@@ -876,12 +931,50 @@ def _build_transfer_row(
         user_name=transfer.user.username,
         edit_url=reverse('finance_account:transfer_money'),
         copy_url='',
-        delete_url='',
+        delete_url=reverse(
+            'finance_account:transfer_delete',
+            kwargs={'pk': transfer.pk},
+        ),
         can_edit=transfer.user_id == current_user.pk,
         transfer_amount=transfer.amount,
         transfer_from_account_name=from_account_name,
         transfer_to_account_name=to_account_name,
     )
+
+
+def _transfer_transactions(
+    current_user: User,
+    users: list[User],
+    finances_filter: FinancesFilter,
+) -> list[FinancesTransaction]:
+    queryset = TransferMoneyLog.objects.filter(user__in=users).select_related(
+        'from_account',
+        'to_account',
+        'user',
+    )
+    queryset = _apply_date_filter(queryset, 'exchange_date', finances_filter)
+    if finances_filter.account_ids:
+        queryset = queryset.filter(
+            models.Q(from_account_id__in=finances_filter.account_ids)
+            | models.Q(to_account_id__in=finances_filter.account_ids),
+        )
+    if finances_filter.category_keys and 'transfer' not in (
+        finances_filter.category_keys
+    ):
+        return []
+    if finances_filter.min_amount:
+        queryset = queryset.filter(amount__gte=finances_filter.min_amount)
+    if finances_filter.q:
+        query = finances_filter.q
+        queryset = queryset.filter(
+            models.Q(from_account__name_account__icontains=query)
+            | models.Q(to_account__name_account__icontains=query)
+            | models.Q(notes__icontains=query),
+        )
+
+    return [
+        _build_transfer_row(transfer, current_user) for transfer in queryset
+    ]
 
 
 def _receipt_transactions(
@@ -969,7 +1062,8 @@ def _finances_summary(
     )
     total_abs = income + expense
     count = len(transactions)
-    avg_check = total_abs / count if count else Decimal()
+    money_count = len([tx for tx in transactions if tx.amount != 0])
+    avg_check = total_abs / money_count if money_count else Decimal()
     return FinancesSummary(
         income=income,
         expense=expense,
@@ -1033,15 +1127,12 @@ def _group_finances_by_category(
     groups: dict[str, list[FinancesTransaction]] = {}
     for tx in transactions:
         groups.setdefault(tx.category_key, []).append(tx)
-    totals = [
-        abs(sum((item.amount for item in items), Decimal()))
-        for items in groups.values()
-    ]
+    totals = [_category_group_abs_total(items) for items in groups.values()]
     total_abs = sum(totals, Decimal()) or Decimal(1)
     max_abs = max(totals) if totals else Decimal(1)
     result = []
     for key, items in groups.items():
-        total = sum((item.amount for item in items), Decimal())
+        total = _category_group_total(items)
         abs_total = abs(total)
         result.append(
             FinancesCategoryGroup(
@@ -1056,6 +1147,18 @@ def _group_finances_by_category(
             ),
         )
     return sorted(result, key=lambda item: abs(item.total), reverse=True)
+
+
+def _category_group_total(items: list[FinancesTransaction]) -> Decimal:
+    if items and items[0].is_transfer:
+        return sum((item.abs_amount for item in items), Decimal())
+    return sum((item.amount for item in items), Decimal())
+
+
+def _category_group_abs_total(items: list[FinancesTransaction]) -> Decimal:
+    if items and items[0].is_transfer:
+        return sum((item.abs_amount for item in items), Decimal())
+    return abs(sum((item.amount for item in items), Decimal()))
 
 
 def _day_label(value: date) -> str:

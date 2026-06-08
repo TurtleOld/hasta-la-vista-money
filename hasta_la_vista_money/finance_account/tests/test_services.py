@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, cast
 from unittest import mock
 
 from django.contrib.auth.models import Group
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -468,3 +468,59 @@ class TestTransferService(TestCase):
 
         logs = TransferMoneyLog.objects.filter(user=self.user)
         self.assertEqual(logs.count(), 1)
+
+    def test_delete_transfer_reverses_balance_and_removes_log(self) -> None:
+        """Deleting a transfer should revert both account balances."""
+        transfer_log = self.transfer_service.transfer_money(
+            from_account=self.from_account,
+            to_account=self.to_account,
+            amount=Decimal('200.00'),
+            user=self.user,
+            exchange_date=datetime(
+                2024,
+                1,
+                1,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+            notes='Delete me',
+        )
+
+        self.transfer_service.delete_transfer(
+            transfer_id=transfer_log.pk,
+            user=self.user,
+        )
+
+        self.from_account.refresh_from_db()
+        self.to_account.refresh_from_db()
+        self.assertEqual(self.from_account.balance, Decimal('1000.00'))
+        self.assertEqual(self.to_account.balance, Decimal('500.00'))
+        self.assertFalse(
+            TransferMoneyLog.objects.filter(pk=transfer_log.pk).exists(),
+        )
+
+    def test_delete_transfer_rejects_foreign_user(self) -> None:
+        """Deleting another user's transfer should be rejected."""
+        other_user = UserFactory()
+        transfer_log = self.transfer_service.transfer_money(
+            from_account=self.from_account,
+            to_account=self.to_account,
+            amount=Decimal('100.00'),
+            user=self.user,
+            exchange_date=datetime(
+                2024,
+                1,
+                1,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+            notes='Foreign user',
+        )
+
+        with self.assertRaises(PermissionDenied):
+            self.transfer_service.delete_transfer(
+                transfer_id=transfer_log.pk,
+                user=other_user,
+            )
+
+        self.assertTrue(
+            TransferMoneyLog.objects.filter(pk=transfer_log.pk).exists(),
+        )
