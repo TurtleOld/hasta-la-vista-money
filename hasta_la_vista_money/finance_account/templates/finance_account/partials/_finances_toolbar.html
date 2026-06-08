@@ -4,6 +4,7 @@
     <button type="button" class="{% if finances_filter.type == 'all' %}is-active{% endif %}" data-finances-type="all">{% translate 'Все' %}</button>
     <button type="button" class="{% if finances_filter.type == 'income' %}is-active{% endif %}" data-finances-type="income">{% translate 'Доходы' %}</button>
     <button type="button" class="{% if finances_filter.type == 'expense' %}is-active{% endif %}" data-finances-type="expense">{% translate 'Расходы' %}</button>
+    <button type="button" class="{% if finances_filter.type == 'transfer' %}is-active{% endif %}" data-finances-type="transfer">{% translate 'Переводы' %}</button>
     <input id="finances-type" type="hidden" name="type" value="{{ finances_filter.type }}">
 </div>
 
@@ -68,7 +69,7 @@
                     <label class="finances-pop-option {% if category.key in finances_filter.category_keys %}is-active{% endif %}">
                         <input type="checkbox" name="category" value="{{ category.key }}" {% if category.key in finances_filter.category_keys %}checked{% endif %}>
                         <span>{{ category.name }}</span>
-                        <span class="finances-muted ml-auto">{% if category.type == 'income' %}{% translate 'доход' %}{% else %}{% translate 'расход' %}{% endif %}</span>
+                        <span class="finances-muted ml-auto">{% if category.type == 'income' %}{% translate 'доход' %}{% elif category.type == 'transfer' %}{% translate 'перевод' %}{% else %}{% translate 'расход' %}{% endif %}</span>
                     </label>
                 {% endfor %}
             </div>

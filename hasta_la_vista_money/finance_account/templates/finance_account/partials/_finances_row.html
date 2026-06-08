@@ -1,7 +1,19 @@
 {% load i18n %}
 
 <article class="finances-row swipe-touch-only" data-swipe-row>
-    {% if tx.can_edit and not tx.is_receipt %}
+    {% if tx.can_edit and tx.is_transfer %}
+        <div class="finances-row-actions finances-row-actions-swipe" data-swipe-actions aria-hidden="true">
+            <form method="post" action="{{ tx.delete_url }}">
+                {% csrf_token %}
+                <button class="swipe-action-btn is-danger"
+                        type="submit"
+                        aria-label="{% translate 'Удалить' %}"
+                        title="{% translate 'Удалить' %}">
+                    {% include 'partials/_swipe_icons.html' with icon='delete' %}
+                </button>
+            </form>
+        </div>
+    {% elif tx.can_edit and not tx.is_receipt %}
         <div class="finances-row-actions finances-row-actions-swipe" data-swipe-actions aria-hidden="true">
             <a class="swipe-action-btn is-neutral"
                href="{{ tx.edit_url }}"
@@ -40,8 +52,12 @@
     {% endif %}
 
     <div class="finances-row-content" data-swipe-content>
-        <div class="finances-icon {% if tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
-            {% if tx.amount > 0 %}
+        <div class="finances-icon {% if tx.is_transfer %}finances-muted{% elif tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
+            {% if tx.is_transfer %}
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h11m0 0-4-4m4 4-4 4M17 17H6m0 0 4 4m-4-4 4-4"></path>
+                </svg>
+            {% elif tx.amount > 0 %}
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-5 5m5-5l5 5"></path>
                 </svg>
@@ -54,19 +70,32 @@
         <div>
             <div class="finances-row-title">{{ tx.category_name }}</div>
             <div class="finances-row-sub">
-                {% if tx.is_receipt %}<span>{% translate 'Чеки' %}</span>{% else %}<span>{% if tx.amount > 0 %}{% translate 'Доход' %}{% else %}{% translate 'Расход' %}{% endif %}</span>{% endif %}
+                {% if tx.is_transfer %}<span>{% translate 'Перевод между счетами' %}</span>{% elif tx.is_receipt %}<span>{% translate 'Чеки' %}</span>{% else %}<span>{% if tx.amount > 0 %}{% translate 'Доход' %}{% else %}{% translate 'Расход' %}{% endif %}</span>{% endif %}
                 <span> · {{ tx.user_name }}</span>
             </div>
         </div>
-        <div class="finances-row-account finances-muted">{{ tx.account_name }}</div>
-        <div class="text-right font-bold {% if tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
-            <span class="finances-money">{% if tx.amount > 0 %}+{% else %}-{% endif %}{{ tx.abs_amount|floatformat:2 }} ₽</span>
+        <div class="finances-row-account finances-muted">
+            {% if tx.is_transfer %}
+                {{ tx.transfer_from_account_name }} → {{ tx.transfer_to_account_name }}
+            {% else %}
+                {{ tx.account_name }}
+            {% endif %}
+        </div>
+        <div class="text-right font-bold {% if tx.is_transfer %}finances-muted{% elif tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
+            <span class="finances-money">{% if tx.is_transfer %}{{ tx.abs_amount|floatformat:2 }} ₽{% elif tx.amount > 0 %}+{{ tx.abs_amount|floatformat:2 }} ₽{% else %}-{{ tx.abs_amount|floatformat:2 }} ₽{% endif %}</span>
             <span class="finances-money-hidden">•••</span>
         </div>
         <div class="finances-row-date finances-muted">{{ tx.date|date:'d.m.Y' }}</div>
         <div class="finances-row-actions finances-row-actions-inline swipe-hide-mobile">
             {% if tx.can_edit %}
-                {% if tx.is_receipt %}
+                {% if tx.is_transfer %}
+                    <form method="post" action="{{ tx.delete_url }}">
+                        {% csrf_token %}
+                        <button class="finances-negative" type="submit" title="{% translate 'Удалить' %}">
+                            {% include 'partials/_swipe_icons.html' with icon='delete' %}
+                        </button>
+                    </form>
+                {% elif tx.is_receipt %}
                     <a class="finances-muted" href="{{ tx.edit_url }}" title="{% translate 'Перейти к чеку' %}">
                         {% include 'partials/_swipe_icons.html' with icon='receipt' %}
                     </a>

@@ -21,6 +21,7 @@ from hasta_la_vista_money.finance_account.views import (
     TransactionCopyView,
     TransactionDeleteView,
     TransactionUpdateView,
+    TransferDeleteView,
     TransferMoneyAccountView,
 )
 
@@ -50,6 +51,11 @@ urlpatterns = [
         'transfer-money/',
         TransferMoneyAccountView.as_view(),
         name='transfer_money',
+    ),
+    path(
+        'transfers/<int:pk>/delete/',
+        TransferDeleteView.as_view(),
+        name='transfer_delete',
     ),
     path(
         'list/',
