@@ -39,16 +39,16 @@
                     <div class="finances-row-title">{{ category.name }}</div>
                     <div class="finances-row-sub">{{ category.items|length }} {% translate 'операций' %} · {{ category.share_pct|floatformat:1 }}%</div>
                 </div>
-                <strong class="{% if category.total > 0 %}finances-positive{% else %}finances-negative{% endif %}">
-                    {% if category.total > 0 %}+{% else %}-{% endif %}{{ category.total|floatformat:2|cut:'-' }} ₽
+                <strong class="{% if category.type == 'transfer' %}finances-muted{% elif category.total > 0 %}finances-positive{% else %}finances-negative{% endif %}">
+                    {% if category.type == 'transfer' %}{{ category.total|floatformat:2 }} ₽{% elif category.total > 0 %}+{{ category.total|floatformat:2 }} ₽{% else %}-{{ category.total|floatformat:2|cut:'-' }} ₽{% endif %}
                 </strong>
             </div>
             <div class="finances-category-bar"><i style="width: {{ category.bar_pct|stringformat:'f' }}%"></i></div>
             <div class="finances-side-list">
                 {% for tx in category.items|slice:':3' %}
                     <div class="finances-side-item finances-muted">
-                        <span>{{ tx.date|date:'d.m.Y' }} · {{ tx.account_name }}</span>
-                        <span>{% if tx.amount > 0 %}+{% else %}-{% endif %}{{ tx.abs_amount|floatformat:2 }} ₽</span>
+                        <span>{{ tx.date|date:'d.m.Y' }} · {% if tx.is_transfer %}{{ tx.transfer_from_account_name }} → {{ tx.transfer_to_account_name }}{% else %}{{ tx.account_name }}{% endif %}</span>
+                        <span>{% if tx.is_transfer %}{{ tx.abs_amount|floatformat:2 }} ₽{% elif tx.amount > 0 %}+{{ tx.abs_amount|floatformat:2 }} ₽{% else %}-{{ tx.abs_amount|floatformat:2 }} ₽{% endif %}</span>
                     </div>
                 {% endfor %}
             </div>
