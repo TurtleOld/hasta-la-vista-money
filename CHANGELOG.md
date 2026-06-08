@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.4.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.4.0...v2.4.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* **finance_account:** lock transfer row on delete ([#855](https://github.com/TurtleOld/hasta-la-vista-money/issues/855)) ([5311ae9](https://github.com/TurtleOld/hasta-la-vista-money/commit/5311ae9fb24e1b5bf377218c91f874588443d03d))
+
 ## [2.4.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.3.1...v2.4.0) (2026-06-08)
 
 
