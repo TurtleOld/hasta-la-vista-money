@@ -32,6 +32,35 @@ class TransferMoneyLogRepository:
         """
         return TransferMoneyLog.objects.get(pk=log_id)
 
+    def get_by_id_for_user(
+        self,
+        log_id: int,
+        user: User,
+        *,
+        for_update: bool = False,
+    ) -> TransferMoneyLog:
+        """Get transfer log by ID for a user.
+
+        Args:
+            log_id: ID of the log to retrieve.
+            user: Owner of the transfer log.
+            for_update: Whether to lock the row for an atomic mutation.
+
+        Returns:
+            TransferMoneyLog: Transfer log instance.
+
+        Raises:
+            TransferMoneyLog.DoesNotExist: If log doesn't exist for user.
+        """
+        queryset = TransferMoneyLog.objects.select_related(
+            'from_account',
+            'to_account',
+            'user',
+        )
+        if for_update:
+            queryset = queryset.select_for_update()
+        return queryset.get(pk=log_id, user=user)
+
     def get_by_user(self, user: User) -> QuerySet[TransferMoneyLog]:
         """Get all transfer logs for a user.
 
@@ -44,7 +73,8 @@ class TransferMoneyLogRepository:
         return TransferMoneyLog.objects.filter(user=user)
 
     def get_by_user_with_related(
-        self, user: User
+        self,
+        user: User,
     ) -> QuerySet[TransferMoneyLog]:
         """Get all transfer logs for a user with related objects optimized.
 
@@ -56,7 +86,9 @@ class TransferMoneyLogRepository:
                 optimizations.
         """
         return TransferMoneyLog.objects.filter(user=user).select_related(
-            'to_account', 'from_account', 'user'
+            'to_account',
+            'from_account',
+            'user',
         )
 
     def get_by_user_ordered(
@@ -112,6 +144,13 @@ class TransferMoneyLogRepository:
             TransferMoneyLog: Created transfer log instance.
         """
         return TransferMoneyLog.objects.create(**kwargs)
+
+    def delete_log(
+        self,
+        transfer_log: TransferMoneyLog,
+    ) -> tuple[int, dict[str, int]]:
+        """Delete a transfer log instance."""
+        return transfer_log.delete()
 
     def filter(self, **kwargs: object) -> QuerySet[TransferMoneyLog]:
         """Filter transfer logs by given criteria.
