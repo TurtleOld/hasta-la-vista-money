@@ -2,7 +2,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.finance_account.models import (
     Account,
@@ -84,3 +86,46 @@ class TransferService:
             exchange_date=exchange_date,
             notes=notes or '',
         )
+
+    @transaction.atomic
+    def delete_transfer(
+        self,
+        *,
+        transfer_id: int,
+        user: User,
+    ) -> None:
+        """Delete transfer log and reverse its balance movements.
+
+        Raises:
+            PermissionDenied: If the transfer does not belong to the user.
+            ValidationError: If one of transfer accounts was already deleted.
+        """
+        try:
+            transfer_log = (
+                self.transfer_money_log_repository.get_by_id_for_user(
+                    transfer_id,
+                    user,
+                    for_update=True,
+                )
+            )
+        except TransferMoneyLog.DoesNotExist as error:
+            raise PermissionDenied(
+                _('Перевод не найден или недоступен.'),
+            ) from error
+
+        if transfer_log.from_account is None or transfer_log.to_account is None:
+            raise ValidationError(
+                _(
+                    'Нельзя удалить перевод: один из счетов уже удалён.',
+                ),
+            )
+
+        self._balance_service.refund_to_account(
+            transfer_log.from_account,
+            transfer_log.amount,
+        )
+        self._balance_service.apply_receipt_spend(
+            transfer_log.to_account,
+            transfer_log.amount,
+        )
+        self.transfer_money_log_repository.delete_log(transfer_log)
