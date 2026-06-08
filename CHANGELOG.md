@@ -1,5 +1,17 @@
 # История изменений
 
+## [2.4.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.3.1...v2.4.0) (2026-06-08)
+
+
+### Features
+
+* **finance_account:** show and delete transfers ([#853](https://github.com/TurtleOld/hasta-la-vista-money/issues/853)) ([6b03451](https://github.com/TurtleOld/hasta-la-vista-money/commit/6b03451415822b34d0ef4f8940b24a54934c5009))
+
+
+### Bug Fixes
+
+* **deps:** update dependency django to v6.0.6 ([#852](https://github.com/TurtleOld/hasta-la-vista-money/issues/852)) ([cf71dd8](https://github.com/TurtleOld/hasta-la-vista-money/commit/cf71dd8eee6c0bf80eb67f3391d272601c3a5959))
+
 ## [2.3.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.3.0...v2.3.1) (2026-06-04)
 
 
