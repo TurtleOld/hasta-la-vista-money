@@ -212,6 +212,30 @@ class TestAccount(TestCase):
         self.assertEqual(response.status_code, constants.SUCCESS_CODE)
         self.assertTrue(Account.objects.filter(pk=self.account1.pk).exists())
 
+    def test_transaction_delete_validation_error_shows_message(self) -> None:
+        self.client.force_login(self.user)
+        self.account1.balance = Decimal('0.00')
+        self.account1.save(update_fields=['balance'])
+
+        response = self.client.post(
+            reverse(
+                'finance_account:transaction_delete',
+                args=(self.income1.pk,),
+            ),
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse('finances'))
+        self.assertTrue(
+            Transaction.objects.filter(pk=self.income1.pk).exists(),
+        )
+        self.account1.refresh_from_db()
+        self.assertEqual(self.account1.balance, Decimal('0.00'))
+        self.assertIn(
+            'Недостаточно средств на счете',
+            [m.message for m in messages.get_messages(response.wsgi_request)],
+        )
+
     def test_transfer_money(self) -> None:
         self.client.force_login(self.user)
 

@@ -74,6 +74,17 @@ if TYPE_CHECKING:
     )
 
 logger = structlog.get_logger(__name__)
+_INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
+
+
+def _validation_error_message(error: ValidationError) -> str:
+    """Return a readable message from Django ValidationError."""
+    for validation_error in getattr(error, 'error_list', ()):
+        if validation_error.code == _INSUFFICIENT_FUNDS_CODE:
+            return str(_('Недостаточно средств на счете'))
+    if error.messages:
+        return ' '.join(str(message) for message in error.messages)
+    return str(_('Ошибка проверки данных.'))
 
 
 @dataclass(frozen=True)
@@ -666,6 +677,8 @@ class TransactionDeleteView(LoginRequiredMixin, View):
                 transaction_obj=transaction_obj,
             )
             messages.success(request, _('Операция успешно удалена.'))
+        except ValidationError as error:
+            messages.error(request, _validation_error_message(error))
         except (ValueError, TypeError, PermissionDenied) as error:
             messages.error(request, str(error))
         return redirect('finances')
@@ -698,7 +711,10 @@ class TransferDeleteView(LoginRequiredMixin, View):
             TypeError,
             PermissionDenied,
         ) as error:
-            messages.error(request, str(error))
+            if isinstance(error, ValidationError):
+                messages.error(request, _validation_error_message(error))
+            else:
+                messages.error(request, str(error))
         return redirect('finances')
 
 
