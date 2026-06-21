@@ -16,12 +16,12 @@ class TestNoopClassifier(TestCase):
             transaction_type='expense',
             existing_categories=['Продукты', 'Транспорт'],
         )
-        assert result == 'MAGNIT'
+        self.assertEqual(result, 'MAGNIT')
 
     def test_returns_description_when_no_categories(self):
         clf = NoopClassifier()
         result = clf.classify('ЗП', 'income', [])
-        assert result == 'ЗП'
+        self.assertEqual(result, 'ЗП')
 
 
 class TestOpenAICompatibleClassifier(TestCase):
@@ -50,7 +50,7 @@ class TestOpenAICompatibleClassifier(TestCase):
 
         clf = self._make_clf()
         result = clf.classify('MAGNIT', 'expense', ['Продукты', 'Транспорт'])
-        assert result == 'Продукты'
+        self.assertEqual(result, 'Продукты')
 
     @patch(
         'hasta_la_vista_money.users.services.category_classifier.httpx.Client',
@@ -65,7 +65,7 @@ class TestOpenAICompatibleClassifier(TestCase):
 
         clf = self._make_clf()
         result = clf.classify('NETFLIX.COM', 'expense', [])
-        assert result == 'NETFLIX.COM'
+        self.assertEqual(result, 'NETFLIX.COM')
 
     @patch(
         'hasta_la_vista_money.users.services.category_classifier.httpx.Client',
@@ -85,4 +85,4 @@ class TestOpenAICompatibleClassifier(TestCase):
 
         clf = self._make_clf()
         result = clf.classify('Яндекс Такси', 'expense', ['Транспорт'])
-        assert result == 'Транспорт'
+        self.assertEqual(result, 'Транспорт')
