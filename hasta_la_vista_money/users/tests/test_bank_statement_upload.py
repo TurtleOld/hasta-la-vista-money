@@ -309,6 +309,47 @@ class TestBankStatementUploadStatusView(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_get_status_completed_with_reconciliation(self) -> None:
+        """Test completed status response includes reconciliation fields."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status='completed',
+            progress=100,
+            income_count=5,
+            expense_count=10,
+            statement_closing_balance=Decimal('1500.00'),
+            account_balance_after=Decimal('1450.00'),
+            balance_discrepancy=Decimal('50.00'),
+        )
+
+        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['statement_closing_balance'], '1500.00')
+        self.assertEqual(data['account_balance_after'], '1450.00')
+        self.assertEqual(data['balance_discrepancy'], '50.00')
+
+    def test_get_status_completed_no_reconciliation(self) -> None:
+        """Test status response has null reconciliation fields when not set."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status='completed',
+            progress=100,
+        )
+
+        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIsNone(data['statement_closing_balance'])
+        self.assertIsNone(data['account_balance_after'])
+        self.assertIsNone(data['balance_discrepancy'])
+
 
 class TestBankStatementParser(TestCase):
     """Test cases for bank statement parser."""
