@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 import re
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -38,6 +40,24 @@ if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class StatementParseResult:
+    """Результат разбора банковской выписки.
+
+    Attributes:
+        transactions: Список распознанных операций. Каждый элемент содержит
+            ключи ``date``, ``amount``, ``description`` и опционально
+            ``source_ref``.
+        closing_balance: Конечный остаток по выписке, если удалось извлечь.
+        closing_balance_date: Дата конечного остатка, если известна.
+    """
+
+    transactions: list[dict[str, Any]] = field(default_factory=list)
+    closing_balance: Decimal | None = None
+    closing_balance_date: date_type | None = None
+
 
 # General parsing constants
 MIN_TABLE_COLUMNS = 5
@@ -226,6 +246,34 @@ class BaseBankStatementParser(ABC):
 
         return cleaned
 
+    def _extract_closing_balance(self, full_text: str) -> Decimal | None:
+        """Извлечь конечный остаток из текста выписки.
+
+        Args:
+            full_text: Полный текст PDF-выписки, полученный через pdfminer.
+
+        Returns:
+            Конечный остаток как ``Decimal`` или ``None``, если не найден.
+        """
+        pattern = (
+            r'(?:Исходящий остаток|Остаток на конец периода'
+            r'|Остаток на конец|Конечный остаток|Closing balance)'
+            r'[^\d\-]*([+-]?\s*\d[\d\s\xa0]*[,\.]\d{2})'
+        )
+        match = re.search(pattern, full_text, re.IGNORECASE)
+        if match:
+            raw = (
+                match.group(1)
+                .replace('\xa0', '')
+                .replace(' ', '')
+                .replace(',', '.')
+            )
+            try:
+                return Decimal(raw)
+            except InvalidOperation:
+                pass
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Generic Russian bank parser (original logic)
@@ -235,9 +283,22 @@ class BaseBankStatementParser(ABC):
 class _GenericBankParser(BaseBankStatementParser):
     """Generic parser for Russian bank statements."""
 
-    def parse(self) -> list[dict[str, Any]]:
+    def parse(self) -> StatementParseResult:
+        """Разобрать PDF-выписку неизвестного банка.
+
+        Returns:
+            ``StatementParseResult`` со списком операций и конечным остатком
+            (если удалось извлечь из текста).
+
+        Raises:
+            BankStatementParseError: При любой ошибке парсинга.
+        """
         try:
             logger.info('Starting PDF parsing (generic): %s', self.pdf_path)
+            try:
+                full_text = extract_text(str(self.pdf_path))
+            except Exception:
+                full_text = ''
             tables = self._read_tables()
             logger.info('Found %d tables in PDF', len(tables))
             transactions: list[dict[str, Any]] = []
@@ -258,16 +319,16 @@ class _GenericBankParser(BaseBankStatementParser):
                     )
                     transactions.extend(parsed)
 
-            # Filter zero-amount transactions
             transactions = [
                 t for t in transactions if t['amount'] != Decimal(0)
             ]
-
             transactions = _dedup_transactions(transactions)
+            closing_balance = self._extract_closing_balance(full_text)
 
             logger.info(
-                'Parsing complete. Total transactions: %d (after dedup)',
+                'Parsing complete. Total: %d transactions, closing_balance=%s',
                 len(transactions),
+                closing_balance,
             )
         except BankStatementParseError:
             raise
@@ -276,7 +337,10 @@ class _GenericBankParser(BaseBankStatementParser):
             error_msg = f'Не удалось обработать PDF файл: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
-            return transactions
+            return StatementParseResult(
+                transactions=transactions,
+                closing_balance=closing_balance,
+            )
 
     def _is_transaction_table(self, df: pd.DataFrame) -> bool:
         for _idx, row in df.iterrows():
@@ -422,7 +486,12 @@ class _RaiffeisenBankParser(_GenericBankParser):
     [6]=Номер карты
     """
 
-    def parse(self) -> list[dict[str, Any]]:
+    def parse(self) -> StatementParseResult:
+        """Разобрать PDF-выписку Райффайзенбанка.
+
+        Returns:
+            ``StatementParseResult`` со списком операций и конечным остатком.
+        """
         logger.info('Starting PDF parsing (Raiffeisen): %s', self.pdf_path)
         return super().parse()
 
@@ -473,9 +542,21 @@ class _SberbankParser(BaseBankStatementParser):
     Columns: [0]=Дата | [1]=Категория | [2]=Сумма | [3]=Остаток
     """
 
-    def parse(self) -> list[dict[str, Any]]:
+    def parse(self) -> StatementParseResult:
+        """Разобрать PDF-выписку Сбербанка (кредитная карта).
+
+        Returns:
+            ``StatementParseResult`` со списком операций и конечным остатком.
+
+        Raises:
+            BankStatementParseError: При любой ошибке парсинга.
+        """
         try:
             logger.info('Starting PDF parsing (Sberbank): %s', self.pdf_path)
+            try:
+                full_text = extract_text(str(self.pdf_path))
+            except Exception:
+                full_text = ''
             tables = self._read_tables()
             logger.info('Found %d tables in PDF', len(tables))
             transactions: list[dict[str, Any]] = []
@@ -496,16 +577,16 @@ class _SberbankParser(BaseBankStatementParser):
                     )
                     transactions.extend(parsed)
 
-            # Filter zero-amount transactions
             transactions = [
                 t for t in transactions if t['amount'] != Decimal(0)
             ]
-
             transactions = _dedup_transactions(transactions)
+            closing_balance = self._extract_closing_balance(full_text)
 
             logger.info(
-                'Parsing complete. Total transactions: %d (after dedup)',
+                'Parsing complete. Total: %d (after dedup), closing_balance=%s',
                 len(transactions),
+                closing_balance,
             )
         except BankStatementParseError:
             raise
@@ -514,7 +595,10 @@ class _SberbankParser(BaseBankStatementParser):
             error_msg = f'Не удалось обработать PDF файл: {e!s}'
             raise BankStatementParseError(error_msg) from e
         else:
-            return transactions
+            return StatementParseResult(
+                transactions=transactions,
+                closing_balance=closing_balance,
+            )
 
     def _is_transaction_table(self, df: pd.DataFrame) -> bool:
         """Detect Sberbank transaction table by column header keywords."""
@@ -889,8 +973,12 @@ class BankStatementParser:
             raise FileNotFoundError(error_msg)
         self._delegate = _create_parser(self.pdf_path)
 
-    def parse(self) -> list[dict[str, Any]]:
-        """Parse PDF and return list of {date, amount, description} dicts."""
+    def parse(self) -> StatementParseResult:
+        """Разобрать PDF и вернуть результат парсинга.
+
+        Returns:
+            ``StatementParseResult`` с операциями и конечным остатком.
+        """
         return self._delegate.parse()
 
     def __getattr__(self, name: str) -> Any:
@@ -924,7 +1012,8 @@ def process_bank_statement(
         BankStatementParseError: If parsing fails.
     """
     parser = BankStatementParser(pdf_path)
-    transactions = parser.parse()
+    parse_result = parser.parse()
+    transactions = parse_result.transactions
     logger.info('Found %d transactions to process', len(transactions))
 
     income_count = 0

@@ -26,6 +26,7 @@ from hasta_la_vista_money.users.models import BankStatementUpload, User
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
+    StatementParseResult,
     _create_parser,
     _GenericBankParser,
     _get_or_create_category,
@@ -33,6 +34,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     _SberbankParser,
     process_bank_statement,
 )
+from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
 
 class TestBankStatementUploadView(TestCase):
@@ -307,6 +309,47 @@ class TestBankStatementUploadStatusView(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_get_status_completed_with_reconciliation(self) -> None:
+        """Test completed status response includes reconciliation fields."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status='completed',
+            progress=100,
+            income_count=5,
+            expense_count=10,
+            statement_closing_balance=Decimal('1500.00'),
+            account_balance_after=Decimal('1450.00'),
+            balance_discrepancy=Decimal('50.00'),
+        )
+
+        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['statement_closing_balance'], '1500.00')
+        self.assertEqual(data['account_balance_after'], '1450.00')
+        self.assertEqual(data['balance_discrepancy'], '50.00')
+
+    def test_get_status_completed_no_reconciliation(self) -> None:
+        """Test status response has null reconciliation fields when not set."""
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status='completed',
+            progress=100,
+        )
+
+        url = reverse('users:bank_statement_upload_status', args=[upload.id])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIsNone(data['statement_closing_balance'])
+        self.assertIsNone(data['account_balance_after'])
+        self.assertIsNone(data['balance_discrepancy'])
+
 
 class TestBankStatementParser(TestCase):
     """Test cases for bank statement parser."""
@@ -365,10 +408,10 @@ class TestBankStatementParser(TestCase):
         pdf_path = self._create_mock_pdf([])
         try:
             parser = BankStatementParser(pdf_path)
-            transactions = parser.parse()
+            result = parser.parse()
 
-            # Basic validation
-            self.assertIsInstance(transactions, list)
+            self.assertIsInstance(result, StatementParseResult)
+            self.assertIsInstance(result.transactions, list)
         finally:
             pdf_path.unlink()
 
@@ -2201,9 +2244,9 @@ class TestBankStatementEdgeCases(TestCase):
                 mock_camelot.read_pdf.return_value = []
 
                 parser = BankStatementParser(pdf_path)
-                transactions = parser.parse()
+                result = parser.parse()
 
-                self.assertEqual(transactions, [])
+                self.assertEqual(result.transactions, [])
         finally:
             pdf_path.unlink()
 
@@ -2227,10 +2270,9 @@ class TestBankStatementEdgeCases(TestCase):
                 mock_camelot.read_pdf.return_value = [mock_table]
 
                 parser = BankStatementParser(pdf_path)
-                transactions = parser.parse()
+                result = parser.parse()
 
-                # Should not parse table with < MIN_TABLE_COLUMNS
-                self.assertEqual(transactions, [])
+                self.assertEqual(result.transactions, [])
         finally:
             pdf_path.unlink()
 
@@ -2824,3 +2866,156 @@ class TestSberbankParser(TestCase):
         transactions = parser._parse_table(df)
         self.assertEqual(len(transactions), 1)
         self.assertIsNone(transactions[0]['source_ref'])
+
+
+class TestStatementParseResult(TestCase):
+    """Тест структуры результата парсинга."""
+
+    def test_has_expected_fields(self):
+        result = StatementParseResult(
+            transactions=[],
+            closing_balance=Decimal('12345.67'),
+            closing_balance_date=None,
+        )
+        self.assertEqual(result.transactions, [])
+        self.assertEqual(result.closing_balance, Decimal('12345.67'))
+        self.assertIsNone(result.closing_balance_date)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    @patch('hasta_la_vista_money.users.services.bank_statement.extract_text')
+    def test_parse_returns_statement_parse_result(
+        self,
+        mock_extract_text,
+        mock_camelot,
+    ):
+        mock_extract_text.return_value = 'Райффайзенбанк'
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame()
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
+            f.write(b'%PDF-1.4 fake')
+            path = f.name
+
+        try:
+            parser = BankStatementParser(path)
+            result = parser.parse()
+            self.assertIsInstance(result, StatementParseResult)
+            self.assertIsInstance(result.transactions, list)
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+
+class TestProcessBankStatementTaskIntegration(TestCase):
+    """Интеграционные тесты задачи Celery с classifier и полями сверки."""
+
+    fixtures: ClassVar[list[str]] = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user: User = User.objects.get(pk=1)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Тест сверки',
+            balance=Decimal('10000.00'),
+            currency='RUB',
+        )
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_category_uses_classifier_output(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        mock_classifier = MagicMock()
+        mock_classifier.classify.return_value = 'Продукты'
+        mock_container = MagicMock()
+        mock_container.users.category_classifier.return_value = mock_classifier
+        mock_container_cls.return_value = mock_container
+
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-500.00'),
+                    'description': 'MAGNIT 1234',
+                    'source_ref': 'ref-001',
+                },
+            ],
+            closing_balance=Decimal('9500.00'),
+        )
+        mock_parser_cls.return_value = mock_parser
+
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/test.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        self.assertEqual(
+            upload.statement_closing_balance,
+            Decimal('9500.00'),
+        )
+
+        category = Category.objects.filter(
+            user=self.user,
+            name='Продукты',
+        ).first()
+        self.assertIsNotNone(category)
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_balance_discrepancy_saved(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        mock_classifier = MagicMock()
+        mock_classifier.classify.return_value = 'Прочее'
+        mock_container = MagicMock()
+        mock_container.users.category_classifier.return_value = mock_classifier
+        mock_container_cls.return_value = mock_container
+
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = StatementParseResult(
+            transactions=[],
+            closing_balance=Decimal('9000.00'),
+        )
+        mock_parser_cls.return_value = mock_parser
+
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/test.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.statement_closing_balance,
+            Decimal('9000.00'),
+        )
+        self.assertEqual(
+            upload.account_balance_after,
+            Decimal('10000.00'),
+        )
+        self.assertEqual(
+            upload.balance_discrepancy,
+            Decimal('-1000.00'),
+        )

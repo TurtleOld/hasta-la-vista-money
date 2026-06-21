@@ -148,27 +148,27 @@
                                     {% for product_form in product_formset %}
                                         <tr class="product-row">
                                             <td class="receipt-review-table-idx">{{ forloop.counter }}</td>
-                                            <td>
+                                            <td data-label="{% translate 'Название' %}">
                                                 {{ product_form.product_name }}
                                                 {% if product_form.product_name.errors %}<div class="receipt-review-error">{{ product_form.product_name.errors }}</div>{% endif %}
                                             </td>
-                                            <td>
+                                            <td data-label="{% translate 'Категория' %}">
                                                 {{ product_form.category }}
                                                 {% if product_form.category.errors %}<div class="receipt-review-error">{{ product_form.category.errors }}</div>{% endif %}
                                             </td>
-                                            <td class="ta-right">
+                                            <td class="ta-right" data-label="{% translate 'Цена' %}">
                                                 {{ product_form.price }}
                                                 {% if product_form.price.errors %}<div class="receipt-review-error">{{ product_form.price.errors }}</div>{% endif %}
                                             </td>
-                                            <td class="ta-right">
+                                            <td class="ta-right" data-label="{% translate 'Кол-во' %}">
                                                 {{ product_form.quantity }}
                                                 {% if product_form.quantity.errors %}<div class="receipt-review-error">{{ product_form.quantity.errors }}</div>{% endif %}
                                             </td>
-                                            <td class="ta-right">
+                                            <td class="ta-right" data-label="{% translate 'Сумма' %}">
                                                 {{ product_form.amount }}
                                                 {% if product_form.amount.errors %}<div class="receipt-review-error">{{ product_form.amount.errors }}</div>{% endif %}
                                             </td>
-                                            <td class="ta-center">
+                                            <td class="ta-center" data-label="{% translate 'Удалить' %}">
                                                 {{ product_form.DELETE }}
                                             </td>
                                             {% for hidden in product_form.hidden_fields %}{{ hidden }}{% endfor %}

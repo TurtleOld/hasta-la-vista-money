@@ -632,11 +632,21 @@ class TransactionCopyView(LoginRequiredMixin, View):
             messages.error(request, _('Некорректный идентификатор операции.'))
             return redirect('finances')
         try:
-            request.container.transactions.transaction_service().copy_transaction(
+            svc = request.container.transactions.transaction_service()
+            new_transaction = svc.copy_transaction(
                 user=request.user,
                 transaction_id=int(transaction_id),
             )
-            messages.success(request, _('Операция успешно скопирована.'))
+            messages.success(
+                request,
+                _('Операция скопирована. Отредактируйте данные и сохраните.'),
+            )
+            return redirect(
+                reverse(
+                    'finance_account:transaction_change',
+                    kwargs={'pk': new_transaction.pk},
+                ),
+            )
         except (ValueError, TypeError, PermissionDenied) as error:
             messages.error(request, str(error))
         return redirect('finances')
