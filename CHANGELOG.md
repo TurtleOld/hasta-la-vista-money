@@ -1,5 +1,17 @@
 # История изменений
 
+## [2.5.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.4.1...v2.5.0) (2026-06-21)
+
+
+### Features
+
+* **users:** balance reconciliation — LLM categorization and statement verification ([#861](https://github.com/TurtleOld/hasta-la-vista-money/issues/861)) ([41d591c](https://github.com/TurtleOld/hasta-la-vista-money/commit/41d591c43bc362665958b64a2653d5267d855e79))
+
+
+### Bug Fixes
+
+* env vars, copy redirect, datetime defaults, mobile receipt preview ([#863](https://github.com/TurtleOld/hasta-la-vista-money/issues/863)) ([81c3742](https://github.com/TurtleOld/hasta-la-vista-money/commit/81c3742177009b8f0f7ade08ca98662b1040f278))
+
 ## [2.4.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.4.0...v2.4.1) (2026-06-08)
 
 
