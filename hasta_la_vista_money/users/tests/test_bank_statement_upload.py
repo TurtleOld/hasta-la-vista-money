@@ -26,6 +26,7 @@ from hasta_la_vista_money.users.models import BankStatementUpload, User
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
+    StatementParseResult,
     _create_parser,
     _GenericBankParser,
     _get_or_create_category,
@@ -365,10 +366,10 @@ class TestBankStatementParser(TestCase):
         pdf_path = self._create_mock_pdf([])
         try:
             parser = BankStatementParser(pdf_path)
-            transactions = parser.parse()
+            result = parser.parse()
 
-            # Basic validation
-            self.assertIsInstance(transactions, list)
+            self.assertIsInstance(result, StatementParseResult)
+            self.assertIsInstance(result.transactions, list)
         finally:
             pdf_path.unlink()
 
@@ -2201,9 +2202,9 @@ class TestBankStatementEdgeCases(TestCase):
                 mock_camelot.read_pdf.return_value = []
 
                 parser = BankStatementParser(pdf_path)
-                transactions = parser.parse()
+                result = parser.parse()
 
-                self.assertEqual(transactions, [])
+                self.assertEqual(result.transactions, [])
         finally:
             pdf_path.unlink()
 
@@ -2227,10 +2228,9 @@ class TestBankStatementEdgeCases(TestCase):
                 mock_camelot.read_pdf.return_value = [mock_table]
 
                 parser = BankStatementParser(pdf_path)
-                transactions = parser.parse()
+                result = parser.parse()
 
-                # Should not parse table with < MIN_TABLE_COLUMNS
-                self.assertEqual(transactions, [])
+                self.assertEqual(result.transactions, [])
         finally:
             pdf_path.unlink()
 
@@ -2824,3 +2824,41 @@ class TestSberbankParser(TestCase):
         transactions = parser._parse_table(df)
         self.assertEqual(len(transactions), 1)
         self.assertIsNone(transactions[0]['source_ref'])
+
+
+class TestStatementParseResult(TestCase):
+    """Тест структуры результата парсинга."""
+
+    def test_has_expected_fields(self):
+        result = StatementParseResult(
+            transactions=[],
+            closing_balance=Decimal('12345.67'),
+            closing_balance_date=None,
+        )
+        self.assertEqual(result.transactions, [])
+        self.assertEqual(result.closing_balance, Decimal('12345.67'))
+        self.assertIsNone(result.closing_balance_date)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    @patch('hasta_la_vista_money.users.services.bank_statement.extract_text')
+    def test_parse_returns_statement_parse_result(
+        self,
+        mock_extract_text,
+        mock_camelot,
+    ):
+        mock_extract_text.return_value = 'Райффайзенбанк'
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame()
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
+            f.write(b'%PDF-1.4 fake')
+            path = f.name
+
+        try:
+            parser = BankStatementParser(path)
+            result = parser.parse()
+            self.assertIsInstance(result, StatementParseResult)
+            self.assertIsInstance(result.transactions, list)
+        finally:
+            Path(path).unlink(missing_ok=True)
