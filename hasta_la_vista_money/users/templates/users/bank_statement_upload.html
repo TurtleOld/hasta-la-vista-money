@@ -146,6 +146,30 @@
                 </div>
             </div>
 
+            <!-- Reconciliation block (shown after completion) -->
+            <div id="reconciliationBlock" class="hidden mt-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="p-6">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                        <i class="bi bi-calculator mr-2"></i>
+                        {% translate 'Сверка баланса' %}
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{% translate 'Остаток по выписке' %}</p>
+                            <p id="reconStatementBalance" class="text-lg font-semibold text-gray-900 dark:text-white">—</p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{% translate 'Остаток в приложении' %}</p>
+                            <p id="reconAppBalance" class="text-lg font-semibold text-gray-900 dark:text-white">—</p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{% translate 'Расхождение' %}</p>
+                            <p id="reconDiscrepancy" class="text-lg font-semibold text-gray-900 dark:text-white">—</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                 <div class="flex">
                     <div class="shrink-0">
@@ -197,7 +221,9 @@
         error: '{% translate "Ошибка:" %}',
         unknownError: '{% translate "Неизвестная ошибка" %}',
         processingError: '{% translate "Ошибка обработки" %}',
-        uploading: '{% translate "Загрузка..." %}'
+        uploading: '{% translate "Загрузка..." %}',
+        balanceMatch: '{% translate "Совпадает" %}',
+        balanceMismatch: '{% translate "Расхождение" %}'
     };
 </script>
 <script src="{% static 'js/bank-statement-upload.js' %}" defer></script>

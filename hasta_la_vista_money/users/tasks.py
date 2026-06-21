@@ -6,6 +6,7 @@ from celery import shared_task
 from django.db import transaction
 from django.db.models import F
 
+from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.transactions.models import (
     Category,
@@ -17,6 +18,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
 )
+from hasta_la_vista_money.users.services.pii_stripper import strip_pii
 
 logger = logging.getLogger(__name__)
 
@@ -26,17 +28,18 @@ def process_bank_statement_task(
     self: shared_task,  # type: ignore[valid-type]
     upload_id: int,
 ) -> dict[str, int]:
-    """Process bank statement PDF in background.
+    """Обработать PDF-выписку в фоне: импортировать транзакции и сверить баланс.
 
     Args:
-        self: Celery task instance.
-        upload_id: ID of the BankStatementUpload instance.
+        self: Экземпляр Celery-задачи (bind=True).
+        upload_id: Первичный ключ ``BankStatementUpload`` для обработки.
 
     Returns:
-        Dictionary with counts of created transactions.
+        Словарь с ключами ``income_count``, ``expense_count``,
+        ``skipped_count``, ``total_count``.
 
     Raises:
-        BankStatementParseError: If parsing fails.
+        BankStatementParseError: Если PDF не удалось разобрать.
     """
     logger.info(
         'Starting bank statement processing task for upload_id=%d',
@@ -44,35 +47,63 @@ def process_bank_statement_task(
     )
 
     try:
-        upload = BankStatementUpload.objects.get(id=upload_id)
+        upload = BankStatementUpload.objects.select_related(
+            'user',
+            'account',
+        ).get(id=upload_id)
         _initialize_upload(upload, self)
 
-        logger.info('Processing upload: %s', upload.pdf_file.path)
+        classifier = ApplicationContainer().users.category_classifier()
 
-        # Parse the PDF
+        logger.info('Processing upload: %s', upload.pdf_file.path)
         parser = BankStatementParser(upload.pdf_file.path)
-        transactions = parser.parse()
+        parse_result = parser.parse()
+        transactions = parse_result.transactions
 
         upload.total_transactions = len(transactions)
         upload.save(update_fields=['total_transactions'])
 
         logger.info('Found %d transactions to process', len(transactions))
 
-        income_count, expense_count, skipped_count = _process_transactions(
-            upload,
-            transactions,
+        existing_categories = list(
+            Category.objects.filter(user=upload.user)
+            .values_list('name', flat=True)
+            .distinct(),
         )
 
-        # Mark as completed
+        income_count, expense_count, skipped_count = _process_transactions(
+            upload=upload,
+            transactions=transactions,
+            classifier=classifier,
+            existing_categories=existing_categories,
+        )
+
+        upload.account.refresh_from_db(fields=['balance'])
+        if parse_result.closing_balance is not None:
+            upload.statement_closing_balance = parse_result.closing_balance
+            upload.account_balance_after = upload.account.balance
+            upload.balance_discrepancy = (
+                parse_result.closing_balance - upload.account.balance
+            )
+
         upload.status = BankStatementUpload.Status.COMPLETED
         upload.progress = 100
-        upload.save(update_fields=['status', 'progress'])
+        upload.save(
+            update_fields=[
+                'status',
+                'progress',
+                'statement_closing_balance',
+                'account_balance_after',
+                'balance_discrepancy',
+            ],
+        )
 
         logger.info(
-            'Completed: %d income, %d expenses, %d skipped',
+            'Completed: %d income, %d expenses, %d skipped, discrepancy=%s',
             income_count,
             expense_count,
             skipped_count,
+            upload.balance_discrepancy,
         )
 
         return {
@@ -83,8 +114,7 @@ def process_bank_statement_task(
         }
 
     except BankStatementUpload.DoesNotExist:
-        error_msg = f'Upload with id={upload_id} not found'
-        logger.exception(error_msg)
+        logger.exception('Upload with id=%d not found', upload_id)
         raise
 
     except BankStatementParseError as e:
@@ -95,7 +125,7 @@ def process_bank_statement_task(
             upload.error_message = f'Ошибка парсинга: {e!s}'
             upload.save(update_fields=['status', 'error_message'])
         except BankStatementUpload.DoesNotExist:
-            logger.warning('Upload record not found for error handling')
+            pass
         raise
 
     except Exception as e:
@@ -106,8 +136,7 @@ def process_bank_statement_task(
             upload.error_message = f'Непредвиденная ошибка: {e!s}'
             upload.save(update_fields=['status', 'error_message'])
         except BankStatementUpload.DoesNotExist:
-            logger.warning('Upload record not found for error handling')
-        # Retry the task
+            pass
         raise self.retry(exc=e, countdown=60) from e
 
 
@@ -115,11 +144,11 @@ def _initialize_upload(
     upload: BankStatementUpload,
     task: shared_task,
 ) -> None:
-    """Initialize upload record for processing.
+    """Перевести запись загрузки в статус «обрабатывается».
 
     Args:
-        upload: Upload instance to initialize.
-        task: Celery task instance.
+        upload: Экземпляр ``BankStatementUpload`` для инициализации.
+        task: Экземпляр Celery-задачи для получения ``request.id``.
     """
     upload.status = BankStatementUpload.Status.PROCESSING
     upload.celery_task_id = task.request.id
@@ -130,11 +159,19 @@ def _initialize_upload(
 def _process_transactions(
     upload: BankStatementUpload,
     transactions: list[dict],
+    classifier,
+    existing_categories: list[str],
 ) -> tuple[int, int, int]:
-    """Process transactions and create income/expense records.
+    """Создать транзакции из разобранных записей выписки.
+
+    Args:
+        upload: Запись загрузки для сохранения прогресса.
+        transactions: Список разобранных операций из ``StatementParseResult``.
+        classifier: Экземпляр ``CategoryClassifier`` для определения категории.
+        existing_categories: Актуальный список категорий пользователя для LLM.
 
     Returns:
-        Tuple of (income_count, expense_count, skipped_count).
+        Кортеж ``(income_count, expense_count, skipped_count)``.
     """
     income_count = 0
     expense_count = 0
@@ -168,9 +205,18 @@ def _process_transactions(
                 skipped_count += 1
                 created = False
             else:
+                clean_desc = strip_pii(description)
+                category_name = classifier.classify(
+                    description=clean_desc,
+                    transaction_type=type_value,
+                    existing_categories=existing_categories,
+                )
+                if category_name not in existing_categories:
+                    existing_categories.append(category_name)
+
                 category, _ = Category.objects.get_or_create(
                     user=upload.user,
-                    name=description[:250],
+                    name=category_name[:250],
                     type=type_value,
                 )
                 Transaction.objects.create(
@@ -199,7 +245,6 @@ def _process_transactions(
         upload.skipped_count = skipped_count
         upload.progress = int((idx + 1) / total * 100)
 
-        # Save progress every batch or on last transaction
         if (idx + 1) % batch_size == 0 or idx == total - 1:
             upload.save(
                 update_fields=[
@@ -229,14 +274,23 @@ def _is_duplicate(
     trans_date,
     source_ref: str | None,
 ) -> bool:
-    """Return True if this transaction has already been imported.
+    """Проверить, не была ли операция уже импортирована.
 
-    When ``source_ref`` is provided we first look for an exact match. If
-    none is found we additionally fall back to ``(account, user, type,
-    amount, date)`` against legacy records that have ``source_ref IS NULL``
-    (created before per-operation refs were stored). When such a legacy
-    record is found we backfill its ``source_ref`` so that subsequent
-    imports match it directly, preventing duplicates.
+    При наличии ``source_ref`` сначала ищет точное совпадение, затем
+    делает откат к поиску по ``(account, user, type, amount, date)`` среди
+    записей без ``source_ref`` (созданных до введения идентификаторов).
+    Если найдена такая «legacy»-запись — проставляет ей ``source_ref``.
+
+    Args:
+        account: Счёт, к которому привязана операция.
+        user: Пользователь-владелец.
+        type_value: ``'income'`` или ``'expense'``.
+        abs_amount: Абсолютное значение суммы операции.
+        trans_date: Дата/время операции.
+        source_ref: Идентификатор операции из выписки или ``None``.
+
+    Returns:
+        ``True`` если операция уже существует в базе, иначе ``False``.
     """
     if source_ref:
         if Transaction.objects.filter(

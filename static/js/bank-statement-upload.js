@@ -186,6 +186,10 @@
         const progressTransactions = document.getElementById('progressTransactions');
         const processedCount = document.getElementById('processedCount');
         const totalCount = document.getElementById('totalCount');
+        const reconciliationBlock = document.getElementById('reconciliationBlock');
+        const reconStatementBalance = document.getElementById('reconStatementBalance');
+        const reconAppBalance = document.getElementById('reconAppBalance');
+        const reconDiscrepancy = document.getElementById('reconDiscrepancy');
 
         let pollInterval = null;
         let uploadId = null;
@@ -236,6 +240,23 @@
                 const doneText = document.createTextNode(window.bankStatementTranslations.done);
                 progressTitle.appendChild(doneText);
 
+                if (data.statement_closing_balance !== null && data.statement_closing_balance !== undefined) {
+                    if (reconciliationBlock) reconciliationBlock.classList.remove('hidden');
+                    if (reconStatementBalance) reconStatementBalance.textContent = data.statement_closing_balance;
+                    if (reconAppBalance) reconAppBalance.textContent = data.account_balance_after;
+
+                    const discrepancy = parseFloat(data.balance_discrepancy);
+                    if (reconDiscrepancy) {
+                        if (discrepancy === 0) {
+                            reconDiscrepancy.textContent = window.bankStatementTranslations.balanceMatch;
+                            reconDiscrepancy.classList.add('text-green-600', 'dark:text-green-400');
+                        } else {
+                            reconDiscrepancy.textContent = data.balance_discrepancy;
+                            reconDiscrepancy.classList.add('text-red-600', 'dark:text-red-400');
+                        }
+                    }
+                }
+
                 if (pollInterval) {
                     clearInterval(pollInterval);
                 }
@@ -248,7 +269,7 @@
                             window.location.assign(redirectUrl);
                         }
                     }
-                }, 3000);
+                }, 5000);
             } else if (data.status === 'failed') {
                 progressBar.classList.remove('bg-blue-600', 'dark:bg-blue-500');
                 progressBar.classList.add('bg-red-600', 'dark:bg-red-500');
