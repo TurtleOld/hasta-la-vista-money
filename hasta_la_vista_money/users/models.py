@@ -13,6 +13,7 @@ from django.db.models import (
     BooleanField,
     CharField,
     DateTimeField,
+    DecimalField,
     FileField,
     ForeignKey,
     IntegerField,
@@ -134,6 +135,27 @@ class BankStatementUpload(Model):
     income_count = IntegerField(default=0)
     expense_count = IntegerField(default=0)
     skipped_count = IntegerField(default=0)
+    statement_closing_balance = DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_('Остаток по выписке'),
+    )
+    account_balance_after = DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_('Остаток в приложении после импорта'),
+    )
+    balance_discrepancy = DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_('Расхождение баланса'),
+    )
     error_message = TextField(blank=True, default='')
     celery_task_id = CharField(max_length=255, blank=True, default='')
     created_at = DateTimeField(auto_now_add=True)
