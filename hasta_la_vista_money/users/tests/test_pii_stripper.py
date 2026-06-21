@@ -5,19 +5,19 @@ from hasta_la_vista_money.users.services.pii_stripper import strip_pii
 
 class TestStripPii(TestCase):
     def test_removes_masked_card(self):
-        assert strip_pii('Оплата *4321 MAGNIT') == 'Оплата MAGNIT'
+        self.assertEqual(strip_pii('Оплата *4321 MAGNIT'), 'Оплата MAGNIT')
 
     def test_removes_auth_code(self):
-        assert strip_pii('NETFLIX.COM 123456') == 'NETFLIX.COM'
+        self.assertEqual(strip_pii('NETFLIX.COM 123456'), 'NETFLIX.COM')
 
     def test_removes_date_fragment(self):
-        assert strip_pii('SPAR 12.03.2025 Москва') == 'SPAR Москва'
+        self.assertEqual(strip_pii('SPAR 12.03.2025 Москва'), 'SPAR Москва')
 
     def test_preserves_clean_description(self):
-        assert strip_pii('Продукты питания') == 'Продукты питания'
+        self.assertEqual(strip_pii('Продукты питания'), 'Продукты питания')
 
     def test_collapses_extra_spaces(self):
-        assert strip_pii('Яндекс  Такси  *1234') == 'Яндекс Такси'
+        self.assertEqual(strip_pii('Яндекс  Такси  *1234'), 'Яндекс Такси')
 
     def test_empty_string(self):
-        assert strip_pii('') == ''
+        self.assertEqual(strip_pii(''), '')
