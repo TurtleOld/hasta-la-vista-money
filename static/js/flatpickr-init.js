@@ -8,6 +8,7 @@ function buildFlatpickrOptions(element) {
   const mode = element.dataset.flatpickrMode ?? 'date';
 
   if (mode === 'datetime') {
+    const now = new Date();
     return {
       locale: Russian,
       enableTime: true,
@@ -15,6 +16,8 @@ function buildFlatpickrOptions(element) {
       dateFormat: 'Y-m-d\\TH:i',
       altInput: true,
       altFormat: 'd.m.Y H:i',
+      defaultHour: now.getHours(),
+      defaultMinute: now.getMinutes(),
     };
   }
 

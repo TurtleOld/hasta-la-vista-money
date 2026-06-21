@@ -17,6 +17,7 @@ from django.forms import (
     ModelForm,
     Textarea,
 )
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -214,6 +215,8 @@ class BaseTransferForm(TailwindFormMixin, ModelForm[TransferMoneyLog]):
             self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
                 constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS,
             )
+            if not self.is_bound:
+                self.fields['exchange_date'].initial = timezone.now()  # type: ignore[attr-defined]
 
         if 'amount' not in self.fields:
             self.fields['amount'] = DecimalField(

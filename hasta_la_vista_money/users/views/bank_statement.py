@@ -151,6 +151,9 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                 user=request.user,
             )
 
+            def _decimal_or_none(value):
+                return str(value) if value is not None else None
+
             return JsonResponse(
                 {
                     'status': upload.status,
@@ -161,6 +164,15 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                     'expense_count': upload.expense_count,
                     'skipped_count': upload.skipped_count,
                     'error_message': upload.error_message,
+                    'statement_closing_balance': _decimal_or_none(
+                        upload.statement_closing_balance,
+                    ),
+                    'account_balance_after': _decimal_or_none(
+                        upload.account_balance_after,
+                    ),
+                    'balance_discrepancy': _decimal_or_none(
+                        upload.balance_discrepancy,
+                    ),
                 },
             )
 
