@@ -1516,3 +1516,112 @@
   justify-content: flex-end;
   padding: 0.85rem 1.25rem;
 }
+
+/* ── Mobile: review_receipt.html ── */
+@media (max-width: 640px) {
+  .receipt-review-table-wrap {
+    overflow-x: unset;
+  }
+
+  .receipt-review-table thead {
+    display: none;
+  }
+
+  .receipt-review-table,
+  .receipt-review-table tbody {
+    display: block;
+  }
+
+  .product-row {
+    background: var(--receipts-surface-2);
+    border: 1px solid var(--receipts-border);
+    border-radius: 0.85rem;
+    display: block;
+    margin-bottom: 0.6rem;
+    overflow: hidden;
+  }
+
+  .product-row td {
+    align-items: center;
+    border: none;
+    border-top: 1px solid color-mix(in oklab, var(--receipts-border) 50%, transparent);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.5rem 0.85rem;
+    text-align: left;
+    vertical-align: unset;
+  }
+
+  .product-row td::before {
+    color: var(--receipts-muted);
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .product-row td.receipt-review-table-idx {
+    background: color-mix(in oklab, var(--receipts-accent) 8%, var(--receipts-surface));
+    border-top: none;
+    font-weight: 700;
+    justify-content: flex-start;
+  }
+
+  .product-row td.receipt-review-table-idx::before {
+    display: none;
+  }
+
+  .product-row td.ta-right,
+  .product-row td.ta-center {
+    text-align: left;
+  }
+
+  .product-row td input,
+  .product-row td select {
+    flex: 1;
+    max-width: 12rem;
+    min-width: 0;
+  }
+
+  .receipt-review-table tfoot {
+    display: block;
+  }
+
+  .receipt-review-table-total {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    padding: 0.65rem 0.25rem;
+  }
+
+  .receipt-review-table-total td {
+    background: transparent;
+    border-top: 2px solid var(--receipts-border);
+    display: inline;
+    padding: 0.4rem 0;
+  }
+
+  .receipts-card-ft {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .receipts-card-ft .hint {
+    display: none;
+  }
+
+  .receipts-card-ft .ft-actions {
+    flex-direction: column;
+    justify-content: stretch;
+  }
+
+  .receipts-card-ft .ft-actions .receipts-btn {
+    justify-content: center;
+  }
+}

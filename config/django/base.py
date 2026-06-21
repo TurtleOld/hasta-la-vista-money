@@ -587,6 +587,19 @@ FNS_BASE_URL: str = config(
 )
 FNS_CLIENT_SECRET: str = config('FNS_CLIENT_SECRET', default='')
 FNS_INN: str = config('FNS_INN', default='')
+
+CATEGORY_CLASSIFIER_BASE_URL: str = config(
+    'CATEGORY_CLASSIFIER_BASE_URL',
+    default='',
+)
+CATEGORY_CLASSIFIER_API_KEY: str = config(
+    'CATEGORY_CLASSIFIER_API_KEY',
+    default='',
+)
+CATEGORY_CLASSIFIER_MODEL: str = config(
+    'CATEGORY_CLASSIFIER_MODEL',
+    default='',
+)
 FNS_PASSWORD: str = config('FNS_PASSWORD', default='')
 FNS_TIMEOUT_SECONDS: float = config(
     'FNS_TIMEOUT_SECONDS',
