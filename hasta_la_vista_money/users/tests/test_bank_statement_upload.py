@@ -34,6 +34,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     _SberbankParser,
     process_bank_statement,
 )
+from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
 
 class TestBankStatementUploadView(TestCase):
@@ -2862,3 +2863,118 @@ class TestStatementParseResult(TestCase):
             self.assertIsInstance(result.transactions, list)
         finally:
             Path(path).unlink(missing_ok=True)
+
+
+class TestProcessBankStatementTaskIntegration(TestCase):
+    """Интеграционные тесты задачи Celery с classifier и полями сверки."""
+
+    fixtures: ClassVar[list[str]] = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user: User = User.objects.get(pk=1)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Тест сверки',
+            balance=Decimal('10000.00'),
+            currency='RUB',
+        )
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_category_uses_classifier_output(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        mock_classifier = MagicMock()
+        mock_classifier.classify.return_value = 'Продукты'
+        mock_container = MagicMock()
+        mock_container.users.category_classifier.return_value = mock_classifier
+        mock_container_cls.return_value = mock_container
+
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-500.00'),
+                    'description': 'MAGNIT 1234',
+                    'source_ref': 'ref-001',
+                },
+            ],
+            closing_balance=Decimal('9500.00'),
+        )
+        mock_parser_cls.return_value = mock_parser
+
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/test.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        self.assertEqual(
+            upload.statement_closing_balance,
+            Decimal('9500.00'),
+        )
+
+        category = Category.objects.filter(
+            user=self.user,
+            name='Продукты',
+        ).first()
+        self.assertIsNotNone(category)
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_balance_discrepancy_saved(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        mock_classifier = MagicMock()
+        mock_classifier.classify.return_value = 'Прочее'
+        mock_container = MagicMock()
+        mock_container.users.category_classifier.return_value = mock_classifier
+        mock_container_cls.return_value = mock_container
+
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = StatementParseResult(
+            transactions=[],
+            closing_balance=Decimal('9000.00'),
+        )
+        mock_parser_cls.return_value = mock_parser
+
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/test.pdf',
+            status=BankStatementUpload.Status.PENDING,
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(
+            upload.statement_closing_balance,
+            Decimal('9000.00'),
+        )
+        self.assertEqual(
+            upload.account_balance_after,
+            Decimal('10000.00'),
+        )
+        self.assertEqual(
+            upload.balance_discrepancy,
+            Decimal('-1000.00'),
+        )
