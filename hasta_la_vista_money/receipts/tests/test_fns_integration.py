@@ -53,6 +53,7 @@ from hasta_la_vista_money.receipts.services.pending_receipt_service import (
 from hasta_la_vista_money.receipts.tasks import (
     _run_fns_pipeline_from_raw,
     process_pending_receipt,
+    process_pending_receipt_from_qr,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -448,6 +449,67 @@ class RunFnsPipelineFromRawTests(TestCase):
         )
         self.assertEqual(receipt_data['name_seller'], 'Магазин')
         self.assertIn('_fns_raw', receipt_data)
+
+
+@override_settings(
+    CACHES=TEST_CACHES,
+    FNS_INN='123456789012',
+    FNS_PASSWORD='password',  # nosec B106: test-only password
+    FNS_CLIENT_SECRET='secret',  # nosec B106: test-only secret
+    FNS_POLL_INTERVAL_SECONDS=0,
+)
+class ProcessPendingReceiptFromQRTests(TestCase):
+    """The QR-scan Celery task: no image, no QR extraction step."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='qr-task-user',
+            password='pass',  # nosec B106: test-only password
+            email='qr-task@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.raw_qr = 't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1'
+
+    def _create_pending(self) -> PendingReceipt:
+        return PendingReceipt.objects.create(
+            user=self.user,
+            account=self.account,
+            status=PendingReceiptStatus.PROCESSING,
+            image_hash='qr-hash-1',
+        )
+
+    def test_task_marks_ready_from_raw_qr(self) -> None:
+        pending = self._create_pending()
+        with mock.patch(
+            'hasta_la_vista_money.receipts.tasks.FNSClient.fetch_receipt',
+            return_value=_fns_payload(),
+        ):
+            process_pending_receipt_from_qr(pending.pk, self.raw_qr)
+
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, PendingReceiptStatus.READY)
+        self.assertEqual(pending.receipt_data['name_seller'], 'Магазин')
+
+    def test_task_marks_failed_on_fns_error(self) -> None:
+        pending = self._create_pending()
+        with mock.patch(
+            'hasta_la_vista_money.receipts.tasks.FNSClient.fetch_receipt',
+            side_effect=FNSMalformedResponseError('bad payload'),
+        ):
+            process_pending_receipt_from_qr(pending.pk, self.raw_qr)
+
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, PendingReceiptStatus.FAILED)
+        self.assertNotEqual(pending.error_message, '')
+
+    def test_task_noop_when_pending_missing(self) -> None:
+        process_pending_receipt_from_qr(999999, self.raw_qr)
+        # No exception raised — just logs and returns.
 
 
 @override_settings(

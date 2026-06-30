@@ -1,4 +1,7 @@
-from hasta_la_vista_money.receipts.tasks import process_pending_receipt
+from hasta_la_vista_money.receipts.tasks import (
+    process_pending_receipt,
+    process_pending_receipt_from_qr,
+)
 from hasta_la_vista_money.receipts.views.list import (
     ProductByMonthView,
     ReceiptView,
@@ -36,4 +39,5 @@ __all__ = [
     'SellerUpdateView',
     'UploadImageView',
     'process_pending_receipt',
+    'process_pending_receipt_from_qr',
 ]
