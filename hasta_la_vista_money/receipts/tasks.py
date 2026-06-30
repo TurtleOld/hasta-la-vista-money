@@ -155,12 +155,17 @@ def _get_pending_receipt_service() -> PendingReceiptServiceProtocol:
     return ApplicationContainer().receipts.pending_receipt_service()
 
 
-def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
-    """Process a pending receipt through QR -> FNS -> mapper pipeline."""
-    with pending.image_file.open('rb') as image_fp:
-        qr_data = QRCodeExtractor().extract(image_fp)
+def _run_fns_pipeline_from_raw(
+    pending: PendingReceipt,
+    raw_qr: str,
+) -> dict[str, Any]:
+    """Run the FNS lookup -> mapper -> validate tail from a decoded QR string.
 
-    fns_payload = FNSClient().fetch_receipt(qr_data.raw)
+    Shared by the photo-upload pipeline (which extracts ``raw_qr`` from the
+    image first) and the browser-camera-scan pipeline (which already has
+    the decoded string and skips extraction entirely).
+    """
+    fns_payload = FNSClient().fetch_receipt(raw_qr)
     receipt_data = map_fns_receipt_to_receipt_data(fns_payload)
     receipt_data['items'] = ReceiptItemCategoryService().categorize_items(
         user=pending.user,
@@ -176,6 +181,13 @@ def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
     validated = validate_receipt_parse_payload(receipt_data).to_dict()
     validated['_fns_raw'] = fns_payload
     return validated
+
+
+def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
+    """Process a pending receipt through QR -> FNS -> mapper pipeline."""
+    with pending.image_file.open('rb') as image_fp:
+        qr_data = QRCodeExtractor().extract(image_fp)
+    return _run_fns_pipeline_from_raw(pending, qr_data.raw)
 
 
 def _run_processing_pipeline(pending: PendingReceipt) -> dict[str, Any]:
