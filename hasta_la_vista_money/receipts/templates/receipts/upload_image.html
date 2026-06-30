@@ -29,71 +29,118 @@
             </div>
         </header>
 
-        <div class="receipts-card receipts-upload-card" x-data="receiptUploadPage">
-            <form method="post" enctype="multipart/form-data" id="uploadForm" class="receipts-upload-form" novalidate>
-                {% csrf_token %}
+        <div class="receipts-card receipts-upload-card" x-data="receiptUploadTabs">
+            <div class="receipts-mode-tabs" role="tablist">
+                <button type="button"
+                        class="receipts-mode-tab"
+                        x-bind:class="{ 'is-active': activeTab === 'file' }"
+                        x-on:click="selectFile()"
+                        role="tab">
+                    <i class="bi bi-cloud-upload"></i>
+                    {% translate 'Файл' %}
+                </button>
+                <button type="button"
+                        class="receipts-mode-tab"
+                        x-bind:class="{ 'is-active': activeTab === 'scan' }"
+                        x-on:click="selectScan()"
+                        role="tab">
+                    <i class="bi bi-qr-code-scan"></i>
+                    {% translate 'Сканировать QR' %}
+                </button>
+            </div>
 
-                <div class="receipts-section">
-                    <h3>
-                        <i class="bi bi-cloud-upload"></i>
-                        {% translate 'Файл чека' %}
-                    </h3>
+            <div x-show="activeTab === 'file'" x-data="receiptUploadPage">
+                <form method="post" enctype="multipart/form-data" id="uploadForm" class="receipts-upload-form" novalidate>
+                    {% csrf_token %}
 
-                    <label id="upload-zone"
-                           for="file-input"
-                           class="receipts-dropzone"
-                           x-bind:class="zoneClass"
-                           x-on:dragenter="handleDragEnter"
-                           x-on:dragover="handleDragOver"
-                           x-on:dragleave="handleDragLeave"
-                           x-on:drop="handleDrop">
-                        <i class="bi bi-cloud-upload receipts-dropzone-icon"></i>
-                        <div class="receipts-dropzone-text">
-                            <strong>{% translate 'Перетащите изображение сюда или нажмите для выбора' %}</strong>
-                            <span>{% translate 'JPG, JPEG или PNG, до 5 МБ' %}</span>
-                            <span id="selected-file-name" class="receipts-dropzone-filename" x-show="hasFiles" x-cloak>
-                                <span x-text="selectedFileLabel"></span>
-                                <span class="receipts-dropzone-status">{% translate '(Файл добавлен. Отправке в обработку)' %}</span>
-                            </span>
-                        </div>
-                    </label>
-
-                    <input type="file"
-                           name="file"
-                           id="file-input"
-                           class="hidden"
-                           accept=".jpg,.jpeg,.png,image/jpeg,image/png"
-                           multiple
-                           x-ref="fileInput"
-                           x-on:change="handleInputChange">
-
-                    <div id="upload-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
-                </div>
-
-                <div class="receipts-section">
-                    <h3>
-                        <i class="bi bi-wallet2"></i>
-                        {{ form.account.label }}
-                    </h3>
-                    {{ form.account }}
-                </div>
-
-                <div class="receipts-card-ft">
-                    <p class="hint">
-                        <i class="bi bi-clock-history"></i>
-                        {% translate 'Когда чек будет распознан, он появится в списке. Если что-то пошло не так — рядом будет показана причина.' %}
-                    </p>
-                    <div class="ft-actions">
-                        <button type="submit"
-                                id="submitBtn"
-                                class="receipts-btn receipts-btn-primary"
-                                x-bind:disabled="!hasFiles">
+                    <div class="receipts-section">
+                        <h3>
                             <i class="bi bi-cloud-upload"></i>
-                            <span>{% translate 'Поставить в обработку' %}</span>
-                        </button>
+                            {% translate 'Файл чека' %}
+                        </h3>
+
+                        <label id="upload-zone"
+                               for="file-input"
+                               class="receipts-dropzone"
+                               x-bind:class="zoneClass"
+                               x-on:dragenter="handleDragEnter"
+                               x-on:dragover="handleDragOver"
+                               x-on:dragleave="handleDragLeave"
+                               x-on:drop="handleDrop">
+                            <i class="bi bi-cloud-upload receipts-dropzone-icon"></i>
+                            <div class="receipts-dropzone-text">
+                                <strong>{% translate 'Перетащите изображение сюда или нажмите для выбора' %}</strong>
+                                <span>{% translate 'JPG, JPEG или PNG, до 5 МБ' %}</span>
+                                <span id="selected-file-name" class="receipts-dropzone-filename" x-show="hasFiles" x-cloak>
+                                    <span x-text="selectedFileLabel"></span>
+                                    <span class="receipts-dropzone-status">{% translate '(Файл добавлен. Отправке в обработку)' %}</span>
+                                </span>
+                            </div>
+                        </label>
+
+                        <input type="file"
+                               name="file"
+                               id="file-input"
+                               class="hidden"
+                               accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                               multiple
+                               x-ref="fileInput"
+                               x-on:change="handleInputChange">
+
+                        <div id="upload-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
                     </div>
-                </div>
-            </form>
+
+                    <div class="receipts-section">
+                        <h3>
+                            <i class="bi bi-wallet2"></i>
+                            {{ upload_form.account.label }}
+                        </h3>
+                        {{ upload_form.account }}
+                    </div>
+
+                    <div class="receipts-card-ft">
+                        <p class="hint">
+                            <i class="bi bi-clock-history"></i>
+                            {% translate 'Когда чек будет распознан, он появится в списке. Если что-то пошло не так — рядом будет показана причина.' %}
+                        </p>
+                        <div class="ft-actions">
+                            <button type="submit"
+                                    id="submitBtn"
+                                    class="receipts-btn receipts-btn-primary"
+                                    x-bind:disabled="!hasFiles">
+                                <i class="bi bi-cloud-upload"></i>
+                                <span>{% translate 'Поставить в обработку' %}</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div x-show="activeTab === 'scan'" x-cloak class="receipts-scan-panel" x-data="receiptQRScanPage">
+                <form method="post" action="{% url 'receipts:scan_qr' %}" id="scanQrForm" x-ref="scanForm">
+                    {% csrf_token %}
+                    {{ scan_form.qr_raw }}
+
+                    <div class="receipts-section">
+                        <h3>
+                            <i class="bi bi-wallet2"></i>
+                            {{ scan_form.account.label }}
+                        </h3>
+                        {{ scan_form.account }}
+                    </div>
+
+                    <div class="receipts-scan-video-wrap">
+                        <video x-ref="video" class="receipts-scan-video" autoplay playsinline muted></video>
+                        <canvas x-ref="canvas" class="hidden"></canvas>
+                    </div>
+
+                    <div id="scan-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
+                    <p class="hint" x-show="!errorMessage">
+                        <i class="bi bi-qr-code-scan"></i>
+                        {% translate 'Наведите камеру на QR-код чека' %}
+                    </p>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -104,6 +151,7 @@
 {% block extra_js %}
 <script defer nonce="{{request.csp_nonce}}" src="{% static 'js/alpine.csp.min.js' %}"></script>
 <script nonce="{{request.csp_nonce}}" src="{% static 'js/upload.js' %}"></script>
+<script nonce="{{request.csp_nonce}}" src="{% static 'js/dist/pages/receipt-qr-scan.js' %}"></script>
 {% endblock %}
 
 {% block alpine_js %}{% endblock %}

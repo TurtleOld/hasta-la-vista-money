@@ -1177,6 +1177,54 @@
   padding: 0.65rem 0.9rem;
 }
 
+.receipts-mode-tabs {
+  display: none;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 768px) {
+  .receipts-mode-tabs {
+    display: flex;
+  }
+}
+
+.receipts-mode-tab {
+  align-items: center;
+  background: var(--receipts-surface-2);
+  border: 1px solid var(--receipts-border);
+  border-radius: 0.75rem;
+  color: var(--receipts-muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.85rem;
+  font-weight: 600;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+}
+
+.receipts-mode-tab.is-active {
+  background: color-mix(in oklab, var(--receipts-accent) 12%, var(--receipts-surface));
+  border-color: color-mix(in oklab, var(--receipts-accent) 45%, var(--receipts-border));
+  color: var(--receipts-accent);
+}
+
+.receipts-scan-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.receipts-scan-video-wrap {
+  background: #000;
+  border-radius: 1.25rem;
+  overflow: hidden;
+}
+
+.receipts-scan-video {
+  display: block;
+  width: 100%;
+}
+
 /* Review */
 .receipt-review-form {
   display: grid;
