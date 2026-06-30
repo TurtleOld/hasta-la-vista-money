@@ -19,11 +19,11 @@
             </div>
             <div class="receipts-actions">
                 <button type="button" class="receipts-chip" @click="openModal()">
-                    <i class="bi bi-info-circle"></i>
+                    <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                     {% translate 'Инструкция' %}
                 </button>
                 <a href="{% url 'receipts:list' %}" class="receipts-button receipts-button-secondary">
-                    <i class="bi bi-arrow-left"></i>
+                    <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                     {% translate 'Назад к списку' %}
                 </a>
             </div>
@@ -36,7 +36,7 @@
                         x-bind:class="{ 'is-active': activeTab === 'file' }"
                         x-on:click="selectFile()"
                         role="tab">
-                    <i class="bi bi-cloud-upload"></i>
+                    <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     {% translate 'Файл' %}
                 </button>
                 <button type="button"
@@ -44,7 +44,7 @@
                         x-bind:class="{ 'is-active': activeTab === 'scan' }"
                         x-on:click="selectScan()"
                         role="tab">
-                    <i class="bi bi-qr-code-scan"></i>
+                    <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg>
                     {% translate 'Сканировать QR' %}
                 </button>
             </div>
@@ -55,7 +55,7 @@
 
                     <div class="receipts-section">
                         <h3>
-                            <i class="bi bi-cloud-upload"></i>
+                            <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                             {% translate 'Файл чека' %}
                         </h3>
 
@@ -67,7 +67,7 @@
                                x-on:dragover="handleDragOver"
                                x-on:dragleave="handleDragLeave"
                                x-on:drop="handleDrop">
-                            <i class="bi bi-cloud-upload receipts-dropzone-icon"></i>
+                            <svg class="receipts-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                             <div class="receipts-dropzone-text">
                                 <strong>{% translate 'Перетащите изображение сюда или нажмите для выбора' %}</strong>
                                 <span>{% translate 'JPG, JPEG или PNG, до 5 МБ' %}</span>
@@ -92,7 +92,7 @@
 
                     <div class="receipts-section">
                         <h3>
-                            <i class="bi bi-wallet2"></i>
+                            <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
                             {{ upload_form.account.label }}
                         </h3>
                         {{ upload_form.account }}
@@ -100,7 +100,7 @@
 
                     <div class="receipts-card-ft">
                         <p class="hint">
-                            <i class="bi bi-clock-history"></i>
+                            <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             {% translate 'Когда чек будет распознан, он появится в списке. Если что-то пошло не так — рядом будет показана причина.' %}
                         </p>
                         <div class="ft-actions">
@@ -108,7 +108,7 @@
                                     id="submitBtn"
                                     class="receipts-btn receipts-btn-primary"
                                     x-bind:disabled="!hasFiles">
-                                <i class="bi bi-cloud-upload"></i>
+                                <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                                 <span>{% translate 'Поставить в обработку' %}</span>
                             </button>
                         </div>
@@ -123,7 +123,7 @@
 
                     <div class="receipts-section">
                         <h3>
-                            <i class="bi bi-wallet2"></i>
+                            <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
                             {{ scan_form.account.label }}
                         </h3>
                         {{ scan_form.account }}
@@ -136,7 +136,7 @@
 
                     <div id="scan-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
                     <p class="hint" x-show="!errorMessage">
-                        <i class="bi bi-qr-code-scan"></i>
+                        <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg>
                         {% translate 'Наведите камеру на QR-код чека' %}
                     </p>
                 </form>
