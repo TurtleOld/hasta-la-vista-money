@@ -18,6 +18,7 @@ from django.forms import (
     DecimalField,
     FileField,
     Form,
+    HiddenInput,
     ModelChoiceField,
     ModelForm,
     NumberInput,
@@ -48,6 +49,10 @@ from hasta_la_vista_money.receipts.models import (
 from hasta_la_vista_money.receipts.parsers.date_parser import (
     ReceiptDateParseError,
     ReceiptDateParser,
+)
+from hasta_la_vista_money.receipts.services.fns_qr import (
+    QRCodeDecodeError,
+    parse_fns_qr,
 )
 
 _INPUT_CLASSES = (
@@ -559,6 +564,39 @@ class UploadImageForm(Form):
                     ),
                 )
         return self.cleaned_data.get('file')
+
+
+class ScanQRForm(Form):
+    """Form for submitting a QR string decoded by the browser camera."""
+
+    account = ModelChoiceField(
+        label=_('Счёт'),
+        queryset=Account.objects.all(),
+        widget=Select(attrs={'class': _SELECT_CLASSES}),
+    )
+    qr_raw = CharField(
+        widget=HiddenInput(),
+        max_length=512,
+    )
+
+    def __init__(self, user: User, *args: Any, **kwargs: Any) -> None:
+        kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        self.fields['account'].queryset = Account.objects.filter(user=user)  # type: ignore[attr-defined]
+        if self.fields['account'].queryset.exists():  # type: ignore[attr-defined]
+            self.fields['account'].initial = self.fields[
+                'account'
+            ].queryset.first()  # type: ignore[attr-defined]
+
+    def clean_qr_raw(self) -> str:
+        qr_raw = (self.cleaned_data.get('qr_raw') or '').strip()
+        if not qr_raw:
+            raise ValidationError(_('QR-код не распознан.'))
+        try:
+            parse_fns_qr(qr_raw)
+        except QRCodeDecodeError as exc:
+            raise ValidationError(str(exc)) from exc
+        return qr_raw
 
 
 class PendingReceiptReviewForm(Form):
