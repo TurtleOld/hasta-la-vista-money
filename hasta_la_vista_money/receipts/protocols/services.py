@@ -97,6 +97,14 @@ class PendingReceiptServiceProtocol(Protocol):
         image_hash: str,
     ) -> PendingReceipt: ...
 
+    def create_processing_job_from_qr(
+        self,
+        *,
+        user: User,
+        account: Account,
+        image_hash: str,
+    ) -> PendingReceipt: ...
+
     def attach_task_id(
         self,
         *,

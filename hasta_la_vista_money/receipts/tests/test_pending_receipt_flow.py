@@ -127,6 +127,35 @@ class PendingReceiptServiceHashTests(TestCase):
         assert match is not None
         self.assertEqual(match.kind, 'pending')
 
+    def test_create_processing_job_from_qr_has_no_image_file(self) -> None:
+        pending = self.service.create_processing_job_from_qr(
+            user=self.user,
+            account=self.account,
+            image_hash='a' * 64,
+        )
+
+        self.assertFalse(pending.image_file)
+        self.assertEqual(pending.image_hash, 'a' * 64)
+        self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
+
+    def test_create_processing_job_from_qr_is_deduplicated_like_photos(
+        self,
+    ) -> None:
+        image_hash = 'b' * 64
+        self.service.create_processing_job_from_qr(
+            user=self.user,
+            account=self.account,
+            image_hash=image_hash,
+        )
+
+        match = self.service.find_duplicate(
+            user=self.user,
+            image_hash=image_hash,
+        )
+        self.assertIsNotNone(match)
+        assert match is not None
+        self.assertEqual(match.kind, 'pending')
+
     def test_failed_pending_does_not_block_reupload(self) -> None:
         upload = SimpleUploadedFile(
             'a.jpg',
