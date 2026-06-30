@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "driver.js": "^1.4.0",
-    "flatpickr": "^4.6.13"
+    "flatpickr": "^4.6.13",
+    "jsqr": "^1.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
