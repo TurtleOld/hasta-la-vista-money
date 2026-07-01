@@ -4,6 +4,7 @@ Covers PendingReceiptService new methods, the Celery task, and the upload /
 retry / counter views. Inference is always mocked — no network calls.
 """
 
+import hashlib
 import io
 from decimal import Decimal
 from typing import Any
@@ -116,6 +117,35 @@ class PendingReceiptServiceHashTests(TestCase):
             user=self.user,
             account=self.account,
             image_file=upload,
+            image_hash=image_hash,
+        )
+
+        match = self.service.find_duplicate(
+            user=self.user,
+            image_hash=image_hash,
+        )
+        self.assertIsNotNone(match)
+        assert match is not None
+        self.assertEqual(match.kind, 'pending')
+
+    def test_create_processing_job_from_qr_has_no_image_file(self) -> None:
+        pending = self.service.create_processing_job_from_qr(
+            user=self.user,
+            account=self.account,
+            image_hash='a' * 64,
+        )
+
+        self.assertFalse(pending.image_file)
+        self.assertEqual(pending.image_hash, 'a' * 64)
+        self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
+
+    def test_create_processing_job_from_qr_is_deduplicated_like_photos(
+        self,
+    ) -> None:
+        image_hash = 'b' * 64
+        self.service.create_processing_job_from_qr(
+            user=self.user,
+            account=self.account,
             image_hash=image_hash,
         )
 
@@ -483,6 +513,91 @@ class UploadImageViewTests(TestCase):
             PendingReceipt.objects.filter(user=self.user).exists(),
         )
         task_mock.delay.assert_not_called()
+
+
+class ScanQRReceiptViewTests(TestCase):
+    """The camera-scan view validates the QR, dedups, and enqueues."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='scan-user',
+            password='pass',  # nosec B106: test-only password
+            email='scan@example.com',
+        )
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Wallet',
+            balance=1000,
+            currency='RU',
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.raw_qr = 't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1'
+
+    def test_scan_creates_processing_pending_and_dispatches(self) -> None:
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_pending_receipt_from_qr',
+        ) as task_mock:
+            task_mock.delay.return_value = mock.Mock(id='qr-task-id-1')
+            response = self.client.post(
+                reverse('receipts:scan_qr'),
+                {'qr_raw': self.raw_qr, 'account': self.account.pk},
+            )
+
+        self.assertRedirects(response, reverse('receipts:list'))
+        pending = PendingReceipt.objects.get(user=self.user)
+        self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
+        self.assertFalse(pending.image_file)
+        self.assertEqual(pending.task_id, 'qr-task-id-1')
+        task_mock.delay.assert_called_once_with(pending.pk, self.raw_qr)
+
+    def test_scan_rejects_invalid_qr_string(self) -> None:
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_pending_receipt_from_qr',
+        ) as task_mock:
+            response = self.client.post(
+                reverse('receipts:scan_qr'),
+                {'qr_raw': 'not-a-fns-qr', 'account': self.account.pk},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            PendingReceipt.objects.filter(user=self.user).exists(),
+        )
+        task_mock.delay.assert_not_called()
+
+    def test_scan_rejects_duplicate_qr(self) -> None:
+        image_hash = hashlib.sha256(self.raw_qr.encode()).hexdigest()
+        PendingReceipt.objects.create(
+            user=self.user,
+            account=self.account,
+            status=PendingReceiptStatus.PROCESSING,
+            image_hash=image_hash,
+        )
+
+        with mock.patch(
+            'hasta_la_vista_money.receipts.views.process_pending_receipt_from_qr',
+        ) as task_mock:
+            response = self.client.post(
+                reverse('receipts:scan_qr'),
+                {'qr_raw': self.raw_qr, 'account': self.account.pk},
+            )
+
+        self.assertRedirects(response, reverse('receipts:list'))
+        self.assertEqual(
+            PendingReceipt.objects.filter(user=self.user).count(),
+            1,
+        )
+        task_mock.delay.assert_not_called()
+
+    def test_scan_requires_login(self) -> None:
+        self.client.logout()
+        response = self.client.post(
+            reverse('receipts:scan_qr'),
+            {'qr_raw': self.raw_qr, 'account': self.account.pk},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(PendingReceipt.objects.exists())
 
 
 class PendingCounterViewTests(TestCase):

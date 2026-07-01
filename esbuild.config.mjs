@@ -10,6 +10,7 @@ const options = {
     'pages/receipts': 'static/js/pages/receipts.js',
     'pages/reports': 'static/js/pages/reports.js',
     'pages/receipt-update': 'static/js/pages/receipt-update.js',
+    'pages/receipt-qr-scan': 'static/js/pages/receipt-qr-scan.js',
     'pages/loan': 'static/js/pages/loan.js',
     'pages/profile': 'static/js/pages/profile.js',
   },
