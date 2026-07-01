@@ -291,6 +291,7 @@ class FinancesFilter:
             'd': _('Сегодня'),
             'w': _('Неделя'),
             'm': _('Этот месяц'),
+            'pm': _('Прошлый'),
             'q': _('Квартал'),
             'y': _('Год'),
             'all': _('Всё время'),
@@ -303,10 +304,16 @@ class FinancesFilter:
 
         today = datetime.now(tz=UTC).date()
         quarter = ((today.month - 1) // 3) + 1
+        previous_month_start = _previous_month_range(today)[0]
         return [
             ('d', str(_('Сегодня')), today.strftime('%d.%m')),
             ('w', str(_('Неделя')), str(_('пн-вс'))),
             ('m', str(_('Месяц')), today.strftime('%m.%Y')),
+            (
+                'pm',
+                str(_('Прошлый')),
+                previous_month_start.strftime('%m.%Y'),
+            ),
             (
                 'q',
                 str(_('{quarter} квартал')).format(quarter=quarter),
@@ -327,6 +334,7 @@ class FinancesFilter:
             'd': (today, today),
             'w': _week_range(today),
             'm': (today.replace(day=1), _end_of_month(today)),
+            'pm': _previous_month_range(today),
             'q': _quarter_range(today),
             'y': (date(today.year, 1, 1), date(today.year, 12, 31)),
         }
@@ -356,6 +364,15 @@ def _quarter_range(value: date) -> tuple[date, date]:
     quarter = (value.month - 1) // 3
     start = date(value.year, quarter * 3 + 1, 1)
     return start, _end_of_month(date(value.year, quarter * 3 + 3, 1))
+
+
+def _previous_month_range(value: date) -> tuple[date, date]:
+    december = 12
+    if value.month == 1:
+        start = date(value.year - 1, december, 1)
+    else:
+        start = date(value.year, value.month - 1, 1)
+    return start, _end_of_month(start)
 
 
 class FinancesView(LoginRequiredMixin, TemplateView):

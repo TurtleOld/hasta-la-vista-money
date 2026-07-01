@@ -2,7 +2,42 @@ import jsQR from 'jsqr';
 
 const SCAN_INTERVAL_MS = 200;
 const CAMERA_UNAVAILABLE_MESSAGE = 'Камера недоступна в этом браузере.';
-const CAMERA_DENIED_MESSAGE = 'Нет доступа к камере. Используйте загрузку файла.';
+const CAMERA_POLICY_BLOCKED_MESSAGE =
+    'Доступ к камере заблокирован настройками сайта (Permissions-Policy). Используйте загрузку файла.';
+const CAMERA_DENIED_MESSAGE =
+    'Доступ к камере запрещён. Разрешите доступ в настройках браузера или используйте загрузку файла.';
+const CAMERA_NOT_FOUND_MESSAGE =
+    'Камера не найдена на этом устройстве. Используйте загрузку файла.';
+const CAMERA_BUSY_MESSAGE =
+    'Камера уже используется другим приложением. Используйте загрузку файла.';
+const CAMERA_CONSTRAINTS_MESSAGE =
+    'Не удалось подключиться к камере с нужными параметрами. Используйте загрузку файла.';
+const CAMERA_GENERIC_ERROR_MESSAGE =
+    'Не удалось получить доступ к камере. Используйте загрузку файла.';
+
+function describeCameraError(error) {
+    const name = error && error.name;
+    const message = (error && error.message) || '';
+
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        return /permissions policy/i.test(message)
+            ? CAMERA_POLICY_BLOCKED_MESSAGE
+            : CAMERA_DENIED_MESSAGE;
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        return CAMERA_NOT_FOUND_MESSAGE;
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError') {
+        return CAMERA_BUSY_MESSAGE;
+    }
+    if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+        return CAMERA_CONSTRAINTS_MESSAGE;
+    }
+    if (name === 'SecurityError') {
+        return CAMERA_POLICY_BLOCKED_MESSAGE;
+    }
+    return CAMERA_GENERIC_ERROR_MESSAGE;
+}
 
 function registerReceiptUploadTabs(Alpine) {
     Alpine.data('receiptUploadTabs', function () {
@@ -48,8 +83,9 @@ function registerReceiptQRScanPage(Alpine) {
                     this.stream = await navigator.mediaDevices.getUserMedia({
                         video: { facingMode: 'environment' },
                     });
-                } catch (_error) {
-                    this.errorMessage = CAMERA_DENIED_MESSAGE;
+                } catch (error) {
+                    console.error('receipt QR scan: camera access failed', error);
+                    this.errorMessage = describeCameraError(error);
                     return;
                 }
                 const video = this.$refs.video;
