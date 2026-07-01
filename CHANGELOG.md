@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.7.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.6.0...v2.7.0) (2026-07-01)
+
+
+### Features
+
+* **finance_account:** floating preview sidebar, previous month filter, camera error fix ([#870](https://github.com/TurtleOld/hasta-la-vista-money/issues/870)) ([b36e02d](https://github.com/TurtleOld/hasta-la-vista-money/commit/b36e02dfeb178d767b050c0c4a786a482526ea57))
+
 ## [2.6.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.5.0...v2.6.0) (2026-07-01)
 
 
