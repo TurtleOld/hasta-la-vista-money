@@ -162,6 +162,35 @@ class PendingReceiptService:
             image_hash=image_hash,
         )
 
+    def create_processing_job_from_qr(
+        self,
+        *,
+        user: User,
+        account: Account,
+        image_hash: str,
+    ) -> PendingReceipt:
+        """Persist a new PendingReceipt from a browser camera QR scan.
+
+        Unlike ``create_processing_job``, there is no uploaded image: the QR
+        was already decoded client-side, so ``image_file`` stays empty and
+        ``image_hash`` is the SHA-256 of the raw QR string — reusing the
+        same dedup mechanism as photo uploads.
+
+        Args:
+            user: Owner of the receipt.
+            account: Account that will be charged for the receipt.
+            image_hash: SHA-256 hex digest of the raw QR string.
+
+        Returns:
+            Newly created PendingReceipt.
+        """
+        return PendingReceipt.objects.create(
+            user=user,
+            account=account,
+            status=PendingReceiptStatus.PROCESSING,
+            image_hash=image_hash,
+        )
+
     def attach_task_id(
         self,
         *,

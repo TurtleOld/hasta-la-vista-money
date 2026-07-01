@@ -22,6 +22,7 @@ from hasta_la_vista_money.receipts.views import (
     ReceiptUpdateView,
     ReceiptView,
     ReviewPendingReceiptView,
+    ScanQRReceiptView,
     SellerCreateView,
     SellerUpdateView,
     UploadImageView,
@@ -83,6 +84,11 @@ urlpatterns = [
         'upload/',
         UploadImageView.as_view(),
         name='upload',
+    ),
+    path(
+        'scan-qr/',
+        ScanQRReceiptView.as_view(),
+        name='scan_qr',
     ),
     path(
         'review/<int:pk>/',
