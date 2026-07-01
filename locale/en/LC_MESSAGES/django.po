@@ -1186,6 +1186,11 @@ msgstr "Failed to update account. Please try again later."
 msgid "Произошла ошибка при переводе средств. Пожалуйста, попробуйте позже."
 msgstr "An error occurred while transferring funds. Please try again later."
 
+#: hasta_la_vista_money/finance_account/views.py:294
+#: hasta_la_vista_money/finance_account/views.py:314
+msgid "Прошлый"
+msgstr "Last"
+
 #: hasta_la_vista_money/income/forms.py:39
 msgid "Выберите категорию дохода"
 msgstr "Select income category"
