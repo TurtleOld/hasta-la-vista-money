@@ -255,6 +255,11 @@
         </div>
 
     </div>
+
+    <div class="composer-toast" x-show="saveHintVisible" x-transition x-cloak>
+        {% translate 'Заполни сумму, категорию и счёт, чтобы сохранить' %}
+    </div>
+
 </div>
 
 <script nonce="{{ request.csp_nonce }}">
@@ -370,6 +375,7 @@
             serverTodayIso:       getServerTodayIso(),
             datetimeLocal:        '',
             note:                 '',
+            saveHintVisible:      false,
 
             /* ── Computed: тип ── */
             get isExpense() { return this.type === 'expense' ? true : null; },
@@ -488,11 +494,22 @@
                 this.amount = this.amount.replace(/[^\d.,]/g, '').replace(',', '.');
             },
             submitForm(action) {
-                if (!this.isValid) return;
+                if (!this.isValid) {
+                    this.flashSaveHint();
+                    return;
+                }
                 if (this.$refs.actionField) {
                     this.$refs.actionField.value = action === 'save_and_add' ? 'save_and_add' : 'save';
                 }
                 this.$refs.composerForm.submit();
+            },
+
+            flashSaveHint() {
+                this.saveHintVisible = true;
+                clearTimeout(this._saveHintTimeout);
+                this._saveHintTimeout = setTimeout(() => {
+                    this.saveHintVisible = false;
+                }, 2400);
             },
 
             prefillFromQuery() {
@@ -555,11 +572,11 @@
                     this.syncFlatpickr();
                 });
                 window.addEventListener('keydown', (e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyS') {
                         e.preventDefault();
                         this.submitForm('save');
                     }
-                    if (e.key === 'Escape') {
+                    if (e.code === 'Escape') {
                         window.location.href = window.FINANCES_URL;
                     }
                 });

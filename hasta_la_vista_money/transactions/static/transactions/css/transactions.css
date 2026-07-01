@@ -1290,6 +1290,23 @@
   font-size: 0.8rem;
 }
 
+.composer-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  background: var(--finances-surface);
+  border: 1px solid var(--finances-border);
+  color: var(--finances-text);
+  padding: 10px 18px;
+  border-radius: 999px;
+  box-shadow: var(--finances-shadow-pop);
+  font-size: 13px;
+  z-index: 50;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+}
+
 /* Preview side-panel */
 .preview-card {
   background: var(--finances-surface);

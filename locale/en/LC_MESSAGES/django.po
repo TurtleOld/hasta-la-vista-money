@@ -1191,6 +1191,10 @@ msgstr "An error occurred while transferring funds. Please try again later."
 msgid "Прошлый"
 msgstr "Last"
 
+#: hasta_la_vista_money/finance_account/templates/finance_account/create.html:260
+msgid "Заполни сумму, категорию и счёт, чтобы сохранить"
+msgstr "Fill in the amount, category, and account to save"
+
 #: hasta_la_vista_money/income/forms.py:39
 msgid "Выберите категорию дохода"
 msgstr "Select income category"
