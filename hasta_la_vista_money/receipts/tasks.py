@@ -6,6 +6,7 @@ live here so the work survives the user closing the page.
 """
 
 import json
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
@@ -155,12 +156,17 @@ def _get_pending_receipt_service() -> PendingReceiptServiceProtocol:
     return ApplicationContainer().receipts.pending_receipt_service()
 
 
-def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
-    """Process a pending receipt through QR -> FNS -> mapper pipeline."""
-    with pending.image_file.open('rb') as image_fp:
-        qr_data = QRCodeExtractor().extract(image_fp)
+def _run_fns_pipeline_from_raw(
+    pending: PendingReceipt,
+    raw_qr: str,
+) -> dict[str, Any]:
+    """Run the FNS lookup -> mapper -> validate tail from a decoded QR string.
 
-    fns_payload = FNSClient().fetch_receipt(qr_data.raw)
+    Shared by the photo-upload pipeline (which extracts ``raw_qr`` from the
+    image first) and the browser-camera-scan pipeline (which already has
+    the decoded string and skips extraction entirely).
+    """
+    fns_payload = FNSClient().fetch_receipt(raw_qr)
     receipt_data = map_fns_receipt_to_receipt_data(fns_payload)
     receipt_data['items'] = ReceiptItemCategoryService().categorize_items(
         user=pending.user,
@@ -176,6 +182,13 @@ def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
     validated = validate_receipt_parse_payload(receipt_data).to_dict()
     validated['_fns_raw'] = fns_payload
     return validated
+
+
+def _run_fns_pipeline(pending: PendingReceipt) -> dict[str, Any]:
+    """Process a pending receipt through QR -> FNS -> mapper pipeline."""
+    with pending.image_file.open('rb') as image_fp:
+        qr_data = QRCodeExtractor().extract(image_fp)
+    return _run_fns_pipeline_from_raw(pending, qr_data.raw)
 
 
 def _run_processing_pipeline(pending: PendingReceipt) -> dict[str, Any]:
@@ -198,6 +211,37 @@ def _classify_failure(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, json.JSONDecodeError | ValueError | TypeError):
         return 'pending_receipt_parse_failed', str(_PARSE_FAILED_MESSAGE)
     return 'pending_receipt_failed', str(_UNEXPECTED_MESSAGE)
+
+
+def _finalize_pipeline(
+    pending: PendingReceipt,
+    pending_receipt_id: int,
+    service: PendingReceiptServiceProtocol,
+    run_pipeline: Callable[[], dict[str, Any]],
+) -> None:
+    """Run a pipeline callable and transition the pending receipt.
+
+    Shared tail for both processing tasks: catches pipeline failures,
+    classifies them, and marks the pending receipt failed or ready.
+    """
+    try:
+        receipt_data = run_pipeline()
+    except Exception as exc:
+        event, message = _classify_failure(exc)
+        service.mark_failed(
+            pending_receipt=pending,
+            error_message=message,
+        )
+        logger.warning(
+            event,
+            pending_receipt_id=pending_receipt_id,
+            error=str(exc),
+        )
+        return
+    service.mark_ready(
+        pending_receipt=pending,
+        receipt_data=receipt_data,
+    )
 
 
 @shared_task(  # type: ignore[untyped-decorator]
@@ -239,24 +283,55 @@ def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
         )
         return
 
+    _finalize_pipeline(
+        pending,
+        pending_receipt_id,
+        service,
+        lambda: _run_processing_pipeline(pending),
+    )
+
+
+@shared_task(  # type: ignore[untyped-decorator]
+    bind=True,
+    name='receipts.process_pending_receipt_from_qr',
+    autoretry_for=(ConnectionError,),
+    max_retries=2,
+    retry_backoff=True,
+    acks_late=True,
+)
+def process_pending_receipt_from_qr(
+    _self: Any,
+    pending_receipt_id: int,
+    raw_qr: str,
+) -> None:
+    """Run the FNS lookup for a pending receipt scanned via browser camera.
+
+    The QR was already decoded client-side, so this task starts straight
+    from the FNS lookup — no image, no ``QRCodeExtractor`` step.
+
+    Args:
+        _self: Bound Celery task instance (unused, present for ``bind=True``).
+        pending_receipt_id: Primary key of the PendingReceipt to process.
+        raw_qr: Raw FNS QR string decoded in the browser.
+    """
     try:
-        receipt_data = _run_processing_pipeline(pending)
-    except Exception as exc:
-        event, message = _classify_failure(exc)
-        service.mark_failed(
-            pending_receipt=pending,
-            error_message=message,
+        pending = PendingReceipt.objects.select_related('user').get(
+            pk=pending_receipt_id,
         )
+    except PendingReceipt.DoesNotExist:
         logger.warning(
-            event,
+            'pending_receipt_missing',
             pending_receipt_id=pending_receipt_id,
-            error=str(exc),
         )
         return
 
-    service.mark_ready(
-        pending_receipt=pending,
-        receipt_data=receipt_data,
+    service = _get_pending_receipt_service()
+
+    _finalize_pipeline(
+        pending,
+        pending_receipt_id,
+        service,
+        lambda: _run_fns_pipeline_from_raw(pending, raw_qr),
     )
 
 
