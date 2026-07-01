@@ -1,3 +1,4 @@
+import hashlib
 import sys
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -15,6 +16,7 @@ from django.views.generic import (
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.core.mixins.base import FormErrorHandlingMixin
 from hasta_la_vista_money.receipts.forms import (
+    ScanQRForm,
     UploadImageForm,
 )
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
@@ -54,6 +56,15 @@ class UploadImageView(
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context['upload_form'] = context.pop('form')
+        context.setdefault(
+            'scan_form',
+            ScanQRForm(user=self.request.user),
+        )
+        return context
 
     def form_valid(self, form: UploadImageForm) -> HttpResponse:
         request = cast('RequestWithContainer', self.request)
@@ -136,3 +147,89 @@ class UploadImageView(
     def _get_uploaded_files(self) -> list[Any]:
         """Extract all uploaded files from request."""
         return list(self.request.FILES.getlist('file'))
+
+
+class ScanQRReceiptView(
+    LoginRequiredMixin,
+    FormView[ScanQRForm],
+    FormErrorHandlingMixin,
+):
+    """Accept a QR string decoded in-browser and enqueue an FNS lookup.
+
+    Mirrors UploadImageView but skips the image upload + pyzbar decode step
+    entirely: the QR is already decoded client-side (camera scan), so only
+    the raw QR string and target account are submitted.
+    """
+
+    template_name = 'receipts/upload_image.html'
+    form_class: type[ScanQRForm] = ScanQRForm
+    success_url: ClassVar[str] = cast('str', reverse_lazy('receipts:list'))  # type: ignore[misc]
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context['scan_form'] = context.pop('form')
+        context.setdefault(
+            'upload_form',
+            UploadImageForm(user=self.request.user),
+        )
+        return context
+
+    def form_valid(self, form: ScanQRForm) -> HttpResponse:
+        request = cast('RequestWithContainer', self.request)
+        user = cast('User', request.user)
+        account = form.cleaned_data['account']
+        qr_raw = form.cleaned_data['qr_raw']
+        image_hash = hashlib.sha256(qr_raw.encode()).hexdigest()
+
+        pending_receipt_service = (
+            request.container.receipts.pending_receipt_service()
+        )
+
+        duplicate = pending_receipt_service.find_duplicate(
+            user=user,
+            image_hash=image_hash,
+        )
+        if duplicate is not None:
+            messages.warning(request, _('Этот чек уже загружен.'))
+            return redirect('receipts:list')
+
+        try:
+            pending_receipt = (
+                pending_receipt_service.create_processing_job_from_qr(
+                    user=user,
+                    account=account,
+                    image_hash=image_hash,
+                )
+            )
+        except Exception as exc:
+            logger.exception(
+                'Error queuing scanned receipt for processing',
+                error=exc,
+            )
+            return self.handle_form_error_with_message(
+                form,
+                exc,
+                constants.ERROR_PROCESSING_RECEIPT,
+            )
+
+        async_result = _views_module().process_pending_receipt_from_qr.delay(
+            pending_receipt.pk,
+            qr_raw,
+        )
+        pending_receipt_service.attach_task_id(
+            pending_receipt=pending_receipt,
+            task_id=async_result.id,
+        )
+        messages.success(
+            request,
+            _(
+                'Чек поставлен в обработку. Когда распознавание '
+                'завершится, он появится в списке.',
+            ),
+        )
+        return redirect('receipts:list')

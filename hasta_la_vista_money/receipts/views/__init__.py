@@ -1,4 +1,7 @@
-from hasta_la_vista_money.receipts.tasks import process_pending_receipt
+from hasta_la_vista_money.receipts.tasks import (
+    process_pending_receipt,
+    process_pending_receipt_from_qr,
+)
 from hasta_la_vista_money.receipts.views.list import (
     ProductByMonthView,
     ReceiptView,
@@ -19,7 +22,10 @@ from hasta_la_vista_money.receipts.views.seller import (
     SellerCreateView,
     SellerUpdateView,
 )
-from hasta_la_vista_money.receipts.views.upload import UploadImageView
+from hasta_la_vista_money.receipts.views.upload import (
+    ScanQRReceiptView,
+    UploadImageView,
+)
 
 __all__ = [
     'PendingReceiptCounterView',
@@ -32,8 +38,10 @@ __all__ = [
     'ReceiptUpdateView',
     'ReceiptView',
     'ReviewPendingReceiptView',
+    'ScanQRReceiptView',
     'SellerCreateView',
     'SellerUpdateView',
     'UploadImageView',
     'process_pending_receipt',
+    'process_pending_receipt_from_qr',
 ]
