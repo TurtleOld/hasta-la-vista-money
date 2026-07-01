@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.6.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.5.0...v2.6.0) (2026-07-01)
+
+
+### Features
+
+* **receipts:** add mobile camera QR scanning for receipt upload ([#868](https://github.com/TurtleOld/hasta-la-vista-money/issues/868)) ([45c06ab](https://github.com/TurtleOld/hasta-la-vista-money/commit/45c06ab16d5242ef2a1d322df8300a585b66ad40))
+
 ## [2.5.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.4.1...v2.5.0) (2026-06-21)
 
 
