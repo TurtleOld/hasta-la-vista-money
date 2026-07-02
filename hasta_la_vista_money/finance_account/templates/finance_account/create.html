@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="finances-app" x-data="composerPage" x-bind:class="typeClass">
+<div class="finances-app composer-page" x-data="composerPage" x-bind:class="typeClass">
 
     <div class="composer-crumb">
         <a href="{% url 'finances' %}">
@@ -22,7 +22,7 @@
 
     <div class="composer-shell">
 
-        <form class="composer-card" method="post" action="{% url 'finances_create' %}" x-ref="composerForm" x-on:submit.prevent="submitForm">
+        <form id="composerForm" class="composer-card" method="post" action="{% url 'finances_create' %}" x-ref="composerForm" x-on:submit.prevent="submitForm">
             {% csrf_token %}
             <input type="hidden" name="operation_type" x-bind:value="type">
             <input type="hidden" name="category"       x-bind:value="categoryId">
@@ -186,6 +186,10 @@
                 </section>
 
             </div>
+        </form>
+
+        <!-- Sidebar: preview + actions float together on desktop -->
+        <div class="composer-sidebar">
 
             <!-- Footer -->
             <div class="composer-ft">
@@ -203,53 +207,59 @@
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                         {% translate 'Сохранить и добавить ещё' %}
                     </button>
-                    <button type="submit" class="finances-button finances-button-primary" x-bind:disabled="!isValid">
+                    <button type="submit" form="composerForm" class="finances-button finances-button-primary" x-bind:disabled="!isValid">
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-10"/></svg>
                         {% translate 'Сохранить' %}
                     </button>
                 </div>
             </div>
-        </form>
 
-        <!-- Preview -->
-        <aside class="preview-card" x-bind:class="previewClass">
-            <div class="panel-hd">
-                <h2>{% translate 'Предпросмотр' %}</h2>
-                <span class="composer-meta-label">{% translate 'как в ленте' %}</span>
-            </div>
-            <div class="preview-body">
-                <div x-show="!previewReady" class="preview-empty" x-cloak>
-                    {% translate 'Заполни сумму, категорию и счёт — здесь появится строка как в ленте операций.' %}
+            <!-- Preview -->
+            <aside class="preview-card" x-bind:class="previewClass">
+                <div class="panel-hd">
+                    <h2>{% translate 'Предпросмотр' %}</h2>
+                    <span class="composer-meta-label">{% translate 'как в ленте' %}</span>
                 </div>
-                <div class="preview-tx" x-show="previewReady" x-cloak>
-                    <div class="top">
-                        <div class="ico">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                                <path x-bind:d="categoryIconPath"></path>
-                            </svg>
+                <div class="preview-body">
+                    <div x-show="!previewReady" class="preview-empty" x-cloak>
+                        {% translate 'Заполни сумму, категорию и счёт — здесь появится строка как в ленте операций.' %}
+                    </div>
+                    <div class="preview-tx" x-show="previewReady" x-cloak>
+                        <div class="top">
+                            <div class="ico">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                    <path x-bind:d="categoryIconPath"></path>
+                                </svg>
+                            </div>
+                            <div class="preview-tx-body">
+                                <div class="name" x-text="selectedCategoryName"></div>
+                                <div class="note" x-text="noteOrDash"></div>
+                            </div>
+                            <div class="amt">
+                                <span x-text="previewAmount"></span>
+                                <span class="cur">₽</span>
+                            </div>
                         </div>
-                        <div class="preview-tx-body">
-                            <div class="name" x-text="selectedCategoryName"></div>
-                            <div class="note" x-text="noteOrDash"></div>
-                        </div>
-                        <div class="amt">
-                            <span x-text="previewAmount"></span>
-                            <span class="cur">₽</span>
+                        <div class="ft">
+                            <span x-text="selectedAccountName"></span>
+                            <span x-text="previewDate"></span>
                         </div>
                     </div>
-                    <div class="ft">
-                        <span x-text="selectedAccountName"></span>
-                        <span x-text="previewDate"></span>
+                    <div class="preview-tip">
+                        <b>{% translate 'Совет.' %}</b> {% translate 'Категории — только ваши. Создавайте под себя в' %}
+                        <a href="{% url 'finances_categories' %}" class="composer-tip-link">{% translate 'Настройках' %}</a>.
                     </div>
                 </div>
-                <div class="preview-tip">
-                    <b>{% translate 'Совет.' %}</b> {% translate 'Категории — только ваши. Создавайте под себя в' %}
-                    <a href="{% url 'finances_categories' %}" class="composer-tip-link">{% translate 'Настройках' %}</a>.
-                </div>
-            </div>
-        </aside>
+            </aside>
+
+        </div>
 
     </div>
+
+    <div class="composer-toast" x-show="saveHintVisible" x-transition x-cloak>
+        {% translate 'Заполни сумму, категорию и счёт, чтобы сохранить' %}
+    </div>
+
 </div>
 
 <script nonce="{{ request.csp_nonce }}">
@@ -365,6 +375,7 @@
             serverTodayIso:       getServerTodayIso(),
             datetimeLocal:        '',
             note:                 '',
+            saveHintVisible:      false,
 
             /* ── Computed: тип ── */
             get isExpense() { return this.type === 'expense' ? true : null; },
@@ -483,11 +494,22 @@
                 this.amount = this.amount.replace(/[^\d.,]/g, '').replace(',', '.');
             },
             submitForm(action) {
-                if (!this.isValid) return;
+                if (!this.isValid) {
+                    this.flashSaveHint();
+                    return;
+                }
                 if (this.$refs.actionField) {
                     this.$refs.actionField.value = action === 'save_and_add' ? 'save_and_add' : 'save';
                 }
                 this.$refs.composerForm.submit();
+            },
+
+            flashSaveHint() {
+                this.saveHintVisible = true;
+                clearTimeout(this._saveHintTimeout);
+                this._saveHintTimeout = setTimeout(() => {
+                    this.saveHintVisible = false;
+                }, 2400);
             },
 
             prefillFromQuery() {
@@ -550,11 +572,11 @@
                     this.syncFlatpickr();
                 });
                 window.addEventListener('keydown', (e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyS') {
                         e.preventDefault();
                         this.submitForm('save');
                     }
-                    if (e.key === 'Escape') {
+                    if (e.code === 'Escape') {
                         window.location.href = window.FINANCES_URL;
                     }
                 });
