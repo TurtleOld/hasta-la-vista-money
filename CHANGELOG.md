@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.7.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.7.0...v2.7.1) (2026-07-02)
+
+
+### Bug Fixes
+
+* **receipts:** improve camera autofocus for QR scanning on paper receipts ([#872](https://github.com/TurtleOld/hasta-la-vista-money/issues/872)) ([fa3b70e](https://github.com/TurtleOld/hasta-la-vista-money/commit/fa3b70e385ade5c74c890b37792d27fe47acdaa6))
+
 ## [2.7.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.6.0...v2.7.0) (2026-07-01)
 
 
