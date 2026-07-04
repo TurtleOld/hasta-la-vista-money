@@ -3,7 +3,7 @@
         docker-build docker-build-prod docker-test-prod docker-up \
         gettext staticfiles start secretkey test coverage \
         rabbitmq rabbitmq-stop rabbitmq-management export-api-schema \
-        help check docs build-js watch-js
+        help check build-js watch-js build-front
 
 lint:
 	@cd hasta_la_vista_money && echo "Running flake8 check..." && uv run flake8 . --select=WPS
@@ -69,6 +69,11 @@ build-js:
 watch-js:
 	@npm run watch:js
 
+build-front:
+	@npm run build:js
+	@cd theme/static_src && npm run build
+	@$(MAKE) staticfiles
+
 start:
 	@uv run python manage.py runserver 127.0.0.1:8000
 
@@ -98,13 +103,10 @@ export-api-schema:
 	@uv run python -c "import os; os.makedirs('docs/docs/api', exist_ok=True)"
 	@echo "Exporting OpenAPI schema..." && uv run python manage.py spectacular --file docs/docs/api/schema.json --format openapi-json && echo "Schema exported to docs/docs/api/schema.json"
 
-docs:
-	@uv run mkdocs build -q
-
 check:
 	@$(MAKE) format
 	@$(MAKE) lint
 	@uv run mypy . && uv run pyright
 
 help:
-	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js\\n  test / coverage\\n  export-api-schema / docs\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)\\n\\nJS scripts:\\n  npm run lint:js\\n  npm run format:js\\n  npm run format:js:check')"
+	@uv run python -c "print('Targets:\\n  install / install-prod\\n  pre-commit-install / pre-commit / pre-commit-update\\n  format / lint / check\\n  migrate / staticfiles / start\\n  build-js / watch-js / build-front\\n  test / coverage\\n  export-api-schema\\n  docker-build / docker-build-prod / docker-test-prod / docker-up\\n  rabbitmq / rabbitmq-stop / rabbitmq-management\\n  secretkey (idempotent)\\n\\nJS scripts:\\n  npm run lint:js\\n  npm run format:js\\n  npm run format:js:check')"
