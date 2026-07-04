@@ -81,13 +81,30 @@
                         <span class="opt" x-show="categoryId" x-text="selectedCategoryLabel" x-cloak></span>
                     </h3>
 
+                    <!-- Поиск по категориям (показывается при длинном списке) -->
+                    <div class="cmp-input cmp-cat-search" x-show="showCategorySearch" x-cloak>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                        <input type="text" autocomplete="off"
+                               placeholder="{% translate 'Найти категорию' %}"
+                               x-model="categoryQuery"
+                               x-on:keydown.enter.prevent="selectFirstCategoryMatch"
+                               x-on:keydown.escape.stop="clearCategoryQuery">
+                        <span class="cmp-cat-search-hint" x-show="categoryQueryTooShort" x-cloak>{% translate 'мин. 3 символа' %}</span>
+                        <button type="button" class="cmp-clear" x-show="categoryQuery" x-cloak
+                                x-on:click="clearCategoryQuery"
+                                aria-label="{% translate 'Очистить поиск' %}">
+                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                        </button>
+                    </div>
+
                     <!-- Расходы -->
                     <div class="cmp-cats" x-show="isExpense">
                         {% for c in expense_categories %}
                         <button type="button" class="cat-chip"
                                 data-category-id="{{ c.pk }}"
                                 data-category-type="expense"
-                                data-category-name="{{ c.name|escapejs }}"
+                                data-category-name="{{ c.name }}"
+                                x-show="categoryMatches($el.dataset.categoryName)"
                                 x-bind:data-on="categoryId == {{ c.pk }}"
                                 x-on:click="selectCategory({{ c.pk }}, '{{ c.name|escapejs }}')">
                             <span class="dot">
@@ -98,6 +115,7 @@
                         {% empty %}
                         <p class="finances-muted">{% translate 'Нет категорий расходов' %}</p>
                         {% endfor %}
+                        <p class="finances-muted" x-show="categoryFilterActive && !hasCategoryMatches" x-cloak>{% translate 'Ничего не найдено — попробуйте другой запрос' %}</p>
                     </div>
 
                     <!-- Доходы -->
@@ -106,7 +124,8 @@
                         <button type="button" class="cat-chip"
                                 data-category-id="{{ c.pk }}"
                                 data-category-type="income"
-                                data-category-name="{{ c.name|escapejs }}"
+                                data-category-name="{{ c.name }}"
+                                x-show="categoryMatches($el.dataset.categoryName)"
                                 x-bind:data-on="categoryId == {{ c.pk }}"
                                 x-on:click="selectCategory({{ c.pk }}, '{{ c.name|escapejs }}')">
                             <span class="dot">
@@ -117,6 +136,7 @@
                         {% empty %}
                         <p class="finances-muted">{% translate 'Нет категорий доходов' %}</p>
                         {% endfor %}
+                        <p class="finances-muted" x-show="categoryFilterActive && !hasCategoryMatches" x-cloak>{% translate 'Ничего не найдено — попробуйте другой запрос' %}</p>
                     </div>
                 </section>
 
@@ -372,6 +392,9 @@
             accountId:            null,
             selectedCategoryName: '',
             selectedAccountName:  '',
+            categoryQuery:        '',
+            expenseCategoryOptions: [],
+            incomeCategoryOptions:  [],
             serverTodayIso:       getServerTodayIso(),
             datetimeLocal:        '',
             note:                 '',
@@ -404,6 +427,47 @@
             /* ── Computed: категория ── */
             get selectedCategoryLabel() {
                 return this.selectedCategoryName ? '· ' + this.selectedCategoryName : '';
+            },
+
+            /* ── Computed: поиск по категориям ── */
+            get activeCategoryOptions() {
+                return this.type === 'income'
+                    ? this.incomeCategoryOptions
+                    : this.expenseCategoryOptions;
+            },
+            get showCategorySearch() {
+                return this.activeCategoryOptions.length > 8;
+            },
+            get normalizedCategoryQuery() {
+                return this.categoryQuery.trim().toLowerCase();
+            },
+            get categoryFilterActive() {
+                return this.normalizedCategoryQuery.length >= 3;
+            },
+            get categoryQueryTooShort() {
+                const len = this.normalizedCategoryQuery.length;
+                return len > 0 && len < 3;
+            },
+            get hasCategoryMatches() {
+                return this.activeCategoryOptions.some(
+                    (option) => this.categoryMatches(option.name),
+                );
+            },
+            categoryMatches(name) {
+                if (!this.categoryFilterActive) return true;
+                return (name || '').toLowerCase().includes(this.normalizedCategoryQuery);
+            },
+            clearCategoryQuery() {
+                this.categoryQuery = '';
+            },
+            selectFirstCategoryMatch() {
+                if (!this.categoryFilterActive) return;
+                const match = this.activeCategoryOptions.find(
+                    (option) => this.categoryMatches(option.name),
+                );
+                if (match) {
+                    this.selectCategory(match.id, match.name);
+                }
             },
 
             /* ── Computed: дата ── */
@@ -468,10 +532,12 @@
                 this.type = t;
                 this.categoryId = null;
                 this.selectedCategoryName = '';
+                this.categoryQuery = '';
             },
             selectCategory(id, name) {
                 this.categoryId = id;
                 this.selectedCategoryName = name;
+                this.categoryQuery = '';
             },
             selectAccount(id, name) {
                 this.accountId = id;
@@ -560,7 +626,18 @@
                 input._flatpickr.setDate(this.datetimeLocal, false, 'Y-m-d\\TH:i');
             },
 
+            collectCategoryOptions(type) {
+                return Array.from(
+                    document.querySelectorAll(`.cat-chip[data-category-type="${type}"]`),
+                ).map((btn) => ({
+                    id: parseInt(btn.dataset.categoryId, 10),
+                    name: btn.dataset.categoryName || '',
+                }));
+            },
+
             init() {
+                this.expenseCategoryOptions = this.collectCategoryOptions('expense');
+                this.incomeCategoryOptions = this.collectCategoryOptions('income');
                 if (!this.datetimeLocal) {
                     const now = new Date();
                     const baseDate = toDateFromIso(this.serverTodayIso);

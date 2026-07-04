@@ -330,6 +330,9 @@
     to {
         opacity: 0;
         transform: translateY(-20px);
+        /* visibility переживает fill-mode: forwards — без него скрытый
+           элемент с pointer-events-auto продолжает перехватывать клики */
+        visibility: hidden;
     }
 }
 

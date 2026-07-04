@@ -65,6 +65,25 @@ function buildFlatpickrOptions(element) {
   };
 }
 
+function enableHourAutoAdvance(instance) {
+  const hour = instance.hourElement;
+  const minute = instance.minuteElement;
+  if (!hour || !minute) return;
+
+  hour.addEventListener('input', () => {
+    const digits = hour.value.replace(/\D/g, '');
+    // Первая цифра больше 2 (в 24-часовом формате) или 1 (в 12-часовом)
+    // не может начинать двузначный час — переходить можно сразу.
+    const maxFirstDigit = instance.config.time_24hr ? 2 : 1;
+    if (
+      digits.length >= 2 ||
+      (digits.length === 1 && Number(digits) > maxFirstDigit)
+    ) {
+      minute.focus();
+    }
+  });
+}
+
 export function initializeFlatpickr(rootElement = document) {
   const root =
     rootElement instanceof Element || rootElement instanceof Document
@@ -80,7 +99,8 @@ export function initializeFlatpickr(rootElement = document) {
       return;
     }
 
-    flatpickr(element, buildFlatpickrOptions(element));
+    const instance = flatpickr(element, buildFlatpickrOptions(element));
+    enableHourAutoAdvance(instance);
   });
 }
 

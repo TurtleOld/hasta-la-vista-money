@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.7.2](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.7.1...v2.7.2) (2026-07-04)
+
+
+### Bug Fixes
+
+* **receipts:** set standard 1x camera zoom for QR scanning ([#874](https://github.com/TurtleOld/hasta-la-vista-money/issues/874)) ([0e8a0db](https://github.com/TurtleOld/hasta-la-vista-money/commit/0e8a0dbe289b2fc0b7fce82bd818f1beea0cd259))
+
 ## [2.7.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.7.0...v2.7.1) (2026-07-02)
 
 
