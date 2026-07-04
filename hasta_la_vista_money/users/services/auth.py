@@ -56,8 +56,8 @@ def login_user(
             jwt_access_token = str(tokens.access_token)
             jwt_refresh_token = str(tokens)
         except (ValueError, TypeError, AttributeError):
-            jwt_access_token = ''
-            jwt_refresh_token = ''
+            jwt_access_token = ''  # nosec B105 - пустой фолбэк, не пароль
+            jwt_refresh_token = ''  # nosec B105 - пустой фолбэк, не пароль
 
         messages.success(request, success_message)
         return {
