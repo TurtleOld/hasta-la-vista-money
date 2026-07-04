@@ -124,8 +124,8 @@ class PendingReceiptServiceHashTests(TestCase):
             user=self.user,
             image_hash=image_hash,
         )
-        self.assertIsNotNone(match)
-        assert match is not None
+        if match is None:
+            self.fail('Дубликат не найден')
         self.assertEqual(match.kind, 'pending')
 
     def test_create_processing_job_from_qr_has_no_image_file(self) -> None:
@@ -153,8 +153,8 @@ class PendingReceiptServiceHashTests(TestCase):
             user=self.user,
             image_hash=image_hash,
         )
-        self.assertIsNotNone(match)
-        assert match is not None
+        if match is None:
+            self.fail('Дубликат не найден')
         self.assertEqual(match.kind, 'pending')
 
     def test_failed_pending_does_not_block_reupload(self) -> None:

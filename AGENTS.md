@@ -295,6 +295,7 @@ class ExpenseServiceTest(TestCase):
 
 **Правила:**
 - Используйте стандартные `django.test.TestCase` / `TransactionTestCase`
+- В проекте используется только unittest, без pytest: никаких голых `assert` в тестах — только методы `self.assert*` (для сужения типов вместо `assert x is not None` используйте `if x is None: self.fail(...)`)
 - Запускайте тесты через `python manage.py test`
 - Покрытие тестами должно быть не менее 85%
 - Используйте фикстуры для общих данных

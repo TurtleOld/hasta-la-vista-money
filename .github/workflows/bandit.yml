@@ -23,4 +23,7 @@ jobs:
         uses: shundor/python-bandit-scan@ab1d87dfccc5a0ffab88be3aaac6ffe35c10d6cd
         with:
           exit_zero: true
+          # Фикстурные пароли и имена JWT-ключей в тестах дают только
+          # ложные B105/B106 — настоящих секретов в тестах нет.
+          excluded_paths: '*/tests/*,*/tests.py,*/test_*.py'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
