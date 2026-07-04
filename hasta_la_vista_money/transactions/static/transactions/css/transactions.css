@@ -1070,6 +1070,37 @@
   text-align: right;
 }
 
+/* Category search */
+.cmp-cat-search {
+  margin-bottom: 10px;
+}
+
+.cmp-cat-search-hint {
+  font-size: 11px;
+  color: var(--finances-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cmp-input .cmp-clear {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--finances-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.cmp-input .cmp-clear:hover {
+  color: var(--finances-text);
+  background: var(--finances-surface);
+}
+
 /* Category chips */
 .cmp-cats {
   display: flex;
