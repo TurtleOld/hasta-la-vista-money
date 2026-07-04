@@ -1,5 +1,18 @@
 # История изменений
 
+## [2.8.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.7.2...v2.8.0) (2026-07-04)
+
+
+### Features
+
+* **finance_account:** add category search with autocomplete in operation form ([#876](https://github.com/TurtleOld/hasta-la-vista-money/issues/876)) ([842d822](https://github.com/TurtleOld/hasta-la-vista-money/commit/842d8228fefd96d4f0b04b85dd3c5b3c45c982be))
+
+
+### Bug Fixes
+
+* **theme:** hide dismissed message toast so it stops blocking clicks ([#877](https://github.com/TurtleOld/hasta-la-vista-money/issues/877)) ([b8ba2c9](https://github.com/TurtleOld/hasta-la-vista-money/commit/b8ba2c909e79742e882048098e4d3b70b86eb115))
+* **transactions:** auto-advance to minutes after typing hours in datetime picker ([#879](https://github.com/TurtleOld/hasta-la-vista-money/issues/879)) ([599d426](https://github.com/TurtleOld/hasta-la-vista-money/commit/599d426c8d4c377f314d250e304159b333b9bb93))
+
 ## [2.7.2](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.7.1...v2.7.2) (2026-07-04)
 
 
