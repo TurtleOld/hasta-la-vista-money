@@ -103,6 +103,7 @@ function registerReceiptQRScanPage(Alpine) {
           return;
         }
         await this.applyFocusConstraints();
+        await this.applyZoomConstraint();
         const video = this.$refs.video;
         if (!video) {
           this.stop();
@@ -145,6 +146,41 @@ function registerReceiptQRScanPage(Alpine) {
         } catch (error) {
           console.warn(
             'receipt QR scan: failed to apply focus constraints',
+            error,
+          );
+        }
+      },
+
+      async applyZoomConstraint() {
+        const track = this.stream && this.stream.getVideoTracks()[0];
+        if (!track || typeof track.getCapabilities !== 'function') {
+          return;
+        }
+        let capabilities;
+        try {
+          capabilities = track.getCapabilities();
+        } catch (_error) {
+          return;
+        }
+        const zoom = capabilities && capabilities.zoom;
+        if (
+          !zoom ||
+          typeof zoom.min !== 'number' ||
+          typeof zoom.max !== 'number'
+        ) {
+          return;
+        }
+        const target = Math.min(Math.max(1, zoom.min), zoom.max);
+        const settings =
+          typeof track.getSettings === 'function' ? track.getSettings() : {};
+        if (settings.zoom === target) {
+          return;
+        }
+        try {
+          await track.applyConstraints({ advanced: [{ zoom: target }] });
+        } catch (error) {
+          console.warn(
+            'receipt QR scan: failed to apply zoom constraint',
             error,
           );
         }
