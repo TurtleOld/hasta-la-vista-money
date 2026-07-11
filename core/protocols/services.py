@@ -43,9 +43,7 @@ class AccountServiceProtocol(Protocol):
         """
         ...
 
-    def get_account_by_id(
-        self, account_id: int, user: User
-    ) -> Account | None:
+    def get_account_by_id(self, account_id: int, user: User) -> Account | None:
         """Get account by ID for a user.
 
         Args:
@@ -107,9 +105,7 @@ class AccountServiceProtocol(Protocol):
         """
         ...
 
-    def apply_receipt_spend(
-        self, account: Account, amount: Decimal
-    ) -> Account:
+    def apply_receipt_spend(self, account: Account, amount: Decimal) -> Account:
         """Apply spending to account balance.
 
         Args:
@@ -121,9 +117,7 @@ class AccountServiceProtocol(Protocol):
         """
         ...
 
-    def refund_to_account(
-        self, account: Account, amount: Decimal
-    ) -> Account:
+    def refund_to_account(self, account: Account, amount: Decimal) -> Account:
         """Refund amount to account balance.
 
         Args:
@@ -133,6 +127,13 @@ class AccountServiceProtocol(Protocol):
         Returns:
             Updated Account instance.
         """
+        ...
+
+    def apply_account_deltas(
+        self,
+        deltas: dict[int, Decimal],
+    ) -> dict[int, Account]:
+        """Apply signed deltas to accounts atomically."""
         ...
 
     def reconcile_account_balances(

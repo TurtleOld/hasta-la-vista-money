@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
 from django.db.models import QuerySet
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import (
@@ -20,7 +19,11 @@ from drf_spectacular.utils import (
 )
 from rest_framework import status
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
+from rest_framework.generics import (
+    ListAPIView,
+    ListCreateAPIView,
+    RetrieveAPIView,
+)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -63,7 +66,7 @@ logger = structlog.get_logger(__name__)
     summary='Список чеков',
     description='Получить список всех чеков текущего пользователя',
 )
-class ReceiptListAPIView(ListCreateAPIView[Receipt]):
+class ReceiptListAPIView(ListAPIView[Receipt]):
     """API view for listing and creating receipts.
 
     Provides endpoints for:
@@ -392,7 +395,8 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         mapper = self._get_mapper()
 
         # Validate user and account
-        user_id = request_data.get('user')
+        request_user = cast('User', self.request.user)
+        user_id = request_user.pk
         account_id = request_data.get('finance_account')
         validation_result = validator.validate_user_and_account(
             user_id,
@@ -649,17 +653,11 @@ class ReceiptDeleteAPIView(APIView):
                 'You do not have permission to delete this receipt',
             )
 
-        with transaction.atomic():
-            request_with_container = cast('RequestWithContainer', request)
-            container = request_with_container.container
-            account_service = container.finance_account.account_service()
-
-            account_service.refund_to_account(
-                receipt.account,
-                receipt.total_sum,
-            )
-
-            receipt.delete()
+        request_with_container = cast('RequestWithContainer', request)
+        deleter = (
+            request_with_container.container.receipts.receipt_deleter_service()
+        )
+        deleter.delete_receipt(user=user, receipt=receipt)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 

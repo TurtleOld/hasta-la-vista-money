@@ -24,6 +24,14 @@ class TransactionRepository:
         """Return the transaction with the given primary key."""
         return Transaction.objects.get(pk=transaction_id)
 
+    def get_by_id_for_update(self, transaction_id: int) -> Transaction:
+        """Return and lock a transaction for mutation."""
+        return (
+            Transaction.objects.select_for_update()
+            .select_related('account', 'category', 'user')
+            .get(pk=transaction_id)
+        )
+
     def get_by_user(
         self,
         user: User,

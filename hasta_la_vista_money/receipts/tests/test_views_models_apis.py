@@ -1226,10 +1226,9 @@ class TestReviewPendingReceiptView(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, '/receipts/')
 
-        self.mock_account_service.apply_receipt_spend.assert_called_once()
-        call_args = self.mock_account_service.apply_receipt_spend.call_args
-        self.assertEqual(call_args[0][0].pk, self.account.pk)
-        self.assertEqual(call_args[0][1], Decimal('150.00'))
+        self.mock_account_service.apply_account_deltas.assert_called_once_with(
+            {self.account.pk: Decimal('-150.00')},
+        )
 
         self.assertFalse(
             PendingReceipt.objects.filter(pk=self.pending_receipt.pk).exists(),
@@ -1323,7 +1322,7 @@ class TestReviewPendingReceiptView(TestCase):
 
     def test_review_pending_receipt_view_insufficient_funds(self) -> None:
         self.client.force_login(self.user)
-        self.mock_account_service.apply_receipt_spend.side_effect = (
+        self.mock_account_service.apply_account_deltas.side_effect = (
             ValidationError('Недостаточно средств на счете')
         )
         url = reverse_lazy(
