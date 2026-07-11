@@ -234,22 +234,48 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         self.account_repository = account_repository
 
         user_accounts = self.account_repository.get_by_user(user)
+        accounts = list(user_accounts)
         initial_accounts = self._get_default_transfer_accounts(
-            list(user_accounts),
+            accounts,
+            self.transfer_service.get_last_used_accounts(user),
         )
+        from_account_initial = self.initial.get(
+            'from_account',
+            initial_accounts[0],
+        )
+        to_account_initial = self.initial.get(
+            'to_account',
+            initial_accounts[1],
+        )
+        if (
+            from_account_initial is not None
+            and from_account_initial == to_account_initial
+        ):
+            ordered_accounts = sorted(
+                accounts,
+                key=lambda account: (
+                    account.created_at is not None,
+                    account.created_at,
+                ),
+                reverse=True,
+            )
+            to_account_initial = self._get_latest_account(
+                ordered_accounts,
+                exclude_account=from_account_initial,
+            )
 
         self.fields['from_account'] = ModelChoiceField(
             label=_('Со счёта:'),
             queryset=user_accounts,
             help_text=_('Выберите счёт, с которого будет списана сумма'),
-            initial=self.initial.get('from_account', initial_accounts[0]),
+            initial=from_account_initial,
         )
 
         self.fields['to_account'] = ModelChoiceField(
             label=_('На счёт:'),
             queryset=user_accounts,
             help_text=_('Выберите счёт, на который будет зачислена сумма'),
-            initial=self.initial.get('to_account', initial_accounts[1]),
+            initial=to_account_initial,
         )
 
         self.add_tailwind_classes()
@@ -257,10 +283,25 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
     def _get_default_transfer_accounts(
         self,
         accounts: Sequence[Account],
+        remembered_accounts: tuple[Account | None, Account | None],
     ) -> tuple[Account | None, Account | None]:
         """Return default source and destination accounts for transfer form."""
         if not accounts:
             return None, None
+
+        accounts_by_id = {account.pk: account for account in accounts}
+        remembered_from, remembered_to = remembered_accounts
+        if (
+            remembered_from is not None
+            and remembered_to is not None
+            and remembered_from.pk in accounts_by_id
+            and remembered_to.pk in accounts_by_id
+            and remembered_from.pk != remembered_to.pk
+        ):
+            return (
+                accounts_by_id[remembered_from.pk],
+                accounts_by_id[remembered_to.pk],
+            )
 
         ordered_accounts = sorted(
             accounts,

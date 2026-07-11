@@ -97,6 +97,20 @@ class TransferService:
             notes=notes or '',
         )
 
+    def get_last_used_accounts(
+        self,
+        user: User,
+    ) -> tuple[Account | None, Account | None]:
+        """Return the account pair from the user's latest transfer."""
+        latest_transfer = (
+            self.transfer_money_log_repository.get_latest_by_user_with_accounts(
+                user,
+            )
+        )
+        if latest_transfer is None:
+            return None, None
+        return latest_transfer.from_account, latest_transfer.to_account
+
     @transaction.atomic
     def delete_transfer(
         self,

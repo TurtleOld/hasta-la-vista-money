@@ -229,6 +229,25 @@ class TestTransferMoneyAccountForm(TestCase):
         self.assertEqual(form.initial['from_account'], self.account1)
         self.assertEqual(form.initial['to_account'], self.account2)
 
+    def test_form_initialization_remembers_last_transfer_accounts(self) -> None:
+        """The latest successful transfer pair should be selected by default."""
+        self.transfer_service.transfer_money(
+            from_account=self.account1,
+            to_account=self.account2,
+            amount=Decimal('10.00'),
+            user=self.user,
+            exchange_date=timezone.now(),
+        )
+
+        form = TransferMoneyAccountForm(
+            user=self.user,
+            transfer_service=self.transfer_service,
+            account_repository=self.account_repository,
+        )
+
+        self.assertEqual(form.fields['from_account'].initial, self.account1)
+        self.assertEqual(form.fields['to_account'].initial, self.account2)
+
     def test_form_initialization_prefers_latest_debit_and_credit_accounts(
         self,
     ) -> None:
