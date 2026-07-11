@@ -540,6 +540,48 @@ class TestTransferMoneyAccountView(TestCase):
         self.assertEqual(self.account1.balance, initial_balance1 - amount)
         self.assertEqual(self.account2.balance, initial_balance2 + amount)
 
+    def test_transfer_money_view_remembers_last_account_pair(self) -> None:
+        """A subsequent transfer should preselect the last successful pair."""
+        self.client.force_login(self.user)
+        url = reverse('finance_account:transfer_money')
+        data = {
+            'from_account': self.account1.pk,
+            'to_account': self.account2.pk,
+            'amount': Decimal('100.00'),
+            'exchange_date': timezone.now().strftime(
+                constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
+            ),
+            'notes': 'Remember this pair',
+        }
+        self.client.post(url, data)
+
+        response = self.client.get(url)
+        form = response.context['form']
+
+        self.assertEqual(form.fields['from_account'].initial, self.account1)
+        self.assertEqual(form.fields['to_account'].initial, self.account2)
+
+    def test_transfer_query_source_overrides_remembered_pair(self) -> None:
+        """An explicit source account should override remembered defaults."""
+        self.client.force_login(self.user)
+        url = reverse('finance_account:transfer_money')
+        TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account1,
+            to_account=self.account2,
+            amount=Decimal('100.00'),
+            exchange_date=timezone.now(),
+        )
+
+        response = self.client.get(
+            url,
+            {'from_account': self.account2.pk},
+        )
+        form = response.context['form']
+
+        self.assertEqual(form.fields['from_account'].initial, self.account2)
+        self.assertEqual(form.fields['to_account'].initial, self.account1)
+
     def test_transfer_money_view_post_insufficient_funds(self) -> None:
         """Test POST request with insufficient funds."""
         self.client.force_login(self.user)

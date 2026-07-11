@@ -115,6 +115,22 @@ class TransferMoneyLogRepository:
             return queryset[:limit]
         return queryset
 
+    def get_latest_by_user_with_accounts(
+        self,
+        user: User,
+    ) -> TransferMoneyLog | None:
+        """Return the most recently recorded complete transfer for a user."""
+        return (
+            TransferMoneyLog.objects.filter(
+                user=user,
+                from_account__isnull=False,
+                to_account__isnull=False,
+            )
+            .select_related('from_account', 'to_account')
+            .order_by('-pk')
+            .first()
+        )
+
     def get_by_date_range(
         self,
         user: User,

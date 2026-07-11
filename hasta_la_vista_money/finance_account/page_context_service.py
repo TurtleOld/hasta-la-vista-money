@@ -131,20 +131,12 @@ class AccountPageContextService:
         Returns:
             Dictionary with forms.
         """
-        account_transfer_money = (
-            self.account_repository.get_by_user_with_related(user)
-        )
-        initial_form_data = {
-            'from_account': account_transfer_money.first(),
-            'to_account': account_transfer_money.first(),
-        }
         return {
             'add_account_form': AddAccountForm(),
             'transfer_money_form': TransferMoneyAccountForm(
                 user=user,
                 transfer_service=self.transfer_service,
                 account_repository=self.account_repository,
-                initial=initial_form_data,
             ),
         }
 
