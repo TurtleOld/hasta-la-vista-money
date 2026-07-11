@@ -80,6 +80,7 @@ class ListUsers(
 
 
 class UpdateUserView(
+    LoginRequiredMixin,
     CustomSuccessURLUserMixin,
     SuccessMessageMixin[UpdateUserForm],
     UpdateView[User, UpdateUserForm],

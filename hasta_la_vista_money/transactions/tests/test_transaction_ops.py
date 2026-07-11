@@ -242,11 +242,18 @@ class TransactionServiceTest(TestCase):
                 type_value=TransactionType.INCOME,
             ),
         )
-        duplicate = self.service.copy_transaction(
-            user=self.user,
-            transaction_id=original.pk,
-        )
+        copied_at = datetime(2026, 7, 11, 12, 30, tzinfo=UTC)
+        with patch(
+            'hasta_la_vista_money.transactions.services.'
+            'transaction_ops.timezone.now',
+            return_value=copied_at,
+        ):
+            duplicate = self.service.copy_transaction(
+                user=self.user,
+                transaction_id=original.pk,
+            )
         self.assertEqual(duplicate.amount, original.amount)
+        self.assertEqual(duplicate.date, copied_at)
         self.assertNotEqual(duplicate.pk, original.pk)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1200.00'))
