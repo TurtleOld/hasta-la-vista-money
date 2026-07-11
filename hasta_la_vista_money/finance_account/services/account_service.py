@@ -231,6 +231,13 @@ class AccountService:
         """
         return self.balance_service.refund_to_account(account, amount)
 
+    def apply_account_deltas(
+        self,
+        deltas: dict[int, Decimal],
+    ) -> dict[int, Account]:
+        """Apply signed balance deltas atomically."""
+        return self.balance_service.apply_account_deltas(deltas)
+
     def reconcile_account_balances(
         self,
         command: BalanceReconcileCommand,

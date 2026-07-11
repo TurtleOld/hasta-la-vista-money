@@ -73,6 +73,19 @@ class TransactionService:
                 ),
             )
 
+    @staticmethod
+    def _validate_category_owner(user: User, category: Category) -> None:
+        if category.user_id != user.pk:
+            raise PermissionDenied(
+                _('У вас нет прав на использование этой категории.'),
+            )
+
+    @staticmethod
+    def _balance_delta(amount: Decimal, type_value: str) -> Decimal:
+        if type_value == TransactionType.INCOME:
+            return amount
+        return -amount
+
     def _apply_balance_for_create(
         self,
         account: Account,
@@ -105,6 +118,7 @@ class TransactionService:
             command.type_value,
             command.category,
         )
+        self._validate_category_owner(command.user, command.category)
 
         with db_transaction.atomic():
             new_transaction = self.transaction_repository.create_transaction(
@@ -136,23 +150,30 @@ class TransactionService:
             command.type_value,
             command.category,
         )
+        self._validate_category_owner(command.user, command.category)
 
         with db_transaction.atomic():
-            old_account = command.transaction_obj.account
-            old_amount = command.transaction_obj.amount
-            old_type = command.transaction_obj.type
-
-            self._apply_balance_for_delete(old_account, old_amount, old_type)
-            self._apply_balance_for_create(
-                command.account,
-                command.amount,
-                command.type_value,
+            transaction_obj = self.transaction_repository.get_by_id_for_update(
+                command.transaction_obj.pk,
             )
+            self._validate_transaction_owner(command.user, transaction_obj)
+            old_account = transaction_obj.account
+            old_amount = transaction_obj.amount
+            old_type = transaction_obj.type
 
-            command.transaction_obj.account = command.account
-            command.transaction_obj.category = command.category
-            command.transaction_obj.amount = command.amount
-            command.transaction_obj.type = command.type_value
+            deltas = {
+                old_account.pk: -self._balance_delta(old_amount, old_type),
+            }
+            deltas[command.account.pk] = deltas.get(
+                command.account.pk,
+                0,
+            ) + self._balance_delta(command.amount, command.type_value)
+            self.account_service.apply_account_deltas(deltas)
+
+            transaction_obj.account = command.account
+            transaction_obj.category = command.category
+            transaction_obj.amount = command.amount
+            transaction_obj.type = command.type_value
 
             date_value = command.transaction_date
             if isinstance(date_value, date) and not isinstance(
@@ -166,9 +187,9 @@ class TransactionService:
                 date_value,
             ):
                 date_value = timezone.make_aware(date_value)
-            command.transaction_obj.date = date_value
-            command.transaction_obj.save()
-        return command.transaction_obj
+            transaction_obj.date = date_value
+            transaction_obj.save()
+        return transaction_obj
 
     def delete_transaction(
         self,
@@ -179,6 +200,10 @@ class TransactionService:
         """Delete a transaction and reverse its effect on the account."""
         self._validate_transaction_owner(user, transaction_obj)
         with db_transaction.atomic():
+            transaction_obj = self.transaction_repository.get_by_id_for_update(
+                transaction_obj.pk,
+            )
+            self._validate_transaction_owner(user, transaction_obj)
             self._apply_balance_for_delete(
                 transaction_obj.account,
                 transaction_obj.amount,
@@ -193,12 +218,14 @@ class TransactionService:
         transaction_id: int,
     ) -> Transaction:
         """Duplicate an existing transaction and adjust the balance."""
-        original = self.transaction_repository.get_by_id(transaction_id)
-        if original.user != user:
-            raise PermissionDenied(
-                _('У вас нет прав на копирование этой операции.'),
-            )
         with db_transaction.atomic():
+            original = self.transaction_repository.get_by_id_for_update(
+                transaction_id,
+            )
+            if original.user != user:
+                raise PermissionDenied(
+                    _('У вас нет прав на копирование этой операции.'),
+                )
             new_transaction = self.transaction_repository.create_transaction(
                 user=original.user,
                 account=original.account,

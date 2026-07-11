@@ -25,6 +25,22 @@ if TYPE_CHECKING:
     )
 
 
+def receipt_balance_delta(
+    operation_type: int | str | None,
+    amount: Decimal,
+) -> Decimal:
+    """Return the account balance effect of an FNS receipt operation."""
+    try:
+        normalized_type = int(operation_type)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as error:
+        raise ValueError('Unsupported receipt operation type') from error
+    if normalized_type not in {1, 2, 3, 4}:
+        raise ValueError('Unsupported receipt operation type')
+    if normalized_type in {2, 3}:
+        return amount
+    return -amount
+
+
 class ReceiptCreatorService:
     """Service for creating receipts with products.
 
@@ -83,17 +99,16 @@ class ReceiptCreatorService:
         """
 
         account_balance = self.account_repository.get_by_id(account.pk)
-        is_refund = receipt_data.operation_type in {2, 4}
-        if is_refund:
-            self.account_service.refund_to_account(
-                account_balance,
-                receipt_data.total_sum,
-            )
-        else:
-            self.account_service.apply_receipt_spend(
-                account_balance,
-                receipt_data.total_sum,
-            )
+        if account_balance.user_id != user.pk:
+            raise ValueError('Account does not belong to user')
+        self.account_service.apply_account_deltas(
+            {
+                account_balance.pk: receipt_balance_delta(
+                    receipt_data.operation_type,
+                    receipt_data.total_sum,
+                ),
+            },
+        )
 
         if seller_id is not None:
             try:
@@ -165,11 +180,14 @@ class ReceiptCreatorService:
         if account_balance.user != user:
             return None
 
-        is_refund = receipt.operation_type in {2, 4}
-        if is_refund:
-            self.account_service.refund_to_account(account_balance, total_sum)
-        else:
-            self.account_service.apply_receipt_spend(account_balance, total_sum)
+        self.account_service.apply_account_deltas(
+            {
+                account_balance.pk: receipt_balance_delta(
+                    receipt.operation_type,
+                    total_sum,
+                ),
+            },
+        )
 
         receipt.user = user
         receipt.seller = seller

@@ -10,11 +10,11 @@ from core.repositories.protocols import (
     ReceiptRepositoryProtocol,
     SellerRepositoryProtocol,
 )
-from hasta_la_vista_money.finance_account.services.types import (
-    BalanceReconcileCommand,
-)
 from hasta_la_vista_money.receipts.forms import ProductForm, ReceiptForm
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    receipt_balance_delta,
+)
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
@@ -75,9 +75,25 @@ class ReceiptUpdaterService:
         Returns:
             Updated Receipt instance.
         """
+        receipt = Receipt.objects.select_for_update().get(pk=receipt.pk)
         old_total_sum = receipt.total_sum
-        old_account = receipt.account
-        receipt = form.save()
+        old_account_id = receipt.account_id
+        old_operation_type = receipt.operation_type
+        form.instance = receipt
+        for field_name in (
+            'seller',
+            'account',
+            'receipt_date',
+            'number_receipt',
+            'operation_type',
+            'nds10',
+            'nds20',
+        ):
+            setattr(receipt, field_name, form.cleaned_data[field_name])
+        if receipt.operation_type is None:
+            raise ValueError('Receipt operation type is required')
+        receipt.operation_type = int(receipt.operation_type)
+        receipt.save()
         receipt.product.clear()
         new_total_sum = Decimal('0.00')
 
@@ -109,16 +125,14 @@ class ReceiptUpdaterService:
         receipt.total_sum = new_total_sum
         receipt.save()
 
-        new_account = receipt.account
-
-        old_account_obj = self.account_repository.get_by_id(old_account.pk)
-        new_account_obj = self.account_repository.get_by_id(new_account.pk)
-        self.account_service.reconcile_account_balances(
-            BalanceReconcileCommand(
-                old_account=old_account_obj,
-                new_account=new_account_obj,
-                old_total_sum=old_total_sum,
-                new_total_sum=new_total_sum,
-            ),
+        old_delta = receipt_balance_delta(old_operation_type, old_total_sum)
+        new_delta = receipt_balance_delta(
+            receipt.operation_type,
+            new_total_sum,
         )
+        deltas = {old_account_id: -old_delta}
+        deltas[receipt.account_id] = (
+            deltas.get(receipt.account_id, 0) + new_delta
+        )
+        self.account_service.apply_account_deltas(deltas)
         return receipt

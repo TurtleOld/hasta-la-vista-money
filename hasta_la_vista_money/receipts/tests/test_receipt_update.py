@@ -7,8 +7,34 @@ from django.urls import reverse
 from hasta_la_vista_money.constants import RECEIPT_OPERATION_PURCHASE
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.receipts.models import Product, Receipt, Seller
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    receipt_balance_delta,
+)
 
 User = get_user_model()
+
+
+class ReceiptBalanceDeltaTest(TestCase):
+    def test_all_fns_operation_directions(self) -> None:
+        cases = (
+            (1, Decimal('-100.00')),
+            (2, Decimal('100.00')),
+            (3, Decimal('100.00')),
+            (4, Decimal('-100.00')),
+        )
+        for operation_type, expected in cases:
+            with self.subTest(operation_type=operation_type):
+                self.assertEqual(
+                    receipt_balance_delta(
+                        operation_type,
+                        Decimal('100.00'),
+                    ),
+                    expected,
+                )
+
+    def test_unknown_operation_type_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            receipt_balance_delta(None, Decimal('100.00'))
 
 
 class ReceiptUpdateViewTest(TestCase):

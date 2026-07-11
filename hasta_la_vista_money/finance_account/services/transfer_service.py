@@ -74,9 +74,19 @@ class TransferService:
         """
         validate_positive_amount(amount)
         validate_different_accounts(from_account, to_account)
+        if from_account.user_id != user.pk or to_account.user_id != user.pk:
+            raise PermissionDenied(
+                _('У вас нет прав на операции с этими счетами.'),
+            )
 
-        self._balance_service.apply_receipt_spend(from_account, amount)
-        self._balance_service.refund_to_account(to_account, amount)
+        locked_accounts = self._balance_service.apply_account_deltas(
+            {
+                from_account.pk: -amount,
+                to_account.pk: amount,
+            },
+        )
+        from_account = locked_accounts[from_account.pk]
+        to_account = locked_accounts[to_account.pk]
 
         return self.transfer_money_log_repository.create_log(
             user=user,
@@ -120,12 +130,10 @@ class TransferService:
                 ),
             )
 
-        self._balance_service.refund_to_account(
-            transfer_log.from_account,
-            transfer_log.amount,
-        )
-        self._balance_service.apply_receipt_spend(
-            transfer_log.to_account,
-            transfer_log.amount,
+        self._balance_service.apply_account_deltas(
+            {
+                transfer_log.from_account.pk: transfer_log.amount,
+                transfer_log.to_account.pk: -transfer_log.amount,
+            },
         )
         self.transfer_money_log_repository.delete_log(transfer_log)

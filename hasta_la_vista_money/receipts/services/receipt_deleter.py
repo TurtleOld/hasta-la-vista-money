@@ -2,6 +2,9 @@ from django.db import transaction
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.receipts.services.receipt_creator import (
+    receipt_balance_delta,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -14,17 +17,17 @@ class ReceiptDeleterService:
     @transaction.atomic
     def delete_receipt(self, *, user: User, receipt: Receipt) -> None:
         """Delete receipt and reverse its balance effect."""
-        is_refund = receipt.operation_type in {2, 4}
-        if is_refund:
-            self.account_service.apply_receipt_spend(
-                receipt.account,
-                receipt.total_sum,
-            )
-        else:
-            self.account_service.refund_to_account(
-                receipt.account,
-                receipt.total_sum,
-            )
+        receipt = Receipt.objects.select_for_update().get(pk=receipt.pk)
+        if receipt.user_id != user.pk:
+            raise Receipt.DoesNotExist
+        self.account_service.apply_account_deltas(
+            {
+                receipt.account_id: -receipt_balance_delta(
+                    receipt.operation_type,
+                    receipt.total_sum,
+                ),
+            },
+        )
 
         for product in receipt.product.all():
             product.delete()

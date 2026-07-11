@@ -19,6 +19,9 @@ from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
 )
+from hasta_la_vista_money.finance_account.services.balance_service import (
+    BalanceService,
+)
 from hasta_la_vista_money.users.factories import UserFactory
 from hasta_la_vista_money.users.models import FamilyGroupMembership
 
@@ -63,6 +66,20 @@ class TestAccountServices(TestCase):
         self.assertIn(self.account1, accounts)
         self.assertIn(self.account2, accounts)
         self.assertNotIn(self.account3, accounts)
+
+    def test_balance_change_ignores_stale_account_value(self) -> None:
+        stale_account = Account.objects.get(pk=self.account1.pk)
+        Account.objects.filter(pk=self.account1.pk).update(
+            balance=Decimal('1250.00'),
+        )
+
+        BalanceService().apply_receipt_spend(
+            stale_account,
+            Decimal('100.00'),
+        )
+
+        self.account1.refresh_from_db()
+        self.assertEqual(self.account1.balance, Decimal('1150.00'))
 
     def test_get_accounts_for_user_or_group_my(self) -> None:
         """Test get_accounts_for_user_or_group with 'my' group_id."""

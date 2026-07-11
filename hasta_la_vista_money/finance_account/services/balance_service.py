@@ -2,6 +2,8 @@
 
 from decimal import Decimal
 
+from django.db import transaction
+
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
     BalanceReconcileCommand,
@@ -34,10 +36,7 @@ class BalanceService:
                 insufficient funds.
         """
         validate_positive_amount(amount)
-        validate_account_balance(account, amount)
-        account.balance -= amount
-        account.save()
-        return account
+        return self.apply_account_deltas({account.pk: -amount})[account.pk]
 
     def refund_to_account(self, account: Account, amount: Decimal) -> Account:
         """Return money to account balance with validation.
@@ -53,9 +52,7 @@ class BalanceService:
             ValidationError: If amount is invalid.
         """
         validate_positive_amount(amount)
-        account.balance += amount
-        account.save()
-        return account
+        return self.apply_account_deltas({account.pk: amount})[account.pk]
 
     def _adjust_balance_on_same_account(
         self,
@@ -122,9 +119,10 @@ class BalanceService:
         Returns:
             Updated Account instance.
         """
-        account.balance += delta
-        account.save(update_fields=['balance'])
-        return account
+        if delta == 0:
+            account.refresh_from_db(fields=['balance'])
+            return account
+        return self.apply_account_deltas({account.pk: delta})[account.pk]
 
     def reconcile_account_balances(
         self,
@@ -142,19 +140,40 @@ class BalanceService:
             old_total_sum: Total amount before change.
             new_total_sum: Total amount after change.
         """
-        if self._should_adjust_same_account(
-            command.old_account,
-            command.new_account,
-        ):
-            self._adjust_balance_on_same_account(
-                command.old_account,
-                command.old_total_sum,
-                command.new_total_sum,
-            )
-        else:
-            self._adjust_balance_on_account_change(
-                command.old_account,
-                command.new_account,
-                command.old_total_sum,
-                command.new_total_sum,
-            )
+        deltas = {command.old_account.pk: command.old_total_sum}
+        deltas[command.new_account.pk] = (
+            deltas.get(command.new_account.pk, 0) - command.new_total_sum
+        )
+        self.apply_account_deltas(deltas)
+
+    @transaction.atomic
+    def apply_account_deltas(
+        self,
+        deltas: dict[int, Decimal],
+    ) -> dict[int, Account]:
+        """Apply signed deltas while locking accounts in a stable order."""
+        effective_deltas = {
+            account_id: delta
+            for account_id, delta in deltas.items()
+            if delta != 0
+        }
+        if not effective_deltas:
+            return {}
+
+        accounts = list(
+            Account.objects.select_for_update()
+            .filter(pk__in=effective_deltas)
+            .order_by('pk'),
+        )
+        if len(accounts) != len(effective_deltas):
+            raise Account.DoesNotExist
+
+        result: dict[int, Account] = {}
+        for locked_account in accounts:
+            delta = effective_deltas[locked_account.pk]
+            if delta < 0:
+                validate_account_balance(locked_account, abs(delta))
+            locked_account.balance += delta
+            locked_account.save(update_fields=['balance', 'updated_at'])
+            result[locked_account.pk] = locked_account
+        return result
