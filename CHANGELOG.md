@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.8.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.8.0...v2.8.1) (2026-07-11)
+
+
+### Bug Fixes
+
+* **finance_account:** make balance updates atomic ([#885](https://github.com/TurtleOld/hasta-la-vista-money/issues/885)) ([02f7c78](https://github.com/TurtleOld/hasta-la-vista-money/commit/02f7c78e57233d121e924bc67557e19e1925f16f))
+
 ## [2.8.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.7.2...v2.8.0) (2026-07-04)
 
 
