@@ -217,7 +217,7 @@ class TransactionService:
         user: User,
         transaction_id: int,
     ) -> Transaction:
-        """Duplicate an existing transaction and adjust the balance."""
+        """Duplicate a transaction with the current time and adjust balance."""
         with db_transaction.atomic():
             original = self.transaction_repository.get_by_id_for_update(
                 transaction_id,
@@ -231,7 +231,7 @@ class TransactionService:
                 account=original.account,
                 category=original.category,
                 amount=original.amount,
-                date=original.date,
+                date=timezone.now(),
                 type=original.type,
             )
             self._apply_balance_for_create(
