@@ -116,7 +116,23 @@
                 </form>
             </div>
 
-            <div x-show="activeTab === 'scan'" x-cloak class="receipts-scan-panel" x-data="receiptQRScanPage">
+            <div x-show="activeTab === 'scan'"
+                 x-cloak
+                 class="receipts-scan-panel"
+                 x-data="receiptQRScanPage"
+                 data-worker-url="{% static 'js/dist/pages/receipt-qr-worker.js' %}"
+                 data-wasm-url="{% static 'js/dist/vendor/zxing_reader.wasm' %}"
+                 data-message-camera-unavailable="{% translate 'Камера или распознавание QR недоступны в этом браузере. Используйте вкладку «Файл».' %}"
+                 data-message-camera-policy-blocked="{% translate 'Доступ к камере заблокирован настройками сайта. Используйте вкладку «Файл».' %}"
+                 data-message-camera-denied="{% translate 'Доступ к камере запрещён. Разрешите его в настройках браузера или используйте вкладку «Файл».' %}"
+                 data-message-camera-not-found="{% translate 'Камера не найдена на этом устройстве. Используйте вкладку «Файл».' %}"
+                 data-message-camera-busy="{% translate 'Камера уже используется другим приложением. Закройте его или используйте вкладку «Файл».' %}"
+                 data-message-camera-constraints="{% translate 'Не удалось подключиться к камере с нужными параметрами. Используйте вкладку «Файл».' %}"
+                 data-message-camera-generic="{% translate 'Не удалось запустить камеру. Используйте вкладку «Файл».' %}"
+                 data-message-decoder-unavailable="{% translate 'Не удалось загрузить модуль распознавания QR. Обновите страницу или используйте вкладку «Файл».' %}"
+                 data-message-invalid-qr="{% translate 'Это не QR-код кассового чека. Наведите камеру на QR-код чека.' %}"
+                 data-message-preparing="{% translate 'Подготовка сканера…' %}"
+                 data-message-scanning="{% translate 'Сканер готов. Поместите QR-код внутрь рамки.' %}">
                 <form method="post" action="{% url 'receipts:scan_qr' %}" id="scanQrForm" x-ref="scanForm">
                     {% csrf_token %}
                     {{ scan_form.qr_raw }}
@@ -130,16 +146,43 @@
                     </div>
 
                     <div class="receipts-scan-video-wrap"
-                         x-on:click="handleVideoTap($event)"
-                         x-on:touchstart="handleVideoTap($event)">
+                         x-on:pointerup="focusAt($event)">
                         <video x-ref="video" class="receipts-scan-video" autoplay playsinline muted></video>
+                        <div class="receipts-scan-frame" aria-hidden="true"></div>
+                        <div class="receipts-scan-controls">
+                            <button type="button"
+                                    class="receipts-scan-control"
+                                    x-show="torchAvailable"
+                                    x-on:click.stop="toggleTorch()"
+                                    x-bind:class="{ 'is-active': torchEnabled }"
+                                    x-cloak>
+                                <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 2 6 0-1 7 4 0-8 13 1-9-5 0Z"/></svg>
+                                <span x-show="!torchEnabled">{% translate 'Включить фонарик' %}</span>
+                                <span x-show="torchEnabled">{% translate 'Выключить фонарик' %}</span>
+                            </button>
+                        </div>
                         <canvas x-ref="canvas" class="hidden"></canvas>
                     </div>
 
+                    <label class="receipts-scan-zoom" x-show="zoomAvailable" x-cloak>
+                        <span>{% translate 'Приближение' %}</span>
+                        <input type="range"
+                               x-bind:min="zoomMin"
+                               x-bind:max="zoomMax"
+                               x-bind:step="zoomStep"
+                               x-model="zoomValue"
+                               x-on:input.debounce.100ms="applyZoom()">
+                        <output x-text="zoomLabel()"></output>
+                    </label>
+
                     <div id="scan-error" class="receipts-upload-error" x-show="errorMessage" x-text="errorMessage" x-cloak></div>
-                    <p class="hint" x-show="!errorMessage">
+                    <div class="receipts-upload-error" x-show="noticeMessage" x-text="noticeMessage" x-cloak></div>
+                    <p class="hint" x-show="statusMessage && !errorMessage">
                         <svg class="receipts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg>
-                        {% translate 'Наведите камеру на QR-код чека. Если фокус не срабатывает — коснитесь изображения.' %}
+                        <span x-text="statusMessage"></span>
+                    </p>
+                    <p class="hint" x-show="!errorMessage">
+                        {% translate 'Держите QR-код целиком внутри рамки. Если фокус не срабатывает — коснитесь изображения.' %}
                     </p>
                 </form>
             </div>

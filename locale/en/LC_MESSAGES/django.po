@@ -2662,6 +2662,57 @@ msgstr "Everything is correct, save"
 msgid "Загрузка чеков с изображения"
 msgstr "Uploading receipts from image"
 
+msgid "Файл"
+msgstr "File"
+
+msgid "Сканировать QR"
+msgstr "Scan QR"
+
+msgid "Камера или распознавание QR недоступны в этом браузере. Используйте вкладку «Файл»."
+msgstr "The camera or QR recognition is unavailable in this browser. Use the File tab."
+
+msgid "Доступ к камере заблокирован настройками сайта. Используйте вкладку «Файл»."
+msgstr "Camera access is blocked by the site settings. Use the File tab."
+
+msgid "Доступ к камере запрещён. Разрешите его в настройках браузера или используйте вкладку «Файл»."
+msgstr "Camera access is denied. Allow it in the browser settings or use the File tab."
+
+msgid "Камера не найдена на этом устройстве. Используйте вкладку «Файл»."
+msgstr "No camera was found on this device. Use the File tab."
+
+msgid "Камера уже используется другим приложением. Закройте его или используйте вкладку «Файл»."
+msgstr "The camera is already used by another application. Close it or use the File tab."
+
+msgid "Не удалось подключиться к камере с нужными параметрами. Используйте вкладку «Файл»."
+msgstr "Could not open the camera with the required settings. Use the File tab."
+
+msgid "Не удалось запустить камеру. Используйте вкладку «Файл»."
+msgstr "Could not start the camera. Use the File tab."
+
+msgid "Не удалось загрузить модуль распознавания QR. Обновите страницу или используйте вкладку «Файл»."
+msgstr "Could not load the QR recognition module. Refresh the page or use the File tab."
+
+msgid "Это не QR-код кассового чека. Наведите камеру на QR-код чека."
+msgstr "This is not a receipt QR code. Point the camera at the receipt QR code."
+
+msgid "Подготовка сканера…"
+msgstr "Preparing the scanner…"
+
+msgid "Сканер готов. Поместите QR-код внутрь рамки."
+msgstr "The scanner is ready. Place the QR code inside the frame."
+
+msgid "Включить фонарик"
+msgstr "Turn flashlight on"
+
+msgid "Выключить фонарик"
+msgstr "Turn flashlight off"
+
+msgid "Приближение"
+msgstr "Zoom"
+
+msgid "Держите QR-код целиком внутри рамки. Если фокус не срабатывает — коснитесь изображения."
+msgstr "Keep the entire QR code inside the frame. Tap the image if it does not focus."
+
 #: hasta_la_vista_money/receipts/templates/receipts/upload_image.html:12
 msgid "Загрузка чека"
 msgstr "Loading receipt"

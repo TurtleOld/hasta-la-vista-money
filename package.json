@@ -2,14 +2,15 @@
   "scripts": {
     "build:js": "node esbuild.config.mjs",
     "watch:js": "node esbuild.config.mjs --watch",
-    "lint:js": "eslint \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/pages/**/*.js\" esbuild.config.mjs eslint.config.mjs",
-    "format:js": "prettier --write \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/pages/**/*.js\" \"*.mjs\" package.json",
-    "format:js:check": "prettier --check \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/pages/**/*.js\" \"*.mjs\" package.json"
+    "test:js": "node --test tests/js/**/*.test.mjs",
+    "lint:js": "eslint \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/**/*.mjs\" \"static/js/pages/**/*.js\" \"tests/js/**/*.mjs\" esbuild.config.mjs eslint.config.mjs",
+    "format:js": "prettier --write \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/**/*.mjs\" \"static/js/pages/**/*.js\" \"tests/js/**/*.mjs\" \"*.mjs\" package.json",
+    "format:js:check": "prettier --check \"static/js/app.js\" \"static/js/service-worker.js\" \"static/js/swipe-list.js\" \"static/js/**/*.mjs\" \"static/js/pages/**/*.js\" \"tests/js/**/*.mjs\" \"*.mjs\" package.json"
   },
   "dependencies": {
     "driver.js": "^1.4.0",
     "flatpickr": "^4.6.13",
-    "jsqr": "^1.4.0"
+    "zxing-wasm": "^3.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
