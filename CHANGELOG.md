@@ -1,5 +1,18 @@
 # История изменений
 
+## [2.9.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.8.1...v2.9.0) (2026-07-12)
+
+
+### Features
+
+* **finance_account:** remember accounts from last transfer ([#889](https://github.com/TurtleOld/hasta-la-vista-money/issues/889)) ([474362c](https://github.com/TurtleOld/hasta-la-vista-money/commit/474362cd588d321f820848f69ed024622d7783c9))
+* **receipts:** improve paper qr scanning with zxing wasm ([#890](https://github.com/TurtleOld/hasta-la-vista-money/issues/890)) ([acb669b](https://github.com/TurtleOld/hasta-la-vista-money/commit/acb669b398bf14cee8119f56bf5ca9ed61de4a89))
+
+
+### Bug Fixes
+
+* **transactions:** use current date when copying operations ([#887](https://github.com/TurtleOld/hasta-la-vista-money/issues/887)) ([53ef821](https://github.com/TurtleOld/hasta-la-vista-money/commit/53ef82181a3d0c2e2b6b624a8f452821c9fce661))
+
 ## [2.8.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.8.0...v2.8.1) (2026-07-11)
 
 
