@@ -12,7 +12,7 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ['static/js/**/*.js'],
+    files: ['static/js/**/*.{js,mjs}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -34,7 +34,7 @@ export default [
     },
   },
   {
-    files: ['*.mjs'],
+    files: ['*.mjs', 'tests/js/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

@@ -400,6 +400,16 @@ class UploadImageViewTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
+    def test_upload_page_configures_self_hosted_qr_decoder(self) -> None:
+        response = self.client.get(reverse('receipts:upload'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'js/dist/pages/receipt-qr-worker.js',
+        )
+        self.assertContains(response, 'js/dist/vendor/zxing_reader.wasm')
+
     def test_upload_creates_processing_pending_and_dispatches(self) -> None:
         upload = SimpleUploadedFile(
             'r.jpg',

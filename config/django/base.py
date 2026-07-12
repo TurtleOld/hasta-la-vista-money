@@ -19,6 +19,7 @@ from config.settings.debug_toolbar.setup import DebugToolbarSetup
 
 django_stubs_ext.monkeypatch()
 mimetypes.add_type('application/manifest+json', '.webmanifest')
+mimetypes.add_type('application/wasm', '.wasm')
 
 
 def _is_testing() -> bool:
@@ -364,6 +365,7 @@ WHITENOISE_ROOT = BASE_DIR / 'staticfiles'
 WHITENOISE_BROTLI = True
 WHITENOISE_MIMETYPES = {
     '.webmanifest': 'application/manifest+json',
+    '.wasm': 'application/wasm',
 }
 
 # Default primary key field type
@@ -396,6 +398,7 @@ default_src = [
 script_src = [
     SELF,
     NONCE,
+    "'wasm-unsafe-eval'",
     BASE_URL,
     *CSP_CDN_URLS,
     *additional_script_src,
@@ -438,6 +441,7 @@ CONTENT_SECURITY_POLICY = {
     'DIRECTIVES': {
         'default-src': default_src,
         'script-src': script_src,
+        'worker-src': [SELF],
         'img-src': img_src,
         'style-src': style_src,
         'style-src-elem': style_src,
