@@ -19,6 +19,15 @@
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="default">
         <meta name="apple-mobile-web-app-title" content="HLVM">
+        {% if user.is_authenticated and user.theme == 'auto' %}
+        <script nonce="{{ request.csp_nonce }}">
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.classList.add('dark');
+                document.documentElement.dataset.bsTheme = 'dark';
+                document.documentElement.dataset.theme = 'dark';
+            }
+        </script>
+        {% endif %}
         <link nonce="{{request.csp_nonce}}" rel="manifest" href="{% static 'manifest.webmanifest' %}?v={% word_hash %}">
         <link nonce="{{request.csp_nonce}}" rel="shortcut icon" href="{% static 'img/favicon/favicon.ico' %}?v={% word_hash %}" type="image/x-icon">
         <link nonce="{{request.csp_nonce}}" rel="apple-touch-icon" href="{% static 'img/pwa/apple-touch-icon.png' %}?v={% word_hash %}">
@@ -33,6 +42,14 @@
     {% endblock %}
 </head>
 <body class="min-h-screen bg-white dark:bg-gray-800 {% if user.is_authenticated %}pb-20 md:pb-0{% endif %}" {% if user.is_authenticated and user.theme == 'dark' %}data-bs-theme="dark" data-theme-mode="dark"{% elif user.is_authenticated and user.theme == 'auto' %}data-bs-theme="light" data-theme-mode="auto"{% else %}data-bs-theme="light" data-theme-mode="light"{% endif %}>
+    {% if user.is_authenticated and user.theme == 'auto' %}
+    <script nonce="{{ request.csp_nonce }}">
+        if (document.documentElement.classList.contains('dark')) {
+            document.body.classList.add('dark');
+            document.body.dataset.bsTheme = 'dark';
+        }
+    </script>
+    {% endif %}
     {% if user.is_authenticated %}
         <input type="checkbox" id="mobileMenuState" class="peer hidden" autocomplete="off">
         <div class="header">
