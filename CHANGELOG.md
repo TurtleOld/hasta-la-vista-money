@@ -1,5 +1,17 @@
 # История изменений
 
+## [2.10.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.9.0...v2.10.0) (2026-07-26)
+
+
+### Features
+
+* **users:** add Ozon statement import ([#897](https://github.com/TurtleOld/hasta-la-vista-money/issues/897)) ([bea3704](https://github.com/TurtleOld/hasta-la-vista-money/commit/bea3704dead9105c2816b18402115adf689df5a5))
+
+
+### Bug Fixes
+
+* **deps:** update dependency django to v6.0.7 ([#893](https://github.com/TurtleOld/hasta-la-vista-money/issues/893)) ([719c84e](https://github.com/TurtleOld/hasta-la-vista-money/commit/719c84e946d806e9c49d5756ae9440bb7c47824e))
+
 ## [2.9.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.8.1...v2.9.0) (2026-07-12)
 
 
