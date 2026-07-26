@@ -69,12 +69,6 @@ FIELD_VERBOSE_NAMES: dict[str, dict[str, str]] = {
     },
 }
 
-FK_RESOLVERS: dict[str, Any] = {
-    'account_id': lambda pk: _resolve_account_name(pk),
-    'from_account_id': lambda pk: _resolve_account_name(pk),
-    'to_account_id': lambda pk: _resolve_account_name(pk),
-}
-
 HIDDEN_FIELDS = frozenset({'id', 'user_id', 'updated_at'})
 
 
@@ -85,6 +79,13 @@ def _resolve_account_name(pk: Any) -> str:
         return Account.objects.values_list('name_account', flat=True).get(pk=pk)
     except Account.DoesNotExist:
         return f'(удалён, id={pk})'
+
+
+FK_RESOLVERS: dict[str, Any] = {
+    'account_id': _resolve_account_name,
+    'from_account_id': _resolve_account_name,
+    'to_account_id': _resolve_account_name,
+}
 
 
 def _iter_concrete_fields(instance: models.Model) -> Iterable[models.Field]:

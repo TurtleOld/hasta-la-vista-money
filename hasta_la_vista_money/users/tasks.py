@@ -5,6 +5,7 @@ import logging
 from celery import shared_task
 from django.db import transaction
 from django.db.models import F
+from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.finance_account.models import Account
@@ -185,6 +186,7 @@ def _process_transactions(
             description = trans['description']
             trans_date = trans['date']
             source_ref = trans.get('source_ref')
+            source = trans.get('source')
             abs_amount = abs(amount)
 
             if amount > 0:
@@ -201,16 +203,19 @@ def _process_transactions(
                 abs_amount=abs_amount,
                 trans_date=trans_date,
                 source_ref=source_ref,
+                match_calendar_date=source == 'ozon',
             ):
                 skipped_count += 1
                 created = False
             else:
-                clean_desc = strip_pii(description)
-                category_name = classifier.classify(
-                    description=clean_desc,
-                    transaction_type=type_value,
-                    existing_categories=existing_categories,
-                )
+                category_name = trans.get('category_name')
+                if category_name is None:
+                    clean_desc = strip_pii(description)
+                    category_name = classifier.classify(
+                        description=clean_desc,
+                        transaction_type=type_value,
+                        existing_categories=existing_categories,
+                    )
                 if category_name not in existing_categories:
                     existing_categories.append(category_name)
 
@@ -273,6 +278,7 @@ def _is_duplicate(
     abs_amount,
     trans_date,
     source_ref: str | None,
+    match_calendar_date: bool = False,
 ) -> bool:
     """Проверить, не была ли операция уже импортирована.
 
@@ -298,14 +304,20 @@ def _is_duplicate(
             source_ref=source_ref,
         ).exists():
             return True
-        legacy = Transaction.objects.filter(
+        legacy_queryset = Transaction.objects.filter(
             account=account,
             user=user,
             type=type_value,
             amount=abs_amount,
-            date=trans_date,
             source_ref__isnull=True,
-        ).first()
+        )
+        if match_calendar_date:
+            legacy_queryset = legacy_queryset.filter(
+                date__date=timezone.localtime(trans_date).date(),
+            )
+        else:
+            legacy_queryset = legacy_queryset.filter(date=trans_date)
+        legacy = legacy_queryset.order_by('date', 'pk').first()
         if legacy is not None:
             legacy.source_ref = source_ref
             legacy.save(update_fields=['source_ref'])
