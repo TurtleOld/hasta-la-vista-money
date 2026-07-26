@@ -1,5 +1,12 @@
 # История изменений
 
+## [2.10.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.10.0...v2.10.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* **receipts:** prevent delete errors and preserve dark theme ([#899](https://github.com/TurtleOld/hasta-la-vista-money/issues/899)) ([e673e82](https://github.com/TurtleOld/hasta-la-vista-money/commit/e673e82b7d3da76fd96e39dd373d9e065ad8c55c))
+
 ## [2.10.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.9.0...v2.10.0) (2026-07-26)
 
 
