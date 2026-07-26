@@ -3,6 +3,7 @@
 Supports multiple bank formats with auto-detection:
 - Raiffeisen (Райффайзенбанк)
 - Sberbank credit card (Выписка по счёту кредитной карты)
+- Ozon Bank (Справка о движении средств)
 - Generic Russian bank format (fallback)
 """
 
@@ -69,6 +70,8 @@ MIN_SBERBANK_COLUMNS = 3
 # Bank detection strings
 RAIFFEISEN_BANK_NAME = 'Райффайзенбанк'
 SBERBANK_CREDIT_CARD_TITLE = 'Выписка по счёту кредитной карты'
+OZON_BANK_NAME = 'ОЗОН Банк'
+OZON_STATEMENT_TITLE = 'Справка о движении средств'
 
 # Raiffeisen column indices
 RAIFFEISEN_NUM_COL = 0
@@ -83,6 +86,16 @@ SBERBANK_DATE_COL = 0
 SBERBANK_CATEGORY_COL = 1
 SBERBANK_AMOUNT_COL = 2
 SBERBANK_BALANCE_COL = 3
+
+# Ozon column indices
+OZON_DATE_COL = 0
+OZON_DOCUMENT_COL = 1
+OZON_DESCRIPTION_COL = 2
+OZON_AMOUNT_COL = 3
+
+OZON_PURCHASE_CATEGORY = 'Покупки Ozon'
+OZON_REFUND_CATEGORY = 'Возвраты Ozon'
+OZON_TIP_CATEGORY = 'Чаевые Ozon'
 
 
 class BankStatementParseError(Exception):
@@ -132,11 +145,11 @@ class BaseBankStatementParser(ABC):
             raise FileNotFoundError(error_msg)
 
     @abstractmethod
-    def parse(self) -> list[dict[str, Any]]:
-        """Parse PDF and return list of transaction dicts.
+    def parse(self) -> StatementParseResult:
+        """Parse PDF and return transactions and reconciliation data.
 
-        Each dict has keys: date (datetime), amount (Decimal),
-        description (str).
+        Each transaction dict has keys: date (datetime), amount (Decimal),
+        and description (str).
         """
 
     # ------------------------------------------------------------------
@@ -357,7 +370,7 @@ class _GenericBankParser(BaseBankStatementParser):
         return None
 
     def _parse_table(self, df: pd.DataFrame) -> list[dict[str, Any]]:
-        transactions = []
+        transactions: list[dict[str, Any]] = []
         for row_idx, row in df.iterrows():
             try:
                 first_col = str(row.iloc[0]) if len(row) > 0 else ''
@@ -908,6 +921,190 @@ class _SberbankParser(BaseBankStatementParser):
 
 
 # ---------------------------------------------------------------------------
+# Ozon Bank parser
+# ---------------------------------------------------------------------------
+
+
+class _OzonBankParser(BaseBankStatementParser):
+    """Parser for Ozon Bank cash-flow statements.
+
+    Columns: [0]=Дата операции | [1]=Документ |
+    [2]=Назначение платежа | [3]=Российские рубли | [4]=Валюта
+    """
+
+    _operation_start_pattern = re.compile(
+        r'^\s*\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2}\b',
+    )
+
+    def parse(self) -> StatementParseResult:
+        """Parse purchases, refunds, and tips from an Ozon statement."""
+        try:
+            logger.info('Starting PDF parsing (Ozon): %s', self.pdf_path)
+            tables = self._read_tables()
+            transactions: list[dict[str, Any]] = []
+            operation_rows = 0
+
+            for table in tables:
+                parsed, table_operation_rows = self._parse_table(table.df)
+                transactions.extend(parsed)
+                operation_rows += table_operation_rows
+
+            if operation_rows == 0:
+                error_msg = (
+                    'В выписке Ozon не найдены строки банковских операций'
+                )
+                raise BankStatementParseError(error_msg)
+
+            transactions = _dedup_transactions(transactions)
+            logger.info(
+                'Ozon parsing complete: %d importable of %d operations',
+                len(transactions),
+                operation_rows,
+            )
+        except BankStatementParseError:
+            raise
+        except Exception as e:
+            logger.exception('Failed to parse Ozon PDF: %s', self.pdf_path)
+            error_msg = f'Не удалось обработать PDF Ozon: {e!s}'
+            raise BankStatementParseError(error_msg) from e
+        else:
+            # Transfers are intentionally excluded, so closing-balance
+            # reconciliation would report an expected false discrepancy.
+            return StatementParseResult(transactions=transactions)
+
+    def _parse_table(
+        self,
+        df: pd.DataFrame,
+    ) -> tuple[list[dict[str, Any]], int]:
+        transactions: list[dict[str, Any]] = []
+        operation_rows = 0
+        index = 0
+
+        while index < len(df):
+            row = df.iloc[index]
+            date_text = self._cell(row, OZON_DATE_COL)
+            if not self._operation_start_pattern.match(date_text):
+                index += 1
+                continue
+
+            operation_rows += 1
+            parts = [row]
+            next_index = index + 1
+            while next_index < len(df):
+                next_row = df.iloc[next_index]
+                if self._operation_start_pattern.match(
+                    self._cell(next_row, OZON_DATE_COL),
+                ):
+                    break
+                parts.append(next_row)
+                next_index += 1
+
+            transaction = self._parse_operation(parts)
+            if transaction is not None:
+                transactions.append(transaction)
+            index = next_index
+
+        return transactions, operation_rows
+
+    def _parse_operation(
+        self,
+        rows: list[pd.Series],
+    ) -> dict[str, Any] | None:
+        date_text = ' '.join(self._cell(row, OZON_DATE_COL) for row in rows)
+        trans_date = self._extract_ozon_date(date_text)
+        source_ref = re.sub(
+            r'\s+',
+            '',
+            self._joined_column(rows, OZON_DOCUMENT_COL),
+        )
+        description = self._joined_column(rows, OZON_DESCRIPTION_COL)
+        amount_text = self._joined_column(rows, OZON_AMOUNT_COL)
+
+        if trans_date is None or not source_ref or not amount_text:
+            error_msg = 'Не удалось разобрать строку операции Ozon'
+            raise BankStatementParseError(error_msg)
+
+        category = self._category_for_description(description)
+        if category is None:
+            logger.warning(
+                'Skipping unsupported Ozon operation %s: %s',
+                source_ref,
+                description,
+            )
+            return None
+
+        amount = self._extract_ozon_amount(amount_text)
+        if amount is None or amount == Decimal(0):
+            error_msg = f'Не удалось разобрать сумму операции Ozon {source_ref}'
+            raise BankStatementParseError(error_msg)
+
+        return {
+            'date': trans_date,
+            'amount': amount,
+            'description': category,
+            'category_name': category,
+            'source_ref': source_ref,
+            'source': 'ozon',
+        }
+
+    def _cell(self, row: pd.Series, index: int) -> str:
+        if len(row) <= index:
+            return ''
+        value = str(row.iloc[index]).strip()
+        return '' if value == 'nan' else value
+
+    def _joined_column(self, rows: list[pd.Series], index: int) -> str:
+        return re.sub(
+            r'\s+',
+            ' ',
+            ' '.join(self._cell(row, index) for row in rows),
+        ).strip()
+
+    def _extract_ozon_date(self, text: str) -> datetime | None:
+        match = re.search(
+            r'\b(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2}:\d{2})\b',
+            text,
+        )
+        if match is None:
+            return None
+        try:
+            return datetime.strptime(
+                f'{match.group(1)} {match.group(2)}',
+                '%d.%m.%Y %H:%M:%S',
+            ).replace(tzinfo=timezone.get_current_timezone())
+        except ValueError:
+            return None
+
+    def _extract_ozon_amount(self, text: str) -> Decimal | None:
+        match = re.search(
+            r'([+-])\s*(\d+(?:[\s\xa0]+\d+)*[\.,]\d{2})\s*₽',
+            text,
+        )
+        if match is None:
+            return None
+        raw = (
+            match.group(2)
+            .replace('\xa0', '')
+            .replace(' ', '')
+            .replace(',', '.')
+        )
+        try:
+            amount = Decimal(raw)
+        except InvalidOperation:
+            return None
+        return amount if match.group(1) == '+' else -amount
+
+    def _category_for_description(self, description: str) -> str | None:
+        if description.startswith('Возврат оплаты за товары/услуги'):
+            return OZON_REFUND_CATEGORY
+        if description.startswith('Оплата товаров/услуг на Платформе Ozon'):
+            return OZON_PURCHASE_CATEGORY
+        if description.startswith('Чаевые по заказу'):
+            return OZON_TIP_CATEGORY
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Detection + factory
 # ---------------------------------------------------------------------------
 
@@ -927,7 +1124,7 @@ def _create_parser(pdf_path: Path) -> BaseBankStatementParser:
             '(using generic parser): %s',
             e,
         )
-        return _GenericBankParser(pdf_path)
+        text = ''
 
     if RAIFFEISEN_BANK_NAME in text:
         logger.info('Detected bank: Raiffeisen')
@@ -936,6 +1133,10 @@ def _create_parser(pdf_path: Path) -> BaseBankStatementParser:
     if SBERBANK_CREDIT_CARD_TITLE in text:
         logger.info('Detected bank: Sberbank credit card')
         return _SberbankParser(pdf_path)
+
+    if OZON_BANK_NAME in text and OZON_STATEMENT_TITLE in text:
+        logger.info('Detected bank: Ozon')
+        return _OzonBankParser(pdf_path)
 
     # Fallback: column-header-based detection
     if 'Поступления' in text and '№ П/П' in text:
@@ -1032,6 +1233,7 @@ def process_bank_statement(
         description = trans['description']
         trans_date = trans['date']
         source_ref = trans.get('source_ref')
+        source = trans.get('source')
         abs_amount = abs(amount)
 
         if amount > 0:
@@ -1046,6 +1248,7 @@ def process_bank_statement(
             abs_amount=abs_amount,
             trans_date=trans_date,
             source_ref=source_ref,
+            match_calendar_date=source == 'ozon',
         ):
             skipped_count += 1
             continue
@@ -1092,6 +1295,7 @@ def _transaction_already_exists(
     abs_amount: Decimal,
     trans_date: datetime,
     source_ref: str | None,
+    match_calendar_date: bool = False,
 ) -> bool:
     """Check whether the transaction has already been imported.
 
@@ -1108,14 +1312,20 @@ def _transaction_already_exists(
             source_ref=source_ref,
         ).exists():
             return True
-        legacy = Transaction.objects.filter(
+        legacy_queryset = Transaction.objects.filter(
             account=account,
             user=user,
             type=type_value,
             amount=abs_amount,
-            date=trans_date,
             source_ref__isnull=True,
-        ).first()
+        )
+        if match_calendar_date:
+            legacy_queryset = legacy_queryset.filter(
+                date__date=timezone.localtime(trans_date).date(),
+            )
+        else:
+            legacy_queryset = legacy_queryset.filter(date=trans_date)
+        legacy = legacy_queryset.order_by('date', 'pk').first()
         if legacy is not None:
             legacy.source_ref = source_ref
             legacy.save(update_fields=['source_ref'])

@@ -30,6 +30,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     _create_parser,
     _GenericBankParser,
     _get_or_create_category,
+    _OzonBankParser,
     _RaiffeisenBankParser,
     _SberbankParser,
     process_bank_statement,
@@ -3018,4 +3019,227 @@ class TestProcessBankStatementTaskIntegration(TestCase):
         self.assertEqual(
             upload.balance_discrepancy,
             Decimal('-1000.00'),
+        )
+
+
+class TestOzonBankStatement(TestCase):
+    """Tests for the Ozon Bank cash-flow statement format."""
+
+    fixtures: ClassVar[list[str]] = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user: User = User.objects.get(pk=1)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Ozon',
+            balance=Decimal('10000.00'),
+            currency='RUB',
+        )
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.pdf',
+            delete=False,
+        ) as temp_file:
+            temp_file.write(b'%PDF-1.4 mock pdf')
+            self.pdf_path = Path(temp_file.name)
+
+    def tearDown(self) -> None:
+        self.pdf_path.unlink(missing_ok=True)
+
+    def _statement_table(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                [
+                    '25.07.2026 18:04:10',
+                    '12110294722',
+                    'Возврат оплаты за\nтовары/услуги, купленные на',
+                    '+ 101.00 ₽',
+                    '+ 101.00 ₽',
+                ],
+                ['', '', 'Платформе Ozon, заказ № 0814. Без НДС.', '', ''],
+                [
+                    '25.07.2026 17:57:47',
+                    '12110154130',
+                    'Оплата товаров/услуг\nна Платформе Ozon, заказ № 0814.',
+                    '- 2 561.00 ₽',
+                    '- 2 561.00 ₽',
+                ],
+                [
+                    '25.07.2026 17:57:42',
+                    '8269844786',
+                    'Перевод через СБП. Отправитель: А. П.',
+                    '+ 2 600.00 ₽',
+                    '+ 2 600.00 ₽',
+                ],
+                [
+                    '20.07.2026 16:53:58',
+                    '11994145163',
+                    'Чаевые по заказу № tips-0814. Без НДС.',
+                    '- 49.00 ₽',
+                    '- 49.00 ₽',
+                ],
+            ],
+        )
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.'
+        '_extract_pdf_text_for_detection',
+        return_value='ООО «ОЗОН Банк»\nСправка о движении средств',
+    )
+    def test_detects_ozon_statement(self, mock_detect: MagicMock) -> None:
+        parser = _create_parser(self.pdf_path)
+        self.assertIsInstance(parser, _OzonBankParser)
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_parses_allowed_operations_and_skips_transfer(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        mock_table = MagicMock()
+        mock_table.df = self._statement_table()
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(len(result.transactions), 3)
+        self.assertIsNone(result.closing_balance)
+        self.assertEqual(
+            [item['description'] for item in result.transactions],
+            ['Возвраты Ozon', 'Покупки Ozon', 'Чаевые Ozon'],
+        )
+        self.assertEqual(
+            [item['amount'] for item in result.transactions],
+            [Decimal('101.00'), Decimal('-2561.00'), Decimal('-49.00')],
+        )
+        self.assertTrue(
+            all(item['source'] == 'ozon' for item in result.transactions),
+        )
+
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_statement_with_only_transfers_is_valid(
+        self,
+        mock_camelot: MagicMock,
+    ) -> None:
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                [
+                    '25.07.2026 17:57:42',
+                    '8269844786',
+                    'Перевод через СБП.',
+                    '+ 2 600.00 ₽',
+                    '+ 2 600.00 ₽',
+                ],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = _OzonBankParser(self.pdf_path).parse()
+
+        self.assertEqual(result.transactions, [])
+
+    @patch(
+        'hasta_la_vista_money.users.services.bank_statement.'
+        '_extract_pdf_text_for_detection',
+        return_value='ООО «ОЗОН Банк»\nСправка о движении средств',
+    )
+    @patch('hasta_la_vista_money.users.services.bank_statement.camelot')
+    def test_deduplicates_same_amount_and_date_one_to_one(
+        self,
+        mock_camelot: MagicMock,
+        mock_detect: MagicMock,
+    ) -> None:
+        category = Category.objects.create(
+            user=self.user,
+            name='Чек Ozon',
+            type=TransactionType.EXPENSE,
+        )
+        existing = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('499.00'),
+            date=datetime(
+                2026,
+                7,
+                25,
+                10,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+        mock_table = MagicMock()
+        mock_table.df = pd.DataFrame(
+            [
+                [
+                    '25.07.2026 17:00:00',
+                    '12110154131',
+                    'Оплата товаров/услуг на Платформе Ozon, заказ № 1.',
+                    '- 499.00 ₽',
+                    '- 499.00 ₽',
+                ],
+                [
+                    '25.07.2026 18:00:00',
+                    '12110154132',
+                    'Оплата товаров/услуг на Платформе Ozon, заказ № 2.',
+                    '- 499.00 ₽',
+                    '- 499.00 ₽',
+                ],
+            ],
+        )
+        mock_camelot.read_pdf.return_value = [mock_table]
+
+        result = process_bank_statement(
+            pdf_path=self.pdf_path,
+            account=self.account,
+            user=self.user,
+        )
+
+        self.assertEqual(result['skipped_count'], 1)
+        self.assertEqual(result['expense_count'], 1)
+        self.assertEqual(
+            Transaction.objects.filter(account=self.account).count(),
+            2,
+        )
+        existing.refresh_from_db()
+        self.assertEqual(existing.source_ref, '12110154131')
+
+    @patch('hasta_la_vista_money.users.tasks.ApplicationContainer')
+    @patch('hasta_la_vista_money.users.tasks.BankStatementParser')
+    def test_task_uses_explicit_ozon_category(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        classifier = MagicMock()
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-100.00'),
+                    'description': 'Покупки Ozon',
+                    'category_name': 'Покупки Ozon',
+                    'source_ref': 'ozon-1',
+                    'source': 'ozon',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/ozon.pdf',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        classifier.classify.assert_not_called()
+        self.assertTrue(
+            Category.objects.filter(
+                user=self.user,
+                name='Покупки Ozon',
+                type=TransactionType.EXPENSE,
+            ).exists(),
         )
