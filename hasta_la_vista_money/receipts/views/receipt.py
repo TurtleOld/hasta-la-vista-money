@@ -272,7 +272,7 @@ class ReceiptUpdateView(
             seller = form.cleaned_data.get('seller')
             if seller is not None:
                 seller.retail_place = form.cleaned_data.get(
-                    'retail_place'
+                    'retail_place',
                 ) or str(_('Нет данных'))
                 seller.save(update_fields=['retail_place'])
 
@@ -344,6 +344,15 @@ class ReceiptDeleteView(
 
     def get_success_url(self) -> str:
         return str(self.success_url)
+
+    def get(
+        self,
+        request: HttpRequest,
+        *args: object,
+        **kwargs: object,
+    ) -> HttpResponse:
+        receipt = self.get_object()
+        return redirect('receipts:view', pk=receipt.pk)
 
     def post(
         self,

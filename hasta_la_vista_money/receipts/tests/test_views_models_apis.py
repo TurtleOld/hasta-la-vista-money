@@ -208,6 +208,21 @@ class TestReceipt(TestCase):
             initial_balance + receipt_total_sum,
         )
 
+    def test_receipt_delete_get_redirects_to_detail(self) -> None:
+        self.client.force_login(self.user)
+        delete_url = reverse_lazy(
+            'receipts:delete',
+            kwargs={'pk': self.receipt.pk},
+        )
+
+        response = self.client.get(delete_url)
+
+        self.assertRedirects(
+            response,
+            reverse_lazy('receipts:view', kwargs={'pk': self.receipt.pk}),
+        )
+        self.assertTrue(Receipt.objects.filter(pk=self.receipt.pk).exists())
+
     def test_receipt_list_unauthorized(self) -> None:
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertRedirects(response, '/login/?next=/receipts/')
