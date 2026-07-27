@@ -5,7 +5,7 @@ and user statistics reports.
 """
 
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -44,11 +44,9 @@ def generate_monthly_report(
 
         start_date = datetime(year, month, 1, tzinfo=UTC)
         if month == constants.NUMBER_TWELFTH_MONTH_YEAR:
-            end_date = datetime(year + 1, 1, 1, tzinfo=UTC) - timedelta(days=1)
+            end_date = datetime(year + 1, 1, 1, tzinfo=UTC)
         else:
-            end_date = datetime(year, month + 1, 1, tzinfo=UTC) - timedelta(
-                days=1,
-            )
+            end_date = datetime(year, month + 1, 1, tzinfo=UTC)
 
         logger.info(
             'Report period defined',
@@ -60,7 +58,8 @@ def generate_monthly_report(
         income_stats = Transaction.objects.filter(
             user=user,
             type=TransactionType.INCOME,
-            date__range=(start_date, end_date),
+            date__gte=start_date,
+            date__lt=end_date,
         ).aggregate(
             total_income=Sum('amount'),
             income_count=Count('id'),
@@ -72,7 +71,8 @@ def generate_monthly_report(
         expense_stats = Transaction.objects.filter(
             user=user,
             type=TransactionType.EXPENSE,
-            date__range=(start_date, end_date),
+            date__gte=start_date,
+            date__lt=end_date,
         ).aggregate(
             total_expense=Sum('amount'),
             expense_count=Count('id'),
@@ -85,7 +85,8 @@ def generate_monthly_report(
             Transaction.objects.filter(
                 user=user,
                 type=TransactionType.INCOME,
-                date__range=(start_date, end_date),
+                date__gte=start_date,
+                date__lt=end_date,
             )
             .values('category__name')
             .annotate(
@@ -100,7 +101,8 @@ def generate_monthly_report(
             Transaction.objects.filter(
                 user=user,
                 type=TransactionType.EXPENSE,
-                date__range=(start_date, end_date),
+                date__gte=start_date,
+                date__lt=end_date,
             )
             .values('category__name')
             .annotate(
@@ -113,7 +115,8 @@ def generate_monthly_report(
 
         receipt_stats = Receipt.objects.filter(
             user=user,
-            receipt_date__range=(start_date, end_date),
+            receipt_date__gte=start_date,
+            receipt_date__lt=end_date,
         ).aggregate(
             total_receipts=Count('id'),
             total_receipt_sum=Sum('total_sum'),
@@ -123,7 +126,8 @@ def generate_monthly_report(
         top_sellers_qs = (
             Receipt.objects.filter(
                 user=user,
-                receipt_date__range=(start_date, end_date),
+                receipt_date__gte=start_date,
+                receipt_date__lt=end_date,
             )
             .values('seller__name_seller')
             .annotate(
@@ -205,7 +209,7 @@ def generate_yearly_report(
         user = User.objects.get(id=user_id)
 
         start_date = datetime(year, 1, 1, tzinfo=UTC)
-        end_date = datetime(year, 12, 31, tzinfo=UTC)
+        end_date = datetime(year + 1, 1, 1, tzinfo=UTC)
 
         logger.info(
             'Yearly report period defined',

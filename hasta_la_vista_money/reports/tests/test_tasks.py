@@ -1,13 +1,21 @@
 """Tests for reports Celery tasks."""
 
 import inspect
+from datetime import UTC, datetime
+from decimal import Decimal
 
 from django.test import TestCase
 
+from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.reports.tasks import (
     generate_monthly_report,
     generate_user_statistics,
     generate_yearly_report,
+)
+from hasta_la_vista_money.transactions.models import (
+    Category,
+    Transaction,
+    TransactionType,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -38,6 +46,36 @@ class ReportTaskTests(TestCase):
         self.assertTrue(result['success'])
         self.assertEqual(result['report']['period']['year'], 2026)
         self.assertEqual(result['report']['period']['month'], 1)
+
+    def test_monthly_report_includes_last_day_and_excludes_next_month(
+        self,
+    ) -> None:
+        account = Account.objects.create(user=self.user, name_account='Main')
+        category = Category.objects.create(
+            user=self.user,
+            name='Salary',
+            type=TransactionType.INCOME,
+        )
+        for transaction_date, amount in (
+            (datetime(2026, 1, 31, 23, 59, tzinfo=UTC), Decimal('900.00')),
+            (datetime(2026, 2, 1, 0, 0, tzinfo=UTC), Decimal('100.00')),
+        ):
+            Transaction.objects.create(
+                user=self.user,
+                account=account,
+                category=category,
+                type=TransactionType.INCOME,
+                amount=amount,
+                date=transaction_date,
+            )
+
+        result = generate_monthly_report.run(self.user.pk, 2026, 1)
+
+        self.assertTrue(result['success'])
+        self.assertEqual(
+            result['report']['income']['total_income'],
+            Decimal('900.00'),
+        )
 
     def test_generate_yearly_report_returns_success(self) -> None:
         """Generate an empty yearly report synchronously via task run."""

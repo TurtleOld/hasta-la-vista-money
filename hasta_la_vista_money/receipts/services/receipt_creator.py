@@ -98,6 +98,12 @@ class ReceiptCreatorService:
             Created Receipt instance.
         """
 
+        products = self._prepare_products(
+            user=user,
+            products_data=products_data,
+        )
+        self._validate_receipt_amounts(receipt_data.total_sum, products)
+
         account_balance = self.account_repository.get_by_id(account.pk)
         if account_balance.user_id != user.pk:
             raise ValueError('Account does not belong to user')
@@ -139,10 +145,6 @@ class ReceiptCreatorService:
             manual=manual,
         )
 
-        products = self._prepare_products(
-            user=user,
-            products_data=products_data,
-        )
         if products:
             created_products = self.product_repository.bulk_create_products(
                 products,
@@ -290,6 +292,28 @@ class ReceiptCreatorService:
             )
 
         return products
+
+    @staticmethod
+    def _validate_receipt_amounts(
+        total_sum: Decimal,
+        products: list[Product],
+    ) -> None:
+        if total_sum <= 0:
+            raise ValueError('Receipt total must be greater than zero')
+        for product in products:
+            if (
+                product.price <= 0
+                or product.quantity <= 0
+                or product.amount <= 0
+            ):
+                raise ValueError('Product monetary values must be positive')
+            expected_amount = (product.price * product.quantity).quantize(
+                Decimal('0.01'),
+            )
+            if product.amount != expected_amount:
+                raise ValueError(
+                    'Product amount must match price multiplied by quantity',
+                )
 
 
 @dataclass

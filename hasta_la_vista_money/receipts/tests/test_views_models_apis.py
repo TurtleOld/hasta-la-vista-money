@@ -329,6 +329,19 @@ class TestProduct(TestCase):
         product = Product.objects.create(**product_data)
         self.assertEqual(product.quantity, Decimal(0))
 
+    def test_product_form_rejects_inconsistent_amount(self) -> None:
+        form = ProductForm(
+            data={
+                'product_name': 'Яблоко',
+                'price': '100.00',
+                'quantity': '2.00',
+                'amount': '1.00',
+            },
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('amount', form.errors)
+
 
 class TestReceiptModel(TestCase):
     fixtures: ClassVar[list[str]] = [  # type: ignore[misc]
