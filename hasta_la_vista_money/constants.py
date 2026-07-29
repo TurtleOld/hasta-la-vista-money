@@ -15,6 +15,7 @@ Constants are organized by domain for better maintainability:
 """
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Final
 
 from django.utils.translation import gettext_lazy as _
@@ -84,7 +85,8 @@ ERROR_MODEL_UNAVAILABLE: Final = _(
 # ============================================================================
 
 RECEIPT_CATEGORY_NAME: Final = _('Покупки по чекам')
-PENDING_RECEIPT_TOTAL_WARNING_RATIO: Final = 0.05
+RECEIPT_ADJUSTMENT_WARNING_AMOUNT: Final = Decimal('1.00')
+RECEIPT_ADJUSTMENT_WARNING_RATIO: Final = Decimal('0.01')
 
 # ============================================================================
 # User Messages - Authentication

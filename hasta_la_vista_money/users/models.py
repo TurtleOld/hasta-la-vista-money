@@ -20,6 +20,7 @@ from django.db.models import (
     JSONField,
     Model,
     PositiveIntegerField,
+    Q,
     TextChoices,
     TextField,
     UniqueConstraint,
@@ -124,6 +125,7 @@ class BankStatementUpload(Model):
     )
     account = ForeignKey('finance_account.Account', on_delete=CASCADE)
     pdf_file = FileField(upload_to='bank_statements/')
+    file_hash = CharField(max_length=64, blank=True, default='')
     status = CharField(
         max_length=20,
         choices=Status.choices,
@@ -165,6 +167,13 @@ class BankStatementUpload(Model):
         ordering = ['-created_at']
         verbose_name = _('Загрузка банковской выписки')
         verbose_name_plural = _('Загрузки банковских выписок')
+        constraints = [
+            UniqueConstraint(
+                fields=['account', 'file_hash'],
+                condition=~Q(file_hash=''),
+                name='uniq_statement_account_file_hash',
+            ),
+        ]
 
     def __str__(self) -> str:
         """Return string representation of the upload.

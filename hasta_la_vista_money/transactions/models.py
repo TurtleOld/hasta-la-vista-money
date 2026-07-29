@@ -120,6 +120,15 @@ class Transaction(models.Model):
         null=True,
         verbose_name=_('Идентификатор операции в выписке'),
     )
+    source_file_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+    )
+    source_row_position = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+    )
 
     objects = TransactionManager()
 
@@ -134,12 +143,24 @@ class Transaction(models.Model):
             models.Index(fields=['user', 'account']),
             models.Index(fields=['date', 'amount']),
             models.Index(fields=['account', 'source_ref']),
+            models.Index(
+                fields=['account', 'source_file_hash', 'source_row_position'],
+            ),
         ]
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=['account', 'source_ref'],
                 condition=Q(source_ref__isnull=False),
                 name='unique_account_source_ref',
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    'account',
+                    'source_file_hash',
+                    'source_row_position',
+                ],
+                condition=Q(source_file_hash__isnull=False),
+                name='unique_statement_source_row',
             ),
         ]
 

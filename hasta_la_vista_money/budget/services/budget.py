@@ -243,54 +243,6 @@ class BudgetService:
         self.planning_repository = planning_repository
         self.budget_repository = budget_repository
 
-    def _get_fact_map_int(
-        self,
-        user: User,
-        months: list[date],
-        categories: list[Category],
-        type_value: str,
-        users: Iterable[User] | None = None,
-    ) -> dict[int, dict[date, int]]:
-        if not months:
-            return {}
-
-        category_ids_by_root = _get_category_ids_by_root(categories)
-        root_id_by_category_id = _get_root_id_by_category_id(
-            category_ids_by_root,
-        )
-        category_ids = list(root_id_by_category_id)
-        if not category_ids:
-            return {}
-
-        start_date, end_date = _month_range(months)
-        scope_users = _scope_users(user, users)
-        rows = (
-            self.transaction_repository.filter(
-                user__in=scope_users,
-                type=type_value,
-                category_id__in=category_ids,
-                date__gte=start_date,
-                date__lte=end_date,
-            )
-            .annotate(month=TruncMonth('date'))
-            .values('category_id', 'month')
-            .annotate(total=Sum('amount'))
-        )
-
-        fact_map: dict[int, dict[date, int]] = defaultdict(
-            lambda: defaultdict(lambda: 0),
-        )
-        for row in rows:
-            month_date = (
-                row['month'].date()
-                if hasattr(row['month'], 'date')
-                else row['month']
-            )
-            month_start = month_date.replace(day=1)
-            root_id = root_id_by_category_id[row['category_id']]
-            fact_map[root_id][month_start] += int(row['total'] or 0)
-        return fact_map
-
     def _get_fact_map_decimal(
         self,
         user: User,
@@ -435,30 +387,6 @@ class BudgetService:
             'category_limits': category_limits,
         }
 
-    def _get_plan_map_int(
-        self,
-        user: User,
-        months: list[date],
-        categories: list[Category],
-        type_value: str,
-        users: Iterable[User] | None = None,
-    ) -> dict[int, dict[date, int]]:
-        scope_users = _scope_users(user, users)
-        plans = self.planning_repository.filter(
-            user__in=scope_users,
-            date__in=months,
-            planning_type=type_value,
-            category__in=categories,
-        ).values('category_id', 'date', 'amount')
-
-        plan_map: dict[int, dict[date, int]] = defaultdict(
-            lambda: defaultdict(lambda: 0),
-        )
-        for row in plans:
-            amount = row['amount']
-            plan_map[row['category_id']][row['date']] = int(amount or 0)
-        return plan_map
-
     def _get_plan_map_decimal(
         self,
         user: User,
@@ -510,14 +438,14 @@ class BudgetService:
             scope_users,
         )
 
-        expense_fact_map = self._get_fact_map_int(
+        expense_fact_map = self._get_fact_map_decimal(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
             users=users,
         )
-        expense_plan_map = self._get_plan_map_int(
+        expense_plan_map = self._get_plan_map_decimal(
             user,
             months,
             expense_categories,
@@ -603,14 +531,14 @@ class BudgetService:
         _validate_expense_table_inputs(user, months, expense_categories)
         scope_users = _scope_users(user, users)
 
-        expense_fact_map = self._get_fact_map_int(
+        expense_fact_map = self._get_fact_map_decimal(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
             users=users,
         )
-        expense_plan_map = self._get_plan_map_int(
+        expense_plan_map = self._get_plan_map_decimal(
             user,
             months,
             expense_categories,
@@ -695,14 +623,14 @@ class BudgetService:
         _validate_expense_api_inputs(user, months, expense_categories)
         scope_users = _scope_users(user, users)
 
-        expense_fact_map = self._get_fact_map_int(
+        expense_fact_map = self._get_fact_map_decimal(
             user,
             months,
             expense_categories,
             TransactionType.EXPENSE,
             users=users,
         )
-        expense_plan_map = self._get_plan_map_int(
+        expense_plan_map = self._get_plan_map_decimal(
             user,
             months,
             expense_categories,

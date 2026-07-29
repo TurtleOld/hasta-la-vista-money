@@ -192,6 +192,45 @@ class BudgetServicesTestCase(TestCase):
 
         self.assertEqual(data['expense_data'][0]['fact'][0], 125)
 
+    def test_aggregate_expense_table_preserves_decimal_amounts(self) -> None:
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('31.98'),
+            date=datetime(
+                2026,
+                1,
+                10,
+                12,
+                0,
+                tzinfo=timezone.get_current_timezone(),
+            ),
+        )
+        Planning.objects.create(
+            user=self.user,
+            category=self.expense_category,
+            date=date(2026, 1, 1),
+            amount=Decimal('100.99'),
+            planning_type=TransactionType.EXPENSE,
+        )
+
+        data = self.budget_service.aggregate_expense_table(
+            user=self.user,
+            months=self.months,
+            expense_categories=self.expense_categories,
+        )
+
+        self.assertEqual(
+            data['expense_data'][0]['fact'][0],
+            Decimal('31.98'),
+        )
+        self.assertEqual(
+            data['expense_data'][0]['plan'][0],
+            Decimal('100.99'),
+        )
+
     def test_aggregate_expense_table_includes_family_users(self) -> None:
         member = User.objects.create_user(
             username='family_member',

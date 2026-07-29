@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -10,6 +11,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.db import connection
 from django.db.models import Min, Q, QuerySet
 from django.forms import (
+    BooleanField,
     CharField,
     ChoiceField,
     ClearableFileInput,
@@ -369,6 +371,19 @@ class ProductForm(ModelForm[Product]):
                 'quantity',
                 _('Количество должно быть больше 0.'),
             )
+        price = cleaned_data.get('price')
+        if price is not None and price <= constants.ZERO:
+            self.add_error('price', _('Цена должна быть больше 0.'))
+        amount = cleaned_data.get('amount')
+        if amount is not None and amount <= constants.ZERO:
+            self.add_error('amount', _('Сумма должна быть больше 0.'))
+        if price is not None and quantity is not None and amount is not None:
+            expected_amount = (price * quantity).quantize(Decimal('0.01'))
+            if amount != expected_amount:
+                self.add_error(
+                    'amount',
+                    _('Сумма не совпадает с ценой и количеством.'),
+                )
         return cleaned_data
 
 
@@ -675,6 +690,10 @@ class PendingReceiptReviewForm(Form):
         label=_('Тип операции'),
         choices=OPERATION_TYPES,
         widget=Select(attrs={'class': _SELECT_CLASSES}),
+        required=False,
+    )
+    confirm_adjustment = BooleanField(
+        label=_('Подтверждаю расхождение итоговой суммы и позиций'),
         required=False,
     )
 

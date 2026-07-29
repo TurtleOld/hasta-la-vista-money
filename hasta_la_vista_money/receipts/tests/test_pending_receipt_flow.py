@@ -28,7 +28,9 @@ from hasta_la_vista_money.receipts.models import (
 )
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
     PendingReceiptService,
+    calculate_receipt_adjustment,
     compute_image_hash,
+    requires_adjustment_confirmation,
 )
 from hasta_la_vista_money.receipts.tasks import (
     cleanup_stale_pending_receipts,
@@ -133,10 +135,12 @@ class PendingReceiptServiceHashTests(TestCase):
             user=self.user,
             account=self.account,
             image_hash='a' * 64,
+            fiscal_key='1:2:3:1',
         )
 
         self.assertFalse(pending.image_file)
         self.assertEqual(pending.image_hash, 'a' * 64)
+        self.assertEqual(pending.fiscal_key, '1:2:3:1')
         self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
 
     def test_create_processing_job_from_qr_is_deduplicated_like_photos(
@@ -147,6 +151,7 @@ class PendingReceiptServiceHashTests(TestCase):
             user=self.user,
             account=self.account,
             image_hash=image_hash,
+            fiscal_key='1:2:3:1',
         )
 
         match = self.service.find_duplicate(
@@ -217,7 +222,7 @@ class ProcessPendingReceiptTaskTests(TestCase):
     def test_task_marks_ready_on_success(self) -> None:
         pending = self._create_pending()
         with mock.patch(
-            'hasta_la_vista_money.receipts.tasks._run_fns_pipeline',
+            'hasta_la_vista_money.receipts.tasks._run_claimed_photo_pipeline',
             return_value=_fake_payload(),
         ):
             process_pending_receipt(pending.pk)
@@ -232,7 +237,7 @@ class ProcessPendingReceiptTaskTests(TestCase):
         payload = _fake_payload()
         payload['total_sum'] = 120.0
         with mock.patch(
-            'hasta_la_vista_money.receipts.tasks._run_fns_pipeline',
+            'hasta_la_vista_money.receipts.tasks._run_claimed_photo_pipeline',
             return_value=payload,
         ):
             process_pending_receipt(pending.pk)
@@ -247,7 +252,7 @@ class ProcessPendingReceiptTaskTests(TestCase):
     def test_task_marks_failed_on_pipeline_error(self) -> None:
         pending = self._create_pending()
         with mock.patch(
-            'hasta_la_vista_money.receipts.tasks._run_fns_pipeline',
+            'hasta_la_vista_money.receipts.tasks._run_claimed_photo_pipeline',
             side_effect=ValueError('pipeline error'),
         ):
             process_pending_receipt(pending.pk)
@@ -329,6 +334,54 @@ class PendingReceiptConversionTests(TestCase):
                 'Услуги сервиса Доставка',
                 'Услуги сервиса Авито Доставка для продавца',
             ],
+        )
+
+    def test_repeated_conversion_returns_same_receipt(self) -> None:
+        payload = _fake_payload()
+        pending = PendingReceipt.objects.create(
+            user=self.user,
+            account=self.account,
+            status=PendingReceiptStatus.READY,
+            receipt_data=payload,
+            fiscal_key='1:2:3:1',
+        )
+
+        first = self.service.convert_to_receipt(pending_receipt=pending)
+        second = self.service.convert_to_receipt(pending_receipt=pending)
+
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(Receipt.objects.count(), 1)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, PendingReceiptStatus.CONVERTED)
+        self.assertEqual(pending.converted_receipt_id, first.pk)
+
+
+class ReceiptAdjustmentTests(TestCase):
+    def test_adjustment_thresholds(self) -> None:
+        self.assertEqual(
+            calculate_receipt_adjustment(
+                Decimal('100.00'),
+                [{'amount': '99.00'}],
+            ),
+            Decimal('1.00'),
+        )
+        self.assertFalse(
+            requires_adjustment_confirmation(
+                Decimal('100.00'),
+                Decimal('1.00'),
+            ),
+        )
+        self.assertTrue(
+            requires_adjustment_confirmation(
+                Decimal('10.00'),
+                Decimal('0.50'),
+            ),
+        )
+        self.assertTrue(
+            requires_adjustment_confirmation(
+                Decimal('1000.00'),
+                Decimal('-1.01'),
+            ),
         )
 
 
@@ -419,7 +472,6 @@ class UploadImageViewTests(TestCase):
         with mock.patch(
             'hasta_la_vista_money.receipts.views.process_pending_receipt',
         ) as task_mock:
-            task_mock.delay.return_value = mock.Mock(id='task-id-1')
             response = self.client.post(
                 reverse('receipts:upload'),
                 {'file': upload, 'account': self.account.pk},
@@ -428,8 +480,11 @@ class UploadImageViewTests(TestCase):
         self.assertRedirects(response, reverse('receipts:list'))
         pending = PendingReceipt.objects.get(user=self.user)
         self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
-        self.assertEqual(pending.task_id, 'task-id-1')
-        task_mock.delay.assert_called_once_with(pending.pk)
+        self.assertTrue(pending.task_id)
+        task_mock.apply_async.assert_called_once_with(
+            args=[pending.pk],
+            task_id=pending.task_id,
+        )
 
     def test_upload_creates_multiple_processing_jobs(self) -> None:
         uploads = [
@@ -447,10 +502,6 @@ class UploadImageViewTests(TestCase):
         with mock.patch(
             'hasta_la_vista_money.receipts.views.process_pending_receipt',
         ) as task_mock:
-            task_mock.delay.side_effect = [
-                mock.Mock(id='task-id-1'),
-                mock.Mock(id='task-id-2'),
-            ]
             response = self.client.post(
                 reverse('receipts:upload'),
                 {'file': uploads, 'account': self.account.pk},
@@ -459,7 +510,7 @@ class UploadImageViewTests(TestCase):
         self.assertRedirects(response, reverse('receipts:list'))
         pending_receipts = PendingReceipt.objects.filter(user=self.user)
         self.assertEqual(pending_receipts.count(), 2)
-        self.assertEqual(task_mock.delay.call_count, 2)
+        self.assertEqual(task_mock.apply_async.call_count, 2)
 
     def test_upload_rejects_duplicate_against_saved_receipt(self) -> None:
         upload = SimpleUploadedFile(
@@ -548,7 +599,6 @@ class ScanQRReceiptViewTests(TestCase):
         with mock.patch(
             'hasta_la_vista_money.receipts.views.process_pending_receipt_from_qr',
         ) as task_mock:
-            task_mock.delay.return_value = mock.Mock(id='qr-task-id-1')
             response = self.client.post(
                 reverse('receipts:scan_qr'),
                 {'qr_raw': self.raw_qr, 'account': self.account.pk},
@@ -558,8 +608,11 @@ class ScanQRReceiptViewTests(TestCase):
         pending = PendingReceipt.objects.get(user=self.user)
         self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
         self.assertFalse(pending.image_file)
-        self.assertEqual(pending.task_id, 'qr-task-id-1')
-        task_mock.delay.assert_called_once_with(pending.pk, self.raw_qr)
+        self.assertTrue(pending.task_id)
+        task_mock.apply_async.assert_called_once_with(
+            args=[pending.pk, self.raw_qr],
+            task_id=pending.task_id,
+        )
 
     def test_scan_rejects_invalid_qr_string(self) -> None:
         with mock.patch(
@@ -696,7 +749,6 @@ class PendingRetryViewTests(TestCase):
         with mock.patch(
             'hasta_la_vista_money.receipts.views.process_pending_receipt',
         ) as task_mock:
-            task_mock.delay.return_value = mock.Mock(id='task-id-2')
             response = self.client.post(
                 reverse('receipts:pending_retry', args=[pending.pk]),
             )
@@ -705,4 +757,7 @@ class PendingRetryViewTests(TestCase):
         pending.refresh_from_db()
         self.assertEqual(pending.status, PendingReceiptStatus.PROCESSING)
         self.assertEqual(pending.error_message, '')
-        task_mock.delay.assert_called_once_with(pending.pk)
+        task_mock.apply_async.assert_called_once_with(
+            args=[pending.pk],
+            task_id=pending.task_id,
+        )

@@ -1,5 +1,6 @@
 import hashlib
 import sys
+import uuid
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import structlog
@@ -19,6 +20,7 @@ from hasta_la_vista_money.receipts.forms import (
     ScanQRForm,
     UploadImageForm,
 )
+from hasta_la_vista_money.receipts.services.fns_qr import parse_fns_qr
 from hasta_la_vista_money.receipts.services.pending_receipt_service import (
     compute_image_hash,
 )
@@ -116,12 +118,14 @@ class UploadImageView(
                     constants.ERROR_PROCESSING_RECEIPT,
                 )
 
-            async_result = _views_module().process_pending_receipt.delay(
-                pending_receipt.pk,
-            )
+            task_id = str(uuid.uuid4())
             pending_receipt_service.attach_task_id(
                 pending_receipt=pending_receipt,
-                task_id=async_result.id,
+                task_id=task_id,
+            )
+            _views_module().process_pending_receipt.apply_async(
+                args=[pending_receipt.pk],
+                task_id=task_id,
             )
             queued_count += 1
 
@@ -184,6 +188,7 @@ class ScanQRReceiptView(
         user = cast('User', request.user)
         account = form.cleaned_data['account']
         qr_raw = form.cleaned_data['qr_raw']
+        fiscal_key = parse_fns_qr(qr_raw).fiscal_key
         image_hash = hashlib.sha256(qr_raw.encode()).hexdigest()
 
         pending_receipt_service = (
@@ -193,6 +198,7 @@ class ScanQRReceiptView(
         duplicate = pending_receipt_service.find_duplicate(
             user=user,
             image_hash=image_hash,
+            fiscal_key=fiscal_key,
         )
         if duplicate is not None:
             messages.warning(request, _('Этот чек уже загружен.'))
@@ -204,6 +210,7 @@ class ScanQRReceiptView(
                     user=user,
                     account=account,
                     image_hash=image_hash,
+                    fiscal_key=fiscal_key,
                 )
             )
         except Exception as exc:
@@ -217,13 +224,14 @@ class ScanQRReceiptView(
                 constants.ERROR_PROCESSING_RECEIPT,
             )
 
-        async_result = _views_module().process_pending_receipt_from_qr.delay(
-            pending_receipt.pk,
-            qr_raw,
-        )
+        task_id = str(uuid.uuid4())
         pending_receipt_service.attach_task_id(
             pending_receipt=pending_receipt,
-            task_id=async_result.id,
+            task_id=task_id,
+        )
+        _views_module().process_pending_receipt_from_qr.apply_async(
+            args=[pending_receipt.pk, qr_raw],
+            task_id=task_id,
         )
         messages.success(
             request,

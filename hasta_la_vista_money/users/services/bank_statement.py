@@ -112,9 +112,9 @@ def _dedup_transactions(
     ``source_ref`` fall back to ``(date, amount, description)``.
     """
     seen_refs: set[str] = set()
-    seen_tuples: set[tuple[str, str, str]] = set()
     unique: list[dict[str, Any]] = []
-    for t in transactions:
+    for position, t in enumerate(transactions):
+        t['row_position'] = position
         ref = t.get('source_ref')
         if ref:
             if ref in seen_refs:
@@ -122,10 +122,6 @@ def _dedup_transactions(
             seen_refs.add(ref)
             unique.append(t)
             continue
-        key = (str(t['date']), str(t['amount']), t['description'])
-        if key in seen_tuples:
-            continue
-        seen_tuples.add(key)
         unique.append(t)
     return unique
 
