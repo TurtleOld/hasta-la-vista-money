@@ -85,7 +85,8 @@ class PendingReceiptServiceProtocol(Protocol):
         self,
         *,
         user: User,
-        image_hash: str,
+        image_hash: str | None = None,
+        fiscal_key: str | None = None,
     ) -> Any | None: ...
 
     def create_processing_job(
@@ -95,6 +96,7 @@ class PendingReceiptServiceProtocol(Protocol):
         account: Account,
         image_file: Any,
         image_hash: str,
+        fiscal_key: str | None = None,
     ) -> PendingReceipt: ...
 
     def create_processing_job_from_qr(
@@ -117,14 +119,24 @@ class PendingReceiptServiceProtocol(Protocol):
         *,
         pending_receipt: PendingReceipt,
         receipt_data: dict[str, Any],
-    ) -> PendingReceipt: ...
+        task_id: str | None = None,
+    ) -> bool: ...
 
     def mark_failed(
         self,
         *,
         pending_receipt: PendingReceipt,
         error_message: str,
-    ) -> PendingReceipt: ...
+        task_id: str | None = None,
+    ) -> bool: ...
+
+    def claim_fiscal_key(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        fiscal_key: str,
+        task_id: str,
+    ) -> bool: ...
 
     def reset_for_retry(
         self,

@@ -38,6 +38,15 @@
                     <span>{% translate 'Сумма позиций отличается от итога чека больше чем на 5%. Проверьте итоговую сумму и позиции перед сохранением.' %}</span>
                 </div>
             {% endif %}
+            <div class="form-check mt-3">
+                {{ form.confirm_adjustment }}
+                <label class="form-check-label" for="{{ form.confirm_adjustment.id_for_label }}">
+                    {{ form.confirm_adjustment.label }}
+                </label>
+                {% for error in form.confirm_adjustment.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
 
             <div class="receipt-review-grid">
                 {% if pending_receipt.image_file %}

@@ -142,6 +142,8 @@ class ReceiptCreatorService:
             nds20=receipt_data.nds20,
             operation_type=receipt_data.operation_type,
             total_sum=receipt_data.total_sum,
+            adjustment=receipt_data.adjustment,
+            fiscal_key=receipt_data.fiscal_key,
             manual=manual,
         )
 
@@ -352,3 +354,5 @@ class ReceiptCreateData:
     operation_type: int | None = None
     nds10: Decimal | None = None
     nds20: Decimal | None = None
+    adjustment: Decimal = Decimal('0.00')
+    fiscal_key: str | None = None

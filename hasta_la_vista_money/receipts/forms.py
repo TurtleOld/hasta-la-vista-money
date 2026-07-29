@@ -11,6 +11,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.db import connection
 from django.db.models import Min, Q, QuerySet
 from django.forms import (
+    BooleanField,
     CharField,
     ChoiceField,
     ClearableFileInput,
@@ -689,6 +690,10 @@ class PendingReceiptReviewForm(Form):
         label=_('Тип операции'),
         choices=OPERATION_TYPES,
         widget=Select(attrs={'class': _SELECT_CLASSES}),
+        required=False,
+    )
+    confirm_adjustment = BooleanField(
+        label=_('Подтверждаю расхождение итоговой суммы и позиций'),
         required=False,
     )
 

@@ -38,6 +38,7 @@ class ReceiptAPIDataMapper:
             operation_type=request_data.get('operation_type'),
             nds10=self.get_optional_decimal(request_data.get('nds10')),
             nds20=self.get_optional_decimal(request_data.get('nds20')),
+            fiscal_key=request_data.get('fiscal_key') or None,
         )
 
     def map_request_to_seller_data(
@@ -57,6 +58,7 @@ class ReceiptAPIDataMapper:
             name_seller=str(seller_data.get('name_seller', '')),
             retail_place_address=seller_data.get('retail_place_address'),
             retail_place=seller_data.get('retail_place'),
+            inn=seller_data.get('inn'),
         )
 
     def parse_receipt_date(self, raw_date: Any) -> datetime:

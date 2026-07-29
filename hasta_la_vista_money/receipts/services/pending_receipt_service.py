@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.repositories.protocols import ReceiptRepositoryProtocol
@@ -24,13 +25,11 @@ from hasta_la_vista_money.receipts.services.receipt_creator import (
 from hasta_la_vista_money.users.models import User
 
 _HASH_CHUNK_SIZE = 64 * 1024
-_TOTAL_WARNING_RATIO = Decimal(
-    str(constants.PENDING_RECEIPT_TOTAL_WARNING_RATIO),
-)
+_ADJUSTMENT_QUANTUM = Decimal('0.01')
 
 
 @dataclass(frozen=True)
-class DuplicateImageMatch:
+class DuplicateReceiptMatch:
     """Result describing where a duplicate upload was found.
 
     Attributes:
@@ -91,8 +90,9 @@ class PendingReceiptService:
         self,
         *,
         user: User,
-        image_hash: str,
-    ) -> DuplicateImageMatch | None:
+        image_hash: str | None = None,
+        fiscal_key: str | None = None,
+    ) -> DuplicateReceiptMatch | None:
         """Locate an existing pending or saved receipt for the same image.
 
         Looks at PendingReceipts in non-failed states (failed entries do not
@@ -111,6 +111,26 @@ class PendingReceiptService:
             PendingReceiptStatus.READY,
             PendingReceiptStatus.READY_WITH_WARNING,
         ]
+        if fiscal_key:
+            receipt = Receipt.objects.filter(
+                user=user,
+                fiscal_key=fiscal_key,
+            ).first()
+            if receipt is not None:
+                return DuplicateReceiptMatch(kind='receipt', receipt=receipt)
+            pending = (
+                PendingReceipt.objects.filter(
+                    user=user,
+                    fiscal_key=fiscal_key,
+                    status__in=active_statuses,
+                )
+                .order_by('-created_at')
+                .first()
+            )
+            if pending is not None:
+                return DuplicateReceiptMatch(kind='pending', pending=pending)
+        if not image_hash:
+            return None
         pending = (
             PendingReceipt.objects.filter(
                 user=user,
@@ -121,7 +141,7 @@ class PendingReceiptService:
             .first()
         )
         if pending is not None:
-            return DuplicateImageMatch(kind='pending', pending=pending)
+            return DuplicateReceiptMatch(kind='pending', pending=pending)
 
         hash_record = (
             ReceiptImageHash.objects.filter(user=user, image_hash=image_hash)
@@ -129,7 +149,7 @@ class PendingReceiptService:
             .first()
         )
         if hash_record is not None:
-            return DuplicateImageMatch(
+            return DuplicateReceiptMatch(
                 kind='receipt',
                 receipt=hash_record.receipt,
             )
@@ -160,6 +180,7 @@ class PendingReceiptService:
             status=PendingReceiptStatus.PROCESSING,
             image_file=image_file,
             image_hash=image_hash,
+            processing_started_at=timezone.now(),
         )
 
     def create_processing_job_from_qr(
@@ -168,6 +189,7 @@ class PendingReceiptService:
         user: User,
         account: Account,
         image_hash: str,
+        fiscal_key: str | None = None,
     ) -> PendingReceipt:
         """Persist a new PendingReceipt from a browser camera QR scan.
 
@@ -189,6 +211,8 @@ class PendingReceiptService:
             account=account,
             status=PendingReceiptStatus.PROCESSING,
             image_hash=image_hash,
+            fiscal_key=fiscal_key,
+            processing_started_at=timezone.now(),
         )
 
     def attach_task_id(
@@ -211,7 +235,8 @@ class PendingReceiptService:
         *,
         pending_receipt: PendingReceipt,
         receipt_data: dict[str, Any],
-    ) -> PendingReceipt:
+        task_id: str | None = None,
+    ) -> bool:
         """Transition a pending receipt to ``ready`` with parsed data.
 
         Args:
@@ -221,20 +246,27 @@ class PendingReceiptService:
         Returns:
             Updated PendingReceipt instance.
         """
-        pending_receipt.receipt_data = receipt_data
-        pending_receipt.status = self._status_for_receipt_data(receipt_data)
-        pending_receipt.error_message = ''
-        pending_receipt.save(
-            update_fields=['receipt_data', 'status', 'error_message'],
+        filters: dict[str, Any] = {
+            'pk': pending_receipt.pk,
+            'status': PendingReceiptStatus.PROCESSING,
+        }
+        if task_id is not None and pending_receipt.task_id:
+            filters['task_id'] = task_id
+        return bool(
+            PendingReceipt.objects.filter(**filters).update(
+                receipt_data=receipt_data,
+                status=self._status_for_receipt_data(receipt_data),
+                error_message='',
+            ),
         )
-        return pending_receipt
 
     def mark_failed(
         self,
         *,
         pending_receipt: PendingReceipt,
         error_message: str,
-    ) -> PendingReceipt:
+        task_id: str | None = None,
+    ) -> bool:
         """Transition a pending receipt to ``failed`` with a reason.
 
         Args:
@@ -244,10 +276,18 @@ class PendingReceiptService:
         Returns:
             Updated PendingReceipt instance.
         """
-        pending_receipt.status = PendingReceiptStatus.FAILED
-        pending_receipt.error_message = error_message
-        pending_receipt.save(update_fields=['status', 'error_message'])
-        return pending_receipt
+        filters: dict[str, Any] = {
+            'pk': pending_receipt.pk,
+            'status': PendingReceiptStatus.PROCESSING,
+        }
+        if task_id is not None and pending_receipt.task_id:
+            filters['task_id'] = task_id
+        return bool(
+            PendingReceipt.objects.filter(**filters).update(
+                status=PendingReceiptStatus.FAILED,
+                error_message=error_message,
+            ),
+        )
 
     def reset_for_retry(
         self,
@@ -264,7 +304,14 @@ class PendingReceiptService:
         """
         pending_receipt.status = PendingReceiptStatus.PROCESSING
         pending_receipt.error_message = ''
-        pending_receipt.save(update_fields=['status', 'error_message'])
+        pending_receipt.processing_started_at = timezone.now()
+        pending_receipt.save(
+            update_fields=[
+                'status',
+                'error_message',
+                'processing_started_at',
+            ],
+        )
         return pending_receipt
 
     def update_pending_receipt(
@@ -318,7 +365,36 @@ class PendingReceiptService:
             account=account,
             receipt_data=receipt_data,
             status=self._status_for_receipt_data(receipt_data),
+            processing_started_at=timezone.now(),
         )
+
+    @transaction.atomic
+    def claim_fiscal_key(
+        self,
+        *,
+        pending_receipt: PendingReceipt,
+        fiscal_key: str,
+        task_id: str,
+    ) -> bool:
+        if Receipt.objects.filter(
+            user_id=pending_receipt.user_id,
+            fiscal_key=fiscal_key,
+        ).exists():
+            return False
+        filters: dict[str, Any] = {
+            'pk': pending_receipt.pk,
+            'status': PendingReceiptStatus.PROCESSING,
+        }
+        if pending_receipt.task_id:
+            filters['task_id'] = task_id
+        try:
+            return bool(
+                PendingReceipt.objects.filter(**filters).update(
+                    fiscal_key=fiscal_key,
+                ),
+            )
+        except IntegrityError:
+            return False
 
     @transaction.atomic
     def convert_to_receipt(
@@ -337,6 +413,19 @@ class PendingReceiptService:
         Raises:
             ValueError: If receipt data is invalid.
         """
+        pending_receipt = (
+            PendingReceipt.objects.select_for_update()
+            .select_related('user', 'account', 'converted_receipt')
+            .get(pk=pending_receipt.pk)
+        )
+        if pending_receipt.converted_receipt is not None:
+            return pending_receipt.converted_receipt
+        if pending_receipt.status not in {
+            PendingReceiptStatus.READY,
+            PendingReceiptStatus.READY_WITH_WARNING,
+        }:
+            raise ValueError('Pending receipt is not ready for conversion')
+
         receipt_data = pending_receipt.receipt_data or {}
         user = pending_receipt.user
         account = pending_receipt.account
@@ -347,6 +436,10 @@ class PendingReceiptService:
 
         receipt_date = ReceiptDateParser.parse(receipt_date_str)
         total_sum = Decimal(str(receipt_data.get('total_sum', 0)))
+        adjustment = calculate_receipt_adjustment(
+            total_sum,
+            receipt_data.get('items', []),
+        )
 
         receipt = self.receipt_creator_service.create_receipt_with_products(
             user=user,
@@ -362,6 +455,8 @@ class PendingReceiptService:
                     receipt_data.get('nds20'),
                 ),
                 operation_type=receipt_data.get('operation_type', 0),
+                adjustment=adjustment,
+                fiscal_key=pending_receipt.fiscal_key,
             ),
             seller_data=SellerCreateData(
                 name_seller=str(
@@ -381,7 +476,15 @@ class PendingReceiptService:
                 defaults={'receipt': receipt},
             )
 
-        self.delete_with_file(pending_receipt=pending_receipt)
+        image_field = pending_receipt.image_file
+        if image_field and image_field.name:
+            image_field.delete(save=False)
+        pending_receipt.image_file = None
+        pending_receipt.converted_receipt = receipt
+        pending_receipt.status = PendingReceiptStatus.CONVERTED
+        pending_receipt.save(
+            update_fields=['image_file', 'converted_receipt', 'status'],
+        )
         return receipt
 
     def delete_with_file(self, *, pending_receipt: PendingReceipt) -> None:
@@ -425,20 +528,13 @@ class PendingReceiptService:
             items = receipt_data.get('items', [])
             if not isinstance(items, list):
                 return False
-            items_total = sum(
-                (
-                    self._parse_decimal(item.get('amount'))
-                    for item in items
-                    if isinstance(item, dict)
-                ),
-                Decimal(0),
-            )
+            adjustment = calculate_receipt_adjustment(total_sum, items)
         except (InvalidOperation, TypeError, ValueError):
             return False
 
-        if total_sum <= 0 or items_total <= 0:
+        if total_sum <= 0:
             return False
-        return abs(total_sum - items_total) > total_sum * _TOTAL_WARNING_RATIO
+        return requires_adjustment_confirmation(total_sum, adjustment)
 
     def _parse_decimal(self, value: Any) -> Decimal:
         if isinstance(value, bool) or value is None:
@@ -447,7 +543,38 @@ class PendingReceiptService:
 
 
 __all__ = [
-    'DuplicateImageMatch',
+    'DuplicateReceiptMatch',
     'PendingReceiptService',
+    'calculate_receipt_adjustment',
     'compute_image_hash',
+    'requires_adjustment_confirmation',
 ]
+
+
+def calculate_receipt_adjustment(
+    total_sum: Decimal,
+    items: Any,
+) -> Decimal:
+    if not isinstance(items, list):
+        raise ValueError('Receipt items must be a list')
+    items_total = sum(
+        (
+            Decimal(str(item.get('amount', 0)))
+            for item in items
+            if isinstance(item, dict)
+        ),
+        Decimal(0),
+    )
+    return (total_sum - items_total).quantize(_ADJUSTMENT_QUANTUM)
+
+
+def requires_adjustment_confirmation(
+    total_sum: Decimal,
+    adjustment: Decimal,
+) -> bool:
+    absolute_adjustment = abs(adjustment)
+    return (
+        absolute_adjustment > constants.RECEIPT_ADJUSTMENT_WARNING_AMOUNT
+        or absolute_adjustment
+        > abs(total_sum) * constants.RECEIPT_ADJUSTMENT_WARNING_RATIO
+    )

@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -23,6 +24,10 @@ from hasta_la_vista_money.receipts.forms import (
 from hasta_la_vista_money.receipts.models import (
     PendingReceipt,
     PendingReceiptStatus,
+)
+from hasta_la_vista_money.receipts.services.pending_receipt_service import (
+    calculate_receipt_adjustment,
+    requires_adjustment_confirmation,
 )
 from hasta_la_vista_money.receipts.views.base import (
     _validation_error_message,
@@ -178,6 +183,26 @@ class ReviewPendingReceiptView(
             return self.form_invalid(form)
 
         receipt_data = self._build_receipt_data(form, product_formset)
+        total_sum = Decimal(str(receipt_data['total_sum']))
+        adjustment = calculate_receipt_adjustment(
+            total_sum,
+            receipt_data['items'],
+        )
+        receipt_data['adjustment'] = str(adjustment)
+        confirmation_required = requires_adjustment_confirmation(
+            total_sum,
+            adjustment,
+        )
+        if confirmation_required and not form.cleaned_data.get(
+            'confirm_adjustment',
+        ):
+            form.add_error(
+                'confirm_adjustment',
+                _(
+                    'Подтвердите расхождение итоговой суммы и суммы позиций.',
+                ),
+            )
+            return self.form_invalid(form)
         pending_receipt_service = (
             request.container.receipts.pending_receipt_service()
         )
@@ -280,25 +305,29 @@ class ReviewPendingReceiptView(
                     },
                 )
 
-        return {
-            'receipt_date': receipt_date_str,
-            'name_seller': form.cleaned_data.get('name_seller', ''),
-            'retail_place': form.cleaned_data.get('retail_place'),
-            'retail_place_address': form.cleaned_data.get(
-                'retail_place_address',
-            ),
-            'number_receipt': form.cleaned_data.get('number_receipt'),
-            'total_sum': float(form.cleaned_data.get('total_sum', 0)),
-            'nds10': (
-                float(form.cleaned_data.get('nds10', 0))
-                if form.cleaned_data.get('nds10')
-                else None
-            ),
-            'nds20': (
-                float(form.cleaned_data.get('nds20', 0))
-                if form.cleaned_data.get('nds20')
-                else None
-            ),
-            'operation_type': form.cleaned_data.get('operation_type', 0),
-            'items': items,
-        }
+        pending_data = dict(self.get_pending_receipt().receipt_data or {})
+        pending_data.update(
+            {
+                'receipt_date': receipt_date_str,
+                'name_seller': form.cleaned_data.get('name_seller', ''),
+                'retail_place': form.cleaned_data.get('retail_place'),
+                'retail_place_address': form.cleaned_data.get(
+                    'retail_place_address',
+                ),
+                'number_receipt': form.cleaned_data.get('number_receipt'),
+                'total_sum': str(form.cleaned_data.get('total_sum', 0)),
+                'nds10': (
+                    float(form.cleaned_data.get('nds10', 0))
+                    if form.cleaned_data.get('nds10')
+                    else None
+                ),
+                'nds20': (
+                    float(form.cleaned_data.get('nds20', 0))
+                    if form.cleaned_data.get('nds20')
+                    else None
+                ),
+                'operation_type': form.cleaned_data.get('operation_type', 0),
+                'items': items,
+            },
+        )
+        return pending_data

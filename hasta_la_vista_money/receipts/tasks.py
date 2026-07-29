@@ -196,6 +196,22 @@ def _run_processing_pipeline(pending: PendingReceipt) -> dict[str, Any]:
     return _run_fns_pipeline(pending)
 
 
+def _run_claimed_photo_pipeline(
+    pending: PendingReceipt,
+    service: PendingReceiptServiceProtocol,
+    task_id: str,
+) -> dict[str, Any]:
+    with pending.image_file.open('rb') as image_fp:
+        qr_data = QRCodeExtractor().extract(image_fp)
+    if not service.claim_fiscal_key(
+        pending_receipt=pending,
+        fiscal_key=qr_data.fiscal_key,
+        task_id=task_id,
+    ):
+        raise ValueError('Receipt fiscal key already exists')
+    return _run_fns_pipeline_from_raw(pending, qr_data.raw)
+
+
 def _classify_failure(exc: Exception) -> tuple[str, str]:
     """Map an exception to a (log_event, user-facing message) pair.
 
@@ -218,6 +234,7 @@ def _finalize_pipeline(
     pending_receipt_id: int,
     service: PendingReceiptServiceProtocol,
     run_pipeline: Callable[[], dict[str, Any]],
+    task_id: str,
 ) -> None:
     """Run a pipeline callable and transition the pending receipt.
 
@@ -231,6 +248,7 @@ def _finalize_pipeline(
         service.mark_failed(
             pending_receipt=pending,
             error_message=message,
+            task_id=task_id,
         )
         logger.warning(
             event,
@@ -241,6 +259,7 @@ def _finalize_pipeline(
     service.mark_ready(
         pending_receipt=pending,
         receipt_data=receipt_data,
+        task_id=task_id,
     )
 
 
@@ -252,7 +271,7 @@ def _finalize_pipeline(
     retry_backoff=True,
     acks_late=True,
 )
-def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
+def process_pending_receipt(self: Any, pending_receipt_id: int) -> None:
     """Run inference for a pending receipt and update its state.
 
     Loads the persisted image, calls ``analyze_image_with_ai`` (which uses the
@@ -275,11 +294,13 @@ def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
         return
 
     service = _get_pending_receipt_service()
+    task_id = str(self.request.id)
 
     if not pending.image_file:
         service.mark_failed(
             pending_receipt=pending,
             error_message=str(_MISSING_FILE_MESSAGE),
+            task_id=task_id,
         )
         return
 
@@ -287,7 +308,8 @@ def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
         pending,
         pending_receipt_id,
         service,
-        lambda: _run_processing_pipeline(pending),
+        lambda: _run_claimed_photo_pipeline(pending, service, task_id),
+        task_id,
     )
 
 
@@ -300,7 +322,7 @@ def process_pending_receipt(_self: Any, pending_receipt_id: int) -> None:
     acks_late=True,
 )
 def process_pending_receipt_from_qr(
-    _self: Any,
+    self: Any,
     pending_receipt_id: int,
     raw_qr: str,
 ) -> None:
@@ -326,12 +348,14 @@ def process_pending_receipt_from_qr(
         return
 
     service = _get_pending_receipt_service()
+    task_id = str(self.request.id)
 
     _finalize_pipeline(
         pending,
         pending_receipt_id,
         service,
         lambda: _run_fns_pipeline_from_raw(pending, raw_qr),
+        task_id,
     )
 
 
@@ -358,7 +382,7 @@ def cleanup_stale_pending_receipts() -> dict[str, int]:
     recovered = 0
     stuck = PendingReceipt.objects.filter(
         status=PendingReceiptStatus.PROCESSING,
-        created_at__lt=stuck_threshold,
+        processing_started_at__lt=stuck_threshold,
     )
     for pending in stuck:
         service.mark_failed(

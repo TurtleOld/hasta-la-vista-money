@@ -1011,8 +1011,11 @@ class TestUploadImageView(TestCase):
         if pending_receipt is not None:
             self.assertEqual(pending_receipt.account.pk, self.account.pk)
             self.assertEqual(pending_receipt.status, 'processing')
-            self.assertEqual(pending_receipt.task_id, 'task-id')
-            mock_task.delay.assert_called_once_with(pending_receipt.pk)
+            self.assertTrue(pending_receipt.task_id)
+            mock_task.apply_async.assert_called_once_with(
+                args=[pending_receipt.pk],
+                task_id=pending_receipt.task_id,
+            )
 
         redirect_location = response.get('Location', '')  # type: ignore[call-overload]
         self.assertEqual(redirect_location, '/receipts/')
@@ -1258,9 +1261,12 @@ class TestReviewPendingReceiptView(TestCase):
             {self.account.pk: Decimal('-150.00')},
         )
 
-        self.assertFalse(
-            PendingReceipt.objects.filter(pk=self.pending_receipt.pk).exists(),
+        self.pending_receipt.refresh_from_db()
+        self.assertEqual(
+            self.pending_receipt.status,
+            PendingReceiptStatus.CONVERTED,
         )
+        self.assertIsNotNone(self.pending_receipt.converted_receipt_id)
 
         receipt = Receipt.objects.filter(
             user=self.user,
@@ -1322,7 +1328,7 @@ class TestReviewPendingReceiptView(TestCase):
         )
         self.assertEqual(
             updated_pending_receipt.receipt_data['total_sum'],
-            200.0,
+            '200.00',
         )
         self.assertEqual(
             updated_pending_receipt.receipt_data['name_seller'],

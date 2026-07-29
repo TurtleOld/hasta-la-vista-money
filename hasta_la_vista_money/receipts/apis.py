@@ -53,6 +53,10 @@ from hasta_la_vista_money.receipts.serializers import (
     ReceiptSerializer,
     SellerSerializer,
 )
+from hasta_la_vista_money.receipts.services.pending_receipt_service import (
+    calculate_receipt_adjustment,
+    requires_adjustment_confirmation,
+)
 from hasta_la_vista_money.receipts.validators.receipt_api_validator import (
     ReceiptAPIValidator,
 )
@@ -417,6 +421,21 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         # Map data and create receipt
         receipt_data = mapper.map_request_to_receipt_data(request_data)
         products_data = request_data.get('product', [])
+        adjustment = calculate_receipt_adjustment(
+            receipt_data.total_sum,
+            products_data,
+        )
+        if (
+            requires_adjustment_confirmation(
+                receipt_data.total_sum,
+                adjustment,
+            )
+            and request_data.get('confirm_adjustment') is not True
+        ):
+            return self._error_response(
+                'Подтвердите расхождение итоговой суммы и суммы позиций',
+            )
+        receipt_data.adjustment = adjustment
 
         request_with_container = cast('RequestWithContainer', self.request)
         receipt_creator_service = (

@@ -1,4 +1,5 @@
 import sys
+import uuid
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import structlog
@@ -59,10 +60,14 @@ class PendingReceiptRetryView(LoginRequiredMixin, View):
         container_request = cast('RequestWithContainer', request)
         service = container_request.container.receipts.pending_receipt_service()
         service.reset_for_retry(pending_receipt=pending)
-        async_result = _views_module().process_pending_receipt.delay(pending.pk)
+        task_id = str(uuid.uuid4())
         service.attach_task_id(
             pending_receipt=pending,
-            task_id=async_result.id,
+            task_id=task_id,
+        )
+        _views_module().process_pending_receipt.apply_async(
+            args=[pending.pk],
+            task_id=task_id,
         )
         messages.success(
             request,

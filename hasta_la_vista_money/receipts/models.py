@@ -450,6 +450,16 @@ class Receipt(models.Model):
         max_digits=10,
         decimal_places=2,
     )
+    adjustment = models.DecimalField(
+        default=0,
+        max_digits=10,
+        decimal_places=2,
+    )
+    fiscal_key = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+    )
     manual = models.BooleanField(null=True)
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -487,6 +497,13 @@ class Receipt(models.Model):
             models.Index(fields=['operation_type']),
             models.Index(fields=['total_sum']),
         ]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['user', 'fiscal_key'],
+                condition=models.Q(fiscal_key__isnull=False),
+                name='uniq_receipt_user_fiscal_key',
+            ),
+        ]
 
     def datetime(self) -> datetime:
         """Get receipt date as datetime.
@@ -514,6 +531,7 @@ class PendingReceiptStatus(models.TextChoices):
     READY = 'ready', _('Готов к проверке')
     READY_WITH_WARNING = 'ready_with_warning', _('Готов с предупреждением')
     FAILED = 'failed', _('Ошибка обработки')
+    CONVERTED = 'converted', _('Сохранён')
 
 
 class PendingReceipt(models.Model):
@@ -584,6 +602,22 @@ class PendingReceipt(models.Model):
         default='',
         verbose_name=_('Идентификатор задачи Celery'),
     )
+    fiscal_key = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+    )
+    converted_receipt = models.OneToOneField(
+        Receipt,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='source_pending_receipt',
+    )
+    processing_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=_('Дата создания'),
@@ -608,6 +642,22 @@ class PendingReceipt(models.Model):
             models.Index(fields=['user', 'status']),
             models.Index(fields=['user', 'image_hash']),
             models.Index(fields=['expires_at']),
+        ]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['user', 'fiscal_key'],
+                condition=(
+                    models.Q(fiscal_key__isnull=False)
+                    & models.Q(
+                        status__in=[
+                            PendingReceiptStatus.PROCESSING,
+                            PendingReceiptStatus.READY,
+                            PendingReceiptStatus.READY_WITH_WARNING,
+                        ],
+                    )
+                ),
+                name='uniq_active_pending_user_fiscal_key',
+            ),
         ]
         verbose_name = _('Временный чек')
         verbose_name_plural = _('Временные чеки')
