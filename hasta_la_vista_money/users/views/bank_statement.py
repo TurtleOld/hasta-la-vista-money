@@ -1,5 +1,6 @@
 import logging
 import sys
+from hashlib import sha256
 from typing import Any, cast
 
 from django.contrib import messages
@@ -54,6 +55,11 @@ class BankStatementUploadView(
         user = cast('User', self.request.user)
         pdf_file = form.cleaned_data['pdf_file']
         account = form.cleaned_data['account']
+        digest = sha256()
+        for chunk in pdf_file.chunks():
+            digest.update(chunk)
+        pdf_file.seek(0)
+        file_hash = digest.hexdigest()
 
         try:
             logger.info(
@@ -63,26 +69,36 @@ class BankStatementUploadView(
             )
 
             # Create upload record
-            upload = BankStatementUpload.objects.create(
+            upload, created = BankStatementUpload.objects.get_or_create(
                 user=user,
                 account=account,
-                pdf_file=pdf_file,
-                status=BankStatementUpload.Status.PENDING,
+                file_hash=file_hash,
+                defaults={
+                    'pdf_file': pdf_file,
+                    'status': BankStatementUpload.Status.PENDING,
+                },
             )
 
             logger.info('Created upload record with id=%d', upload.pk)
 
-            task_runner = cast(
-                'Any',
-                _views_module().process_bank_statement_task,
-            )
-            task = task_runner.delay(upload.pk)
-            logger.info('Started background task with id=%s', task.id)
+            if created:
+                task_runner = cast(
+                    'Any',
+                    _views_module().process_bank_statement_task,
+                )
+                task = task_runner.delay(upload.pk)
+                logger.info('Started background task with id=%s', task.id)
+            else:
+                messages.warning(
+                    self.request,
+                    _('Эта выписка уже была загружена.'),
+                )
 
             # Store upload ID in session for progress tracking
             self.request.session['last_upload_id'] = upload.pk
 
-            messages.success(self.request, str(self.success_message))
+            if created:
+                messages.success(self.request, str(self.success_message))
 
         except Exception as e:
             logger = logging.getLogger(__name__)

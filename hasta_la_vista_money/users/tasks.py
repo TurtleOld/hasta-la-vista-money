@@ -186,6 +186,7 @@ def _process_transactions(
             description = trans['description']
             trans_date = trans['date']
             source_ref = trans.get('source_ref')
+            row_position = trans.get('row_position', idx)
             source = trans.get('source')
             abs_amount = abs(amount)
 
@@ -203,6 +204,8 @@ def _process_transactions(
                 abs_amount=abs_amount,
                 trans_date=trans_date,
                 source_ref=source_ref,
+                source_file_hash=upload.file_hash,
+                source_row_position=row_position,
                 match_calendar_date=source == 'ozon',
             ):
                 skipped_count += 1
@@ -232,6 +235,12 @@ def _process_transactions(
                     amount=abs_amount,
                     date=trans_date,
                     source_ref=source_ref or None,
+                    source_file_hash=(
+                        upload.file_hash if not source_ref else None
+                    ),
+                    source_row_position=(
+                        row_position if not source_ref else None
+                    ),
                 )
                 created = True
 
@@ -278,6 +287,8 @@ def _is_duplicate(
     abs_amount,
     trans_date,
     source_ref: str | None,
+    source_file_hash: str,
+    source_row_position: int,
     match_calendar_date: bool = False,
 ) -> bool:
     """Проверить, не была ли операция уже импортирована.
@@ -325,9 +336,6 @@ def _is_duplicate(
         return False
     return Transaction.objects.filter(
         account=account,
-        user=user,
-        type=type_value,
-        amount=abs_amount,
-        date=trans_date,
-        source_ref__isnull=True,
+        source_file_hash=source_file_hash,
+        source_row_position=source_row_position,
     ).exists()

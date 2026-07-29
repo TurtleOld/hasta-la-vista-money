@@ -28,6 +28,7 @@ from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParser,
     StatementParseResult,
     _create_parser,
+    _dedup_transactions,
     _GenericBankParser,
     _get_or_create_category,
     _OzonBankParser,
@@ -116,6 +117,46 @@ class TestBankStatementUploadView(TestCase):
         messages = list(get_messages(response.wsgi_request))
         # Check that there's a success message
         self.assertTrue(len(messages) > 0)
+
+    @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
+    def test_repeated_file_does_not_start_second_import(
+        self,
+        mock_task: MagicMock,
+    ) -> None:
+        mock_task.delay.return_value = MagicMock(id='test-task-id')
+        pdf_content = b'%PDF-1.4 identical statement'
+
+        for filename in ('statement.pdf', 'renamed.pdf'):
+            self.client.post(
+                self.upload_url,
+                {
+                    'account': self.account.pk,
+                    'pdf_file': SimpleUploadedFile(
+                        filename,
+                        pdf_content,
+                        content_type='application/pdf',
+                    ),
+                },
+            )
+
+        self.assertEqual(BankStatementUpload.objects.count(), 1)
+        mock_task.delay.assert_called_once()
+
+    def test_identical_rows_without_source_ref_remain_distinct(self) -> None:
+        transaction = {
+            'date': timezone.now(),
+            'amount': Decimal('-10.00'),
+            'description': 'Покупка',
+            'source_ref': None,
+        }
+
+        result = _dedup_transactions([transaction.copy(), transaction.copy()])
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(
+            [row['row_position'] for row in result],
+            [0, 1],
+        )
 
     def test_upload_without_account(self) -> None:
         """Test upload without selecting account."""
