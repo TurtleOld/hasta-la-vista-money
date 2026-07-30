@@ -22,7 +22,11 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.forms import BankStatementUploadForm
-from hasta_la_vista_money.users.models import BankStatementUpload, User
+from hasta_la_vista_money.users.models import (
+    BankStatementRow,
+    BankStatementUpload,
+    User,
+)
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
@@ -314,6 +318,28 @@ class TestBankStatementUploadStatusView(TestCase):
         self.assertEqual(data['income_count'], 10)
         self.assertEqual(data['expense_count'], 20)
 
+    def test_get_status_awaiting_confirmation(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+            progress=100,
+        )
+
+        response = self.client.get(
+            reverse('users:bank_statement_upload_status', args=[upload.pk]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()['status'],
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertEqual(
+            response.json()['reconciliation_url'],
+            reverse('users:bank_statement_reconciliation', args=[upload.pk]),
+        )
+
     def test_get_status_failed(self) -> None:
         """Test getting status of failed upload."""
         upload = BankStatementUpload.objects.create(
@@ -391,6 +417,151 @@ class TestBankStatementUploadStatusView(TestCase):
         self.assertIsNone(data['statement_closing_balance'])
         self.assertIsNone(data['account_balance_after'])
         self.assertIsNone(data['balance_discrepancy'])
+
+
+class TestBankStatementReconciliationView(TestCase):
+    fixtures: ClassVar[list[str]] = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user: User = User.objects.get(pk=1)
+        self.other_user: User = User.objects.get(pk=2)
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+        self.category = Category.objects.create(
+            user=self.user,
+            name='Транспорт',
+            type=TransactionType.EXPENSE,
+        )
+        self.candidate = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('120.00'),
+            date=timezone.now(),
+        )
+        self.upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/reconciliation.pdf',
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.row = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=self.candidate.date,
+            amount=Decimal('120.00'),
+            description='Такси',
+            candidate_description='Такси по городу',
+            suggested_category='Поездки',
+            source_ref='new-source',
+            source_row_position=0,
+            candidate=self.candidate,
+        )
+
+    def test_owner_sees_statement_and_candidate_financial_fields(self) -> None:
+        response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Такси')
+        self.assertContains(response, '120,00 RUB')
+        self.assertContains(response, 'Транспорт')
+        self.assertContains(response, 'Расход')
+        self.assertContains(response, 'Такси по городу')
+
+    def test_linked_decision_is_idempotent_and_keeps_balance(self) -> None:
+        url = reverse(
+            'users:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+        first_response = self.client.post(url, {'decision': 'linked'})
+        second_response = self.client.post(url, {'decision': 'linked'})
+
+        self.assertEqual(first_response.status_code, 302)
+        self.assertEqual(second_response.status_code, 302)
+        self.row.refresh_from_db()
+        self.upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.row.transaction, self.candidate)
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.COMPLETED,
+        )
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_new_decision_is_idempotent_and_changes_balance_once(self) -> None:
+        url = reverse(
+            'users:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+        self.client.post(url, {'decision': 'new'})
+        self.client.post(url, {'decision': 'new'})
+
+        self.row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.NEW)
+        self.assertIsNotNone(self.row.transaction)
+        self.assertEqual(self.account.balance, Decimal('880.00'))
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertTrue(
+            Category.objects.filter(
+                user=self.user,
+                name='Поездки',
+                type=TransactionType.EXPENSE,
+            ).exists(),
+        )
+
+    def test_other_user_cannot_view_or_decide(self) -> None:
+        self.client.force_login(self.other_user)
+        page_url = reverse(
+            'users:bank_statement_reconciliation',
+            args=[self.upload.pk],
+        )
+        decision_url = reverse(
+            'users:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+        self.assertEqual(self.client.get(page_url).status_code, 404)
+        self.assertEqual(
+            self.client.post(
+                decision_url,
+                {'decision': 'new'},
+            ).status_code,
+            404,
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+
+    def test_conflicting_repeated_decision_is_rejected(self) -> None:
+        url = reverse(
+            'users:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+        self.client.post(url, {'decision': 'linked'})
+        response = self.client.post(url, {'decision': 'new'})
+
+        self.assertEqual(response.status_code, 409)
+        self.row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
 
 
 class TestBankStatementParser(TestCase):
@@ -3061,6 +3232,299 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             upload.balance_discrepancy,
             Decimal('-1000.00'),
         )
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_probable_duplicate_waits_for_confirmation(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        transaction_date = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Транспорт',
+            type=TransactionType.EXPENSE,
+        )
+        existing = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('500.00'),
+            date=transaction_date,
+        )
+        classifier = MagicMock()
+        classifier.classify.return_value = 'Такси'
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': transaction_date,
+                    'amount': Decimal('-500.00'),
+                    'description': 'Такси 123456 Иван Иванов',
+                    'source_ref': 'statement-ref',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/duplicate.pdf',
+            file_hash='duplicate-file',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertEqual(self.account.balance, Decimal('10000.00'))
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertFalse(
+            Category.objects.filter(
+                user=self.user,
+                name='Такси',
+                type=TransactionType.EXPENSE,
+            ).exists(),
+        )
+        statement_row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(statement_row.candidate, existing)
+        self.assertEqual(statement_row.suggested_category, 'Такси')
+        self.assertNotIn('123456', statement_row.description)
+        self.assertEqual(statement_row.candidate_description, 'Транспорт')
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_classifier_failure_uses_fallback_for_probable_duplicate(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        transaction_date = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Старое',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('50.00'),
+            date=transaction_date,
+        )
+        classifier = MagicMock()
+        classifier.classify.side_effect = RuntimeError('offline')
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': transaction_date,
+                    'amount': Decimal('-50.00'),
+                    'description': 'Кофе',
+                    'source_ref': 'coffee-ref',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/offline.pdf',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        statement_row = BankStatementRow.objects.get(upload=upload)
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertEqual(statement_row.suggested_category, 'Без категории')
+        self.assertFalse(
+            Category.objects.filter(
+                user=self.user,
+                name='Без категории',
+            ).exists(),
+        )
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_classifier_failure_uses_fallback_for_new_row(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        classifier = MagicMock()
+        classifier.classify.side_effect = RuntimeError('offline')
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-25.00'),
+                    'description': 'Кофе',
+                    'source_ref': 'new-coffee-ref',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/new-offline.pdf',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        self.assertTrue(
+            Category.objects.filter(
+                user=self.user,
+                name='Без категории',
+                type=TransactionType.EXPENSE,
+            ).exists(),
+        )
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_exact_source_duplicate_does_not_require_confirmation(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        transaction_date = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Продукты',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('75.00'),
+            date=transaction_date,
+            source_ref='same-ref',
+        )
+        classifier = MagicMock()
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': transaction_date,
+                    'amount': Decimal('-75.00'),
+                    'description': 'Магазин',
+                    'source_ref': 'same-ref',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/repeat.pdf',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        self.assertFalse(
+            BankStatementRow.objects.filter(upload=upload).exists(),
+        )
+        classifier.classify.assert_not_called()
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_candidate_must_have_same_account_and_type(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        transaction_date = timezone.now()
+        other_account = Account.objects.create(
+            user=self.user,
+            name_account='Другой',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        category = Category.objects.create(
+            user=self.user,
+            name='Доход',
+            type=TransactionType.INCOME,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=other_account,
+            category=category,
+            type=TransactionType.INCOME,
+            amount=Decimal('100.00'),
+            date=transaction_date,
+        )
+        classifier = MagicMock()
+        classifier.classify.return_value = 'Продукты'
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': transaction_date,
+                    'amount': Decimal('-100.00'),
+                    'description': 'Магазин',
+                    'source_ref': 'different-movement',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/new.pdf',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        self.assertFalse(
+            BankStatementRow.objects.filter(upload=upload).exists(),
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('9900.00'))
 
 
 class TestOzonBankStatement(TestCase):
