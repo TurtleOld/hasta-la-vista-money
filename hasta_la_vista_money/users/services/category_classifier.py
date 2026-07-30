@@ -1,5 +1,5 @@
 import logging
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import httpx
 
@@ -133,8 +133,9 @@ class OpenAICompatibleClassifier:
                     json=payload,
                 )
                 response.raise_for_status()
-                data = response.json()
-                return data['choices'][0]['message']['content'].strip()
+                data = cast('dict[str, Any]', response.json())
+                content = data['choices'][0]['message']['content']
+                return str(content).strip()
         except Exception:
             logger.warning(
                 'category_classifier_failed',

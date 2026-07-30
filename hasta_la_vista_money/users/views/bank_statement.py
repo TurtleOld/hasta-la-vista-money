@@ -1,27 +1,38 @@
 import logging
 import sys
+from decimal import Decimal
 from hashlib import sha256
 from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import QuerySet
 from django.http import (
+    Http404,
     HttpRequest,
     HttpResponse,
     JsonResponse,
 )
-from django.urls import reverse_lazy
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django.views.generic import DetailView
 from django.views.generic.edit import FormView
 
 from hasta_la_vista_money.users.forms import (
     BankStatementUploadForm,
 )
 from hasta_la_vista_money.users.models import (
+    BankStatementRow,
     BankStatementUpload,
     User,
+)
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    BankStatementReconciliationService,
+    InvalidReconciliationDecisionError,
+    ReconciliationDecisionConflictError,
 )
 
 
@@ -127,6 +138,7 @@ class BankStatementUploadView(
                 if upload.status in [
                     BankStatementUpload.Status.PENDING,
                     BankStatementUpload.Status.PROCESSING,
+                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
                 ]:
                     context['show_progress'] = True
                     context['upload_id'] = upload.pk
@@ -164,10 +176,10 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
         try:
             upload = BankStatementUpload.objects.get(
                 id=upload_id,
-                user=request.user,
+                user=cast('User', request.user),
             )
 
-            def _decimal_or_none(value):
+            def _decimal_or_none(value: Decimal | None) -> str | None:
                 return str(value) if value is not None else None
 
             return JsonResponse(
@@ -189,6 +201,15 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                     'balance_discrepancy': _decimal_or_none(
                         upload.balance_discrepancy,
                     ),
+                    'reconciliation_url': (
+                        reverse(
+                            'users:bank_statement_reconciliation',
+                            args=[upload.pk],
+                        )
+                        if upload.status
+                        == BankStatementUpload.Status.AWAITING_CONFIRMATION
+                        else None
+                    ),
                 },
             )
 
@@ -197,3 +218,52 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                 {'error': 'Upload not found'},
                 status=404,
             )
+
+
+class BankStatementReconciliationView(
+    LoginRequiredMixin,
+    DetailView[BankStatementUpload],
+):
+    template_name = 'users/bank_statement_reconciliation.html'
+    context_object_name = 'upload'
+
+    def get_queryset(self) -> QuerySet[BankStatementUpload]:
+        user = cast('User', self.request.user)
+        return BankStatementUpload.objects.filter(
+            user=user,
+            account__user=user,
+        ).prefetch_related(
+            'statement_rows__candidate__category',
+        )
+
+
+class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        row = get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=request.user,
+            upload__account__user=request.user,
+        )
+        try:
+            BankStatementReconciliationService().decide(
+                row.pk,
+                request.POST.get('decision', ''),
+                cast('User', request.user).pk,
+            )
+        except InvalidReconciliationDecisionError as error:
+            raise Http404 from error
+        except ReconciliationDecisionConflictError:
+            return HttpResponse(status=409)
+        return redirect(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[upload_id],
+            ),
+        )

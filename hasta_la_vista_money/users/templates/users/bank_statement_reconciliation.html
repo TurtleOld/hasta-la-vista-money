@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block title %}{% translate 'Сверка выписки' %}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto max-w-5xl px-4 py-8">
+    <h1 class="mb-6 text-2xl font-semibold">{% translate 'Сверка выписки' %}</h1>
+    {% for row in upload.statement_rows.all %}
+        <section class="mb-6 rounded-lg border border-gray-200 p-5 dark:border-gray-700">
+            <div class="grid gap-5 md:grid-cols-2">
+                <div>
+                    <h2 class="mb-3 font-semibold">{% translate 'Строка выписки' %}</h2>
+                    <p>{{ row.transaction_date|date:'d.m.Y H:i' }}</p>
+                    <p>{{ row.amount }} {{ upload.account.currency }}</p>
+                    <p>{{ row.get_transaction_type_display }}</p>
+                    <p>{{ row.suggested_category }}</p>
+                    <p>{{ row.description }}</p>
+                </div>
+                <div>
+                    <h2 class="mb-3 font-semibold">{% translate 'Учтённая операция' %}</h2>
+                    <p>{{ row.candidate.date|date:'d.m.Y H:i' }}</p>
+                    <p>{{ row.candidate.amount }} {{ upload.account.currency }}</p>
+                    <p>{{ row.candidate.get_type_display }}</p>
+                    <p>{{ row.candidate.category.name }}</p>
+                    <p>{{ row.candidate_description }}</p>
+                </div>
+            </div>
+            {% if row.decision == 'pending' %}
+                <div class="mt-5 flex flex-wrap gap-3">
+                    <form method="post" action="{% url 'users:bank_statement_reconciliation_decide' upload.pk row.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="decision" value="linked">
+                        <button class="rounded bg-blue-600 px-4 py-2 text-white" type="submit">
+                            {% translate 'Уже учтена' %}
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'users:bank_statement_reconciliation_decide' upload.pk row.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="decision" value="new">
+                        <button class="rounded border border-gray-300 px-4 py-2" type="submit">
+                            {% translate 'Новая операция' %}
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </section>
+    {% empty %}
+        <p>{% translate 'Нет строк для сверки.' %}</p>
+    {% endfor %}
+</div>
+{% endblock %}

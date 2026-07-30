@@ -16,6 +16,7 @@ from django.db.models import (
     DecimalField,
     FileField,
     ForeignKey,
+    Index,
     IntegerField,
     JSONField,
     Model,
@@ -115,6 +116,10 @@ class BankStatementUpload(Model):
     class Status(TextChoices):
         PENDING = 'pending', _('В очереди')
         PROCESSING = 'processing', _('Обрабатывается')
+        AWAITING_CONFIRMATION = (
+            'awaiting_confirmation',
+            _('Ожидает подтверждения'),
+        )
         COMPLETED = 'completed', _('Завершено')
         FAILED = 'failed', _('Ошибка')
 
@@ -127,7 +132,7 @@ class BankStatementUpload(Model):
     pdf_file = FileField(upload_to='bank_statements/')
     file_hash = CharField(max_length=64, blank=True, default='')
     status = CharField(
-        max_length=20,
+        max_length=21,
         choices=Status.choices,
         default=Status.PENDING,
     )
@@ -182,6 +187,70 @@ class BankStatementUpload(Model):
             str: Formatted string with username and status.
         """
         return f'{self.user.username} - {self.status} - {self.created_at}'
+
+
+class BankStatementRow(Model):
+    """Parsed statement row awaiting a reconciliation decision."""
+
+    class Decision(TextChoices):
+        PENDING = 'pending', _('Ожидает решения')
+        LINKED = 'linked', _('Уже учтена')
+        NEW = 'new', _('Новая операция')
+
+    class TransactionType(TextChoices):
+        INCOME = 'income', _('Доход')
+        EXPENSE = 'expense', _('Расход')
+
+    upload = ForeignKey(
+        BankStatementUpload,
+        on_delete=CASCADE,
+        related_name='statement_rows',
+    )
+    transaction_type = CharField(
+        max_length=10,
+        choices=TransactionType.choices,
+    )
+    transaction_date = DateTimeField()
+    amount = DecimalField(max_digits=20, decimal_places=2)
+    description = CharField(max_length=250)
+    candidate_description = CharField(max_length=250)
+    suggested_category = CharField(max_length=250)
+    source_ref = CharField(max_length=64, blank=True, null=True)
+    source_row_position = PositiveIntegerField()
+    candidate = ForeignKey(
+        'transactions.Transaction',
+        on_delete=CASCADE,
+        related_name='statement_candidates',
+    )
+    transaction = ForeignKey(
+        'transactions.Transaction',
+        on_delete=CASCADE,
+        related_name='statement_rows',
+        blank=True,
+        null=True,
+    )
+    decision = CharField(
+        max_length=10,
+        choices=Decision.choices,
+        default=Decision.PENDING,
+    )
+    created_at = DateTimeField(auto_now_add=True)
+    decided_at = DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['transaction_date', 'pk']
+        constraints = [
+            UniqueConstraint(
+                fields=['upload', 'source_row_position'],
+                name='unique_statement_upload_row',
+            ),
+        ]
+        indexes = [
+            Index(
+                fields=['upload', 'decision'],
+                name='users_statement_decision_idx',
+            ),
+        ]
 
 
 class FamilyGroupMembership(Model):
