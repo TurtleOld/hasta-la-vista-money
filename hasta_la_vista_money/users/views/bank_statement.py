@@ -9,7 +9,6 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import QuerySet
 from django.http import (
-    Http404,
     HttpRequest,
     HttpResponse,
     JsonResponse,
@@ -33,6 +32,7 @@ from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
     BankStatementReconciliationService,
     InvalidReconciliationDecisionError,
     ReconciliationDecisionConflictError,
+    StaleStatementCandidateError,
 )
 
 
@@ -233,7 +233,7 @@ class BankStatementReconciliationView(
             user=user,
             account__user=user,
         ).prefetch_related(
-            'statement_rows__candidate__category',
+            'statement_rows__candidates__transaction__category',
         )
 
 
@@ -256,14 +256,30 @@ class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
                 row.pk,
                 request.POST.get('decision', ''),
                 cast('User', request.user).pk,
+                self._candidate_id(request),
             )
-        except InvalidReconciliationDecisionError as error:
-            raise Http404 from error
+        except InvalidReconciliationDecisionError:
+            return HttpResponse(status=400)
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
+        except StaleStatementCandidateError:
+            return self._stale_response(row)
         return redirect(
             reverse(
                 'users:bank_statement_reconciliation',
                 args=[upload_id],
             ),
+        )
+
+    def _candidate_id(self, request: HttpRequest) -> int | None:
+        value = request.POST.get('candidate')
+        return int(value) if value and value.isdigit() else None
+
+    def _stale_response(self, row: BankStatementRow) -> JsonResponse:
+        candidates = BankStatementReconciliationService().current_candidates(
+            row,
+        )
+        return JsonResponse(
+            {'candidates': list(candidates.values_list('pk', flat=True))},
+            status=409,
         )
