@@ -12,6 +12,19 @@ from hasta_la_vista_money.finance_account.bank_constants import (
 from hasta_la_vista_money.finance_account.currencies import currency_choices
 
 
+def _deposit_date_widget() -> forms.DateInput:
+    return forms.DateInput(
+        format=constants.HTML5_DATE_INPUT_FORMAT,
+        attrs={
+            'type': 'date',
+            'lang': 'ru-RU',
+            'data-flatpickr': 'true',
+            'data-flatpickr-mode': 'date',
+            'placeholder': 'ДД.ММ.ГГГГ',
+        },
+    )
+
+
 class CreateDepositForm(forms.Form):
     name = forms.CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,
@@ -30,12 +43,12 @@ class CreateDepositForm(forms.Form):
     )
     opened_on = forms.DateField(
         input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=_deposit_date_widget(),
         label=_('Дата открытия'),
     )
     matures_on = forms.DateField(
         input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=_deposit_date_widget(),
         label=_('Дата окончания'),
     )
     annual_rate = forms.DecimalField(
