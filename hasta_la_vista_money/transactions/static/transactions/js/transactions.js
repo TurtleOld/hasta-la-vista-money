@@ -3,6 +3,8 @@ document.addEventListener('alpine:init', () => {
 });
 
 (function () {
+  let searchSelection = null;
+
   const storage = {
     get(key, fallback) {
       try {
@@ -39,6 +41,11 @@ document.addEventListener('alpine:init', () => {
     document.querySelectorAll('[data-finances-pop]').forEach((pop) => {
       if (pop.dataset.financesPop !== except) {
         pop.classList.remove('is-open');
+        document
+          .querySelector(
+            `[data-finances-pop-button="${pop.dataset.financesPop}"]`,
+          )
+          ?.setAttribute('aria-expanded', 'false');
       }
     });
   }
@@ -111,6 +118,7 @@ document.addEventListener('alpine:init', () => {
       closePops(name);
       if (pop) {
         pop.classList.toggle('is-open', Boolean(willOpen));
+        popButton.setAttribute('aria-expanded', String(Boolean(willOpen)));
       }
       return;
     }
@@ -187,6 +195,35 @@ document.addEventListener('alpine:init', () => {
     }
   });
 
-  document.addEventListener('htmx:afterSwap', hydrateState);
+  document.addEventListener('htmx:beforeSwap', (event) => {
+    if (event.detail.target?.id !== 'finances-results') return;
+    const search = document.querySelector('[data-finances-search]');
+    if (search && document.activeElement === search) {
+      searchSelection = {
+        start: search.selectionStart,
+        end: search.selectionEnd,
+        direction: search.selectionDirection,
+      };
+    } else {
+      searchSelection = null;
+    }
+  });
+
+  document.addEventListener('htmx:afterSwap', (event) => {
+    hydrateState();
+    if (event.detail.target?.id !== 'finances-results' || !searchSelection) {
+      return;
+    }
+    const search = document.querySelector('[data-finances-search]');
+    if (search) {
+      search.focus({ preventScroll: true });
+      search.setSelectionRange(
+        searchSelection.start,
+        searchSelection.end,
+        searchSelection.direction,
+      );
+    }
+    searchSelection = null;
+  });
   document.addEventListener('DOMContentLoaded', hydrateState);
 })();

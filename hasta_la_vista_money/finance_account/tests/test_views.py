@@ -305,6 +305,79 @@ class TestFinancesView(TestCase):
         self.assertEqual(len(transactions), 1)
         self.assertEqual(transactions[0].key, f'transfer-{transfer.pk}')
 
+    def test_finances_searches_transaction_by_spaced_amount(self) -> None:
+        transaction = Transaction.objects.create(
+            type=TransactionType.EXPENSE,
+            user=self.user,
+            account=self.account,
+            category=self.expense_category,
+            amount=Decimal('116000.00'),
+            date=timezone.now(),
+        )
+        request = self.factory.get('/finance/?q=116%20000')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(q='116 000'),
+        )
+
+        self.assertEqual(
+            [item.source_id for item in transactions],
+            [transaction.pk],
+        )
+
+    def test_finances_searches_transfer_by_amount(self) -> None:
+        transfer = TransferMoneyLog.objects.create(
+            user=self.user,
+            from_account=self.account,
+            to_account=self.other_account,
+            amount=Decimal('116000.00'),
+            exchange_date=timezone.now(),
+        )
+        request = self.factory.get('/finance/?q=116000')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(q='116000'),
+        )
+
+        self.assertEqual(
+            [item.source_id for item in transactions],
+            [transfer.pk],
+        )
+
+    def test_finances_searches_receipt_by_decimal_amount(self) -> None:
+        self.receipt.total_sum = Decimal('116000.50')
+        self.receipt.save(update_fields=['total_sum'])
+        request = self.factory.get('/finance/?q=116%20000%2C50')
+        request.user = self.user
+        setup_container_for_request(request)
+
+        transactions = _finances_transactions(
+            request=request,
+            users=[self.user],
+            finances_filter=FinancesFilter(q='116 000,50'),
+        )
+
+        self.assertEqual(len(transactions), 1)
+        self.assertTrue(transactions[0].is_receipt)
+
+    def test_finances_search_field_has_stable_id_for_htmx_focus(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('finances'),
+            HTTP_HX_REQUEST='true',
+        )
+
+        self.assertContains(response, 'id="finances-search"')
+
     def test_transfer_delete_view_reverses_balances(self) -> None:
         transfer = TransferMoneyLog.objects.create(
             user=self.user,
