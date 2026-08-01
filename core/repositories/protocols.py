@@ -264,6 +264,7 @@ class SellerRepositoryProtocol(Protocol):
         self,
         user: 'User',
         name_seller: str,
+        inn: str | None = None,
         defaults: dict[str, object] | None = None,
     ) -> 'Seller':
         """Update or create a seller.
@@ -271,6 +272,7 @@ class SellerRepositoryProtocol(Protocol):
         Args:
             user: User owning the seller.
             name_seller: Seller name.
+            inn: Optional seller INN used as a lookup key.
             defaults: Values to update if seller exists.
 
         Returns:

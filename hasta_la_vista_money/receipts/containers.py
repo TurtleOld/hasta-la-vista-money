@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING, cast
+
 from dependency_injector import containers, providers
 
 from hasta_la_vista_money.receipts.protocols.services import (
@@ -23,6 +25,9 @@ from hasta_la_vista_money.receipts.services.receipt_deleter import (
 from hasta_la_vista_money.receipts.services.receipt_updater import (
     ReceiptUpdaterService,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ReceiptsContainer(containers.DeclarativeContainer):
@@ -62,7 +67,10 @@ class ReceiptsContainer(containers.DeclarativeContainer):
     pending_receipt_service: providers.Factory[
         PendingReceiptServiceProtocol
     ] = providers.Factory(
-        PendingReceiptService,
+        cast(
+            'Callable[..., PendingReceiptServiceProtocol]',
+            PendingReceiptService,
+        ),
         receipt_creator_service=receipt_creator_service,
         receipt_repository=receipt_repository,
     )

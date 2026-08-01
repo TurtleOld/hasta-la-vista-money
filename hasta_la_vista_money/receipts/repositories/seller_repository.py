@@ -38,17 +38,20 @@ class SellerRepository:
         Returns:
             Seller: Seller instance (created or updated).
         """
-        if inn:
-            lookup = {'user': user, 'inn': inn}
-        else:
-            lookup = {'user': user, 'name_seller': name_seller}
         all_defaults = dict(defaults or {})
         if inn:
             all_defaults.setdefault('name_seller', name_seller)
-        seller, _ = Seller.objects.update_or_create(
-            **lookup,
-            defaults=all_defaults,
-        )
+            seller, _ = Seller.objects.update_or_create(
+                user=user,
+                inn=inn,
+                defaults=all_defaults,
+            )
+        else:
+            seller, _ = Seller.objects.update_or_create(
+                user=user,
+                name_seller=name_seller,
+                defaults=all_defaults,
+            )
         return seller
 
     def get_by_user(self, user: User) -> QuerySet[Seller]:

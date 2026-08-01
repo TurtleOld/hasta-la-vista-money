@@ -64,7 +64,7 @@ class UploadImageView(
         context['upload_form'] = context.pop('form')
         context.setdefault(
             'scan_form',
-            ScanQRForm(user=self.request.user),
+            ScanQRForm(user=cast('User', self.request.user)),
         )
         return context
 
@@ -179,7 +179,7 @@ class ScanQRReceiptView(
         context['scan_form'] = context.pop('form')
         context.setdefault(
             'upload_form',
-            UploadImageForm(user=self.request.user),
+            UploadImageForm(user=cast('User', self.request.user)),
         )
         return context
 

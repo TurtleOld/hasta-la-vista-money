@@ -4,6 +4,7 @@ import structlog
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import QuerySet
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import (
@@ -88,8 +89,10 @@ class SellerUpdateView(
     form_class: type[SellerForm] = SellerForm
     template_name = 'receipts/seller_update.html'
 
-    def get_queryset(self):
-        return Seller.objects.filter(user=self.request.user)
+    def get_queryset(self) -> QuerySet[Seller]:
+        return Seller.objects.filter(
+            user=cast('User', self.request.user),
+        )
 
     def get_success_url(self) -> str:
         return str(reverse_lazy('receipts:list'))

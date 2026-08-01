@@ -126,7 +126,7 @@ class ReceiptCreateView(
         if number_receipt:
             messages.error(
                 request,
-                _(constants.RECEIPT_ALREADY_EXISTS),
+                constants.RECEIPT_ALREADY_EXISTS,
             )
             return False
         self.create_receipt(
@@ -217,7 +217,7 @@ class ReceiptUpdateView(
 
     def get_initial(self) -> dict[str, Any]:
         initial = super().get_initial()
-        if hasattr(self, 'object') and self.object and self.object.seller:
+        if hasattr(self, 'object') and self.object.seller:
             initial['retail_place'] = self.object.seller.retail_place
         return initial
 
@@ -382,4 +382,3 @@ class ReceiptDeleteView(
                 constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT,
             )
             return redirect(str(self.success_url))
-        return redirect(str(self.success_url))

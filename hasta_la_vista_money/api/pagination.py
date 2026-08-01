@@ -1,6 +1,7 @@
 """Pagination classes for DRF API views."""
 
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.request import Request
 
 from hasta_la_vista_money import constants
 
@@ -16,7 +17,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size_query_param = 'size'
     max_page_size = 100
 
-    def get_page_size(self, request):  # type: ignore[override]
+    def get_page_size(self, request: Request) -> int | None:
         """Support `size` and `page_size` query parameters."""
 
         if 'size' in request.query_params:

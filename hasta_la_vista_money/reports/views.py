@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import AnonymousUser
@@ -12,9 +12,6 @@ from django.views.generic import TemplateView
 from hasta_la_vista_money.reports.services.aggregation import (
     budget_charts,
 )
-
-if TYPE_CHECKING:
-    from hasta_la_vista_money.users.models import User
 
 
 class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
@@ -48,7 +45,7 @@ class ReportView(LoginRequiredMixin, SuccessMessageMixin[Any], TemplateView):
         if selected_period not in allowed_periods:
             selected_period = 'y'
         charts_data = budget_charts(
-            cast('User', request.user),
+            request.user,
             period=selected_period,
         )
         result = cast('dict[str, Any]', charts_data)

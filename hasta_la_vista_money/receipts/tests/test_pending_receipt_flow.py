@@ -6,8 +6,9 @@ retry / counter views. Inference is always mocked — no network calls.
 
 import hashlib
 import io
+from datetime import timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -230,7 +231,8 @@ class ProcessPendingReceiptTaskTests(TestCase):
         pending.refresh_from_db()
         self.assertEqual(pending.status, PendingReceiptStatus.READY)
         self.assertEqual(pending.error_message, '')
-        self.assertEqual(pending.receipt_data['name_seller'], 'Shop')
+        receipt_data = cast('dict[str, Any]', pending.receipt_data)
+        self.assertEqual(receipt_data['name_seller'], 'Shop')
 
     def test_task_marks_ready_with_warning_on_total_mismatch(self) -> None:
         pending = self._create_pending()
@@ -264,7 +266,7 @@ class ProcessPendingReceiptTaskTests(TestCase):
     def test_cleanup_purges_expired_rows(self) -> None:
         pending = self._create_pending()
         PendingReceipt.objects.filter(pk=pending.pk).update(
-            expires_at=timezone.now() - timezone.timedelta(hours=1),
+            expires_at=timezone.now() - timedelta(hours=1),
         )
         result = cleanup_stale_pending_receipts()
         self.assertEqual(result['purged'], 1)

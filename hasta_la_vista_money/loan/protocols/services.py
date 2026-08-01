@@ -5,6 +5,7 @@ enabling dependency injection and type checking.
 """
 
 from datetime import date
+from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
 from hasta_la_vista_money.loan.models import Loan
@@ -25,7 +26,7 @@ class LoanCalculationServiceProtocol(Protocol):
         user_id: int,
         loan: Loan,
         start_date: date,
-        loan_amount: float,
-        annual_interest_rate: float,
+        loan_amount: Decimal,
+        annual_interest_rate: Decimal,
         period_loan: int,
     ) -> None: ...

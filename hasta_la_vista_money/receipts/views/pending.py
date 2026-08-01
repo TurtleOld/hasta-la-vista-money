@@ -1,6 +1,6 @@
 import sys
 import uuid
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from django.contrib import messages
@@ -19,6 +19,7 @@ from hasta_la_vista_money.receipts.models import (
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
+    from hasta_la_vista_money.users.models import User
 
 logger = structlog.get_logger(__name__)
 _INSUFFICIENT_FUNDS_CODE = 'insufficient_funds'
@@ -31,7 +32,7 @@ def _views_module() -> Any:
 class PendingReceiptRetryView(LoginRequiredMixin, View):
     """Re-enqueue a failed pending receipt without re-uploading the file."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names = ['post']
 
     def post(
         self,
@@ -42,7 +43,7 @@ class PendingReceiptRetryView(LoginRequiredMixin, View):
         pending = get_object_or_404(
             PendingReceipt,
             pk=kwargs.get('pk'),
-            user=request.user,
+            user=cast('User', request.user),
         )
         if pending.status != PendingReceiptStatus.FAILED:
             messages.error(
@@ -79,7 +80,7 @@ class PendingReceiptRetryView(LoginRequiredMixin, View):
 class PendingReceiptDeleteView(LoginRequiredMixin, View):
     """Delete a pending receipt entry along with its stored image."""
 
-    http_method_names: ClassVar[list[str]] = ['post']
+    http_method_names = ['post']
 
     def post(
         self,
@@ -90,7 +91,7 @@ class PendingReceiptDeleteView(LoginRequiredMixin, View):
         pending = get_object_or_404(
             PendingReceipt,
             pk=kwargs.get('pk'),
-            user=request.user,
+            user=cast('User', request.user),
         )
         container_request = cast('RequestWithContainer', request)
         service = container_request.container.receipts.pending_receipt_service()
@@ -106,7 +107,7 @@ class PendingReceiptCounterView(LoginRequiredMixin, View):
     many uploads are still in flight without reloading the page.
     """
 
-    http_method_names: ClassVar[list[str]] = ['get']
+    http_method_names = ['get']
     template_name = 'receipts/_pending_counter.html'
 
     def get(
@@ -116,7 +117,7 @@ class PendingReceiptCounterView(LoginRequiredMixin, View):
         **kwargs: Any,
     ) -> HttpResponse:
         count = PendingReceipt.objects.filter(
-            user=request.user,
+            user=cast('User', request.user),
             status=PendingReceiptStatus.PROCESSING,
         ).count()
         return render(request, self.template_name, {'count': count})
