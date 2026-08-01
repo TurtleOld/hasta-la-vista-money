@@ -276,3 +276,31 @@ class DepositDetailFloatingRateDisplayTests(TestCase):
         response = self.client.get(deposit.get_absolute_url())
 
         self.assertContains(response, 'не определена')
+
+    def test_undefined_future_rate_is_shown_explicitly_on_list(self) -> None:
+        """The deposit list page must also show the rate as undefined
+        for a floating term whose last rate period has already ended,
+        instead of silently rendering a bare '%' sign."""
+        service = ApplicationContainer().deposits.deposit_service()
+        opened_on = timezone.localdate() - timedelta(days=60)
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Вклад с истёкшим периодом (список)',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('20000.00'),
+                opened_on=opened_on,
+                matures_on=timezone.localdate() + timedelta(days=200),
+                annual_rate=Decimal('9.00'),
+                rate_kind=DepositTerm.RateKind.FLOATING,
+            ),
+        )
+        term = deposit.current_term
+        period = term.rate_periods.get()
+        period.ends_on = timezone.localdate() - timedelta(days=1)
+        period.save(update_fields=['ends_on'])
+
+        response = self.client.get(reverse('deposits:list'))
+
+        self.assertContains(response, 'не определена')
