@@ -4,11 +4,13 @@ from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
+from django.db.models import Sum
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_DEPOSIT
 from hasta_la_vista_money.deposits.commands import (
+    ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
     OpenExistingDepositCommand,
@@ -393,3 +395,287 @@ class DepositServiceIntegrationTests(TestCase):
             Deposit.objects.filter(account__user=user).exists(),
         )
         self.assertFalse(Account.objects.filter(user=user).exists())
+
+
+class ConvertAccountToDepositServiceTests(TestCase):
+    def test_converts_existing_account_preserving_identity_and_balance(
+        self,
+    ) -> None:
+        """Conversion keeps the same PK, balance, currency, owner, and
+        timestamps, and records a neutral opening position."""
+        user = cast('User', UserFactory())
+        account = Account.objects.create(
+            user=user,
+            name_account='Production вклад',
+            type_account='Debit',
+            bank='SBERBANK',
+            currency='RUB',
+            balance=Decimal('75000.00'),
+        )
+        original_pk = account.pk
+        original_created_at = account.created_at
+        service = ApplicationContainer().deposits.deposit_service()
+        kpis_before = get_dashboard_month_kpis(user)
+
+        deposit = service.convert_account_to_deposit(
+            ConvertAccountToDepositCommand(
+                user=user,
+                account_id=account.pk,
+                name='Production вклад',
+                bank='SBERBANK',
+                opened_on=date(2026, 6, 1),
+                matures_on=date(2026, 12, 1),
+                annual_rate=Decimal('14.00'),
+                converted_on=date(2026, 8, 1),
+            ),
+        )
+
+        account.refresh_from_db()
+        self.assertEqual(account.pk, original_pk)
+        self.assertEqual(account.balance, Decimal('75000.00'))
+        self.assertEqual(account.currency, 'RUB')
+        self.assertEqual(account.user, user)
+        self.assertEqual(account.created_at, original_created_at)
+        self.assertEqual(account.type_account, ACCOUNT_TYPE_DEPOSIT)
+        self.assertEqual(deposit.account_id, original_pk)
+
+        event = DepositPrincipalEvent.objects.get(deposit=deposit)
+        self.assertEqual(
+            event.type,
+            DepositPrincipalEvent.Type.OPENING_POSITION,
+        )
+        self.assertEqual(event.amount, Decimal('75000.00'))
+        self.assertEqual(event.effective_on, date(2026, 8, 1))
+        self.assertIsNone(event.source_account)
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+        self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+
+        kpis_after = get_dashboard_month_kpis(user)
+        for field in ('income', 'expenses', 'net_result', 'savings_rate'):
+            with self.subTest(field=field):
+                self.assertEqual(kpis_after[field], kpis_before[field])
+
+    def test_rejects_foreign_account(self) -> None:
+        user = cast('User', UserFactory())
+        other_user = cast('User', UserFactory())
+        account = Account.objects.create(
+            user=other_user,
+            name_account='Чужой счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.convert_account_to_deposit(
+                ConvertAccountToDepositCommand(
+                    user=user,
+                    account_id=account.pk,
+                    name='Попытка чужого счёта',
+                    bank='SBERBANK',
+                    opened_on=date(2026, 6, 1),
+                    matures_on=date(2026, 12, 1),
+                    annual_rate=Decimal('14.00'),
+                    converted_on=date(2026, 8, 1),
+                ),
+            )
+
+        account.refresh_from_db()
+        self.assertEqual(account.type_account, 'Debit')
+        self.assertFalse(Deposit.objects.filter(account=account).exists())
+
+    def test_rejects_account_already_of_deposit_type(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        existing_deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Уже вклад',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('1000.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 7, 1),
+                annual_rate=Decimal('10.00'),
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            service.convert_account_to_deposit(
+                ConvertAccountToDepositCommand(
+                    user=user,
+                    account_id=existing_deposit.account_id,
+                    name='Повторное преобразование',
+                    bank='SBERBANK',
+                    opened_on=date(2026, 6, 1),
+                    matures_on=date(2026, 12, 1),
+                    annual_rate=Decimal('14.00'),
+                    converted_on=date(2026, 8, 1),
+                ),
+            )
+
+        self.assertEqual(
+            Deposit.objects.filter(account__user=user).count(),
+            1,
+        )
+
+    def test_conversion_is_idempotent_on_repeat_run(self) -> None:
+        """Repeating the same conversion command does not create a
+        second deposit or opening position."""
+        user = cast('User', UserFactory())
+        account = Account.objects.create(
+            user=user,
+            name_account='Production вклад',
+            type_account='Debit',
+            bank='SBERBANK',
+            currency='RUB',
+            balance=Decimal('75000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        command = ConvertAccountToDepositCommand(
+            user=user,
+            account_id=account.pk,
+            name='Production вклад',
+            bank='SBERBANK',
+            opened_on=date(2026, 6, 1),
+            matures_on=date(2026, 12, 1),
+            annual_rate=Decimal('14.00'),
+            converted_on=date(2026, 8, 1),
+        )
+        first_deposit = service.convert_account_to_deposit(command)
+
+        with self.assertRaises(ValidationError):
+            service.convert_account_to_deposit(command)
+
+        self.assertEqual(Deposit.objects.filter(account=account).count(), 1)
+        self.assertEqual(
+            DepositPrincipalEvent.objects.filter(
+                deposit=first_deposit,
+            ).count(),
+            1,
+        )
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('75000.00'))
+
+    def test_invalid_agreement_leaves_account_unchanged(self) -> None:
+        user = cast('User', UserFactory())
+        account = Account.objects.create(
+            user=user,
+            name_account='Production вклад',
+            type_account='Debit',
+            bank='SBERBANK',
+            currency='RUB',
+            balance=Decimal('75000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.convert_account_to_deposit(
+                ConvertAccountToDepositCommand(
+                    user=user,
+                    account_id=account.pk,
+                    name='Неверный срок',
+                    bank='SBERBANK',
+                    opened_on=date(2027, 1, 1),
+                    matures_on=date(2026, 1, 1),
+                    annual_rate=Decimal('14.00'),
+                    converted_on=date(2026, 8, 1),
+                ),
+            )
+
+        account.refresh_from_db()
+        self.assertEqual(account.type_account, 'Debit')
+        self.assertFalse(Deposit.objects.filter(account=account).exists())
+
+    def test_event_failure_rolls_back_type_change_and_agreement(self) -> None:
+        """If opening-position event creation fails mid-conversion, the
+        account type change and agreement creation are fully rolled back."""
+        user = cast('User', UserFactory())
+        account = Account.objects.create(
+            user=user,
+            name_account='Production вклад',
+            type_account='Debit',
+            bank='SBERBANK',
+            currency='RUB',
+            balance=Decimal('75000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_principal_event',
+                side_effect=RuntimeError('event storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.convert_account_to_deposit(
+                ConvertAccountToDepositCommand(
+                    user=user,
+                    account_id=account.pk,
+                    name='Production вклад',
+                    bank='SBERBANK',
+                    opened_on=date(2026, 6, 1),
+                    matures_on=date(2026, 12, 1),
+                    annual_rate=Decimal('14.00'),
+                    converted_on=date(2026, 8, 1),
+                ),
+            )
+
+        account.refresh_from_db()
+        self.assertEqual(account.type_account, 'Debit')
+        self.assertEqual(account.balance, Decimal('75000.00'))
+        self.assertFalse(Deposit.objects.filter(account=account).exists())
+
+    def test_conversion_preserves_assets_by_currency(self) -> None:
+        """Total assets per currency are unchanged by the neutral
+        conversion, matching the definition used across the reports."""
+        user = cast('User', UserFactory())
+        other_rub_account = Account.objects.create(
+            user=user,
+            name_account='Другой рублёвый счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('30000.00'),
+        )
+        account = Account.objects.create(
+            user=user,
+            name_account='Production вклад',
+            type_account='Debit',
+            bank='SBERBANK',
+            currency='RUB',
+            balance=Decimal('75000.00'),
+        )
+        assets_before = Decimal(
+            Account.objects.filter(
+                user=user,
+                currency='RUB',
+            ).aggregate(total=Sum('balance'))['total']
+            or 0,
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+
+        service.convert_account_to_deposit(
+            ConvertAccountToDepositCommand(
+                user=user,
+                account_id=account.pk,
+                name='Production вклад',
+                bank='SBERBANK',
+                opened_on=date(2026, 6, 1),
+                matures_on=date(2026, 12, 1),
+                annual_rate=Decimal('14.00'),
+                converted_on=date(2026, 8, 1),
+            ),
+        )
+
+        assets_after = Decimal(
+            Account.objects.filter(
+                user=user,
+                currency='RUB',
+            ).aggregate(total=Sum('balance'))['total']
+            or 0,
+        )
+        self.assertEqual(assets_before, assets_after)
+        other_rub_account.refresh_from_db()
+        self.assertEqual(other_rub_account.balance, Decimal('30000.00'))

@@ -37,6 +37,26 @@ class FundDepositCommand:
 
 
 @dataclass(frozen=True)
+class ConvertAccountToDepositCommand:
+    """Command to convert an existing production account into a deposit.
+
+    The account keeps its PK, balance, currency, owner, and timestamps.
+    The account type changes to Deposit, a deposit agreement, term, and
+    rate period are created, and a neutral opening-position event is
+    recorded on the conversion date — no monetary delta is applied.
+    """
+
+    user: User
+    account_id: int
+    name: str
+    bank: str
+    opened_on: date
+    matures_on: date
+    annual_rate: Decimal
+    converted_on: date
+
+
+@dataclass(frozen=True)
 class OpenExistingDepositCommand:
     """Command to record an already-active term deposit.
 

@@ -3,6 +3,7 @@ from typing import Protocol
 from django.db.models import QuerySet
 
 from hasta_la_vista_money.deposits.commands import (
+    ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
     OpenExistingDepositCommand,
@@ -52,6 +53,24 @@ class DepositServiceProtocol(Protocol):
 
         Returns:
             The created Deposit.
+        """
+
+    def convert_account_to_deposit(
+        self,
+        command: ConvertAccountToDepositCommand,
+    ) -> Deposit:
+        """Convert an existing production account into a term deposit.
+
+        Args:
+            command: Account identifier, agreement parameters, and the
+                conversion date.
+
+        Returns:
+            The created Deposit, wrapping the same account.
+
+        Raises:
+            ValidationError: If the account is invalid, already a deposit,
+                already linked, or the agreement parameters are invalid.
         """
 
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]: ...
