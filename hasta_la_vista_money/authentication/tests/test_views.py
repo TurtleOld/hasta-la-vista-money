@@ -23,6 +23,8 @@ WRONG_PASSWORD = 'wrongpassword'  # nosec B105
 class CookieTokenObtainPairViewTestCase(TestCase):
     """Test cases for CookieTokenObtainPairView"""
 
+    client: APIClient
+
     def setUp(self) -> None:
         """Set up test data."""
         self.client = APIClient()
@@ -132,6 +134,8 @@ class CookieTokenObtainPairViewTestCase(TestCase):
 
 class CookieTokenRefreshViewTestCase(TestCase):
     """Test cases for CookieTokenRefreshView"""
+
+    client: APIClient
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -302,6 +306,8 @@ class CookieTokenRefreshViewTestCase(TestCase):
 
 class AuthorizationHeaderTestCase(TestCase):
     """Test cases for Authorization header support in API"""
+
+    client: APIClient
 
     def setUp(self) -> None:
         """Set up test data."""

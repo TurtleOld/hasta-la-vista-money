@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime, time
 from decimal import Decimal
 from statistics import pstdev
@@ -7,6 +7,7 @@ from typing import Any
 from dateutil.relativedelta import relativedelta
 from django.db.models import Sum
 from django.utils import timezone
+from typing_extensions import TypedDict
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
@@ -16,6 +17,13 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import User
+
+
+class CashflowForecastDict(TypedDict):
+    forecast_labels: list[str]
+    forecast_balance: list[float]
+    forecast_lower: list[float]
+    forecast_upper: list[float]
 
 
 def _aware_day(day: date, *, end_of_day: bool = False) -> datetime:
@@ -61,7 +69,7 @@ def build_cashflow_forecast(
     accounts: Iterable[Account],
     today: date,
     months: int = 6,
-) -> dict[str, list[float | str | None]]:
+) -> CashflowForecastDict:
     """Return 3/6 month cash-flow forecast from the latest 6 months."""
     history_start = today.replace(day=1) - relativedelta(months=5)
     flows = _monthly_net_flows(users, history_start, today)
@@ -106,7 +114,7 @@ def build_cashflow_forecast(
 def build_payment_calendar(
     *,
     users: Iterable[User],
-    credit_cards: list[dict[str, Any]],
+    credit_cards: Iterable[Mapping[str, Any]],
     today: date,
     months: int = 6,
 ) -> list[dict[str, Any]]:

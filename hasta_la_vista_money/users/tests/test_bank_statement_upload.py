@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -52,11 +52,14 @@ from hasta_la_vista_money.users.services.bank_statement_retention import (
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
+if TYPE_CHECKING:
+    from django.http import HttpResponseRedirect
+
 
 class TestBankStatementUploadView(TestCase):
     """Test cases for bank statement upload view."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -92,7 +95,8 @@ class TestBankStatementUploadView(TestCase):
         self.assertEqual(response.status_code, 302)
         # Check that it redirects to login
         # (could be /auth/login/ or /users/login/)
-        self.assertIn('login', response.url.lower())
+        redirect_response = cast('HttpResponseRedirect', response)
+        self.assertIn('login', redirect_response.url.lower())
 
     @patch('hasta_la_vista_money.users.views.process_bank_statement_task')
     def test_upload_pdf_success(self, mock_task: MagicMock) -> None:
@@ -253,7 +257,7 @@ class TestBankStatementUploadView(TestCase):
 class TestBankStatementUploadStatusView(TestCase):
     """Test cases for bank statement upload status API."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -467,7 +471,7 @@ class TestBankStatementUploadStatusView(TestCase):
 
 
 class TestBankStatementReconciliationView(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         self.user: User = User.objects.get(pk=1)
@@ -645,6 +649,8 @@ class TestBankStatementReconciliationView(TestCase):
             suggested_category='Прочее',
             source_row_position=2,
         )
+        if stale.amount is None or stale.transaction_date is None:
+            self.fail('Statement row must contain amount and date')
         stale_transaction = Transaction.objects.create(
             user=self.user,
             account=self.account,
@@ -1112,6 +1118,8 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
 
     def test_repeated_linked_decision_rejects_different_candidate(self) -> None:
+        if self.row.amount is None or self.row.transaction_date is None:
+            self.fail('Statement row must contain amount and date')
         second = Transaction.objects.create(
             user=self.user,
             account=self.account,
@@ -1292,7 +1300,12 @@ class TestBankStatementReconciliationView(TestCase):
 
     def test_stale_candidate_returns_current_candidates(self) -> None:
         stale_candidate = BankStatementCandidate.objects.get(row=self.row)
-        stale_candidate.transaction.delete()
+        stale_transaction = stale_candidate.transaction
+        if stale_transaction is None:
+            self.fail('Expected a linked candidate transaction')
+        stale_transaction.delete()
+        if self.row.transaction_date is None:
+            self.fail('Statement row must contain a date')
         replacement = Transaction.objects.create(
             user=self.user,
             account=self.account,
@@ -1321,7 +1334,7 @@ class TestBankStatementReconciliationView(TestCase):
 
 
 class TestBankStatementUploadHistory(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         self.user: User = User.objects.get(pk=1)
@@ -1393,7 +1406,10 @@ class TestBankStatementParser(TestCase):
         """Set up test data."""
         self.faker = Faker()
 
-    def _create_mock_pdf(self, transactions: list[dict]) -> Path:
+    def _create_mock_pdf(
+        self,
+        transactions: list[dict[str, Any]],
+    ) -> Path:
         """Create a mock PDF file with transaction data.
 
         Args:
@@ -1454,7 +1470,7 @@ class TestBankStatementParser(TestCase):
 class TestProcessBankStatementTask(TestCase):
     """Test cases for Celery task processing bank statements."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -1471,7 +1487,7 @@ class TestProcessBankStatementTask(TestCase):
     def _generate_random_transactions(
         self,
         count: int = 10,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Generate random transaction data for testing.
 
         Args:
@@ -1649,7 +1665,7 @@ class TestProcessBankStatementTask(TestCase):
 class TestBankStatementUploadModel(TestCase):
     """Test cases for BankStatementUpload model."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -1968,7 +1984,7 @@ class TestBankStatementParserMethods(TestCase):
 class TestBankStatementFormValidation(TestCase):
     """Test cases for BankStatementUploadForm validation."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -2070,7 +2086,7 @@ class TestBankStatementFormValidation(TestCase):
 class TestBankStatementIntegration(TestCase):
     """Integration tests for bank statement processing."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -2706,7 +2722,7 @@ class TestBankStatementParserAdvanced(TestCase):
 class TestBankStatementProcessIntegration(TestCase):
     """Integration tests for process_bank_statement function."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -3191,7 +3207,7 @@ class TestBankStatementProcessIntegration(TestCase):
 class TestBankStatementEdgeCases(TestCase):
     """Edge case tests for bank statement processing."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -3517,7 +3533,7 @@ class TestRaiffeisenBankParser(TestCase):
         self.addCleanup(pdf_path.unlink)
         return _RaiffeisenBankParser(pdf_path)
 
-    def _make_row(self, cols: list) -> pd.Series:
+    def _make_row(self, cols: list[Any]) -> pd.Series:
         return pd.Series(cols)
 
     def test_income_from_col3(self) -> None:
@@ -3535,7 +3551,8 @@ class TestRaiffeisenBankParser(TestCase):
             ],
         )
         amount = parser._extract_amount_from_row(row)
-        self.assertIsNotNone(amount)
+        if amount is None:
+            self.fail('Expected an income amount')
         self.assertEqual(amount, Decimal('1500.00'))
         self.assertGreater(amount, 0)
 
@@ -3554,7 +3571,8 @@ class TestRaiffeisenBankParser(TestCase):
             ],
         )
         amount = parser._extract_amount_from_row(row)
-        self.assertIsNotNone(amount)
+        if amount is None:
+            self.fail('Expected an expense amount')
         self.assertEqual(amount, Decimal('-13.20'))
         self.assertLess(amount, 0)
 
@@ -3623,7 +3641,7 @@ class TestSberbankParser(TestCase):
         self.addCleanup(pdf_path.unlink)
         return _SberbankParser(pdf_path)
 
-    def _make_df(self, rows: list) -> pd.DataFrame:
+    def _make_df(self, rows: list[list[Any]]) -> pd.DataFrame:
         return pd.DataFrame(rows)
 
     def test_is_transaction_table_detects_header(self) -> None:
@@ -3944,7 +3962,7 @@ class TestStatementParseResult(TestCase):
 class TestProcessBankStatementTaskIntegration(TestCase):
     """Интеграционные тесты задачи Celery с classifier и полями сверки."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         self.user: User = User.objects.get(pk=1)
@@ -4665,7 +4683,7 @@ class TestProcessBankStatementTaskIntegration(TestCase):
 class TestOzonBankStatement(TestCase):
     """Tests for the Ozon Bank cash-flow statement format."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures: list[str] = ['users.yaml']
 
     def setUp(self) -> None:
         self.user: User = User.objects.get(pk=1)

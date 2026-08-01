@@ -5,9 +5,16 @@ Transaction, Receipt, or TransferMoneyLog is saved or deleted.
 """
 
 from django.db import transaction
+from django.db.models import Model
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
+from hasta_la_vista_money.receipts.models import Receipt
+from hasta_la_vista_money.transactions.models import Category, Transaction
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
 )
@@ -22,9 +29,9 @@ def _invalidate_on_commit(user_id: int) -> None:
 @receiver(post_save, sender='transactions.Transaction')
 @receiver(post_delete, sender='transactions.Transaction')
 def invalidate_cache_on_transaction_change(
-    sender,
-    instance,
-    **kwargs,
+    sender: type[Model],
+    instance: Transaction,
+    **kwargs: object,
 ) -> None:
     del sender, kwargs
     _invalidate_on_commit(instance.user_id)
@@ -33,9 +40,9 @@ def invalidate_cache_on_transaction_change(
 @receiver(post_save, sender='receipts.Receipt')
 @receiver(post_delete, sender='receipts.Receipt')
 def invalidate_cache_on_receipt_change(
-    sender,
-    instance,
-    **kwargs,
+    sender: type[Model],
+    instance: Receipt,
+    **kwargs: object,
 ) -> None:
     del sender, kwargs
     _invalidate_on_commit(instance.user_id)
@@ -44,9 +51,9 @@ def invalidate_cache_on_receipt_change(
 @receiver(post_save, sender='finance_account.TransferMoneyLog')
 @receiver(post_delete, sender='finance_account.TransferMoneyLog')
 def invalidate_cache_on_transfer_change(
-    sender,
-    instance,
-    **kwargs,
+    sender: type[Model],
+    instance: TransferMoneyLog,
+    **kwargs: object,
 ) -> None:
     del sender, kwargs
     _invalidate_on_commit(instance.user_id)
@@ -55,9 +62,9 @@ def invalidate_cache_on_transfer_change(
 @receiver(post_save, sender='transactions.Category')
 @receiver(post_delete, sender='transactions.Category')
 def invalidate_cache_on_category_change(
-    sender,
-    instance,
-    **kwargs,
+    sender: type[Model],
+    instance: Category,
+    **kwargs: object,
 ) -> None:
     del sender, kwargs
     _invalidate_on_commit(instance.user_id)
@@ -66,9 +73,9 @@ def invalidate_cache_on_category_change(
 @receiver(post_save, sender='finance_account.Account')
 @receiver(post_delete, sender='finance_account.Account')
 def invalidate_cache_on_account_change(
-    sender,
-    instance,
-    **kwargs,
+    sender: type[Model],
+    instance: Account,
+    **kwargs: object,
 ) -> None:
     del sender, kwargs
     _invalidate_on_commit(instance.user_id)

@@ -17,12 +17,12 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import camelot
 from django.db import transaction
 from django.utils import timezone
-from pdfminer.high_level import extract_text  # type: ignore[import-untyped]
+from pdfminer.high_level import extract_text
 from pdfminer.pdfparser import PDFSyntaxError
 
 from hasta_la_vista_money.finance_account.services.balance_service import (
@@ -154,11 +154,14 @@ class BaseBankStatementParser(ABC):
 
     def _read_tables(self, pages: str = 'all') -> list[Any]:
         """Read all tables from the PDF using camelot stream mode."""
-        return camelot.read_pdf(  # type: ignore[no-any-return]
-            str(self.pdf_path),
-            flavor='stream',
-            pages=pages,
-            suppress_stdout=True,
+        return cast(
+            'list[Any]',
+            camelot.read_pdf(  # type: ignore[attr-defined]
+                str(self.pdf_path),
+                flavor='stream',
+                pages=pages,
+                suppress_stdout=True,
+            ),
         )
 
     def _extract_amount_from_column(self, text: str) -> Decimal | None:
@@ -655,7 +658,7 @@ class _SberbankParser(BaseBankStatementParser):
           col[2]=balance (happens when PDF columns are merged, e.g. on
           last page)
         """
-        transactions = []
+        transactions: list[dict[str, Any]] = []
         num_cols = len(df.columns)
         merged_col = num_cols == MIN_SBERBANK_COLUMNS
         data_start = self._find_data_start_row(df)

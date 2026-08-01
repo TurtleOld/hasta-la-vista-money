@@ -18,10 +18,6 @@ from rest_framework.views import APIView
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
-from hasta_la_vista_money.core.mixins import (
-    FormErrorHandlingMixin,
-    UserAuthMixin,
-)
 from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import (
     get_groups_not_for_user,
@@ -65,7 +61,7 @@ from hasta_la_vista_money.users.services.groups import (
         ),
     },
 )
-class UserGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
+class UserGroupsAPIView(APIView):
     """API view for getting user groups.
 
     Returns list of groups that the specified user belongs to.
@@ -139,7 +135,7 @@ class UserGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         ),
     },
 )
-class AvailableGroupsAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
+class AvailableGroupsAPIView(APIView):
     """API view for getting available groups for user.
 
     Returns list of groups that the specified user does not belong to.

@@ -279,9 +279,13 @@ def get_drill_down_data(
             'level': 0,
         }
 
+    if not category_id.isdigit():
+        return {'error': 'Категория не найдена', 'data': []}
+    category_pk = int(category_id)
+
     category = Category.objects.filter(
         user=user,
-        id=category_id,
+        id=category_pk,
         type=type_value,
     ).first()
 
@@ -294,7 +298,7 @@ def get_drill_down_data(
             type=type_value,
             date__gte=month_start_dt,
             date__lte=month_end_dt,
-            category__parent_category_id=category_id,
+            category__parent_category_id=category_pk,
         )
         .values('category__id', 'category__name')
         .annotate(total=Sum('amount'))
