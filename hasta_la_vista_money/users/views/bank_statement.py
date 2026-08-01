@@ -316,8 +316,19 @@ class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
                 cast('User', request.user).pk,
                 self._candidate_id(request),
             )
-        except InvalidReconciliationDecisionError:
-            return HttpResponse(status=400)
+        except InvalidReconciliationDecisionError as error:
+            if str(error) != 'candidate':
+                return HttpResponse(status=400)
+            messages.error(
+                request,
+                _('Выберите учтённую операцию перед подтверждением.'),
+            )
+            return redirect(
+                reverse(
+                    'users:bank_statement_reconciliation',
+                    args=[upload_id],
+                ),
+            )
         except ReconciliationDecisionConflictError:
             return HttpResponse(status=409)
         except ReconciliationExpiredError:

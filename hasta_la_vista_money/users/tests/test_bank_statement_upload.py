@@ -551,6 +551,10 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertContains(response, 'Транспорт')
         self.assertContains(response, 'Расход')
         self.assertContains(response, 'Такси по городу')
+        self.assertContains(
+            response,
+            f'value="{self.row.candidates.get().pk}" checked required',
+        )
 
     def test_linked_decision_is_idempotent_and_keeps_balance(self) -> None:
         url = reverse(
@@ -578,6 +582,32 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(Transaction.objects.count(), 1)
         self.assertEqual(self.upload.linked_count, 1)
         self.assertEqual(self.upload.awaiting_decision_count, 0)
+
+    def test_multiple_candidates_are_not_preselected(self) -> None:
+        second = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=self.candidate.amount,
+            date=self.candidate.date,
+        )
+        BankStatementCandidate.objects.create(
+            row=self.row,
+            transaction=second,
+            description='Второй кандидат',
+            rank=1,
+        )
+
+        response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'checked required')
 
     def test_new_decision_is_idempotent_and_changes_balance_once(self) -> None:
         url = reverse(
@@ -1105,15 +1135,31 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(self.row.decision, BankStatementRow.Decision.LINKED)
         self.assertEqual(self.account.balance, Decimal('1000.00'))
 
-    def test_linked_decision_requires_explicit_candidate(self) -> None:
+    def test_linked_decision_without_candidate_returns_to_reconciliation(
+        self,
+    ) -> None:
         url = reverse(
             'users:bank_statement_reconciliation_decide',
             args=[self.upload.pk, self.row.pk],
         )
 
-        response = self.client.post(url, {'decision': 'linked'})
+        response = self.client.post(
+            url,
+            {'decision': 'linked'},
+            follow=True,
+        )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertRedirects(
+            response,
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+        self.assertContains(
+            response,
+            'Выберите учтённую операцию перед подтверждением.',
+        )
         self.row.refresh_from_db()
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
 
