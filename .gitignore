@@ -244,3 +244,5 @@ uv.lock
 .codegraph/
 
 docs/superpowers/**
+
+kilo.jsonc
