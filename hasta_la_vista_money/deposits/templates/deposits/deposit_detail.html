@@ -27,6 +27,7 @@
             <div class="accounts-panel-hd"><h2>{% translate 'Условия текущего срока' %}</h2></div>
             <div class="accounts-list">
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Годовая ставка' %}</div><div class="accounts-row-name">{{ rate.annual_rate }}%</div></div></div></div>
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Тип ставки' %}</div><div class="accounts-row-name">{{ term.get_rate_kind_display }}</div></div></div></div>
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Срок' %}</div><div class="accounts-row-name">{{ term.opened_on|date:'d.m.Y' }} — {{ term.matures_on|date:'d.m.Y' }}</div></div></div></div>
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Состояние' %}</div><div class="accounts-row-name">{{ term.state_label }}</div></div></div></div>
             </div>

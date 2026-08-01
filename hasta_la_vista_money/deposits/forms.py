@@ -5,7 +5,10 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.deposits.models import DepositPrincipalEvent
+from hasta_la_vista_money.deposits.models import (
+    DepositPrincipalEvent,
+    DepositTerm,
+)
 from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_CHOICES,
     BANK_DEFAULT,
@@ -34,6 +37,11 @@ class CreateDepositForm(forms.Form):
     opening_method = forms.ChoiceField(
         choices=DepositPrincipalEvent.Type.choices,
         label=_('Как начать учёт'),
+        widget=forms.RadioSelect,
+    )
+    rate_kind = forms.ChoiceField(
+        choices=DepositTerm.RateKind.choices,
+        label=_('Тип ставки'),
         widget=forms.RadioSelect,
     )
     name = forms.CharField(
@@ -128,3 +136,33 @@ class CreateDepositForm(forms.Form):
                 _('Укажите дату начала учёта вклада.'),
             )
         return cleaned_data
+
+
+class AddFloatingRatePeriodForm(forms.Form):
+    starts_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата начала действия ставки'),
+    )
+    annual_rate = forms.DecimalField(
+        min_value=constants.MIN_ANNUAL_RATE,
+        max_digits=6,
+        decimal_places=2,
+        label=_('Новая годовая ставка, %'),
+    )
+    note = forms.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        label=_('Пояснение к изменению ставки'),
+        help_text=_(
+            'Например: «по договору с банком» или «КС ЦБ РФ + 2%». '
+            'Без привязки к конкретному внешнему источнику.',
+        ),
+    )
+
+    def clean_note(self) -> str:
+        note = str(self.cleaned_data['note']).strip()
+        if not note:
+            raise ValidationError(
+                _('Укажите пояснение к изменению ставки.'),
+            )
+        return note
