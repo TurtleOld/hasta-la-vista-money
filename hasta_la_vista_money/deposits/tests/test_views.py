@@ -243,3 +243,36 @@ class DepositAddRatePeriodViewSmokeTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+
+class DepositDetailFloatingRateDisplayTests(TestCase):
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.client.force_login(self.user)
+
+    def test_undefined_future_rate_is_shown_explicitly(self) -> None:
+        """A floating term whose last rate period has already ended must
+        show the rate as undefined, not silently continue the old rate."""
+        service = ApplicationContainer().deposits.deposit_service()
+        opened_on = timezone.localdate() - timedelta(days=60)
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Вклад с истёкшим периодом',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('20000.00'),
+                opened_on=opened_on,
+                matures_on=timezone.localdate() + timedelta(days=200),
+                annual_rate=Decimal('9.00'),
+                rate_kind=DepositTerm.RateKind.FLOATING,
+            ),
+        )
+        term = deposit.current_term
+        period = term.rate_periods.get()
+        period.ends_on = timezone.localdate() - timedelta(days=1)
+        period.save(update_fields=['ends_on'])
+
+        response = self.client.get(deposit.get_absolute_url())
+
+        self.assertContains(response, 'не определена')
