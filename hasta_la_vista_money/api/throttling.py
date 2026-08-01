@@ -4,6 +4,8 @@ This module provides throttling classes for controlling API request rates,
 including login rate limiting to prevent brute force attacks.
 """
 
+from typing import cast
+
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework.throttling import (
@@ -27,9 +29,9 @@ class LoginRateThrottle(UserRateThrottle):
         if rate:
             return rate
 
-        throttle_rates = settings.REST_FRAMEWORK.get(
-            'DEFAULT_THROTTLE_RATES',
-            {},
+        throttle_rates = cast(
+            'dict[str, str]',
+            settings.REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {}),
         )
         try:
             return throttle_rates[self.scope]

@@ -6,6 +6,7 @@ including account balances, expenses, income, and categories.
 
 from datetime import datetime, time
 from decimal import Decimal
+from typing import cast
 
 import structlog
 from django.core.cache import cache
@@ -22,7 +23,6 @@ from hasta_la_vista_money.users.repositories.statistics_repository import (
 from hasta_la_vista_money.users.utils.date_utils import (
     get_last_month_start_end,
     get_month_start_end,
-    to_decimal,
 )
 
 logger = structlog.get_logger(__name__)
@@ -96,11 +96,6 @@ class UserStatisticsService:
             ValueError: If user is invalid.
             DatabaseError: On database errors.
         """
-        if not user or not hasattr(user, 'id'):
-            error_msg = 'Invalid user provided to get_user_statistics'
-            logger.error(error_msg, user_id=getattr(user, 'id', None))
-            raise ValueError(error_msg)
-
         try:
             cache_key = self._get_cache_key(user)
             cached_statistics = cache.get(cache_key)
@@ -111,7 +106,7 @@ class UserStatisticsService:
                     user_id=user.id,
                     cache_key=cache_key,
                 )
-                return cached_statistics
+                return cast('UserStatistics', cached_statistics)
 
             statistics = self._calculate_statistics(user)
             cache.set(cache_key, statistics, timeout=self.cache_timeout)
@@ -170,18 +165,18 @@ class UserStatisticsService:
         )
 
         return {
-            'total_balance': to_decimal(accounts_stats['total_balance']),
+            'total_balance': Decimal(accounts_stats['total_balance']),
             'accounts_count': int(accounts_stats['accounts_count']),
-            'current_month_expenses': to_decimal(expenses_stats['current']),
-            'current_month_income': to_decimal(income_stats['current']),
-            'last_month_expenses': to_decimal(expenses_stats['last_month']),
-            'last_month_income': to_decimal(income_stats['last_month']),
+            'current_month_expenses': expenses_stats['current'],
+            'current_month_income': income_stats['current'],
+            'last_month_expenses': expenses_stats['last_month'],
+            'last_month_income': income_stats['last_month'],
             'recent_expenses': list(recent_transactions['expenses']),
             'recent_incomes': list(recent_transactions['incomes']),
             'receipts_count': receipts_count,
             'top_expense_categories': list(top_categories),
-            'monthly_savings': to_decimal(monthly_savings),
-            'last_month_savings': to_decimal(last_month_savings),
+            'monthly_savings': monthly_savings,
+            'last_month_savings': last_month_savings,
         }
 
     def _calculate_period_dates(
@@ -323,8 +318,8 @@ class UserStatisticsService:
         )
 
         return {
-            'expenses': recent_expenses,
-            'incomes': recent_incomes,
+            'expenses': list(recent_expenses),
+            'incomes': list(recent_incomes),
         }
 
     def _get_top_categories(

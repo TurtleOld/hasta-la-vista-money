@@ -35,9 +35,9 @@ class ExpenseDataRowDict(TypedDict):
 
     category: str
     category_id: int
-    fact: list[int]
-    plan: list[int]
-    diff: list[int]
+    fact: list[Decimal]
+    plan: list[Decimal]
+    diff: list[Decimal]
     percent: list[float | None]
 
 
@@ -89,8 +89,8 @@ class AggregateBudgetDataDict(TypedDict):
 
     months: list[date]
     expense_data: list[ExpenseDataRowDict]
-    total_fact_expense: list[int]
-    total_plan_expense: list[int]
+    total_fact_expense: list[Decimal]
+    total_plan_expense: list[Decimal]
     income_data: list[IncomeDataRowDict]
     total_fact_income: list[Decimal]
     total_plan_income: list[Decimal]
@@ -103,8 +103,8 @@ class AggregateExpenseTableDict(TypedDict):
 
     months: list[date]
     expense_data: list[ExpenseDataRowDict]
-    total_fact_expense: list[int]
-    total_plan_expense: list[int]
+    total_fact_expense: list[Decimal]
+    total_plan_expense: list[Decimal]
 
 
 class AggregateIncomeTableDict(TypedDict):
@@ -727,13 +727,13 @@ def _validate_budget_inputs(
 
 
 def _calculate_expense_totals(
-    expense_fact_map: dict[int, dict[date, int]],
-    expense_plan_map: dict[int, dict[date, int]],
+    expense_fact_map: dict[int, dict[date, Decimal]],
+    expense_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     expense_categories: list[Category],
-) -> tuple[list[int], list[int]]:
-    total_fact_expense = [0] * len(months)
-    total_plan_expense = [0] * len(months)
+) -> tuple[list[Decimal], list[Decimal]]:
+    total_fact_expense = [Decimal(0)] * len(months)
+    total_plan_expense = [Decimal(0)] * len(months)
     for i, m in enumerate(months):
         for cat in expense_categories:
             total_fact_expense[i] += expense_fact_map[cat.pk][m]
@@ -742,8 +742,8 @@ def _calculate_expense_totals(
 
 
 def _build_expense_data(
-    expense_fact_map: dict[int, dict[date, int]],
-    expense_plan_map: dict[int, dict[date, int]],
+    expense_fact_map: dict[int, dict[date, Decimal]],
+    expense_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     expense_categories: list[Category],
     include_owner: bool = False,
@@ -826,8 +826,8 @@ def _build_chart_data(
     months: list[date],
     total_fact_income: list[Decimal],
     total_plan_income: list[Decimal],
-    total_fact_expense: list[int],
-    total_plan_expense: list[int],
+    total_fact_expense: list[Decimal],
+    total_plan_expense: list[Decimal],
 ) -> BudgetChartDataDict:
     chart_labels = [m.strftime('%b %Y') for m in months]
     chart_plan_execution_income: list[float] = []
@@ -879,15 +879,15 @@ def _validate_expense_table_inputs(
 
 
 def _build_expense_table_data(
-    expense_fact_map: dict[int, dict[date, int]],
-    expense_plan_map: dict[int, dict[date, int]],
+    expense_fact_map: dict[int, dict[date, Decimal]],
+    expense_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     expense_categories: list[Category],
     include_owner: bool = False,
-) -> tuple[list[ExpenseDataRowDict], list[int], list[int]]:
+) -> tuple[list[ExpenseDataRowDict], list[Decimal], list[Decimal]]:
     expense_data = []
-    total_fact_expense = [0] * len(months)
-    total_plan_expense = [0] * len(months)
+    total_fact_expense = [Decimal(0)] * len(months)
+    total_plan_expense = [Decimal(0)] * len(months)
 
     for cat in expense_categories:
         row: ExpenseDataRowDict = {
@@ -1013,8 +1013,8 @@ def _build_income_api_data(
 
 
 def _build_expense_api_data(
-    expense_fact_map: dict[int, dict[date, int]],
-    expense_plan_map: dict[int, dict[date, int]],
+    expense_fact_map: dict[int, dict[date, Decimal]],
+    expense_plan_map: dict[int, dict[date, Decimal]],
     months: list[date],
     expense_categories: list[Category],
     include_owner: bool = False,

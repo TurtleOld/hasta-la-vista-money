@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 
+from django.forms import ModelChoiceField
 from django.test import TestCase
 from django.utils import timezone
 
@@ -196,7 +197,12 @@ class TestTransferMoneyAccountForm(TestCase):
             account_repository=self.account_repository,
         )
 
-        from_account_queryset = form.fields['from_account'].queryset
+        from_account_field = form.fields['from_account']
+        if not isinstance(from_account_field, ModelChoiceField):
+            self.fail('Expected a model choice field')
+        from_account_queryset = from_account_field.queryset
+        if from_account_queryset is None:
+            self.fail('Expected a queryset')
         self.assertEqual(
             from_account_queryset.count(),
             2,

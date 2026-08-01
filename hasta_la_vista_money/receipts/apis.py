@@ -34,10 +34,6 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
-from hasta_la_vista_money.core.mixins import (
-    FormErrorHandlingMixin,
-    UserAuthMixin,
-)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.core.types import RequestWithContainer
@@ -352,23 +348,13 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
             return self._handle_receipt_creation(request_data)
         except DjangoValidationError as error:
             error_message = str(error)
-            if hasattr(error, 'message_dict'):
-                messages = []
+            if error.message_dict:
+                messages: list[str] = []
                 for errors in error.message_dict.values():
-                    if isinstance(errors, list):
-                        messages.extend(errors)
-                    else:
-                        messages.append(str(errors))
+                    messages.extend(str(message) for message in errors)
                 error_message = '; '.join(messages)
-            elif hasattr(error, 'messages') and error.messages:
-                if isinstance(error.messages, list):
-                    error_message = '; '.join(
-                        str(msg) for msg in error.messages
-                    )
-                else:
-                    error_message = '; '.join(error.messages)
-            elif isinstance(error, DjangoValidationError):
-                error_message = str(error)
+            elif error.messages:
+                error_message = '; '.join(str(msg) for msg in error.messages)
             return self._error_response(error_message)
         except (ValueError, TypeError, decimal.InvalidOperation):
             logger.exception(
@@ -520,7 +506,7 @@ class ReceiptCreateAPIView(ListCreateAPIView[Receipt]):
         ),
     },
 )
-class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
+class ReceiptsByGroupAPIView(APIView):
     """API view for retrieving receipts by group.
 
     Provides an endpoint to get a list of receipts filtered by user group.
@@ -589,9 +575,7 @@ class ReceiptsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         )
 
         paginator = self.pagination_class()
-        paginated_receipts: QuerySet[Receipt, Receipt] | None = (
-            paginator.paginate_queryset(receipts, request)  # type: ignore[arg-type]
-        )
+        paginated_receipts = paginator.paginate_queryset(receipts, request)
 
         if paginated_receipts is None:
             receipt_serializer = ReceiptSerializer(receipts, many=True)

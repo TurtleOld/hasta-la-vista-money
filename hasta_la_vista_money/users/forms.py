@@ -194,6 +194,8 @@ class UpdateUserForm(ModelForm[User]):
 class GroupCreateForm(ModelForm[Group]):
     """Form for creating new user groups."""
 
+    current_user: User | None = None
+
     class Meta:
         model: ClassVar[type[Group]] = Group
         fields: ClassVar[list[str]] = ['name']
@@ -227,7 +229,10 @@ class GroupDeleteForm(forms.Form):
                 user=current_user,
                 role=FamilyGroupMembership.Role.OWNER,
             ).values_list('group_id', flat=True)
-            self.fields['group'].queryset = Group.objects.filter(
+            group_field = self.fields['group']
+            if not isinstance(group_field, forms.ModelChoiceField):
+                return
+            group_field.queryset = Group.objects.filter(
                 id__in=owner_group_ids,
             ).exclude(name='Семья')
 

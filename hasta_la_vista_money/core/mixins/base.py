@@ -66,7 +66,7 @@ class EntityListViewMixin:
             FilterSet: Applied filter.
         """
         request = self.get_request_with_container()
-        return filterset_class(
+        return filterset_class(  # type: ignore[call-arg]
             self.request.GET,
             queryset=base_queryset,
             user=request.user,
@@ -143,6 +143,8 @@ class UserAuthMixin:
     isinstance(request.user, User) check in every view method.
     """
 
+    request: Any
+
     def dispatch(
         self,
         request: HttpRequest | DRFRequest,
@@ -175,7 +177,7 @@ class UserAuthMixin:
         Raises:
             TypeError: If request.user is not an instance of User.
         """
-        request = self.request
+        request = cast('HttpRequest | DRFRequest', self.request)
         if not isinstance(request.user, User):
             raise TypeError('User must be authenticated')
         return request.user
@@ -187,6 +189,8 @@ class FormErrorHandlingMixin:
     Provides common methods for handling errors when working with forms,
     eliminating code duplication for exception handling.
     """
+
+    request: Any
 
     def handle_form_error_with_message(
         self,
@@ -210,7 +214,7 @@ class FormErrorHandlingMixin:
             error=str(error),
             **kwargs,
         )
-        request = self.request
+        request = cast('HttpRequest', self.request)
         if isinstance(request, HttpRequest):
             messages.error(request, _(error_message))
         return cast(

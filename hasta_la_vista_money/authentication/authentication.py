@@ -70,13 +70,13 @@ class CookieJWTAuthentication(JWTAuthentication):
         request: Request,
     ) -> tuple[User, Token] | None:
         logger = structlog.get_logger(__name__)
-        header = self.get_header(request)
+        header = cast('bytes | None', self.get_header(request))
         if header is None:
             auth_header_raw = request.META.get(
                 'HTTP_AUTHORIZATION',
             ) or request.META.get('Authorization')
             if auth_header_raw and auth_header_raw.startswith('Bearer '):
-                header = auth_header_raw
+                header = auth_header_raw.encode('utf-8')
             else:
                 logger.warning(
                     'Authorization header not found by get_header',

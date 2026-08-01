@@ -1,11 +1,13 @@
 """System health and readiness views."""
 
 from pathlib import Path
+from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.staticfiles import finders
 from django.core.cache import cache
 from django.db import connection
+from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -15,6 +17,7 @@ from django.views.generic import ListView, TemplateView
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.system.models import AuditLog
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
+from hasta_la_vista_money.users.models import User
 
 
 @method_decorator(never_cache, name='dispatch')
@@ -61,7 +64,7 @@ class ReadinessCheckView(View):
         try:
             cache_key = 'readiness-check'
             cache.set(cache_key, 'ok', timeout=constants.THIRTY)
-            return cache.get(cache_key) == 'ok'
+            return bool(cache.get(cache_key) == 'ok')
         except Exception:
             return False
 
@@ -109,12 +112,14 @@ AUDITED_MODEL_CHOICES = [
 ]
 
 
-class AuditLogView(LoginRequiredMixin, ListView):
+class AuditLogView(LoginRequiredMixin, ListView[AuditLog]):
     template_name = 'system/auditlog.html'
     context_object_name = 'entries'
     paginate_by = AUDIT_PAGE_SIZE
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[AuditLog]:
+        if not isinstance(self.request.user, User):
+            raise TypeError('User must be authenticated')
         qs = AuditLog.objects.filter(
             user=self.request.user,
         ).select_related('user')
@@ -132,7 +137,10 @@ class AuditLogView(LoginRequiredMixin, ListView):
             qs = qs.filter(created_at__date__lte=date_to)
         return qs
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(
+        self,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         ctx = super().get_context_data(**kwargs)
         ctx['model_choices'] = AUDITED_MODEL_CHOICES
         ctx['action_choices'] = AuditLog.Action.choices

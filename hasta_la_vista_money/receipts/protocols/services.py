@@ -4,6 +4,7 @@ This module defines Protocol interfaces for receipt-related services,
 enabling dependency injection and type checking.
 """
 
+from collections.abc import Iterable
 from typing import Any, Protocol, runtime_checkable
 
 from django.forms import BaseFormSet
@@ -41,8 +42,9 @@ class ReceiptCreatorServiceProtocol(Protocol):
         user: User,
         account: Account,
         receipt_data: ReceiptCreateData,
-        seller_data: SellerCreateData,
-        products_data: list[dict[str, Any]] | None = None,
+        seller_data: SellerCreateData | None = None,
+        seller_id: int | None = None,
+        products_data: Iterable[dict[str, Any]] | None = None,
         manual: bool = False,
     ) -> Receipt: ...
 

@@ -4,7 +4,7 @@ This module provides test cases for UserStatisticsService including
 statistics retrieval and cache invalidation.
 """
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -31,7 +31,7 @@ class UserStatisticsServiceTest(TestCase):
     Tests user statistics retrieval, caching, and data structure validation.
     """
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures: list[str] = [
         'users.yaml',
         'finance_account.yaml',
         'receipt_product.yaml',

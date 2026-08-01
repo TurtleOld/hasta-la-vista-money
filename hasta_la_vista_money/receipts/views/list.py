@@ -241,7 +241,7 @@ class ReceiptView(BaseEntityFilterView, BaseView, EntityListViewMixin):
         context['group_querystring'] = group_querystring
         context['pending_receipts'] = (
             PendingReceipt.objects.filter(
-                user=request.user,
+                user=user,
                 expires_at__gt=timezone.now(),
             )
             .select_related('account')

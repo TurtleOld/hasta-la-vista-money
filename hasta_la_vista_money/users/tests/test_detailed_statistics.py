@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -13,6 +13,8 @@ from hasta_la_vista_money.users.services.cache import (
     get_user_detailed_statistics_cache_key,
 )
 from hasta_la_vista_money.users.services.detailed_statistics import (
+    CardMonthDict,
+    PaymentItemDict,
     StatisticsFilters,
     UserDetailedStatisticsDict,
     _apply_payments_to_months,
@@ -83,27 +85,30 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
             self.user.pk,
             stats_filter.cache_suffix,
         )
-        cached_stats: UserDetailedStatisticsDict = {
-            'months_data': [],
-            'top_expense_categories': [],
-            'top_income_categories': [],
-            'receipt_info_by_month': [],
-            'income_expense': [],
-            'transfer_money_log': [],
-            'accounts': [],
-            'balances_by_currency': {},
-            'delta_by_currency': {},
-            'chart_combined': {},
-            'user': self.user,
-            'credit_cards_data': [],
-            'statistics_filter': stats_filter,
-            'statistics_period_choices': [],
-            'statistics_account_choices': [],
-            'statistics_currency_choices': [],
-            'statistics_category_choices': [],
-            'statistics_member_choices': [],
-            'statistics_members': [self.user],
-        }
+        cached_stats = cast(
+            'UserDetailedStatisticsDict',
+            {
+                'months_data': [],
+                'top_expense_categories': [],
+                'top_income_categories': [],
+                'receipt_info_by_month': [],
+                'income_expense': [],
+                'transfer_money_log': [],
+                'accounts': [],
+                'balances_by_currency': {},
+                'delta_by_currency': {},
+                'chart_combined': {},
+                'user': self.user,
+                'credit_cards_data': [],
+                'statistics_filter': stats_filter,
+                'statistics_period_choices': [],
+                'statistics_account_choices': [],
+                'statistics_currency_choices': [],
+                'statistics_category_choices': [],
+                'statistics_member_choices': [],
+                'statistics_members': [self.user],
+            },
+        )
         cache.set(cache_key, cached_stats, 600)
 
         stats = get_user_detailed_statistics(
@@ -157,7 +162,7 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         )
 
         filtered_receipts = list(
-            filtered_stats['receipt_page'].paginator.object_list
+            filtered_stats['receipt_page'].paginator.object_list,
         )
         self.assertTrue(filtered_receipts)
         for receipt in filtered_receipts:
@@ -212,7 +217,8 @@ class GetUserDetailedStatisticsServiceTest(TestCase):
         self.assertContains(response, 'id="statistics-content"')
         self.assertContains(response, 'id="statistics-results"')
         self.assertContains(
-            response, 'class="statistics-panel statistics-filter-form"'
+            response,
+            'class="statistics-panel statistics-filter-form"',
         )
         self.assertContains(response, 'hx-target="#statistics-content"')
         self.assertContains(response, 'name="operations_search"')
@@ -228,7 +234,7 @@ class CreditCardPaymentScheduleTest(TestCase):
         grace_end = timezone.make_aware(
             datetime.combine(date(2026, 8, 28), time.max),
         )
-        months = [
+        months: list[CardMonthDict] = [
             {
                 'month': '05.2026',
                 'purchase_start': timezone.now(),
@@ -242,7 +248,7 @@ class CreditCardPaymentScheduleTest(TestCase):
                 'is_paid': False,
             },
         ]
-        payments = [
+        payments: list[PaymentItemDict] = [
             {
                 'amount': Decimal('10000.00'),
                 'date': grace_end + timedelta(days=1),

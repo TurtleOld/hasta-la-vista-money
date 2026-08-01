@@ -25,7 +25,12 @@ TEST_PASSWORD = 'pwd123456!'  # nosec B105
 
 
 class CategoryRepositoryTest(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures = ['users.yaml']
+    user: ClassVar[User]
+    repo: ClassVar[CategoryRepository]
+    income_root: ClassVar[Category]
+    expense_root: ClassVar[Category]
+    expense_child: ClassVar[Category]
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -99,10 +104,18 @@ class CategoryRepositoryTest(TestCase):
 
 
 class TransactionRepositoryTest(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
+    user: ClassVar[User]
+    other_user: ClassVar[User]
+    account: ClassVar[Account]
+    repo: ClassVar[TransactionRepository]
+    income_category: ClassVar[Category]
+    expense_category: ClassVar[Category]
+    income_jan: ClassVar[Transaction]
+    expense_feb: ClassVar[Transaction]
 
     @classmethod
     def setUpTestData(cls) -> None:

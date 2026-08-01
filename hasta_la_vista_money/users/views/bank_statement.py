@@ -1,32 +1,65 @@
 import logging
 import sys
+from decimal import Decimal
 from hashlib import sha256
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.paginator import Paginator
+from django.db.models import QuerySet
 from django.http import (
     HttpRequest,
     HttpResponse,
     JsonResponse,
 )
-from django.urls import reverse_lazy
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django.views.generic import DetailView
 from django.views.generic.edit import FormView
 
+from hasta_la_vista_money.constants import (
+    STATEMENT_RECONCILIATION_PAGE_SIZE,
+)
 from hasta_la_vista_money.users.forms import (
     BankStatementUploadForm,
 )
 from hasta_la_vista_money.users.models import (
+    BankStatementRow,
     BankStatementUpload,
     User,
 )
+from hasta_la_vista_money.users.protocols.services import (
+    BankStatementReconciliationServiceProtocol,
+)
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    InvalidReconciliationDecisionError,
+    ReconciliationDecisionConflictError,
+    ReconciliationExpiredError,
+    StaleStatementCandidateError,
+)
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.core.types import RequestWithContainer
 
 
 def _views_module() -> Any:
     return sys.modules['hasta_la_vista_money.users.views']
+
+
+def _reconciliation_service(
+    request: HttpRequest,
+) -> BankStatementReconciliationServiceProtocol:
+    """Resolve statement reconciliation through the request container."""
+    request_with_container = cast('RequestWithContainer', request)
+    return cast(
+        'BankStatementReconciliationServiceProtocol',
+        request_with_container.container.users.bank_statement_reconciliation_service(),
+    )
 
 
 class BankStatementUploadView(
@@ -115,6 +148,9 @@ class BankStatementUploadView(
         """Add extra context data."""
         context = super().get_context_data(**kwargs)
         user = cast('User', self.request.user)
+        context['upload_history'] = _reconciliation_service(
+            self.request,
+        ).upload_history(user.pk)
         # Check if there's an ongoing upload
         last_upload_id = self.request.session.get('last_upload_id')
         if last_upload_id:
@@ -127,10 +163,14 @@ class BankStatementUploadView(
                 if upload.status in [
                     BankStatementUpload.Status.PENDING,
                     BankStatementUpload.Status.PROCESSING,
+                    BankStatementUpload.Status.AWAITING_CONFIRMATION,
                 ]:
                     context['show_progress'] = True
                     context['upload_id'] = upload.pk
-                elif upload.status == BankStatementUpload.Status.COMPLETED:
+                elif upload.status in {
+                    BankStatementUpload.Status.COMPLETED,
+                    BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+                }:
                     # Clear session if completed
                     self.request.session.pop('last_upload_id', None)
             except BankStatementUpload.DoesNotExist:
@@ -164,10 +204,11 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
         try:
             upload = BankStatementUpload.objects.get(
                 id=upload_id,
-                user=request.user,
+                user=cast('User', request.user),
+                account__user=cast('User', request.user),
             )
 
-            def _decimal_or_none(value):
+            def _decimal_or_none(value: Decimal | None) -> str | None:
                 return str(value) if value is not None else None
 
             return JsonResponse(
@@ -189,6 +230,22 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                     'balance_discrepancy': _decimal_or_none(
                         upload.balance_discrepancy,
                     ),
+                    'reconciliation_url': (
+                        reverse(
+                            'users:bank_statement_reconciliation',
+                            args=[upload.pk],
+                        )
+                        if upload.status
+                        == BankStatementUpload.Status.AWAITING_CONFIRMATION
+                        else None
+                    ),
+                    'outcomes': {
+                        'imported': upload.imported_count,
+                        'linked': upload.linked_count,
+                        'awaiting_decision': (upload.awaiting_decision_count),
+                        'expired': upload.expired_count,
+                        'failed': upload.failed_count,
+                    },
                 },
             )
 
@@ -197,3 +254,186 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                 {'error': 'Upload not found'},
                 status=404,
             )
+
+
+class BankStatementReconciliationView(
+    LoginRequiredMixin,
+    DetailView[BankStatementUpload],
+):
+    template_name = 'users/bank_statement_reconciliation.html'
+    context_object_name = 'upload'
+
+    def get_queryset(self) -> QuerySet[BankStatementUpload]:
+        user = cast('User', self.request.user)
+        return BankStatementUpload.objects.filter(
+            user=user,
+            account__user=user,
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        outcome = self.request.GET.get(
+            'outcome',
+            BankStatementRow.Decision.PENDING,
+        )
+        rows = _reconciliation_service(self.request).reconciliation_rows(
+            self.object,
+            outcome,
+        )
+        if outcome not in BankStatementRow.Decision.values:
+            outcome = BankStatementRow.Decision.PENDING
+        context['page_obj'] = Paginator(
+            rows,
+            STATEMENT_RECONCILIATION_PAGE_SIZE,
+        ).get_page(
+            self.request.GET.get('page'),
+        )
+        context['outcome'] = outcome
+        context['reconciliation_active'] = (
+            timezone.now() < self.object.expires_at
+        )
+        return context
+
+
+class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        row = get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=request.user,
+            upload__account__user=request.user,
+        )
+        try:
+            _reconciliation_service(request).decide(
+                row.pk,
+                request.POST.get('decision', ''),
+                cast('User', request.user).pk,
+                self._candidate_id(request),
+            )
+        except InvalidReconciliationDecisionError:
+            return HttpResponse(status=400)
+        except ReconciliationDecisionConflictError:
+            return HttpResponse(status=409)
+        except ReconciliationExpiredError:
+            return HttpResponse(status=410)
+        except StaleStatementCandidateError:
+            return self._stale_response(request, row)
+        return redirect(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[upload_id],
+            ),
+        )
+
+    def _candidate_id(self, request: HttpRequest) -> int | None:
+        value = request.POST.get('candidate')
+        return int(value) if value and value.isdigit() else None
+
+    def _stale_response(
+        self,
+        request: HttpRequest,
+        row: BankStatementRow,
+    ) -> JsonResponse:
+        candidates = _reconciliation_service(request).current_candidates(row)
+        return JsonResponse(
+            {'candidates': list(candidates.values_list('pk', flat=True))},
+            status=409,
+        )
+
+
+class BankStatementReconciliationBulkView(LoginRequiredMixin, View):
+    """Apply one reconciliation decision to selected rows independently."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+    ) -> JsonResponse:
+        """Return a separate outcome for every selected statement row."""
+        upload = get_object_or_404(
+            BankStatementUpload,
+            pk=upload_id,
+            user=request.user,
+            account__user=request.user,
+        )
+        decision = request.POST.get('decision', '')
+        if (
+            decision == BankStatementRow.Decision.NEW
+            and request.POST.get('confirm_risk') != 'true'
+        ):
+            return JsonResponse(
+                {'error': 'confirmation_required'},
+                status=400,
+            )
+        row_ids = [
+            int(value)
+            for value in request.POST.getlist('rows')
+            if value.isdigit()
+        ]
+        results = _reconciliation_service(request).bulk_decide(
+            row_ids,
+            decision,
+            cast('User', request.user).pk,
+            upload_id,
+        )
+        upload.refresh_from_db(
+            fields=[
+                'imported_count',
+                'linked_count',
+                'awaiting_decision_count',
+                'expired_count',
+                'failed_count',
+            ],
+        )
+        return JsonResponse(
+            {
+                'results': [result.as_dict() for result in results],
+                'outcomes': {
+                    'imported': upload.imported_count,
+                    'linked': upload.linked_count,
+                    'awaiting_decision': upload.awaiting_decision_count,
+                    'expired': upload.expired_count,
+                    'failed': upload.failed_count,
+                },
+            },
+        )
+
+
+class BankStatementReconciliationRevisionView(LoginRequiredMixin, View):
+    """Revise a linked statement row to a newly imported transaction."""
+
+    def post(
+        self,
+        request: HttpRequest,
+        upload_id: int,
+        row_id: int,
+    ) -> HttpResponse:
+        """Apply an owner-authorized linked-to-new revision."""
+        get_object_or_404(
+            BankStatementRow,
+            pk=row_id,
+            upload_id=upload_id,
+            upload__user=request.user,
+            upload__account__user=request.user,
+        )
+        try:
+            _reconciliation_service(request).revise_linked_to_new(
+                row_id,
+                cast('User', request.user).pk,
+            )
+        except ReconciliationExpiredError:
+            return HttpResponse(status=410)
+        except ReconciliationDecisionConflictError:
+            return HttpResponse(status=409)
+        return redirect(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[upload_id],
+            ),
+        )

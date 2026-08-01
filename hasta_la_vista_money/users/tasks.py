@@ -1,6 +1,10 @@
 """Celery tasks for user-related async operations."""
 
 import logging
+from datetime import datetime
+from decimal import Decimal
+from difflib import SequenceMatcher
+from typing import Any
 
 from celery import shared_task
 from django.db import transaction
@@ -14,19 +18,41 @@ from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
 )
-from hasta_la_vista_money.users.models import BankStatementUpload
+from hasta_la_vista_money.users.models import (
+    BankStatementCandidate,
+    BankStatementRow,
+    BankStatementUpload,
+)
 from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
 )
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    BankStatementReconciliationService,
+)
+from hasta_la_vista_money.users.services.category_classifier import (
+    CategoryClassifier,
+)
 from hasta_la_vista_money.users.services.pii_stripper import strip_pii
 
 logger = logging.getLogger(__name__)
+FALLBACK_CATEGORY = 'Без категории'
 
 
-@shared_task(bind=True, max_retries=3)
+def _cleanup_expired_bank_statements() -> dict[str, int]:
+    """Remove expired statement data and return the number cleaned."""
+    service = ApplicationContainer().users.bank_statement_retention_service()
+    return {'cleaned': service.cleanup_expired()}
+
+
+cleanup_expired_bank_statements = shared_task(
+    name='users.cleanup_expired_bank_statements',
+)(_cleanup_expired_bank_statements)
+
+
+@shared_task(bind=True, max_retries=3)  # type: ignore[untyped-decorator]
 def process_bank_statement_task(
-    self: shared_task,  # type: ignore[valid-type]
+    self: Any,
     upload_id: int,
 ) -> dict[str, int]:
     """Обработать PDF-выписку в фоне: импортировать транзакции и сверить баланс.
@@ -87,7 +113,13 @@ def process_bank_statement_task(
                 parse_result.closing_balance - upload.account.balance
             )
 
-        upload.status = BankStatementUpload.Status.COMPLETED
+        if BankStatementRow.objects.filter(
+            upload=upload,
+            decision=BankStatementRow.Decision.PENDING,
+        ).exists():
+            upload.status = BankStatementUpload.Status.AWAITING_CONFIRMATION
+        else:
+            upload.status = BankStatementUpload.Status.COMPLETED
         upload.progress = 100
         upload.save(
             update_fields=[
@@ -98,6 +130,7 @@ def process_bank_statement_task(
                 'balance_discrepancy',
             ],
         )
+        BankStatementReconciliationService.refresh_outcome_counts(upload)
 
         logger.info(
             'Completed: %d income, %d expenses, %d skipped, discrepancy=%s',
@@ -123,8 +156,11 @@ def process_bank_statement_task(
         try:
             upload = BankStatementUpload.objects.get(id=upload_id)
             upload.status = BankStatementUpload.Status.FAILED
+            upload.failed_count = 1
             upload.error_message = f'Ошибка парсинга: {e!s}'
-            upload.save(update_fields=['status', 'error_message'])
+            upload.save(
+                update_fields=['status', 'failed_count', 'error_message'],
+            )
         except BankStatementUpload.DoesNotExist:
             pass
         raise
@@ -134,8 +170,11 @@ def process_bank_statement_task(
         try:
             upload = BankStatementUpload.objects.get(id=upload_id)
             upload.status = BankStatementUpload.Status.FAILED
+            upload.failed_count = 1
             upload.error_message = f'Непредвиденная ошибка: {e!s}'
-            upload.save(update_fields=['status', 'error_message'])
+            upload.save(
+                update_fields=['status', 'failed_count', 'error_message'],
+            )
         except BankStatementUpload.DoesNotExist:
             pass
         raise self.retry(exc=e, countdown=60) from e
@@ -154,13 +193,21 @@ def _initialize_upload(
     upload.status = BankStatementUpload.Status.PROCESSING
     upload.celery_task_id = task.request.id
     upload.progress = 0
-    upload.save(update_fields=['status', 'celery_task_id', 'progress'])
+    upload.failed_count = 0
+    upload.save(
+        update_fields=[
+            'status',
+            'celery_task_id',
+            'progress',
+            'failed_count',
+        ],
+    )
 
 
 def _process_transactions(
     upload: BankStatementUpload,
-    transactions: list[dict],
-    classifier,
+    transactions: list[dict[str, Any]],
+    classifier: CategoryClassifier,
     existing_categories: list[str],
 ) -> tuple[int, int, int]:
     """Создать транзакции из разобранных записей выписки.
@@ -197,7 +244,42 @@ def _process_transactions(
                 type_value = TransactionType.EXPENSE
                 balance_change = -abs_amount
 
-            if _is_duplicate(
+            if _is_exact_duplicate(
+                account=upload.account,
+                source_ref=source_ref,
+                source_file_hash=upload.file_hash,
+                source_row_position=row_position,
+            ):
+                skipped_count += 1
+                created = False
+                candidate = None
+            else:
+                candidates = _find_probable_duplicates(
+                    account=upload.account,
+                    user=upload.user,
+                    type_value=type_value,
+                    abs_amount=abs_amount,
+                    trans_date=trans_date,
+                    match_calendar_date=source == 'ozon',
+                    description=strip_pii(str(description)),
+                    current_file_hash=upload.file_hash,
+                )
+                candidate = candidates[0] if candidates else None
+                created = True
+            if candidate is not None:
+                _save_probable_duplicate(
+                    upload=upload,
+                    trans=trans,
+                    candidates=candidates,
+                    type_value=type_value,
+                    row_position=row_position,
+                    classifier=classifier,
+                    existing_categories=existing_categories,
+                    match_calendar_date=source == 'ozon',
+                )
+                skipped_count += 1
+                created = False
+            elif created and _is_duplicate(
                 account=upload.account,
                 user=upload.user,
                 type_value=type_value,
@@ -210,14 +292,15 @@ def _process_transactions(
             ):
                 skipped_count += 1
                 created = False
-            else:
+            elif created:
                 category_name = trans.get('category_name')
                 if category_name is None:
                     clean_desc = strip_pii(description)
-                    category_name = classifier.classify(
-                        description=clean_desc,
-                        transaction_type=type_value,
-                        existing_categories=existing_categories,
+                    category_name = _classify_category(
+                        classifier,
+                        clean_desc,
+                        type_value,
+                        existing_categories,
                     )
                 if category_name not in existing_categories:
                     existing_categories.append(category_name)
@@ -234,6 +317,7 @@ def _process_transactions(
                     type=type_value,
                     amount=abs_amount,
                     date=trans_date,
+                    description=strip_pii(str(description))[:250],
                     source_ref=source_ref or None,
                     source_file_hash=(
                         upload.file_hash if not source_ref else None
@@ -279,13 +363,150 @@ def _process_transactions(
     return income_count, expense_count, skipped_count
 
 
+def _is_exact_duplicate(
+    *,
+    account: Account,
+    source_ref: str | None,
+    source_file_hash: str,
+    source_row_position: int,
+) -> bool:
+    if source_ref:
+        return bool(
+            Transaction.objects.filter(
+                account=account,
+                source_ref=source_ref,
+            ).exists(),
+        )
+    return bool(
+        Transaction.objects.filter(
+            account=account,
+            source_file_hash=source_file_hash,
+            source_row_position=source_row_position,
+        ).exists(),
+    )
+
+
+def _save_probable_duplicate(
+    *,
+    upload: BankStatementUpload,
+    trans: dict[str, Any],
+    candidates: list[Transaction],
+    type_value: str,
+    row_position: int,
+    classifier: CategoryClassifier,
+    existing_categories: list[str],
+    match_calendar_date: bool,
+) -> bool:
+    clean_desc = strip_pii(str(trans['description']))
+    category_name = trans.get('category_name')
+    if category_name is None:
+        category_name = _classify_category(
+            classifier,
+            clean_desc,
+            type_value,
+            existing_categories,
+        )
+    row, _ = BankStatementRow.objects.get_or_create(
+        upload=upload,
+        source_row_position=row_position,
+        defaults={
+            'transaction_type': type_value,
+            'transaction_date': trans['date'],
+            'amount': abs(trans['amount']),
+            'description': clean_desc,
+            'candidate_description': str(candidates[0].category.name),
+            'suggested_category': str(category_name)[:250],
+            'source_ref': trans.get('source_ref') or None,
+            'candidate': candidates[0],
+            'match_calendar_date': match_calendar_date,
+        },
+    )
+    BankStatementCandidate.objects.bulk_create(
+        [
+            BankStatementCandidate(
+                row=row,
+                transaction=candidate,
+                description=_candidate_description(candidate),
+                rank=rank,
+            )
+            for rank, candidate in enumerate(candidates)
+        ],
+        ignore_conflicts=True,
+    )
+    return True
+
+
+def _classify_category(
+    classifier: CategoryClassifier,
+    description: str,
+    type_value: str,
+    existing_categories: list[str],
+) -> str:
+    try:
+        return str(
+            classifier.classify(
+                description=description,
+                transaction_type=type_value,
+                existing_categories=existing_categories,
+            ),
+        )
+    except Exception:
+        logger.warning('category_classifier_failed', exc_info=True)
+        return FALLBACK_CATEGORY
+
+
+def _find_probable_duplicates(
+    *,
+    account: Account,
+    user: Any,
+    type_value: str,
+    abs_amount: Decimal,
+    trans_date: datetime,
+    match_calendar_date: bool,
+    description: str,
+    current_file_hash: str,
+) -> list[Transaction]:
+    queryset = Transaction.objects.filter(
+        account=account,
+        user=user,
+        type=type_value,
+        amount=abs_amount,
+    )
+    if current_file_hash:
+        queryset = queryset.exclude(source_file_hash=current_file_hash)
+    if match_calendar_date:
+        queryset = queryset.filter(
+            date__date=timezone.localtime(trans_date).date(),
+        )
+    else:
+        queryset = queryset.filter(date=trans_date)
+    candidates = list(
+        queryset.select_related('category').order_by('date', 'pk'),
+    )
+    return sorted(
+        candidates,
+        key=lambda candidate: (
+            -SequenceMatcher(
+                None,
+                description.casefold(),
+                _candidate_description(candidate).casefold(),
+            ).ratio(),
+            candidate.pk,
+        ),
+    )
+
+
+def _candidate_description(candidate: Transaction) -> str:
+    return candidate.description or str(candidate.category.name)
+
+
 def _is_duplicate(
     *,
     account: Account,
-    user,
+    user: Any,
     type_value: str,
-    abs_amount,
-    trans_date,
+    abs_amount: Decimal,
+    trans_date: datetime,
     source_ref: str | None,
     source_file_hash: str,
     source_row_position: int,
@@ -334,8 +555,10 @@ def _is_duplicate(
             legacy.save(update_fields=['source_ref'])
             return True
         return False
-    return Transaction.objects.filter(
-        account=account,
-        source_file_hash=source_file_hash,
-        source_row_position=source_row_position,
-    ).exists()
+    return bool(
+        Transaction.objects.filter(
+            account=account,
+            source_file_hash=source_file_hash,
+            source_row_position=source_row_position,
+        ).exists(),
+    )

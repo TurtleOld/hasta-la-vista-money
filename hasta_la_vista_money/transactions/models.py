@@ -93,6 +93,7 @@ class Transaction(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
     )
+    description = models.CharField(max_length=250, blank=True, default='')
     created_at = models.DateTimeField(
         auto_now_add=True,
         null=True,

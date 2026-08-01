@@ -176,7 +176,7 @@ class PaymentMakeLoanForm(ModelForm[PaymentMakeLoan]):
         self.fields['account'].queryset = self.get_account_queryset()  # type: ignore[attr-defined]
         self.fields['loan'].queryset = Loan.objects.filter(user=user)  # type: ignore[attr-defined]
         if not self.is_bound:
-            self.fields['date'].initial = timezone.now()  # type: ignore[attr-defined]
+            self.fields['date'].initial = timezone.now()
 
         input_classes = 'loan-form-input'
         select_classes = 'loan-form-select'

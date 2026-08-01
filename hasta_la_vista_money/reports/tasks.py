@@ -25,7 +25,9 @@ from hasta_la_vista_money.users.models import User
 logger = structlog.get_logger(__name__)
 
 
-@shared_task(name='reports.generate_monthly_report')
+@shared_task(  # type: ignore[untyped-decorator]
+    name='reports.generate_monthly_report',
+)
 def generate_monthly_report(
     user_id: int,
     year: int,
@@ -193,7 +195,9 @@ def generate_monthly_report(
         return {'success': True, 'report': report_data}
 
 
-@shared_task(name='reports.generate_yearly_report')
+@shared_task(  # type: ignore[untyped-decorator]
+    name='reports.generate_yearly_report',
+)
 def generate_yearly_report(
     user_id: int,
     year: int,
@@ -353,7 +357,9 @@ def generate_yearly_report(
         return {'success': True, 'report': report_data}
 
 
-@shared_task(name='reports.generate_user_statistics')
+@shared_task(  # type: ignore[untyped-decorator]
+    name='reports.generate_user_statistics',
+)
 def generate_user_statistics(
     user_id: int,
 ) -> dict[str, Any]:

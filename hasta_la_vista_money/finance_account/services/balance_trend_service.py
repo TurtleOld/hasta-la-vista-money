@@ -102,13 +102,13 @@ class BalanceTrendService:
         delta_percent = (
             (delta_absolute / period_start_balance * 100)
             if period_start_balance != 0
-            else 0.0
+            else Decimal(0)
         )
 
         return {
             'current_balance': float(current_balance),
-            'delta_absolute': round(delta_absolute, 2),
-            'delta_percent': round(delta_percent, 2),
+            'delta_absolute': float(round(delta_absolute, 2)),
+            'delta_percent': float(round(delta_percent, 2)),
             'series': series,
             'has_data': True,
         }
@@ -234,4 +234,5 @@ class BalanceTrendService:
         income_after = totals_by_type.get(TransactionType.INCOME, Decimal(0))
 
         # Balance at target_date = current - income_after + expenses_after
-        return current_balance - income_after + expenses_after
+        result = current_balance - income_after + expenses_after
+        return result if isinstance(result, Decimal) else Decimal(str(result))

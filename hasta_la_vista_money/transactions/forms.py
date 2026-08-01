@@ -103,11 +103,9 @@ class TransactionForm(
     def clean_date(self) -> datetime:
         """Make naive ``date`` values timezone-aware."""
         date_value = self.cleaned_data.get('date')
-        if (
-            date_value
-            and isinstance(date_value, datetime)
-            and timezone.is_naive(date_value)
-        ):
+        if not isinstance(date_value, datetime):
+            raise ValidationError(_('Укажите корректную дату и время'))
+        if timezone.is_naive(date_value):
             return timezone.make_aware(date_value)
         return date_value
 
