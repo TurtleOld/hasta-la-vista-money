@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
+from django.db.models import Sum
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
@@ -586,3 +587,95 @@ class ConvertAccountToDepositServiceTests(TestCase):
         account.refresh_from_db()
         self.assertEqual(account.type_account, 'Debit')
         self.assertFalse(Deposit.objects.filter(account=account).exists())
+
+    def test_event_failure_rolls_back_type_change_and_agreement(self) -> None:
+        """If opening-position event creation fails mid-conversion, the
+        account type change and agreement creation are fully rolled back."""
+        user = cast('User', UserFactory())
+        account = Account.objects.create(
+            user=user,
+            name_account='Production вклад',
+            type_account='Debit',
+            bank='SBERBANK',
+            currency='RUB',
+            balance=Decimal('75000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_principal_event',
+                side_effect=RuntimeError('event storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.convert_account_to_deposit(
+                ConvertAccountToDepositCommand(
+                    user=user,
+                    account_id=account.pk,
+                    name='Production вклад',
+                    bank='SBERBANK',
+                    opened_on=date(2026, 6, 1),
+                    matures_on=date(2026, 12, 1),
+                    annual_rate=Decimal('14.00'),
+                    converted_on=date(2026, 8, 1),
+                ),
+            )
+
+        account.refresh_from_db()
+        self.assertEqual(account.type_account, 'Debit')
+        self.assertEqual(account.balance, Decimal('75000.00'))
+        self.assertFalse(Deposit.objects.filter(account=account).exists())
+
+    def test_conversion_preserves_assets_by_currency(self) -> None:
+        """Total assets per currency are unchanged by the neutral
+        conversion, matching the definition used across the reports."""
+        user = cast('User', UserFactory())
+        other_rub_account = Account.objects.create(
+            user=user,
+            name_account='Другой рублёвый счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('30000.00'),
+        )
+        account = Account.objects.create(
+            user=user,
+            name_account='Production вклад',
+            type_account='Debit',
+            bank='SBERBANK',
+            currency='RUB',
+            balance=Decimal('75000.00'),
+        )
+        assets_before = Decimal(
+            Account.objects.filter(
+                user=user,
+                currency='RUB',
+            ).aggregate(total=Sum('balance'))['total']
+            or 0,
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+
+        service.convert_account_to_deposit(
+            ConvertAccountToDepositCommand(
+                user=user,
+                account_id=account.pk,
+                name='Production вклад',
+                bank='SBERBANK',
+                opened_on=date(2026, 6, 1),
+                matures_on=date(2026, 12, 1),
+                annual_rate=Decimal('14.00'),
+                converted_on=date(2026, 8, 1),
+            ),
+        )
+
+        assets_after = Decimal(
+            Account.objects.filter(
+                user=user,
+                currency='RUB',
+            ).aggregate(total=Sum('balance'))['total']
+            or 0,
+        )
+        self.assertEqual(assets_before, assets_after)
+        other_rub_account.refresh_from_db()
+        self.assertEqual(other_rub_account.balance, Decimal('30000.00'))
