@@ -2,6 +2,7 @@ from django.db.models import QuerySet
 
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositPrincipalEvent,
     DepositRatePeriod,
     DepositTerm,
 )
@@ -17,6 +18,20 @@ class DepositRepository:
 
     def create_rate_period(self, **kwargs: object) -> DepositRatePeriod:
         return DepositRatePeriod.objects.create(**kwargs)
+
+    def create_principal_event(
+        self,
+        **kwargs: object,
+    ) -> DepositPrincipalEvent:
+        """Persist a new immutable deposit principal event.
+
+        Args:
+            **kwargs: Fields for the DepositPrincipalEvent instance.
+
+        Returns:
+            The persisted DepositPrincipalEvent.
+        """
+        return DepositPrincipalEvent.objects.create(**kwargs)
 
     def get_by_user(self, user: User) -> QuerySet[Deposit]:
         return (
