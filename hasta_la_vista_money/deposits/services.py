@@ -6,7 +6,9 @@ from django.db import transaction
 from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.commands import (
+    ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
     OpenExistingDepositCommand,
@@ -140,6 +142,80 @@ class DepositService:
             amount=command.amount,
             effective_on=command.opened_on,
             source_account=locked_accounts[source_account.pk],
+        )
+        return deposit
+
+    @transaction.atomic
+    def convert_account_to_deposit(
+        self,
+        command: ConvertAccountToDepositCommand,
+    ) -> Deposit:
+        """Convert an existing production account into a term deposit.
+
+        The account keeps its PK, balance, currency, owner, and timestamps.
+        Its type changes to Deposit, and a deposit agreement, current term,
+        rate period, and a neutral opening-position event dated on the
+        conversion date are created. No monetary delta is applied.
+
+        Args:
+            command: Account identifier, agreement parameters, and the
+                conversion date.
+
+        Returns:
+            The created Deposit, wrapping the same account.
+
+        Raises:
+            ValidationError: If the account is not found, not owned by the
+                user, already of Deposit type, already linked to a deposit,
+                or the agreement parameters are invalid.
+        """
+        account = self.account_repository.get_by_id_and_user(
+            command.account_id,
+            command.user,
+        )
+        if account is None:
+            raise ValidationError(_('Счёт не найден или недоступен.'))
+        if account.type_account == constants.ACCOUNT_TYPE_DEPOSIT:
+            raise ValidationError(
+                _('Счёт уже имеет тип «Вклад».'),
+            )
+        if Deposit.objects.filter(account=account).exists():
+            raise ValidationError(
+                _('Счёт уже связан со вкладом.'),
+            )
+        self._validate_agreement(
+            opened_on=command.opened_on,
+            matures_on=command.matures_on,
+            annual_rate=command.annual_rate,
+            balance=account.balance,
+        )
+
+        account.type_account = constants.ACCOUNT_TYPE_DEPOSIT
+        account.save(update_fields=['type_account', 'updated_at'])
+
+        deposit = self.deposit_repository.create_deposit(
+            account=account,
+            name=command.name,
+            bank=command.bank,
+        )
+        term = self.deposit_repository.create_term(
+            deposit=deposit,
+            opened_on=command.opened_on,
+            matures_on=command.matures_on,
+            is_current=True,
+        )
+        self.deposit_repository.create_rate_period(
+            term=term,
+            starts_on=command.opened_on,
+            ends_on=command.matures_on,
+            annual_rate=command.annual_rate,
+        )
+        self.deposit_repository.create_principal_event(
+            deposit=deposit,
+            type=DepositPrincipalEvent.Type.OPENING_POSITION,
+            amount=account.balance,
+            effective_on=command.converted_on,
+            source_account=None,
         )
         return deposit
 
