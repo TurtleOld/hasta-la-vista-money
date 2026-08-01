@@ -12,18 +12,40 @@
   --finances-positive: var(--app-positive);
   --finances-negative: var(--app-negative);
   --finances-accent: var(--app-accent);
-  --finances-halo-1: color-mix(in oklab, var(--finances-accent) 13%, transparent);
-  --finances-halo-2: color-mix(in oklab, var(--finances-positive) 7%, transparent);
-  --finances-shadow-soft: 0 4px 24px color-mix(in oklab, var(--finances-accent) 8%, transparent), 0 1px 6px rgba(0, 0, 0, 0.04);
-  --finances-shadow-panel: 0 2px 16px color-mix(in oklab, var(--finances-accent) 6%, transparent), 0 1px 4px rgba(0, 0, 0, 0.04);
-  --finances-shadow-button: 0 16px 35px color-mix(in oklab, var(--finances-positive) 25%, transparent);
+  --finances-halo-1: color-mix(
+    in oklab,
+    var(--finances-accent) 13%,
+    transparent
+  );
+  --finances-halo-2: color-mix(
+    in oklab,
+    var(--finances-positive) 7%,
+    transparent
+  );
+  --finances-shadow-soft: 0 18px 55px
+    color-mix(in oklab, var(--finances-accent) 8%, transparent);
+  --finances-shadow-panel: 0 20px 55px
+    color-mix(in oklab, var(--finances-accent) 7%, transparent);
+  --finances-shadow-button: 0 16px 35px
+    color-mix(in oklab, var(--finances-positive) 25%, transparent);
   --finances-shadow-pop: 0 24px 60px rgba(15, 23, 42, 0.18);
   --finances-shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06);
   background:
-    radial-gradient(ellipse 80% 50% at 0% 0%, var(--finances-halo-1), transparent),
-    radial-gradient(ellipse 60% 40% at 100% 100%, var(--finances-halo-2), transparent),
+    radial-gradient(
+      ellipse 80% 50% at 0% 0%,
+      var(--finances-halo-1),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 100% 100%,
+      var(--finances-halo-2),
+      transparent
+    ),
     var(--finances-bg);
   color: var(--finances-text);
+  font-family: 'Geist', 'Golos Text', sans-serif;
+  font-feature-settings: 'ss01', 'cv11';
+  font-variant-numeric: tabular-nums;
   min-height: calc(100vh - 4rem);
   overflow-x: hidden;
   padding-bottom: 2rem;
@@ -37,20 +59,36 @@
 }
 
 .dark .finances-app {
-  --finances-halo-1: color-mix(in oklab, var(--finances-accent) 12%, transparent);
-  --finances-halo-2: color-mix(in oklab, var(--finances-positive) 6%, transparent);
+  --finances-halo-1: color-mix(
+    in oklab,
+    var(--finances-accent) 12%,
+    transparent
+  );
+  --finances-halo-2: color-mix(
+    in oklab,
+    var(--finances-positive) 6%,
+    transparent
+  );
   --finances-shadow-soft: 0 4px 32px rgba(0, 0, 0, 0.3);
   --finances-shadow-panel: 0 2px 20px rgba(0, 0, 0, 0.25);
   background:
-    radial-gradient(ellipse 70% 50% at 0% 0%, var(--finances-halo-1), transparent),
-    radial-gradient(ellipse 50% 60% at 100% 100%, var(--finances-halo-2), transparent),
+    radial-gradient(
+      ellipse 70% 50% at 0% 0%,
+      var(--finances-halo-1),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 50% 60% at 100% 100%,
+      var(--finances-halo-2),
+      transparent
+    ),
     var(--finances-bg);
 }
 
 .finances-wrap {
   margin: 0 auto;
-  max-width: 84rem;
-  padding: 0 1rem;
+  max-width: 86rem;
+  padding: 0 1.5rem;
 }
 
 .finances-header {
@@ -58,22 +96,24 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
-  padding: 2.1rem 0 1.1rem;
+  padding: 2.75rem 0 1.5rem;
 }
 
 .finances-kicker {
   color: var(--finances-muted);
   font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .finances-title {
-  font-size: clamp(1.8rem, 3vw, 2.15rem);
-  font-weight: 800;
-  letter-spacing: -0.06em;
-  line-height: 1.05;
+  font-size: clamp(2rem, 3.5vw, 2.75rem);
+  font-weight: 650;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+  margin-top: 0.35rem;
+  text-wrap: balance;
 }
 
 .finances-actions,
@@ -131,18 +171,37 @@
 .finances-button {
   align-items: center;
   border: 1px solid var(--finances-border);
-  border-radius: 999px;
+  border-radius: 0.75rem;
   display: inline-flex;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 600;
   gap: 0.45rem;
   min-height: 2.5rem;
   padding: 0.65rem 1rem;
-  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
 .finances-button:hover {
   transform: translateY(-1px);
+}
+
+.finances-button:active {
+  transform: scale(0.98);
+}
+
+.finances-button:focus-visible,
+.finances-segment button:focus-visible,
+.finances-scope button:focus-visible,
+.finances-chip:focus-visible,
+.finances-reset:focus-visible,
+.finances-category-link:focus-visible,
+.finances-row-actions-inline a:focus-visible,
+.finances-row-actions-inline button:focus-visible {
+  outline: 2px solid var(--finances-accent);
+  outline-offset: 2px;
 }
 
 .finances-button-primary {
@@ -160,12 +219,12 @@
 .finances-summary {
   background: var(--finances-surface);
   border: 1px solid var(--finances-border);
-  border-radius: 1.5rem;
+  border-radius: 1.25rem;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   box-shadow: var(--finances-shadow-soft);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .dark .finances-summary {
@@ -174,7 +233,7 @@
 
 .finances-summary-cell {
   border-right: 1px solid var(--finances-border);
-  padding: 1.25rem;
+  padding: 1.35rem 1.5rem 1.5rem;
 }
 
 .finances-summary-cell:last-child {
@@ -184,8 +243,8 @@
 .finances-label {
   color: var(--finances-muted);
   font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.09em;
   margin-bottom: 0.45rem;
   text-transform: uppercase;
 }
@@ -193,8 +252,8 @@
 .finances-amount {
   font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   font-size: clamp(1.35rem, 2vw, 1.75rem);
-  font-weight: 700;
-  letter-spacing: -0.05em;
+  font-weight: 600;
+  letter-spacing: -0.04em;
 }
 
 .finances-positive {
@@ -253,27 +312,61 @@
 }
 
 .finances-toolbar {
+  align-items: stretch;
+  background: color-mix(in oklab, var(--finances-surface) 82%, transparent);
+  border: 1px solid var(--finances-border);
+  border-radius: 1.1rem;
+  box-shadow: var(--finances-shadow-panel);
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 1.25rem;
+  padding: 0;
+}
+
+.finances-toolbar-primary,
+.finances-toolbar-filters {
+  align-items: center;
+  display: flex;
   gap: 0.75rem;
-  justify-content: space-between;
-  padding: 0 0 1rem;
+}
+
+.finances-toolbar-primary {
+  padding: 0.65rem;
+}
+
+.finances-toolbar-filters {
+  border-top: 1px solid
+    color-mix(in oklab, var(--finances-border) 70%, transparent);
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+}
+
+.finances-filter-label {
+  color: var(--finances-muted);
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 .finances-segment {
-  background: var(--finances-surface);
-  border: 1px solid var(--finances-border);
-  border-radius: 1rem;
+  background: var(--finances-surface-2);
+  border: 0;
+  border-radius: 0.75rem;
   gap: 0.2rem;
-  padding: 0.25rem;
-  box-shadow: var(--finances-shadow-card);
+  padding: 0.2rem;
 }
 
 .finances-scope {
-  background: color-mix(in oklab, var(--finances-accent) 7%, var(--finances-surface));
-  border: 1px dashed color-mix(in oklab, var(--finances-accent) 28%, transparent);
-  border-radius: 1rem;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--finances-border);
+  border-radius: 0;
   gap: 0.2rem;
-  padding: 0.25rem;
-  box-shadow: var(--finances-shadow-card);
+  padding: 0 0 0 0.75rem;
 }
 
 .finances-segment button,
@@ -286,55 +379,90 @@
 
 .finances-segment button {
   background: transparent;
-  border-radius: 0.75rem;
+  border-radius: 0.55rem;
   color: var(--finances-muted);
   font-size: 0.86rem;
-  font-weight: 800;
-  padding: 0.55rem 0.95rem;
+  font-weight: 550;
+  padding: 0.5rem 0.85rem;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .finances-scope button {
   background: transparent;
-  border-radius: 0.75rem;
+  border-radius: 0.55rem;
   color: var(--finances-muted);
   font-size: 0.86rem;
-  font-weight: 800;
-  padding: 0.55rem 0.95rem;
+  font-weight: 550;
+  padding: 0.5rem 0.75rem;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .finances-segment button.is-active {
-  background: var(--finances-surface-2);
+  background: var(--finances-surface);
   color: var(--finances-text);
+  box-shadow: 0 1px 3px
+    color-mix(in oklab, var(--finances-text) 8%, transparent);
 }
 
 .finances-scope button.is-active {
-  background: var(--finances-surface);
+  background: color-mix(
+    in oklab,
+    var(--finances-accent) 10%,
+    var(--finances-surface)
+  );
   color: var(--finances-accent);
 }
 
+.finances-segment button:active,
+.finances-scope button:active,
+.finances-chip:active {
+  transform: scale(0.97);
+}
+
 .finances-chip {
-  background: var(--finances-surface);
-  border: 1px solid color-mix(in oklab, var(--finances-accent) 20%, transparent);
-  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--finances-border);
+  border-radius: 0.65rem;
   color: var(--finances-muted);
   display: inline-flex;
   font-size: 0.8rem;
-  font-weight: 700;
+  font-weight: 550;
   gap: 0.4rem;
-  padding: 0.62rem 0.9rem;
+  padding: 0.48rem 0.7rem;
   white-space: nowrap;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
 }
 
 .finances-chip:hover {
-  border-color: color-mix(in oklab, var(--finances-accent) 40%, transparent);
+  background: var(--finances-surface-2);
+  border-color: color-mix(
+    in oklab,
+    var(--finances-accent) 35%,
+    var(--finances-border)
+  );
   color: var(--finances-text);
 }
 
 .finances-chip.is-active {
-  border-color: var(--finances-accent);
+  border-color: color-mix(
+    in oklab,
+    var(--finances-accent) 55%,
+    var(--finances-border)
+  );
   color: var(--finances-accent);
-  background: color-mix(in oklab, var(--finances-accent) 8%, var(--finances-surface));
+  background: color-mix(
+    in oklab,
+    var(--finances-accent) 8%,
+    var(--finances-surface)
+  );
 }
 
 .finances-pop-wrap {
@@ -345,7 +473,7 @@
 .finances-pop {
   background: var(--finances-surface);
   border: 1px solid var(--finances-border);
-  border-radius: 1rem;
+  border-radius: 0.85rem;
   box-shadow: var(--finances-shadow-pop);
   display: none;
   left: 0;
@@ -360,7 +488,7 @@
   border-bottom: 1px solid var(--finances-border);
   color: var(--finances-muted);
   font-size: 0.7rem;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.08em;
   padding: 0.75rem 0.9rem;
   text-transform: uppercase;
@@ -385,6 +513,7 @@
   display: flex;
   gap: 0.6rem;
   padding: 0.6rem 0.7rem;
+  transition: background 0.15s ease;
 }
 
 .finances-pop-option:hover,
@@ -393,18 +522,24 @@
 }
 
 .finances-search {
-  background: var(--finances-surface);
-  border: 1px solid var(--finances-border);
-  border-radius: 1rem;
+  background: var(--finances-surface-2);
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
   gap: 0.5rem;
-  min-width: 16rem;
+  margin-left: auto;
+  min-width: min(18rem, 28vw);
   padding: 0 0.8rem;
-  box-shadow: var(--finances-shadow-card);
+  color: var(--finances-muted);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .finances-search:focus-within {
   border-color: var(--finances-accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--finances-accent) 15%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in oklab, var(--finances-accent) 15%, transparent);
 }
 
 .finances-search input {
@@ -414,6 +549,100 @@
   height: 2.55rem;
   outline: 0;
   width: 100%;
+}
+
+.finances-search input::placeholder {
+  color: color-mix(in oklab, var(--finances-muted) 82%, transparent);
+}
+
+.finances-search kbd {
+  border: 1px solid var(--finances-border);
+  border-radius: 0.3rem;
+  color: var(--finances-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 0.2rem 0.32rem;
+}
+
+.finances-reset {
+  align-items: center;
+  color: var(--finances-accent);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 550;
+  gap: 0.4rem;
+  text-decoration: none;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.finances-reset:hover {
+  color: var(--finances-text);
+  transform: translateY(-1px);
+}
+
+.finances-category-control {
+  align-items: stretch;
+}
+
+.finances-category-control > .finances-chip {
+  border-right: 0;
+  border-radius: 0.65rem 0 0 0.65rem;
+}
+
+.finances-category-link {
+  align-items: center;
+  background: color-mix(
+    in oklab,
+    var(--finances-accent) 7%,
+    var(--finances-surface)
+  );
+  border: 1px solid var(--finances-border);
+  border-left: 0;
+  border-radius: 0 0.65rem 0.65rem 0;
+  color: var(--finances-muted);
+  display: inline-flex;
+  align-self: stretch;
+  justify-content: center;
+  position: relative;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.12s ease;
+  width: 2.25rem;
+}
+
+.finances-category-link::after {
+  background: var(--finances-accent);
+  border-radius: 999px;
+  content: '';
+  height: 0.25rem;
+  position: absolute;
+  right: 0.3rem;
+  top: 0.3rem;
+  transform: scale(0);
+  transition: transform 0.18s cubic-bezier(0.23, 1, 0.32, 1);
+  width: 0.25rem;
+}
+
+.finances-category-link:hover {
+  background: color-mix(
+    in oklab,
+    var(--finances-accent) 14%,
+    var(--finances-surface)
+  );
+  color: var(--finances-accent);
+}
+
+.finances-category-link:hover::after {
+  transform: scale(1);
+}
+
+.finances-category-link:active {
+  transform: scale(0.96);
 }
 
 .finances-grid {
@@ -435,7 +664,7 @@
 .finances-side-card {
   background: var(--finances-surface);
   border: 1px solid var(--finances-border);
-  border-radius: 1.5rem;
+  border-radius: 1.15rem;
   overflow: hidden;
   box-shadow: var(--finances-shadow-panel);
 }
@@ -454,23 +683,25 @@
 .finances-list-head {
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: 2.6rem minmax(0, 1fr) minmax(8rem, 0.7fr) 8rem 7rem 5.5rem;
+  grid-template-columns:
+    2.6rem minmax(0, 1fr) minmax(8rem, 0.7fr)
+    8rem 7rem 5.5rem;
 }
 
 .finances-list-head {
   border-bottom: 1px solid var(--finances-border);
   color: var(--finances-muted);
   font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 0.85rem 1rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  padding: 0.9rem 1rem;
   text-transform: uppercase;
 }
 
 .finances-row {
   align-items: center;
   border-bottom: 1px solid var(--finances-border);
-  min-height: 3.7rem;
+  min-height: 4.45rem;
   padding: 0;
   position: relative;
 }
@@ -481,9 +712,12 @@
   box-sizing: border-box;
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: 2.6rem minmax(0, 1fr) minmax(8rem, 0.7fr) 8rem 7rem 5.5rem;
-  min-height: 3.7rem;
-  padding: 0.75rem 1rem;
+  grid-template-columns:
+    2.6rem minmax(0, 1fr) minmax(8rem, 0.7fr)
+    8rem 7rem 5.5rem;
+  min-height: 4.45rem;
+  padding: 0.85rem 1rem;
+  transition: background 0.18s ease;
   width: 100%;
 }
 
@@ -491,9 +725,27 @@
   min-width: 0;
 }
 
+@media (hover: hover) {
+  .finances-row:hover .finances-row-content[data-swipe-content] {
+    background: color-mix(
+      in oklab,
+      var(--finances-accent) 4%,
+      var(--finances-surface)
+    );
+  }
+}
+
 .finances-row-actions-swipe {
-  --swipe-accent: color-mix(in oklab, var(--finances-accent) 36%, var(--finances-surface-2));
-  --swipe-danger: color-mix(in oklab, var(--finances-negative) 40%, var(--finances-surface-2));
+  --swipe-accent: color-mix(
+    in oklab,
+    var(--finances-accent) 36%,
+    var(--finances-surface-2)
+  );
+  --swipe-danger: color-mix(
+    in oklab,
+    var(--finances-negative) 40%,
+    var(--finances-surface-2)
+  );
   --swipe-surface-2: var(--finances-surface-2);
   align-items: center;
   display: flex;
@@ -518,7 +770,9 @@
 .finances-icon {
   align-items: center;
   background: var(--finances-surface-2);
-  border-radius: 1rem;
+  border: 1px solid
+    color-mix(in oklab, currentColor 16%, var(--finances-border));
+  border-radius: 0.75rem;
   display: flex;
   height: 2.6rem;
   justify-content: center;
@@ -526,25 +780,47 @@
 }
 
 .finances-row-title {
-  font-weight: 800;
+  font-size: 0.93rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
   overflow-wrap: break-word;
   word-break: break-word;
 }
 
 .finances-row-sub {
   color: var(--finances-muted);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   margin-top: 0.15rem;
+}
+
+.finances-row-account {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finances-row-amount {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.finances-row-date {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.76rem;
 }
 
 .finances-day-head {
   border-top: 1px solid var(--finances-border);
   color: var(--finances-muted);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 600;
   justify-content: space-between;
   letter-spacing: 0.08em;
-  padding: 1rem 1rem 0.4rem;
+  padding: 1.05rem 1rem 0.5rem;
   text-transform: uppercase;
 }
 
@@ -596,7 +872,7 @@
 
 .finances-empty {
   color: var(--finances-muted);
-  padding: 3rem 1rem;
+  padding: 4.5rem 1rem;
   text-align: center;
 }
 
@@ -642,7 +918,7 @@
 
 .finances-side-title {
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0.08em;
   margin-bottom: 0.8rem;
   text-transform: uppercase;
@@ -674,7 +950,6 @@
     border-bottom: 0;
   }
 
-  .finances-toolbar,
   .finances-header {
     align-items: stretch;
     flex-direction: column;
@@ -682,7 +957,27 @@
 
   .finances-search {
     min-width: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .finances-toolbar-primary {
+    flex-wrap: wrap;
+  }
+
+  .finances-search {
+    flex-basis: 100%;
+    margin-left: 0;
+    order: 3;
     width: 100%;
+  }
+
+  .finances-toolbar-filters {
+    align-items: flex-start;
+  }
+
+  .finances-filter-label {
+    padding-top: 0.55rem;
   }
 }
 
@@ -697,6 +992,49 @@
 }
 
 @media (max-width: 768px) {
+  .finances-wrap {
+    padding: 0 0.8rem;
+  }
+
+  .finances-header {
+    padding-top: 1.75rem;
+  }
+
+  .finances-toolbar-primary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .finances-segment {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .finances-segment button,
+  .finances-scope button {
+    padding-inline: 0.4rem;
+  }
+
+  .finances-scope {
+    border-left: 0;
+    border-top: 1px solid var(--finances-border);
+    justify-content: flex-start;
+    padding: 0.55rem 0 0;
+  }
+
+  .finances-toolbar-filters {
+    display: grid;
+    grid-template-columns: 1fr auto;
+  }
+
+  .finances-filter-label {
+    display: none;
+  }
+
+  .finances-pills {
+    min-width: 0;
+  }
+
   .finances-list-head {
     display: none;
   }
@@ -717,24 +1055,49 @@
   }
 }
 
+@media (max-width: 520px) {
+  .finances-toolbar-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .finances-row-content[data-swipe-content] {
+    gap: 0.65rem;
+    grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+    padding-inline: 0.75rem;
+  }
+
+  .finances-icon {
+    height: 2.4rem;
+    width: 2.4rem;
+  }
+
+  .finances-row-amount {
+    font-size: 0.78rem;
+  }
+}
+
 /* ─── Composer (страница создания операции) ────────────────────────────── */
 
 /* Маппинг токенов composer.css → finances токены */
 .finances-app {
-  --surface:   var(--finances-surface);
+  --surface: var(--finances-surface);
   --surface-2: var(--finances-surface-2);
-  --border:    var(--finances-border);
-  --border-2:  color-mix(in oklab, var(--finances-border) 180%, transparent);
-  --text:      var(--finances-text);
-  --text-2:    var(--finances-muted);
-  --muted:     var(--finances-muted);
-  --muted-2:   color-mix(in oklab, var(--finances-muted) 55%, transparent);
-  --accent:    var(--finances-accent);
-  --positive:  var(--finances-positive);
-  --negative:  var(--finances-negative);
+  --border: var(--finances-border);
+  --border-2: color-mix(in oklab, var(--finances-border) 180%, transparent);
+  --text: var(--finances-text);
+  --text-2: var(--finances-muted);
+  --muted: var(--finances-muted);
+  --muted-2: color-mix(in oklab, var(--finances-muted) 55%, transparent);
+  --accent: var(--finances-accent);
+  --positive: var(--finances-positive);
+  --negative: var(--finances-negative);
   --info: var(--color-info-500);
-  --bg-elev:   color-mix(in oklab, var(--finances-surface-2) 70%, var(--finances-surface));
-  --radius:    0.75rem;
+  --bg-elev: color-mix(
+    in oklab,
+    var(--finances-surface-2) 70%,
+    var(--finances-surface)
+  );
+  --radius: 0.75rem;
   --radius-lg: 1.25rem;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 }
@@ -852,8 +1215,16 @@
 }
 
 .cmp-type button[data-on] {
-  background: color-mix(in oklab, var(--type-c, var(--finances-accent)) 12%, var(--finances-surface));
-  border-color: color-mix(in oklab, var(--type-c, var(--finances-accent)) 40%, var(--finances-border));
+  background: color-mix(
+    in oklab,
+    var(--type-c, var(--finances-accent)) 12%,
+    var(--finances-surface)
+  );
+  border-color: color-mix(
+    in oklab,
+    var(--type-c, var(--finances-accent)) 40%,
+    var(--finances-border)
+  );
   color: var(--type-c, var(--finances-accent));
 }
 
@@ -866,15 +1237,23 @@
   place-items: center;
 }
 
-.cmp-type button[data-type="income"]   { --type-c: var(--finances-positive); }
-.cmp-type button[data-type="expense"]  { --type-c: var(--finances-negative); }
+.cmp-type button[data-type='income'] {
+  --type-c: var(--finances-positive);
+}
+.cmp-type button[data-type='expense'] {
+  --type-c: var(--finances-negative);
+}
 
 /* Amount input */
 .cmp-amount {
   padding: 36px 24px 28px;
   text-align: center;
   border-bottom: 1px solid var(--finances-border);
-  background: radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--type-c, var(--finances-accent)) 7%, transparent), transparent 60%);
+  background: radial-gradient(
+    120% 80% at 50% 0%,
+    color-mix(in oklab, var(--type-c, var(--finances-accent)) 7%, transparent),
+    transparent 60%
+  );
   overflow-x: hidden;
 }
 
@@ -901,8 +1280,12 @@
   letter-spacing: -0.04em;
 }
 
-[data-bs-theme='dark'] .cmp-amt-input input:not([type='checkbox']):not([type='radio']):not([type='file']),
-[data-bs-theme='light'] .cmp-amt-input input:not([type='checkbox']):not([type='radio']):not([type='file']),
+[data-bs-theme='dark']
+  .cmp-amt-input
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+[data-bs-theme='light']
+  .cmp-amt-input
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
 .cmp-amt-input input {
   appearance: none;
   background: transparent !important;
@@ -962,7 +1345,8 @@
 
 .cmp-section {
   padding: 16px 24px;
-  border-bottom: 1px solid color-mix(in oklab, var(--finances-border) 60%, transparent);
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--finances-border) 60%, transparent);
 }
 
 .cmp-section:last-child {
@@ -1021,8 +1405,16 @@
 }
 
 .cmp-select-list button[data-on] {
-  background: color-mix(in oklab, var(--type-c, var(--finances-accent)) 10%, var(--finances-surface-2));
-  border-color: color-mix(in oklab, var(--type-c, var(--finances-accent)) 50%, var(--finances-border));
+  background: color-mix(
+    in oklab,
+    var(--type-c, var(--finances-accent)) 10%,
+    var(--finances-surface-2)
+  );
+  border-color: color-mix(
+    in oklab,
+    var(--type-c, var(--finances-accent)) 50%,
+    var(--finances-border)
+  );
 }
 
 .cmp-select-list button[data-on]::after {
@@ -1044,8 +1436,13 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: color-mix(in oklab, var(--finances-accent) 14%, var(--finances-surface-2));
-  border: 1px solid color-mix(in oklab, var(--finances-accent) 22%, var(--finances-border));
+  background: color-mix(
+    in oklab,
+    var(--finances-accent) 14%,
+    var(--finances-surface-2)
+  );
+  border: 1px solid
+    color-mix(in oklab, var(--finances-accent) 22%, var(--finances-border));
   color: var(--finances-accent);
   display: grid;
   place-items: center;
@@ -1093,7 +1490,9 @@
   padding: 4px;
   border-radius: 6px;
   flex-shrink: 0;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 
 .cmp-input .cmp-clear:hover {
@@ -1127,7 +1526,11 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: color-mix(in oklab, var(--cat-c, var(--finances-accent)) 22%, var(--finances-surface));
+  background: color-mix(
+    in oklab,
+    var(--cat-c, var(--finances-accent)) 22%,
+    var(--finances-surface)
+  );
   color: var(--cat-c, var(--finances-accent));
   display: grid;
   place-items: center;
@@ -1135,12 +1538,24 @@
 }
 
 .cat-chip:hover {
-  background: color-mix(in oklab, var(--cat-c, var(--finances-accent)) 8%, var(--finances-surface-2));
-  border-color: color-mix(in oklab, var(--cat-c, var(--finances-accent)) 28%, var(--border-2));
+  background: color-mix(
+    in oklab,
+    var(--cat-c, var(--finances-accent)) 8%,
+    var(--finances-surface-2)
+  );
+  border-color: color-mix(
+    in oklab,
+    var(--cat-c, var(--finances-accent)) 28%,
+    var(--border-2)
+  );
 }
 
 .cat-chip[data-on] {
-  background: color-mix(in oklab, var(--type-c, var(--finances-accent)) 14%, var(--finances-surface-2));
+  background: color-mix(
+    in oklab,
+    var(--type-c, var(--finances-accent)) 14%,
+    var(--finances-surface-2)
+  );
   border-color: var(--type-c, var(--finances-accent));
   color: var(--type-c, var(--finances-accent));
 }
@@ -1400,9 +1815,18 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: color-mix(in oklab, var(--prev-c, var(--finances-accent)) 16%, var(--finances-surface-2));
+  background: color-mix(
+    in oklab,
+    var(--prev-c, var(--finances-accent)) 16%,
+    var(--finances-surface-2)
+  );
   color: var(--prev-c, var(--finances-accent));
-  border: 1px solid color-mix(in oklab, var(--prev-c, var(--finances-accent)) 22%, var(--finances-border));
+  border: 1px solid
+    color-mix(
+      in oklab,
+      var(--prev-c, var(--finances-accent)) 22%,
+      var(--finances-border)
+    );
   display: grid;
   place-items: center;
 }
@@ -1436,7 +1860,8 @@
 .preview-tx .ft {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid color-mix(in oklab, var(--finances-border) 60%, transparent);
+  border-top: 1px solid
+    color-mix(in oklab, var(--finances-border) 60%, transparent);
   display: flex;
   justify-content: space-between;
   font-size: 11.5px;
@@ -1476,7 +1901,11 @@
 .finance-categories-hero {
   align-items: flex-start;
   background:
-    radial-gradient(80% 140% at 100% 0%, color-mix(in oklab, var(--finances-accent) 16%, transparent), transparent 60%),
+    radial-gradient(
+      80% 140% at 100% 0%,
+      color-mix(in oklab, var(--finances-accent) 16%, transparent),
+      transparent 60%
+    ),
     var(--finances-surface-2);
   border-bottom: 1px solid var(--finances-border);
   display: flex;
@@ -1514,7 +1943,8 @@
 }
 
 .finance-category-panel:first-child {
-  border-right: 1px solid color-mix(in oklab, var(--finances-border) 60%, transparent);
+  border-right: 1px solid
+    color-mix(in oklab, var(--finances-border) 60%, transparent);
 }
 
 .finance-category-panel-head {
@@ -1557,7 +1987,10 @@
   grid-template-columns: 24px 1fr auto;
   margin-left: calc(var(--cat-level, 0) * 18px);
   padding: 10px 10px 10px 12px;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .finance-category-row:hover {
@@ -1609,7 +2042,8 @@
 .finance-category-inline-input {
   appearance: none;
   background: var(--finances-surface);
-  border: 1px solid color-mix(in oklab, var(--cat-c) 32%, var(--finances-border));
+  border: 1px solid
+    color-mix(in oklab, var(--cat-c) 32%, var(--finances-border));
   border-radius: 12px;
   color: inherit;
   font-size: 14px;
@@ -1619,7 +2053,9 @@
   min-height: 38px;
   outline: none;
   padding: 9px 12px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
   width: 100%;
 }
 
@@ -1644,12 +2080,16 @@
   color: var(--cat-c);
 }
 
-.finance-category-inline-form .finance-category-actions button[type='submit']:hover {
+.finance-category-inline-form
+  .finance-category-actions
+  button[type='submit']:hover {
   background: color-mix(in oklab, var(--cat-c) 12%, transparent);
   color: var(--cat-c);
 }
 
-.finance-category-inline-form .finance-category-actions button[type='button']:hover {
+.finance-category-inline-form
+  .finance-category-actions
+  button[type='button']:hover {
   background: color-mix(in oklab, var(--finances-negative) 10%, transparent);
   color: var(--finances-negative);
 }
@@ -1672,7 +2112,9 @@
   height: 30px;
   justify-content: center;
   padding: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   width: 30px;
 }
 
@@ -1744,7 +2186,8 @@
   }
 
   .finance-category-panel:first-child {
-    border-bottom: 1px solid color-mix(in oklab, var(--finances-border) 60%, transparent);
+    border-bottom: 1px solid
+      color-mix(in oklab, var(--finances-border) 60%, transparent);
     border-right: 0;
   }
 
@@ -1755,10 +2198,18 @@
 
 /* ── Утилиты для замены инлайн-стилей (CSP) ─────────────────────────────── */
 
-.cmp-type-c-expense { --type-c: var(--finances-negative); }
-.cmp-type-c-income  { --type-c: var(--finances-positive); }
-.cmp-prev-c-expense { --prev-c: var(--finances-negative); }
-.cmp-prev-c-income  { --prev-c: var(--finances-positive); }
+.cmp-type-c-expense {
+  --type-c: var(--finances-negative);
+}
+.cmp-type-c-income {
+  --type-c: var(--finances-positive);
+}
+.cmp-prev-c-expense {
+  --prev-c: var(--finances-negative);
+}
+.cmp-prev-c-income {
+  --prev-c: var(--finances-positive);
+}
 
 .composer-sep {
   color: var(--muted-2);

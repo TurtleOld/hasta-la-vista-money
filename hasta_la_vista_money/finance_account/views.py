@@ -360,6 +360,21 @@ def _parse_filter_date(value: str | None) -> date | None:
         return None
 
 
+def _parse_search_amount(value: str) -> Decimal | None:
+    """Parse a complete search query as a localized monetary amount."""
+
+    normalized_value = (
+        ''.join(value.split()).removesuffix('₽').replace(',', '.')
+    )
+    if not normalized_value:
+        return None
+    try:
+        amount = abs(Decimal(normalized_value))
+    except InvalidOperation:
+        return None
+    return amount if amount.is_finite() else None
+
+
 def _week_range(value: date) -> tuple[date, date]:
     start = value - timedelta(days=value.weekday())
     return start, start + timedelta(days=6)
@@ -916,7 +931,17 @@ def _typed_transactions(
     if finances_filter.min_amount:
         queryset = queryset.filter(amount__gte=finances_filter.min_amount)
     if finances_filter.q:
-        queryset = queryset.filter(category__name__icontains=finances_filter.q)
+        query = finances_filter.q
+        search_filter = (
+            models.Q(category__name__icontains=query)
+            | models.Q(account__name_account__icontains=query)
+            | models.Q(description__icontains=query)
+            | models.Q(user__username__icontains=query)
+        )
+        search_amount = _parse_search_amount(query)
+        if search_amount is not None:
+            search_filter |= models.Q(amount=search_amount)
+        queryset = queryset.filter(search_filter)
 
     return [
         _build_transaction_row(transaction_obj, current_user)
@@ -1016,11 +1041,17 @@ def _transfer_transactions(
         queryset = queryset.filter(amount__gte=finances_filter.min_amount)
     if finances_filter.q:
         query = finances_filter.q
-        queryset = queryset.filter(
+        search_filter = (
             models.Q(from_account__name_account__icontains=query)
             | models.Q(to_account__name_account__icontains=query)
-            | models.Q(notes__icontains=query),
+            | models.Q(notes__icontains=query)
         )
+        search_amount = _parse_search_amount(query)
+        if search_amount is not None:
+            search_filter |= models.Q(amount=search_amount)
+        transfer_name = str(_('Перевод'))
+        if query.casefold() not in transfer_name.casefold():
+            queryset = queryset.filter(search_filter)
 
     return [
         _build_transfer_row(transfer, current_user) for transfer in queryset
@@ -1053,10 +1084,16 @@ def _receipt_transactions(
     ):
         return []
     category_name = str(RECEIPT_CATEGORY_NAME)
-    if finances_filter.q and finances_filter.q.lower() not in (
-        category_name.lower()
-    ):
-        return []
+    if finances_filter.q:
+        query = finances_filter.q
+        if query.casefold() not in category_name.casefold():
+            search_filter = models.Q(
+                account__name_account__icontains=query,
+            ) | models.Q(user__username__icontains=query)
+            search_amount = _parse_search_amount(query)
+            if search_amount is not None:
+                search_filter |= models.Q(total_sum=search_amount)
+            queryset = queryset.filter(search_filter)
 
     transactions = []
     for receipt in queryset:

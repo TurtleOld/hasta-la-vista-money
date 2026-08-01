@@ -1,29 +1,36 @@
 {% load i18n %}
 
-<div class="finances-segment" role="tablist" aria-label="{% translate 'Тип операций' %}">
-    <button type="button" class="{% if finances_filter.type == 'all' %}is-active{% endif %}" data-finances-type="all">{% translate 'Все' %}</button>
-    <button type="button" class="{% if finances_filter.type == 'income' %}is-active{% endif %}" data-finances-type="income">{% translate 'Доходы' %}</button>
-    <button type="button" class="{% if finances_filter.type == 'expense' %}is-active{% endif %}" data-finances-type="expense">{% translate 'Расходы' %}</button>
-    <button type="button" class="{% if finances_filter.type == 'transfer' %}is-active{% endif %}" data-finances-type="transfer">{% translate 'Переводы' %}</button>
-    <input id="finances-type" type="hidden" name="type" value="{{ finances_filter.type }}">
+<div class="finances-toolbar-primary">
+    <div class="finances-segment" role="tablist" aria-label="{% translate 'Тип операций' %}">
+        <button type="button" class="{% if finances_filter.type == 'all' %}is-active{% endif %}" data-finances-type="all">{% translate 'Все' %}</button>
+        <button type="button" class="{% if finances_filter.type == 'income' %}is-active{% endif %}" data-finances-type="income">{% translate 'Доходы' %}</button>
+        <button type="button" class="{% if finances_filter.type == 'expense' %}is-active{% endif %}" data-finances-type="expense">{% translate 'Расходы' %}</button>
+        <button type="button" class="{% if finances_filter.type == 'transfer' %}is-active{% endif %}" data-finances-type="transfer">{% translate 'Переводы' %}</button>
+        <input id="finances-type" type="hidden" name="type" value="{{ finances_filter.type }}">
+    </div>
+
+    <div class="finances-scope" role="tablist" aria-label="{% translate 'Область данных' %}">
+        <button type="button" class="{% if selected_group_id == 'family' %}is-active{% endif %}" data-finances-scope="family">{% translate 'Семья' %}</button>
+        <button type="button" class="{% if selected_group_id == 'my' %}is-active{% endif %}" data-finances-scope="my">{% translate 'Мои' %}</button>
+        <input id="finances-group" type="hidden" name="group_id" value="{{ selected_group_id }}">
+    </div>
+
+    <label class="finances-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m20 20-4-4"/>
+        </svg>
+        <input id="finances-search" data-finances-search type="search" name="q" value="{{ finances_filter.q }}" placeholder="{% translate 'Категория, счёт или сумма' %}" autocomplete="off">
+        <kbd>/</kbd>
+    </label>
 </div>
 
-<a class="finances-chip" href="{% url 'finances_categories' %}" style="align-items: center;" aria-label="{% translate 'Перейти к категориям' %}">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;">
-        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
-    </svg>
-    <span>{% translate 'Категории' %}</span>
-</a>
-
-<div class="finances-scope" role="tablist" aria-label="{% translate 'Область данных' %}">
-    <button type="button" class="{% if selected_group_id == 'family' %}is-active{% endif %}" data-finances-scope="family">{% translate 'Семья' %}</button>
-    <button type="button" class="{% if selected_group_id == 'my' %}is-active{% endif %}" data-finances-scope="my">{% translate 'Мои' %}</button>
-    <input id="finances-group" type="hidden" name="group_id" value="{{ selected_group_id }}">
-</div>
+<div class="finances-toolbar-filters">
+    <span class="finances-filter-label">{% translate 'Фильтры' %}</span>
 
 <div class="finances-pills">
     <div class="finances-pop-wrap">
-        <button type="button" class="finances-chip {% if finances_filter.period != 'm' %}is-active{% endif %}" data-finances-pop-button="period">
+        <button type="button" class="finances-chip {% if finances_filter.period != 'm' %}is-active{% endif %}" data-finances-pop-button="period" aria-haspopup="true" aria-expanded="false">
             {% translate 'Период' %}: {{ finances_filter.period_label }}
         </button>
         <div class="finances-pop" data-finances-pop="period">
@@ -41,7 +48,7 @@
     </div>
 
     <div class="finances-pop-wrap">
-        <button type="button" class="finances-chip {% if finances_filter.account_ids %}is-active{% endif %}" data-finances-pop-button="account">
+        <button type="button" class="finances-chip {% if finances_filter.account_ids %}is-active{% endif %}" data-finances-pop-button="account" aria-haspopup="true" aria-expanded="false">
             {% translate 'Счёт' %}: {% if finances_filter.account_ids %}{{ finances_filter.account_ids|length }}{% translate ' выбрано' %}{% else %}{% translate 'все' %}{% endif %}
         </button>
         <div class="finances-pop" data-finances-pop="account">
@@ -58,10 +65,18 @@
         </div>
     </div>
 
-    <div class="finances-pop-wrap">
-        <button type="button" class="finances-chip {% if finances_filter.category_keys %}is-active{% endif %}" data-finances-pop-button="category">
+    <div class="finances-pop-wrap finances-category-control">
+        <button type="button" class="finances-chip {% if finances_filter.category_keys %}is-active{% endif %}" data-finances-pop-button="category" aria-haspopup="true" aria-expanded="false">
             {% translate 'Категория' %}: {% if finances_filter.category_keys %}{{ finances_filter.category_keys|length }}{% translate ' выбрано' %}{% else %}{% translate 'все' %}{% endif %}
         </button>
+        <a class="finances-category-link" href="{% url 'finances_categories' %}" aria-label="{% translate 'Управлять категориями' %}" title="{% translate 'Управлять категориями' %}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="6" cy="6" r="2"/>
+                <circle cx="18" cy="6" r="2"/>
+                <circle cx="12" cy="18" r="2"/>
+                <path d="M8 6h8M7.5 7.5l3.3 8.7M16.5 7.5l-3.3 8.7"/>
+            </svg>
+        </a>
         <div class="finances-pop" data-finances-pop="category">
             <div class="finances-pop-title">{% translate 'Категории' %}</div>
             <div class="finances-pop-body">
@@ -77,7 +92,7 @@
     </div>
 
     <div class="finances-pop-wrap">
-        <button type="button" class="finances-chip {% if finances_filter.min_amount %}is-active{% endif %}" data-finances-pop-button="amount">
+        <button type="button" class="finances-chip {% if finances_filter.min_amount %}is-active{% endif %}" data-finances-pop-button="amount" aria-haspopup="true" aria-expanded="false">
             {% translate 'Сумма' %}: {% if finances_filter.min_amount %}≥ {{ finances_filter.min_amount|floatformat:2 }} ₽{% else %}{% translate 'любая' %}{% endif %}
         </button>
         <div class="finances-pop" data-finances-pop="amount">
@@ -93,12 +108,9 @@
         <input id="finances-min-amount" type="hidden" name="min_amount" value="{{ finances_filter.min_amount|default_if_none:'' }}">
     </div>
 
-    {% if finances_filter.is_active %}
-        <a class="finances-chip is-active" href="{% url 'finances' %}">{% translate 'Сбросить' %}</a>
-    {% endif %}
-</div>
+        {% if finances_filter.is_active %}
+            <a class="finances-reset" href="{% url 'finances' %}">{% translate 'Сбросить' %}</a>
+        {% endif %}
+    </div>
 
-<label class="finances-search">
-    <span class="finances-muted">⌕</span>
-    <input data-finances-search type="search" name="q" value="{{ finances_filter.q }}" placeholder="{% translate 'Поиск операций' %}">
-</label>
+</div>
