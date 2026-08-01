@@ -88,7 +88,9 @@ FK_RESOLVERS: dict[str, Any] = {
 }
 
 
-def _iter_concrete_fields(instance: models.Model) -> Iterable[models.Field]:
+def _iter_concrete_fields(
+    instance: models.Model,
+) -> Iterable[models.Field[Any, Any]]:
     return (
         field
         for field in instance._meta.concrete_fields
@@ -207,12 +209,16 @@ def _create_audit_log(
 
 
 @receiver(pre_save)
-def store_original_state(sender, instance: models.Model, **kwargs) -> None:
+def store_original_state(
+    sender: type[models.Model],
+    instance: models.Model,
+    **kwargs: Any,
+) -> None:
     del kwargs
     if sender not in AUDITED_MODELS or instance.pk is None:
         return
 
-    old_instance = sender.objects.filter(pk=instance.pk).first()
+    old_instance = sender._default_manager.filter(pk=instance.pk).first()
     if old_instance is None:
         return
 
@@ -221,10 +227,10 @@ def store_original_state(sender, instance: models.Model, **kwargs) -> None:
 
 @receiver(post_save)
 def audit_saved_instance(
-    sender,
+    sender: type[models.Model],
     instance: models.Model,
     created: bool,
-    **kwargs,
+    **kwargs: Any,
 ) -> None:
     del kwargs
     if sender not in AUDITED_MODELS:
@@ -255,7 +261,11 @@ def audit_saved_instance(
 
 
 @receiver(post_delete)
-def audit_deleted_instance(sender, instance: models.Model, **kwargs) -> None:
+def audit_deleted_instance(
+    sender: type[models.Model],
+    instance: models.Model,
+    **kwargs: Any,
+) -> None:
     del kwargs
     if sender not in AUDITED_MODELS:
         return

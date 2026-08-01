@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -282,9 +282,10 @@ class Budget(models.Model):
         ]
 
     def clean(self) -> None:
-        if self.period and self.period.day != 1:
+        if self.period.day != 1:
             self.period = self.period.replace(day=1)
-        if self.category_id and self.category.type != TransactionType.EXPENSE:
+        category = self.category
+        if category is not None and category.type != TransactionType.EXPENSE:
             raise ValidationError(
                 {
                     'category': _(
@@ -292,14 +293,13 @@ class Budget(models.Model):
                     ),
                 },
             )
-        if self.category_id and self.category.user_id != self.user_id:
+        if category is not None and category.user_id != self.user_id:
             raise ValidationError(
                 {'category': _('Категория должна принадлежать пользователю.')},
             )
 
-    def save(self, *args: object, **kwargs: object) -> None:
-        if self.period:
-            self.period = self.period.replace(day=1)
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        self.period = self.period.replace(day=1)
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:

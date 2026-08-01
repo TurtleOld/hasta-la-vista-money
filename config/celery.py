@@ -38,7 +38,7 @@ app.conf.update(
 )
 
 
-@app.task(bind=True, ignore_result=True)
+@app.task(bind=True, ignore_result=True)  # type: ignore[untyped-decorator]
 def debug_task(self: Celery) -> None:
     """Debug task for testing Celery setup."""
     logging.getLogger(__name__).info('Request: %r', self.request)

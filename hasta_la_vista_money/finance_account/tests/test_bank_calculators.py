@@ -2,6 +2,7 @@
 
 from calendar import monthrange
 from datetime import datetime, time
+from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock
 
 from dateutil.relativedelta import relativedelta
@@ -22,6 +23,9 @@ from hasta_la_vista_money.finance_account.services.bank_calculators import (
     create_bank_calculator,
 )
 from hasta_la_vista_money.users.factories import UserFactory
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.models import Account
 
 
 def _aware_datetime(
@@ -49,10 +53,13 @@ class TestSberbankCalculator(TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.user = UserFactory()
-        self.account = AccountFactory(
-            user=self.user,
-            bank=BANK_SBERBANK,
-            type_account='CreditCard',
+        self.account = cast(
+            'Account',
+            AccountFactory(
+                user=self.user,
+                bank=BANK_SBERBANK,
+                type_account='CreditCard',
+            ),
         )
         self.calculator = SberbankCalculator()
         self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
@@ -100,10 +107,13 @@ class TestRaiffeisenbankCalculator(TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.user = UserFactory()
-        self.account = AccountFactory(
-            user=self.user,
-            bank=BANK_RAIFFEISENBANK,
-            type_account='CreditCard',
+        self.account = cast(
+            'Account',
+            AccountFactory(
+                user=self.user,
+                bank=BANK_RAIFFEISENBANK,
+                type_account='CreditCard',
+            ),
         )
         self.transaction_repository = MagicMock()
         self.receipt_repository = MagicMock()
@@ -180,7 +190,10 @@ class TestDefaultBankCalculator(TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.user = UserFactory()
-        self.account = AccountFactory(user=self.user, bank=BANK_DEFAULT)
+        self.account = cast(
+            'Account',
+            AccountFactory(user=self.user, bank=BANK_DEFAULT),
+        )
         self.calculator = DefaultBankCalculator()
         self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)
         self.purchase_end = _aware_datetime(2024, 1, 31, 23, 59, 59)

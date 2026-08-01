@@ -4,7 +4,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.staticfiles import finders
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpRequest
 from django.urls import include, path, re_path
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -53,7 +53,7 @@ def _serve_file(
     return response
 
 
-def debug_media_serve(request, path: str):
+def debug_media_serve(request: HttpRequest, path: str) -> FileResponse:
     del request
     media_root = Path(settings.MEDIA_ROOT)
     file_path = (media_root / path).resolve()
@@ -65,7 +65,7 @@ def debug_media_serve(request, path: str):
     return _serve_file(file_path)
 
 
-def debug_static_serve(request, path: str):
+def debug_static_serve(request: HttpRequest, path: str) -> FileResponse:
     del request
     static_file = finders.find(path)
     if not static_file:

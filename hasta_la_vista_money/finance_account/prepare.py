@@ -92,7 +92,7 @@ def collect_info_income(
         queryset = queryset.filter(account__currency=currency)
     if category_ids:
         queryset = queryset.filter(category_id__in=category_ids)
-    queryset = queryset.values(
+    values_queryset = queryset.values(
         'id',
         'date',
         'account__name_account',
@@ -100,7 +100,7 @@ def collect_info_income(
         'user__username',
         'amount',
     )
-    return cast('list[IncomeInfoDict]', list(queryset))
+    return cast('list[IncomeInfoDict]', list(values_queryset))
 
 
 def collect_info_expense(
@@ -138,7 +138,7 @@ def collect_info_expense(
         queryset = queryset.filter(account__currency=currency)
     if category_ids:
         queryset = queryset.filter(category_id__in=category_ids)
-    queryset = queryset.values(
+    values_queryset = queryset.values(
         'id',
         'date',
         'account__name_account',
@@ -146,7 +146,7 @@ def collect_info_expense(
         'user__username',
         'amount',
     )
-    return cast('list[ExpenseInfoDict]', list(queryset))
+    return cast('list[ExpenseInfoDict]', list(values_queryset))
 
 
 def sort_expense_income(

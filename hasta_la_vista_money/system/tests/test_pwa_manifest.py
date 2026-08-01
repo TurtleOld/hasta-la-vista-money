@@ -1,14 +1,19 @@
 from http import HTTPStatus
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.http import HttpResponse, StreamingHttpResponse
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from hasta_la_vista_money import __version__
 from hasta_la_vista_money.system.services.pwa import get_pwa_precache_payload
 from hasta_la_vista_money.system.views import ServiceWorkerView
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class PwaManifestTests(TestCase):
@@ -22,7 +27,10 @@ class PwaManifestTests(TestCase):
 
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertIn('application/manifest+json', response['Content-Type'])
-        content = b''.join(response.streaming_content)
+        streaming_response = cast('StreamingHttpResponse', response)
+        content = b''.join(
+            cast('Iterable[bytes]', streaming_response.streaming_content),
+        )
         self.assertIn(b'"name": "Hasta La Vista, Money!"', content)
         self.assertIn(b'"display": "standalone"', content)
 
@@ -46,6 +54,8 @@ class ServiceWorkerTests(TestCase):
     def test_service_worker_is_available(self) -> None:
         request = RequestFactory().get(reverse('service_worker'))
         response = ServiceWorkerView.as_view()(request)
+        if not isinstance(response, HttpResponse):
+            self.fail('Expected an HttpResponse')
 
         self.assertEqual(response.status_code, HTTPStatus.OK)
         content_type = response['Content-Type'].split(';', maxsplit=1)[0]
