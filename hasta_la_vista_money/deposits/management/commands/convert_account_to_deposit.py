@@ -10,6 +10,7 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money.deposits.commands import (
     ConvertAccountToDepositCommand,
 )
+from hasta_la_vista_money.deposits.models import DepositTerm
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.services.dashboard_kpis import (
     DashboardKpiDict,
@@ -138,6 +139,7 @@ class Command(BaseCommand):
                     matures_on=options['matures_on'],
                     annual_rate=options['annual_rate'],
                     converted_on=options['converted_on'],
+                    rate_kind=DepositTerm.RateKind.FIXED,
                 ),
             )
         except ValidationError as error:

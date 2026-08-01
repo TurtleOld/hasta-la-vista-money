@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-{% with term=deposit.current_term rate=deposit.current_term.current_rate %}
+{% with term=deposit.current_term %}
 <main class="accounts-app">
     <div class="accounts-wrap">
         <div class="accounts-composer-crumb">
@@ -26,11 +26,37 @@
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Условия текущего срока' %}</h2></div>
             <div class="accounts-list">
-                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Годовая ставка' %}</div><div class="accounts-row-name">{{ rate.annual_rate }}%</div></div></div></div>
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Тип ставки' %}</div><div class="accounts-row-name">{{ term.get_rate_kind_display }}</div></div></div></div>
+                {% with rate=term.current_rate %}
+                {% if rate %}
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Текущая годовая ставка' %}</div><div class="accounts-row-name">{{ rate.annual_rate }}%</div></div></div></div>
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Действует с' %}</div><div class="accounts-row-name">{{ rate.starts_on|date:'d.m.Y' }}</div></div></div></div>
+                {% if rate.note %}
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Пояснение' %}</div><div class="accounts-row-name">{{ rate.note }}</div></div></div></div>
+                {% endif %}
+                {% else %}
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Текущая годовая ставка' %}</div><div class="accounts-row-name">{% translate 'Ставка на текущий период не определена' %}</div></div></div></div>
+                {% endif %}
+                {% endwith %}
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Срок' %}</div><div class="accounts-row-name">{{ term.opened_on|date:'d.m.Y' }} — {{ term.matures_on|date:'d.m.Y' }}</div></div></div></div>
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Состояние' %}</div><div class="accounts-row-name">{{ term.state_label }}</div></div></div></div>
             </div>
         </section>
+        {% if term.rate_kind == 'floating' %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd">
+                <h2>{% translate 'История ставки' %}</h2>
+                {% if term.state != 'matured' %}
+                <a href="{% url 'deposits:add-rate-period' pk=deposit.pk term_id=term.pk %}" class="btn btn-sm btn-outline-primary">{% translate 'Добавить период' %}</a>
+                {% endif %}
+            </div>
+            <div class="accounts-list">
+                {% for period in term.rate_periods.all %}
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{{ period.starts_on|date:'d.m.Y' }} — {{ period.ends_on|date:'d.m.Y' }}</div><div class="accounts-row-name">{{ period.annual_rate }}%{% if period.note %} · {{ period.note }}{% endif %}</div></div></div></div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
     </div>
 </main>
 {% endwith %}

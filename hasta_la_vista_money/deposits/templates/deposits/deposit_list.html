@@ -27,7 +27,9 @@
                             <div class="accounts-row-mark">%</div>
                             <div class="accounts-min0">
                                 <div class="accounts-row-name">{{ deposit.name }}</div>
-                                <div class="accounts-row-kind">{{ deposit.get_bank_display }} · {{ term.state_label }} · {{ term.current_rate.annual_rate }}%</div>
+                                {% with rate=term.current_rate %}
+                                <div class="accounts-row-kind">{{ deposit.get_bank_display }} · {{ term.state_label }} · {% if rate %}{{ rate.annual_rate }}%{% else %}{% translate 'Ставка на текущий период не определена' %}{% endif %}</div>
+                                {% endwith %}
                             </div>
                             <div class="accounts-row-right">
                                 <div class="accounts-row-amt">{{ deposit.account.balance|comma }}<span class="cur">{{ deposit.account.currency }}</span></div>
@@ -38,7 +40,7 @@
                 {% empty %}
                     <div class="accounts-empty">
                         <p class="accounts-empty-title">{% translate 'Срочных вкладов пока нет' %}</p>
-                        <p class="accounts-empty-text">{% translate 'Создайте договор с фиксированным сроком и ставкой.' %}</p>
+                        <p class="accounts-empty-text">{% translate 'Создайте договор со сроком и ставкой.' %}</p>
                     </div>
                 {% endfor %}
             </div>

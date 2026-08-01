@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load i18n static comma word_hash %}
+
+{% block title %}{% translate 'Новый период ставки' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'accounts/css/accounts.css' %}?v={% word_hash %}">
+{% endblock %}
+
+{% block content %}
+<main class="accounts-app">
+    <div class="accounts-wrap">
+        <div class="accounts-composer-crumb">
+            <a href="{% url 'deposits:list' %}">{% translate 'Вклады' %}</a>
+            <span class="sep">·</span>
+            <a href="{{ deposit.get_absolute_url }}">{{ deposit.name }}</a>
+            <span class="sep">·</span>
+            <b>{% translate 'Новый период ставки' %}</b>
+        </div>
+        <section class="accounts-panel">
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button type="submit" class="btn btn-primary">{% translate 'Сохранить' %}</button>
+            </form>
+        </section>
+    </div>
+</main>
+{% endblock %}

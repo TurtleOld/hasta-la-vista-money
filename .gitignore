@@ -246,3 +246,5 @@ uv.lock
 docs/superpowers/**
 
 kilo.jsonc
+
+.worktrees/

@@ -3,12 +3,13 @@ from typing import Protocol
 from django.db.models import QuerySet
 
 from hasta_la_vista_money.deposits.commands import (
+    AddFloatingRatePeriodCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
     OpenExistingDepositCommand,
 )
-from hasta_la_vista_money.deposits.models import Deposit
+from hasta_la_vista_money.deposits.models import Deposit, DepositRatePeriod
 from hasta_la_vista_money.users.models import User
 
 
@@ -71,6 +72,24 @@ class DepositServiceProtocol(Protocol):
         Raises:
             ValidationError: If the account is invalid, already a deposit,
                 already linked, or the agreement parameters are invalid.
+        """
+
+    def add_floating_rate_period(
+        self,
+        command: AddFloatingRatePeriodCommand,
+    ) -> DepositRatePeriod:
+        """Append a new effective-rate period to a floating-rate term.
+
+        Args:
+            command: Term identifier, new period's start date, rate, and
+                note.
+
+        Returns:
+            The newly created DepositRatePeriod.
+
+        Raises:
+            ValidationError: If the term is invalid, not floating, matured,
+                or the new period's parameters are invalid.
         """
 
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]: ...

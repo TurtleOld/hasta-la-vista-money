@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
@@ -6,16 +6,22 @@ from unittest.mock import patch
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from django.test import TestCase
+from django.utils import timezone
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_DEPOSIT
 from hasta_la_vista_money.deposits.commands import (
+    AddFloatingRatePeriodCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
     OpenExistingDepositCommand,
 )
-from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
+from hasta_la_vista_money.deposits.models import (
+    Deposit,
+    DepositPrincipalEvent,
+    DepositTerm,
+)
 from hasta_la_vista_money.finance_account.models import (
     Account,
     TransferMoneyLog,
@@ -49,6 +55,7 @@ class DepositServiceIntegrationTests(TestCase):
                 opened_on=date(2026, 6, 1),
                 matures_on=date(2026, 12, 1),
                 annual_rate=Decimal('14.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
             ),
         )
         event = DepositPrincipalEvent.objects.get(deposit=deposit)
@@ -123,6 +130,7 @@ class DepositServiceIntegrationTests(TestCase):
                         opened_on=date(2026, 8, 1),
                         matures_on=date(2027, 2, 1),
                         annual_rate=Decimal('15.50'),
+                        rate_kind=DepositTerm.RateKind.FIXED,
                     ),
                 )
 
@@ -161,6 +169,7 @@ class DepositServiceIntegrationTests(TestCase):
                     opened_on=date(2026, 8, 1),
                     matures_on=date(2027, 2, 1),
                     annual_rate=Decimal('15.50'),
+                    rate_kind=DepositTerm.RateKind.FIXED,
                 ),
             )
 
@@ -214,6 +223,7 @@ class DepositServiceIntegrationTests(TestCase):
                     opened_on=date(2026, 8, 1),
                     matures_on=date(2027, 2, 1),
                     annual_rate=Decimal('15.50'),
+                    rate_kind=DepositTerm.RateKind.FIXED,
                 ),
             )
 
@@ -242,6 +252,7 @@ class DepositServiceIntegrationTests(TestCase):
                 opened_on=date(2026, 6, 1),
                 matures_on=date(2026, 12, 1),
                 annual_rate=Decimal('14.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
             ),
         )
 
@@ -289,6 +300,7 @@ class DepositServiceIntegrationTests(TestCase):
                 opened_on=date(2026, 8, 1),
                 matures_on=date(2027, 2, 1),
                 annual_rate=Decimal('15.50'),
+                rate_kind=DepositTerm.RateKind.FIXED,
             ),
         )
 
@@ -326,6 +338,7 @@ class DepositServiceIntegrationTests(TestCase):
                 opened_on=date(2026, 8, 1),
                 matures_on=date(2027, 2, 1),
                 annual_rate=Decimal('15.50'),
+                rate_kind=DepositTerm.RateKind.FIXED,
             ),
         )
 
@@ -388,6 +401,7 @@ class DepositServiceIntegrationTests(TestCase):
                     opened_on=date(2027, 1, 1),
                     matures_on=date(2026, 1, 1),
                     annual_rate=Decimal('10.00'),
+                    rate_kind=DepositTerm.RateKind.FIXED,
                 ),
             )
 
@@ -427,6 +441,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                 matures_on=date(2026, 12, 1),
                 annual_rate=Decimal('14.00'),
                 converted_on=date(2026, 8, 1),
+                rate_kind=DepositTerm.RateKind.FIXED,
             ),
         )
 
@@ -478,6 +493,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                     matures_on=date(2026, 12, 1),
                     annual_rate=Decimal('14.00'),
                     converted_on=date(2026, 8, 1),
+                    rate_kind=DepositTerm.RateKind.FIXED,
                 ),
             )
 
@@ -498,6 +514,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                 opened_on=date(2026, 1, 1),
                 matures_on=date(2026, 7, 1),
                 annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
             ),
         )
 
@@ -512,6 +529,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                     matures_on=date(2026, 12, 1),
                     annual_rate=Decimal('14.00'),
                     converted_on=date(2026, 8, 1),
+                    rate_kind=DepositTerm.RateKind.FIXED,
                 ),
             )
 
@@ -542,6 +560,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
             matures_on=date(2026, 12, 1),
             annual_rate=Decimal('14.00'),
             converted_on=date(2026, 8, 1),
+            rate_kind=DepositTerm.RateKind.FIXED,
         )
         first_deposit = service.convert_account_to_deposit(command)
 
@@ -581,6 +600,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                     matures_on=date(2026, 1, 1),
                     annual_rate=Decimal('14.00'),
                     converted_on=date(2026, 8, 1),
+                    rate_kind=DepositTerm.RateKind.FIXED,
                 ),
             )
 
@@ -620,6 +640,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                     matures_on=date(2026, 12, 1),
                     annual_rate=Decimal('14.00'),
                     converted_on=date(2026, 8, 1),
+                    rate_kind=DepositTerm.RateKind.FIXED,
                 ),
             )
 
@@ -666,6 +687,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                 matures_on=date(2026, 12, 1),
                 annual_rate=Decimal('14.00'),
                 converted_on=date(2026, 8, 1),
+                rate_kind=DepositTerm.RateKind.FIXED,
             ),
         )
 
@@ -679,3 +701,229 @@ class ConvertAccountToDepositServiceTests(TestCase):
         self.assertEqual(assets_before, assets_after)
         other_rub_account.refresh_from_db()
         self.assertEqual(other_rub_account.balance, Decimal('30000.00'))
+
+
+class AddFloatingRatePeriodServiceTests(TestCase):
+    def _open_floating_deposit(
+        self,
+        user: 'User',
+        *,
+        opened_on: date | None = None,
+        matures_on: date | None = None,
+    ) -> Deposit:
+        service = ApplicationContainer().deposits.deposit_service()
+        opened_on = opened_on or date(2026, 1, 1)
+        matures_on = matures_on or date(2026, 12, 31)
+        deposit: Deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Плавающий вклад',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('50000.00'),
+                opened_on=opened_on,
+                matures_on=matures_on,
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FLOATING,
+            ),
+        )
+        return deposit
+
+    def test_add_floating_rate_period_trims_previous_and_appends_new(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        new_period = service.add_floating_rate_period(
+            AddFloatingRatePeriodCommand(
+                user=user,
+                term_id=term.pk,
+                starts_on=date(2026, 3, 1),
+                annual_rate=Decimal('11.50'),
+                note='КС ЦБ РФ повышена',
+            ),
+        )
+
+        term.refresh_from_db()
+        periods = list(term.rate_periods.order_by('starts_on'))
+        self.assertEqual(len(periods), 2)
+        self.assertEqual(periods[0].ends_on, date(2026, 2, 28))
+        self.assertEqual(periods[0].annual_rate, Decimal('10.00'))
+        self.assertEqual(periods[1], new_period)
+        self.assertEqual(new_period.starts_on, date(2026, 3, 1))
+        self.assertEqual(new_period.ends_on, date(2026, 12, 31))
+        self.assertEqual(new_period.annual_rate, Decimal('11.50'))
+        self.assertEqual(new_period.note, 'КС ЦБ РФ повышена')
+
+    def test_rejects_period_on_fixed_term(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Фикс вклад',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('10000.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+
+        with self.assertRaises(ValidationError):
+            service.add_floating_rate_period(
+                AddFloatingRatePeriodCommand(
+                    user=user,
+                    term_id=term.pk,
+                    starts_on=date(2026, 3, 1),
+                    annual_rate=Decimal('11.00'),
+                    note='попытка',
+                ),
+            )
+
+    def test_rejects_non_owner(self) -> None:
+        user = cast('User', UserFactory())
+        other_user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.add_floating_rate_period(
+                AddFloatingRatePeriodCommand(
+                    user=other_user,
+                    term_id=term.pk,
+                    starts_on=date(2026, 3, 1),
+                    annual_rate=Decimal('11.00'),
+                    note='чужой',
+                ),
+            )
+
+    def test_rejects_non_positive_rate(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.add_floating_rate_period(
+                AddFloatingRatePeriodCommand(
+                    user=user,
+                    term_id=term.pk,
+                    starts_on=date(2026, 3, 1),
+                    annual_rate=Decimal(0),
+                    note='нулевая ставка',
+                ),
+            )
+
+    def test_rejects_empty_note(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.add_floating_rate_period(
+                AddFloatingRatePeriodCommand(
+                    user=user,
+                    term_id=term.pk,
+                    starts_on=date(2026, 3, 1),
+                    annual_rate=Decimal('11.00'),
+                    note='   ',
+                ),
+            )
+
+    def test_rejects_non_monotonic_starts_on(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+        service.add_floating_rate_period(
+            AddFloatingRatePeriodCommand(
+                user=user,
+                term_id=term.pk,
+                starts_on=date(2026, 3, 1),
+                annual_rate=Decimal('11.00'),
+                note='первое изменение',
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            service.add_floating_rate_period(
+                AddFloatingRatePeriodCommand(
+                    user=user,
+                    term_id=term.pk,
+                    starts_on=date(2026, 2, 1),
+                    annual_rate=Decimal('12.00'),
+                    note='более ранняя дата',
+                ),
+            )
+
+    def test_rejects_starts_on_outside_term_bounds(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.add_floating_rate_period(
+                AddFloatingRatePeriodCommand(
+                    user=user,
+                    term_id=term.pk,
+                    starts_on=date(2027, 1, 15),
+                    annual_rate=Decimal('11.00'),
+                    note='после срока',
+                ),
+            )
+
+    def test_rejects_period_on_matured_term(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(
+            user,
+            opened_on=date(2020, 1, 1),
+            matures_on=date(2020, 6, 1),
+        )
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.add_floating_rate_period(
+                AddFloatingRatePeriodCommand(
+                    user=user,
+                    term_id=term.pk,
+                    starts_on=date(2020, 3, 1),
+                    annual_rate=Decimal('11.00'),
+                    note='после погашения',
+                ),
+            )
+
+    def test_allows_future_starts_on(self) -> None:
+        """A rate change already known in advance can be recorded ahead of
+        time — starts_on in the future is allowed."""
+        user = cast('User', UserFactory())
+        today = timezone.localdate()
+        deposit = self._open_floating_deposit(
+            user,
+            opened_on=today - timedelta(days=10),
+            matures_on=today + timedelta(days=300),
+        )
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        new_period = service.add_floating_rate_period(
+            AddFloatingRatePeriodCommand(
+                user=user,
+                term_id=term.pk,
+                starts_on=today + timedelta(days=30),
+                annual_rate=Decimal('13.00'),
+                note='повышение с будущей даты',
+            ),
+        )
+
+        self.assertEqual(new_period.starts_on, today + timedelta(days=30))

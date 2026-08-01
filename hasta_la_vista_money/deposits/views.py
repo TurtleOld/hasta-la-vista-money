@@ -10,10 +10,14 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, ListView, TemplateView
 
 from hasta_la_vista_money.deposits.commands import (
+    AddFloatingRatePeriodCommand,
     FundDepositCommand,
     OpenExistingDepositCommand,
 )
-from hasta_la_vista_money.deposits.forms import CreateDepositForm
+from hasta_la_vista_money.deposits.forms import (
+    AddFloatingRatePeriodForm,
+    CreateDepositForm,
+)
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 
 if TYPE_CHECKING:
@@ -60,6 +64,7 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
                         opened_on=data['opened_on'],
                         matures_on=data['matures_on'],
                         annual_rate=data['annual_rate'],
+                        rate_kind=data['rate_kind'],
                     ),
                 )
             else:
@@ -74,6 +79,7 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
                         opened_on=data['opened_on'],
                         matures_on=data['matures_on'],
                         annual_rate=data['annual_rate'],
+                        rate_kind=data['rate_kind'],
                     ),
                 )
         except ValidationError as error:
@@ -99,3 +105,50 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
 
     def get_success_url(self) -> str:
         return reverse('deposits:list')
+
+
+class DepositAddRatePeriodView(
+    LoginRequiredMixin,
+    FormView[AddFloatingRatePeriodForm],
+):
+    form_class = AddFloatingRatePeriodForm
+    template_name = 'deposits/deposit_add_rate_period.html'
+
+    def get_deposit(self) -> Deposit:
+        user = cast('User', self.request.user)
+        request = cast('Any', self.request)
+        service = request.container.deposits.deposit_service()
+        return cast(
+            'Deposit',
+            get_object_or_404(
+                service.get_user_deposits(user),
+                pk=self.kwargs['pk'],
+            ),
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context['deposit'] = self.get_deposit()
+        return context
+
+    def form_valid(self, form: AddFloatingRatePeriodForm) -> HttpResponse:
+        deposit = self.get_deposit()
+        user = cast('User', self.request.user)
+        data = form.cleaned_data
+        request = cast('Any', self.request)
+        service = request.container.deposits.deposit_service()
+        try:
+            service.add_floating_rate_period(
+                AddFloatingRatePeriodCommand(
+                    user=user,
+                    term_id=self.kwargs['term_id'],
+                    starts_on=data['starts_on'],
+                    annual_rate=data['annual_rate'],
+                    note=data['note'],
+                ),
+            )
+        except ValidationError as error:
+            form.add_error(None, error)
+            return self.form_invalid(form)
+        messages.success(self.request, _('Ставка вклада обновлена.'))
+        return HttpResponseRedirect(deposit.get_absolute_url())

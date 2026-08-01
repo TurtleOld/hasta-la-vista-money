@@ -1,10 +1,14 @@
 from typing import TYPE_CHECKING, cast
 
-from django.forms import DateField, DateInput, ModelChoiceField
+from django.forms import ChoiceField, DateField, DateInput, ModelChoiceField
 from django.test import TestCase
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.deposits.forms import CreateDepositForm
+from hasta_la_vista_money.deposits.forms import (
+    AddFloatingRatePeriodForm,
+    CreateDepositForm,
+)
+from hasta_la_vista_money.deposits.models import DepositTerm
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.factories import UserFactory
 
@@ -63,6 +67,7 @@ class CreateDepositFormTests(TestCase):
                 'matures_on': '2027-02-01',
                 'annual_rate': '15.50',
                 'opening_method': 'funding',
+                'rate_kind': 'fixed',
                 'source_account': source_account.pk,
             },
         )
@@ -98,3 +103,41 @@ class CreateDepositFormTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('tracking_started_on', form.errors)
+
+
+class CreateDepositFormRateKindTests(TestCase):
+    def test_rate_kind_field_offers_fixed_and_floating(self) -> None:
+        form = CreateDepositForm()
+        rate_kind_field = cast('ChoiceField', form.fields['rate_kind'])
+        choices = cast(
+            'list[tuple[str, str]]',
+            rate_kind_field.choices,
+        )
+        choice_values = [choice[0] for choice in choices]
+        self.assertIn(DepositTerm.RateKind.FIXED, choice_values)
+        self.assertIn(DepositTerm.RateKind.FLOATING, choice_values)
+
+
+class AddFloatingRatePeriodFormTests(TestCase):
+    def test_requires_non_blank_note(self) -> None:
+        form = AddFloatingRatePeriodForm(
+            data={
+                'starts_on': '2026-03-01',
+                'annual_rate': '11.50',
+                'note': '   ',
+            },
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('note', form.errors)
+
+    def test_valid_with_note_and_positive_rate(self) -> None:
+        form = AddFloatingRatePeriodForm(
+            data={
+                'starts_on': '2026-03-01',
+                'annual_rate': '11.50',
+                'note': 'КС ЦБ РФ + 2%',
+            },
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
