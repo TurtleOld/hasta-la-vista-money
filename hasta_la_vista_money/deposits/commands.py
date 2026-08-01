@@ -15,6 +15,7 @@ class CreateDepositCommand:
     opened_on: date
     matures_on: date
     annual_rate: Decimal
+    rate_kind: str
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class FundDepositCommand:
     opened_on: date
     matures_on: date
     annual_rate: Decimal
+    rate_kind: str
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class ConvertAccountToDepositCommand:
     matures_on: date
     annual_rate: Decimal
     converted_on: date
+    rate_kind: str
 
 
 @dataclass(frozen=True)
@@ -74,6 +77,7 @@ class OpenExistingDepositCommand:
     opened_on: date
     matures_on: date
     annual_rate: Decimal
+    rate_kind: str
 
 
 @dataclass(frozen=True)
