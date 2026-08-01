@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, QuerySet
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
@@ -27,6 +27,37 @@ class StaleStatementCandidateError(ValueError):
 
 class BankStatementReconciliationService:
     """Apply an owner decision to a probable statement duplicate."""
+
+    @staticmethod
+    def upload_history(user_id: int) -> QuerySet[BankStatementUpload]:
+        return BankStatementUpload.objects.filter(
+            user_id=user_id,
+            account__user_id=user_id,
+        ).select_related('account')[:10]
+
+    @staticmethod
+    def reconciliation_rows(
+        upload: BankStatementUpload,
+        outcome: str,
+    ) -> QuerySet[BankStatementRow]:
+        valid_outcomes = {
+            BankStatementRow.Decision.PENDING,
+            BankStatementRow.Decision.LINKED,
+            BankStatementRow.Decision.NEW,
+        }
+        decision = (
+            outcome
+            if outcome in valid_outcomes
+            else BankStatementRow.Decision.PENDING
+        )
+        return (
+            BankStatementRow.objects.filter(
+                upload=upload,
+                decision=decision,
+            )
+            .prefetch_related('candidates__transaction__category')
+            .order_by('transaction_date', 'pk')
+        )
 
     @transaction.atomic
     def decide(

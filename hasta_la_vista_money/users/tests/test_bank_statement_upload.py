@@ -8,6 +8,7 @@ from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+from django.contrib.auth.models import Group
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
@@ -26,6 +27,7 @@ from hasta_la_vista_money.users.models import (
     BankStatementCandidate,
     BankStatementRow,
     BankStatementUpload,
+    FamilyGroupMembership,
     User,
 )
 from hasta_la_vista_money.users.services.bank_statement import (
@@ -646,6 +648,148 @@ class TestBankStatementReconciliationView(TestCase):
         self.row.refresh_from_db()
         self.assertEqual(self.row.transaction, self.candidate)
 
+    def test_defaults_to_first_25_pending_rows_ordered_by_date(self) -> None:
+        BankStatementRow.objects.all().delete()
+        base_date = timezone.now()
+        for index in range(30):
+            BankStatementRow.objects.create(
+                upload=self.upload,
+                transaction_type=TransactionType.EXPENSE,
+                transaction_date=base_date + timedelta(minutes=index),
+                amount=Decimal('10.00'),
+                description=f'Строка {index}',
+                candidate_description='Кандидат',
+                suggested_category='Прочее',
+                source_row_position=index,
+                candidate=self.candidate,
+            )
+
+        response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['page_obj']), 25)
+        self.assertEqual(response.context['outcome'], 'pending')
+        self.assertEqual(
+            response.context['page_obj'][0].description,
+            'Строка 0',
+        )
+        self.assertNotContains(response, 'Строка 29')
+
+        second_page = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+            {'page': 2},
+        )
+        self.assertEqual(len(second_page.context['page_obj']), 5)
+        self.assertContains(second_page, '?outcome=pending&page=1')
+
+    def test_rows_with_same_date_use_primary_key_tie_breaker(self) -> None:
+        BankStatementRow.objects.all().delete()
+        transaction_date = timezone.now()
+        first = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=transaction_date,
+            amount=Decimal('10.00'),
+            description='Первая',
+            candidate_description='Кандидат',
+            suggested_category='Прочее',
+            source_row_position=0,
+            candidate=self.candidate,
+        )
+        second = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=transaction_date,
+            amount=Decimal('20.00'),
+            description='Вторая',
+            candidate_description='Кандидат',
+            suggested_category='Прочее',
+            source_row_position=1,
+            candidate=self.candidate,
+        )
+
+        response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(list(response.context['page_obj']), [first, second])
+
+    def test_filters_linked_and_new_rows(self) -> None:
+        linked = self.row
+        linked.decision = BankStatementRow.Decision.LINKED
+        linked.transaction = self.candidate
+        linked.save(update_fields=['decision', 'transaction'])
+        new = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now() + timedelta(minutes=1),
+            amount=Decimal('20.00'),
+            description='Новая строка',
+            candidate_description='Кандидат',
+            suggested_category='Прочее',
+            source_row_position=1,
+            candidate=self.candidate,
+            transaction=self.candidate,
+            decision=BankStatementRow.Decision.NEW,
+        )
+
+        linked_response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+            {'outcome': 'linked'},
+        )
+        new_response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+            {'outcome': 'new'},
+        )
+
+        self.assertEqual(list(linked_response.context['page_obj']), [linked])
+        self.assertEqual(list(new_response.context['page_obj']), [new])
+
+    def test_family_viewer_cannot_open_reconciliation(self) -> None:
+        group = Group.objects.create(name='Семья')
+        self.user.groups.add(group)
+        self.other_user.groups.add(group)
+        FamilyGroupMembership.objects.create(
+            group=group,
+            user=self.other_user,
+            role=FamilyGroupMembership.Role.VIEWER,
+        )
+        self.client.force_login(self.other_user)
+
+        response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 404)
+        decision_response = self.client.post(
+            reverse(
+                'users:bank_statement_reconciliation_decide',
+                args=[self.upload.pk, self.row.pk],
+            ),
+            {'decision': 'new'},
+        )
+        self.assertEqual(decision_response.status_code, 404)
+
     def test_stale_candidate_returns_current_candidates(self) -> None:
         stale_candidate = BankStatementCandidate.objects.get(row=self.row)
         stale_candidate.transaction.delete()
@@ -674,6 +818,72 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertContains(response, str(replacement.pk), status_code=409)
         self.row.refresh_from_db()
         self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
+
+
+class TestBankStatementUploadHistory(TestCase):
+    fixtures: ClassVar[list[str]] = ['users.yaml']
+
+    def setUp(self) -> None:
+        self.user: User = User.objects.get(pk=1)
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.account = Account.objects.create(
+            user=self.user,
+            name_account='Основной',
+            balance=Decimal('1000.00'),
+            currency='RUB',
+        )
+
+    def test_upload_page_lists_history_and_unfinished_review_link(self) -> None:
+        pending = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/pending.pdf',
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        completed = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/completed.pdf',
+            status=BankStatementUpload.Status.COMPLETED,
+        )
+        other_user = User.objects.get(pk=2)
+        other_account = Account.objects.create(
+            user=other_user,
+            name_account='Чужой счёт',
+            balance=Decimal('500.00'),
+            currency='RUB',
+        )
+        BankStatementUpload.objects.create(
+            user=other_user,
+            account=other_account,
+            pdf_file='bank_statements/foreign.pdf',
+            status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+
+        response = self.client.get(reverse('users:bank_statement_upload'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'История загрузок')
+        self.assertEqual(
+            list(response.context['upload_history']),
+            [completed, pending],
+        )
+        self.assertContains(
+            response,
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[pending.pk],
+            ),
+        )
+        self.assertNotContains(
+            response,
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[completed.pk],
+            ),
+        )
+        self.assertNotContains(response, 'Чужой счёт')
 
 
 class TestBankStatementParser(TestCase):
