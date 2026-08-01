@@ -325,6 +325,10 @@ class TestBankStatementUploadStatusView(TestCase):
             account=self.account,
             status=BankStatementUpload.Status.AWAITING_CONFIRMATION,
             progress=100,
+            imported_count=4,
+            linked_count=2,
+            awaiting_decision_count=3,
+            expired_count=1,
         )
 
         response = self.client.get(
@@ -340,6 +344,16 @@ class TestBankStatementUploadStatusView(TestCase):
             response.json()['reconciliation_url'],
             reverse('users:bank_statement_reconciliation', args=[upload.pk]),
         )
+        self.assertEqual(
+            response.json()['outcomes'],
+            {
+                'imported': 4,
+                'linked': 2,
+                'awaiting_decision': 3,
+                'expired': 1,
+                'failed': 0,
+            },
+        )
 
     def test_get_status_failed(self) -> None:
         """Test getting status of failed upload."""
@@ -347,6 +361,7 @@ class TestBankStatementUploadStatusView(TestCase):
             user=self.user,
             account=self.account,
             status='failed',
+            failed_count=1,
             error_message='Тестовая ошибка',
         )
 
@@ -357,6 +372,7 @@ class TestBankStatementUploadStatusView(TestCase):
         data = response.json()
         self.assertEqual(data['status'], 'failed')
         self.assertEqual(data['error_message'], 'Тестовая ошибка')
+        self.assertEqual(data['outcomes']['failed'], 1)
 
     def test_cannot_access_other_user_upload(self) -> None:
         """Test that user cannot access other user's upload status."""
@@ -511,6 +527,8 @@ class TestBankStatementReconciliationView(TestCase):
         )
         self.assertEqual(self.account.balance, Decimal('1000.00'))
         self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(self.upload.linked_count, 1)
+        self.assertEqual(self.upload.awaiting_decision_count, 0)
 
     def test_new_decision_is_idempotent_and_changes_balance_once(self) -> None:
         url = reverse(
@@ -534,6 +552,9 @@ class TestBankStatementReconciliationView(TestCase):
                 type=TransactionType.EXPENSE,
             ).exists(),
         )
+        self.upload.refresh_from_db()
+        self.assertEqual(self.upload.imported_count, 1)
+        self.assertEqual(self.upload.awaiting_decision_count, 0)
 
     def test_other_user_cannot_view_or_decide(self) -> None:
         self.client.force_login(self.other_user)
@@ -3762,6 +3783,173 @@ class TestProcessBankStatementTaskIntegration(TestCase):
             list(row.candidates.values_list('transaction_id', flat=True)),
             [matching.pk, unrelated.pk],
         )
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_mixed_statement_imports_clear_row_and_awaits_duplicate(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        duplicate_date = timezone.now()
+        category = Category.objects.create(
+            user=self.user,
+            name='Транспорт',
+            type=TransactionType.EXPENSE,
+        )
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=category,
+            type=TransactionType.EXPENSE,
+            amount=Decimal('300.00'),
+            date=duplicate_date,
+        )
+        classifier = MagicMock()
+        classifier.classify.side_effect = ['Поездки', 'Продукты']
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': duplicate_date,
+                    'amount': Decimal('-300.00'),
+                    'description': 'Такси',
+                    'source_ref': 'duplicate-row',
+                },
+                {
+                    'date': duplicate_date + timedelta(hours=1),
+                    'amount': Decimal('-125.00'),
+                    'description': 'Магазин',
+                    'source_ref': 'clear-row',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/mixed.pdf',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            upload.status,
+            BankStatementUpload.Status.AWAITING_CONFIRMATION,
+        )
+        self.assertEqual(upload.progress, 100)
+        self.assertEqual(upload.imported_count, 1)
+        self.assertEqual(upload.awaiting_decision_count, 1)
+        self.assertEqual(upload.linked_count, 0)
+        self.assertEqual(upload.expired_count, 0)
+        self.assertEqual(upload.failed_count, 0)
+        self.assertEqual(self.account.balance, Decimal('9875.00'))
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertEqual(
+            BankStatementRow.objects.filter(upload=upload).count(),
+            1,
+        )
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_identical_rows_in_same_file_are_imported_separately(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        transaction_date = timezone.now()
+        classifier = MagicMock()
+        classifier.classify.return_value = 'Кофе'
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': transaction_date,
+                    'amount': Decimal('-100.00'),
+                    'description': 'Кофе',
+                    'row_position': 0,
+                },
+                {
+                    'date': transaction_date,
+                    'amount': Decimal('-100.00'),
+                    'description': 'Кофе',
+                    'row_position': 1,
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/identical.pdf',
+            file_hash='identical-file',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        self.assertEqual(upload.imported_count, 2)
+        self.assertEqual(self.account.balance, Decimal('9800.00'))
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertFalse(
+            BankStatementRow.objects.filter(upload=upload).exists(),
+        )
+
+    @patch(
+        'hasta_la_vista_money.users.tasks.ApplicationContainer',
+    )
+    @patch(
+        'hasta_la_vista_money.users.tasks.BankStatementParser',
+    )
+    def test_clear_statement_completes_with_outcomes_and_balance(
+        self,
+        mock_parser_cls: MagicMock,
+        mock_container_cls: MagicMock,
+    ) -> None:
+        classifier = MagicMock()
+        classifier.classify.return_value = 'Продукты'
+        container = MagicMock()
+        container.users.category_classifier.return_value = classifier
+        mock_container_cls.return_value = container
+        mock_parser_cls.return_value.parse.return_value = StatementParseResult(
+            transactions=[
+                {
+                    'date': timezone.now(),
+                    'amount': Decimal('-250.00'),
+                    'description': 'Магазин',
+                    'source_ref': 'clear-only',
+                },
+            ],
+        )
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            pdf_file='bank_statements/clear.pdf',
+        )
+
+        process_bank_statement_task.apply(args=[upload.pk])
+
+        upload.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(upload.status, BankStatementUpload.Status.COMPLETED)
+        self.assertEqual(upload.progress, 100)
+        self.assertEqual(upload.imported_count, 1)
+        self.assertEqual(upload.awaiting_decision_count, 0)
+        self.assertEqual(self.account.balance, Decimal('9750.00'))
 
 
 class TestOzonBankStatement(TestCase):

@@ -210,6 +210,13 @@ class BankStatementUploadStatusView(LoginRequiredMixin, View):
                         == BankStatementUpload.Status.AWAITING_CONFIRMATION
                         else None
                     ),
+                    'outcomes': {
+                        'imported': upload.imported_count,
+                        'linked': upload.linked_count,
+                        'awaiting_decision': (upload.awaiting_decision_count),
+                        'expired': upload.expired_count,
+                        'failed': upload.failed_count,
+                    },
                 },
             )
 

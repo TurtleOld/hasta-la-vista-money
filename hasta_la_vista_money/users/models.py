@@ -143,6 +143,11 @@ class BankStatementUpload(Model):
     income_count = IntegerField(default=0)
     expense_count = IntegerField(default=0)
     skipped_count = IntegerField(default=0)
+    imported_count = IntegerField(default=0)
+    linked_count = IntegerField(default=0)
+    awaiting_decision_count = IntegerField(default=0)
+    expired_count = IntegerField(default=0)
+    failed_count = IntegerField(default=0)
     statement_closing_balance = DecimalField(
         max_digits=20,
         decimal_places=2,
