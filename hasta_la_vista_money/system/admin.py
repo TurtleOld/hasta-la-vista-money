@@ -1,10 +1,11 @@
 from django.contrib import admin
+from django.http import HttpRequest
 
 from hasta_la_vista_money.system.models import AuditLog
 
 
 @admin.register(AuditLog)
-class AuditLogAdmin(admin.ModelAdmin):
+class AuditLogAdmin(admin.ModelAdmin[AuditLog]):
     list_display = (
         'created_at',
         'user',
@@ -27,10 +28,14 @@ class AuditLogAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'model_name', 'object_pk')
     date_hierarchy = 'created_at'
 
-    def has_add_permission(self, request) -> bool:
+    def has_add_permission(self, request: HttpRequest) -> bool:
         del request
         return False
 
-    def has_change_permission(self, request, obj=None) -> bool:
+    def has_change_permission(
+        self,
+        request: HttpRequest,
+        obj: AuditLog | None = None,
+    ) -> bool:
         del request, obj
         return False

@@ -8,7 +8,7 @@ live here so the work survives the user closing the page.
 import json
 from collections.abc import Callable
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from celery import shared_task
@@ -153,7 +153,10 @@ _FAILURE_RULES = (
 
 def _get_pending_receipt_service() -> PendingReceiptServiceProtocol:
     """Resolve PendingReceiptService through the application DI container."""
-    return ApplicationContainer().receipts.pending_receipt_service()
+    return cast(
+        'PendingReceiptServiceProtocol',
+        ApplicationContainer().receipts.pending_receipt_service(),
+    )
 
 
 def _run_fns_pipeline_from_raw(

@@ -158,7 +158,7 @@ class AccountsByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         paginator = self.pagination_class()
         paginated_queryset = paginator.paginate_queryset(
             accounts,
-            request,  # type: ignore[arg-type]
+            request,
         )
         account_serializer = AccountSerializer(
             paginated_queryset,

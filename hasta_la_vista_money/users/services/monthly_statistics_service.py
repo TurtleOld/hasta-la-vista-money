@@ -179,7 +179,7 @@ class StatisticsFilters:
     @property
     def query_string(self) -> str:
         params: list[tuple[str, str | int]] = []
-        optional_params = [
+        optional_params: list[tuple[str, str | int, bool]] = [
             ('period', self.period, self.period != '6'),
             (
                 'date_from',
@@ -404,7 +404,7 @@ def _member_choices(
         for group in family_groups
     )
     family_users = _family_users_for_statistics(user)
-    choices = [
+    choices: list[StatisticsChoiceDict] = [
         {'value': 'my', 'label': 'Мои данные'},
     ]
     if has_owned_family:
@@ -653,10 +653,11 @@ def _budgets_data(
             else 0.0
         )
 
+        category = budget.category
         result.append(
             {
-                'category_name': budget.category.name
-                if budget.category_id
+                'category_name': category.name
+                if category is not None
                 else 'Общий лимит',
                 'period': budget.period.strftime('%B %Y'),
                 'amount_limit': limit,

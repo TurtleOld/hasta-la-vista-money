@@ -7,19 +7,23 @@ including getting currency choices and default currency.
 import json
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 
 from django.utils.translation import get_language
 
 
 @lru_cache
-def _get_currencies_rates():
+def _get_currencies_rates() -> dict[str, dict[str, str]]:
     """Get currency rates from JSON file.
 
     Returns:
         Dictionary mapping currency codes to currency data.
     """
     path = Path(__file__).parent / 'currencies.json'
-    data = json.loads(path.read_text(encoding='utf-8'))
+    data = cast(
+        'list[dict[str, str]]',
+        json.loads(path.read_text(encoding='utf-8')),
+    )
     return {x['code_name']: x for x in data}
 
 

@@ -11,9 +11,12 @@ from typing import Any
 from django.core.exceptions import ValidationError
 from django.forms import (
     CharField,
+    DateField,
     DateInput,
+    DateTimeField,
     DateTimeInput,
     DecimalField,
+    Field,
     ModelForm,
     Textarea,
 )
@@ -45,13 +48,15 @@ class TailwindFormMixin:
     to ensure consistent styling across the application.
     """
 
+    fields: dict[str, Field]
+
     def add_tailwind_classes(self) -> None:
         """Add Tailwind CSS classes to all form widgets.
 
         Iterates through all form fields and appends the shared control class
         set to their widget attributes if not already present.
         """
-        for field in self.fields.values():  # type: ignore[attr-defined]
+        for field in self.fields.values():
             if hasattr(field.widget, 'attrs'):
                 current_class = field.widget.attrs.get('class', '')
                 if TAILWIND_FORM_CONTROL not in current_class:
@@ -67,6 +72,8 @@ class CreditFieldsMixin:
     conditional styling and behavior in the frontend.
     """
 
+    fields: dict[str, Field]
+
     def add_credit_field_classes(self) -> None:
         """Add CSS classes for credit-only fields.
 
@@ -80,12 +87,12 @@ class CreditFieldsMixin:
         ]
 
         for field_name in credit_fields:
-            if field_name in self.fields:  # type: ignore[attr-defined]
-                current_class = self.fields[field_name].widget.attrs.get(  # type: ignore[attr-defined]
+            if field_name in self.fields:
+                current_class = self.fields[field_name].widget.attrs.get(
                     'class',
                     '',
                 )
-                self.fields[field_name].widget.attrs['class'] = (  # type: ignore[attr-defined]
+                self.fields[field_name].widget.attrs['class'] = (
                     f'{current_class} credit-only-field'.strip()
                 )
 
@@ -97,14 +104,17 @@ class DateFieldMixin:
     HTML5 input types and Tailwind styling.
     """
 
+    fields: dict[str, Field]
+
     def setup_date_fields(self) -> None:
         """Configure date fields with appropriate widgets.
 
         Sets up payment_due_date with a date input widget and exchange_date
         with a datetime-local input widget, both with Tailwind styling.
         """
-        if 'payment_due_date' in self.fields:  # type: ignore[attr-defined]
-            self.fields['payment_due_date'].widget = DateInput(  # type: ignore[attr-defined]
+        if 'payment_due_date' in self.fields:
+            payment_due_date = self.fields['payment_due_date']
+            payment_due_date.widget = DateInput(
                 format=constants.HTML5_DATE_INPUT_FORMAT,
                 attrs={
                     'type': 'date',
@@ -114,12 +124,14 @@ class DateFieldMixin:
                     'data-flatpickr-mode': 'date',
                 },
             )
-            self.fields['payment_due_date'].input_formats = list(  # type: ignore[attr-defined]
-                constants.HTML5_DATE_INPUT_FORMATS,
-            )
+            if isinstance(payment_due_date, DateField):
+                payment_due_date.input_formats = list(
+                    constants.HTML5_DATE_INPUT_FORMATS,
+                )
 
-        if 'exchange_date' in self.fields:  # type: ignore[attr-defined]
-            self.fields['exchange_date'].widget = DateTimeInput(  # type: ignore[attr-defined]
+        if 'exchange_date' in self.fields:
+            exchange_date = self.fields['exchange_date']
+            exchange_date.widget = DateTimeInput(
                 format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
                 attrs={
                     'type': 'datetime-local',
@@ -128,9 +140,10 @@ class DateFieldMixin:
                     'data-flatpickr-mode': 'datetime',
                 },
             )
-            self.fields['exchange_date'].input_formats = list(  # type: ignore[attr-defined]
-                constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS,
-            )
+            if isinstance(exchange_date, DateTimeField):
+                exchange_date.input_formats = list(
+                    constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS,
+                )
 
 
 class FormValidationMixin:
@@ -202,8 +215,8 @@ class BaseTransferForm(TailwindFormMixin, ModelForm[TransferMoneyLog]):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
-        if 'exchange_date' in self.fields:  # type: ignore[attr-defined]
-            self.fields['exchange_date'].widget = DateTimeInput(  # type: ignore[attr-defined]
+        if 'exchange_date' in self.fields:
+            self.fields['exchange_date'].widget = DateTimeInput(
                 format=constants.HTML5_DATETIME_LOCAL_INPUT_FORMAT,
                 attrs={
                     'type': 'datetime-local',
@@ -216,7 +229,7 @@ class BaseTransferForm(TailwindFormMixin, ModelForm[TransferMoneyLog]):
                 constants.HTML5_DATETIME_LOCAL_INPUT_FORMATS,
             )
             if not self.is_bound:
-                self.fields['exchange_date'].initial = timezone.now()  # type: ignore[attr-defined]
+                self.fields['exchange_date'].initial = timezone.now()
 
         if 'amount' not in self.fields:
             self.fields['amount'] = DecimalField(

@@ -1,18 +1,58 @@
 {% extends 'base.html' %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% translate 'Сверка выписки' %}{% endblock %}
 
 {% block content %}
 <div class="container mx-auto max-w-5xl px-4 py-8">
     <h1 class="mb-6 text-2xl font-semibold">{% translate 'Сверка выписки' %}</h1>
+    <p class="mb-5 text-sm text-gray-600 dark:text-gray-300">
+        {% translate 'Решения доступны до' %} {{ upload.expires_at|date:'d.m.Y H:i' }}.
+    </p>
     <nav class="mb-6 flex flex-wrap gap-2" aria-label="{% translate 'Фильтр решений' %}">
         <a href="?outcome=pending" class="rounded px-3 py-2 {% if outcome == 'pending' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Нерешённые' %}</a>
         <a href="?outcome=linked" class="rounded px-3 py-2 {% if outcome == 'linked' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Уже учтённые' %}</a>
         <a href="?outcome=new" class="rounded px-3 py-2 {% if outcome == 'new' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Новые операции' %}</a>
+        <a href="?outcome=expired" class="rounded px-3 py-2 {% if outcome == 'expired' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Срок истёк' %}</a>
     </nav>
+    {% if outcome == 'pending' and reconciliation_active %}
+        <form id="bulk-form"
+              class="mb-6 rounded-lg border border-gray-200 p-4 dark:border-gray-700"
+              method="post"
+              action="{% url 'users:bank_statement_reconciliation_bulk' upload.pk %}"
+              data-linked="{% translate 'Связана с единственным актуальным кандидатом' %}"
+              data-new="{% translate 'Импортирована как новая операция' %}"
+              data-ambiguous="{% translate 'Не обработана: найдено несколько кандидатов' %}"
+              data-stale="{% translate 'Не обработана: актуальный кандидат отсутствует' %}"
+              data-conflict="{% translate 'Не обработана: решение конфликтует с текущим состоянием' %}"
+              data-error="{% translate 'Не обработана из-за внутренней ошибки' %}"
+              data-expired="{% translate 'Не обработана: срок сверки истёк' %}"
+              data-not-found="{% translate 'Не обработана: строка недоступна' %}"
+              data-summary="{% translate 'Итоги' %}"
+              data-imported="{% translate 'импортировано' %}"
+              data-linked-count="{% translate 'связано' %}"
+              data-awaiting="{% translate 'ожидает решения' %}"
+              data-expired-count="{% translate 'срок истёк' %}">
+            {% csrf_token %}
+            <div class="flex flex-wrap items-center gap-3">
+                <button class="rounded bg-blue-600 px-4 py-2 text-white" type="submit" name="decision" value="linked">{% translate 'Массово: уже учтены' %}</button>
+                <button class="rounded border border-gray-300 px-4 py-2" type="submit" name="decision" value="new">{% translate 'Массово: импортировать как новые' %}</button>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="confirm_risk" value="true">
+                    {% translate 'Подтверждаю риск создания новых операций' %}
+                </label>
+            </div>
+            <div id="bulk-results" class="mt-3 grid gap-2" aria-live="polite"></div>
+        </form>
+    {% endif %}
     {% for row in page_obj %}
         <section class="mb-6 rounded-lg border border-gray-200 p-5 dark:border-gray-700">
+            {% if outcome == 'pending' and reconciliation_active %}
+                <label class="mb-4 flex items-center gap-2 font-medium">
+                    <input form="bulk-form" type="checkbox" name="rows" value="{{ row.pk }}">
+                    {% translate 'Выбрать строку для массового решения' %}
+                </label>
+            {% endif %}
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <h2 class="mb-3 font-semibold">{% translate 'Строка выписки' %}</h2>
@@ -36,7 +76,7 @@
                     {% endfor %}
                 </div>
             </div>
-            {% if row.decision == 'pending' %}
+            {% if row.decision == 'pending' and reconciliation_active %}
                 <div class="mt-5 flex flex-wrap gap-3">
                     <form id="linked-{{ row.pk }}" method="post" action="{% url 'users:bank_statement_reconciliation_decide' upload.pk row.pk %}">
                         {% csrf_token %}
@@ -53,6 +93,15 @@
                         </button>
                     </form>
                 </div>
+            {% elif row.decision == 'pending' %}
+                <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Срок сверки истёк. Строка будет очищена без создания операции.' %}</p>
+            {% elif row.decision == 'linked' and reconciliation_active %}
+                <form class="mt-5" method="post" action="{% url 'users:bank_statement_reconciliation_revise' upload.pk row.pk %}">
+                    {% csrf_token %}
+                    <button class="rounded border border-gray-300 px-4 py-2" type="submit">{% translate 'Пересмотреть и импортировать как новую' %}</button>
+                </form>
+            {% elif row.decision == 'new' %}
+                <p class="mt-5 text-sm text-gray-600 dark:text-gray-300">{% translate 'Связать эту строку с существующей операцией нельзя до появления безопасного аннулирования финансовых движений.' %}</p>
             {% endif %}
         </section>
     {% empty %}
@@ -66,4 +115,5 @@
         </nav>
     {% endif %}
 </div>
+<script src="{% static 'js/dist/pages/bank-statement-reconciliation.js' %}" defer></script>
 {% endblock %}

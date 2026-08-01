@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import ClassVar
 
 from django.test import TestCase
 from django.urls import reverse
@@ -18,12 +17,12 @@ from hasta_la_vista_money.users.models import User
 
 
 class TransactionAPITest(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures = ['users.yaml']
 
     def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
-        self.client = APIClient()
-        self.client.force_authenticate(user=self.user)
+        self.api_client = APIClient()
+        self.api_client.force_authenticate(user=self.user)
 
         self.account = Account.objects.create(
             user=self.user,
@@ -60,13 +59,13 @@ class TransactionAPITest(TestCase):
         )
 
     def test_by_group_returns_all_user_transactions(self) -> None:
-        response = self.client.get(reverse('api:transactions:by_group'))
+        response = self.api_client.get(reverse('api:transactions:by_group'))
         self.assertEqual(response.status_code, 200)
         ids = {row['id'] for row in response.json()['results']}
         self.assertEqual(ids, {self.income.pk, self.expense.pk})
 
     def test_by_group_filters_by_type(self) -> None:
-        response = self.client.get(
+        response = self.api_client.get(
             reverse('api:transactions:by_group') + '?type=income',
         )
         results = response.json()['results']
@@ -74,7 +73,7 @@ class TransactionAPITest(TestCase):
         self.assertEqual(results[0]['id'], self.income.pk)
 
     def test_data_filters_by_date_range(self) -> None:
-        response = self.client.get(
+        response = self.api_client.get(
             reverse('api:transactions:data')
             + '?date_after=2026-02-01&date_before=2026-02-28',
         )
@@ -83,7 +82,7 @@ class TransactionAPITest(TestCase):
         self.assertEqual(results[0]['id'], self.expense.pk)
 
     def test_retrieve_returns_serialized_transaction(self) -> None:
-        response = self.client.get(
+        response = self.api_client.get(
             reverse('api:transactions:retrieve', args=[self.income.pk]),
         )
         self.assertEqual(response.status_code, 200)
@@ -94,6 +93,6 @@ class TransactionAPITest(TestCase):
         self.assertEqual(body['account_name'], 'Карта')
 
     def test_unauthenticated_request_rejected(self) -> None:
-        self.client.force_authenticate(user=None)
-        response = self.client.get(reverse('api:transactions:by_group'))
+        self.api_client.force_authenticate(user=None)
+        response = self.api_client.get(reverse('api:transactions:by_group'))
         self.assertEqual(response.status_code, 401)

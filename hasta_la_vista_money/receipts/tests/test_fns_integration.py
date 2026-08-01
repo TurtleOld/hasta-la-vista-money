@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import sys
 import types
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self, cast
 from unittest import mock
 
 from django.core.cache import cache
@@ -56,6 +56,11 @@ from hasta_la_vista_money.receipts.tasks import (
     process_pending_receipt_from_qr,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import httpx
 
 TEST_CACHES = {
     'default': {
@@ -137,8 +142,9 @@ class FNSQRTests(TestCase):
         )
         pyzbar_package = types.ModuleType('pyzbar')
         pyzbar_module = types.ModuleType('pyzbar.pyzbar')
-        pyzbar_module.ZBarSymbol = types.SimpleNamespace(QRCODE='QRCODE')
-        pyzbar_module.decode = mock.Mock(
+        pyzbar_api = cast('Any', pyzbar_module)
+        pyzbar_api.ZBarSymbol = types.SimpleNamespace(QRCODE='QRCODE')
+        pyzbar_api.decode = mock.Mock(
             return_value=[
                 types.SimpleNamespace(
                     data=b't=20260525T1200&s=123.45&fn=1&i=2&fp=3&n=1',
@@ -164,8 +170,9 @@ class FNSQRTests(TestCase):
         )
         pyzbar_package = types.ModuleType('pyzbar')
         pyzbar_module = types.ModuleType('pyzbar.pyzbar')
-        pyzbar_module.ZBarSymbol = types.SimpleNamespace(QRCODE='QRCODE')
-        pyzbar_module.decode = mock.Mock(return_value=[])
+        pyzbar_api = cast('Any', pyzbar_module)
+        pyzbar_api.ZBarSymbol = types.SimpleNamespace(QRCODE='QRCODE')
+        pyzbar_api.decode = mock.Mock(return_value=[])
 
         with (
             mock.patch.dict(
@@ -326,7 +333,10 @@ class FNSClientTests(TestCase):
 
     def _client(self) -> FNSClient:
         return FNSClient(
-            http_client_factory=_FakeHTTPClient,
+            http_client_factory=cast(
+                'Callable[..., httpx.Client]',
+                _FakeHTTPClient,
+            ),
             base_url='https://fns.example/v2',
             credentials=self.credentials,
             timeout_seconds=1,
@@ -493,7 +503,8 @@ class ProcessPendingReceiptFromQRTests(TestCase):
 
         pending.refresh_from_db()
         self.assertEqual(pending.status, PendingReceiptStatus.READY)
-        self.assertEqual(pending.receipt_data['name_seller'], 'Магазин')
+        receipt_data = cast('dict[str, Any]', pending.receipt_data)
+        self.assertEqual(receipt_data['name_seller'], 'Магазин')
 
     def test_task_marks_failed_on_fns_error(self) -> None:
         pending = self._create_pending()
@@ -569,12 +580,13 @@ class ProcessPendingReceiptFNSTests(TestCase):
 
         pending.refresh_from_db()
         self.assertEqual(pending.status, PendingReceiptStatus.READY)
-        self.assertEqual(pending.receipt_data['name_seller'], 'Магазин')
+        receipt_data = cast('dict[str, Any]', pending.receipt_data)
+        self.assertEqual(receipt_data['name_seller'], 'Магазин')
         self.assertEqual(
-            pending.receipt_data['items'][0]['category'],
+            receipt_data['items'][0]['category'],
             DEFAULT_PRODUCT_CATEGORY,
         )
-        self.assertIn('_fns_raw', pending.receipt_data)
+        self.assertIn('_fns_raw', receipt_data)
 
     def test_task_marks_ready_with_warning_from_fns_mismatch(self) -> None:
         pending = self._create_pending()
@@ -623,10 +635,8 @@ class ProcessPendingReceiptFNSTests(TestCase):
 
         pending.refresh_from_db()
         self.assertEqual(pending.status, PendingReceiptStatus.READY)
-        self.assertEqual(
-            pending.receipt_data['items'][0]['category'],
-            'История',
-        )
+        receipt_data = cast('dict[str, Any]', pending.receipt_data)
+        self.assertEqual(receipt_data['items'][0]['category'], 'История')
 
     def test_task_marks_failed_when_qr_missing(self) -> None:
         pending = self._create_pending()

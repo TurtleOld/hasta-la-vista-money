@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from django.test import TestCase
 
@@ -15,9 +15,18 @@ from hasta_la_vista_money.transactions.models import (
 )
 from hasta_la_vista_money.users.models import User
 
+if TYPE_CHECKING:
+    from django_filters import ModelChoiceFilter
+
 
 class TransactionFilterTest(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures = ['users.yaml']
+    user: ClassVar[User]
+    account: ClassVar[Account]
+    income_category: ClassVar[Category]
+    expense_category: ClassVar[Category]
+    income: ClassVar[Transaction]
+    expense: ClassVar[Transaction]
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -62,7 +71,13 @@ class TransactionFilterTest(TestCase):
             queryset=Transaction.objects.all(),
             user=self.user,
         )
-        category_qs = filterset.filters['category'].queryset
+        category_filter = cast(
+            'ModelChoiceFilter',
+            filterset.filters['category'],
+        )
+        category_qs = category_filter.queryset
+        if category_qs is None:
+            self.fail('Category filter queryset must be configured')
         self.assertEqual(
             set(category_qs),
             {self.income_category, self.expense_category},

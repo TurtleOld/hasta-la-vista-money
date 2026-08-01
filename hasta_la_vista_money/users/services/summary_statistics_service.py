@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
@@ -58,6 +58,7 @@ from hasta_la_vista_money.users.services.category_statistics_service import (
     _transfer_logs,
 )
 from hasta_la_vista_money.users.services.forecast import (
+    CashflowForecastDict,
     build_cashflow_forecast,
     build_payment_calendar,
 )
@@ -260,7 +261,7 @@ def _build_chart(
     stats_filter: StatisticsFilters,
     start: date,
     end: date,
-    forecast: dict[str, list[float | str | None]] | None = None,
+    forecast: CashflowForecastDict | None = None,
 ) -> ChartDataDict:
     exp_ds = (
         _filtered_transactions(
@@ -313,13 +314,10 @@ def _build_chart(
         exp_series = [constants.ZERO, *exp_series]
         inc_series = [constants.ZERO, *inc_series]
 
-    forecast_labels = [
-        str(label)
-        for label in (forecast or {}).get(
-            'forecast_labels',
-            [],
-        )
-    ]
+    forecast_labels = forecast['forecast_labels'] if forecast else []
+    forecast_balance = forecast['forecast_balance'] if forecast else []
+    forecast_lower = forecast['forecast_lower'] if forecast else []
+    forecast_upper = forecast['forecast_upper'] if forecast else []
     labels = [*all_dates, *forecast_labels]
     padding = [None] * len(all_dates)
     forecast_padding = [None] * len(forecast_labels)
@@ -330,15 +328,15 @@ def _build_chart(
         'income_data': [*inc_series, *forecast_padding],
         'forecast_balance': [
             *padding,
-            *((forecast or {}).get('forecast_balance', [])),
+            *forecast_balance,
         ],
         'forecast_lower': [
             *padding,
-            *((forecast or {}).get('forecast_lower', [])),
+            *forecast_lower,
         ],
         'forecast_upper': [
             *padding,
-            *((forecast or {}).get('forecast_upper', [])),
+            *forecast_upper,
         ],
     }
 
@@ -714,13 +712,15 @@ def _collect_card_payments(
             date__date__lte=period_end,
         ).values('amount', 'date'),
     )
-    return [
-        {'amount': Decimal(str(p['amount'])), 'date': p['exchange_date']}
-        for p in transfers
-    ] + [
-        {'amount': Decimal(str(p['amount'])), 'date': p['date']}
-        for p in income_txns
+    payments: list[PaymentItemDict] = [
+        {'amount': Decimal(str(item['amount'])), 'date': item['exchange_date']}
+        for item in transfers
     ]
+    payments.extend(
+        {'amount': Decimal(str(item['amount'])), 'date': item['date']}
+        for item in income_txns
+    )
+    return payments
 
 
 def _pre_period_debt_for_card(
@@ -1138,7 +1138,7 @@ def get_user_detailed_statistics(
     operations_sort_key = stats_filter.operations_sort.removeprefix('-')
     income_expense = sorted(
         income_expense,
-        key=lambda item: item[operations_sort_key],
+        key=lambda item: cast('Any', item)[operations_sort_key],
         reverse=reverse_operations,
     )
     if stats_filter.operations_search:

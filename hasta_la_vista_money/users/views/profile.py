@@ -307,7 +307,13 @@ class SwitchThemeView(LoginRequiredMixin, View):
         request: HttpRequest,
     ) -> JsonResponse:
         try:
-            user = User.objects.get(pk=request.user.pk)
+            user_pk = request.user.pk
+            if user_pk is None:
+                return JsonResponse(
+                    {'success': False, 'error': 'User not authenticated'},
+                    status=401,
+                )
+            user = User.objects.get(pk=user_pk)
             data = json.loads(request.body)
             theme = data.get('theme', 'auto')
 

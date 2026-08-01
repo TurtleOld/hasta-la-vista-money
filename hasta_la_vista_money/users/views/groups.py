@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import PermissionDenied
 from django.http import (
+    HttpRequest,
     HttpResponse,
 )
 from django.shortcuts import redirect
@@ -17,6 +18,7 @@ from hasta_la_vista_money.users.forms import (
     GroupCreateForm,
     GroupDeleteForm,
 )
+from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.groups import (
     accept_family_invite,
     create_group,
@@ -36,7 +38,10 @@ class GroupCreateView(
     success_message = _('Группа успешно создана')
 
     def form_valid(self, form: GroupCreateForm) -> HttpResponse:
-        form.current_user = self.request.user
+        user = self.request.user
+        if not isinstance(user, User):
+            raise PermissionDenied
+        form.current_user = user
         create_group(form)
         return super().form_valid(form)
 
@@ -64,8 +69,11 @@ class GroupDeleteView(
         return kwargs
 
     def form_valid(self, form: GroupDeleteForm) -> HttpResponse:
+        user = self.request.user
+        if not isinstance(user, User):
+            raise PermissionDenied
         if not user_can_manage_group(
-            self.request.user,
+            user,
             form.cleaned_data['group'],
         ):
             raise PermissionDenied
@@ -96,8 +104,11 @@ class AddUserToGroupView(
         return kwargs
 
     def form_valid(self, form: AddUserToGroupForm) -> HttpResponse:
+        user = self.request.user
+        if not isinstance(user, User):
+            raise PermissionDenied
         if not user_can_manage_group(
-            self.request.user,
+            user,
             form.cleaned_data['group'],
         ):
             raise PermissionDenied
@@ -128,8 +139,11 @@ class DeleteUserFromGroupView(
         return kwargs
 
     def form_valid(self, form: DeleteUserFromGroupForm) -> HttpResponse:
+        user = self.request.user
+        if not isinstance(user, User):
+            raise PermissionDenied
         if not user_can_manage_group(
-            self.request.user,
+            user,
             form.cleaned_data['group'],
         ):
             raise PermissionDenied
@@ -152,10 +166,13 @@ class DeleteUserFromGroupView(
 class JoinFamilyGroupView(View):
     """Join a family group by share link."""
 
-    def get(self, request, token: str) -> HttpResponse:
+    def get(self, request: HttpRequest, token: str) -> HttpResponse:
         if not request.user.is_authenticated:
             return redirect('users:groups:register_by_invite', token=token)
-        group = accept_family_invite(request.user, token)
+        user = request.user
+        if not isinstance(user, User):
+            raise PermissionDenied
+        group = accept_family_invite(user, token)
         if group is None:
             messages.error(
                 request,

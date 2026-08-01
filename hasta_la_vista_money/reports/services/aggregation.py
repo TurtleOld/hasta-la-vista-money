@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from django.core.cache import cache
 from django.db.models import CharField, F, Sum
@@ -185,11 +185,11 @@ def pie_expense_category(user: User) -> list[ChartDataDict]:
         )
 
         if row['category__parent_category']:
-            drilldown_series = chart_entry['drilldown_series'].setdefault(
+            category_series = chart_entry['drilldown_series'].setdefault(
                 drilldown_id,
                 [],
             )
-            drilldown_series.append(
+            category_series.append(
                 {'name': category_name, 'y': amount},
             )
 
@@ -328,7 +328,7 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
     cache_key = f'{get_reports_budget_charts_cache_key(user.pk)}:{period}'
     cached_charts = cache.get(cache_key)
     if cached_charts is not None:
-        return cached_charts  # type: ignore[no-any-return]
+        return cast('BudgetChartsDict', cached_charts)
 
     period_range = report_period_range(period)
     transactions_qs = Transaction.objects.filter(user=user)
@@ -404,7 +404,7 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
         pie_labels[pie_values.index(max(pie_values))] if pie_values else ''
     )
 
-    charts_data = {
+    charts_data: BudgetChartsDict = {
         'chart_labels': chart_labels,
         'chart_income': total_income,
         'chart_expense': total_expense,

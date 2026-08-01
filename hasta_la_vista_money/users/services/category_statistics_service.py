@@ -124,7 +124,7 @@ def _filtered_accounts(
 
 
 def _category_choices(users: Iterable[User]) -> list[StatisticsChoiceDict]:
-    choices = [
+    choices: list[StatisticsChoiceDict] = [
         {
             'value': f'{category.type}-{category.pk}',
             'label': f'{category.name} ({category.get_type_display()})',
@@ -286,7 +286,7 @@ def _category_drilldown_transactions(
         end,
     ).select_related('account', 'category', 'user')
     for category_id in category_ids:
-        result[category_id] = list(
+        rows = (
             queryset.filter(
                 Q(category_id=category_id)
                 | Q(category__parent_category_id=category_id),
@@ -298,8 +298,9 @@ def _category_drilldown_transactions(
                 'category__name',
                 'user__username',
             )
-            .order_by('-date')[: constants.PAGINATE_BY_DEFAULT],
+            .order_by('-date')[: constants.PAGINATE_BY_DEFAULT]
         )
+        result[category_id] = [dict(row) for row in rows]
     return result
 
 

@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 
+from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase
 from django.test.client import RequestFactory
 from rest_framework import serializers as drf_serializers
@@ -77,7 +78,7 @@ class TestAccountSerializer(TestCase):
         self.assertFalse(serializer_with_context.data['is_foreign'])
 
         unauth_request = self.request_factory.get('/api/v1/finance-account/')
-        unauth_request.user = None
+        unauth_request.user = AnonymousUser()
         serializer_with_unauth_context = AccountSerializer(
             self.account,
             context={'request': unauth_request},

@@ -19,10 +19,18 @@ from hasta_la_vista_money.users.models import User
 class TransactionQuerySetTest(TestCase):
     """Cover TransactionQuerySet shortcuts and aggregates."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
+    user: ClassVar[User]
+    account: ClassVar[Account]
+    income_category: ClassVar[Category]
+    expense_root: ClassVar[Category]
+    expense_child: ClassVar[Category]
+    income: ClassVar[Transaction]
+    expense_a: ClassVar[Transaction]
+    expense_b: ClassVar[Transaction]
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -118,7 +126,7 @@ class TransactionQuerySetTest(TestCase):
 class CategoryUniqueConstraintTest(TestCase):
     """Verify the per-user/per-type uniqueness on Category."""
 
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures = ['users.yaml']
 
     def test_same_name_allowed_across_types(self) -> None:
         user = User.objects.get(pk=1)
@@ -155,7 +163,7 @@ class CategoryUniqueConstraintTest(TestCase):
 class ModelStringRepresentationTest(TestCase):
     """Cover __str__ methods on the models."""
 
-    fixtures: ClassVar[list[str]] = [
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]

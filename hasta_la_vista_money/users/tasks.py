@@ -39,6 +39,17 @@ logger = logging.getLogger(__name__)
 FALLBACK_CATEGORY = 'Без категории'
 
 
+def _cleanup_expired_bank_statements() -> dict[str, int]:
+    """Remove expired statement data and return the number cleaned."""
+    service = ApplicationContainer().users.bank_statement_retention_service()
+    return {'cleaned': service.cleanup_expired()}
+
+
+cleanup_expired_bank_statements = shared_task(
+    name='users.cleanup_expired_bank_statements',
+)(_cleanup_expired_bank_statements)
+
+
 @shared_task(bind=True, max_retries=3)  # type: ignore[untyped-decorator]
 def process_bank_statement_task(
     self: Any,

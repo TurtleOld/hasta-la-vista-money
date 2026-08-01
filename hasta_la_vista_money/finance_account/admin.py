@@ -9,7 +9,7 @@ from hasta_la_vista_money.finance_account.models import (
 
 
 @admin.register(Account)
-class AccountAdmin(admin.ModelAdmin):
+class AccountAdmin(admin.ModelAdmin[Account]):
     list_display = (
         'name_account',
         'type_account',
@@ -23,7 +23,7 @@ class AccountAdmin(admin.ModelAdmin):
 
 
 @admin.register(TransferMoneyLog)
-class TransferMoneyLogAdmin(admin.ModelAdmin):
+class TransferMoneyLogAdmin(admin.ModelAdmin[TransferMoneyLog]):
     list_display = (
         'exchange_date',
         'amount',

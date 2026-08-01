@@ -15,7 +15,11 @@ from hasta_la_vista_money.users.models import User
 
 
 class TransactionFormTest(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures = ['users.yaml']
+    user: ClassVar[User]
+    account: ClassVar[Account]
+    income_category: ClassVar[Category]
+    expense_category: ClassVar[Category]
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -82,7 +86,10 @@ class TransactionFormTest(TestCase):
 
 
 class CategoryFormTest(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures = ['users.yaml']
+    user: ClassVar[User]
+    income_parent: ClassVar[Category]
+    expense_parent: ClassVar[Category]
 
     @classmethod
     def setUpTestData(cls) -> None:

@@ -75,7 +75,7 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
         if user_id is None:
             return False
 
-        return obj.user_id != user_id
+        return bool(obj.user_id != user_id)
 
     def create(self, validated_data: dict[str, Any]) -> Account:
         """Override create to set user from request."""

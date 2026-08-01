@@ -19,8 +19,13 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import models
-from django.db.models import QuerySet
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.db.models import Model, QuerySet
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -445,15 +450,18 @@ class FinancesCreateView(LoginRequiredMixin, TemplateView):
         """Build context with both income and expense forms."""
         context = super().get_context_data(**kwargs)
         request = cast('WSGIRequestWithContainer', self.request)
+        if not isinstance(request.user, User):
+            raise TypeError('User must be authenticated')
+        current_user = request.user
         income_categories = Category.objects.filter(
-            user=request.user,
+            user=current_user,
             type=TransactionType.INCOME,
         )
         expense_categories = Category.objects.filter(
-            user=request.user,
+            user=current_user,
             type=TransactionType.EXPENSE,
         )
-        accounts = Account.objects.filter(user=request.user).order_by(
+        accounts = Account.objects.filter(user=current_user).order_by(
             'name_account',
         )
         context.update(
@@ -592,6 +600,8 @@ class TransactionUpdateView(
 
     def get_object(self, queryset: Any = None) -> Transaction:
         """Return a transaction owned by the current user."""
+        if not isinstance(self.request.user, User):
+            raise TypeError('User must be authenticated')
         return get_object_or_404(
             Transaction.objects.select_related('user', 'category', 'account'),
             pk=self.kwargs['pk'],
@@ -600,6 +610,8 @@ class TransactionUpdateView(
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Limit category and account choices to the current transaction."""
+        if not isinstance(self.request.user, User):
+            raise TypeError('User must be authenticated')
         kwargs = super().get_form_kwargs()
         transaction_obj = self.get_object()
         kwargs['category_queryset'] = Category.objects.filter(
@@ -615,6 +627,8 @@ class TransactionUpdateView(
     def form_valid(self, form: TransactionForm) -> HttpResponse:
         """Persist changes through TransactionService for balance safety."""
         request = cast('RequestWithContainer', self.request)
+        if not isinstance(request.user, User):
+            raise TypeError('User must be authenticated')
         cd = form.cleaned_data
         try:
             request.container.transactions.transaction_service().update_transaction(
@@ -631,7 +645,7 @@ class TransactionUpdateView(
             messages.success(request, _('Операция успешно обновлена.'))
             return HttpResponseRedirect(str(self.success_url))
         except (ValueError, TypeError, PermissionDenied) as error:
-            form.add_error(None, error)
+            form.add_error(None, str(error))
             return self.form_invalid(form)
 
 
@@ -815,7 +829,11 @@ def _category_ids(keys: list[str], prefix: str) -> list[int]:
     ]
 
 
-def _apply_date_filter(queryset: QuerySet[Any], field: str, f: FinancesFilter):
+def _apply_date_filter[ModelType: Model](
+    queryset: QuerySet[ModelType],
+    field: str,
+    f: FinancesFilter,
+) -> QuerySet[ModelType]:
     date_range = f.date_range()
     if date_range is None:
         return queryset
@@ -830,15 +848,18 @@ def _apply_date_filter(queryset: QuerySet[Any], field: str, f: FinancesFilter):
 
 def _finances_transactions(
     *,
-    request: 'WSGIRequestWithContainer',
+    request: HttpRequest,
     users: list[User],
     finances_filter: FinancesFilter,
 ) -> list[FinancesTransaction]:
+    if not isinstance(request.user, User):
+        raise TypeError('User must be authenticated')
+    current_user = request.user
     transactions: list[FinancesTransaction] = []
     if finances_filter.type in {'all', TransactionType.INCOME}:
         transactions.extend(
             _typed_transactions(
-                current_user=request.user,
+                current_user=current_user,
                 users=users,
                 finances_filter=finances_filter,
                 type_value=TransactionType.INCOME,
@@ -847,7 +868,7 @@ def _finances_transactions(
     if finances_filter.type in {'all', TransactionType.EXPENSE}:
         transactions.extend(
             _typed_transactions(
-                current_user=request.user,
+                current_user=current_user,
                 users=users,
                 finances_filter=finances_filter,
                 type_value=TransactionType.EXPENSE,
@@ -859,7 +880,7 @@ def _finances_transactions(
     if finances_filter.type in {'all', 'transfer'}:
         transactions.extend(
             _transfer_transactions(
-                current_user=request.user,
+                current_user=current_user,
                 users=users,
                 finances_filter=finances_filter,
             ),
@@ -873,7 +894,7 @@ def _typed_transactions(
     finances_filter: FinancesFilter,
     type_value: str,
 ) -> list[FinancesTransaction]:
-    queryset = Transaction.objects.filter(
+    queryset: QuerySet[Transaction] = Transaction.objects.filter(
         user__in=users,
         type=type_value,
     ).select_related(
@@ -974,7 +995,9 @@ def _transfer_transactions(
     users: list[User],
     finances_filter: FinancesFilter,
 ) -> list[FinancesTransaction]:
-    queryset = TransferMoneyLog.objects.filter(user__in=users).select_related(
+    queryset: QuerySet[TransferMoneyLog] = TransferMoneyLog.objects.filter(
+        user__in=users,
+    ).select_related(
         'from_account',
         'to_account',
         'user',
@@ -1005,10 +1028,13 @@ def _transfer_transactions(
 
 
 def _receipt_transactions(
-    request: 'WSGIRequestWithContainer',
+    request: HttpRequest,
     users: list[User],
     finances_filter: FinancesFilter,
 ) -> list[FinancesTransaction]:
+    if not isinstance(request.user, User):
+        raise TypeError('User must be authenticated')
+    current_user = request.user
     queryset = (
         Receipt.objects.filter(
             user__in=users,
@@ -1042,7 +1068,7 @@ def _receipt_transactions(
                 key=f'receipt-{receipt.pk}',
                 source_id=receipt.pk,
                 receipt=receipt,
-                current_user=request.user,
+                current_user=current_user,
                 amount=amount,
                 category_name=category_name,
                 category_key='receipt',
@@ -1235,7 +1261,7 @@ def _to_date(value: Any) -> date:
         return value.date()
     if isinstance(value, date):
         return value
-    return value.date()
+    return cast('date', value.date())
 
 
 class BaseView:
@@ -1330,11 +1356,14 @@ class AccountView(
         )
 
         request = cast('WSGIRequestWithContainer', self.request)
+        if not isinstance(request.user, User):
+            raise TypeError('User must be authenticated')
+        current_user = request.user
         container = request.container.finance_account
         page_context_service = container.account_page_context_service()
 
         user = page_context_service.get_user_with_groups(
-            request.user.pk,
+            current_user.pk,
         )
         group_id = self.get_group_id()
         accounts = page_context_service.get_accounts_for_user_or_group(
@@ -1356,23 +1385,23 @@ class AccountView(
 
         account_service = request.container.core.account_service()
         users_in_group = account_service.get_users_for_group(
-            request.user,
+            current_user,
             group_id,
-        ) or [request.user]
+        ) or [current_user]
         context['last_operations'] = _recent_transactions(
-            request.user,
+            current_user,
             users_in_group,
             limit=12,
         )
         context['drawer_accounts'] = Account.objects.filter(
-            user=request.user,
+            user=current_user,
         ).order_by('name_account')
         context['drawer_income_categories'] = Category.objects.filter(
-            user=request.user,
+            user=current_user,
             type=TransactionType.INCOME,
         ).order_by('name')
         context['drawer_expense_categories'] = Category.objects.filter(
-            user=request.user,
+            user=current_user,
             type=TransactionType.EXPENSE,
         ).order_by('name')
         return context
@@ -1429,7 +1458,7 @@ class AccountCreateView(
         """
         return str(reverse_lazy('finance_account:list'))
 
-    def form_valid(self, form: AddAccountForm) -> HttpResponseRedirect:
+    def form_valid(self, form: AddAccountForm) -> HttpResponse:
         """
         Save the new account and handle success or error feedback.
 
@@ -1461,7 +1490,7 @@ class AccountCreateView(
                 request,
                 _('Не удалось создать счет. Пожалуйста, попробуйте позже.'),
             )
-            return self.form_invalid(form)  # type: ignore[return-value]
+            return self.form_invalid(form)
 
 
 class ChangeAccountView(
@@ -1525,7 +1554,7 @@ class ChangeAccountView(
         else:
             return context
 
-    def form_valid(self, form: AddAccountForm) -> HttpResponseRedirect:
+    def form_valid(self, form: AddAccountForm) -> HttpResponse:
         request = cast('WSGIRequestWithContainer', self.request)
         try:
             account = form.save(commit=False)
@@ -1538,7 +1567,7 @@ class ChangeAccountView(
         except ValidationError as e:
             form.add_error(None, str(e))
             messages.error(request, str(e))
-            return self.form_invalid(form)  # type: ignore[return-value]
+            return cast('HttpResponse', self.form_invalid(form))
         except Exception:
             logger.exception(
                 'Ошибка при изменении счета',
@@ -1552,7 +1581,7 @@ class ChangeAccountView(
                 request,
                 _('Не удалось изменить счет. Пожалуйста, попробуйте позже.'),
             )
-            return self.form_invalid(form)  # type: ignore[return-value]
+            return cast('HttpResponse', self.form_invalid(form))
 
     def form_invalid(self, form: AddAccountForm) -> Any:
         context = self.get_context_data()

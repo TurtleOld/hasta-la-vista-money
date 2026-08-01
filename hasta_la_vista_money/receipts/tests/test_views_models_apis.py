@@ -219,7 +219,7 @@ class TestReceipt(TestCase):
 
         self.assertRedirects(
             response,
-            reverse_lazy('receipts:view', kwargs={'pk': self.receipt.pk}),
+            str(reverse_lazy('receipts:view', kwargs={'pk': self.receipt.pk})),
         )
         self.assertTrue(Receipt.objects.filter(pk=self.receipt.pk).exists())
 
@@ -1017,7 +1017,7 @@ class TestUploadImageView(TestCase):
                 task_id=pending_receipt.task_id,
             )
 
-        redirect_location = response.get('Location', '')  # type: ignore[call-overload]
+        redirect_location = response.get('Location', '')
         self.assertEqual(redirect_location, '/receipts/')
 
 
@@ -1318,7 +1318,7 @@ class TestReviewPendingReceiptView(TestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
 
-        redirect_location = response.get('Location', '')  # type: ignore[call-overload]
+        redirect_location = response.get('Location', '')
         self.assertIn('/receipts/review/', redirect_location)
 
         self.mock_account_service.apply_receipt_spend.assert_not_called()
@@ -1326,12 +1326,13 @@ class TestReviewPendingReceiptView(TestCase):
         updated_pending_receipt = PendingReceipt.objects.get(
             pk=self.pending_receipt.pk,
         )
-        self.assertEqual(
-            updated_pending_receipt.receipt_data['total_sum'],
-            '200.00',
+        receipt_data = cast(
+            'dict[str, Any]',
+            updated_pending_receipt.receipt_data,
         )
+        self.assertEqual(receipt_data['total_sum'], '200.00')
         self.assertEqual(
-            updated_pending_receipt.receipt_data['name_seller'],
+            receipt_data['name_seller'],
             'Обновленный продавец',
         )
 

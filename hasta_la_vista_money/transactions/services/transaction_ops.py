@@ -5,7 +5,7 @@ balance reconciliation. Income transactions credit the account; expense
 transactions debit it.
 """
 
-from datetime import date, datetime, time
+from datetime import datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -176,16 +176,11 @@ class TransactionService:
             transaction_obj.type = command.type_value
 
             date_value = command.transaction_date
-            if isinstance(date_value, date) and not isinstance(
-                date_value,
-                datetime,
-            ):
+            if not isinstance(date_value, datetime):
                 date_value = timezone.make_aware(
                     datetime.combine(date_value, time.min),
                 )
-            elif isinstance(date_value, datetime) and timezone.is_naive(
-                date_value,
-            ):
+            elif timezone.is_naive(date_value):
                 date_value = timezone.make_aware(date_value)
             transaction_obj.date = date_value
             transaction_obj.save()

@@ -6,7 +6,7 @@ from hasta_la_vista_money.transactions.models import Category, Transaction
 
 
 @admin.register(Transaction)
-class TransactionAdmin(admin.ModelAdmin):
+class TransactionAdmin(admin.ModelAdmin[Transaction]):
     """Admin view for the unified Transaction model."""
 
     list_display = ('date', 'type', 'amount', 'category', 'account', 'user')
@@ -17,7 +17,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
+class CategoryAdmin(admin.ModelAdmin[Category]):
     """Admin view for the unified Category model."""
 
     list_display = ('name', 'type', 'user', 'parent_category')

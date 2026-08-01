@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.test import TestCase
 from django.urls import reverse_lazy
@@ -23,6 +23,11 @@ from hasta_la_vista_money.loan.tasks import (
     calculate_differentiated_loan,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from django.forms import ChoiceField
 
 
 class TestLoan(TestCase):
@@ -434,9 +439,9 @@ class TestLoan(TestCase):
     def test_loan_form_type_choices_present(self) -> None:
         """Test type_loan select keeps predefined choices."""
         form = LoanForm(user=self.user)
-        type_choices = [
-            choice[0] for choice in form.fields['type_loan'].choices
-        ]
+        type_field = cast('ChoiceField', form.fields['type_loan'])
+        choices = cast('Iterable[tuple[Any, Any]]', type_field.choices)
+        type_choices = [choice[0] for choice in choices]
         self.assertIn('Annuity', type_choices)
         self.assertIn('Differentiated', type_choices)
 
