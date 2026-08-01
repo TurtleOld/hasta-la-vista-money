@@ -1,22 +1,315 @@
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_DEPOSIT
-from hasta_la_vista_money.deposits.commands import CreateDepositCommand
-from hasta_la_vista_money.deposits.models import Deposit
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.deposits.commands import (
+    CreateDepositCommand,
+    FundDepositCommand,
+    OpenExistingDepositCommand,
+)
+from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
+from hasta_la_vista_money.finance_account.models import (
+    Account,
+    TransferMoneyLog,
+)
+from hasta_la_vista_money.transactions.models import Transaction
 from hasta_la_vista_money.users.factories import UserFactory
+from hasta_la_vista_money.users.services.dashboard_kpis import (
+    get_dashboard_month_kpis,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
 class DepositServiceIntegrationTests(TestCase):
+    def test_confirmed_principal_event_cannot_be_changed_or_deleted(
+        self,
+    ) -> None:
+        """Principal events reject save, delete, bulk update, and
+        bulk delete."""
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.open_existing_term_deposit(
+            OpenExistingDepositCommand(
+                user=user,
+                name='Неизменяемая история',
+                bank='SBERBANK',
+                currency='RUB',
+                current_balance=Decimal('75000.00'),
+                tracking_started_on=date(2026, 7, 15),
+                opened_on=date(2026, 6, 1),
+                matures_on=date(2026, 12, 1),
+                annual_rate=Decimal('14.00'),
+            ),
+        )
+        event = DepositPrincipalEvent.objects.get(deposit=deposit)
+
+        event.amount = Decimal('1.00')
+        with self.assertRaisesMessage(
+            ValidationError,
+            'Подтверждённое событие вклада нельзя изменить.',
+        ):
+            event.save()
+        with self.assertRaisesMessage(
+            ValidationError,
+            'Подтверждённое событие вклада нельзя удалить.',
+        ):
+            event.delete()
+        with self.assertRaises(ValidationError):
+            DepositPrincipalEvent.objects.filter(pk=event.pk).update(
+                amount=Decimal('1.00'),
+            )
+        with self.assertRaises(ValidationError):
+            DepositPrincipalEvent.objects.filter(pk=event.pk).delete()
+
+        event.refresh_from_db()
+        self.assertEqual(event.amount, Decimal('75000.00'))
+
+    def test_funding_rejects_ineligible_source_accounts_and_amounts(
+        self,
+    ) -> None:
+        """Reject foreign accounts, other currencies, negative amounts, and
+        insufficient funds."""
+        user = cast('User', UserFactory())
+        other_user = cast('User', UserFactory())
+        valid_source = Account.objects.create(
+            user=user,
+            name_account='Рубли',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        foreign_source = Account.objects.create(
+            user=other_user,
+            name_account='Чужой счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        usd_source = Account.objects.create(
+            user=user,
+            name_account='Доллары',
+            type_account='Debit',
+            currency='USD',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        cases = (
+            ('foreign account', foreign_source.pk, Decimal('100.00')),
+            ('other currency', usd_source.pk, Decimal('100.00')),
+            ('negative amount', valid_source.pk, Decimal('-1.00')),
+            ('insufficient funds', valid_source.pk, Decimal('1000.01')),
+        )
+
+        for case, source_account_id, amount in cases:
+            with self.subTest(case=case), self.assertRaises(ValidationError):
+                service.create_funded_term_deposit(
+                    FundDepositCommand(
+                        user=user,
+                        name='Недоступный вклад',
+                        bank='SBERBANK',
+                        currency='RUB',
+                        amount=amount,
+                        source_account_id=source_account_id,
+                        opened_on=date(2026, 8, 1),
+                        matures_on=date(2027, 2, 1),
+                        annual_rate=Decimal('15.50'),
+                    ),
+                )
+
+        self.assertFalse(Deposit.objects.filter(account__user=user).exists())
+        valid_source.refresh_from_db()
+        self.assertEqual(valid_source.balance, Decimal('1000.00'))
+
+    def test_event_failure_rolls_back_funding_and_agreement(self) -> None:
+        """If event creation fails, the atomic transaction fully rolls back."""
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_principal_event',
+                side_effect=RuntimeError('event storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.create_funded_term_deposit(
+                FundDepositCommand(
+                    user=user,
+                    name='Атомарный вклад',
+                    bank='SBERBANK',
+                    currency='RUB',
+                    amount=Decimal('500.00'),
+                    source_account_id=source_account.pk,
+                    opened_on=date(2026, 8, 1),
+                    matures_on=date(2027, 2, 1),
+                    annual_rate=Decimal('15.50'),
+                ),
+            )
+
+        source_account.refresh_from_db()
+        self.assertEqual(source_account.balance, Decimal('1000.00'))
+        self.assertFalse(Deposit.objects.filter(account__user=user).exists())
+        self.assertFalse(
+            DepositPrincipalEvent.objects.filter(
+                deposit__account__user=user,
+            ).exists(),
+        )
+
+    def test_balance_failure_rolls_back_source_account_change(self) -> None:
+        """If deposit account balance update fails, source account
+        is unchanged."""
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        original_save = Account.save
+
+        def fail_deposit_balance_save(
+            account: Account,
+            *args: Any,
+            **kwargs: Any,
+        ) -> None:
+            if (
+                account.type_account == ACCOUNT_TYPE_DEPOSIT
+                and kwargs.get('update_fields') is not None
+            ):
+                raise RuntimeError('deposit balance storage failed')
+            original_save(account, *args, **kwargs)
+
+        with (
+            patch.object(Account, 'save', new=fail_deposit_balance_save),
+            self.assertRaises(RuntimeError),
+        ):
+            service.create_funded_term_deposit(
+                FundDepositCommand(
+                    user=user,
+                    name='Атомарный баланс',
+                    bank='SBERBANK',
+                    currency='RUB',
+                    amount=Decimal('500.00'),
+                    source_account_id=source_account.pk,
+                    opened_on=date(2026, 8, 1),
+                    matures_on=date(2027, 2, 1),
+                    annual_rate=Decimal('15.50'),
+                ),
+            )
+
+        source_account.refresh_from_db()
+        self.assertEqual(source_account.balance, Decimal('1000.00'))
+        self.assertFalse(Deposit.objects.filter(account__user=user).exists())
+        self.assertFalse(DepositPrincipalEvent.objects.exists())
+
+    def test_open_existing_deposit_records_neutral_opening_position(
+        self,
+    ) -> None:
+        """Opening position does not create transactions, transfers, or affect
+        dashboard KPIs (income/expenses/savings rate)."""
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        kpis_before = get_dashboard_month_kpis(user)
+
+        deposit = service.open_existing_term_deposit(
+            OpenExistingDepositCommand(
+                user=user,
+                name='Действующий вклад',
+                bank='SBERBANK',
+                currency='RUB',
+                current_balance=Decimal('75000.00'),
+                tracking_started_on=date(2026, 7, 15),
+                opened_on=date(2026, 6, 1),
+                matures_on=date(2026, 12, 1),
+                annual_rate=Decimal('14.00'),
+            ),
+        )
+
+        self.assertEqual(deposit.account.balance, Decimal('75000.00'))
+        event = DepositPrincipalEvent.objects.get(deposit=deposit)
+        self.assertEqual(
+            event.type,
+            DepositPrincipalEvent.Type.OPENING_POSITION,
+        )
+        self.assertEqual(event.amount, Decimal('75000.00'))
+        self.assertEqual(event.effective_on, date(2026, 7, 15))
+        self.assertIsNone(event.source_account)
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+        self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+        kpis_after = get_dashboard_month_kpis(user)
+        for field in ('income', 'expenses', 'net_result', 'savings_rate'):
+            with self.subTest(field=field):
+                self.assertEqual(kpis_after[field], kpis_before[field])
+
+    def test_create_funded_deposit_preserves_assets_and_records_event(
+        self,
+    ) -> None:
+        """Funding preserves total assets, records a FUNDING event, and does not
+        create income/expense transactions."""
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            bank='SBERBANK',
+            currency='RUB',
+            balance=Decimal('200000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        kpis_before = get_dashboard_month_kpis(user)
+
+        deposit = service.create_funded_term_deposit(
+            FundDepositCommand(
+                user=user,
+                name='Новый вклад',
+                bank='SBERBANK',
+                currency='RUB',
+                amount=Decimal('150000.00'),
+                source_account_id=source_account.pk,
+                opened_on=date(2026, 8, 1),
+                matures_on=date(2027, 2, 1),
+                annual_rate=Decimal('15.50'),
+            ),
+        )
+
+        source_account.refresh_from_db()
+        deposit.account.refresh_from_db()
+        self.assertEqual(source_account.balance, Decimal('50000.00'))
+        self.assertEqual(deposit.account.balance, Decimal('150000.00'))
+        self.assertEqual(
+            source_account.balance + deposit.account.balance,
+            Decimal('200000.00'),
+        )
+        event = DepositPrincipalEvent.objects.get(deposit=deposit)
+        self.assertEqual(event.type, DepositPrincipalEvent.Type.FUNDING)
+        self.assertEqual(event.amount, Decimal('150000.00'))
+        self.assertEqual(event.source_account, source_account)
+        self.assertEqual(event.effective_on, date(2026, 8, 1))
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+        self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+        kpis_after = get_dashboard_month_kpis(user)
+        for field in ('income', 'expenses', 'net_result', 'savings_rate'):
+            with self.subTest(field=field):
+                self.assertEqual(kpis_after[field], kpis_before[field])
+
     def test_create_term_deposit_builds_complete_agreement(self) -> None:
         user = cast('User', UserFactory())
         service = ApplicationContainer().deposits.deposit_service()
@@ -55,6 +348,11 @@ class DepositServiceIntegrationTests(TestCase):
         self.assertEqual(rate_periods[0].starts_on, term.opened_on)
         self.assertEqual(rate_periods[0].ends_on, term.matures_on)
         self.assertEqual(rate_periods[0].annual_rate, Decimal('15.50'))
+        event = DepositPrincipalEvent.objects.get(deposit=deposit)
+        self.assertEqual(
+            event.type,
+            DepositPrincipalEvent.Type.OPENING_POSITION,
+        )
 
     def test_regular_account_creation_rejects_deposit_type(self) -> None:
         user = cast('User', UserFactory())
