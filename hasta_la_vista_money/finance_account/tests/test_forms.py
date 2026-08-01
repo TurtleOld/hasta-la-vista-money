@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from django.forms import ModelChoiceField
+from django.forms import ChoiceField, ModelChoiceField
 from django.test import TestCase
 from django.utils import timezone
 
@@ -12,6 +12,7 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_CREDIT,
     ACCOUNT_TYPE_CREDIT_CARD,
     ACCOUNT_TYPE_DEBIT_CARD,
+    ACCOUNT_TYPE_DEPOSIT,
 )
 from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_CHOICES,
@@ -48,6 +49,10 @@ class TestAddAccountForm(TestCase):
         )
         self.assertEqual(Account.BANK_LIST, BANK_CHOICES)
         self.assertEqual(Account._meta.get_field('bank').default, BANK_DEFAULT)
+        type_field = form.fields['type_account']
+        if not isinstance(type_field, ChoiceField):
+            self.fail('type_account must be a ChoiceField')
+        self.assertFalse(type_field.valid_value(ACCOUNT_TYPE_DEPOSIT))
 
         for field in form.fields.values():
             if hasattr(field.widget, 'attrs'):

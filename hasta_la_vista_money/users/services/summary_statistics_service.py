@@ -21,8 +21,6 @@ if TYPE_CHECKING:
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
-    ACCOUNT_TYPE_CREDIT,
-    ACCOUNT_TYPE_CREDIT_CARD,
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
@@ -915,7 +913,7 @@ def compute_total_payment_schedule_debt(
     period_start, period_end = stats_filter.date_range(today)
 
     credit_cards = accounts.filter(
-        type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT],
+        type_account__in=constants.CREDIT_ACCOUNT_TYPES,
     )
 
     total = Decimal(str(constants.ZERO))
@@ -947,7 +945,7 @@ def _credit_cards_block(
     period_start, period_end = stats_filter.date_range(today)
 
     credit_cards = accounts.filter(
-        type_account__in=[ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_CREDIT],
+        type_account__in=constants.CREDIT_ACCOUNT_TYPES,
     )
 
     for card in credit_cards:

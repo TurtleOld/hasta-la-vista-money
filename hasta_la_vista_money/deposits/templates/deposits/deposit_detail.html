@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load i18n static comma word_hash %}
+
+{% block title %}{{ deposit.name }}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'accounts/css/accounts.css' %}?v={% word_hash %}">
+{% endblock %}
+
+{% block content %}
+{% with term=deposit.current_term rate=deposit.current_term.current_rate %}
+<main class="accounts-app">
+    <div class="accounts-wrap">
+        <div class="accounts-composer-crumb">
+            <a href="{% url 'deposits:list' %}">{% translate 'Вклады' %}</a>
+            <span class="sep">·</span>
+            <b>{{ deposit.name }}</b>
+        </div>
+        <section class="accounts-hero">
+            <div>
+                <div class="accounts-hero-label">{{ deposit.get_bank_display }} · {{ term.state_label }}</div>
+                <div class="accounts-hero-amt">{{ deposit.account.balance|comma }}<span class="cur">{{ deposit.account.currency }}</span></div>
+                <div class="accounts-hero-change">{% translate 'Фактический остаток связанного счёта' %}</div>
+            </div>
+        </section>
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Условия текущего срока' %}</h2></div>
+            <div class="accounts-list">
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Годовая ставка' %}</div><div class="accounts-row-name">{{ rate.annual_rate }}%</div></div></div></div>
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Срок' %}</div><div class="accounts-row-name">{{ term.opened_on|date:'d.m.Y' }} — {{ term.matures_on|date:'d.m.Y' }}</div></div></div></div>
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Состояние' %}</div><div class="accounts-row-name">{{ term.state_label }}</div></div></div></div>
+            </div>
+        </section>
+    </div>
+</main>
+{% endwith %}
+{% endblock %}

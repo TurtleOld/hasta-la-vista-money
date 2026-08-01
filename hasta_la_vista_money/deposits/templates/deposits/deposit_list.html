@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load i18n static comma word_hash %}
+
+{% block title %}{% translate 'Срочные вклады' %}{% endblock %}
+
+{% block extra_head %}
+    <link nonce="{{ request.csp_nonce }}" rel="stylesheet" href="{% static 'accounts/css/accounts.css' %}?v={% word_hash %}">
+{% endblock %}
+
+{% block content %}
+<main class="accounts-app">
+    <div class="accounts-wrap">
+        <div class="accounts-page-hd">
+            <div class="accounts-page-title"><h1>{% translate 'Срочные вклады' %}</h1></div>
+            <div class="accounts-actions">
+                <a href="{% url 'finance_account:list' %}" class="accounts-btn">{% translate 'Счета' %}</a>
+                <a href="{% url 'deposits:create' %}" class="accounts-btn accounts-btn-primary">{% translate 'Открыть вклад' %}</a>
+            </div>
+        </div>
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Мои вклады' %}</h2></div>
+            <div class="accounts-list">
+                {% for deposit in deposits %}
+                    {% with term=deposit.current_term %}
+                    <a href="{{ deposit.get_absolute_url }}" class="accounts-row">
+                        <div class="accounts-row-content">
+                            <div class="accounts-row-mark">%</div>
+                            <div class="accounts-min0">
+                                <div class="accounts-row-name">{{ deposit.name }}</div>
+                                <div class="accounts-row-kind">{{ deposit.get_bank_display }} · {{ term.state_label }} · {{ term.current_rate.annual_rate }}%</div>
+                            </div>
+                            <div class="accounts-row-right">
+                                <div class="accounts-row-amt">{{ deposit.account.balance|comma }}<span class="cur">{{ deposit.account.currency }}</span></div>
+                            </div>
+                        </div>
+                    </a>
+                    {% endwith %}
+                {% empty %}
+                    <div class="accounts-empty">
+                        <p class="accounts-empty-title">{% translate 'Срочных вкладов пока нет' %}</p>
+                        <p class="accounts-empty-text">{% translate 'Создайте договор с фиксированным сроком и ставкой.' %}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

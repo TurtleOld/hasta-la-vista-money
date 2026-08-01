@@ -5,6 +5,7 @@
     {% for account in accounts %}
         <article class="accounts-row{% if account.user != request.user %} accounts-row-foreign{% endif %}" data-swipe-row>
             <div class="accounts-row-actions" data-swipe-actions aria-hidden="true">
+                {% if not account.is_deposit %}
                 <a href="{% url 'finance_account:transfer_money' %}?from_account={{ account.id }}"
                    class="accounts-row-action transfer swipe-action-btn is-accent"
                    aria-label="{% translate 'Перевод' %}"
@@ -27,6 +28,14 @@
                         {% include 'partials/_swipe_icons.html' with icon='delete' %}
                     </button>
                 </form>
+                {% else %}
+                <a href="{{ account.deposit.get_absolute_url }}"
+                   class="accounts-row-action edit swipe-action-btn is-accent"
+                   aria-label="{% translate 'Открыть вклад' %}"
+                   title="{% translate 'Открыть вклад' %}">
+                    {% include 'partials/_swipe_icons.html' with icon='edit' %}
+                </a>
+                {% endif %}
             </div>
 
             <div class="accounts-row-hint" aria-hidden="true"><i></i><i></i><i></i></div>

@@ -184,6 +184,10 @@ class AccountRepository:
         """
         return Account.objects.create(**kwargs)
 
+    def create_deposit_account(self, **kwargs: object) -> Account:
+        """Create an account reserved for a deposit agreement."""
+        return Account.objects.create_deposit(**kwargs)
+
     def filter(self, **kwargs: object) -> QuerySet[Account]:
         """Filter accounts by given criteria.
 

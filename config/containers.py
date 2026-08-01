@@ -2,6 +2,7 @@ from dependency_injector import containers, providers
 
 from core.protocols.services import AccountServiceProtocol
 from hasta_la_vista_money.budget.containers import BudgetContainer
+from hasta_la_vista_money.deposits.containers import DepositContainer
 from hasta_la_vista_money.finance_account.containers import (
     FinanceAccountContainer,
 )
@@ -48,6 +49,11 @@ class ApplicationContainer(containers.DeclarativeContainer):
     core.account_service.override(finance_account.account_service)
 
     receipts.finance_account.override(finance_account)
+
+    deposits = providers.Container(
+        DepositContainer,
+        finance_account=finance_account,
+    )
 
     budget = providers.Container(
         BudgetContainer,

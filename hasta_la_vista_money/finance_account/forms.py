@@ -61,7 +61,11 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
     )
 
     type_account = ChoiceField(
-        choices=Account.TYPE_ACCOUNT_LIST,
+        choices=[
+            choice
+            for choice in Account.TYPE_ACCOUNT_LIST
+            if choice[0] in constants.MANUALLY_CREATABLE_ACCOUNT_TYPES
+        ],
         label=_('Тип счёта'),
         help_text=_('Выберите из списка тип счёта'),
     )
@@ -136,7 +140,7 @@ class AddAccountForm(BaseAccountForm, DateFieldMixin):
         if (
             balance is not None
             and balance < 0
-            and type_account not in ['Credit', 'CreditCard']
+            and type_account not in constants.CREDIT_ACCOUNT_TYPES
         ):
             raise ValidationError(
                 _('Баланс не может быть отрицательным для данного типа счёта'),
@@ -233,7 +237,9 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         self.transfer_service = transfer_service
         self.account_repository = account_repository
 
-        user_accounts = self.account_repository.get_by_user(user)
+        user_accounts = self.account_repository.get_by_user(user).exclude(
+            type_account=constants.ACCOUNT_TYPE_DEPOSIT,
+        )
         accounts = list(user_accounts)
         initial_accounts = self._get_default_transfer_accounts(
             accounts,
@@ -316,20 +322,14 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
 
         from_account = self._get_latest_account_by_types(
             ordered_accounts,
-            [
-                constants.ACCOUNT_TYPE_DEBIT_CARD,
-                constants.ACCOUNT_TYPE_DEBIT,
-            ],
+            tuple(constants.LIQUID_ACCOUNT_TYPES),
         )
         if from_account is None:
             from_account = ordered_accounts[0]
 
         to_account = self._get_latest_account_by_types(
             ordered_accounts,
-            [
-                constants.ACCOUNT_TYPE_CREDIT_CARD,
-                constants.ACCOUNT_TYPE_CREDIT,
-            ],
+            tuple(constants.CREDIT_ACCOUNT_TYPES),
             exclude_account=from_account,
         )
 
