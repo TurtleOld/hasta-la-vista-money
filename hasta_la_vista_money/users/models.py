@@ -10,6 +10,7 @@ from django.contrib import admin
 from django.contrib.auth.models import AbstractUser, Group
 from django.db.models import (
     CASCADE,
+    SET_NULL,
     BooleanField,
     CharField,
     DateTimeField,
@@ -217,10 +218,13 @@ class BankStatementRow(Model):
     suggested_category = CharField(max_length=250)
     source_ref = CharField(max_length=64, blank=True, null=True)
     source_row_position = PositiveIntegerField()
+    match_calendar_date = BooleanField(default=False)
     candidate = ForeignKey(
         'transactions.Transaction',
-        on_delete=CASCADE,
+        on_delete=SET_NULL,
         related_name='statement_candidates',
+        blank=True,
+        null=True,
     )
     transaction = ForeignKey(
         'transactions.Transaction',
@@ -249,6 +253,34 @@ class BankStatementRow(Model):
             Index(
                 fields=['upload', 'decision'],
                 name='users_statement_decision_idx',
+            ),
+        ]
+
+
+class BankStatementCandidate(Model):
+    """Financial movement matching a statement row."""
+
+    row = ForeignKey(
+        BankStatementRow,
+        on_delete=CASCADE,
+        related_name='candidates',
+    )
+    transaction = ForeignKey(
+        'transactions.Transaction',
+        on_delete=SET_NULL,
+        related_name='statement_candidate_links',
+        blank=True,
+        null=True,
+    )
+    description = CharField(max_length=250)
+    rank = PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['rank', 'pk']
+        constraints = [
+            UniqueConstraint(
+                fields=['row', 'transaction'],
+                name='unique_statement_row_candidate',
             ),
         ]
 

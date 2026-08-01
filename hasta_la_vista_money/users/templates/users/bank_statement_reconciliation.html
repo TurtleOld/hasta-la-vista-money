@@ -18,17 +18,22 @@
                     <p>{{ row.description }}</p>
                 </div>
                 <div>
-                    <h2 class="mb-3 font-semibold">{% translate 'Учтённая операция' %}</h2>
-                    <p>{{ row.candidate.date|date:'d.m.Y H:i' }}</p>
-                    <p>{{ row.candidate.amount }} {{ upload.account.currency }}</p>
-                    <p>{{ row.candidate.get_type_display }}</p>
-                    <p>{{ row.candidate.category.name }}</p>
-                    <p>{{ row.candidate_description }}</p>
+                    <h2 class="mb-3 font-semibold">{% translate 'Учтённые операции' %}</h2>
+                    {% for candidate in row.candidates.all %}
+                        <label class="mb-3 block rounded border border-gray-200 p-3 dark:border-gray-700">
+                            <input form="linked-{{ row.pk }}" type="radio" name="candidate" value="{{ candidate.pk }}" required>
+                            <span>{{ candidate.transaction.date|date:'d.m.Y H:i' }}</span>
+                            <span>{{ candidate.transaction.amount }} {{ upload.account.currency }}</span>
+                            <span>{{ candidate.transaction.get_type_display }}</span>
+                            <span>{{ candidate.transaction.category.name }}</span>
+                            <span>{{ candidate.description }}</span>
+                        </label>
+                    {% endfor %}
                 </div>
             </div>
             {% if row.decision == 'pending' %}
                 <div class="mt-5 flex flex-wrap gap-3">
-                    <form method="post" action="{% url 'users:bank_statement_reconciliation_decide' upload.pk row.pk %}">
+                    <form id="linked-{{ row.pk }}" method="post" action="{% url 'users:bank_statement_reconciliation_decide' upload.pk row.pk %}">
                         {% csrf_token %}
                         <input type="hidden" name="decision" value="linked">
                         <button class="rounded bg-blue-600 px-4 py-2 text-white" type="submit">

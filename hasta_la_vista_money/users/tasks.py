@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from decimal import Decimal
+from difflib import SequenceMatcher
 from typing import Any
 
 from celery import shared_task
@@ -18,6 +19,7 @@ from hasta_la_vista_money.transactions.models import (
     TransactionType,
 )
 from hasta_la_vista_money.users.models import (
+    BankStatementCandidate,
     BankStatementRow,
     BankStatementUpload,
 )
@@ -223,24 +225,27 @@ def _process_transactions(
                 created = False
                 candidate = None
             else:
-                candidate = _find_probable_duplicate(
+                candidates = _find_probable_duplicates(
                     account=upload.account,
                     user=upload.user,
                     type_value=type_value,
                     abs_amount=abs_amount,
                     trans_date=trans_date,
                     match_calendar_date=source == 'ozon',
+                    description=strip_pii(str(description)),
                 )
+                candidate = candidates[0] if candidates else None
                 created = True
             if candidate is not None:
                 _save_probable_duplicate(
                     upload=upload,
                     trans=trans,
-                    candidate=candidate,
+                    candidates=candidates,
                     type_value=type_value,
                     row_position=row_position,
                     classifier=classifier,
                     existing_categories=existing_categories,
+                    match_calendar_date=source == 'ozon',
                 )
                 skipped_count += 1
                 created = False
@@ -282,6 +287,7 @@ def _process_transactions(
                     type=type_value,
                     amount=abs_amount,
                     date=trans_date,
+                    description=strip_pii(str(description))[:250],
                     source_ref=source_ref or None,
                     source_file_hash=(
                         upload.file_hash if not source_ref else None
@@ -335,26 +341,31 @@ def _is_exact_duplicate(
     source_row_position: int,
 ) -> bool:
     if source_ref:
-        return Transaction.objects.filter(
+        return bool(
+            Transaction.objects.filter(
+                account=account,
+                source_ref=source_ref,
+            ).exists(),
+        )
+    return bool(
+        Transaction.objects.filter(
             account=account,
-            source_ref=source_ref,
-        ).exists()
-    return Transaction.objects.filter(
-        account=account,
-        source_file_hash=source_file_hash,
-        source_row_position=source_row_position,
-    ).exists()
+            source_file_hash=source_file_hash,
+            source_row_position=source_row_position,
+        ).exists(),
+    )
 
 
 def _save_probable_duplicate(
     *,
     upload: BankStatementUpload,
     trans: dict[str, Any],
-    candidate: Transaction,
+    candidates: list[Transaction],
     type_value: str,
     row_position: int,
     classifier: CategoryClassifier,
     existing_categories: list[str],
+    match_calendar_date: bool,
 ) -> bool:
     clean_desc = strip_pii(str(trans['description']))
     category_name = trans.get('category_name')
@@ -365,7 +376,7 @@ def _save_probable_duplicate(
             type_value,
             existing_categories,
         )
-    BankStatementRow.objects.get_or_create(
+    row, _ = BankStatementRow.objects.get_or_create(
         upload=upload,
         source_row_position=row_position,
         defaults={
@@ -373,11 +384,24 @@ def _save_probable_duplicate(
             'transaction_date': trans['date'],
             'amount': abs(trans['amount']),
             'description': clean_desc,
-            'candidate_description': str(candidate.category.name),
+            'candidate_description': str(candidates[0].category.name),
             'suggested_category': str(category_name)[:250],
             'source_ref': trans.get('source_ref') or None,
-            'candidate': candidate,
+            'candidate': candidates[0],
+            'match_calendar_date': match_calendar_date,
         },
+    )
+    BankStatementCandidate.objects.bulk_create(
+        [
+            BankStatementCandidate(
+                row=row,
+                transaction=candidate,
+                description=_candidate_description(candidate),
+                rank=rank,
+            )
+            for rank, candidate in enumerate(candidates)
+        ],
+        ignore_conflicts=True,
     )
     return True
 
@@ -389,17 +413,19 @@ def _classify_category(
     existing_categories: list[str],
 ) -> str:
     try:
-        return classifier.classify(
-            description=description,
-            transaction_type=type_value,
-            existing_categories=existing_categories,
+        return str(
+            classifier.classify(
+                description=description,
+                transaction_type=type_value,
+                existing_categories=existing_categories,
+            ),
         )
     except Exception:
         logger.warning('category_classifier_failed', exc_info=True)
         return FALLBACK_CATEGORY
 
 
-def _find_probable_duplicate(
+def _find_probable_duplicates(
     *,
     account: Account,
     user: Any,
@@ -407,7 +433,8 @@ def _find_probable_duplicate(
     abs_amount: Decimal,
     trans_date: datetime,
     match_calendar_date: bool,
-) -> Transaction | None:
+    description: str,
+) -> list[Transaction]:
     queryset = Transaction.objects.filter(
         account=account,
         user=user,
@@ -420,10 +447,24 @@ def _find_probable_duplicate(
         )
     else:
         queryset = queryset.filter(date=trans_date)
-    candidates = list(queryset.order_by('date', 'pk')[:2])
-    if len(candidates) == 1:
-        return candidates[0]
-    return None
+    candidates = list(
+        queryset.select_related('category').order_by('date', 'pk'),
+    )
+    return sorted(
+        candidates,
+        key=lambda candidate: (
+            -SequenceMatcher(
+                None,
+                description.casefold(),
+                _candidate_description(candidate).casefold(),
+            ).ratio(),
+            candidate.pk,
+        ),
+    )
+
+
+def _candidate_description(candidate: Transaction) -> str:
+    return candidate.description or str(candidate.category.name)
 
 
 def _is_duplicate(
@@ -481,8 +522,10 @@ def _is_duplicate(
             legacy.save(update_fields=['source_ref'])
             return True
         return False
-    return Transaction.objects.filter(
-        account=account,
-        source_file_hash=source_file_hash,
-        source_row_position=source_row_position,
-    ).exists()
+    return bool(
+        Transaction.objects.filter(
+            account=account,
+            source_file_hash=source_file_hash,
+            source_row_position=source_row_position,
+        ).exists(),
+    )
