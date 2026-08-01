@@ -15,6 +15,7 @@ class CreateDepositCommand:
     opened_on: date
     matures_on: date
     annual_rate: Decimal
+    rate_kind: str
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class FundDepositCommand:
     opened_on: date
     matures_on: date
     annual_rate: Decimal
+    rate_kind: str
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class ConvertAccountToDepositCommand:
     matures_on: date
     annual_rate: Decimal
     converted_on: date
+    rate_kind: str
 
 
 @dataclass(frozen=True)
@@ -74,3 +77,20 @@ class OpenExistingDepositCommand:
     opened_on: date
     matures_on: date
     annual_rate: Decimal
+    rate_kind: str
+
+
+@dataclass(frozen=True)
+class AddFloatingRatePeriodCommand:
+    """Command to append a new effective-rate period to a floating-rate term.
+
+    The new period starts on starts_on and runs to the term's maturity date
+    until superseded by a later period. The previous period's end date is
+    trimmed to the day before starts_on — history is never rewritten.
+    """
+
+    user: User
+    term_id: int
+    starts_on: date
+    annual_rate: Decimal
+    note: str

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.commands import (
+    AddFloatingRatePeriodCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
@@ -16,6 +17,8 @@ from hasta_la_vista_money.deposits.commands import (
 from hasta_la_vista_money.deposits.models import (
     Deposit,
     DepositPrincipalEvent,
+    DepositRatePeriod,
+    DepositTerm,
 )
 from hasta_la_vista_money.deposits.repositories import DepositRepository
 from hasta_la_vista_money.finance_account.repositories import AccountRepository
@@ -203,6 +206,7 @@ class DepositService:
             opened_on=command.opened_on,
             matures_on=command.matures_on,
             is_current=True,
+            rate_kind=command.rate_kind,
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -307,6 +311,7 @@ class DepositService:
             opened_on=command.opened_on,
             matures_on=command.matures_on,
             is_current=True,
+            rate_kind=command.rate_kind,
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -315,6 +320,88 @@ class DepositService:
             annual_rate=command.annual_rate,
         )
         return deposit
+
+    @transaction.atomic
+    def add_floating_rate_period(
+        self,
+        command: AddFloatingRatePeriodCommand,
+    ) -> DepositRatePeriod:
+        """Append a new effective-rate period to a floating-rate term.
+
+        The previous period's end date is trimmed to the day before the new
+        period's start; earlier periods are never modified.
+
+        Args:
+            command: Term identifier, new period's start date, rate, and a
+                free-text note on the reason for the change.
+
+        Returns:
+            The newly created DepositRatePeriod.
+
+        Raises:
+            ValidationError: If the term is not found or not owned, is not
+                floating-rate, has already matured, the rate is not
+                positive, the note is blank, starts_on falls outside the
+                term's bounds, or starts_on does not come after the last
+                recorded period's start date.
+        """
+        try:
+            term = self.deposit_repository.get_term_by_id_and_user(
+                command.term_id,
+                command.user,
+            )
+        except DepositTerm.DoesNotExist as error:
+            raise ValidationError(
+                _('Срок не найден или недоступен.'),
+            ) from error
+
+        if term.rate_kind != DepositTerm.RateKind.FLOATING:
+            raise ValidationError(
+                _(
+                    'Добавлять периоды ставки можно только для '
+                    'плавающей ставки.',
+                ),
+            )
+        if term.state == DepositTerm.State.MATURED:
+            raise ValidationError(
+                _('Срок уже завершён, изменить ставку нельзя.'),
+            )
+        if command.annual_rate <= 0:
+            raise ValidationError(_('Годовая ставка должна быть больше нуля.'))
+        if not command.note.strip():
+            raise ValidationError(
+                _('Укажите пояснение к изменению ставки.'),
+            )
+        if not (term.opened_on <= command.starts_on <= term.matures_on):
+            raise ValidationError(
+                _('Дата начала периода должна попадать в срок вклада.'),
+            )
+
+        last_period = term.rate_periods.order_by('-starts_on').first()
+        if (
+            last_period is not None
+            and command.starts_on <= last_period.starts_on
+        ):
+            raise ValidationError(
+                _(
+                    'Дата начала нового периода должна быть позже даты '
+                    'начала последнего периода.',
+                ),
+            )
+
+        if last_period is not None:
+            self.deposit_repository.trim_rate_period_end(
+                last_period.pk,
+                command.starts_on - timedelta(days=1),
+            )
+
+        return self.deposit_repository.create_rate_period(
+            term=term,
+            starts_on=command.starts_on,
+            ends_on=term.matures_on,
+            annual_rate=command.annual_rate,
+            note=command.note.strip(),
+        )
 
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]:
         return self.deposit_repository.get_by_user(user)
