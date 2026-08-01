@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
+from hasta_la_vista_money import constants
 from hasta_la_vista_money.finance_account.models import Account
 
 
@@ -93,3 +94,10 @@ class AccountSerializer(serializers.ModelSerializer[Account]):
 
         validated_data['user'] = user
         return super().create(validated_data)
+
+    def validate_type_account(self, value: str) -> str:
+        if value == constants.ACCOUNT_TYPE_DEPOSIT:
+            raise serializers.ValidationError(
+                _('Счёт вклада можно создать только через сервис вкладов.'),
+            )
+        return value

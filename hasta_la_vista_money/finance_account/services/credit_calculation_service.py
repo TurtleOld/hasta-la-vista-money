@@ -12,8 +12,6 @@ from django.utils import timezone
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.constants import (
-    ACCOUNT_TYPE_CREDIT,
-    ACCOUNT_TYPE_CREDIT_CARD,
     RECEIPT_OPERATION_PURCHASE,
     RECEIPT_OPERATION_RETURN,
 )
@@ -83,10 +81,7 @@ class CreditCalculationService:
         Returns:
             Decimal debt amount if account is credit type, None otherwise.
         """
-        if account.type_account not in (
-            ACCOUNT_TYPE_CREDIT_CARD,
-            ACCOUNT_TYPE_CREDIT,
-        ):
+        if account.type_account not in constants.CREDIT_ACCOUNT_TYPES:
             return None
 
         start_date_dt: datetime | None = None
@@ -429,10 +424,7 @@ class CreditCalculationService:
             Dictionary with grace period information. Empty dict if account
             is not a credit card.
         """
-        if account.type_account not in (
-            ACCOUNT_TYPE_CREDIT_CARD,
-            ACCOUNT_TYPE_CREDIT,
-        ):
+        if account.type_account not in constants.CREDIT_ACCOUNT_TYPES:
             return {}
 
         purchase_start, purchase_end = self._calculate_purchase_period(

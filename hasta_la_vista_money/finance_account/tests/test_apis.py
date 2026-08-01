@@ -118,6 +118,27 @@ class TestAccountAPI(TestCase):
         self.assertEqual(response_data['name_account'], 'Credit Card')
         self.assertEqual(response_data['type_account'], 'Credit')
 
+    def test_account_api_rejects_deposit_creation(self) -> None:
+        url = reverse('finance_account:api_list')
+        self.client.force_authenticate(user=self.user)  # type: ignore[attr-defined]
+
+        response = self.client.post(
+            url,
+            {
+                'name_account': 'Deposit bypass',
+                'type_account': 'Deposit',
+                'bank': 'SBERBANK',
+                'balance': '1000.00',
+                'currency': 'RUB',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            Account.objects.filter(name_account='Deposit bypass').exists(),
+        )
+
     def test_account_api_filter_by_user(self) -> None:
         """Test account API filtering by user."""
         other_user = User.objects.create_user(

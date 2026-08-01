@@ -120,6 +120,13 @@ urlpatterns = [
             namespace='finance_account',
         ),
     ),
+    path(
+        'deposits/',
+        include(
+            'hasta_la_vista_money.deposits.urls',
+            namespace='deposits',
+        ),
+    ),
     path('finance/', FinancesView.as_view(), name='finances'),
     path(
         'finance/categories/',

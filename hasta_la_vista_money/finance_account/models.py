@@ -1,16 +1,13 @@
 from datetime import date
 from typing import ClassVar
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.constants import (
-    ACCOUNT_TYPE_CREDIT,
-    ACCOUNT_TYPE_CREDIT_CARD,
-)
 from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_CHOICES,
     BANK_DEFAULT,
@@ -30,12 +27,12 @@ class AccountQuerySet(models.QuerySet['Account']):
     def credit(self) -> 'AccountQuerySet':
         """Return only credit accounts and credit cards."""
         return self.filter(
-            type_account__in=[ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD],
+            type_account__in=constants.CREDIT_ACCOUNT_TYPES,
         )
 
     def debit(self) -> 'AccountQuerySet':
         """Return only debit accounts, debit cards, and cash."""
-        return self.filter(type_account__in=['Debit', 'DebitCard', 'CASH'])
+        return self.filter(type_account__in=constants.LIQUID_ACCOUNT_TYPES)
 
     def by_user(self, user: 'User') -> 'AccountQuerySet':
         """Return accounts belonging to the given user."""
@@ -55,7 +52,40 @@ class AccountQuerySet(models.QuerySet['Account']):
         return self.filter(type_account=type_account)
 
 
-AccountManager = models.Manager.from_queryset(AccountQuerySet)
+class AccountManager(models.Manager['Account']):
+    """Keep deposit accounts behind the deposit domain service."""
+
+    def get_queryset(self) -> AccountQuerySet:
+        return AccountQuerySet(self.model, using=self._db)
+
+    def credit(self) -> AccountQuerySet:
+        return self.get_queryset().credit()
+
+    def debit(self) -> AccountQuerySet:
+        return self.get_queryset().debit()
+
+    def by_user(self, user: User) -> AccountQuerySet:
+        return self.get_queryset().by_user(user)
+
+    def by_user_with_related(self, user: User) -> AccountQuerySet:
+        return self.get_queryset().by_user_with_related(user)
+
+    def by_currency(self, currency: str) -> AccountQuerySet:
+        return self.get_queryset().by_currency(currency)
+
+    def by_type(self, type_account: str) -> AccountQuerySet:
+        return self.get_queryset().by_type(type_account)
+
+    def create(self, **kwargs: object) -> 'Account':
+        if kwargs.get('type_account') == constants.ACCOUNT_TYPE_DEPOSIT:
+            raise ValidationError(
+                _('Счёт вклада можно создать только через сервис вкладов.'),
+            )
+        return super().create(**kwargs)
+
+    def create_deposit(self, **kwargs: object) -> 'Account':
+        kwargs['type_account'] = constants.ACCOUNT_TYPE_DEPOSIT
+        return super().create(**kwargs)
 
 
 class TimeStampedModel(models.Model):
@@ -88,13 +118,9 @@ class Account(TimeStampedModel):
     Provides methods for money transfer and credit card debt calculations.
     """
 
-    TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str | Promise]]] = [
-        ('Credit', _('Кредитный счёт')),
-        ('Debit', _('Дебетовый счёт')),
-        ('CreditCard', _('Кредитная карта')),
-        ('DebitCard', _('Дебетовая карта')),
-        ('CASH', _('Наличные')),
-    ]
+    TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str | Promise]]] = list(
+        constants.ACCOUNT_TYPE_CHOICES,
+    )
     BANK_LIST: ClassVar[tuple[tuple[str, str | Promise], ...]] = BANK_CHOICES
 
     user = models.ForeignKey(
@@ -183,6 +209,10 @@ class Account(TimeStampedModel):
         Returns the absolute URL to edit this account in the admin or UI.
         """
         return reverse('finance_account:change', args=[self.pk])
+
+    @property
+    def is_deposit(self) -> bool:
+        return self.type_account == constants.ACCOUNT_TYPE_DEPOSIT
 
 
 class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):

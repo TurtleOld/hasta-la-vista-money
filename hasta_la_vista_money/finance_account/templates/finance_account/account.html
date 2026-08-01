@@ -70,6 +70,9 @@
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14M5 12h14"/></svg>
                     {% translate 'Добавить счет' %}
                 </a>
+                <a href="{% url 'deposits:list' %}" class="accounts-btn">
+                    {% translate 'Вклады' %}
+                </a>
                 <a id="transfer-money-between-accounts" href="{% url 'finance_account:transfer_money' %}" class="accounts-btn">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>
                     {% translate 'Перевести средства' %}

@@ -1432,6 +1432,7 @@ class AccountView(
         )
         context['drawer_accounts'] = Account.objects.filter(
             user=current_user,
+            type_account__in=constants.MANUALLY_CREATABLE_ACCOUNT_TYPES,
         ).order_by('name_account')
         context['drawer_income_categories'] = Category.objects.filter(
             user=current_user,
@@ -1547,6 +1548,15 @@ class ChangeAccountView(
     form_class = AddAccountForm
     template_name = 'finance_account/change_account.html'
     success_message = constants.SUCCESS_MESSAGE_CHANGED_ACCOUNT
+
+    def get_queryset(self) -> QuerySet[Account]:
+        return (
+            super()
+            .get_queryset()
+            .exclude(
+                type_account=constants.ACCOUNT_TYPE_DEPOSIT,
+            )
+        )
 
     def get_context_data(
         self,
@@ -1740,6 +1750,14 @@ class DeleteAccountView(
     success_url = reverse_lazy('finance_account:list')
     success_message = constants.SUCCESS_MESSAGE_DELETE_ACCOUNT[:]
     error_message = constants.UNSUCCESSFULLY_MESSAGE_DELETE_ACCOUNT[:]
+
+    def get_queryset(self) -> QuerySet[Account]:
+        request = cast('WSGIRequestWithContainer', self.request)
+        if not isinstance(request.user, User):
+            raise TypeError('User must be authenticated')
+        return Account.objects.filter(
+            user=request.user,
+        ).exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
 
 
 @method_decorator(require_POST, name='dispatch')

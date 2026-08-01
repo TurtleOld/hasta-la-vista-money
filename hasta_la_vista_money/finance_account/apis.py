@@ -29,6 +29,7 @@ from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
+from hasta_la_vista_money.constants import ACCOUNT_TYPE_DEPOSIT
 from hasta_la_vista_money.core.mixins import (
     FormErrorHandlingMixin,
     UserAuthMixin,
@@ -206,4 +207,8 @@ class AccountRetrieveUpdateDestroyAPIView(
         if getattr(self, 'swagger_fake_view', False):
             return Account.objects.none()
         user = cast('User', self.request.user)
-        return Account.objects.filter(user=user).order_by('-id')
+        return (
+            Account.objects.filter(user=user)
+            .exclude(type_account=ACCOUNT_TYPE_DEPOSIT)
+            .order_by('-id')
+        )

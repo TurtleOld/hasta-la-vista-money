@@ -176,6 +176,27 @@ ACCOUNT_TYPE_CREDIT_CARD: Final = 'CreditCard'
 ACCOUNT_TYPE_DEBIT: Final = 'Debit'
 ACCOUNT_TYPE_DEBIT_CARD: Final = 'DebitCard'
 ACCOUNT_TYPE_CASH: Final = 'CASH'
+ACCOUNT_TYPE_DEPOSIT: Final = 'Deposit'
+MIN_ANNUAL_RATE: Final = Decimal('0.01')
+
+ACCOUNT_TYPE_CHOICES: Final = (
+    (ACCOUNT_TYPE_CREDIT, _('Кредитный счёт')),
+    (ACCOUNT_TYPE_DEBIT, _('Дебетовый счёт')),
+    (ACCOUNT_TYPE_CREDIT_CARD, _('Кредитная карта')),
+    (ACCOUNT_TYPE_DEBIT_CARD, _('Дебетовая карта')),
+    (ACCOUNT_TYPE_CASH, _('Наличные')),
+    (ACCOUNT_TYPE_DEPOSIT, _('Вклад')),
+)
+CREDIT_ACCOUNT_TYPES: Final = frozenset(
+    {ACCOUNT_TYPE_CREDIT, ACCOUNT_TYPE_CREDIT_CARD},
+)
+LIQUID_ACCOUNT_TYPES: Final = frozenset(
+    {ACCOUNT_TYPE_DEBIT, ACCOUNT_TYPE_DEBIT_CARD, ACCOUNT_TYPE_CASH},
+)
+ASSET_ACCOUNT_TYPES: Final = LIQUID_ACCOUNT_TYPES | {ACCOUNT_TYPE_DEPOSIT}
+MANUALLY_CREATABLE_ACCOUNT_TYPES: Final = (
+    CREDIT_ACCOUNT_TYPES | LIQUID_ACCOUNT_TYPES
+)
 
 # ============================================================================
 # HTTP Status Codes
