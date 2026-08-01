@@ -58,6 +58,10 @@ class DepositTerm(models.Model):
         ACTIVE = 'active', _('Активен')
         MATURED = 'matured', _('Срок истёк')
 
+    class RateKind(models.TextChoices):
+        FIXED = 'fixed', _('Фиксированная')
+        FLOATING = 'floating', _('Плавающая')
+
     deposit = models.ForeignKey(
         Deposit,
         on_delete=models.CASCADE,
@@ -66,6 +70,12 @@ class DepositTerm(models.Model):
     opened_on = models.DateField(verbose_name=_('Дата открытия'))
     matures_on = models.DateField(verbose_name=_('Дата окончания'))
     is_current = models.BooleanField(default=True)
+    rate_kind = models.CharField(
+        max_length=10,
+        choices=RateKind.choices,
+        default=RateKind.FIXED,
+        verbose_name=_('Тип ставки'),
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ['opened_on']
@@ -95,16 +105,23 @@ class DepositTerm(models.Model):
         return str(self.State(self.state).label)
 
     @property
-    def current_rate(self) -> 'DepositRatePeriod':
+    def current_rate(self) -> 'DepositRatePeriod | None':
         today = timezone.localdate()
         rate = self.rate_periods.filter(
             starts_on__lte=today,
             ends_on__gte=today,
         ).first()
-        return rate or self.rate_periods.get(
-            starts_on=self.opened_on,
-            ends_on=self.matures_on,
-        )
+        if rate is not None:
+            return rate
+        if self.rate_kind == self.RateKind.FIXED:
+            return self.rate_periods.get(
+                starts_on=self.opened_on,
+                ends_on=self.matures_on,
+            )
+        return None
+
+    def has_defined_current_rate(self) -> bool:
+        return self.current_rate is not None
 
 
 class DepositRatePeriod(models.Model):
@@ -120,6 +137,12 @@ class DepositRatePeriod(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(constants.MIN_ANNUAL_RATE)],
         verbose_name=_('Годовая ставка'),
+    )
+    note = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        blank=True,
+        default='',
+        verbose_name=_('Пояснение к ставке'),
     )
 
     class Meta:
