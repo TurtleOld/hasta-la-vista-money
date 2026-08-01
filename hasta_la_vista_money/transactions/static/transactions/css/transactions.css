@@ -584,7 +584,12 @@
   transform: translateY(-1px);
 }
 
+.finances-category-control {
+  align-items: stretch;
+}
+
 .finances-category-control > .finances-chip {
+  border-right: 0;
   border-radius: 0.65rem 0 0 0.65rem;
 }
 
@@ -600,7 +605,7 @@
   border-radius: 0 0.65rem 0.65rem 0;
   color: var(--finances-muted);
   display: inline-flex;
-  height: 2.125rem;
+  align-self: stretch;
   justify-content: center;
   position: relative;
   transition:
