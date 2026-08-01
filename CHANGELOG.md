@@ -1,5 +1,21 @@
 # История изменений
 
+## [2.11.0](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.10.1...v2.11.0) (2026-08-01)
+
+
+### Features
+
+* **users:** add statement reconciliation history ([#916](https://github.com/TurtleOld/hasta-la-vista-money/issues/916)) ([40369a7](https://github.com/TurtleOld/hasta-la-vista-money/commit/40369a788d688bfec1aed205f2bbf858f2cd678f))
+* **users:** complete partial statement import ([#915](https://github.com/TurtleOld/hasta-la-vista-money/issues/915)) ([cd36926](https://github.com/TurtleOld/hasta-la-vista-money/commit/cd36926373a0479c68358bdfb9a37aa5150e02db))
+* **users:** complete statement reconciliation lifecycle ([#917](https://github.com/TurtleOld/hasta-la-vista-money/issues/917)) ([0043ff9](https://github.com/TurtleOld/hasta-la-vista-money/commit/0043ff9e2940a51dca48fe8a8f5d51af395d39b3))
+* **users:** handle ambiguous statement matches ([#914](https://github.com/TurtleOld/hasta-la-vista-money/issues/914)) ([686db83](https://github.com/TurtleOld/hasta-la-vista-money/commit/686db836fe29b720a15504b675683e2e2a7ba411))
+* **users:** reconcile probable statement duplicate ([#913](https://github.com/TurtleOld/hasta-la-vista-money/issues/913)) ([57fab14](https://github.com/TurtleOld/hasta-la-vista-money/commit/57fab14f5e143f8bbabdc2f7fd4d889938be8d4e))
+
+
+### Bug Fixes
+
+* **reports:** correct financial aggregation precision ([#903](https://github.com/TurtleOld/hasta-la-vista-money/issues/903)) ([edab4f0](https://github.com/TurtleOld/hasta-la-vista-money/commit/edab4f0e0ebbca7aca9ef4e08b7a28a3b12d8d08))
+
 ## [2.10.1](https://github.com/TurtleOld/hasta-la-vista-money/compare/v2.10.0...v2.10.1) (2026-07-26)
 
 
