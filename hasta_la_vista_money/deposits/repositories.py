@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from django.db.models import QuerySet
 
 from hasta_la_vista_money.deposits.models import (
@@ -7,6 +9,9 @@ from hasta_la_vista_money.deposits.models import (
     DepositTerm,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from datetime import date
 
 
 class DepositRepository:
@@ -42,3 +47,22 @@ class DepositRepository:
 
     def get_by_id_and_user(self, deposit_id: int, user: User) -> Deposit:
         return self.get_by_user(user).get(pk=deposit_id)
+
+    def get_term_by_id_and_user(
+        self,
+        term_id: int,
+        user: User,
+    ) -> DepositTerm:
+        return DepositTerm.objects.select_related('deposit__account').get(
+            pk=term_id,
+            deposit__account__user=user,
+        )
+
+    def trim_rate_period_end(
+        self,
+        period_id: int,
+        new_ends_on: 'date',
+    ) -> None:
+        DepositRatePeriod.objects.filter(pk=period_id).update(
+            ends_on=new_ends_on,
+        )
