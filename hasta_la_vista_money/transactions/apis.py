@@ -27,10 +27,6 @@ from hasta_la_vista_money.api.serializers import GroupQuerySerializer
 from hasta_la_vista_money.authentication.authentication import (
     CookieJWTAuthentication,
 )
-from hasta_la_vista_money.core.mixins import (
-    FormErrorHandlingMixin,
-    UserAuthMixin,
-)
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -104,7 +100,7 @@ def _serialize(transaction_obj: Transaction) -> dict[str, Any]:
         ),
     },
 )
-class TransactionByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
+class TransactionByGroupAPIView(APIView):
     """API view for retrieving transactions by group."""
 
     schema = AutoSchema()
@@ -177,7 +173,7 @@ class TransactionByGroupAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         ),
     },
 )
-class TransactionDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
+class TransactionDataAPIView(APIView):
     """API view for retrieving transaction data for table widgets."""
 
     schema = AutoSchema()
@@ -226,7 +222,7 @@ class TransactionDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
         data = [_serialize(transaction_obj) for transaction_obj in transactions]
         paginator = self.pagination_class()
         paginated_data: list[dict[str, object]] | None = (
-            paginator.paginate_queryset(data, request)
+            paginator.paginate_queryset(data, request)  # type: ignore[arg-type]
         )
         return paginator.get_paginated_response(paginated_data)
 
@@ -257,7 +253,6 @@ class TransactionDataAPIView(APIView, UserAuthMixin, FormErrorHandlingMixin):
 )
 class TransactionRetrieveAPIView(
     RetrieveAPIView[Transaction],
-    UserAuthMixin,
 ):
     """API view for retrieving a single transaction by primary key."""
 

@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import ClassVar
 
 from django.test import TestCase
 from django.urls import reverse
@@ -19,7 +18,7 @@ TEST_PASSWORD = 'pwd123456!'  # nosec B105
 
 
 class CategoryCRUDViewsTest(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures = ['users.yaml']
 
     def setUp(self) -> None:
         self.user = User.objects.get(pk=1)

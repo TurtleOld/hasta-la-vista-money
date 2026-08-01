@@ -1,6 +1,6 @@
 """HTML views for transaction category management."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -15,6 +15,9 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from hasta_la_vista_money.services.views import get_cached_category_tree
 from hasta_la_vista_money.transactions.forms import CategoryForm
 from hasta_la_vista_money.transactions.models import Category, TransactionType
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.users.models import User
 
 
 def _category_type(value: str | None) -> str:
@@ -75,18 +78,20 @@ class CategoryCreateView(
 
     def get_form_kwargs(self) -> dict[str, Any]:
         kwargs = super().get_form_kwargs()
+        user = cast('User', self.request.user)
         kwargs['category_queryset'] = Category.objects.filter(
-            user=self.request.user,
+            user=user,
             type=self.get_category_type(),
         )
         return kwargs
 
     def form_valid(self, form: CategoryForm) -> HttpResponse:
+        user = cast('User', self.request.user)
         category = form.save(commit=False)
-        category.user = self.request.user
+        category.user = user
         category.type = self.get_category_type()
         category.save()
-        _clear_category_cache(self.request.user.pk, category.type)
+        _clear_category_cache(user.pk, category.type)
         messages.success(self.request, _('Категория успешно добавлена.'))
         return redirect(self.success_url)
 
@@ -112,10 +117,11 @@ class CategoryUpdateView(
         )
 
     def get_object(self, queryset: Any = None) -> Category:
+        user = cast('User', self.request.user)
         return get_object_or_404(
             Category,
             pk=self.kwargs['pk'],
-            user=self.request.user,
+            user=user,
         )
 
     def get(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -130,22 +136,20 @@ class CategoryUpdateView(
     def get_form_kwargs(self) -> dict[str, Any]:
         kwargs = super().get_form_kwargs()
         category = self.get_object()
+        user = cast('User', self.request.user)
         kwargs['category_queryset'] = Category.objects.filter(
-            user=self.request.user,
+            user=user,
             type=category.type,
         ).exclude(pk=category.pk)
         kwargs.setdefault('initial', {})['type'] = category.type
         return kwargs
 
     def _inline_item_context(self, category: Category) -> dict[str, Any]:
-        tree = get_cached_category_tree(
-            user_id=self.request.user.pk,
-            category_type=category.type,
-            categories=list(
-                Category.objects.filter(
-                    user=self.request.user,
-                    type=category.type,
-                )
+        user = cast('User', self.request.user)
+        categories = cast(
+            'list[dict[str, Any]]',
+            list(
+                Category.objects.filter(user=user, type=category.type)
                 .values(
                     'id',
                     'name',
@@ -154,6 +158,11 @@ class CategoryUpdateView(
                 )
                 .order_by('parent_category_id'),
             ),
+        )
+        tree = get_cached_category_tree(
+            user_id=user.pk,
+            category_type=category.type,
+            categories=categories,
             depth=3,
         )
         found = _find_category_node(tree, category.pk)
@@ -210,11 +219,12 @@ class CategoryUpdateView(
         )
 
     def form_valid(self, form: CategoryForm) -> HttpResponse:
+        user = cast('User', self.request.user)
         category = form.save(commit=False)
-        category.user = self.request.user
+        category.user = user
         category.type = self.get_object().type
         category.save()
-        _clear_category_cache(self.request.user.pk, category.type)
+        _clear_category_cache(user.pk, category.type)
         if self.is_inline_request():
             return self._render_inline_item(category=category)
         messages.success(self.request, _('Категория успешно обновлена.'))
@@ -233,13 +243,15 @@ class CategoryDeleteView(LoginRequiredMixin, DeleteView[Category, Any]):
     success_url = reverse_lazy('finances_categories')
 
     def get_object(self, queryset: Any = None) -> Category:
+        user = cast('User', self.request.user)
         return get_object_or_404(
             Category,
             pk=self.kwargs['pk'],
-            user=self.request.user,
+            user=user,
         )
 
     def form_valid(self, form: Any) -> HttpResponse:
+        user = cast('User', self.request.user)
         category = self.get_object()
         category_type = category.type
         try:
@@ -250,6 +262,6 @@ class CategoryDeleteView(LoginRequiredMixin, DeleteView[Category, Any]):
                 _('Категория используется и не может быть удалена.'),
             )
             return redirect(self.success_url)
-        _clear_category_cache(self.request.user.pk, category_type)
+        _clear_category_cache(user.pk, category_type)
         messages.success(self.request, _('Категория успешно удалена.'))
         return redirect(self.success_url)

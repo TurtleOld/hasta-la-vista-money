@@ -2,7 +2,6 @@
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import ClassVar
 from unittest.mock import patch
 
 from django.core.exceptions import PermissionDenied
@@ -38,7 +37,7 @@ TEST_PASSWORD = 'pwd123456!'  # nosec B105
 
 
 class TransactionServiceTest(TestCase):
-    fixtures: ClassVar[list[str]] = [
+    fixtures = [
         'users.yaml',
         'finance_account.yaml',
     ]
@@ -307,7 +306,7 @@ class TransactionServiceTest(TestCase):
 
 
 class CategoryServiceTest(TestCase):
-    fixtures: ClassVar[list[str]] = ['users.yaml']
+    fixtures = ['users.yaml']
 
     def setUp(self) -> None:
         self.user = User.objects.get(pk=1)
