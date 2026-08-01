@@ -7,6 +7,7 @@ from typing import Any, cast
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.paginator import Paginator
 from django.db.models import QuerySet
 from django.http import (
     HttpRequest,
@@ -20,6 +21,9 @@ from django.views import View
 from django.views.generic import DetailView
 from django.views.generic.edit import FormView
 
+from hasta_la_vista_money.constants import (
+    STATEMENT_RECONCILIATION_PAGE_SIZE,
+)
 from hasta_la_vista_money.users.forms import (
     BankStatementUploadForm,
 )
@@ -126,6 +130,9 @@ class BankStatementUploadView(
         """Add extra context data."""
         context = super().get_context_data(**kwargs)
         user = cast('User', self.request.user)
+        context['upload_history'] = (
+            BankStatementReconciliationService.upload_history(user.pk)
+        )
         # Check if there's an ongoing upload
         last_upload_id = self.request.session.get('last_upload_id')
         if last_upload_id:
@@ -239,9 +246,28 @@ class BankStatementReconciliationView(
         return BankStatementUpload.objects.filter(
             user=user,
             account__user=user,
-        ).prefetch_related(
-            'statement_rows__candidates__transaction__category',
         )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        outcome = self.request.GET.get(
+            'outcome',
+            BankStatementRow.Decision.PENDING,
+        )
+        rows = BankStatementReconciliationService.reconciliation_rows(
+            self.object,
+            outcome,
+        )
+        if outcome not in BankStatementRow.Decision.values:
+            outcome = BankStatementRow.Decision.PENDING
+        context['page_obj'] = Paginator(
+            rows,
+            STATEMENT_RECONCILIATION_PAGE_SIZE,
+        ).get_page(
+            self.request.GET.get('page'),
+        )
+        context['outcome'] = outcome
+        return context
 
 
 class BankStatementReconciliationDecisionView(LoginRequiredMixin, View):

@@ -120,6 +120,27 @@
                 </div>
             </div>
 
+            <section class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white">{% translate 'История загрузок' %}</h2>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for history_upload in upload_history %}
+                        <div class="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">{{ history_upload.account.name_account }}</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ history_upload.created_at|date:'d.m.Y H:i' }} · {{ history_upload.get_status_display }}</p>
+                            </div>
+                            {% if history_upload.status == 'awaiting_confirmation' %}
+                                <a class="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" href="{% url 'users:bank_statement_reconciliation' history_upload.pk %}">{% translate 'Продолжить сверку' %}</a>
+                            {% endif %}
+                        </div>
+                    {% empty %}
+                        <p class="p-5 text-sm text-gray-500 dark:text-gray-400">{% translate 'Загрузок пока нет.' %}</p>
+                    {% endfor %}
+                </div>
+            </section>
+
             <!-- Progress indicator -->
             <div id="progressIndicator" class="hidden mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div class="p-6">

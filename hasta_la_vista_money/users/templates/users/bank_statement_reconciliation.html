@@ -6,7 +6,12 @@
 {% block content %}
 <div class="container mx-auto max-w-5xl px-4 py-8">
     <h1 class="mb-6 text-2xl font-semibold">{% translate 'Сверка выписки' %}</h1>
-    {% for row in upload.statement_rows.all %}
+    <nav class="mb-6 flex flex-wrap gap-2" aria-label="{% translate 'Фильтр решений' %}">
+        <a href="?outcome=pending" class="rounded px-3 py-2 {% if outcome == 'pending' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Нерешённые' %}</a>
+        <a href="?outcome=linked" class="rounded px-3 py-2 {% if outcome == 'linked' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Уже учтённые' %}</a>
+        <a href="?outcome=new" class="rounded px-3 py-2 {% if outcome == 'new' %}bg-blue-600 text-white{% else %}border border-gray-300{% endif %}">{% translate 'Новые операции' %}</a>
+    </nav>
+    {% for row in page_obj %}
         <section class="mb-6 rounded-lg border border-gray-200 p-5 dark:border-gray-700">
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
@@ -20,7 +25,7 @@
                 <div>
                     <h2 class="mb-3 font-semibold">{% translate 'Учтённые операции' %}</h2>
                     {% for candidate in row.candidates.all %}
-                        <label class="mb-3 block rounded border border-gray-200 p-3 dark:border-gray-700">
+                        <label class="mb-3 grid gap-1 rounded border border-gray-200 p-3 dark:border-gray-700 sm:grid-cols-2">
                             <input form="linked-{{ row.pk }}" type="radio" name="candidate" value="{{ candidate.pk }}" required>
                             <span>{{ candidate.transaction.date|date:'d.m.Y H:i' }}</span>
                             <span>{{ candidate.transaction.amount }} {{ upload.account.currency }}</span>
@@ -53,5 +58,12 @@
     {% empty %}
         <p>{% translate 'Нет строк для сверки.' %}</p>
     {% endfor %}
+    {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="mt-6 flex items-center justify-between" aria-label="{% translate 'Страницы сверки' %}">
+            {% if page_obj.has_previous %}<a href="?outcome={{ outcome }}&page={{ page_obj.previous_page_number }}">{% translate 'Назад' %}</a>{% else %}<span></span>{% endif %}
+            <span>{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}<a href="?outcome={{ outcome }}&page={{ page_obj.next_page_number }}">{% translate 'Далее' %}</a>{% endif %}
+        </nav>
+    {% endif %}
 </div>
 {% endblock %}
