@@ -2,17 +2,22 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import FormView, ListView, TemplateView
 
-from hasta_la_vista_money.deposits.commands import CreateDepositCommand
+from hasta_la_vista_money.deposits.commands import (
+    FundDepositCommand,
+    OpenExistingDepositCommand,
+)
 from hasta_la_vista_money.deposits.forms import CreateDepositForm
-from hasta_la_vista_money.deposits.models import Deposit
+from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 
 if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.users.models import User
 
 
@@ -31,23 +36,49 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
     form_class = CreateDepositForm
     template_name = 'deposits/deposit_form.html'
 
+    def get_form_kwargs(self) -> dict[str, Any]:
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = cast('User', self.request.user)
+        return kwargs
+
     def form_valid(self, form: CreateDepositForm) -> HttpResponse:
         user = cast('User', self.request.user)
         data = form.cleaned_data
         request = cast('Any', self.request)
         service = request.container.deposits.deposit_service()
-        deposit = service.create_term_deposit(
-            CreateDepositCommand(
-                user=user,
-                name=data['name'],
-                bank=data['bank'],
-                currency=data['currency'],
-                balance=data['balance'],
-                opened_on=data['opened_on'],
-                matures_on=data['matures_on'],
-                annual_rate=data['annual_rate'],
-            ),
-        )
+        try:
+            if data['opening_method'] == DepositPrincipalEvent.Type.FUNDING:
+                source_account = cast('Account', data['source_account'])
+                deposit = service.create_funded_term_deposit(
+                    FundDepositCommand(
+                        user=user,
+                        name=data['name'],
+                        bank=data['bank'],
+                        currency=data['currency'],
+                        amount=data['balance'],
+                        source_account_id=source_account.pk,
+                        opened_on=data['opened_on'],
+                        matures_on=data['matures_on'],
+                        annual_rate=data['annual_rate'],
+                    ),
+                )
+            else:
+                deposit = service.open_existing_term_deposit(
+                    OpenExistingDepositCommand(
+                        user=user,
+                        name=data['name'],
+                        bank=data['bank'],
+                        currency=data['currency'],
+                        current_balance=data['balance'],
+                        tracking_started_on=data['tracking_started_on'],
+                        opened_on=data['opened_on'],
+                        matures_on=data['matures_on'],
+                        annual_rate=data['annual_rate'],
+                    ),
+                )
+        except ValidationError as error:
+            form.add_error(None, error)
+            return self.form_invalid(form)
         messages.success(self.request, _('Срочный вклад успешно создан.'))
         return HttpResponseRedirect(deposit.get_absolute_url())
 
