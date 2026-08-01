@@ -15,6 +15,8 @@ const options = {
     'pages/receipt-qr-worker': 'static/js/pages/receipt-qr-worker.js',
     'pages/loan': 'static/js/pages/loan.js',
     'pages/profile': 'static/js/pages/profile.js',
+    'pages/bank-statement-reconciliation':
+      'static/js/pages/bank-statement-reconciliation.js',
   },
   bundle: true,
   format: 'iife',

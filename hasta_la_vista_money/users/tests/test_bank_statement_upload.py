@@ -3,6 +3,7 @@
 import tempfile
 from datetime import datetime, timedelta
 from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
@@ -42,6 +43,12 @@ from hasta_la_vista_money.users.services.bank_statement import (
     _RaiffeisenBankParser,
     _SberbankParser,
     process_bank_statement,
+)
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    BankStatementReconciliationService,
+)
+from hasta_la_vista_money.users.services.bank_statement_retention import (
+    BankStatementRetentionService,
 )
 from hasta_la_vista_money.users.tasks import process_bank_statement_task
 
@@ -357,6 +364,27 @@ class TestBankStatementUploadStatusView(TestCase):
             },
         )
 
+    def test_get_status_completed_with_unresolved(self) -> None:
+        upload = BankStatementUpload.objects.create(
+            user=self.user,
+            account=self.account,
+            status=BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+            progress=100,
+            expired_count=2,
+        )
+
+        response = self.client.get(
+            reverse('users:bank_statement_upload_status', args=[upload.pk]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()['status'],
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+        )
+        self.assertEqual(response.json()['outcomes']['expired'], 2)
+        self.assertIsNone(response.json()['reconciliation_url'])
+
     def test_get_status_failed(self) -> None:
         """Test getting status of failed upload."""
         upload = BankStatementUpload.objects.create(
@@ -490,6 +518,21 @@ class TestBankStatementReconciliationView(TestCase):
             rank=0,
         )
 
+    def assert_retention_payload_scrubbed(
+        self,
+        row: BankStatementRow,
+    ) -> None:
+        """Assert that a retained row contains no statement payload."""
+        self.assertEqual(row.description, '')
+        self.assertEqual(row.candidate_description, '')
+        self.assertEqual(row.suggested_category, '')
+        self.assertIsNone(row.source_ref)
+        self.assertIsNone(row.transaction_type)
+        self.assertIsNone(row.transaction_date)
+        self.assertIsNone(row.amount)
+        self.assertIsNone(row.source_row_position)
+        self.assertFalse(row.candidates.exists())
+
     def test_owner_sees_statement_and_candidate_financial_fields(self) -> None:
         response = self.client.get(
             reverse(
@@ -558,6 +601,458 @@ class TestBankStatementReconciliationView(TestCase):
         self.assertEqual(self.upload.imported_count, 1)
         self.assertEqual(self.upload.awaiting_decision_count, 0)
 
+    def test_bulk_link_returns_independent_results_and_is_idempotent(
+        self,
+    ) -> None:
+        ambiguous = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=self.candidate.date,
+            amount=self.candidate.amount,
+            description='Неоднозначная строка',
+            candidate_description='Кандидат',
+            suggested_category='Поездки',
+            source_row_position=1,
+            candidate=self.candidate,
+        )
+        BankStatementCandidate.objects.create(
+            row=ambiguous,
+            transaction=self.candidate,
+            description='Первый кандидат',
+            rank=0,
+        )
+        second_candidate = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=self.candidate.amount,
+            date=self.candidate.date,
+        )
+        BankStatementCandidate.objects.create(
+            row=ambiguous,
+            transaction=second_candidate,
+            description='Второй кандидат',
+            rank=1,
+        )
+        stale = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now() + timedelta(days=1),
+            amount=Decimal('50.00'),
+            description='Устаревшая строка',
+            candidate_description='Удалённый кандидат',
+            suggested_category='Прочее',
+            source_row_position=2,
+        )
+        stale_transaction = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            category=self.category,
+            type=TransactionType.EXPENSE,
+            amount=stale.amount,
+            date=stale.transaction_date,
+        )
+        stale_candidate = BankStatementCandidate.objects.create(
+            row=stale,
+            transaction=stale_transaction,
+            description='Удалённый кандидат',
+            rank=0,
+        )
+        stale_transaction.delete()
+        url = reverse(
+            'users:bank_statement_reconciliation_bulk',
+            args=[self.upload.pk],
+        )
+        payload = {
+            'decision': 'linked',
+            'rows': [self.row.pk, ambiguous.pk, stale.pk],
+        }
+
+        first_response = self.client.post(url, payload)
+        second_response = self.client.post(url, payload)
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        first_results = {
+            result['row_id']: result['outcome']
+            for result in first_response.json()['results']
+        }
+        second_results = {
+            result['row_id']: result['outcome']
+            for result in second_response.json()['results']
+        }
+        self.assertEqual(first_results[self.row.pk], 'linked')
+        self.assertEqual(first_results[ambiguous.pk], 'ambiguous')
+        self.assertEqual(first_results[stale.pk], 'stale')
+        self.assertEqual(second_results, first_results)
+        self.row.refresh_from_db()
+        ambiguous.refresh_from_db()
+        stale.refresh_from_db()
+        stale_candidate.refresh_from_db()
+        self.upload.refresh_from_db()
+        self.assertEqual(self.row.transaction, self.candidate)
+        self.assertEqual(
+            ambiguous.decision,
+            BankStatementRow.Decision.PENDING,
+        )
+        self.assertEqual(stale.decision, BankStatementRow.Decision.PENDING)
+        self.assertIsNone(stale_candidate.transaction)
+        self.assertEqual(self.upload.linked_count, 1)
+        self.assertEqual(self.upload.awaiting_decision_count, 2)
+        self.assertEqual(Transaction.objects.count(), 2)
+
+    def test_bulk_new_requires_risk_confirmation(self) -> None:
+        url = reverse(
+            'users:bank_statement_reconciliation_bulk',
+            args=[self.upload.pk],
+        )
+        payload = {'decision': 'new', 'rows': [self.row.pk]}
+
+        rejected = self.client.post(url, payload)
+        accepted = self.client.post(
+            url,
+            {**payload, 'confirm_risk': 'true'},
+        )
+
+        self.assertEqual(rejected.status_code, 400)
+        self.assertEqual(rejected.json()['error'], 'confirmation_required')
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(
+            accepted.json()['results'],
+            [{'row_id': self.row.pk, 'outcome': 'new'}],
+        )
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('880.00'))
+        self.assertEqual(Transaction.objects.count(), 2)
+
+    def test_bulk_new_continues_after_one_database_error(self) -> None:
+        self.candidate.source_ref = 'duplicate-source'
+        self.candidate.save(update_fields=['source_ref'])
+        self.row.source_ref = 'duplicate-source'
+        self.row.save(update_fields=['source_ref'])
+        successful = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now() + timedelta(minutes=1),
+            amount=Decimal('30.00'),
+            description='Успешная строка',
+            candidate_description='Кандидат',
+            suggested_category='Прочее',
+            source_ref='unique-source',
+            source_row_position=1,
+        )
+
+        response = self.client.post(
+            reverse(
+                'users:bank_statement_reconciliation_bulk',
+                args=[self.upload.pk],
+            ),
+            {
+                'decision': 'new',
+                'confirm_risk': 'true',
+                'rows': [self.row.pk, successful.pk],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()['results'],
+            [
+                {'row_id': self.row.pk, 'outcome': 'error'},
+                {'row_id': successful.pk, 'outcome': 'new'},
+            ],
+        )
+        self.row.refresh_from_db()
+        successful.refresh_from_db()
+        self.account.refresh_from_db()
+        self.upload.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(successful.decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(self.account.balance, Decimal('970.00'))
+        self.assertEqual(self.upload.imported_count, 1)
+        self.assertEqual(self.upload.awaiting_decision_count, 1)
+        self.assertEqual(Transaction.objects.count(), 2)
+
+    def test_linked_row_can_be_revised_to_new_once_with_audit(self) -> None:
+        candidate_link = BankStatementCandidate.objects.get(row=self.row)
+        decision_url = reverse(
+            'users:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+        self.client.post(
+            decision_url,
+            {'decision': 'linked', 'candidate': candidate_link.pk},
+        )
+        revision_url = reverse(
+            'users:bank_statement_reconciliation_revise',
+            args=[self.upload.pk, self.row.pk],
+        )
+
+        first_response = self.client.post(revision_url)
+        second_response = self.client.post(revision_url)
+
+        self.assertEqual(first_response.status_code, 302)
+        self.assertEqual(second_response.status_code, 302)
+        self.row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.upload.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.NEW)
+        self.assertNotEqual(self.row.transaction, self.candidate)
+        self.assertEqual(self.account.balance, Decimal('880.00'))
+        self.assertEqual(Transaction.objects.count(), 2)
+        audits = list(self.row.decision_audits.order_by('created_at'))
+        self.assertEqual(len(audits), 2)
+        self.assertEqual(audits[0].decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(audits[0].transaction, self.candidate)
+        self.assertEqual(audits[1].decision, BankStatementRow.Decision.NEW)
+        self.assertEqual(audits[1].previous_transaction, self.candidate)
+        self.assertEqual(audits[1].transaction, self.row.transaction)
+        self.assertEqual(self.upload.linked_count, 0)
+        self.assertEqual(self.upload.imported_count, 1)
+
+    def test_linked_row_cannot_be_revised_after_deadline(self) -> None:
+        candidate_link = BankStatementCandidate.objects.get(row=self.row)
+        self.client.post(
+            reverse(
+                'users:bank_statement_reconciliation_decide',
+                args=[self.upload.pk, self.row.pk],
+            ),
+            {'decision': 'linked', 'candidate': candidate_link.pk},
+        )
+        self.upload.expires_at = timezone.now() - timedelta(seconds=1)
+        self.upload.save(update_fields=['expires_at'])
+
+        response = self.client.post(
+            reverse(
+                'users:bank_statement_reconciliation_revise',
+                args=[self.upload.pk, self.row.pk],
+            ),
+        )
+
+        self.assertEqual(response.status_code, 410)
+        self.row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(self.row.transaction, self.candidate)
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_retention_cleanup_expires_unresolved_and_preserves_audit(
+        self,
+    ) -> None:
+        candidate_link = BankStatementCandidate.objects.get(row=self.row)
+        self.client.post(
+            reverse(
+                'users:bank_statement_reconciliation_decide',
+                args=[self.upload.pk, self.row.pk],
+            ),
+            {'decision': 'linked', 'candidate': candidate_link.pk},
+        )
+        pending = BankStatementRow.objects.create(
+            upload=self.upload,
+            transaction_type=TransactionType.EXPENSE,
+            transaction_date=timezone.now(),
+            amount=Decimal('25.00'),
+            description='Секретное назначение',
+            candidate_description='Секретный кандидат',
+            suggested_category='Секретная категория',
+            source_ref='secret-source',
+            source_row_position=1,
+            candidate=self.candidate,
+        )
+        BankStatementCandidate.objects.create(
+            row=pending,
+            transaction=self.candidate,
+            description='Секретные детали кандидата',
+            rank=0,
+        )
+        pdf_content = b'%PDF-1.4 sensitive statement'
+        self.upload.pdf_file.save(
+            'retention.pdf',
+            SimpleUploadedFile(
+                'retention.pdf',
+                pdf_content,
+                content_type='application/pdf',
+            ),
+        )
+        file_name = self.upload.pdf_file.name
+        storage = self.upload.pdf_file.storage
+        file_hash = sha256(pdf_content).hexdigest()
+        self.upload.file_hash = file_hash
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['file_hash', 'expires_at'])
+
+        retention_service = BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        )
+        before_count = retention_service.cleanup_expired(
+            deadline - timedelta(microseconds=1),
+        )
+        self.assertEqual(before_count, 0)
+        self.assertTrue(storage.exists(file_name))
+        first_count = retention_service.cleanup_expired(deadline)
+        second_count = retention_service.cleanup_expired(deadline)
+
+        self.assertEqual(first_count, 1)
+        self.assertEqual(second_count, 0)
+        self.upload.refresh_from_db()
+        self.row.refresh_from_db()
+        pending.refresh_from_db()
+        self.assertEqual(
+            self.upload.status,
+            BankStatementUpload.Status.COMPLETED_WITH_UNRESOLVED,
+        )
+        self.assertEqual(self.upload.expired_count, 1)
+        self.assertEqual(self.upload.awaiting_decision_count, 0)
+        self.assertEqual(self.upload.file_hash, file_hash)
+        self.assertEqual(self.upload.account, self.account)
+        self.assertIsNotNone(self.upload.retention_cleaned_at)
+        self.assertFalse(storage.exists(file_name))
+        self.assertFalse(bool(self.upload.pdf_file))
+        self.assertEqual(pending.decision, BankStatementRow.Decision.EXPIRED)
+        self.assert_retention_payload_scrubbed(pending)
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.LINKED)
+        self.assertEqual(self.row.transaction, self.candidate)
+        self.assertEqual(self.row.decision_audits.count(), 1)
+        self.assert_retention_payload_scrubbed(self.row)
+        self.assertEqual(Transaction.objects.count(), 1)
+
+        with patch(
+            'hasta_la_vista_money.users.views.process_bank_statement_task',
+        ) as task:
+            response = self.client.post(
+                reverse('users:bank_statement_upload'),
+                {
+                    'account': self.account.pk,
+                    'pdf_file': SimpleUploadedFile(
+                        'retention.pdf',
+                        pdf_content,
+                        content_type='application/pdf',
+                    ),
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(BankStatementUpload.objects.count(), 1)
+        task.delay.assert_not_called()
+
+    def test_cleanup_failure_keeps_pending_row_and_can_be_retried(
+        self,
+    ) -> None:
+        self.upload.pdf_file.save(
+            'retry-retention.pdf',
+            SimpleUploadedFile(
+                'retry-retention.pdf',
+                b'%PDF-1.4 sensitive statement',
+                content_type='application/pdf',
+            ),
+        )
+        deadline = timezone.now()
+        self.upload.expires_at = deadline
+        self.upload.save(update_fields=['expires_at'])
+        storage = self.upload.pdf_file.storage
+        retention_service = BankStatementRetentionService(
+            BankStatementReconciliationService(),
+        )
+
+        with (
+            patch.object(
+                storage,
+                'delete',
+                side_effect=OSError('storage unavailable'),
+            ),
+            self.assertRaises(OSError),
+        ):
+            retention_service.cleanup_expired(deadline)
+
+        self.upload.refresh_from_db()
+        self.row.refresh_from_db()
+        self.assertIsNone(self.upload.retention_cleaned_at)
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(Transaction.objects.count(), 1)
+
+        cleaned = retention_service.cleanup_expired(deadline)
+
+        self.assertEqual(cleaned, 1)
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.EXPIRED)
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_pending_decision_after_deadline_creates_no_transaction(
+        self,
+    ) -> None:
+        self.upload.expires_at = timezone.now() - timedelta(seconds=1)
+        self.upload.save(update_fields=['expires_at'])
+
+        response = self.client.post(
+            reverse(
+                'users:bank_statement_reconciliation_decide',
+                args=[self.upload.pk, self.row.pk],
+            ),
+            {'decision': 'new'},
+        )
+
+        self.assertEqual(response.status_code, 410)
+        self.row.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.row.decision, BankStatementRow.Decision.PENDING)
+        self.assertEqual(self.account.balance, Decimal('1000.00'))
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_reconciliation_page_exposes_bulk_and_safe_revision_actions(
+        self,
+    ) -> None:
+        pending_response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+        )
+        candidate_link = BankStatementCandidate.objects.get(row=self.row)
+        self.client.post(
+            reverse(
+                'users:bank_statement_reconciliation_decide',
+                args=[self.upload.pk, self.row.pk],
+            ),
+            {'decision': 'linked', 'candidate': candidate_link.pk},
+        )
+        linked_response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+            {'outcome': 'linked'},
+        )
+        self.client.post(
+            reverse(
+                'users:bank_statement_reconciliation_revise',
+                args=[self.upload.pk, self.row.pk],
+            ),
+        )
+        new_response = self.client.get(
+            reverse(
+                'users:bank_statement_reconciliation',
+                args=[self.upload.pk],
+            ),
+            {'outcome': 'new'},
+        )
+
+        self.assertContains(pending_response, 'Массово: уже учтены')
+        self.assertContains(
+            pending_response,
+            'Подтверждаю риск создания новых операций',
+        )
+        self.assertContains(
+            linked_response,
+            'Пересмотреть и импортировать как новую',
+        )
+        self.assertContains(
+            new_response,
+            'Связать эту строку с существующей операцией нельзя',
+        )
+
     def test_other_user_cannot_view_or_decide(self) -> None:
         self.client.force_login(self.other_user)
         page_url = reverse(
@@ -566,6 +1061,10 @@ class TestBankStatementReconciliationView(TestCase):
         )
         decision_url = reverse(
             'users:bank_statement_reconciliation_decide',
+            args=[self.upload.pk, self.row.pk],
+        )
+        revision_url = reverse(
+            'users:bank_statement_reconciliation_revise',
             args=[self.upload.pk, self.row.pk],
         )
 
@@ -577,6 +1076,7 @@ class TestBankStatementReconciliationView(TestCase):
             ).status_code,
             404,
         )
+        self.assertEqual(self.client.post(revision_url).status_code, 404)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('1000.00'))
 

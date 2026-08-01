@@ -4,12 +4,21 @@ from dependency_injector import containers, providers
 from django.conf import settings
 
 from hasta_la_vista_money.users.protocols.services import (
+    BankStatementReconciliationServiceProtocol,
+    BankStatementRetentionServiceProtocol,
     UserStatisticsServiceProtocol,
 )
 from hasta_la_vista_money.users.repositories.statistics_repository import (
     StatisticsRepository,
 )
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    BankStatementReconciliationService,
+)
+from hasta_la_vista_money.users.services.bank_statement_retention import (
+    BankStatementRetentionService,
+)
 from hasta_la_vista_money.users.services.category_classifier import (
+    CategoryClassifier,
     NoopClassifier,
     OpenAICompatibleClassifier,
 )
@@ -18,7 +27,7 @@ from hasta_la_vista_money.users.services.statistics import (
 )
 
 
-def _build_classifier():
+def _build_classifier() -> CategoryClassifier:
     """Собрать экземпляр категоризатора на основе настроек Django.
 
     Returns:
@@ -48,3 +57,14 @@ class UsersContainer(containers.DeclarativeContainer):
     )
 
     category_classifier = providers.Singleton(_build_classifier)
+
+    bank_statement_reconciliation_service: providers.Factory[
+        BankStatementReconciliationServiceProtocol
+    ] = providers.Factory(BankStatementReconciliationService)
+
+    bank_statement_retention_service: providers.Factory[
+        BankStatementRetentionServiceProtocol
+    ] = providers.Factory(
+        BankStatementRetentionService,
+        reconciliation_service=bank_statement_reconciliation_service,
+    )

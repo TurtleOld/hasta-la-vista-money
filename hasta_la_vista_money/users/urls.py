@@ -3,7 +3,9 @@
 from django.urls import include, path
 
 from hasta_la_vista_money.users.views import (
+    BankStatementReconciliationBulkView,
     BankStatementReconciliationDecisionView,
+    BankStatementReconciliationRevisionView,
     BankStatementReconciliationView,
     BankStatementUploadStatusView,
     BankStatementUploadView,
@@ -89,5 +91,16 @@ urlpatterns = [
         '<int:row_id>/decide/',
         BankStatementReconciliationDecisionView.as_view(),
         name='bank_statement_reconciliation_decide',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/reconciliation/bulk/',
+        BankStatementReconciliationBulkView.as_view(),
+        name='bank_statement_reconciliation_bulk',
+    ),
+    path(
+        'bank-statement-upload/<int:upload_id>/reconciliation/'
+        '<int:row_id>/revise/',
+        BankStatementReconciliationRevisionView.as_view(),
+        name='bank_statement_reconciliation_revise',
     ),
 ]

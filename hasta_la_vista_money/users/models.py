@@ -4,6 +4,7 @@ This module contains models for users and user-related features,
 including dashboard widgets and admin configurations.
 """
 
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.contrib import admin
@@ -29,6 +30,13 @@ from django.db.models import (
 )
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+from hasta_la_vista_money.constants import STATEMENT_RETENTION_DAYS
+
+
+def bank_statement_expires_at() -> datetime:
+    """Return the default reconciliation and retention deadline."""
+    return timezone.now() + timedelta(days=STATEMENT_RETENTION_DAYS)
 
 
 class User(AbstractUser):
@@ -122,6 +130,10 @@ class BankStatementUpload(Model):
             _('Ожидает подтверждения'),
         )
         COMPLETED = 'completed', _('Завершено')
+        COMPLETED_WITH_UNRESOLVED = (
+            'completed_with_unresolved',
+            _('Завершено с нерешёнными строками'),
+        )
         FAILED = 'failed', _('Ошибка')
 
     user = ForeignKey(
@@ -133,7 +145,7 @@ class BankStatementUpload(Model):
     pdf_file = FileField(upload_to='bank_statements/')
     file_hash = CharField(max_length=64, blank=True, default='')
     status = CharField(
-        max_length=21,
+        max_length=25,
         choices=Status.choices,
         default=Status.PENDING,
     )
@@ -171,6 +183,8 @@ class BankStatementUpload(Model):
     )
     error_message = TextField(blank=True, default='')
     celery_task_id = CharField(max_length=255, blank=True, default='')
+    expires_at = DateTimeField(default=bank_statement_expires_at)
+    retention_cleaned_at = DateTimeField(blank=True, null=True)
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
 
@@ -202,6 +216,7 @@ class BankStatementRow(Model):
         PENDING = 'pending', _('Ожидает решения')
         LINKED = 'linked', _('Уже учтена')
         NEW = 'new', _('Новая операция')
+        EXPIRED = 'expired', _('Срок решения истёк')
 
     class TransactionType(TextChoices):
         INCOME = 'income', _('Доход')
@@ -215,14 +230,21 @@ class BankStatementRow(Model):
     transaction_type = CharField(
         max_length=10,
         choices=TransactionType.choices,
+        blank=True,
+        null=True,
     )
-    transaction_date = DateTimeField()
-    amount = DecimalField(max_digits=20, decimal_places=2)
-    description = CharField(max_length=250)
-    candidate_description = CharField(max_length=250)
-    suggested_category = CharField(max_length=250)
+    transaction_date = DateTimeField(blank=True, null=True)
+    amount = DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        blank=True,
+        null=True,
+    )
+    description = CharField(max_length=250, blank=True, default='')
+    candidate_description = CharField(max_length=250, blank=True, default='')
+    suggested_category = CharField(max_length=250, blank=True, default='')
     source_ref = CharField(max_length=64, blank=True, null=True)
-    source_row_position = PositiveIntegerField()
+    source_row_position = PositiveIntegerField(blank=True, null=True)
     match_calendar_date = BooleanField(default=False)
     candidate = ForeignKey(
         'transactions.Transaction',
@@ -233,7 +255,7 @@ class BankStatementRow(Model):
     )
     transaction = ForeignKey(
         'transactions.Transaction',
-        on_delete=CASCADE,
+        on_delete=SET_NULL,
         related_name='statement_rows',
         blank=True,
         null=True,
@@ -288,6 +310,45 @@ class BankStatementCandidate(Model):
                 name='unique_statement_row_candidate',
             ),
         ]
+
+
+class BankStatementDecisionAudit(Model):
+    """Immutable audit entry for a statement reconciliation decision."""
+
+    row = ForeignKey(
+        BankStatementRow,
+        on_delete=CASCADE,
+        related_name='decision_audits',
+    )
+    actor = ForeignKey(
+        User,
+        on_delete=SET_NULL,
+        related_name='statement_decision_audits',
+        blank=True,
+        null=True,
+    )
+    decision = CharField(
+        max_length=10,
+        choices=BankStatementRow.Decision.choices,
+    )
+    previous_transaction = ForeignKey(
+        'transactions.Transaction',
+        on_delete=SET_NULL,
+        related_name='previous_statement_decision_audits',
+        blank=True,
+        null=True,
+    )
+    transaction = ForeignKey(
+        'transactions.Transaction',
+        on_delete=SET_NULL,
+        related_name='statement_decision_audits',
+        blank=True,
+        null=True,
+    )
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'pk']
 
 
 class FamilyGroupMembership(Model):

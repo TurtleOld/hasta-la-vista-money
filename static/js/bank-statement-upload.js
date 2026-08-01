@@ -226,7 +226,7 @@
                 if (isValidRedirectUrl(data.reconciliation_url)) {
                     window.location.assign(data.reconciliation_url);
                 }
-            } else if (data.status === 'completed') {
+            } else if (data.status === 'completed' || data.status === 'completed_with_unresolved') {
                 progressBar.classList.remove('bg-blue-600', 'dark:bg-blue-500');
                 progressBar.classList.add('bg-green-600', 'dark:bg-green-500');
                 progressPercent.classList.remove('text-blue-600', 'dark:text-blue-400');
