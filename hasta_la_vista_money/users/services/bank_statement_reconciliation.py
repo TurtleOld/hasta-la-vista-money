@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
@@ -65,6 +66,7 @@ class BankStatementReconciliationService:
         row.save(
             update_fields=['transaction', 'decision', 'decided_at'],
         )
+        self.refresh_outcome_counts(row.upload)
         if not BankStatementRow.objects.filter(
             upload=row.upload,
             decision=BankStatementRow.Decision.PENDING,
@@ -72,6 +74,37 @@ class BankStatementReconciliationService:
             row.upload.status = BankStatementUpload.Status.COMPLETED
             row.upload.save(update_fields=['status'])
         return row
+
+    @staticmethod
+    def refresh_outcome_counts(upload: BankStatementUpload) -> None:
+        decisions = (
+            BankStatementRow.objects.filter(upload=upload)
+            .values(
+                'decision',
+            )
+            .annotate(count=Count('pk'))
+        )
+        counts = {item['decision']: item['count'] for item in decisions}
+        upload.linked_count = counts.get(
+            BankStatementRow.Decision.LINKED,
+            0,
+        )
+        upload.awaiting_decision_count = counts.get(
+            BankStatementRow.Decision.PENDING,
+            0,
+        )
+        upload.imported_count = (
+            upload.income_count
+            + upload.expense_count
+            + counts.get(BankStatementRow.Decision.NEW, 0)
+        )
+        upload.save(
+            update_fields=[
+                'linked_count',
+                'awaiting_decision_count',
+                'imported_count',
+            ],
+        )
 
     def _validated_candidate(
         self,

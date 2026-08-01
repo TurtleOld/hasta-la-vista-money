@@ -27,6 +27,9 @@ from hasta_la_vista_money.users.services.bank_statement import (
     BankStatementParseError,
     BankStatementParser,
 )
+from hasta_la_vista_money.users.services.bank_statement_reconciliation import (
+    BankStatementReconciliationService,
+)
 from hasta_la_vista_money.users.services.category_classifier import (
     CategoryClassifier,
 )
@@ -116,6 +119,7 @@ def process_bank_statement_task(
                 'balance_discrepancy',
             ],
         )
+        BankStatementReconciliationService.refresh_outcome_counts(upload)
 
         logger.info(
             'Completed: %d income, %d expenses, %d skipped, discrepancy=%s',
@@ -141,8 +145,11 @@ def process_bank_statement_task(
         try:
             upload = BankStatementUpload.objects.get(id=upload_id)
             upload.status = BankStatementUpload.Status.FAILED
+            upload.failed_count = 1
             upload.error_message = f'Ошибка парсинга: {e!s}'
-            upload.save(update_fields=['status', 'error_message'])
+            upload.save(
+                update_fields=['status', 'failed_count', 'error_message'],
+            )
         except BankStatementUpload.DoesNotExist:
             pass
         raise
@@ -152,8 +159,11 @@ def process_bank_statement_task(
         try:
             upload = BankStatementUpload.objects.get(id=upload_id)
             upload.status = BankStatementUpload.Status.FAILED
+            upload.failed_count = 1
             upload.error_message = f'Непредвиденная ошибка: {e!s}'
-            upload.save(update_fields=['status', 'error_message'])
+            upload.save(
+                update_fields=['status', 'failed_count', 'error_message'],
+            )
         except BankStatementUpload.DoesNotExist:
             pass
         raise self.retry(exc=e, countdown=60) from e
@@ -172,7 +182,15 @@ def _initialize_upload(
     upload.status = BankStatementUpload.Status.PROCESSING
     upload.celery_task_id = task.request.id
     upload.progress = 0
-    upload.save(update_fields=['status', 'celery_task_id', 'progress'])
+    upload.failed_count = 0
+    upload.save(
+        update_fields=[
+            'status',
+            'celery_task_id',
+            'progress',
+            'failed_count',
+        ],
+    )
 
 
 def _process_transactions(
@@ -233,6 +251,7 @@ def _process_transactions(
                     trans_date=trans_date,
                     match_calendar_date=source == 'ozon',
                     description=strip_pii(str(description)),
+                    current_file_hash=upload.file_hash,
                 )
                 candidate = candidates[0] if candidates else None
                 created = True
@@ -434,6 +453,7 @@ def _find_probable_duplicates(
     trans_date: datetime,
     match_calendar_date: bool,
     description: str,
+    current_file_hash: str,
 ) -> list[Transaction]:
     queryset = Transaction.objects.filter(
         account=account,
@@ -441,6 +461,8 @@ def _find_probable_duplicates(
         type=type_value,
         amount=abs_amount,
     )
+    if current_file_hash:
+        queryset = queryset.exclude(source_file_hash=current_file_hash)
     if match_calendar_date:
         queryset = queryset.filter(
             date__date=timezone.localtime(trans_date).date(),
