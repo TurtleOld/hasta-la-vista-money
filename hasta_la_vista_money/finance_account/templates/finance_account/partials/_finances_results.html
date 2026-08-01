@@ -6,7 +6,7 @@
     {% include 'finance_account/partials/_finances_toolbar.html' %}
 </form>
 
-<div class="finances-grid mt-4">
+<div class="finances-grid">
     <section class="finances-panel">
         {% include 'finance_account/partials/_finances_list.html' %}
     </section>
@@ -28,7 +28,7 @@
             </div>
         </section>
 
-        <section class="finances-side-card mt-4">
+        <section class="finances-side-card">
             <h2 class="finances-side-title">{% translate 'Вид' %}</h2>
             <div class="finances-side-list">
                 <button type="button" class="finances-chip" data-finances-group="day">{% translate 'По дням' %}</button>

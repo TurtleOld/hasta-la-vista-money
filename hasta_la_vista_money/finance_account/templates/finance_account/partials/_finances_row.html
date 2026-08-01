@@ -74,14 +74,14 @@
                 <span> · {{ tx.user_name }}</span>
             </div>
         </div>
-        <div class="finances-row-account finances-muted">
+        <div class="finances-row-account finances-muted" title="{% if tx.is_transfer %}{{ tx.transfer_from_account_name }} → {{ tx.transfer_to_account_name }}{% else %}{{ tx.account_name }}{% endif %}">
             {% if tx.is_transfer %}
                 {{ tx.transfer_from_account_name }} → {{ tx.transfer_to_account_name }}
             {% else %}
                 {{ tx.account_name }}
             {% endif %}
         </div>
-        <div class="text-right font-bold {% if tx.is_transfer %}finances-muted{% elif tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
+        <div class="finances-row-amount {% if tx.is_transfer %}finances-muted{% elif tx.amount > 0 %}finances-positive{% else %}finances-negative{% endif %}">
             <span class="finances-money">{% if tx.is_transfer %}{{ tx.abs_amount|floatformat:2 }} ₽{% elif tx.amount > 0 %}+{{ tx.abs_amount|floatformat:2 }} ₽{% else %}-{{ tx.abs_amount|floatformat:2 }} ₽{% endif %}</span>
             <span class="finances-money-hidden">•••</span>
         </div>
