@@ -8,8 +8,13 @@ from hasta_la_vista_money.deposits.commands import (
     CreateDepositCommand,
     FundDepositCommand,
     OpenExistingDepositCommand,
+    RecalculateInterestForecastCommand,
 )
-from hasta_la_vista_money.deposits.models import Deposit, DepositRatePeriod
+from hasta_la_vista_money.deposits.models import (
+    Deposit,
+    DepositInterestForecast,
+    DepositRatePeriod,
+)
 from hasta_la_vista_money.users.models import User
 
 
@@ -95,3 +100,20 @@ class DepositServiceProtocol(Protocol):
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]: ...
 
     def get_user_deposit(self, deposit_id: int, user: User) -> Deposit: ...
+
+    def recalculate_forecast(
+        self,
+        command: RecalculateInterestForecastCommand,
+    ) -> list[DepositInterestForecast]:
+        """Rebuild a term's expected interest payout forecast.
+
+        Args:
+            command: Term identifier to recalculate the forecast for.
+
+        Returns:
+            The newly created forecast lines, in chronological order.
+
+        Raises:
+            ValidationError: If the term is invalid or not owned, or the
+                custom payout schedule has no configured dates.
+        """

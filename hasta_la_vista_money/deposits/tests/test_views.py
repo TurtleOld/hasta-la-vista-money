@@ -11,6 +11,7 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.commands import CreateDepositCommand
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositInterestForecast,
     DepositPrincipalEvent,
     DepositTerm,
 )
@@ -304,3 +305,122 @@ class DepositDetailFloatingRateDisplayTests(TestCase):
         response = self.client.get(reverse('deposits:list'))
 
         self.assertContains(response, 'не определена')
+
+
+class DepositRecalculateForecastViewSmokeTests(TestCase):
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.client.force_login(self.user)
+
+    def _create_deposit(self) -> Deposit:
+        service = ApplicationContainer().deposits.deposit_service()
+        opened_on = timezone.localdate()
+        deposit: Deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Вклад для прогноза',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('100000.00'),
+                opened_on=opened_on,
+                matures_on=opened_on + timedelta(days=365),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        return deposit
+
+    def test_user_recalculates_forecast_and_sees_it_on_the_card(self) -> None:
+        deposit = self._create_deposit()
+        term = deposit.current_term
+
+        response = self.client.post(
+            reverse(
+                'deposits:recalculate-forecast',
+                kwargs={'pk': deposit.pk, 'term_id': term.pk},
+            ),
+        )
+
+        self.assertRedirects(response, deposit.get_absolute_url())
+        self.assertTrue(
+            DepositInterestForecast.objects.filter(term=term).exists(),
+        )
+        detail_response = self.client.get(deposit.get_absolute_url())
+        self.assertContains(detail_response, 'Ожидаемые выплаты процентов')
+        self.assertContains(detail_response, 'Способ выплаты')
+        self.assertContains(detail_response, 'В конце срока')
+
+    def test_other_user_cannot_recalculate_forecast(self) -> None:
+        deposit = self._create_deposit()
+        term = deposit.current_term
+        self.client.logout()
+        other_user = cast('User', UserFactory())
+        self.client.force_login(other_user)
+
+        response = self.client.post(
+            reverse(
+                'deposits:recalculate-forecast',
+                kwargs={'pk': deposit.pk, 'term_id': term.pk},
+            ),
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            DepositInterestForecast.objects.filter(term=term).exists(),
+        )
+
+    def test_user_selects_custom_schedule_and_recalculates_forecast(
+        self,
+    ) -> None:
+        """End-to-end: the user picks Actual/365, a custom payout
+        schedule, and a business-day roll on the create form; the
+        resulting term carries those choices into the forecast."""
+        opened_on = timezone.localdate()
+        matures_on = opened_on + timedelta(days=120)
+        first_payout = (opened_on + timedelta(days=40)).strftime('%d/%m/%Y')
+
+        response = self.client.post(
+            reverse('deposits:create'),
+            {
+                'opening_method': 'opening_position',
+                'rate_kind': 'fixed',
+                'day_count_convention': 'actual_365',
+                'payout_schedule_kind': 'custom',
+                'custom_payout_dates': first_payout,
+                'business_day_convention': 'following',
+                'name': 'Вклад с индивидуальным расписанием',
+                'bank': 'SBERBANK',
+                'currency': 'RUB',
+                'balance': '40000.00',
+                'opened_on': opened_on.isoformat(),
+                'matures_on': matures_on.isoformat(),
+                'annual_rate': '13.00',
+                'tracking_started_on': opened_on.isoformat(),
+            },
+        )
+
+        deposit = Deposit.objects.get(account__user=self.user)
+        self.assertRedirects(response, deposit.get_absolute_url())
+        term = deposit.current_term
+        self.assertEqual(
+            term.day_count_convention,
+            DepositTerm.DayCountConvention.ACTUAL_365,
+        )
+        self.assertEqual(
+            term.payout_schedule_kind,
+            DepositTerm.PayoutScheduleKind.CUSTOM,
+        )
+        self.assertEqual(term.payout_schedule_dates.count(), 1)
+
+        recalculate_response = self.client.post(
+            reverse(
+                'deposits:recalculate-forecast',
+                kwargs={'pk': deposit.pk, 'term_id': term.pk},
+            ),
+        )
+
+        self.assertRedirects(recalculate_response, deposit.get_absolute_url())
+        forecasts = DepositInterestForecast.objects.filter(term=term)
+        self.assertEqual(forecasts.count(), 2)
+        payout_dates = sorted(line.payout_on for line in forecasts)
+        self.assertEqual(payout_dates[-1], matures_on)

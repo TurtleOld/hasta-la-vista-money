@@ -1,3 +1,4 @@
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
@@ -33,6 +34,22 @@ def _deposit_date_widget() -> forms.DateInput:
     )
 
 
+def _parse_html5_date(token: str) -> date:
+    for date_format in constants.HTML5_DATE_INPUT_FORMATS:
+        try:
+            return (
+                datetime.strptime(token, date_format)
+                .replace(
+                    tzinfo=UTC,
+                )
+                .date()
+            )
+        except ValueError:
+            continue
+    message = _('Неверный формат даты: %(token)s') % {'token': token}
+    raise ValidationError(message)
+
+
 class CreateDepositForm(forms.Form):
     opening_method = forms.ChoiceField(
         choices=DepositPrincipalEvent.Type.choices,
@@ -43,6 +60,44 @@ class CreateDepositForm(forms.Form):
         choices=DepositTerm.RateKind.choices,
         label=_('Тип ставки'),
         widget=forms.RadioSelect,
+    )
+    day_count_convention = forms.ChoiceField(
+        choices=DepositTerm.DayCountConvention.choices,
+        initial=DepositTerm.DayCountConvention.ACTUAL_ACTUAL,
+        required=False,
+        label=_('Метод расчёта дней'),
+    )
+    accrual_start_included = forms.BooleanField(
+        required=False,
+        initial=True,
+        label=_('Учитывать день поступления средств'),
+    )
+    accrual_end_included = forms.BooleanField(
+        required=False,
+        initial=False,
+        label=_('Учитывать день возврата вклада'),
+    )
+    payout_schedule_kind = forms.ChoiceField(
+        choices=DepositTerm.PayoutScheduleKind.choices,
+        initial=DepositTerm.PayoutScheduleKind.MATURITY,
+        required=False,
+        label=_('Расписание выплат'),
+    )
+    custom_payout_dates = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 2}),
+        label=_('Даты индивидуального расписания'),
+        help_text=_(
+            'Только для индивидуального расписания. Через запятую или '
+            'с новой строки, формат ДД/ММ/ГГГГ. Дата окончания срока '
+            'учитывается автоматически.',
+        ),
+    )
+    business_day_convention = forms.ChoiceField(
+        choices=DepositTerm.BusinessDayConvention.choices,
+        initial=DepositTerm.BusinessDayConvention.NONE,
+        required=False,
+        label=_('Перенос выплаты на рабочий день'),
     )
     name = forms.CharField(
         max_length=constants.TWO_HUNDRED_FIFTY,
@@ -110,8 +165,35 @@ class CreateDepositForm(forms.Form):
             raise ValidationError(_('Выберите банк для срочного вклада.'))
         return bank
 
+    def clean_custom_payout_dates(self) -> list[date]:
+        raw = str(self.cleaned_data.get('custom_payout_dates', '')).strip()
+        if not raw:
+            return []
+        tokens = [
+            token.strip()
+            for token in raw.replace('\n', ',').split(',')
+            if token.strip()
+        ]
+        parsed_dates = [_parse_html5_date(token) for token in tokens]
+        return sorted(parsed_dates)
+
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean() or {}
+        cleaned_data.setdefault('day_count_convention', None)
+        if not cleaned_data['day_count_convention']:
+            cleaned_data['day_count_convention'] = (
+                DepositTerm.DayCountConvention.ACTUAL_ACTUAL
+            )
+        cleaned_data.setdefault('payout_schedule_kind', None)
+        if not cleaned_data['payout_schedule_kind']:
+            cleaned_data['payout_schedule_kind'] = (
+                DepositTerm.PayoutScheduleKind.MATURITY
+            )
+        cleaned_data.setdefault('business_day_convention', None)
+        if not cleaned_data['business_day_convention']:
+            cleaned_data['business_day_convention'] = (
+                DepositTerm.BusinessDayConvention.NONE
+            )
         opened_on = cleaned_data.get('opened_on')
         matures_on = cleaned_data.get('matures_on')
         if opened_on and matures_on and matures_on < opened_on:
@@ -134,6 +216,18 @@ class CreateDepositForm(forms.Form):
             self.add_error(
                 'tracking_started_on',
                 _('Укажите дату начала учёта вклада.'),
+            )
+        if cleaned_data.get(
+            'payout_schedule_kind',
+        ) == DepositTerm.PayoutScheduleKind.CUSTOM and not cleaned_data.get(
+            'custom_payout_dates',
+        ):
+            self.add_error(
+                'custom_payout_dates',
+                _(
+                    'Для индивидуального расписания укажите хотя бы одну '
+                    'дату выплаты.',
+                ),
             )
         return cleaned_data
 

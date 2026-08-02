@@ -1,9 +1,10 @@
+import contextlib
 from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Sum
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -11,11 +12,20 @@ from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
+    ForecastTerms,
     FundDepositCommand,
     OpenExistingDepositCommand,
+    RecalculateInterestForecastCommand,
+)
+from hasta_la_vista_money.deposits.interest_forecast import (
+    ProductionCalendar,
+    RateSegment,
+    WeekendOnlyCalendar,
+    build_forecast,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositInterestForecast,
     DepositPrincipalEvent,
     DepositRatePeriod,
     DepositTerm,
@@ -33,9 +43,11 @@ class DepositService:
         self,
         deposit_repository: DepositRepository,
         account_repository: AccountRepository,
+        calendar: ProductionCalendar | None = None,
     ) -> None:
         self.deposit_repository = deposit_repository
         self.account_repository = account_repository
+        self.calendar: ProductionCalendar = calendar or WeekendOnlyCalendar()
         self.balance_service = BalanceService()
 
     @transaction.atomic
@@ -207,6 +219,7 @@ class DepositService:
             matures_on=command.matures_on,
             is_current=True,
             rate_kind=command.rate_kind,
+            **self._forecast_term_kwargs(command.forecast_terms),
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -214,6 +227,7 @@ class DepositService:
             ends_on=command.matures_on,
             annual_rate=command.annual_rate,
         )
+        self._create_custom_schedule_dates(term, command.forecast_terms)
         self.deposit_repository.create_principal_event(
             deposit=deposit,
             type=DepositPrincipalEvent.Type.OPENING_POSITION,
@@ -312,6 +326,7 @@ class DepositService:
             matures_on=command.matures_on,
             is_current=True,
             rate_kind=command.rate_kind,
+            **self._forecast_term_kwargs(command.forecast_terms),
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -319,7 +334,35 @@ class DepositService:
             ends_on=command.matures_on,
             annual_rate=command.annual_rate,
         )
+        self._create_custom_schedule_dates(term, command.forecast_terms)
         return deposit
+
+    def _forecast_term_kwargs(
+        self,
+        forecast_terms: ForecastTerms,
+    ) -> dict[str, object]:
+        return {
+            'day_count_convention': forecast_terms.day_count_convention,
+            'accrual_start_included': forecast_terms.accrual_start_included,
+            'accrual_end_included': forecast_terms.accrual_end_included,
+            'payout_schedule_kind': forecast_terms.payout_schedule_kind,
+            'business_day_convention': forecast_terms.business_day_convention,
+        }
+
+    def _create_custom_schedule_dates(
+        self,
+        term: DepositTerm,
+        forecast_terms: ForecastTerms,
+    ) -> None:
+        if forecast_terms.payout_schedule_kind != (
+            DepositTerm.PayoutScheduleKind.CUSTOM
+        ):
+            return
+        for payout_on in forecast_terms.custom_payout_dates:
+            self.deposit_repository.create_payout_schedule_date(
+                term=term,
+                payout_on=payout_on,
+            )
 
     @transaction.atomic
     def add_floating_rate_period(
@@ -329,7 +372,11 @@ class DepositService:
         """Append a new effective-rate period to a floating-rate term.
 
         The previous period's end date is trimmed to the day before the new
-        period's start; earlier periods are never modified.
+        period's start; earlier periods are never modified. The term's
+        forecast is recalculated afterwards (replacing only unconfirmed
+        rows) so it reflects the new rate; if the term's payout schedule
+        is misconfigured (e.g. custom without dates), the rate change
+        still succeeds and the forecast is simply left stale.
 
         Args:
             command: Term identifier, new period's start date, rate, and a
@@ -395,16 +442,112 @@ class DepositService:
                 command.starts_on - timedelta(days=1),
             )
 
-        return self.deposit_repository.create_rate_period(
+        new_period = self.deposit_repository.create_rate_period(
             term=term,
             starts_on=command.starts_on,
             ends_on=term.matures_on,
             annual_rate=command.annual_rate,
             note=command.note.strip(),
         )
+        with contextlib.suppress(ValidationError):
+            self._recalculate_forecast_for_term(term)
+        return new_period
 
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]:
         return self.deposit_repository.get_by_user(user)
 
     def get_user_deposit(self, deposit_id: int, user: User) -> Deposit:
         return self.deposit_repository.get_by_id_and_user(deposit_id, user)
+
+    @transaction.atomic
+    def recalculate_forecast(
+        self,
+        command: RecalculateInterestForecastCommand,
+    ) -> list[DepositInterestForecast]:
+        """Rebuild a term's expected interest payout forecast.
+
+        Purely projective — never changes Account.balance, actual income
+        or expense, or KPIs. Only unconfirmed forecast rows are replaced;
+        rows already confirmed by an actual payout are left untouched.
+
+        Args:
+            command: Term identifier to recalculate the forecast for.
+
+        Returns:
+            The newly created forecast lines, in chronological order.
+
+        Raises:
+            ValidationError: If the term is not found or not owned by the
+                user, or the term's payout schedule is custom without any
+                configured schedule dates.
+        """
+        try:
+            term = self.deposit_repository.get_term_by_id_and_user(
+                command.term_id,
+                command.user,
+            )
+        except DepositTerm.DoesNotExist as error:
+            raise ValidationError(
+                _('Срок не найден или недоступен.'),
+            ) from error
+        return self._recalculate_forecast_for_term(term)
+
+    def _recalculate_forecast_for_term(
+        self,
+        term: DepositTerm,
+    ) -> list[DepositInterestForecast]:
+        """Rebuild a term's forecast; caller has already resolved `term`.
+
+        Raises:
+            ValidationError: If the term's payout schedule is custom
+                without any configured schedule dates.
+        """
+        rate_segments = [
+            RateSegment(
+                starts_on=period.starts_on,
+                ends_on=period.ends_on,
+                annual_rate=period.annual_rate,
+            )
+            for period in term.rate_periods.all()
+        ]
+        custom_payout_dates = [
+            scheduled.payout_on
+            for scheduled in term.payout_schedule_dates.all()
+        ]
+        if (
+            term.payout_schedule_kind == DepositTerm.PayoutScheduleKind.CUSTOM
+            and not custom_payout_dates
+        ):
+            raise ValidationError(
+                _(
+                    'Для индивидуального расписания укажите хотя бы одну '
+                    'дату выплаты.',
+                ),
+            )
+
+        principal = term.deposit.principal_events.filter(
+            effective_on__lte=term.opened_on,
+        ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
+
+        lines = build_forecast(
+            opened_on=term.opened_on,
+            matures_on=term.matures_on,
+            principal=principal,
+            rate_segments=rate_segments,
+            day_count_convention=DepositTerm.DayCountConvention(
+                term.day_count_convention,
+            ),
+            accrual_start_included=term.accrual_start_included,
+            accrual_end_included=term.accrual_end_included,
+            payout_schedule_kind=DepositTerm.PayoutScheduleKind(
+                term.payout_schedule_kind,
+            ),
+            custom_payout_dates=custom_payout_dates,
+            business_day_convention=DepositTerm.BusinessDayConvention(
+                term.business_day_convention,
+            ),
+            calendar=self.calendar,
+        )
+
+        self.deposit_repository.delete_unconfirmed_forecasts(term.pk)
+        return self.deposit_repository.create_forecast_lines(term, lines)

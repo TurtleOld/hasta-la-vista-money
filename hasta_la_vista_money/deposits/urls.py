@@ -5,6 +5,7 @@ from hasta_la_vista_money.deposits.views import (
     DepositCreateView,
     DepositDetailView,
     DepositListView,
+    DepositRecalculateForecastView,
 )
 
 app_name = 'deposits'
@@ -17,5 +18,10 @@ urlpatterns = [
         '<int:pk>/terms/<int:term_id>/rate-periods/add/',
         DepositAddRatePeriodView.as_view(),
         name='add-rate-period',
+    ),
+    path(
+        '<int:pk>/terms/<int:term_id>/forecast/recalculate/',
+        DepositRecalculateForecastView.as_view(),
+        name='recalculate-forecast',
     ),
 ]

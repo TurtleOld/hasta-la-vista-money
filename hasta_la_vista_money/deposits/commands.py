@@ -1,8 +1,26 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
+from hasta_la_vista_money.deposits.models import DepositTerm
 from hasta_la_vista_money.users.models import User
+
+
+@dataclass(frozen=True)
+class ForecastTerms:
+    """Contract terms governing a term's expected-payout forecast.
+
+    Purely configuration — never affects Account.balance or actual
+    income/expense. Defaults match the previous fixed behaviour (single
+    payout at maturity, Actual/Actual, no business-day roll).
+    """
+
+    day_count_convention: str = DepositTerm.DayCountConvention.ACTUAL_ACTUAL
+    accrual_start_included: bool = True
+    accrual_end_included: bool = False
+    payout_schedule_kind: str = DepositTerm.PayoutScheduleKind.MATURITY
+    custom_payout_dates: list[date] = field(default_factory=list)
+    business_day_convention: str = DepositTerm.BusinessDayConvention.NONE
 
 
 @dataclass(frozen=True)
@@ -16,6 +34,7 @@ class CreateDepositCommand:
     matures_on: date
     annual_rate: Decimal
     rate_kind: str
+    forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
 
 
 @dataclass(frozen=True)
@@ -36,6 +55,7 @@ class FundDepositCommand:
     matures_on: date
     annual_rate: Decimal
     rate_kind: str
+    forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
 
 
 @dataclass(frozen=True)
@@ -57,6 +77,7 @@ class ConvertAccountToDepositCommand:
     annual_rate: Decimal
     converted_on: date
     rate_kind: str
+    forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
 
 
 @dataclass(frozen=True)
@@ -78,6 +99,7 @@ class OpenExistingDepositCommand:
     matures_on: date
     annual_rate: Decimal
     rate_kind: str
+    forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
 
 
 @dataclass(frozen=True)
@@ -94,3 +116,16 @@ class AddFloatingRatePeriodCommand:
     starts_on: date
     annual_rate: Decimal
     note: str
+
+
+@dataclass(frozen=True)
+class RecalculateInterestForecastCommand:
+    """Command to (re)build a term's expected interest payout forecast.
+
+    Purely projective — never changes Account.balance, actual income or
+    expense, or KPIs. Only forecast rows not yet marked confirmed are
+    replaced; confirmed rows are left untouched.
+    """
+
+    user: User
+    term_id: int

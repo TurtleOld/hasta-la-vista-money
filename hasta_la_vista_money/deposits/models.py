@@ -52,6 +52,8 @@ class Deposit(models.Model):
 class DepositTerm(models.Model):
     if TYPE_CHECKING:
         rate_periods: models.Manager['DepositRatePeriod']
+        payout_schedule_dates: models.Manager['DepositPayoutScheduleDate']
+        interest_forecasts: models.Manager['DepositInterestForecast']
 
     class State(models.TextChoices):
         PLANNED = 'planned', _('Запланирован')
@@ -61,6 +63,20 @@ class DepositTerm(models.Model):
     class RateKind(models.TextChoices):
         FIXED = 'fixed', _('Фиксированная')
         FLOATING = 'floating', _('Плавающая')
+
+    class DayCountConvention(models.TextChoices):
+        ACTUAL_ACTUAL = 'actual_actual', _('Actual/Actual')
+        ACTUAL_365 = 'actual_365', _('Actual/365')
+
+    class PayoutScheduleKind(models.TextChoices):
+        MONTHLY = 'monthly', _('Ежемесячно')
+        MATURITY = 'maturity', _('В конце срока')
+        CUSTOM = 'custom', _('Индивидуальное расписание')
+
+    class BusinessDayConvention(models.TextChoices):
+        NONE = 'none', _('Без переноса')
+        PRECEDING = 'preceding', _('На предыдущий рабочий день')
+        FOLLOWING = 'following', _('На следующий рабочий день')
 
     deposit = models.ForeignKey(
         Deposit,
@@ -75,6 +91,32 @@ class DepositTerm(models.Model):
         choices=RateKind.choices,
         default=RateKind.FIXED,
         verbose_name=_('Тип ставки'),
+    )
+    day_count_convention = models.CharField(
+        max_length=20,
+        choices=DayCountConvention.choices,
+        default=DayCountConvention.ACTUAL_ACTUAL,
+        verbose_name=_('Метод расчёта дней'),
+    )
+    accrual_start_included = models.BooleanField(
+        default=True,
+        verbose_name=_('Учитывать день поступления средств'),
+    )
+    accrual_end_included = models.BooleanField(
+        default=False,
+        verbose_name=_('Учитывать день возврата вклада'),
+    )
+    payout_schedule_kind = models.CharField(
+        max_length=10,
+        choices=PayoutScheduleKind.choices,
+        default=PayoutScheduleKind.MATURITY,
+        verbose_name=_('Расписание выплат'),
+    )
+    business_day_convention = models.CharField(
+        max_length=10,
+        choices=BusinessDayConvention.choices,
+        default=BusinessDayConvention.NONE,
+        verbose_name=_('Перенос выплаты на рабочий день'),
     )
 
     class Meta:
@@ -260,3 +302,79 @@ class DepositPrincipalEvent(models.Model):
         raise ValidationError(
             _('Подтверждённое событие вклада нельзя удалить.'),
         )
+
+
+class DepositPayoutScheduleDate(models.Model):
+    """A single user-defined payout date for a term's custom schedule.
+
+    Only used when the owning term's payout_schedule_kind is CUSTOM.
+    """
+
+    term = models.ForeignKey(
+        DepositTerm,
+        on_delete=models.CASCADE,
+        related_name='payout_schedule_dates',
+    )
+    payout_on = models.DateField(verbose_name=_('Дата выплаты'))
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['payout_on']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['term', 'payout_on'],
+                name='deposit_payout_schedule_date_unique',
+            ),
+        ]
+
+
+class DepositInterestForecast(models.Model):
+    """A projected interest payment for a deposit term.
+
+    Purely informational: creating or recalculating forecasts never
+    changes Account.balance, actual income/expense, or KPIs. Recalculating
+    a term's forecast replaces only rows where confirmed is False.
+    """
+
+    term = models.ForeignKey(
+        DepositTerm,
+        on_delete=models.CASCADE,
+        related_name='interest_forecasts',
+    )
+    payout_on = models.DateField(verbose_name=_('Ожидаемая дата выплаты'))
+    amount = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        verbose_name=_('Ожидаемая сумма'),
+    )
+    period_starts_on = models.DateField(
+        verbose_name=_('Начало периода начисления'),
+    )
+    period_ends_on = models.DateField(
+        verbose_name=_('Конец периода начисления'),
+    )
+    is_rate_undefined = models.BooleanField(
+        default=False,
+        verbose_name=_('Ставка периода не определена'),
+    )
+    is_date_tentative = models.BooleanField(
+        default=False,
+        verbose_name=_('Дата ориентировочна'),
+    )
+    confirmed = models.BooleanField(
+        default=False,
+        verbose_name=_('Подтверждено фактической выплатой'),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['payout_on', 'pk']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=Q(amount__gte=0),
+                name='deposit_interest_forecast_amount_valid',
+            ),
+            models.CheckConstraint(
+                condition=Q(period_ends_on__gte=models.F('period_starts_on')),
+                name='deposit_interest_forecast_period_valid',
+            ),
+        ]

@@ -16,9 +16,11 @@ from hasta_la_vista_money.deposits.commands import (
     CreateDepositCommand,
     FundDepositCommand,
     OpenExistingDepositCommand,
+    RecalculateInterestForecastCommand,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositInterestForecast,
     DepositPrincipalEvent,
     DepositTerm,
 )
@@ -927,3 +929,270 @@ class AddFloatingRatePeriodServiceTests(TestCase):
         )
 
         self.assertEqual(new_period.starts_on, today + timedelta(days=30))
+
+    def test_adding_rate_period_recalculates_unconfirmed_forecast(
+        self,
+    ) -> None:
+        """Changing a term's future rate must recreate its unconfirmed
+        forecast so the projection reflects the new rate, without
+        requiring the user to trigger a separate manual recalculation."""
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+        stale_amount = DepositInterestForecast.objects.get(term=term).amount
+
+        service.add_floating_rate_period(
+            AddFloatingRatePeriodCommand(
+                user=user,
+                term_id=term.pk,
+                starts_on=date(2026, 3, 1),
+                annual_rate=Decimal('30.00'),
+                note='резкое повышение ставки',
+            ),
+        )
+
+        forecast = DepositInterestForecast.objects.get(term=term)
+        self.assertNotEqual(forecast.amount, stale_amount)
+
+    def test_adding_rate_period_preserves_confirmed_forecast_rows(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_floating_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+        confirmed = DepositInterestForecast.objects.get(term=term)
+        confirmed.confirmed = True
+        confirmed.save(update_fields=['confirmed'])
+
+        service.add_floating_rate_period(
+            AddFloatingRatePeriodCommand(
+                user=user,
+                term_id=term.pk,
+                starts_on=date(2026, 3, 1),
+                annual_rate=Decimal('30.00'),
+                note='резкое повышение ставки',
+            ),
+        )
+
+        confirmed.refresh_from_db()
+        self.assertTrue(confirmed.confirmed)
+        self.assertEqual(
+            DepositInterestForecast.objects.filter(term=term).count(),
+            2,
+        )
+
+
+class RecalculateInterestForecastServiceTests(TestCase):
+    def _open_fixed_deposit(
+        self,
+        user: 'User',
+        *,
+        opened_on: date | None = None,
+        matures_on: date | None = None,
+        annual_rate: Decimal | None = None,
+        balance: Decimal | None = None,
+    ) -> Deposit:
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit: Deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад для прогноза',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=balance or Decimal('100000.00'),
+                opened_on=opened_on or date(2026, 1, 1),
+                matures_on=matures_on or date(2026, 12, 31),
+                annual_rate=annual_rate or Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        return deposit
+
+    def test_recalculate_forecast_does_not_affect_balances_or_kpis(
+        self,
+    ) -> None:
+        """Forecasting is purely informational: it must not touch
+        Account.balance, create transactions/transfers, or move KPIs."""
+        user = cast('User', UserFactory())
+        deposit = self._open_fixed_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+        balance_before = deposit.account.balance
+        kpis_before = get_dashboard_month_kpis(user)
+
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, balance_before)
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+        self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+        kpis_after = get_dashboard_month_kpis(user)
+        for field in ('income', 'expenses', 'net_result', 'savings_rate'):
+            with self.subTest(field=field):
+                self.assertEqual(kpis_after[field], kpis_before[field])
+
+    def test_recalculate_creates_forecast_lines_for_maturity_schedule(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_fixed_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        lines = service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+
+        self.assertEqual(len(lines), 1)
+        line = lines[0]
+        self.assertEqual(line.payout_on, date(2026, 12, 31))
+        self.assertFalse(line.is_rate_undefined)
+        self.assertGreater(line.amount, Decimal(0))
+        self.assertFalse(line.confirmed)
+
+    def test_recalculate_replaces_unconfirmed_lines_only(self) -> None:
+        """Confirmed forecast rows survive a recalculation untouched;
+        unconfirmed rows are replaced with freshly computed ones."""
+        user = cast('User', UserFactory())
+        deposit = self._open_fixed_deposit(user)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+        confirmed_line = DepositInterestForecast.objects.get(term=term)
+        confirmed_line.confirmed = True
+        confirmed_line.save(update_fields=['confirmed'])
+
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+
+        remaining = DepositInterestForecast.objects.filter(term=term)
+        self.assertEqual(remaining.count(), 2)
+        confirmed_line.refresh_from_db()
+        self.assertTrue(confirmed_line.confirmed)
+
+    def test_recalculate_marks_undefined_floating_period(self) -> None:
+        """A floating term whose known rate periods do not reach maturity
+        must report the forecast as undefined, not silently continue the
+        last known rate."""
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit: Deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Плавающий вклад для прогноза',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('100000.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FLOATING,
+            ),
+        )
+        term = deposit.current_term
+        known_rate_period = term.rate_periods.get()
+        known_rate_period.ends_on = date(2026, 6, 30)
+        known_rate_period.save(update_fields=['ends_on'])
+
+        lines = service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].is_rate_undefined)
+        self.assertEqual(lines[0].amount, Decimal('0.00'))
+
+    def test_recalculate_for_missing_term_raises(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.recalculate_forecast(
+                RecalculateInterestForecastCommand(user=user, term_id=999999),
+            )
+
+    def test_recalculate_for_other_users_term_raises(self) -> None:
+        owner = cast('User', UserFactory())
+        other_user = cast('User', UserFactory())
+        deposit = self._open_fixed_deposit(owner)
+        term = deposit.current_term
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with self.assertRaises(ValidationError):
+            service.recalculate_forecast(
+                RecalculateInterestForecastCommand(
+                    user=other_user,
+                    term_id=term.pk,
+                ),
+            )
+
+    def test_custom_schedule_without_dates_raises(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_fixed_deposit(user)
+        term = deposit.current_term
+        term.payout_schedule_kind = DepositTerm.PayoutScheduleKind.CUSTOM
+        term.save(update_fields=['payout_schedule_kind'])
+
+        with self.assertRaises(ValidationError):
+            service.recalculate_forecast(
+                RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+            )
+
+    def test_monthly_schedule_produces_multiple_lines(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_fixed_deposit(
+            user,
+            opened_on=date(2026, 1, 15),
+            matures_on=date(2026, 4, 15),
+        )
+        term = deposit.current_term
+        term.payout_schedule_kind = DepositTerm.PayoutScheduleKind.MONTHLY
+        term.save(update_fields=['payout_schedule_kind'])
+        service = ApplicationContainer().deposits.deposit_service()
+
+        lines = service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+
+        self.assertEqual(len(lines), 3)
+        self.assertEqual(lines[-1].payout_on, date(2026, 4, 15))
+
+    def test_business_day_roll_marks_tentative_date(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_fixed_deposit(
+            user,
+            opened_on=date(2026, 1, 1),
+            matures_on=date(2026, 1, 3),
+        )
+        term = deposit.current_term
+        term.business_day_convention = (
+            DepositTerm.BusinessDayConvention.FOLLOWING
+        )
+        term.accrual_end_included = True
+        term.save(
+            update_fields=['business_day_convention', 'accrual_end_included'],
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+
+        lines = service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].payout_on, date(2026, 1, 5))
+        self.assertTrue(lines[0].is_date_tentative)
