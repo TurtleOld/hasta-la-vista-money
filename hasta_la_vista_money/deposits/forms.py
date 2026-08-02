@@ -58,14 +58,14 @@ class CreateDepositForm(forms.Form):
     )
     minimum_withdrawal_amount = forms.DecimalField(
         required=False,
-        min_value=Decimal('0.01'),
+        min_value=constants.MIN_MONEY_AMOUNT,
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
         label=_('Минимальная сумма снятия'),
     )
     maximum_withdrawal_amount = forms.DecimalField(
         required=False,
-        min_value=Decimal('0.01'),
+        min_value=constants.MIN_MONEY_AMOUNT,
         max_digits=constants.TWENTY,
         decimal_places=constants.TWO,
         label=_('Максимальная сумма снятия'),
@@ -83,6 +83,37 @@ class CreateDepositForm(forms.Form):
         decimal_places=constants.TWO,
         initial=Decimal(),
         label=_('Неснижаемый остаток'),
+    )
+    top_up_allowed = forms.BooleanField(
+        required=False,
+        label=_('Разрешено пополнение'),
+    )
+    minimum_top_up_amount = forms.DecimalField(
+        required=False,
+        min_value=constants.MIN_MONEY_AMOUNT,
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Минимальная сумма пополнения'),
+    )
+    maximum_top_up_amount = forms.DecimalField(
+        required=False,
+        min_value=constants.MIN_MONEY_AMOUNT,
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Максимальная сумма пополнения'),
+    )
+    top_up_deadline = forms.DateField(
+        required=False,
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Крайний срок пополнения'),
+    )
+    maximum_balance = forms.DecimalField(
+        required=False,
+        min_value=constants.MIN_MONEY_AMOUNT,
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Максимальный остаток после пополнения'),
     )
     opening_method = forms.ChoiceField(
         choices=DepositPrincipalEvent.Type.choices,
@@ -263,6 +294,7 @@ class CreateDepositForm(forms.Form):
                 ),
             )
         self._clean_withdrawal_terms(cleaned_data)
+        self._clean_top_up_terms(cleaned_data)
         return cleaned_data
 
     def _clean_withdrawal_terms(
@@ -285,6 +317,68 @@ class CreateDepositForm(forms.Form):
                 'maximum_withdrawal_amount',
                 _('Максимальная сумма не может быть меньше минимальной.'),
             )
+
+    def _clean_top_up_terms(self, cleaned_data: dict[str, Any]) -> None:
+        if not cleaned_data.get('top_up_allowed'):
+            for field_name in (
+                'minimum_top_up_amount',
+                'maximum_top_up_amount',
+                'top_up_deadline',
+                'maximum_balance',
+            ):
+                cleaned_data[field_name] = None
+            return
+        minimum = cleaned_data.get('minimum_top_up_amount')
+        maximum = cleaned_data.get('maximum_top_up_amount')
+        if minimum and maximum and minimum > maximum:
+            self.add_error(
+                'maximum_top_up_amount',
+                _('Максимальная сумма не может быть меньше минимальной.'),
+            )
+
+
+class TopUpDepositForm(forms.Form):
+    source_account = forms.ModelChoiceField(
+        queryset=Account.objects.none(),
+        label=_('Счёт списания'),
+    )
+    amount = forms.DecimalField(
+        min_value=constants.MIN_MONEY_AMOUNT,
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Сумма пополнения'),
+    )
+    effective_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата валютирования'),
+    )
+    exception_reason = forms.CharField(
+        required=False,
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        widget=forms.Textarea(attrs={'rows': 2}),
+        label=_('Причина фактического исключения'),
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        user: 'User',
+        currency: str,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        field = cast(
+            'forms.ModelChoiceField[Account]',
+            self.fields['source_account'],
+        )
+        field.queryset = Account.objects.filter(
+            user=user,
+            currency=currency,
+        ).exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+
+    def clean_exception_reason(self) -> str:
+        return str(self.cleaned_data['exception_reason']).strip()
 
 
 class AddFloatingRatePeriodForm(forms.Form):

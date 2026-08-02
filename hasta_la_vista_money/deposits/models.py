@@ -148,6 +148,36 @@ class DepositTerm(models.Model):
         default=0,
         verbose_name=_('Неснижаемый остаток'),
     )
+    top_up_allowed = models.BooleanField(
+        default=False,
+        verbose_name=_('Разрешено пополнение'),
+    )
+    minimum_top_up_amount = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        null=True,
+        blank=True,
+        verbose_name=_('Минимальная сумма пополнения'),
+    )
+    maximum_top_up_amount = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        null=True,
+        blank=True,
+        verbose_name=_('Максимальная сумма пополнения'),
+    )
+    top_up_deadline = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Крайний срок пополнения'),
+    )
+    maximum_balance = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        null=True,
+        blank=True,
+        verbose_name=_('Максимальный остаток после пополнения'),
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ['opened_on']
@@ -271,6 +301,7 @@ class DepositPrincipalEvent(models.Model):
     class Type(models.TextChoices):
         FUNDING = 'funding', _('Финансирование')
         OPENING_POSITION = 'opening_position', _('Начальная позиция')
+        TOP_UP = 'top_up', _('Пополнение')
         WITHDRAWAL = 'withdrawal', _('Снятие')
 
     deposit = models.ForeignKey(
@@ -316,6 +347,7 @@ class DepositPrincipalEvent(models.Model):
                 condition=(
                     Q(type='funding', amount__gt=0)
                     | Q(type='opening_position', amount__gte=0)
+                    | Q(type='top_up', amount__gt=0)
                     | Q(type='withdrawal', amount__gt=0)
                 ),
                 name='deposit_principal_event_amount_valid',
@@ -323,6 +355,7 @@ class DepositPrincipalEvent(models.Model):
             models.CheckConstraint(
                 condition=(
                     Q(type='funding', source_account__isnull=False)
+                    | Q(type='top_up', source_account__isnull=False)
                     | Q(
                         type='opening_position',
                         source_account__isnull=True,

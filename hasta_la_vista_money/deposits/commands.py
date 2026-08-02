@@ -33,6 +33,15 @@ class WithdrawalTerms:
 
 
 @dataclass(frozen=True)
+class TopUpTerms:
+    top_up_allowed: bool = False
+    minimum_top_up_amount: Decimal | None = None
+    maximum_top_up_amount: Decimal | None = None
+    top_up_deadline: date | None = None
+    maximum_balance: Decimal | None = None
+
+
+@dataclass(frozen=True)
 class CreateDepositCommand:
     user: User
     name: str
@@ -45,6 +54,7 @@ class CreateDepositCommand:
     rate_kind: str
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
+    top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
 
 
 @dataclass(frozen=True)
@@ -67,6 +77,7 @@ class FundDepositCommand:
     rate_kind: str
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
+    top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
 
 
 @dataclass(frozen=True)
@@ -90,6 +101,7 @@ class ConvertAccountToDepositCommand:
     rate_kind: str
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
+    top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
 
 
 @dataclass(frozen=True)
@@ -113,6 +125,7 @@ class OpenExistingDepositCommand:
     rate_kind: str
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
+    top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
 
 
 @dataclass(frozen=True)
@@ -149,6 +162,16 @@ class WithdrawDepositCommand:
     user: User
     deposit_id: int
     destination_account_id: int
+    amount: Decimal
+    effective_on: date
+    exception_reason: str = ''
+
+
+@dataclass(frozen=True)
+class TopUpDepositCommand:
+    user: User
+    deposit_id: int
+    source_account_id: int
     amount: Decimal
     effective_on: date
     exception_reason: str = ''

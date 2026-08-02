@@ -51,6 +51,15 @@ class AccountRepository:
         except Account.DoesNotExist:
             return None
 
+    def get_by_ids_for_update(
+        self,
+        account_ids: set[int],
+    ) -> dict[int, Account]:
+        accounts = Account.objects.select_for_update().filter(
+            pk__in=account_ids,
+        )
+        return {account.pk: account for account in accounts}
+
     def get_by_user(self, user: User) -> QuerySet[Account]:
         """Get all accounts for a user.
 
