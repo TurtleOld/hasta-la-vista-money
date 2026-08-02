@@ -25,6 +25,14 @@
             </div>
         </section>
         <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Пополнить вклад' %}</h2></div>
+            <form method="post" action="{% url 'deposits:top-up' pk=deposit.pk %}">
+                {% csrf_token %}
+                {{ top_up_form.as_p }}
+                <button type="submit" class="btn btn-primary">{% translate 'Пополнить' %}</button>
+            </form>
+        </section>
+        <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Снять тело вклада' %}</h2></div>
             <form method="post" action="{% url 'deposits:withdraw' pk=deposit.pk %}">
                 {% csrf_token %}

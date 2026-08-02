@@ -57,6 +57,12 @@ class RateSegment:
 
 
 @dataclass(frozen=True)
+class PrincipalChange:
+    effective_on: date
+    amount: Decimal
+
+
+@dataclass(frozen=True)
 class ForecastLine:
     """One projected interest payout, computed but not yet persisted."""
 
@@ -150,6 +156,7 @@ def compute_accrued_interest(
     day_count_convention: DepositTerm.DayCountConvention,
     principal: Decimal,
     rate_segments: list[RateSegment],
+    principal_changes: list[PrincipalChange] | None = None,
 ) -> tuple[Decimal, bool]:
     """Compute high-precision accrued interest over an accrual period.
 
@@ -184,7 +191,17 @@ def compute_accrued_interest(
         if rate is None:
             return Decimal(0), True
         year_length = year_length_for_day_count(day, day_count_convention)
-        total += principal * rate / Decimal(100) / year_length
+        daily_principal = principal
+        if principal_changes is not None:
+            daily_principal = sum(
+                (
+                    change.amount
+                    for change in principal_changes
+                    if change.effective_on <= day
+                ),
+                Decimal(),
+            )
+        total += daily_principal * rate / Decimal(100) / year_length
     return total.quantize(_ACCRUAL_PRECISION), False
 
 
@@ -281,6 +298,7 @@ def build_forecast(
     custom_payout_dates: list[date],
     business_day_convention: DepositTerm.BusinessDayConvention,
     calendar: ProductionCalendar,
+    principal_changes: list[PrincipalChange] | None = None,
 ) -> list[ForecastLine]:
     """Compute the full expected-payout schedule for a deposit term.
 
@@ -333,6 +351,7 @@ def build_forecast(
             day_count_convention=day_count_convention,
             principal=principal,
             rate_segments=rate_segments,
+            principal_changes=principal_changes,
         )
         payout_on, is_date_tentative = roll_to_business_day(
             unadjusted_payout_on,

@@ -9,10 +9,12 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    TopUpDepositCommand,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
     DepositInterestForecast,
+    DepositPrincipalEvent,
     DepositRatePeriod,
 )
 from hasta_la_vista_money.users.models import User
@@ -117,3 +119,8 @@ class DepositServiceProtocol(Protocol):
             ValidationError: If the term is invalid or not owned, or the
                 custom payout schedule has no configured dates.
         """
+
+    def top_up_deposit_principal(
+        self,
+        command: TopUpDepositCommand,
+    ) -> DepositPrincipalEvent: ...

@@ -83,6 +83,17 @@ class DepositRepository:
             confirmed=False,
         ).delete()
 
+    def delete_future_unconfirmed_forecasts(
+        self,
+        term_id: int,
+        effective_on: 'date',
+    ) -> None:
+        DepositInterestForecast.objects.filter(
+            term_id=term_id,
+            confirmed=False,
+            payout_on__gte=effective_on,
+        ).delete()
+
     def create_forecast_lines(
         self,
         term: DepositTerm,

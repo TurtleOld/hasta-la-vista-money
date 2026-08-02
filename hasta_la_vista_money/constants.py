@@ -178,6 +178,7 @@ ACCOUNT_TYPE_DEBIT_CARD: Final = 'DebitCard'
 ACCOUNT_TYPE_CASH: Final = 'CASH'
 ACCOUNT_TYPE_DEPOSIT: Final = 'Deposit'
 MIN_ANNUAL_RATE: Final = Decimal('0.01')
+MIN_MONEY_AMOUNT: Final = Decimal('0.01')
 
 ACCOUNT_TYPE_CHOICES: Final = (
     (ACCOUNT_TYPE_CREDIT, _('Кредитный счёт')),

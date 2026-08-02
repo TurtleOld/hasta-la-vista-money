@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import QuerySet, Sum
+from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -16,10 +16,13 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    TopUpDepositCommand,
+    TopUpTerms,
     WithdrawalTerms,
     WithdrawDepositCommand,
 )
 from hasta_la_vista_money.deposits.interest_forecast import (
+    PrincipalChange,
     ProductionCalendar,
     RateSegment,
     WeekendOnlyCalendar,
@@ -228,6 +231,7 @@ class DepositService:
             rate_kind=command.rate_kind,
             **self._forecast_term_kwargs(command.forecast_terms),
             **self._withdrawal_term_kwargs(command.withdrawal_terms),
+            **self._top_up_term_kwargs(command.top_up_terms),
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -336,6 +340,7 @@ class DepositService:
             rate_kind=command.rate_kind,
             **self._forecast_term_kwargs(command.forecast_terms),
             **self._withdrawal_term_kwargs(command.withdrawal_terms),
+            **self._top_up_term_kwargs(command.top_up_terms),
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -372,6 +377,18 @@ class DepositService:
             ),
             'withdrawal_deadline': withdrawal_terms.withdrawal_deadline,
             'minimum_balance': withdrawal_terms.minimum_balance,
+        }
+
+    def _top_up_term_kwargs(
+        self,
+        top_up_terms: TopUpTerms,
+    ) -> dict[str, object]:
+        return {
+            'top_up_allowed': top_up_terms.top_up_allowed,
+            'minimum_top_up_amount': top_up_terms.minimum_top_up_amount,
+            'maximum_top_up_amount': top_up_terms.maximum_top_up_amount,
+            'top_up_deadline': top_up_terms.top_up_deadline,
+            'maximum_balance': top_up_terms.maximum_balance,
         }
 
     def _create_custom_schedule_dates(
@@ -557,6 +574,103 @@ class DepositService:
         )
         return event
 
+    @transaction.atomic
+    def top_up_deposit_principal(
+        self,
+        command: TopUpDepositCommand,
+    ) -> DepositPrincipalEvent:
+        try:
+            deposit = self.deposit_repository.get_by_id_and_user(
+                command.deposit_id,
+                command.user,
+            )
+        except Deposit.DoesNotExist as error:
+            raise ValidationError(
+                _('Вклад не найден или недоступен.'),
+            ) from error
+        source = self.account_repository.get_by_id_and_user(
+            command.source_account_id,
+            command.user,
+        )
+        if source is None or source.is_deposit:
+            raise ValidationError(_('Исходный счёт не найден или недоступен.'))
+        if source.currency != deposit.account.currency:
+            raise ValidationError(
+                _('Исходный счёт должен быть в валюте вклада.'),
+            )
+        if command.amount <= 0:
+            raise ValidationError(
+                _('Сумма пополнения должна быть больше нуля.'),
+            )
+        term = deposit.current_term
+        account_ids = {source.pk, deposit.account.pk}
+        locked_accounts = self.account_repository.get_by_ids_for_update(
+            account_ids,
+        )
+        if len(locked_accounts) != len(account_ids):
+            raise ValidationError(_('Счёт не найден или недоступен.'))
+        source = locked_accounts[source.pk]
+        deposit_account = locked_accounts[deposit.account.pk]
+        if not term.opened_on <= command.effective_on <= term.matures_on:
+            raise ValidationError(
+                _('Дата пополнения должна попадать в срок вклада.'),
+            )
+        exception_reason = command.exception_reason.strip()
+        if not exception_reason:
+            self._validate_top_up_terms(
+                term,
+                command.amount,
+                command.effective_on,
+                deposit_account.balance,
+            )
+        locked_accounts = self.balance_service.apply_account_deltas(
+            {
+                source.pk: -command.amount,
+                deposit.account.pk: command.amount,
+            },
+        )
+        event = self.deposit_repository.create_principal_event(
+            deposit=deposit,
+            type=DepositPrincipalEvent.Type.TOP_UP,
+            amount=command.amount,
+            effective_on=command.effective_on,
+            source_account=locked_accounts[source.pk],
+            exception_reason=exception_reason,
+        )
+        self._recalculate_forecast_for_term(term, command.effective_on)
+        return event
+
+    def _validate_top_up_terms(
+        self,
+        term: DepositTerm,
+        amount: Decimal,
+        effective_on: date,
+        balance: Decimal,
+    ) -> None:
+        if not term.top_up_allowed:
+            raise ValidationError(
+                _('Условия вклада не разрешают пополнение.'),
+            )
+        if term.top_up_deadline and effective_on > term.top_up_deadline:
+            raise ValidationError(_('Срок разрешённого пополнения уже истёк.'))
+        if (
+            term.minimum_top_up_amount is not None
+            and amount < term.minimum_top_up_amount
+        ):
+            raise ValidationError(_('Сумма меньше минимально разрешённой.'))
+        if (
+            term.maximum_top_up_amount is not None
+            and amount > term.maximum_top_up_amount
+        ):
+            raise ValidationError(_('Сумма больше максимально разрешённой.'))
+        if (
+            term.maximum_balance is not None
+            and balance + amount > term.maximum_balance
+        ):
+            raise ValidationError(
+                _('Пополнение превысит максимальный остаток.'),
+            )
+
     def _validate_withdrawal_terms(
         self,
         term: DepositTerm,
@@ -616,6 +730,7 @@ class DepositService:
     def _recalculate_forecast_for_term(
         self,
         term: DepositTerm,
+        effective_on: date | None = None,
     ) -> list[DepositInterestForecast]:
         """Rebuild a term's forecast; caller has already resolved `term`.
 
@@ -646,14 +761,22 @@ class DepositService:
                 ),
             )
 
-        principal = term.deposit.principal_events.filter(
-            effective_on__lte=term.opened_on,
-        ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
+        principal_changes = [
+            PrincipalChange(
+                effective_on=event.effective_on,
+                amount=(
+                    -event.amount
+                    if event.type == DepositPrincipalEvent.Type.WITHDRAWAL
+                    else event.amount
+                ),
+            )
+            for event in term.deposit.principal_events.all()
+        ]
 
         lines = build_forecast(
             opened_on=term.opened_on,
             matures_on=term.matures_on,
-            principal=principal,
+            principal=Decimal(),
             rate_segments=rate_segments,
             day_count_convention=DepositTerm.DayCountConvention(
                 term.day_count_convention,
@@ -668,7 +791,27 @@ class DepositService:
                 term.business_day_convention,
             ),
             calendar=self.calendar,
+            principal_changes=principal_changes,
         )
-
-        self.deposit_repository.delete_unconfirmed_forecasts(term.pk)
+        if effective_on is None:
+            self.deposit_repository.delete_unconfirmed_forecasts(term.pk)
+        else:
+            self.deposit_repository.delete_future_unconfirmed_forecasts(
+                term.pk,
+                effective_on,
+            )
+            confirmed_payout_dates = set(
+                term.interest_forecasts.filter(
+                    confirmed=True,
+                    payout_on__gte=effective_on,
+                ).values_list('payout_on', flat=True),
+            )
+            lines = [
+                line
+                for line in lines
+                if (
+                    line.payout_on >= effective_on
+                    and line.payout_on not in confirmed_payout_dates
+                )
+            ]
         return self.deposit_repository.create_forecast_lines(term, lines)

@@ -17,6 +17,7 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    TopUpDepositCommand,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
@@ -39,6 +40,318 @@ if TYPE_CHECKING:
 
 
 class DepositServiceIntegrationTests(TestCase):
+    def test_top_up_transfers_principal_within_term_conditions(self) -> None:
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Пополняемый вклад',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.minimum_top_up_amount = Decimal('100.00')
+        term.maximum_top_up_amount = Decimal('300.00')
+        term.top_up_deadline = date(2026, 6, 30)
+        term.maximum_balance = Decimal('750.00')
+        term.save()
+        kpis_before = get_dashboard_month_kpis(user)
+
+        event = service.top_up_deposit_principal(
+            TopUpDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                source_account_id=source_account.pk,
+                amount=Decimal('250.00'),
+                effective_on=date(2026, 6, 30),
+            ),
+        )
+
+        source_account.refresh_from_db()
+        deposit.account.refresh_from_db()
+        self.assertEqual(source_account.balance, Decimal('750.00'))
+        self.assertEqual(deposit.account.balance, Decimal('750.00'))
+        self.assertEqual(event.type, DepositPrincipalEvent.Type.TOP_UP)
+        self.assertEqual(event.effective_on, date(2026, 6, 30))
+        self.assertEqual(event.source_account, source_account)
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+        self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+        kpis_after = get_dashboard_month_kpis(user)
+        for field in ('income', 'expenses', 'net_result', 'savings_rate'):
+            with self.subTest(field=field):
+                self.assertEqual(kpis_after[field], kpis_before[field])
+
+    def test_top_up_rejects_planned_operations_outside_term_conditions(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с лимитами',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.minimum_top_up_amount = Decimal('100.00')
+        term.maximum_top_up_amount = Decimal('300.00')
+        term.top_up_deadline = date(2026, 6, 30)
+        term.maximum_balance = Decimal('750.00')
+        term.save()
+
+        cases = (
+            ('disabled', Decimal('100.00'), date(2026, 6, 1), False),
+            ('minimum', Decimal('99.99'), date(2026, 6, 1), True),
+            ('maximum', Decimal('300.01'), date(2026, 6, 1), True),
+            ('deadline', Decimal('100.00'), date(2026, 7, 1), True),
+            ('balance', Decimal('251.00'), date(2026, 6, 1), True),
+        )
+        for case, amount, effective_on, enabled in cases:
+            with self.subTest(case=case):
+                term.top_up_allowed = enabled
+                term.save(update_fields=['top_up_allowed'])
+                with self.assertRaises(ValidationError):
+                    service.top_up_deposit_principal(
+                        TopUpDepositCommand(
+                            user=user,
+                            deposit_id=deposit.pk,
+                            source_account_id=source_account.pk,
+                            amount=amount,
+                            effective_on=effective_on,
+                        ),
+                    )
+                source_account.refresh_from_db()
+                deposit.account.refresh_from_db()
+                self.assertEqual(source_account.balance, Decimal('1000.00'))
+                self.assertEqual(deposit.account.balance, Decimal('500.00'))
+
+    def test_top_up_exception_requires_reason_and_is_audited(self) -> None:
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с исключением',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            service.top_up_deposit_principal(
+                TopUpDepositCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    source_account_id=source_account.pk,
+                    amount=Decimal('100.00'),
+                    effective_on=date(2026, 6, 1),
+                ),
+            )
+
+        event = service.top_up_deposit_principal(
+            TopUpDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                source_account_id=source_account.pk,
+                amount=Decimal('100.00'),
+                effective_on=date(2026, 6, 1),
+                exception_reason='Банк принял пополнение вне условий.',
+            ),
+        )
+        self.assertEqual(
+            event.exception_reason,
+            'Банк принял пополнение вне условий.',
+        )
+
+    def test_top_up_rolls_back_balances_when_event_storage_fails(self) -> None:
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Атомарное пополнение',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.save(update_fields=['top_up_allowed'])
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_principal_event',
+                side_effect=RuntimeError('event storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.top_up_deposit_principal(
+                TopUpDepositCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    source_account_id=source_account.pk,
+                    amount=Decimal('100.00'),
+                    effective_on=date(2026, 6, 1),
+                ),
+            )
+
+        source_account.refresh_from_db()
+        deposit.account.refresh_from_db()
+        self.assertEqual(source_account.balance, Decimal('1000.00'))
+        self.assertEqual(deposit.account.balance, Decimal('500.00'))
+
+    def test_top_up_refreshes_future_forecast_without_replacing_confirmed_row(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с прогнозом',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.save(update_fields=['top_up_allowed'])
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+        confirmed = DepositInterestForecast.objects.get(term=term)
+        confirmed.confirmed = True
+        confirmed.save(update_fields=['confirmed'])
+
+        service.top_up_deposit_principal(
+            TopUpDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                source_account_id=source_account.pk,
+                amount=Decimal('100.00'),
+                effective_on=date(2026, 6, 1),
+            ),
+        )
+
+        confirmed.refresh_from_db()
+        self.assertTrue(confirmed.confirmed)
+        self.assertEqual(
+            DepositInterestForecast.objects.filter(term=term).count(),
+            1,
+        )
+
+    def test_top_up_recalculates_future_unconfirmed_forecast(self) -> None:
+        user = cast('User', UserFactory())
+        source_account = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с будущим прогнозом',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('500.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.top_up_allowed = True
+        term.save(update_fields=['top_up_allowed'])
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+        forecast_before = DepositInterestForecast.objects.get(term=term)
+
+        service.top_up_deposit_principal(
+            TopUpDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                source_account_id=source_account.pk,
+                amount=Decimal('100.00'),
+                effective_on=date(2026, 6, 1),
+            ),
+        )
+
+        forecast_after = DepositInterestForecast.objects.get(term=term)
+        self.assertGreater(forecast_after.amount, forecast_before.amount)
+        self.assertFalse(forecast_after.confirmed)
+
     def test_confirmed_principal_event_cannot_be_changed_or_deleted(
         self,
     ) -> None:
