@@ -11,6 +11,7 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.commands import CreateDepositCommand
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositTerm,
@@ -518,3 +519,81 @@ class DepositRecalculateForecastViewSmokeTests(TestCase):
         self.assertEqual(forecasts.count(), 2)
         payout_dates = sorted(line.payout_on for line in forecasts)
         self.assertEqual(payout_dates[-1], matures_on)
+
+
+class CapitalizeInterestSmokeTests(TestCase):
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.client.force_login(self.user)
+        service = ApplicationContainer().deposits.deposit_service()
+        self.deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Вклад для капитализации',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('100000.00'),
+                opened_on=timezone.localdate() - timedelta(days=30),
+                matures_on=timezone.localdate() + timedelta(days=335),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+    def test_capitalize_increases_balance_and_creates_event(self) -> None:
+        balance_before = self.deposit.account.balance
+        response = self.client.post(
+            reverse('deposits:capitalize', kwargs={'pk': self.deposit.pk}),
+            {
+                'gross': '6000.00',
+                'withholding': '780.00',
+                'net': '5220.00',
+                'posting_on': timezone.localdate().isoformat(),
+                'value_on': timezone.localdate().isoformat(),
+                'reason': 'Плановая капитализация.',
+            },
+        )
+
+        self.assertRedirects(response, self.deposit.get_absolute_url())
+        self.deposit.account.refresh_from_db()
+        self.assertEqual(
+            self.deposit.account.balance,
+            balance_before + Decimal('5220.00'),
+        )
+        event = DepositCapitalizationEvent.objects.get(
+            deposit=self.deposit,
+        )
+        self.assertEqual(event.gross, Decimal('6000.00'))
+        self.assertEqual(event.withholding, Decimal('780.00'))
+        self.assertEqual(event.net, Decimal('5220.00'))
+        self.assertEqual(event.reason, 'Плановая капитализация.')
+
+    def test_capitalize_rejects_inconsistent_amounts(self) -> None:
+        response = self.client.post(
+            reverse('deposits:capitalize', kwargs={'pk': self.deposit.pk}),
+            {
+                'gross': '6000.00',
+                'withholding': '780.00',
+                'net': '5000.00',
+                'posting_on': timezone.localdate().isoformat(),
+                'value_on': timezone.localdate().isoformat(),
+                'reason': 'Неверные суммы.',
+            },
+        )
+
+        self.assertRedirects(response, self.deposit.get_absolute_url())
+        self.deposit.account.refresh_from_db()
+        self.assertEqual(self.deposit.account.balance, Decimal('100000.00'))
+        self.assertFalse(
+            DepositCapitalizationEvent.objects.filter(
+                deposit=self.deposit,
+            ).exists(),
+        )
+
+    def test_detail_page_includes_capitalize_form(self) -> None:
+        response = self.client.get(
+            reverse('deposits:detail', kwargs={'pk': self.deposit.pk}),
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('Капитализировать проценты', content)

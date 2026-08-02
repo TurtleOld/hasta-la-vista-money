@@ -4,6 +4,7 @@ from django.db.models import QuerySet
 
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPayoutScheduleDate,
     DepositPrincipalEvent,
@@ -112,4 +113,15 @@ class DepositRepository:
                 )
                 for line in lines
             ],
+        )
+
+    def create_capitalization_event(
+        self,
+        **kwargs: object,
+    ) -> DepositCapitalizationEvent:
+        return DepositCapitalizationEvent.objects.create(**kwargs)
+
+    def confirm_forecast(self, forecast_id: int) -> None:
+        DepositInterestForecast.objects.filter(pk=forecast_id).update(
+            confirmed=True,
         )

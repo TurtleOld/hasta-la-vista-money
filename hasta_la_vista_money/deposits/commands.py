@@ -175,3 +175,16 @@ class TopUpDepositCommand:
     amount: Decimal
     effective_on: date
     exception_reason: str = ''
+
+
+@dataclass(frozen=True)
+class CapitalizeInterestCommand:
+    user: User
+    deposit_id: int
+    gross: Decimal
+    withholding: Decimal
+    net: Decimal
+    posting_on: date
+    value_on: date
+    forecast_id: int | None = None
+    reason: str = ''

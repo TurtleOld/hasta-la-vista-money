@@ -12,6 +12,7 @@ from config.containers import ApplicationContainer
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_DEPOSIT
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
+    CapitalizeInterestCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
@@ -21,6 +22,7 @@ from hasta_la_vista_money.deposits.commands import (
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositTerm,
@@ -1509,3 +1511,383 @@ class RecalculateInterestForecastServiceTests(TestCase):
         self.assertEqual(len(lines), 1)
         self.assertEqual(lines[0].payout_on, date(2026, 1, 5))
         self.assertTrue(lines[0].is_date_tentative)
+
+
+class CapitalizeInterestServiceTests(TestCase):
+    def _open_deposit(
+        self,
+        user: 'User',
+        *,
+        balance: Decimal | None = None,
+    ) -> Deposit:
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit: Deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с капитализацией',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=balance or Decimal('100000.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        return deposit
+
+    def test_capitalize_increases_balance_by_net(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+        balance_before = deposit.account.balance
+
+        event = service.capitalize_interest(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('12000.00'),
+                withholding=Decimal('1560.00'),
+                net=Decimal('10440.00'),
+                posting_on=date(2026, 7, 1),
+                value_on=date(2026, 7, 1),
+                reason='Фактическая выплата по условиям.',
+            ),
+        )
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(
+            deposit.account.balance,
+            balance_before + Decimal('10440.00'),
+        )
+        self.assertEqual(event.gross, Decimal('12000.00'))
+        self.assertEqual(event.withholding, Decimal('1560.00'))
+        self.assertEqual(event.net, Decimal('10440.00'))
+
+    def test_capitalize_creates_immutable_event(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+
+        event = service.capitalize_interest(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('5000.00'),
+                withholding=Decimal(0),
+                net=Decimal('5000.00'),
+                posting_on=date(2026, 6, 1),
+                value_on=date(2026, 6, 1),
+                reason='Плановая капитализация.',
+            ),
+        )
+
+        self.assertEqual(
+            DepositCapitalizationEvent.objects.filter(deposit=deposit).count(),
+            1,
+        )
+        event.net = Decimal('1.00')
+        with self.assertRaisesMessage(
+            ValidationError,
+            'Подтверждённую капитализацию нельзя изменить.',
+        ):
+            event.save()
+        with self.assertRaisesMessage(
+            ValidationError,
+            'Подтверждённую капитализацию нельзя удалить.',
+        ):
+            event.delete()
+
+    def test_capitalize_rejects_mismatched_net(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+
+        with self.assertRaises(ValidationError):
+            service.capitalize_interest(
+                CapitalizeInterestCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    gross=Decimal('1000.00'),
+                    withholding=Decimal('100.00'),
+                    net=Decimal('800.00'),
+                    posting_on=date(2026, 6, 1),
+                    value_on=date(2026, 6, 1),
+                    reason='Неверные суммы.',
+                ),
+            )
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('100000.00'))
+        self.assertFalse(
+            DepositCapitalizationEvent.objects.filter(
+                deposit=deposit,
+            ).exists(),
+        )
+
+    def test_capitalize_rejects_negative_amounts(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+
+        negative_cases = (
+            (Decimal('-1000.00'), Decimal(0), Decimal('-1000.00')),
+            (Decimal('1000.00'), Decimal('-100.00'), Decimal('1100.00')),
+            (Decimal('1000.00'), Decimal(0), Decimal('-1000.00')),
+        )
+        for gross, withholding, net in negative_cases:
+            with (
+                self.subTest(
+                    gross=gross,
+                    withholding=withholding,
+                    net=net,
+                ),
+                self.assertRaises(ValidationError),
+            ):
+                service.capitalize_interest(
+                    CapitalizeInterestCommand(
+                        user=user,
+                        deposit_id=deposit.pk,
+                        gross=gross,
+                        withholding=withholding,
+                        net=net,
+                        posting_on=date(2026, 6, 1),
+                        value_on=date(2026, 6, 1),
+                        reason='Отрицательные суммы.',
+                    ),
+                )
+
+    def test_capitalize_rejects_zero_net(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+
+        with self.assertRaises(ValidationError):
+            service.capitalize_interest(
+                CapitalizeInterestCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    gross=Decimal(0),
+                    withholding=Decimal(0),
+                    net=Decimal(0),
+                    posting_on=date(2026, 6, 1),
+                    value_on=date(2026, 6, 1),
+                    reason='Нулевая капитализация.',
+                ),
+            )
+
+    def test_capitalize_links_to_forecast_and_confirms_it(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+        term = deposit.current_term
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+        forecast = DepositInterestForecast.objects.get(term=term)
+        forecast_amount_before = forecast.amount
+
+        event = service.capitalize_interest(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                forecast_id=forecast.pk,
+                gross=Decimal('12000.00'),
+                withholding=Decimal('1560.00'),
+                net=Decimal('10440.00'),
+                posting_on=date(2026, 7, 1),
+                value_on=date(2026, 7, 1),
+            ),
+        )
+
+        forecast.refresh_from_db()
+        self.assertEqual(event.forecast, forecast)
+        self.assertTrue(forecast.confirmed)
+        self.assertEqual(forecast.amount, forecast_amount_before)
+
+    def test_capitalize_rejects_already_confirmed_forecast(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+        term = deposit.current_term
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+        forecast = DepositInterestForecast.objects.get(term=term)
+        forecast.confirmed = True
+        forecast.save(update_fields=['confirmed'])
+
+        with self.assertRaises(ValidationError):
+            service.capitalize_interest(
+                CapitalizeInterestCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    forecast_id=forecast.pk,
+                    gross=Decimal('12000.00'),
+                    withholding=Decimal(0),
+                    net=Decimal('12000.00'),
+                    posting_on=date(2026, 7, 1),
+                    value_on=date(2026, 7, 1),
+                ),
+            )
+
+    def test_capitalize_rejects_foreign_forecast(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit_a = self._open_deposit(user)
+        deposit_b = self._open_deposit(
+            user,
+            balance=Decimal('50000.00'),
+        )
+        term_b = deposit_b.current_term
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term_b.pk),
+        )
+        foreign_forecast = DepositInterestForecast.objects.get(term=term_b)
+
+        with self.assertRaises(ValidationError):
+            service.capitalize_interest(
+                CapitalizeInterestCommand(
+                    user=user,
+                    deposit_id=deposit_a.pk,
+                    forecast_id=foreign_forecast.pk,
+                    gross=Decimal('1000.00'),
+                    withholding=Decimal(0),
+                    net=Decimal('1000.00'),
+                    posting_on=date(2026, 7, 1),
+                    value_on=date(2026, 7, 1),
+                ),
+            )
+
+    def test_capitalize_off_schedule_requires_reason(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+
+        with self.assertRaises(ValidationError):
+            service.capitalize_interest(
+                CapitalizeInterestCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    gross=Decimal('1000.00'),
+                    withholding=Decimal(0),
+                    net=Decimal('1000.00'),
+                    posting_on=date(2026, 7, 1),
+                    value_on=date(2026, 7, 1),
+                ),
+            )
+
+    def test_capitalize_does_not_create_transactions(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+        kpis_before = get_dashboard_month_kpis(user)
+
+        service.capitalize_interest(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('5000.00'),
+                withholding=Decimal(0),
+                net=Decimal('5000.00'),
+                posting_on=date(2026, 7, 1),
+                value_on=date(2026, 7, 1),
+                reason='Плановая капитализация.',
+            ),
+        )
+
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+        self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+        kpis_after = get_dashboard_month_kpis(user)
+        for field in ('income', 'expenses', 'net_result', 'savings_rate'):
+            with self.subTest(field=field):
+                self.assertEqual(kpis_after[field], kpis_before[field])
+
+    def test_capitalize_rolls_back_on_event_failure(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+        balance_before = deposit.account.balance
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_capitalization_event',
+                side_effect=RuntimeError('event storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.capitalize_interest(
+                CapitalizeInterestCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    gross=Decimal('5000.00'),
+                    withholding=Decimal(0),
+                    net=Decimal('5000.00'),
+                    posting_on=date(2026, 7, 1),
+                    value_on=date(2026, 7, 1),
+                    reason='Плановая капитализация.',
+                ),
+            )
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, balance_before)
+        self.assertFalse(
+            DepositCapitalizationEvent.objects.filter(
+                deposit=deposit,
+            ).exists(),
+        )
+
+    def test_capitalization_affects_forecast_from_value_date(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(user)
+        term = deposit.current_term
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(user=user, term_id=term.pk),
+        )
+        forecast_before = DepositInterestForecast.objects.get(term=term)
+
+        service.capitalize_interest(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('12000.00'),
+                withholding=Decimal(0),
+                net=Decimal('12000.00'),
+                posting_on=date(2026, 6, 30),
+                value_on=date(2026, 6, 30),
+                reason='Полугодовая капитализация.',
+            ),
+        )
+
+        forecast_after = DepositInterestForecast.objects.get(term=term)
+        self.assertGreater(forecast_after.amount, forecast_before.amount)
+
+    def test_capitalize_rejects_foreign_deposit(self) -> None:
+        owner = cast('User', UserFactory())
+        other_user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_deposit(owner)
+
+        with self.assertRaises(ValidationError):
+            service.capitalize_interest(
+                CapitalizeInterestCommand(
+                    user=other_user,
+                    deposit_id=deposit.pk,
+                    gross=Decimal('1000.00'),
+                    withholding=Decimal(0),
+                    net=Decimal('1000.00'),
+                    posting_on=date(2026, 7, 1),
+                    value_on=date(2026, 7, 1),
+                    reason='Чужой вклад.',
+                ),
+            )
