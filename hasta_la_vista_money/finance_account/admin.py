@@ -4,8 +4,17 @@ from django.contrib import admin
 
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    Bank,
     TransferMoneyLog,
 )
+
+
+@admin.register(Bank)
+class BankAdmin(admin.ModelAdmin[Bank]):
+    list_display = ('code', 'name', 'is_system', 'user', 'created_at')
+    list_filter = ('is_system',)
+    search_fields = ('code', 'name')
+    ordering = ('name',)
 
 
 @admin.register(Account)

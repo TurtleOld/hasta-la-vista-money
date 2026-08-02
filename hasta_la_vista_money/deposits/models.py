@@ -10,8 +10,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.bank_constants import BANK_CHOICES
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 
 
 class Deposit(models.Model):
@@ -27,9 +26,10 @@ class Deposit(models.Model):
         max_length=constants.TWO_HUNDRED_FIFTY,
         verbose_name=_('Название вклада'),
     )
-    bank = models.CharField(
-        max_length=20,
-        choices=BANK_CHOICES,
+    bank = models.ForeignKey(
+        Bank,
+        on_delete=models.PROTECT,
+        related_name='deposits',
         verbose_name=_('Банк'),
     )
     created_at = models.DateTimeField(auto_now_add=True)

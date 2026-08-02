@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -13,11 +14,10 @@ from hasta_la_vista_money.deposits.models import (
     DepositTerm,
 )
 from hasta_la_vista_money.finance_account.bank_constants import (
-    BANK_CHOICES,
     BANK_DEFAULT,
 )
 from hasta_la_vista_money.finance_account.currencies import currency_choices
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
@@ -168,7 +168,10 @@ class CreateDepositForm(forms.Form):
         max_length=constants.TWO_HUNDRED_FIFTY,
         label=_('Название вклада'),
     )
-    bank = forms.ChoiceField(choices=BANK_CHOICES, label=_('Банк'))
+    bank = forms.ModelChoiceField(
+        queryset=Bank.objects.none(),
+        label=_('Банк'),
+    )
     currency = forms.ChoiceField(
         choices=currency_choices(),
         label=_('Валюта'),
@@ -215,6 +218,10 @@ class CreateDepositForm(forms.Form):
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        bank_field = cast(
+            'forms.ModelChoiceField[Bank]',
+            self.fields['bank'],
+        )
         if user is not None:
             source_account_field = cast(
                 'forms.ModelChoiceField[Account]',
@@ -223,12 +230,19 @@ class CreateDepositForm(forms.Form):
             source_account_field.queryset = Account.objects.filter(
                 user=user,
             ).exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+            bank_field.queryset = Bank.objects.filter(
+                models.Q(is_system=True) | models.Q(user=user),
+            )
+        else:
+            bank_field.queryset = Bank.objects.filter(
+                is_system=True,
+            )
 
     def clean_bank(self) -> str:
-        bank = str(self.cleaned_data['bank'])
-        if bank == BANK_DEFAULT:
+        bank = cast('Bank | None', self.cleaned_data.get('bank'))
+        if bank is None or bank.code == BANK_DEFAULT:
             raise ValidationError(_('Выберите банк для срочного вклада.'))
-        return bank
+        return bank.code
 
     def clean_custom_payout_dates(self) -> list[date]:
         raw = str(self.cleaned_data.get('custom_payout_dates', '')).strip()

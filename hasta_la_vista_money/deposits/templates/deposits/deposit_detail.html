@@ -18,7 +18,7 @@
         </div>
         <section class="accounts-hero">
             <div>
-                <div class="accounts-hero-label">{{ deposit.get_bank_display }} · {{ term.state_label }}</div>
+                <div class="accounts-hero-label">{{ deposit.bank.name }} · {{ term.state_label }}</div>
                 <div class="accounts-hero-amt">{{ deposit.account.balance|comma }}<span class="cur">{{ deposit.account.currency }}</span></div>
                 <div class="accounts-hero-change">{% translate 'Фактический остаток связанного счёта' %}</div>
                 <div class="accounts-hero-change">{% translate 'Ликвидная сумма' %}: {{ term.liquid_amount|comma }} <span class="cur">{{ deposit.account.currency }}</span></div>

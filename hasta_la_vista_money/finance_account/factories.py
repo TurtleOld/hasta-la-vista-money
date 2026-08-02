@@ -5,11 +5,22 @@ import factory as _factory
 
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    Bank,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.users.factories import UserFactory
 
 factory = cast('Any', _factory)
+
+
+class BankFactory(_factory.django.DjangoModelFactory[Bank]):
+    class Meta:
+        model = Bank
+
+    code = factory.Sequence(lambda n: f'bank_{n}')
+    name = factory.Sequence(lambda n: f'Bank {n}')
+    is_system = False
+    user = factory.SubFactory(UserFactory)
 
 
 class AccountFactory(_factory.django.DjangoModelFactory[Account]):
@@ -20,6 +31,7 @@ class AccountFactory(_factory.django.DjangoModelFactory[Account]):
     name_account = factory.Sequence(lambda n: f'Account {n}')
     balance = Decimal('1000.00')
     currency = 'RUB'
+    bank = factory.SubFactory(BankFactory)
 
 
 class TransferMoneyLogFactory(
