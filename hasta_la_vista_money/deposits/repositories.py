@@ -4,6 +4,8 @@ from django.db.models import QuerySet
 
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositInterestForecast,
+    DepositPayoutScheduleDate,
     DepositPrincipalEvent,
     DepositRatePeriod,
     DepositTerm,
@@ -12,6 +14,8 @@ from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
     from datetime import date
+
+    from hasta_la_vista_money.deposits.interest_forecast import ForecastLine
 
 
 class DepositRepository:
@@ -23,6 +27,12 @@ class DepositRepository:
 
     def create_rate_period(self, **kwargs: object) -> DepositRatePeriod:
         return DepositRatePeriod.objects.create(**kwargs)
+
+    def create_payout_schedule_date(
+        self,
+        **kwargs: object,
+    ) -> DepositPayoutScheduleDate:
+        return DepositPayoutScheduleDate.objects.create(**kwargs)
 
     def create_principal_event(
         self,
@@ -65,4 +75,30 @@ class DepositRepository:
     ) -> None:
         DepositRatePeriod.objects.filter(pk=period_id).update(
             ends_on=new_ends_on,
+        )
+
+    def delete_unconfirmed_forecasts(self, term_id: int) -> None:
+        DepositInterestForecast.objects.filter(
+            term_id=term_id,
+            confirmed=False,
+        ).delete()
+
+    def create_forecast_lines(
+        self,
+        term: DepositTerm,
+        lines: list['ForecastLine'],
+    ) -> list[DepositInterestForecast]:
+        return DepositInterestForecast.objects.bulk_create(
+            [
+                DepositInterestForecast(
+                    term=term,
+                    payout_on=line.payout_on,
+                    amount=line.amount,
+                    period_starts_on=line.period_starts_on,
+                    period_ends_on=line.period_ends_on,
+                    is_rate_undefined=line.is_rate_undefined,
+                    is_date_tentative=line.is_date_tentative,
+                )
+                for line in lines
+            ],
         )

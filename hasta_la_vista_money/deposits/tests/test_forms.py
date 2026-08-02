@@ -1,3 +1,4 @@
+from datetime import date
 from typing import TYPE_CHECKING, cast
 
 from django.forms import ChoiceField, DateField, DateInput, ModelChoiceField
@@ -103,6 +104,99 @@ class CreateDepositFormTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('tracking_started_on', form.errors)
+
+
+class CreateDepositFormForecastTermsTests(TestCase):
+    def _base_data(self) -> dict[str, str]:
+        return {
+            'name': 'Вклад с прогнозом',
+            'bank': 'SBERBANK',
+            'currency': 'RUB',
+            'balance': '50000.00',
+            'opened_on': '2026-06-01',
+            'matures_on': '2027-02-01',
+            'annual_rate': '15.50',
+            'opening_method': 'opening_position',
+            'tracking_started_on': '2026-06-01',
+            'rate_kind': 'fixed',
+        }
+
+    def test_forecast_fields_default_when_omitted(self) -> None:
+        """Omitting the new forecast-terms fields (e.g. programmatic POST)
+        falls back to the previous fixed behaviour instead of failing
+        validation."""
+        form = CreateDepositForm(data=self._base_data())
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.cleaned_data['day_count_convention'],
+            DepositTerm.DayCountConvention.ACTUAL_ACTUAL,
+        )
+        self.assertEqual(
+            form.cleaned_data['payout_schedule_kind'],
+            DepositTerm.PayoutScheduleKind.MATURITY,
+        )
+        self.assertEqual(
+            form.cleaned_data['business_day_convention'],
+            DepositTerm.BusinessDayConvention.NONE,
+        )
+        self.assertEqual(form.cleaned_data['custom_payout_dates'], [])
+
+    def test_user_can_select_actual_365_and_monthly_schedule(self) -> None:
+        data = self._base_data()
+        data['day_count_convention'] = 'actual_365'
+        data['payout_schedule_kind'] = 'monthly'
+        data['business_day_convention'] = 'following'
+
+        form = CreateDepositForm(data=data)
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.cleaned_data['day_count_convention'],
+            DepositTerm.DayCountConvention.ACTUAL_365,
+        )
+        self.assertEqual(
+            form.cleaned_data['payout_schedule_kind'],
+            DepositTerm.PayoutScheduleKind.MONTHLY,
+        )
+        self.assertEqual(
+            form.cleaned_data['business_day_convention'],
+            DepositTerm.BusinessDayConvention.FOLLOWING,
+        )
+
+    def test_custom_schedule_requires_at_least_one_date(self) -> None:
+        data = self._base_data()
+        data['payout_schedule_kind'] = 'custom'
+
+        form = CreateDepositForm(data=data)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('custom_payout_dates', form.errors)
+
+    def test_custom_schedule_parses_comma_and_newline_separated_dates(
+        self,
+    ) -> None:
+        data = self._base_data()
+        data['payout_schedule_kind'] = 'custom'
+        data['custom_payout_dates'] = '15/07/2026,\n01/09/2026'
+
+        form = CreateDepositForm(data=data)
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(
+            form.cleaned_data['custom_payout_dates'],
+            [date(2026, 7, 15), date(2026, 9, 1)],
+        )
+
+    def test_custom_schedule_rejects_unparseable_date(self) -> None:
+        data = self._base_data()
+        data['payout_schedule_kind'] = 'custom'
+        data['custom_payout_dates'] = 'not-a-date'
+
+        form = CreateDepositForm(data=data)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('custom_payout_dates', form.errors)
 
 
 class CreateDepositFormRateKindTests(TestCase):

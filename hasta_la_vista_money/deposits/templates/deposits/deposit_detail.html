@@ -57,6 +57,40 @@
             </div>
         </section>
         {% endif %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd">
+                <h2>{% translate 'Ожидаемые выплаты процентов' %}</h2>
+                <form method="post" action="{% url 'deposits:recalculate-forecast' pk=deposit.pk term_id=term.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-primary">{% translate 'Пересчитать прогноз' %}</button>
+                </form>
+            </div>
+            <div class="accounts-list">
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Способ выплаты' %}</div><div class="accounts-row-name">{{ term.get_payout_schedule_kind_display }} · {{ term.get_business_day_convention_display }}</div></div></div></div>
+                {% for line in forecast_lines %}
+                <div class="accounts-row">
+                    <div class="accounts-row-content">
+                        <div class="accounts-min0">
+                            <div class="accounts-row-kind">
+                                {{ line.payout_on|date:'d.m.Y' }}
+                                {% if line.is_date_tentative %}<span class="badge bg-warning text-dark">{% translate 'Дата ориентировочна' %}</span>{% endif %}
+                            </div>
+                            <div class="accounts-row-name">
+                                {% if line.is_rate_undefined %}
+                                    {% translate 'Ставка периода не определена' %}
+                                {% else %}
+                                    {{ line.amount|comma }}<span class="cur">{{ deposit.account.currency }}</span>
+                                {% endif %}
+                                {% if line.confirmed %} · {% translate 'подтверждено' %}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-name">{% translate 'Прогноз ещё не рассчитан.' %}</div></div></div></div>
+                {% endfor %}
+            </div>
+        </section>
     </div>
 </main>
 {% endwith %}
