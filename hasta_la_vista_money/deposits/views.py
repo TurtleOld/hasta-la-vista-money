@@ -13,6 +13,7 @@ from django.views.generic import FormView, ListView, TemplateView
 
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
+    CapitalizeInterestCommand,
     ForecastTerms,
     FundDepositCommand,
     OpenExistingDepositCommand,
@@ -24,6 +25,7 @@ from hasta_la_vista_money.deposits.commands import (
 )
 from hasta_la_vista_money.deposits.forms import (
     AddFloatingRatePeriodForm,
+    CapitalizeInterestForm,
     CreateDepositForm,
     TopUpDepositForm,
     WithdrawDepositForm,
@@ -142,6 +144,10 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
         context['deposit'] = deposit
         context['forecast_lines'] = (
             deposit.current_term.interest_forecasts.all()
+        )
+        context['capitalization_events'] = deposit.capitalization_events.all()
+        context['capitalize_form'] = CapitalizeInterestForm(
+            term=deposit.current_term,
         )
         context['withdraw_form'] = WithdrawDepositForm(
             user=user,
@@ -297,4 +303,43 @@ class DepositAddRatePeriodView(
             form.add_error(None, error)
             return self.form_invalid(form)
         messages.success(self.request, _('Ставка вклада обновлена.'))
+        return HttpResponseRedirect(deposit.get_absolute_url())
+
+
+class DepositCapitalizeInterestView(LoginRequiredMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        user = cast('User', request.user)
+        typed_request = cast('Any', request)
+        service = typed_request.container.deposits.deposit_service()
+        deposit = get_object_or_404(service.get_user_deposits(user), pk=pk)
+        term = deposit.current_term
+        form = CapitalizeInterestForm(request.POST, term=term)
+        if not form.is_valid():
+            messages.error(
+                request,
+                _('Проверьте данные капитализации процентов.'),
+            )
+            return HttpResponseRedirect(deposit.get_absolute_url())
+        forecast = form.cleaned_data.get('forecast')
+        try:
+            service.capitalize_interest(
+                CapitalizeInterestCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    forecast_id=forecast.pk if forecast else None,
+                    gross=form.cleaned_data['gross'],
+                    withholding=form.cleaned_data['withholding'],
+                    net=form.cleaned_data['net'],
+                    posting_on=form.cleaned_data['posting_on'],
+                    value_on=form.cleaned_data['value_on'],
+                    reason=form.cleaned_data['reason'],
+                ),
+            )
+        except ValidationError as error:
+            messages.error(request, error.message)
+        else:
+            messages.success(
+                request,
+                _('Проценты капитализированы на вклад.'),
+            )
         return HttpResponseRedirect(deposit.get_absolute_url())

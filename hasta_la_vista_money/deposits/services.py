@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
+    CapitalizeInterestCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     ForecastTerms,
@@ -30,6 +31,7 @@ from hasta_la_vista_money.deposits.interest_forecast import (
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositRatePeriod,
@@ -640,6 +642,113 @@ class DepositService:
         self._recalculate_forecast_for_term(term, command.effective_on)
         return event
 
+    @transaction.atomic
+    def capitalize_interest(
+        self,
+        command: CapitalizeInterestCommand,
+    ) -> DepositCapitalizationEvent:
+        try:
+            deposit = self.deposit_repository.get_by_id_and_user(
+                command.deposit_id,
+                command.user,
+            )
+        except Deposit.DoesNotExist as error:
+            raise ValidationError(
+                _('Вклад не найден или недоступен.'),
+            ) from error
+
+        self._validate_capitalization_amounts(command)
+        forecast = self._resolve_capitalization_forecast(
+            deposit,
+            command,
+        )
+
+        self.balance_service.apply_account_deltas(
+            {deposit.account.pk: command.net},
+        )
+        event = self.deposit_repository.create_capitalization_event(
+            deposit=deposit,
+            forecast=forecast,
+            gross=command.gross,
+            withholding=command.withholding,
+            net=command.net,
+            posting_on=command.posting_on,
+            value_on=command.value_on,
+            reason=command.reason.strip(),
+        )
+        if forecast is not None:
+            self.deposit_repository.confirm_forecast(forecast.pk)
+        with contextlib.suppress(ValidationError):
+            self._recalculate_forecast_for_term(
+                deposit.current_term,
+                command.value_on,
+            )
+        return event
+
+    def _validate_capitalization_amounts(
+        self,
+        command: CapitalizeInterestCommand,
+    ) -> None:
+        if command.gross < 0:
+            raise ValidationError(
+                _('Валовый процентный доход не может быть отрицательным.'),
+            )
+        if command.withholding < 0:
+            raise ValidationError(
+                _('Удержание не может быть отрицательным.'),
+            )
+        if command.net < 0:
+            raise ValidationError(
+                _('Чистый доход не может быть отрицательным.'),
+            )
+        if command.net == 0:
+            raise ValidationError(
+                _('Чистый доход должен быть больше нуля.'),
+            )
+        expected_net = (command.gross - command.withholding).quantize(
+            command.net,
+        )
+        if expected_net != command.net:
+            raise ValidationError(
+                _(
+                    'Суммы не согласованы: чистый доход (%(net)s) '
+                    'должен равняться валовому доходу (%(gross)s) '
+                    'за вычетом удержания (%(withholding)s).',
+                )
+                % {
+                    'net': command.net,
+                    'gross': command.gross,
+                    'withholding': command.withholding,
+                },
+            )
+
+    def _resolve_capitalization_forecast(
+        self,
+        deposit: Deposit,
+        command: CapitalizeInterestCommand,
+    ) -> DepositInterestForecast | None:
+        if command.forecast_id is None:
+            if not command.reason.strip():
+                raise ValidationError(
+                    _('Для внеплановой капитализации укажите причину.'),
+                )
+            return None
+        try:
+            forecast = deposit.current_term.interest_forecasts.get(
+                pk=command.forecast_id,
+            )
+        except DepositInterestForecast.DoesNotExist as error:
+            raise ValidationError(
+                _(
+                    'Ожидаемая выплата не найдена или не принадлежит вкладу.',
+                ),
+            ) from error
+        if forecast.confirmed:
+            raise ValidationError(
+                _('Эта ожидаемая выплата уже подтверждена.'),
+            )
+        return forecast
+
     def _validate_top_up_terms(
         self,
         term: DepositTerm,
@@ -761,7 +870,7 @@ class DepositService:
                 ),
             )
 
-        principal_changes = [
+        principal_changes: list[PrincipalChange] = [
             PrincipalChange(
                 effective_on=event.effective_on,
                 amount=(
@@ -772,6 +881,15 @@ class DepositService:
             )
             for event in term.deposit.principal_events.all()
         ]
+        capitalization_changes = [
+            PrincipalChange(
+                effective_on=ce.value_on,
+                amount=ce.net,
+            )
+            for ce in term.deposit.capitalization_events.all()
+        ]
+        principal_changes.extend(capitalization_changes)
+        principal_changes.sort(key=lambda pc: pc.effective_on)
 
         lines = build_forecast(
             opened_on=term.opened_on,

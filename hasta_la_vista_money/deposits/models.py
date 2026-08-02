@@ -471,3 +471,91 @@ class DepositInterestForecast(models.Model):
                 name='deposit_interest_forecast_period_valid',
             ),
         ]
+
+
+class DepositCapitalizationEventQuerySet(
+    models.QuerySet['DepositCapitalizationEvent'],
+):
+    def update(self, **kwargs: Any) -> int:
+        raise ValidationError(
+            _('Подтверждённую капитализацию нельзя изменить.'),
+        )
+
+    def delete(self) -> tuple[int, dict[str, int]]:
+        raise ValidationError(
+            _('Подтверждённую капитализацию нельзя удалить.'),
+        )
+
+
+class DepositCapitalizationEvent(models.Model):
+    deposit = models.ForeignKey(
+        Deposit,
+        on_delete=models.PROTECT,
+        related_name='capitalization_events',
+    )
+    forecast = models.ForeignKey(
+        DepositInterestForecast,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='capitalization_event',
+    )
+    gross = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        validators=[MinValueValidator(0)],
+    )
+    withholding = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        validators=[MinValueValidator(0)],
+    )
+    net = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        validators=[MinValueValidator(0)],
+    )
+    posting_on = models.DateField(verbose_name=_('Дата проводки'))
+    value_on = models.DateField(verbose_name=_('Дата валютирования'))
+    reason = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        blank=True,
+        default='',
+        verbose_name=_('Причина внеплановой капитализации'),
+    )
+    confirmed_at = models.DateTimeField(auto_now_add=True)
+
+    objects = DepositCapitalizationEventQuerySet.as_manager()
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['value_on', 'pk']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=Q(gross__gte=0),
+                name='deposit_capitalization_gross_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=Q(withholding__gte=0),
+                name='deposit_capitalization_withholding_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=Q(net__gte=0),
+                name='deposit_capitalization_net_non_negative',
+            ),
+        ]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise ValidationError(
+                _('Подтверждённую капитализацию нельзя изменить.'),
+            )
+        super().save(*args, **kwargs)
+
+    def delete(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> tuple[int, dict[str, int]]:
+        raise ValidationError(
+            _('Подтверждённую капитализацию нельзя удалить.'),
+        )

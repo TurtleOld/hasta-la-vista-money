@@ -25,6 +25,14 @@
             </div>
         </section>
         <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Капитализировать проценты' %}</h2></div>
+            <form method="post" action="{% url 'deposits:capitalize' pk=deposit.pk %}">
+                {% csrf_token %}
+                {{ capitalize_form.as_p }}
+                <button type="submit" class="btn btn-primary">{% translate 'Подтвердить капитализацию' %}</button>
+            </form>
+        </section>
+        <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Пополнить вклад' %}</h2></div>
             <form method="post" action="{% url 'deposits:top-up' pk=deposit.pk %}">
                 {% csrf_token %}
@@ -108,6 +116,32 @@
                 {% endfor %}
             </div>
         </section>
+        {% if capitalization_events %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Подтверждённые капитализации' %}</h2></div>
+            <div class="accounts-list">
+                {% for event in capitalization_events %}
+                <div class="accounts-row">
+                    <div class="accounts-row-content">
+                        <div class="accounts-min0">
+                            <div class="accounts-row-kind">
+                                {% translate 'Проводка' %}: {{ event.posting_on|date:'d.m.Y' }}
+                                · {% translate 'Валютирование' %}: {{ event.value_on|date:'d.m.Y' }}
+                            </div>
+                            <div class="accounts-row-name">
+                                {% translate 'Брутто' %}: {{ event.gross|comma }}
+                                · {% translate 'Удержание' %}: {{ event.withholding|comma }}
+                                · {% translate 'Нетто' %}: {{ event.net|comma }}
+                                <span class="cur">{{ deposit.account.currency }}</span>
+                                {% if event.reason %} · {{ event.reason }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
     </div>
 </main>
 {% endwith %}

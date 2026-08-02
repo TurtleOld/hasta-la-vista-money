@@ -4,6 +4,7 @@ from django.db.models import QuerySet
 
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
+    CapitalizeInterestCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
@@ -13,6 +14,7 @@ from hasta_la_vista_money.deposits.commands import (
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositRatePeriod,
@@ -124,3 +126,8 @@ class DepositServiceProtocol(Protocol):
         self,
         command: TopUpDepositCommand,
     ) -> DepositPrincipalEvent: ...
+
+    def capitalize_interest(
+        self,
+        command: CapitalizeInterestCommand,
+    ) -> DepositCapitalizationEvent: ...

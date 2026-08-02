@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import (
+    DepositInterestForecast,
     DepositPrincipalEvent,
     DepositTerm,
 )
@@ -379,6 +380,82 @@ class TopUpDepositForm(forms.Form):
 
     def clean_exception_reason(self) -> str:
         return str(self.cleaned_data['exception_reason']).strip()
+
+
+class CapitalizeInterestForm(forms.Form):
+    forecast = forms.ModelChoiceField(
+        queryset=DepositInterestForecast.objects.none(),
+        required=False,
+        label=_('Ожидаемая выплата'),
+    )
+    gross = forms.DecimalField(
+        min_value=Decimal(0),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Валовый процентный доход'),
+    )
+    withholding = forms.DecimalField(
+        min_value=Decimal(0),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        initial=Decimal(0),
+        label=_('Удержание (налог)'),
+    )
+    net = forms.DecimalField(
+        min_value=Decimal('0.01'),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Чистое зачисление'),
+    )
+    posting_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата проводки'),
+    )
+    value_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата валютирования'),
+    )
+    reason = forms.CharField(
+        required=False,
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        widget=forms.Textarea(attrs={'rows': 2}),
+        label=_('Причина внеплановой капитализации'),
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        term: DepositTerm,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        field = cast(
+            'forms.ModelChoiceField[DepositInterestForecast]',
+            self.fields['forecast'],
+        )
+        field.queryset = term.interest_forecasts.filter(confirmed=False)
+
+    def clean(self) -> dict[str, Any] | None:
+        cleaned = super().clean()
+        if cleaned is None:
+            return cleaned
+        gross = cleaned.get('gross')
+        withholding = cleaned.get('withholding')
+        net = cleaned.get('net')
+        forecast = cleaned.get('forecast')
+        reason = str(cleaned.get('reason', '')).strip()
+        if gross is None or withholding is None or net is None:
+            return cleaned
+        if not forecast and not reason:
+            raise ValidationError(
+                _(
+                    'Выберите ожидаемую выплату или укажите причину '
+                    'внеплановой капитализации.',
+                ),
+            )
+        return cleaned
 
 
 class AddFloatingRatePeriodForm(forms.Form):
