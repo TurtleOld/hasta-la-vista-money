@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
@@ -51,6 +52,38 @@ def _parse_html5_date(token: str) -> date:
 
 
 class CreateDepositForm(forms.Form):
+    withdrawal_allowed = forms.BooleanField(
+        required=False,
+        label=_('Разрешено частичное снятие'),
+    )
+    minimum_withdrawal_amount = forms.DecimalField(
+        required=False,
+        min_value=Decimal('0.01'),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Минимальная сумма снятия'),
+    )
+    maximum_withdrawal_amount = forms.DecimalField(
+        required=False,
+        min_value=Decimal('0.01'),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Максимальная сумма снятия'),
+    )
+    withdrawal_deadline = forms.DateField(
+        required=False,
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Крайний срок снятия'),
+    )
+    minimum_balance = forms.DecimalField(
+        required=False,
+        min_value=0,
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        initial=Decimal(),
+        label=_('Неснижаемый остаток'),
+    )
     opening_method = forms.ChoiceField(
         choices=DepositPrincipalEvent.Type.choices,
         label=_('Как начать учёт'),
@@ -229,7 +262,29 @@ class CreateDepositForm(forms.Form):
                     'дату выплаты.',
                 ),
             )
+        self._clean_withdrawal_terms(cleaned_data)
         return cleaned_data
+
+    def _clean_withdrawal_terms(
+        self,
+        cleaned_data: dict[str, Any],
+    ) -> None:
+        if not cleaned_data.get('withdrawal_allowed'):
+            for field_name in (
+                'minimum_withdrawal_amount',
+                'maximum_withdrawal_amount',
+                'withdrawal_deadline',
+                'minimum_balance',
+            ):
+                cleaned_data[field_name] = None
+            return
+        minimum = cleaned_data.get('minimum_withdrawal_amount')
+        maximum = cleaned_data.get('maximum_withdrawal_amount')
+        if minimum and maximum and minimum > maximum:
+            self.add_error(
+                'maximum_withdrawal_amount',
+                _('Максимальная сумма не может быть меньше минимальной.'),
+            )
 
 
 class AddFloatingRatePeriodForm(forms.Form):
@@ -260,3 +315,50 @@ class AddFloatingRatePeriodForm(forms.Form):
                 _('Укажите пояснение к изменению ставки.'),
             )
         return note
+
+
+class WithdrawDepositForm(forms.Form):
+    destination_account = forms.ModelChoiceField(
+        queryset=Account.objects.none(),
+        label=_('Счёт зачисления'),
+    )
+    amount = forms.DecimalField(
+        min_value=Decimal('0.01'),
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Сумма снятия'),
+    )
+    effective_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата валютирования'),
+    )
+    exception_reason = forms.CharField(
+        required=False,
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        widget=forms.Textarea(attrs={'rows': 2}),
+        label=_('Причина фактического исключения'),
+        help_text=_(
+            'Укажите только если банк уже провёл снятие в нарушение условий.',
+        ),
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        user: 'User',
+        currency: str,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        field = cast(
+            'forms.ModelChoiceField[Account]',
+            self.fields['destination_account'],
+        )
+        field.queryset = Account.objects.filter(
+            user=user,
+            currency=currency,
+        ).exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+
+    def clean_exception_reason(self) -> str:
+        return str(self.cleaned_data['exception_reason']).strip()

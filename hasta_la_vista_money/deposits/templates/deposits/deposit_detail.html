@@ -21,7 +21,16 @@
                 <div class="accounts-hero-label">{{ deposit.get_bank_display }} · {{ term.state_label }}</div>
                 <div class="accounts-hero-amt">{{ deposit.account.balance|comma }}<span class="cur">{{ deposit.account.currency }}</span></div>
                 <div class="accounts-hero-change">{% translate 'Фактический остаток связанного счёта' %}</div>
+                <div class="accounts-hero-change">{% translate 'Ликвидная сумма' %}: {{ term.liquid_amount|comma }} <span class="cur">{{ deposit.account.currency }}</span></div>
             </div>
+        </section>
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Снять тело вклада' %}</h2></div>
+            <form method="post" action="{% url 'deposits:withdraw' pk=deposit.pk %}">
+                {% csrf_token %}
+                {{ withdraw_form.as_p }}
+                <button type="submit" class="btn btn-primary">{% translate 'Перевести на счёт' %}</button>
+            </form>
         </section>
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Условия текущего срока' %}</h2></div>

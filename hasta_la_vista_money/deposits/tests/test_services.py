@@ -17,6 +17,7 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    WithdrawDepositCommand,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
@@ -39,6 +40,178 @@ if TYPE_CHECKING:
 
 
 class DepositServiceIntegrationTests(TestCase):
+    def test_withdraws_liquid_principal_to_owned_account_neutrally(
+        self,
+    ) -> None:
+        """A permitted withdrawal moves principal without KPI transactions."""
+        user = cast('User', UserFactory())
+        destination = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('100.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Ликвидный вклад',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('1000.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.withdrawal_allowed = True
+        term.minimum_withdrawal_amount = Decimal('100.00')
+        term.maximum_withdrawal_amount = Decimal('400.00')
+        term.minimum_balance = Decimal('700.00')
+        term.save()
+
+        service.withdraw_deposit_principal(
+            WithdrawDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                destination_account_id=destination.pk,
+                amount=Decimal('300.00'),
+                effective_on=date(2026, 8, 1),
+            ),
+        )
+
+        deposit.account.refresh_from_db()
+        destination.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('700.00'))
+        self.assertEqual(destination.balance, Decimal('400.00'))
+        self.assertEqual(TransferMoneyLog.objects.filter(user=user).count(), 1)
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+
+    def test_rejects_withdrawal_outside_liquid_amount(self) -> None:
+        """Limits, currency, ownership, and minimum balance reject changes."""
+        user = cast('User', UserFactory())
+        other_user = cast('User', UserFactory())
+        destination = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+        foreign_destination = Account.objects.create(
+            user=other_user,
+            name_account='Чужой счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Ограниченный вклад',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('1000.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.withdrawal_allowed = True
+        term.minimum_withdrawal_amount = Decimal('100.00')
+        term.maximum_withdrawal_amount = Decimal('400.00')
+        term.minimum_balance = Decimal('700.00')
+        term.save()
+
+        cases = (
+            (destination.pk, Decimal('99.00')),
+            (destination.pk, Decimal('401.00')),
+            (destination.pk, Decimal('350.00')),
+            (foreign_destination.pk, Decimal('100.00')),
+        )
+        for destination_id, amount in cases:
+            with (
+                self.subTest(destination_id=destination_id, amount=amount),
+                self.assertRaises(ValidationError),
+            ):
+                service.withdraw_deposit_principal(
+                    WithdrawDepositCommand(
+                        user=user,
+                        deposit_id=deposit.pk,
+                        destination_account_id=destination_id,
+                        amount=amount,
+                        effective_on=date(2026, 8, 1),
+                    ),
+                )
+
+        deposit.account.refresh_from_db()
+        destination.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('1000.00'))
+        self.assertEqual(destination.balance, Decimal('0.00'))
+        self.assertFalse(
+            DepositPrincipalEvent.objects.filter(
+                type=DepositPrincipalEvent.Type.WITHDRAWAL,
+            ).exists(),
+        )
+
+    def test_allows_occurred_exception_only_with_reason(self) -> None:
+        """An exception records an immutable reason and bypasses terms."""
+        user = cast('User', UserFactory())
+        destination = Account.objects.create(
+            user=user,
+            name_account='Основной счёт',
+            type_account='Debit',
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад с исключением',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('1000.00'),
+                opened_on=date(2026, 1, 1),
+                matures_on=date(2026, 12, 31),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+        with self.assertRaises(ValidationError):
+            service.withdraw_deposit_principal(
+                WithdrawDepositCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    destination_account_id=destination.pk,
+                    amount=Decimal('500.00'),
+                    effective_on=date(2026, 8, 1),
+                ),
+            )
+
+        event = service.withdraw_deposit_principal(
+            WithdrawDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                destination_account_id=destination.pk,
+                amount=Decimal('500.00'),
+                effective_on=date(2026, 8, 1),
+                exception_reason='Банк подтвердил досрочное снятие.',
+            ),
+        )
+
+        self.assertEqual(
+            event.exception_reason,
+            'Банк подтвердил досрочное снятие.',
+        )
+
     def test_confirmed_principal_event_cannot_be_changed_or_deleted(
         self,
     ) -> None:

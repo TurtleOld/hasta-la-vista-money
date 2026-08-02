@@ -9,10 +9,12 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    WithdrawDepositCommand,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
     DepositInterestForecast,
+    DepositPrincipalEvent,
     DepositRatePeriod,
 )
 from hasta_la_vista_money.users.models import User
@@ -115,5 +117,11 @@ class DepositServiceProtocol(Protocol):
 
         Raises:
             ValidationError: If the term is invalid or not owned, or the
-                custom payout schedule has no configured dates.
+            custom payout schedule has no configured dates.
         """
+
+    def withdraw_deposit_principal(
+        self,
+        command: WithdrawDepositCommand,
+    ) -> DepositPrincipalEvent:
+        """Transfer an allowed principal amount to an owned account."""

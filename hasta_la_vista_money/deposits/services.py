@@ -1,5 +1,5 @@
 import contextlib
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -16,6 +16,8 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    WithdrawalTerms,
+    WithdrawDepositCommand,
 )
 from hasta_la_vista_money.deposits.interest_forecast import (
     ProductionCalendar,
@@ -31,7 +33,10 @@ from hasta_la_vista_money.deposits.models import (
     DepositTerm,
 )
 from hasta_la_vista_money.deposits.repositories import DepositRepository
-from hasta_la_vista_money.finance_account.repositories import AccountRepository
+from hasta_la_vista_money.finance_account.repositories import (
+    AccountRepository,
+    TransferMoneyLogRepository,
+)
 from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
@@ -43,10 +48,12 @@ class DepositService:
         self,
         deposit_repository: DepositRepository,
         account_repository: AccountRepository,
+        transfer_money_log_repository: TransferMoneyLogRepository,
         calendar: ProductionCalendar | None = None,
     ) -> None:
         self.deposit_repository = deposit_repository
         self.account_repository = account_repository
+        self.transfer_money_log_repository = transfer_money_log_repository
         self.calendar: ProductionCalendar = calendar or WeekendOnlyCalendar()
         self.balance_service = BalanceService()
 
@@ -220,6 +227,7 @@ class DepositService:
             is_current=True,
             rate_kind=command.rate_kind,
             **self._forecast_term_kwargs(command.forecast_terms),
+            **self._withdrawal_term_kwargs(command.withdrawal_terms),
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -327,6 +335,7 @@ class DepositService:
             is_current=True,
             rate_kind=command.rate_kind,
             **self._forecast_term_kwargs(command.forecast_terms),
+            **self._withdrawal_term_kwargs(command.withdrawal_terms),
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -347,6 +356,22 @@ class DepositService:
             'accrual_end_included': forecast_terms.accrual_end_included,
             'payout_schedule_kind': forecast_terms.payout_schedule_kind,
             'business_day_convention': forecast_terms.business_day_convention,
+        }
+
+    def _withdrawal_term_kwargs(
+        self,
+        withdrawal_terms: WithdrawalTerms,
+    ) -> dict[str, object]:
+        return {
+            'withdrawal_allowed': withdrawal_terms.withdrawal_allowed,
+            'minimum_withdrawal_amount': (
+                withdrawal_terms.minimum_withdrawal_amount
+            ),
+            'maximum_withdrawal_amount': (
+                withdrawal_terms.maximum_withdrawal_amount
+            ),
+            'withdrawal_deadline': withdrawal_terms.withdrawal_deadline,
+            'minimum_balance': withdrawal_terms.minimum_balance,
         }
 
     def _create_custom_schedule_dates(
@@ -460,6 +485,162 @@ class DepositService:
         return self.deposit_repository.get_by_id_and_user(deposit_id, user)
 
     @transaction.atomic
+    def withdraw_deposit_principal(
+        self,
+        command: WithdrawDepositCommand,
+    ) -> DepositPrincipalEvent:
+        """Withdraw deposit principal via a neutral internal transfer."""
+        try:
+            deposit = self.deposit_repository.get_by_id_and_user(
+                command.deposit_id,
+                command.user,
+            )
+        except Deposit.DoesNotExist as error:
+            raise ValidationError(
+                _('Вклад не найден или недоступен.'),
+            ) from error
+
+        destination = self.account_repository.get_by_id_and_user(
+            command.destination_account_id,
+            command.user,
+        )
+        if destination is None:
+            raise ValidationError(
+                _('Счёт назначения не найден или недоступен.'),
+            )
+        if destination.is_deposit:
+            raise ValidationError(
+                _('Средства можно вывести только на обычный счёт.'),
+            )
+        if destination.currency != deposit.account.currency:
+            raise ValidationError(
+                _('Счёт назначения должен быть в валюте вклада.'),
+            )
+        if command.amount <= 0:
+            raise ValidationError(_('Сумма снятия должна быть больше нуля.'))
+
+        term = deposit.current_term
+        is_exception = bool(command.exception_reason.strip())
+        if not is_exception:
+            self._validate_withdrawal_terms(
+                term,
+                command.amount,
+                command.effective_on,
+            )
+
+        locked_accounts = self.balance_service.apply_account_deltas(
+            {
+                deposit.account.pk: -command.amount,
+                destination.pk: command.amount,
+            },
+        )
+        locked_deposit_account = locked_accounts[deposit.account.pk]
+        if locked_deposit_account.balance < term.minimum_balance:
+            raise ValidationError(
+                _('Снятие нарушает неснижаемый остаток вклада.'),
+            )
+
+        event = self.deposit_repository.create_principal_event(
+            deposit=deposit,
+            type=DepositPrincipalEvent.Type.WITHDRAWAL,
+            amount=command.amount,
+            effective_on=command.effective_on,
+            source_account=None,
+            destination_account=locked_accounts[destination.pk],
+            exception_reason=command.exception_reason.strip(),
+        )
+        self.transfer_money_log_repository.create_log(
+            user=command.user,
+            from_account=locked_deposit_account,
+            to_account=locked_accounts[destination.pk],
+            amount=command.amount,
+            exchange_date=datetime.combine(
+                command.effective_on,
+                datetime.min.time(),
+                tzinfo=UTC,
+            ),
+            notes=_('Частичное снятие тела вклада.'),
+        )
+        self._recalculate_future_forecast(term, command.effective_on)
+        return event
+
+    def _validate_withdrawal_terms(
+        self,
+        term: DepositTerm,
+        amount: Decimal,
+        effective_on: date,
+    ) -> None:
+        if not term.withdrawal_allowed:
+            raise ValidationError(
+                _('Условия вклада не разрешают частичное снятие.'),
+            )
+        if term.withdrawal_deadline and effective_on > term.withdrawal_deadline:
+            raise ValidationError(_('Срок разрешённого снятия уже истёк.'))
+        if (
+            term.minimum_withdrawal_amount is not None
+            and amount < term.minimum_withdrawal_amount
+        ):
+            raise ValidationError(_('Сумма меньше минимально разрешённой.'))
+        if (
+            term.maximum_withdrawal_amount is not None
+            and amount > term.maximum_withdrawal_amount
+        ):
+            raise ValidationError(_('Сумма больше максимально разрешённой.'))
+
+    def _recalculate_future_forecast(
+        self,
+        term: DepositTerm,
+        effective_on: date,
+    ) -> None:
+        """Replace only projected rows affected by the withdrawal date."""
+        future_lines = list(
+            DepositInterestForecast.objects.filter(
+                term=term,
+                confirmed=False,
+                payout_on__gte=effective_on,
+            ),
+        )
+        if not future_lines:
+            return
+        principal = self._principal_on(term, effective_on)
+        rate_segments = [
+            RateSegment(
+                starts_on=period.starts_on,
+                ends_on=period.ends_on,
+                annual_rate=period.annual_rate,
+            )
+            for period in term.rate_periods.all()
+        ]
+        custom_payout_dates = [
+            scheduled.payout_on
+            for scheduled in term.payout_schedule_dates.all()
+            if scheduled.payout_on >= effective_on
+        ]
+        lines = build_forecast(
+            opened_on=effective_on,
+            matures_on=term.matures_on,
+            principal=principal,
+            rate_segments=rate_segments,
+            day_count_convention=DepositTerm.DayCountConvention(
+                term.day_count_convention,
+            ),
+            accrual_start_included=term.accrual_start_included,
+            accrual_end_included=term.accrual_end_included,
+            payout_schedule_kind=DepositTerm.PayoutScheduleKind(
+                term.payout_schedule_kind,
+            ),
+            custom_payout_dates=custom_payout_dates,
+            business_day_convention=DepositTerm.BusinessDayConvention(
+                term.business_day_convention,
+            ),
+            calendar=self.calendar,
+        )
+        DepositInterestForecast.objects.filter(
+            pk__in=[line.pk for line in future_lines],
+        ).delete()
+        self.deposit_repository.create_forecast_lines(term, lines)
+
+    @transaction.atomic
     def recalculate_forecast(
         self,
         command: RecalculateInterestForecastCommand,
@@ -525,9 +706,7 @@ class DepositService:
                 ),
             )
 
-        principal = term.deposit.principal_events.filter(
-            effective_on__lte=term.opened_on,
-        ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
+        principal = self._principal_on(term, term.opened_on)
 
         lines = build_forecast(
             opened_on=term.opened_on,
@@ -551,3 +730,24 @@ class DepositService:
 
         self.deposit_repository.delete_unconfirmed_forecasts(term.pk)
         return self.deposit_repository.create_forecast_lines(term, lines)
+
+    def _principal_on(self, term: DepositTerm, value_date: date) -> Decimal:
+        events = term.deposit.principal_events.filter(
+            effective_on__lte=value_date,
+        )
+        funded = (
+            events.filter(
+                type__in=[
+                    DepositPrincipalEvent.Type.FUNDING,
+                    DepositPrincipalEvent.Type.OPENING_POSITION,
+                ],
+            ).aggregate(total=Sum('amount'))['total']
+            or Decimal()
+        )
+        withdrawn = (
+            events.filter(
+                type=DepositPrincipalEvent.Type.WITHDRAWAL,
+            ).aggregate(total=Sum('amount'))['total']
+            or Decimal()
+        )
+        return funded - withdrawn

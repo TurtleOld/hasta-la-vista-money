@@ -24,6 +24,17 @@ class ForecastTerms:
 
 
 @dataclass(frozen=True)
+class WithdrawalTerms:
+    """Contract conditions that determine a deposit's liquid principal."""
+
+    withdrawal_allowed: bool = False
+    minimum_withdrawal_amount: Decimal | None = None
+    maximum_withdrawal_amount: Decimal | None = None
+    withdrawal_deadline: date | None = None
+    minimum_balance: Decimal = Decimal()
+
+
+@dataclass(frozen=True)
 class CreateDepositCommand:
     user: User
     name: str
@@ -35,6 +46,7 @@ class CreateDepositCommand:
     annual_rate: Decimal
     rate_kind: str
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
+    withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
 
 
 @dataclass(frozen=True)
@@ -56,6 +68,7 @@ class FundDepositCommand:
     annual_rate: Decimal
     rate_kind: str
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
+    withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
 
 
 @dataclass(frozen=True)
@@ -78,6 +91,7 @@ class ConvertAccountToDepositCommand:
     converted_on: date
     rate_kind: str
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
+    withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
 
 
 @dataclass(frozen=True)
@@ -100,6 +114,7 @@ class OpenExistingDepositCommand:
     annual_rate: Decimal
     rate_kind: str
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
+    withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
 
 
 @dataclass(frozen=True)
@@ -129,3 +144,15 @@ class RecalculateInterestForecastCommand:
 
     user: User
     term_id: int
+
+
+@dataclass(frozen=True)
+class WithdrawDepositCommand:
+    """Move a permitted part of deposit principal to an owned account."""
+
+    user: User
+    deposit_id: int
+    destination_account_id: int
+    amount: Decimal
+    effective_on: date
+    exception_reason: str = ''

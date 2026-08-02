@@ -16,6 +16,9 @@ class DepositContainer(containers.DeclarativeContainer):
             DepositService,
             deposit_repository=deposit_repository,
             account_repository=finance_account.account_repository,
+            transfer_money_log_repository=(
+                finance_account.transfer_money_log_repository
+            ),
             calendar=production_calendar,
         )
     )
