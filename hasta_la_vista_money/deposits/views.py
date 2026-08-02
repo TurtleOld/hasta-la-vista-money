@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
@@ -16,10 +17,13 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    WithdrawalTerms,
+    WithdrawDepositCommand,
 )
 from hasta_la_vista_money.deposits.forms import (
     AddFloatingRatePeriodForm,
     CreateDepositForm,
+    WithdrawDepositForm,
 )
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
 
@@ -61,6 +65,13 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
             custom_payout_dates=data['custom_payout_dates'],
             business_day_convention=data['business_day_convention'],
         )
+        withdrawal_terms = WithdrawalTerms(
+            withdrawal_allowed=data['withdrawal_allowed'],
+            minimum_withdrawal_amount=data['minimum_withdrawal_amount'],
+            maximum_withdrawal_amount=data['maximum_withdrawal_amount'],
+            withdrawal_deadline=data['withdrawal_deadline'],
+            minimum_balance=data['minimum_balance'] or Decimal(),
+        )
         try:
             if data['opening_method'] == DepositPrincipalEvent.Type.FUNDING:
                 source_account = cast('Account', data['source_account'])
@@ -77,6 +88,7 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
                         annual_rate=data['annual_rate'],
                         rate_kind=data['rate_kind'],
                         forecast_terms=forecast_terms,
+                        withdrawal_terms=withdrawal_terms,
                     ),
                 )
             else:
@@ -93,6 +105,7 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
                         annual_rate=data['annual_rate'],
                         rate_kind=data['rate_kind'],
                         forecast_terms=forecast_terms,
+                        withdrawal_terms=withdrawal_terms,
                     ),
                 )
         except ValidationError as error:
@@ -117,6 +130,11 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
         context['deposit'] = deposit
         context['forecast_lines'] = (
             deposit.current_term.interest_forecasts.all()
+        )
+        context['withdraw_form'] = WithdrawDepositForm(
+            user=user,
+            currency=deposit.account.currency,
+            initial={'effective_on': deposit.current_term.opened_on},
         )
         return context
 
@@ -149,6 +167,39 @@ class DepositRecalculateForecastView(LoginRequiredMixin, View):
             messages.error(request, error.message)
         else:
             messages.success(request, _('Прогноз выплат пересчитан.'))
+        return HttpResponseRedirect(deposit.get_absolute_url())
+
+
+class DepositWithdrawView(LoginRequiredMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        user = cast('User', request.user)
+        typed_request = cast('Any', request)
+        service = typed_request.container.deposits.deposit_service()
+        deposit = get_object_or_404(service.get_user_deposits(user), pk=pk)
+        form = WithdrawDepositForm(
+            request.POST,
+            user=user,
+            currency=deposit.account.currency,
+        )
+        if not form.is_valid():
+            messages.error(request, _('Проверьте данные снятия.'))
+            return HttpResponseRedirect(deposit.get_absolute_url())
+        destination = form.cleaned_data['destination_account']
+        try:
+            service.withdraw_deposit_principal(
+                WithdrawDepositCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    destination_account_id=destination.pk,
+                    amount=form.cleaned_data['amount'],
+                    effective_on=form.cleaned_data['effective_on'],
+                    exception_reason=form.cleaned_data['exception_reason'],
+                ),
+            )
+        except ValidationError as error:
+            messages.error(request, error.message)
+        else:
+            messages.success(request, _('Тело вклада переведено на счёт.'))
         return HttpResponseRedirect(deposit.get_absolute_url())
 
 

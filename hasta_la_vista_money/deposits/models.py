@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.core.exceptions import ValidationError
@@ -118,6 +119,35 @@ class DepositTerm(models.Model):
         default=BusinessDayConvention.NONE,
         verbose_name=_('Перенос выплаты на рабочий день'),
     )
+    withdrawal_allowed = models.BooleanField(
+        default=False,
+        verbose_name=_('Разрешено частичное снятие'),
+    )
+    minimum_withdrawal_amount = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        null=True,
+        blank=True,
+        verbose_name=_('Минимальная сумма снятия'),
+    )
+    maximum_withdrawal_amount = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        null=True,
+        blank=True,
+        verbose_name=_('Максимальная сумма снятия'),
+    )
+    withdrawal_deadline = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Крайний срок снятия'),
+    )
+    minimum_balance = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        default=0,
+        verbose_name=_('Неснижаемый остаток'),
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ['opened_on']
@@ -164,6 +194,16 @@ class DepositTerm(models.Model):
 
     def has_defined_current_rate(self) -> bool:
         return self.current_rate is not None
+
+    @property
+    def liquid_amount(self) -> Decimal:
+        balance = self.deposit.account.balance
+        if not self.withdrawal_allowed:
+            return Decimal()
+        available = max(balance - self.minimum_balance, Decimal())
+        if self.maximum_withdrawal_amount is not None:
+            return min(available, self.maximum_withdrawal_amount)
+        return available
 
 
 class DepositRatePeriod(models.Model):
@@ -231,6 +271,7 @@ class DepositPrincipalEvent(models.Model):
     class Type(models.TextChoices):
         FUNDING = 'funding', _('Финансирование')
         OPENING_POSITION = 'opening_position', _('Начальная позиция')
+        WITHDRAWAL = 'withdrawal', _('Снятие')
 
     deposit = models.ForeignKey(
         Deposit,
@@ -251,6 +292,19 @@ class DepositPrincipalEvent(models.Model):
         on_delete=models.PROTECT,
         related_name='deposit_funding_events',
     )
+    destination_account = models.ForeignKey(
+        Account,
+        blank=True,
+        null=True,
+        on_delete=models.PROTECT,
+        related_name='deposit_withdrawal_events',
+    )
+    exception_reason = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        blank=True,
+        default='',
+        verbose_name=_('Причина исключения'),
+    )
     confirmed_at = models.DateTimeField(auto_now_add=True)
 
     objects = DepositPrincipalEventQuerySet.as_manager()
@@ -262,6 +316,7 @@ class DepositPrincipalEvent(models.Model):
                 condition=(
                     Q(type='funding', amount__gt=0)
                     | Q(type='opening_position', amount__gte=0)
+                    | Q(type='withdrawal', amount__gt=0)
                 ),
                 name='deposit_principal_event_amount_valid',
             ),
@@ -271,6 +326,11 @@ class DepositPrincipalEvent(models.Model):
                     | Q(
                         type='opening_position',
                         source_account__isnull=True,
+                    )
+                    | Q(
+                        type='withdrawal',
+                        source_account__isnull=True,
+                        destination_account__isnull=False,
                     )
                 ),
                 name='deposit_principal_event_source_valid',

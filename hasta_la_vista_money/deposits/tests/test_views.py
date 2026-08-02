@@ -71,6 +71,55 @@ class DepositViewSmokeTests(TestCase):
             f'href="{deposit.get_absolute_url()}"',
         )
 
+    def test_user_withdraws_liquid_amount_from_detail_card(self) -> None:
+        """The detail workflow transfers the permitted liquid principal."""
+        destination = Account.objects.create(
+            user=self.user,
+            name_account='Основной счёт',
+            type_account=constants.ACCOUNT_TYPE_DEBIT,
+            currency='RUB',
+            balance=Decimal('0.00'),
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        opened_on = timezone.localdate()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Вклад для снятия',
+                bank='SBERBANK',
+                currency='RUB',
+                balance=Decimal('1000.00'),
+                opened_on=opened_on,
+                matures_on=opened_on + timedelta(days=184),
+                annual_rate=Decimal('14.25'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        term.withdrawal_allowed = True
+        term.maximum_withdrawal_amount = Decimal('300.00')
+        term.minimum_balance = Decimal('700.00')
+        term.save()
+
+        detail_response = self.client.get(deposit.get_absolute_url())
+        self.assertContains(detail_response, 'Ликвидная сумма')
+        self.assertContains(detail_response, '300.00')
+
+        response = self.client.post(
+            reverse('deposits:withdraw', args=[deposit.pk]),
+            {
+                'destination_account': destination.pk,
+                'amount': '300.00',
+                'effective_on': opened_on.isoformat(),
+            },
+        )
+
+        self.assertRedirects(response, deposit.get_absolute_url())
+        deposit.account.refresh_from_db()
+        destination.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('700.00'))
+        self.assertEqual(destination.balance, Decimal('300.00'))
+
     def test_user_creates_deposit_funded_from_owned_account(self) -> None:
         """Funding from an owned account creates deposit, records FUNDING event,
         and preserves total balance."""
