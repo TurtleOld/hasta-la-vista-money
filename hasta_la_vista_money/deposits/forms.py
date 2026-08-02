@@ -274,9 +274,9 @@ class CreateDepositForm(forms.Form):
                 'minimum_withdrawal_amount',
                 'maximum_withdrawal_amount',
                 'withdrawal_deadline',
-                'minimum_balance',
             ):
                 cleaned_data[field_name] = None
+            cleaned_data['minimum_balance'] = Decimal()
             return
         minimum = cleaned_data.get('minimum_withdrawal_amount')
         maximum = cleaned_data.get('maximum_withdrawal_amount')
@@ -338,9 +338,6 @@ class WithdrawDepositForm(forms.Form):
         max_length=constants.TWO_HUNDRED_FIFTY,
         widget=forms.Textarea(attrs={'rows': 2}),
         label=_('Причина фактического исключения'),
-        help_text=_(
-            'Укажите только если банк уже провёл снятие в нарушение условий.',
-        ),
     )
 
     def __init__(

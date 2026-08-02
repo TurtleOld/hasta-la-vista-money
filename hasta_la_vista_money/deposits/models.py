@@ -197,7 +197,6 @@ class DepositTerm(models.Model):
 
     @property
     def liquid_amount(self) -> Decimal:
-        """Return principal available under the current withdrawal terms."""
         balance = self.deposit.account.balance
         if not self.withdrawal_allowed:
             return Decimal()

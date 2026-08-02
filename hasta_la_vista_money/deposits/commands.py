@@ -25,8 +25,6 @@ class ForecastTerms:
 
 @dataclass(frozen=True)
 class WithdrawalTerms:
-    """Contract conditions that determine a deposit's liquid principal."""
-
     withdrawal_allowed: bool = False
     minimum_withdrawal_amount: Decimal | None = None
     maximum_withdrawal_amount: Decimal | None = None
@@ -148,8 +146,6 @@ class RecalculateInterestForecastCommand:
 
 @dataclass(frozen=True)
 class WithdrawDepositCommand:
-    """Move a permitted part of deposit principal to an owned account."""
-
     user: User
     deposit_id: int
     destination_account_id: int
