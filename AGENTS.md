@@ -615,6 +615,32 @@ git push
 
 Release Please подхватит его при следующем запуске и обновит PR с changelog.
 
+### Правила заголовков PR
+
+Заголовок PR **обязан** следовать тому же формату Conventional Commits, что и коммиты:
+
+```
+<type>(<scope>): <description>
+```
+
+**Важно:**
+- Заголовок PR пишется **на английском языке**. Release Please формирует changelog из заголовков PR, и английский заголовок гарантирует читаемый changelog.
+- Тип и описание — строчными буквами.
+- Scope соответствует Django-приложению: `finance_account`, `receipts`, `expense`, `income`, `loan`, `budget`, `api`, `auth`.
+
+**Примеры:**
+```bash
+# ✅ Правильно
+feat(finance_account): capitalize actual interest payments
+fix(receipts): prevent delete errors on missing receipt
+refactor(loan): extract amortization schedule calculator
+
+# ❌ Неправильно
+feat(finance_account): капитализировать фактические проценты
+Fix receipt delete errors
+FEAT: add new feature
+```
+
 ---
 
 ## 📖 Дополнительные ресурсы
