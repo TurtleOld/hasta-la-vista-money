@@ -81,6 +81,58 @@ class DepositViewSmokeTests(TestCase):
             f'href="{deposit.get_absolute_url()}"',
         )
 
+    def test_user_adds_personal_bank_from_create_form_without_losing_terms(
+        self,
+    ) -> None:
+        """Adding a personal bank mid-form keeps the entered contract terms.
+
+        The deposit form renders a quick-add control for the bank field
+        (see deposit_form.html + finance_account:quick_bank) that lets the
+        browser create a personal bank via AJAX and select it without a
+        page reload. This smoke-tests the two HTTP calls that flow
+        performs, in order, and confirms the deposit is created against
+        the freshly added bank.
+        """
+        form_response = self.client.get(reverse('deposits:create'))
+        self.assertContains(form_response, 'data-qb-root')
+        self.assertContains(
+            form_response,
+            reverse('finance_account:quick_bank'),
+        )
+
+        quick_add_response = self.client.post(
+            reverse('finance_account:quick_bank'),
+            {'name': 'Мой карманный банк'},
+        )
+        self.assertEqual(quick_add_response.status_code, constants.SUCCESS_CODE)
+        payload = quick_add_response.json()
+        self.assertTrue(payload['ok'])
+        personal_bank = Bank.objects.get(pk=payload['id'])
+        self.assertFalse(personal_bank.is_system)
+
+        opened_on = timezone.localdate()
+        matures_on = opened_on + timedelta(days=184)
+        create_response = self.client.post(
+            reverse('deposits:create'),
+            {
+                'opening_method': 'opening_position',
+                'rate_kind': 'fixed',
+                'name': 'Вклад в своём банке',
+                'bank': personal_bank.pk,
+                'currency': 'RUB',
+                'balance': '50000.00',
+                'opened_on': opened_on.isoformat(),
+                'matures_on': matures_on.isoformat(),
+                'annual_rate': '12.00',
+                'tracking_started_on': opened_on.isoformat(),
+            },
+        )
+
+        deposit = Deposit.objects.get(account__user=self.user)
+        self.assertRedirects(create_response, deposit.get_absolute_url())
+        self.assertEqual(deposit.bank, personal_bank)
+        self.assertEqual(deposit.account.bank, personal_bank)
+
     def test_user_withdraws_liquid_amount_from_detail_card(self) -> None:
         """The detail workflow transfers the permitted liquid principal."""
         destination = Account.objects.create(
