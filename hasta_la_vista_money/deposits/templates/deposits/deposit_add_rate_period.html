@@ -18,10 +18,24 @@
             <b>{% translate 'Новый период ставки' %}</b>
         </div>
         <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Новый период ставки' %}</h2></div>
             <form method="post" novalidate>
                 {% csrf_token %}
-                {{ form.as_p }}
-                <button type="submit" class="btn btn-primary">{% translate 'Сохранить' %}</button>
+                <div class="accounts-cmp-body">
+                    {% for field in form %}
+                    <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}">
+                        <h3>{{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}</h3>
+                        <div class="accounts-cmp-input">
+                            {% include 'forms/_field.html' with field=field %}
+                        </div>
+                    </section>
+                    {% endfor %}
+                </div>
+                <div class="accounts-composer-ft">
+                    <div class="ft-actions">
+                        <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Сохранить' %}</button>
+                    </div>
+                </div>
             </form>
         </section>
     </div>
