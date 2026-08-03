@@ -38,6 +38,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositTerm,
 )
 from hasta_la_vista_money.deposits.repositories import DepositRepository
+from hasta_la_vista_money.finance_account.models import Bank
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
     TransferMoneyLogRepository,
@@ -220,10 +221,11 @@ class DepositService:
         account.type_account = constants.ACCOUNT_TYPE_DEPOSIT
         account.save(update_fields=['type_account', 'updated_at'])
 
+        bank_instance = self._resolve_bank(command.bank)
         deposit = self.deposit_repository.create_deposit(
             account=account,
             name=command.name,
-            bank=command.bank,
+            bank=bank_instance,
         )
         term = self.deposit_repository.create_term(
             deposit=deposit,
@@ -302,6 +304,12 @@ class DepositService:
                 _('Остаток вклада не может быть отрицательным.'),
             )
 
+    def _resolve_bank(self, bank: 'Bank | str') -> Bank:
+        """Resolve a bank code or instance to a Bank instance."""
+        if isinstance(bank, Bank):
+            return bank
+        return Bank.objects.get(code=bank)
+
     def _create_agreement(
         self,
         *,
@@ -322,17 +330,18 @@ class DepositService:
         Returns:
             The persisted Deposit with associated account, term, and rate.
         """
+        bank_instance = self._resolve_bank(command.bank)
         account = self.account_repository.create_deposit_account(
             user=command.user,
             name_account=command.name,
-            bank=command.bank,
+            bank=bank_instance,
             currency=command.currency,
             balance=balance,
         )
         deposit = self.deposit_repository.create_deposit(
             account=account,
             name=command.name,
-            bank=command.bank,
+            bank=bank_instance,
         )
         term = self.deposit_repository.create_term(
             deposit=deposit,

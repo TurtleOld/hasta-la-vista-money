@@ -16,6 +16,7 @@ from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_SBERBANK,
 )
 from hasta_la_vista_money.finance_account.factories import AccountFactory
+from hasta_la_vista_money.finance_account.models import Bank
 from hasta_la_vista_money.finance_account.services.bank_calculators import (
     DefaultBankCalculator,
     RaiffeisenbankCalculator,
@@ -53,11 +54,12 @@ class TestSberbankCalculator(TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.user = UserFactory()
+        bank = Bank.objects.get(code=BANK_SBERBANK)
         self.account = cast(
             'Account',
             AccountFactory(
                 user=self.user,
-                bank=BANK_SBERBANK,
+                bank=bank,
                 type_account='CreditCard',
             ),
         )
@@ -107,11 +109,12 @@ class TestRaiffeisenbankCalculator(TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.user = UserFactory()
+        bank = Bank.objects.get(code=BANK_RAIFFEISENBANK)
         self.account = cast(
             'Account',
             AccountFactory(
                 user=self.user,
-                bank=BANK_RAIFFEISENBANK,
+                bank=bank,
                 type_account='CreditCard',
             ),
         )
@@ -190,9 +193,10 @@ class TestDefaultBankCalculator(TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.user = UserFactory()
+        bank = Bank.objects.get(code=BANK_DEFAULT)
         self.account = cast(
             'Account',
-            AccountFactory(user=self.user, bank=BANK_DEFAULT),
+            AccountFactory(user=self.user, bank=bank),
         )
         self.calculator = DefaultBankCalculator()
         self.purchase_start = _aware_datetime(2024, 1, 1, 0, 0, 0)

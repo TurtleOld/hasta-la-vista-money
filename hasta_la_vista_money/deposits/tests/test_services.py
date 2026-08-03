@@ -29,6 +29,7 @@ from hasta_la_vista_money.deposits.models import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    Bank,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.transactions.models import Transaction
@@ -39,6 +40,14 @@ from hasta_la_vista_money.users.services.dashboard_kpis import (
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
+
+
+def _sberbank() -> Bank:
+    bank, _ = Bank.objects.get_or_create(
+        code='SBERBANK',
+        defaults={'name': 'Сбербанк', 'is_system': True},
+    )
+    return bank
 
 
 class DepositServiceIntegrationTests(TestCase):
@@ -56,7 +65,7 @@ class DepositServiceIntegrationTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Пополняемый вклад',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('500.00'),
                 opened_on=date(2026, 1, 1),
@@ -114,7 +123,7 @@ class DepositServiceIntegrationTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Вклад с лимитами',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('500.00'),
                 opened_on=date(2026, 1, 1),
@@ -171,7 +180,7 @@ class DepositServiceIntegrationTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Вклад с исключением',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('500.00'),
                 opened_on=date(2026, 1, 1),
@@ -221,7 +230,7 @@ class DepositServiceIntegrationTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Атомарное пополнение',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('500.00'),
                 opened_on=date(2026, 1, 1),
@@ -273,7 +282,7 @@ class DepositServiceIntegrationTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Вклад с прогнозом',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('500.00'),
                 opened_on=date(2026, 1, 1),
@@ -323,7 +332,7 @@ class DepositServiceIntegrationTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Вклад с будущим прогнозом',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('500.00'),
                 opened_on=date(2026, 1, 1),
@@ -365,7 +374,7 @@ class DepositServiceIntegrationTests(TestCase):
             OpenExistingDepositCommand(
                 user=user,
                 name='Неизменяемая история',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 current_balance=Decimal('75000.00'),
                 tracking_started_on=date(2026, 7, 15),
@@ -440,7 +449,7 @@ class DepositServiceIntegrationTests(TestCase):
                     FundDepositCommand(
                         user=user,
                         name='Недоступный вклад',
-                        bank='SBERBANK',
+                        bank=_sberbank(),
                         currency='RUB',
                         amount=amount,
                         source_account_id=source_account_id,
@@ -479,7 +488,7 @@ class DepositServiceIntegrationTests(TestCase):
                 FundDepositCommand(
                     user=user,
                     name='Атомарный вклад',
-                    bank='SBERBANK',
+                    bank=_sberbank(),
                     currency='RUB',
                     amount=Decimal('500.00'),
                     source_account_id=source_account.pk,
@@ -533,7 +542,7 @@ class DepositServiceIntegrationTests(TestCase):
                 FundDepositCommand(
                     user=user,
                     name='Атомарный баланс',
-                    bank='SBERBANK',
+                    bank=_sberbank(),
                     currency='RUB',
                     amount=Decimal('500.00'),
                     source_account_id=source_account.pk,
@@ -562,7 +571,7 @@ class DepositServiceIntegrationTests(TestCase):
             OpenExistingDepositCommand(
                 user=user,
                 name='Действующий вклад',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 current_balance=Decimal('75000.00'),
                 tracking_started_on=date(2026, 7, 15),
@@ -599,7 +608,7 @@ class DepositServiceIntegrationTests(TestCase):
             user=user,
             name_account='Основной счёт',
             type_account='Debit',
-            bank='SBERBANK',
+            bank=_sberbank(),
             currency='RUB',
             balance=Decimal('200000.00'),
         )
@@ -610,7 +619,7 @@ class DepositServiceIntegrationTests(TestCase):
             FundDepositCommand(
                 user=user,
                 name='Новый вклад',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 amount=Decimal('150000.00'),
                 source_account_id=source_account.pk,
@@ -649,7 +658,7 @@ class DepositServiceIntegrationTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Надёжный доход',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('150000.00'),
                 opened_on=date(2026, 8, 1),
@@ -662,7 +671,7 @@ class DepositServiceIntegrationTests(TestCase):
         self.assertIsInstance(deposit, Deposit)
         self.assertEqual(deposit.account.user, user)
         self.assertEqual(deposit.name, 'Надёжный доход')
-        self.assertEqual(deposit.bank, 'SBERBANK')
+        self.assertEqual(deposit.bank.code, 'SBERBANK')
         self.assertEqual(deposit.account.user, user)
         self.assertEqual(deposit.account.type_account, ACCOUNT_TYPE_DEPOSIT)
         self.assertEqual(deposit.account.currency, 'RUB')
@@ -697,7 +706,7 @@ class DepositServiceIntegrationTests(TestCase):
                 user=user,
                 name_account='Обход сервиса',
                 type_account=ACCOUNT_TYPE_DEPOSIT,
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
             )
 
@@ -712,7 +721,7 @@ class DepositServiceIntegrationTests(TestCase):
                 CreateDepositCommand(
                     user=user,
                     name='Неверный срок',
-                    bank='SBERBANK',
+                    bank=_sberbank(),
                     currency='RUB',
                     balance=Decimal('1000.00'),
                     opened_on=date(2027, 1, 1),
@@ -739,7 +748,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
             user=user,
             name_account='Production вклад',
             type_account='Debit',
-            bank='SBERBANK',
+            bank=_sberbank(),
             currency='RUB',
             balance=Decimal('75000.00'),
         )
@@ -753,7 +762,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                 user=user,
                 account_id=account.pk,
                 name='Production вклад',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 opened_on=date(2026, 6, 1),
                 matures_on=date(2026, 12, 1),
                 annual_rate=Decimal('14.00'),
@@ -805,7 +814,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                     user=user,
                     account_id=account.pk,
                     name='Попытка чужого счёта',
-                    bank='SBERBANK',
+                    bank=_sberbank(),
                     opened_on=date(2026, 6, 1),
                     matures_on=date(2026, 12, 1),
                     annual_rate=Decimal('14.00'),
@@ -825,7 +834,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Уже вклад',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('1000.00'),
                 opened_on=date(2026, 1, 1),
@@ -841,7 +850,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                     user=user,
                     account_id=existing_deposit.account_id,
                     name='Повторное преобразование',
-                    bank='SBERBANK',
+                    bank=_sberbank(),
                     opened_on=date(2026, 6, 1),
                     matures_on=date(2026, 12, 1),
                     annual_rate=Decimal('14.00'),
@@ -863,7 +872,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
             user=user,
             name_account='Production вклад',
             type_account='Debit',
-            bank='SBERBANK',
+            bank=_sberbank(),
             currency='RUB',
             balance=Decimal('75000.00'),
         )
@@ -872,7 +881,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
             user=user,
             account_id=account.pk,
             name='Production вклад',
-            bank='SBERBANK',
+            bank=_sberbank(),
             opened_on=date(2026, 6, 1),
             matures_on=date(2026, 12, 1),
             annual_rate=Decimal('14.00'),
@@ -900,7 +909,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
             user=user,
             name_account='Production вклад',
             type_account='Debit',
-            bank='SBERBANK',
+            bank=_sberbank(),
             currency='RUB',
             balance=Decimal('75000.00'),
         )
@@ -912,7 +921,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                     user=user,
                     account_id=account.pk,
                     name='Неверный срок',
-                    bank='SBERBANK',
+                    bank=_sberbank(),
                     opened_on=date(2027, 1, 1),
                     matures_on=date(2026, 1, 1),
                     annual_rate=Decimal('14.00'),
@@ -933,7 +942,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
             user=user,
             name_account='Production вклад',
             type_account='Debit',
-            bank='SBERBANK',
+            bank=_sberbank(),
             currency='RUB',
             balance=Decimal('75000.00'),
         )
@@ -952,7 +961,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                     user=user,
                     account_id=account.pk,
                     name='Production вклад',
-                    bank='SBERBANK',
+                    bank=_sberbank(),
                     opened_on=date(2026, 6, 1),
                     matures_on=date(2026, 12, 1),
                     annual_rate=Decimal('14.00'),
@@ -981,7 +990,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
             user=user,
             name_account='Production вклад',
             type_account='Debit',
-            bank='SBERBANK',
+            bank=_sberbank(),
             currency='RUB',
             balance=Decimal('75000.00'),
         )
@@ -999,7 +1008,7 @@ class ConvertAccountToDepositServiceTests(TestCase):
                 user=user,
                 account_id=account.pk,
                 name='Production вклад',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 opened_on=date(2026, 6, 1),
                 matures_on=date(2026, 12, 1),
                 annual_rate=Decimal('14.00'),
@@ -1035,7 +1044,7 @@ class AddFloatingRatePeriodServiceTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Плавающий вклад',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('50000.00'),
                 opened_on=opened_on,
@@ -1082,7 +1091,7 @@ class AddFloatingRatePeriodServiceTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Фикс вклад',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('10000.00'),
                 opened_on=date(2026, 1, 1),
@@ -1320,7 +1329,7 @@ class RecalculateInterestForecastServiceTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Вклад для прогноза',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=balance or Decimal('100000.00'),
                 opened_on=opened_on or date(2026, 1, 1),
@@ -1409,7 +1418,7 @@ class RecalculateInterestForecastServiceTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Плавающий вклад для прогноза',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('100000.00'),
                 opened_on=date(2026, 1, 1),
@@ -1525,7 +1534,7 @@ class CapitalizeInterestServiceTests(TestCase):
             CreateDepositCommand(
                 user=user,
                 name='Вклад с капитализацией',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=balance or Decimal('100000.00'),
                 opened_on=date(2026, 1, 1),

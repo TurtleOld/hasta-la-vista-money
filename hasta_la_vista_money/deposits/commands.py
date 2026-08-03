@@ -1,9 +1,13 @@
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from hasta_la_vista_money.deposits.models import DepositTerm
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.models import Bank
 
 
 @dataclass(frozen=True)
@@ -45,7 +49,7 @@ class TopUpTerms:
 class CreateDepositCommand:
     user: User
     name: str
-    bank: str
+    bank: 'str | Bank'
     currency: str
     balance: Decimal
     opened_on: date
@@ -67,7 +71,7 @@ class FundDepositCommand:
 
     user: User
     name: str
-    bank: str
+    bank: 'str | Bank'
     currency: str
     amount: Decimal
     source_account_id: int
@@ -93,7 +97,7 @@ class ConvertAccountToDepositCommand:
     user: User
     account_id: int
     name: str
-    bank: str
+    bank: 'str | Bank'
     opened_on: date
     matures_on: date
     annual_rate: Decimal
@@ -115,7 +119,7 @@ class OpenExistingDepositCommand:
 
     user: User
     name: str
-    bank: str
+    bank: 'str | Bank'
     currency: str
     current_balance: Decimal
     tracking_started_on: date

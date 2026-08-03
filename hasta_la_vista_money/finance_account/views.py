@@ -1811,3 +1811,23 @@ class QuickCategoryCreateView(LoginRequiredMixin, View):
         return JsonResponse(
             {'ok': True, 'id': category.pk, 'name': category.name},
         )
+
+
+class QuickBankCreateView(LoginRequiredMixin, View):
+    """Lightweight JSON endpoint for adding a personal bank inline.
+
+    Lets the deposit creation form add a personal bank without leaving
+    the page, so the contract terms already entered stay intact.
+    """
+
+    def post(self, request: Any, *args: Any, **kwargs: Any) -> JsonResponse:
+        name = (request.POST.get('name') or '').strip()
+        bank_service = request.container.finance_account.bank_service()
+        try:
+            bank = bank_service.get_or_create_user_bank(request.user, name)
+        except ValidationError as error:
+            return JsonResponse(
+                {'ok': False, 'error': error.message},
+                status=400,
+            )
+        return JsonResponse({'ok': True, 'id': bank.pk, 'name': bank.name})

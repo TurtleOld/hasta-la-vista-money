@@ -3,20 +3,71 @@ from typing import ClassVar
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.urls import reverse
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
-from hasta_la_vista_money.finance_account.bank_constants import (
-    BANK_CHOICES,
-    BANK_DEFAULT,
-)
 from hasta_la_vista_money.finance_account.currencies import (
     currency_choices,
     get_default_currency,
 )
 from hasta_la_vista_money.users.models import User
+
+
+class Bank(models.Model):
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name=_('Код банка'),
+    )
+    name = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        verbose_name=_('Название банка'),
+    )
+    is_system = models.BooleanField(
+        default=False,
+        verbose_name=_('Системный банк'),
+    )
+    user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='personal_banks',
+        verbose_name=_('Владелец'),
+        help_text=_('Только для личных банков пользователя'),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Дата создания'),
+    )
+
+    class Meta:
+        verbose_name = _('Банк')
+        verbose_name_plural = _('Банки')
+        ordering: ClassVar[list[str]] = ['name']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['name', 'user'],
+                name='unique_bank_name_per_user',
+                condition=Q(is_system=False),
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def natural_key(self) -> tuple[str]:
+        return (self.code,)
+
+
+def _get_default_bank_pk() -> int:
+    return Bank.objects.get_or_create(
+        code='-',
+        defaults={'name': '—', 'is_system': True},
+    )[0].pk
 
 
 class AccountQuerySet(models.QuerySet['Account']):
@@ -121,7 +172,6 @@ class Account(TimeStampedModel):
     TYPE_ACCOUNT_LIST: ClassVar[list[tuple[str, str | Promise]]] = list(
         constants.ACCOUNT_TYPE_CHOICES,
     )
-    BANK_LIST: ClassVar[tuple[tuple[str, str | Promise], ...]] = BANK_CHOICES
 
     user = models.ForeignKey(
         User,
@@ -138,12 +188,12 @@ class Account(TimeStampedModel):
         default=TYPE_ACCOUNT_LIST[1][0],
         verbose_name=_('Тип счёта'),
     )
-    bank = models.CharField(
-        max_length=20,
-        choices=BANK_LIST,
-        default=BANK_DEFAULT,
+    bank = models.ForeignKey(
+        'Bank',
+        on_delete=models.PROTECT,
         verbose_name=_('Банк'),
         help_text=_('Банк, выпустивший карту или обслуживающий счёт'),
+        default=_get_default_bank_pk,
     )
     balance = models.DecimalField(
         max_digits=constants.TWENTY,
