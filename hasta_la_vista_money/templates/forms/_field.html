@@ -9,9 +9,23 @@
                 {% render_field field class+="rounded border-gray-300 text-green-600 shadow-sm focus:border-green-500 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-green-500" %}
                 <span>{{ field.label }}</span>
             </label>
+        {% elif field.field.widget.input_type == 'radio' %}
+            {% if field.label %}
+                <label class="accounts-plain-label block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {{ field.label }}{% if field.field.required %}<span class="ml-1 text-red-500">*</span>{% endif %}
+                </label>
+            {% endif %}
+            <div class="accounts-radio-group">
+                {% for subwidget in field.subwidgets %}
+                    <label for="{{ subwidget.id_for_label }}" class="accounts-radio-option">
+                        {{ subwidget.tag }}
+                        <span>{{ subwidget.choice_label }}</span>
+                    </label>
+                {% endfor %}
+            </div>
         {% else %}
             {% if field.label %}
-                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                <label class="accounts-plain-label block text-sm font-medium text-gray-700 dark:text-gray-200">
                     {{ field.label }}{% if field.field.required %}<span class="ml-1 text-red-500">*</span>{% endif %}
                 </label>
             {% endif %}
