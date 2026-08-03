@@ -10,11 +10,19 @@ from hasta_la_vista_money.deposits.forms import (
     CreateDepositForm,
 )
 from hasta_la_vista_money.deposits.models import DepositTerm
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
+
+
+def _sberbank() -> Bank:
+    bank, _ = Bank.objects.get_or_create(
+        code='SBERBANK',
+        defaults={'name': 'Сбербанк', 'is_system': True},
+    )
+    return bank
 
 
 class CreateDepositFormTests(TestCase):
@@ -61,7 +69,7 @@ class CreateDepositFormTests(TestCase):
             user=user,
             data={
                 'name': 'Новый вклад',
-                'bank': 'SBERBANK',
+                'bank': _sberbank().pk,
                 'currency': 'RUB',
                 'balance': '50000.00',
                 'opened_on': '2026-08-01',
@@ -92,7 +100,7 @@ class CreateDepositFormTests(TestCase):
             user=user,
             data={
                 'name': 'Действующий вклад',
-                'bank': 'SBERBANK',
+                'bank': _sberbank().pk,
                 'currency': 'RUB',
                 'balance': '50000.00',
                 'opened_on': '2026-06-01',
@@ -107,10 +115,10 @@ class CreateDepositFormTests(TestCase):
 
 
 class CreateDepositFormForecastTermsTests(TestCase):
-    def _base_data(self) -> dict[str, str]:
+    def _base_data(self) -> dict[str, object]:
         return {
             'name': 'Вклад с прогнозом',
-            'bank': 'SBERBANK',
+            'bank': _sberbank().pk,
             'currency': 'RUB',
             'balance': '50000.00',
             'opened_on': '2026-06-01',

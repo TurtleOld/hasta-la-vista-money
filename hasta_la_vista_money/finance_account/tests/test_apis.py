@@ -7,7 +7,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.users.models import User
 
 
@@ -21,6 +21,7 @@ class TestAccountAPI(TestCase):
             username='testuser',
             password='testpass123',  # nosec B106: test-only password
         )
+        self.bank = Bank.objects.get(code='SBERBANK')
         self.refresh = RefreshToken.for_user(self.user)
         self.access_token = str(self.refresh.access_token)
         self.account = Account.objects.create(
@@ -28,6 +29,7 @@ class TestAccountAPI(TestCase):
             name_account='Test Account',
             balance=Decimal('1000.00'),
             currency='RUB',
+            bank=self.bank,
         )
 
     def test_account_api_list_authenticated(self) -> None:
@@ -57,6 +59,7 @@ class TestAccountAPI(TestCase):
             'name_account': 'New Account',
             'balance': Decimal('500.00'),
             'currency': 'USD',
+            'bank': self.bank.pk,
         }
 
         self.client.force_authenticate(user=self.user)  # type: ignore[attr-defined]
@@ -102,7 +105,7 @@ class TestAccountAPI(TestCase):
         data = {
             'name_account': 'Credit Card',
             'type_account': 'Credit',
-            'bank': 'SBERBANK',
+            'bank': self.bank.pk,
             'limit_credit': Decimal('10000.00'),
             'payment_due_date': '2024-12-31',
             'grace_period_days': 30,
@@ -127,7 +130,7 @@ class TestAccountAPI(TestCase):
             {
                 'name_account': 'Deposit bypass',
                 'type_account': 'Deposit',
-                'bank': 'SBERBANK',
+                'bank': self.bank.pk,
                 'balance': '1000.00',
                 'currency': 'RUB',
             },

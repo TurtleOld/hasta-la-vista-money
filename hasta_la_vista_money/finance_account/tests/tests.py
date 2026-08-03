@@ -28,6 +28,7 @@ from hasta_la_vista_money.finance_account.forms import (
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    Bank,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.prepare import (
@@ -743,6 +744,9 @@ class TestAccountBusinessLogic(TestCase):
         self.account2 = Account.objects.get(name_account='Основной счёт')
         self.account1.user = self.user
         self.account2.user = self.user
+        bank = Bank.objects.get(code='SBERBANK')
+        self.account1.bank = bank
+        self.account2.bank = bank
         self.account1.save()
         self.account2.save()
         self.container = ApplicationContainer()
@@ -859,6 +863,7 @@ class TestAddAccountFormRefactored(TestCase):
             username='testuser',
             password='testpass123',  # nosec B106: test-only password
         )
+        self.sberbank = Bank.objects.get(code='SBERBANK')
 
     def test_form_initialization(self) -> None:
         """Test form initialization with default values."""
@@ -892,7 +897,7 @@ class TestAddAccountFormRefactored(TestCase):
         form_data = {
             'name_account': 'Credit Card',
             'type_account': ACCOUNT_TYPE_CREDIT,
-            'bank': 'SBERBANK',
+            'bank': self.sberbank.pk,
             'limit_credit': Decimal('10000.00'),
             'payment_due_date': timezone.now().date(),
             'grace_period_days': 30,

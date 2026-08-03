@@ -9,11 +9,19 @@ from django.test import TestCase
 
 from hasta_la_vista_money.constants import ACCOUNT_TYPE_DEPOSIT
 from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
+
+
+def _sberbank() -> Bank:
+    bank, _ = Bank.objects.get_or_create(
+        code='SBERBANK',
+        defaults={'name': 'Сбербанк', 'is_system': True},
+    )
+    return bank
 
 
 class ConvertAccountToDepositCommandTests(TestCase):
@@ -22,7 +30,7 @@ class ConvertAccountToDepositCommandTests(TestCase):
             user=user,
             name_account='Production вклад',
             type_account='Debit',
-            bank='SBERBANK',
+            bank=_sberbank(),
             currency='RUB',
             balance=Decimal('75000.00'),
         )

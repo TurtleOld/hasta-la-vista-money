@@ -13,7 +13,7 @@ from hasta_la_vista_money.finance_account.bank_constants import (
     BANK_RAIFFEISENBANK,
     BANK_SBERBANK,
 )
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.finance_account.services.protocols import (
     BankCalculatorProtocol,
 )
@@ -203,14 +203,14 @@ class DefaultBankCalculator:
 
 
 def create_bank_calculator(
-    bank: str,
+    bank: 'Bank | str',
     transaction_repository: 'TransactionRepository | None' = None,
     receipt_repository: 'ReceiptRepository | None' = None,
 ) -> BankCalculatorProtocol:
     """Create bank calculator based on bank type.
 
     Args:
-        bank: Bank identifier.
+        bank: Bank instance or bank code string.
         transaction_repository: Repository for transaction data access (required
             for Raiffeisenbank).
         receipt_repository: Repository for receipt data access (required
@@ -223,9 +223,10 @@ def create_bank_calculator(
         ValueError: If required repositories are not provided for
             Raiffeisenbank.
     """
-    if bank == BANK_SBERBANK:
+    code = bank.code if not isinstance(bank, str) else bank
+    if code == BANK_SBERBANK:
         return SberbankCalculator()
-    if bank == BANK_RAIFFEISENBANK:
+    if code == BANK_RAIFFEISENBANK:
         if transaction_repository is None or receipt_repository is None:
             raise ValueError(
                 'Transaction and receipt repositories are required for '

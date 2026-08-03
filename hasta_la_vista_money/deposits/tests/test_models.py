@@ -10,7 +10,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositRatePeriod,
     DepositTerm,
 )
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
@@ -18,17 +18,18 @@ if TYPE_CHECKING:
 
 
 def _make_deposit(user: 'User') -> Deposit:
+    bank = Bank.objects.get(code='SBERBANK')
     account = Account.objects.create_deposit(
         user=user,
         name_account='Вклад для теста',
-        bank='SBERBANK',
+        bank=bank,
         currency='RUB',
         balance=Decimal('10000.00'),
     )
     return Deposit.objects.create(
         account=account,
         name='Вклад',
-        bank='SBERBANK',
+        bank=bank,
     )
 
 

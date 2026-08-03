@@ -16,17 +16,26 @@ from hasta_la_vista_money.deposits.models import (
     DepositPrincipalEvent,
     DepositTerm,
 )
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.users.factories import UserFactory
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.users.models import User
 
 
+def _sberbank() -> Bank:
+    bank, _ = Bank.objects.get_or_create(
+        code='SBERBANK',
+        defaults={'name': 'Сбербанк', 'is_system': True},
+    )
+    return bank
+
+
 class DepositViewSmokeTests(TestCase):
     def setUp(self) -> None:
         self.user = cast('User', UserFactory())
         self.client.force_login(self.user)
+        self.sberbank_pk = _sberbank().pk
 
     def test_user_creates_and_opens_term_deposit(self) -> None:
         opened_on = timezone.localdate()
@@ -37,7 +46,7 @@ class DepositViewSmokeTests(TestCase):
                 'opening_method': 'opening_position',
                 'rate_kind': 'fixed',
                 'name': 'Летний вклад',
-                'bank': 'SBERBANK',
+                'bank': self.sberbank_pk,
                 'currency': 'RUB',
                 'balance': '75000.00',
                 'opened_on': opened_on.isoformat(),
@@ -72,6 +81,58 @@ class DepositViewSmokeTests(TestCase):
             f'href="{deposit.get_absolute_url()}"',
         )
 
+    def test_user_adds_personal_bank_from_create_form_without_losing_terms(
+        self,
+    ) -> None:
+        """Adding a personal bank mid-form keeps the entered contract terms.
+
+        The deposit form renders a quick-add control for the bank field
+        (see deposit_form.html + finance_account:quick_bank) that lets the
+        browser create a personal bank via AJAX and select it without a
+        page reload. This smoke-tests the two HTTP calls that flow
+        performs, in order, and confirms the deposit is created against
+        the freshly added bank.
+        """
+        form_response = self.client.get(reverse('deposits:create'))
+        self.assertContains(form_response, 'data-qb-root')
+        self.assertContains(
+            form_response,
+            reverse('finance_account:quick_bank'),
+        )
+
+        quick_add_response = self.client.post(
+            reverse('finance_account:quick_bank'),
+            {'name': 'Мой карманный банк'},
+        )
+        self.assertEqual(quick_add_response.status_code, constants.SUCCESS_CODE)
+        payload = quick_add_response.json()
+        self.assertTrue(payload['ok'])
+        personal_bank = Bank.objects.get(pk=payload['id'])
+        self.assertFalse(personal_bank.is_system)
+
+        opened_on = timezone.localdate()
+        matures_on = opened_on + timedelta(days=184)
+        create_response = self.client.post(
+            reverse('deposits:create'),
+            {
+                'opening_method': 'opening_position',
+                'rate_kind': 'fixed',
+                'name': 'Вклад в своём банке',
+                'bank': personal_bank.pk,
+                'currency': 'RUB',
+                'balance': '50000.00',
+                'opened_on': opened_on.isoformat(),
+                'matures_on': matures_on.isoformat(),
+                'annual_rate': '12.00',
+                'tracking_started_on': opened_on.isoformat(),
+            },
+        )
+
+        deposit = Deposit.objects.get(account__user=self.user)
+        self.assertRedirects(create_response, deposit.get_absolute_url())
+        self.assertEqual(deposit.bank, personal_bank)
+        self.assertEqual(deposit.account.bank, personal_bank)
+
     def test_user_withdraws_liquid_amount_from_detail_card(self) -> None:
         """The detail workflow transfers the permitted liquid principal."""
         destination = Account.objects.create(
@@ -87,7 +148,7 @@ class DepositViewSmokeTests(TestCase):
             CreateDepositCommand(
                 user=self.user,
                 name='Вклад для снятия',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('1000.00'),
                 opened_on=opened_on,
@@ -135,7 +196,7 @@ class DepositViewSmokeTests(TestCase):
             CreateDepositCommand(
                 user=self.user,
                 name='Вклад для пополнения',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('500.00'),
                 opened_on=opened_on,
@@ -185,7 +246,7 @@ class DepositViewSmokeTests(TestCase):
                 'rate_kind': 'fixed',
                 'source_account': source_account.pk,
                 'name': 'Вклад переводом',
-                'bank': 'SBERBANK',
+                'bank': self.sberbank_pk,
                 'currency': 'RUB',
                 'balance': '60000.00',
                 'opened_on': opened_on.isoformat(),
@@ -221,7 +282,7 @@ class DepositViewSmokeTests(TestCase):
                 'rate_kind': 'fixed',
                 'source_account': source_account.pk,
                 'name': 'Рублёвый вклад',
-                'bank': 'SBERBANK',
+                'bank': self.sberbank_pk,
                 'currency': 'RUB',
                 'balance': '500.00',
                 'opened_on': opened_on.isoformat(),
@@ -251,7 +312,7 @@ class DepositViewSmokeTests(TestCase):
                 CreateDepositCommand(
                     user=other_user,
                     name='Чужой вклад',
-                    bank='SBERBANK',
+                    bank=_sberbank(),
                     currency='RUB',
                     balance=Decimal('10000.00'),
                     opened_on=opened_on,
@@ -271,6 +332,7 @@ class DepositAddRatePeriodViewSmokeTests(TestCase):
     def setUp(self) -> None:
         self.user = cast('User', UserFactory())
         self.client.force_login(self.user)
+        self.sberbank_pk = _sberbank().pk
 
     def _create_floating_deposit(self) -> Deposit:
         opened_on = timezone.localdate()
@@ -281,7 +343,7 @@ class DepositAddRatePeriodViewSmokeTests(TestCase):
                 'opening_method': 'opening_position',
                 'rate_kind': 'floating',
                 'name': 'Плавающий вклад',
-                'bank': 'SBERBANK',
+                'bank': self.sberbank_pk,
                 'currency': 'RUB',
                 'balance': '50000.00',
                 'opened_on': opened_on.isoformat(),
@@ -355,7 +417,7 @@ class DepositDetailFloatingRateDisplayTests(TestCase):
             CreateDepositCommand(
                 user=self.user,
                 name='Вклад с истёкшим периодом',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('20000.00'),
                 opened_on=opened_on,
@@ -383,7 +445,7 @@ class DepositDetailFloatingRateDisplayTests(TestCase):
             CreateDepositCommand(
                 user=self.user,
                 name='Вклад с истёкшим периодом (список)',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('20000.00'),
                 opened_on=opened_on,
@@ -406,6 +468,7 @@ class DepositRecalculateForecastViewSmokeTests(TestCase):
     def setUp(self) -> None:
         self.user = cast('User', UserFactory())
         self.client.force_login(self.user)
+        self.sberbank_pk = _sberbank().pk
 
     def _create_deposit(self) -> Deposit:
         service = ApplicationContainer().deposits.deposit_service()
@@ -414,7 +477,7 @@ class DepositRecalculateForecastViewSmokeTests(TestCase):
             CreateDepositCommand(
                 user=self.user,
                 name='Вклад для прогноза',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('100000.00'),
                 opened_on=opened_on,
@@ -484,7 +547,7 @@ class DepositRecalculateForecastViewSmokeTests(TestCase):
                 'custom_payout_dates': first_payout,
                 'business_day_convention': 'following',
                 'name': 'Вклад с индивидуальным расписанием',
-                'bank': 'SBERBANK',
+                'bank': self.sberbank_pk,
                 'currency': 'RUB',
                 'balance': '40000.00',
                 'opened_on': opened_on.isoformat(),
@@ -530,7 +593,7 @@ class CapitalizeInterestSmokeTests(TestCase):
             CreateDepositCommand(
                 user=self.user,
                 name='Вклад для капитализации',
-                bank='SBERBANK',
+                bank=_sberbank(),
                 currency='RUB',
                 balance=Decimal('100000.00'),
                 opened_on=timezone.localdate() - timedelta(days=30),

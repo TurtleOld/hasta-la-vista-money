@@ -14,6 +14,7 @@ from hasta_la_vista_money.constants import ACCOUNT_TYPE_CREDIT
 from hasta_la_vista_money.finance_account.factories import AccountFactory
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    Bank,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.finance_account.tests.helpers import (
@@ -739,3 +740,75 @@ class TestAjaxAccountsByGroupView(TestCase):
 
         NOTE: View removed - test disabled.
         """
+
+
+class TestQuickBankCreateView(TestCase):
+    """Integration tests for the inline personal-bank quick-add endpoint."""
+
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.other_user = cast('User', UserFactory())
+        self.client.force_login(self.user)
+
+    def test_creates_personal_bank_and_returns_it(self) -> None:
+        response = self.client.post(
+            reverse('finance_account:quick_bank'),
+            {'name': 'Мой карманный банк'},
+        )
+
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        payload = response.json()
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['name'], 'Мой карманный банк')
+
+        bank = Bank.objects.get(pk=payload['id'])
+        self.assertEqual(bank.user, self.user)
+        self.assertFalse(bank.is_system)
+
+    def test_reuses_existing_personal_bank_with_same_name(self) -> None:
+        first = self.client.post(
+            reverse('finance_account:quick_bank'),
+            {'name': 'Банк повторно'},
+        ).json()
+        second = self.client.post(
+            reverse('finance_account:quick_bank'),
+            {'name': 'Банк повторно'},
+        ).json()
+
+        self.assertEqual(first['id'], second['id'])
+        self.assertEqual(
+            Bank.objects.filter(user=self.user, name='Банк повторно').count(),
+            1,
+        )
+
+    def test_rejects_blank_name(self) -> None:
+        response = self.client.post(
+            reverse('finance_account:quick_bank'),
+            {'name': '   '},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertFalse(payload['ok'])
+
+    def test_anonymous_user_is_redirected_to_login(self) -> None:
+        self.client.logout()
+        response = self.client.post(
+            reverse('finance_account:quick_bank'),
+            {'name': 'Чужой банк'},
+        )
+        self.assertNotEqual(response.status_code, constants.SUCCESS_CODE)
+
+    def test_personal_bank_is_scoped_to_its_owner(self) -> None:
+        self.client.post(
+            reverse('finance_account:quick_bank'),
+            {'name': 'Приватный банк'},
+        )
+        bank = Bank.objects.get(name='Приватный банк')
+
+        self.assertFalse(
+            Bank.objects.filter(pk=bank.pk, user=self.other_user).exists(),
+        )
+        self.assertTrue(
+            Bank.objects.filter(pk=bank.pk, user=self.user).exists(),
+        )
