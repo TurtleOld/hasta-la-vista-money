@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.models import (
+    DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositTerm,
@@ -148,6 +149,12 @@ class CreateDepositForm(forms.Form):
         required=False,
         label=_('Расписание выплат'),
     )
+    interest_payout_destination = forms.ChoiceField(
+        choices=DepositTerm.PayoutDestination.choices,
+        initial=DepositTerm.PayoutDestination.CAPITALIZATION,
+        required=False,
+        label=_('Обычный способ выплаты процентов'),
+    )
     custom_payout_dates = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={'rows': 2}),
@@ -272,6 +279,11 @@ class CreateDepositForm(forms.Form):
         if not cleaned_data['business_day_convention']:
             cleaned_data['business_day_convention'] = (
                 DepositTerm.BusinessDayConvention.NONE
+            )
+        cleaned_data.setdefault('interest_payout_destination', None)
+        if not cleaned_data['interest_payout_destination']:
+            cleaned_data['interest_payout_destination'] = (
+                DepositTerm.PayoutDestination.CAPITALIZATION
             )
         opened_on = cleaned_data.get('opened_on')
         matures_on = cleaned_data.get('matures_on')
@@ -402,6 +414,16 @@ class CapitalizeInterestForm(forms.Form):
         required=False,
         label=_('Ожидаемая выплата'),
     )
+    destination = forms.ChoiceField(
+        choices=DepositCapitalizationEvent.Destination.choices,
+        required=False,
+        label=_('Фактическое назначение выплаты'),
+    )
+    destination_account = forms.ModelChoiceField(
+        queryset=Account.objects.none(),
+        required=False,
+        label=_('Собственный счёт для выплаты'),
+    )
     gross = forms.DecimalField(
         min_value=Decimal(0),
         max_digits=constants.TWENTY,
@@ -435,21 +457,35 @@ class CapitalizeInterestForm(forms.Form):
         required=False,
         max_length=constants.TWO_HUNDRED_FIFTY,
         widget=forms.Textarea(attrs={'rows': 2}),
-        label=_('Причина внеплановой капитализации'),
+        label=_('Причина внеплановой выплаты'),
     )
 
     def __init__(
         self,
         *args: Any,
         term: DepositTerm,
+        user: 'User | None' = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
+        self.initial.setdefault(
+            'destination',
+            term.interest_payout_destination,
+        )
         field = cast(
             'forms.ModelChoiceField[DepositInterestForecast]',
             self.fields['forecast'],
         )
         field.queryset = term.interest_forecasts.filter(confirmed=False)
+        account_field = cast(
+            'forms.ModelChoiceField[Account]',
+            self.fields['destination_account'],
+        )
+        if user is not None:
+            account_field.queryset = Account.objects.filter(
+                user=user,
+                currency=term.deposit.account.currency,
+            ).exclude(pk=term.deposit.account_id)
 
     def clean(self) -> dict[str, Any] | None:
         cleaned = super().clean()
@@ -460,14 +496,37 @@ class CapitalizeInterestForm(forms.Form):
         net = cleaned.get('net')
         forecast = cleaned.get('forecast')
         reason = str(cleaned.get('reason', '')).strip()
+        destination = (
+            cleaned.get('destination') or (self.initial['destination'])
+        )
+        destination_account = cleaned.get('destination_account')
+        cleaned['destination'] = destination
         if gross is None or withholding is None or net is None:
             return cleaned
         if not forecast and not reason:
             raise ValidationError(
                 _(
                     'Выберите ожидаемую выплату или укажите причину '
-                    'внеплановой капитализации.',
+                    'внеплановой выплаты.',
                 ),
+            )
+        if (
+            destination
+            == DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+            and destination_account is None
+        ):
+            self.add_error(
+                'destination_account',
+                _('Выберите собственный счёт для выплаты процентов.'),
+            )
+        if (
+            destination
+            != DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+            and destination_account is not None
+        ):
+            self.add_error(
+                'destination_account',
+                _('Счёт можно указать только для внутренней выплаты.'),
             )
         return cleaned
 

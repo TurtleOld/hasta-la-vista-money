@@ -20,6 +20,8 @@ from typing import Final
 
 from django.utils.translation import gettext_lazy as _
 
+REPORTS_BUDGET_CHART_PERIODS: Final = ('m', 'q', 'y', 'all')
+
 # ============================================================================
 # Receipt JSON Parsing Constants
 # ============================================================================
