@@ -28,24 +28,63 @@
             <div class="accounts-panel-hd"><h2>{% translate 'Подтвердить выплату процентов' %}</h2></div>
             <form method="post" action="{% url 'deposits:capitalize' pk=deposit.pk %}">
                 {% csrf_token %}
-                {{ capitalize_form.as_p }}
-                <button type="submit" class="btn btn-primary">{% translate 'Подтвердить выплату' %}</button>
+                <div class="accounts-cmp-body">
+                    {% for field in capitalize_form %}
+                    <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}">
+                        <h3>{{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}</h3>
+                        <div class="accounts-cmp-input">
+                            {% include 'forms/_field.html' with field=field %}
+                        </div>
+                    </section>
+                    {% endfor %}
+                </div>
+                <div class="accounts-composer-ft">
+                    <div class="ft-actions">
+                        <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Подтвердить выплату' %}</button>
+                    </div>
+                </div>
             </form>
         </section>
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Пополнить вклад' %}</h2></div>
             <form method="post" action="{% url 'deposits:top-up' pk=deposit.pk %}">
                 {% csrf_token %}
-                {{ top_up_form.as_p }}
-                <button type="submit" class="btn btn-primary">{% translate 'Пополнить' %}</button>
+                <div class="accounts-cmp-body">
+                    {% for field in top_up_form %}
+                    <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}">
+                        <h3>{{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}</h3>
+                        <div class="accounts-cmp-input">
+                            {% include 'forms/_field.html' with field=field %}
+                        </div>
+                    </section>
+                    {% endfor %}
+                </div>
+                <div class="accounts-composer-ft">
+                    <div class="ft-actions">
+                        <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Пополнить' %}</button>
+                    </div>
+                </div>
             </form>
         </section>
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Снять тело вклада' %}</h2></div>
             <form method="post" action="{% url 'deposits:withdraw' pk=deposit.pk %}">
                 {% csrf_token %}
-                {{ withdraw_form.as_p }}
-                <button type="submit" class="btn btn-primary">{% translate 'Перевести на счёт' %}</button>
+                <div class="accounts-cmp-body">
+                    {% for field in withdraw_form %}
+                    <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}">
+                        <h3>{{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}</h3>
+                        <div class="accounts-cmp-input">
+                            {% include 'forms/_field.html' with field=field %}
+                        </div>
+                    </section>
+                    {% endfor %}
+                </div>
+                <div class="accounts-composer-ft">
+                    <div class="ft-actions">
+                        <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Перевести на счёт' %}</button>
+                    </div>
+                </div>
             </form>
         </section>
         <section class="accounts-panel">
