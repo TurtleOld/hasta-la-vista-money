@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.test.client import RequestFactory
 from rest_framework import serializers as drf_serializers
 
-from hasta_la_vista_money.finance_account.models import Account
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.finance_account.serializers import AccountSerializer
 from hasta_la_vista_money.users.models import User
 
@@ -22,12 +22,14 @@ class TestAccountSerializer(TestCase):
             username='testuser',
             password='testpass123',  # nosec B106: test-only password
         )
+        self.bank = Bank.objects.get(code='SBERBANK')
         self.account = Account.objects.create(
             user=self.user,
             name_account='Test Account',
             balance=Decimal('1000.50'),
             currency='RUB',
             type_account='Debit',
+            bank=self.bank,
         )
 
     def test_account_serializer_fields(self) -> None:
@@ -91,6 +93,7 @@ class TestAccountSerializer(TestCase):
             'balance': '10.00',
             'currency': 'RUB',
             'type_account': 'Debit',
+            'bank': self.bank.pk,
         }
         serializer = AccountSerializer(data=data)
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -106,7 +109,7 @@ class TestAccountSerializer(TestCase):
             balance=Decimal('-500.00'),
             currency='USD',
             type_account='CREDIT',
-            bank='SBERBANK',
+            bank=self.bank,
             limit_credit=Decimal('5000.00'),
         )
 
@@ -179,13 +182,23 @@ class TestAccountSerializer(TestCase):
 
         Tests various invalid and boundary values for create/update.
         """
-        testcases = [
-            ({}, ['name_account', 'balance', 'currency', 'type_account']),
+        testcases: list[tuple[dict[str, object], list[str]]] = [
+            (
+                {},
+                [
+                    'name_account',
+                    'balance',
+                    'currency',
+                    'type_account',
+                    'bank',
+                ],
+            ),
             (
                 {
                     'balance': '100.00',
                     'currency': 'RUB',
                     'type_account': 'Debit',
+                    'bank': self.bank.pk,
                 },
                 ['name_account'],
             ),
@@ -194,6 +207,7 @@ class TestAccountSerializer(TestCase):
                     'name_account': 'Test',
                     'currency': 'RUB',
                     'type_account': 'Debit',
+                    'bank': self.bank.pk,
                 },
                 ['balance'],
             ),
@@ -202,6 +216,7 @@ class TestAccountSerializer(TestCase):
                     'name_account': 'Test',
                     'balance': '10.00',
                     'type_account': 'Debit',
+                    'bank': self.bank.pk,
                 },
                 ['currency'],
             ),
@@ -211,6 +226,7 @@ class TestAccountSerializer(TestCase):
                     'currency': 'RUB',
                     'type_account': 'Debit',
                     'balance': 'oops',
+                    'bank': self.bank.pk,
                 },
                 ['balance'],
             ),
@@ -220,6 +236,7 @@ class TestAccountSerializer(TestCase):
                     'currency': 'SOMETHING',
                     'type_account': 'Debit',
                     'balance': '10.00',
+                    'bank': self.bank.pk,
                 },
                 ['currency'],
             ),
@@ -229,6 +246,7 @@ class TestAccountSerializer(TestCase):
                     'currency': 'USD',
                     'type_account': 'BADTYPE',
                     'balance': '10.00',
+                    'bank': self.bank.pk,
                 },
                 ['type_account'],
             ),
@@ -238,6 +256,7 @@ class TestAccountSerializer(TestCase):
                     'currency': 'USD',
                     'type_account': 'Debit',
                     'balance': '-5.00',
+                    'bank': self.bank.pk,
                 },
                 [],
             ),

@@ -28,7 +28,7 @@
                             <div class="accounts-min0">
                                 <div class="accounts-row-name">{{ deposit.name }}</div>
                                 {% with rate=term.current_rate %}
-                                <div class="accounts-row-kind">{{ deposit.get_bank_display }} · {{ term.state_label }} · {% if rate %}{{ rate.annual_rate }}%{% else %}{% translate 'Ставка на текущий период не определена' %}{% endif %}</div>
+                                <div class="accounts-row-kind">{{ deposit.bank.name }} · {{ term.state_label }} · {% if rate %}{{ rate.annual_rate }}%{% else %}{% translate 'Ставка на текущий период не определена' %}{% endif %}</div>
                                 {% endwith %}
                             </div>
                             <div class="accounts-row-right">

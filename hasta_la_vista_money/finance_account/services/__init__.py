@@ -1,11 +1,10 @@
 """Finance account services.
 
 This package contains services for account management, balance operations,
-credit card calculations, and money transfers.
+credit card calculations, money transfers, and bank management.
 """
 
 from hasta_la_vista_money.finance_account.bank_constants import (
-    BANK_CHOICES,
     BANK_DEFAULT,
     BANK_RAIFFEISENBANK,
     BANK_SBERBANK,
@@ -25,6 +24,9 @@ from hasta_la_vista_money.finance_account.services.bank_calculators import (
     RaiffeisenbankCalculator,
     SberbankCalculator,
     create_bank_calculator,
+)
+from hasta_la_vista_money.finance_account.services.bank_service import (
+    BankService,
 )
 from hasta_la_vista_money.finance_account.services.credit_calculation_service import (  # noqa: E501
     CreditCalculationService,
@@ -46,7 +48,6 @@ from hasta_la_vista_money.finance_account.services.types import (
 )
 
 __all__ = [
-    'BANK_CHOICES',
     'BANK_DEFAULT',
     'BANK_RAIFFEISENBANK',
     'BANK_SBERBANK',
@@ -57,6 +58,7 @@ __all__ = [
     'BalanceServiceProtocol',
     'BalanceTrendService',
     'BankCalculatorProtocol',
+    'BankService',
     'CreditCalculationService',
     'CreditCalculationServiceProtocol',
     'DefaultBankCalculator',

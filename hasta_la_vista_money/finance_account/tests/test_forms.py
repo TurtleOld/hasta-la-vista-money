@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 
+from django.db import models
 from django.forms import ChoiceField, ModelChoiceField
 from django.test import TestCase
 from django.utils import timezone
@@ -14,16 +15,13 @@ from hasta_la_vista_money.constants import (
     ACCOUNT_TYPE_DEBIT_CARD,
     ACCOUNT_TYPE_DEPOSIT,
 )
-from hasta_la_vista_money.finance_account.bank_constants import (
-    BANK_CHOICES,
-    BANK_DEFAULT,
-)
 from hasta_la_vista_money.finance_account.forms import (
     AddAccountForm,
     TransferMoneyAccountForm,
 )
 from hasta_la_vista_money.finance_account.models import (
     Account,
+    Bank,
     TransferMoneyLog,
 )
 from hasta_la_vista_money.users.models import User
@@ -38,6 +36,7 @@ class TestAddAccountForm(TestCase):
             username='testuser',
             password='testpass123',  # nosec B106: test-only password
         )
+        self.sberbank = Bank.objects.get(code='SBERBANK')
 
     def test_form_initialization(self) -> None:
         """Test form initialization with default values."""
@@ -47,8 +46,10 @@ class TestAddAccountForm(TestCase):
             form.fields['type_account'].initial,
             Account.TYPE_ACCOUNT_LIST[1][0],
         )
-        self.assertEqual(Account.BANK_LIST, BANK_CHOICES)
-        self.assertEqual(Account._meta.get_field('bank').default, BANK_DEFAULT)
+        self.assertIsInstance(
+            Account._meta.get_field('bank'),
+            models.ForeignKey,
+        )
         type_field = form.fields['type_account']
         if not isinstance(type_field, ChoiceField):
             self.fail('type_account must be a ChoiceField')
@@ -77,7 +78,7 @@ class TestAddAccountForm(TestCase):
         form_data = {
             'name_account': 'Credit Card',
             'type_account': ACCOUNT_TYPE_CREDIT,
-            'bank': 'SBERBANK',
+            'bank': self.sberbank.pk,
             'limit_credit': Decimal('10000.00'),
             'payment_due_date': timezone.now().date(),
             'grace_period_days': 30,

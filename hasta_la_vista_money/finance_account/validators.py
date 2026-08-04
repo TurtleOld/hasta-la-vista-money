@@ -7,7 +7,7 @@ operations.
 """
 
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -15,8 +15,11 @@ from django.utils.translation import gettext_lazy as _
 from hasta_la_vista_money.constants import CREDIT_ACCOUNT_TYPES
 from hasta_la_vista_money.finance_account.models import Account
 
+if TYPE_CHECKING:
+    from hasta_la_vista_money.finance_account.models import Bank
 
-def validate_account_balance(from_account: Account, amount: Decimal) -> None:
+
+def validate_account_balance(from_account: 'Account', amount: Decimal) -> None:
     """Validate that the account has sufficient balance for the transfer.
 
     Checks if the source account has enough funds to complete the transfer
@@ -72,7 +75,7 @@ def validate_different_accounts(
 
 def validate_credit_fields_required(
     type_account: str | None,
-    bank: str | None,
+    bank: 'Bank | str | None' = None,
     limit_credit: Any = None,
     payment_due_date: Any = None,
     grace_period_days: Any = None,
@@ -85,7 +88,7 @@ def validate_credit_fields_required(
 
     Args:
         type_account: The type of account (Credit or CreditCard).
-        bank: The bank issuing the credit account.
+        bank: The bank issuing the credit account (Bank instance or code).
         limit_credit: Credit limit value.
         payment_due_date: Payment due date.
         grace_period_days: Grace period in days.
@@ -95,8 +98,11 @@ def validate_credit_fields_required(
     """
     if type_account in CREDIT_ACCOUNT_TYPES:
         errors = []
+        bank_code = ''
+        if bank is not None:
+            bank_code = bank.code if hasattr(bank, 'code') else str(bank)
 
-        if not bank or bank == '-':
+        if not bank_code or bank_code == '-':
             errors.append(_('Для кредитного счёта необходимо указать банк'))
 
         if not limit_credit or limit_credit <= 0:

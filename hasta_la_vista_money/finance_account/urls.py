@@ -17,6 +17,7 @@ from hasta_la_vista_money.finance_account.views import (
     AccountView,
     ChangeAccountView,
     DeleteAccountView,
+    QuickBankCreateView,
     QuickCategoryCreateView,
     TransactionCopyView,
     TransactionDeleteView,
@@ -76,6 +77,11 @@ urlpatterns = [
         'quick-category/',
         QuickCategoryCreateView.as_view(),
         name='quick_category',
+    ),
+    path(
+        'quick-bank/',
+        QuickBankCreateView.as_view(),
+        name='quick_bank',
     ),
     path(
         'transactions/<int:pk>/change/',

@@ -11,6 +11,7 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    ConfirmInterestPaymentCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     ForecastTerms,
@@ -38,6 +39,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositTerm,
 )
 from hasta_la_vista_money.deposits.repositories import DepositRepository
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.finance_account.repositories import (
     AccountRepository,
     TransferMoneyLogRepository,
@@ -46,6 +48,9 @@ from hasta_la_vista_money.finance_account.services.balance_service import (
     BalanceService,
 )
 from hasta_la_vista_money.users.models import User
+from hasta_la_vista_money.users.services.cache import (
+    invalidate_user_detailed_statistics_cache,
+)
 
 
 class DepositService:
@@ -220,10 +225,11 @@ class DepositService:
         account.type_account = constants.ACCOUNT_TYPE_DEPOSIT
         account.save(update_fields=['type_account', 'updated_at'])
 
+        bank_instance = self._resolve_bank(command.bank)
         deposit = self.deposit_repository.create_deposit(
             account=account,
             name=command.name,
-            bank=command.bank,
+            bank=bank_instance,
         )
         term = self.deposit_repository.create_term(
             deposit=deposit,
@@ -302,6 +308,12 @@ class DepositService:
                 _('Остаток вклада не может быть отрицательным.'),
             )
 
+    def _resolve_bank(self, bank: 'Bank | str') -> Bank:
+        """Resolve a bank code or instance to a Bank instance."""
+        if isinstance(bank, Bank):
+            return bank
+        return Bank.objects.get(code=bank)
+
     def _create_agreement(
         self,
         *,
@@ -322,17 +334,18 @@ class DepositService:
         Returns:
             The persisted Deposit with associated account, term, and rate.
         """
+        bank_instance = self._resolve_bank(command.bank)
         account = self.account_repository.create_deposit_account(
             user=command.user,
             name_account=command.name,
-            bank=command.bank,
+            bank=bank_instance,
             currency=command.currency,
             balance=balance,
         )
         deposit = self.deposit_repository.create_deposit(
             account=account,
             name=command.name,
-            bank=command.bank,
+            bank=bank_instance,
         )
         term = self.deposit_repository.create_term(
             deposit=deposit,
@@ -363,6 +376,9 @@ class DepositService:
             'accrual_end_included': forecast_terms.accrual_end_included,
             'payout_schedule_kind': forecast_terms.payout_schedule_kind,
             'business_day_convention': forecast_terms.business_day_convention,
+            'interest_payout_destination': (
+                forecast_terms.interest_payout_destination
+            ),
         }
 
     def _withdrawal_term_kwargs(
@@ -642,10 +658,16 @@ class DepositService:
         self._recalculate_forecast_for_term(term, command.effective_on)
         return event
 
-    @transaction.atomic
     def capitalize_interest(
         self,
         command: CapitalizeInterestCommand,
+    ) -> DepositCapitalizationEvent:
+        return self.confirm_interest_payment(command)
+
+    @transaction.atomic
+    def confirm_interest_payment(
+        self,
+        command: ConfirmInterestPaymentCommand,
     ) -> DepositCapitalizationEvent:
         try:
             deposit = self.deposit_repository.get_by_id_and_user(
@@ -662,10 +684,20 @@ class DepositService:
             deposit,
             command,
         )
-
-        self.balance_service.apply_account_deltas(
-            {deposit.account.pk: command.net},
+        destination_account = self._resolve_interest_destination(
+            deposit,
+            command,
         )
+        account_deltas: dict[int, Decimal] = {}
+        if (
+            command.destination
+            == DepositCapitalizationEvent.Destination.CAPITALIZATION
+        ):
+            account_deltas[deposit.account.pk] = command.net
+        elif destination_account is not None:
+            account_deltas[destination_account.pk] = command.net
+        if account_deltas:
+            self.balance_service.apply_account_deltas(account_deltas)
         event = self.deposit_repository.create_capitalization_event(
             deposit=deposit,
             forecast=forecast,
@@ -675,15 +707,69 @@ class DepositService:
             posting_on=command.posting_on,
             value_on=command.value_on,
             reason=command.reason.strip(),
+            destination=command.destination,
+            destination_account=destination_account,
         )
         if forecast is not None:
             self.deposit_repository.confirm_forecast(forecast.pk)
-        with contextlib.suppress(ValidationError):
-            self._recalculate_forecast_for_term(
-                deposit.current_term,
-                command.value_on,
-            )
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        if (
+            command.destination
+            == DepositCapitalizationEvent.Destination.CAPITALIZATION
+        ):
+            with contextlib.suppress(ValidationError):
+                self._recalculate_forecast_for_term(
+                    deposit.current_term,
+                    command.value_on,
+                )
         return event
+
+    def _resolve_interest_destination(
+        self,
+        deposit: Deposit,
+        command: CapitalizeInterestCommand,
+    ) -> Account | None:
+        if command.destination not in tuple(
+            choice.value for choice in DepositCapitalizationEvent.Destination
+        ):
+            raise ValidationError(
+                _('Неизвестное назначение выплаты процентов.'),
+            )
+        if (
+            command.destination
+            != DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+        ):
+            if command.destination_account_id is not None:
+                raise ValidationError(
+                    _('Счёт можно указать только для внутренней выплаты.'),
+                )
+            return None
+        if command.destination_account_id is None:
+            raise ValidationError(
+                _('Выберите собственный счёт для выплаты процентов.'),
+            )
+        account = self.account_repository.get_by_id_and_user(
+            command.destination_account_id,
+            command.user,
+        )
+        if account is None:
+            raise ValidationError(
+                _(
+                    'Счёт выплаты не найден или принадлежит другому '
+                    'пользователю.',
+                ),
+            )
+        if account.pk == deposit.account.pk:
+            raise ValidationError(
+                _('Для внутренней выплаты выберите другой собственный счёт.'),
+            )
+        if account.currency != deposit.account.currency:
+            raise ValidationError(
+                _('Валюта счёта выплаты должна совпадать с валютой вклада.'),
+            )
+        return account
 
     def _validate_capitalization_amounts(
         self,
@@ -730,12 +816,13 @@ class DepositService:
         if command.forecast_id is None:
             if not command.reason.strip():
                 raise ValidationError(
-                    _('Для внеплановой капитализации укажите причину.'),
+                    _('Для внеплановой выплаты укажите причину.'),
                 )
             return None
         try:
-            forecast = deposit.current_term.interest_forecasts.get(
-                pk=command.forecast_id,
+            forecast = self.deposit_repository.get_forecast_for_update(
+                command.forecast_id,
+                deposit.current_term.pk,
             )
         except DepositInterestForecast.DoesNotExist as error:
             raise ValidationError(
@@ -886,7 +973,11 @@ class DepositService:
                 effective_on=ce.value_on,
                 amount=ce.net,
             )
-            for ce in term.deposit.capitalization_events.all()
+            for ce in term.deposit.capitalization_events.filter(
+                destination=(
+                    DepositCapitalizationEvent.Destination.CAPITALIZATION
+                ),
+            )
         ]
         principal_changes.extend(capitalization_changes)
         principal_changes.sort(key=lambda pc: pc.effective_on)

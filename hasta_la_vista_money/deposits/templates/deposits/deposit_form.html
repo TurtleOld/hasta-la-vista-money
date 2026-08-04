@@ -31,6 +31,17 @@
                         <div class="accounts-cmp-input">
                             {% include 'forms/_field.html' with field=field %}
                         </div>
+                        {% if field.name == 'bank' %}
+                            <div class="deposit-quick-bank" data-qb-root>
+                                <button type="button" class="accounts-form-button accounts-form-button-secondary" data-qb-toggle>{% translate 'Добавить свой банк' %}</button>
+                                <div class="deposit-quick-bank-form is-hidden-icon" data-qb-form>
+                                    <input type="text" data-qb-name maxlength="250" placeholder="{% translate 'Название банка' %}">
+                                    <button type="button" class="accounts-form-button accounts-form-button-primary" data-qb-save>{% translate 'Сохранить' %}</button>
+                                    <button type="button" class="accounts-form-button accounts-form-button-secondary" data-qb-cancel>{% translate 'Отмена' %}</button>
+                                    <p class="text-sm text-red-600 dark:text-red-400 is-hidden-icon" data-qb-error></p>
+                                </div>
+                            </div>
+                        {% endif %}
                     </section>
                 {% endfor %}
             </div>
@@ -44,4 +55,15 @@
         </form>
     </div>
 </main>
+
+<script nonce="{{ request.csp_nonce }}">
+    window.HLVM_DEPOSIT_FORM_CONFIG = {
+        quickBankUrl: "{% url 'finance_account:quick_bank' %}",
+        csrfToken: "{{ csrf_token }}",
+    };
+</script>
+{% endblock %}
+
+{% block extra_js %}
+    <script defer nonce="{{ request.csp_nonce }}" src="{% static 'deposits/js/deposit_form.js' %}?v={% word_hash %}"></script>
 {% endblock %}
