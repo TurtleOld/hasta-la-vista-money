@@ -2,6 +2,8 @@ import hashlib
 
 from django.core.cache import cache
 
+from hasta_la_vista_money import constants
+
 PERIOD_TYPES = ('month', 'quarter', 'year')
 
 
@@ -39,7 +41,16 @@ def invalidate_user_detailed_statistics_cache(user_id: int) -> None:
     version_key = _user_statistics_version_key(user_id)
     cache.set(version_key, int(cache.get(version_key, 1)) + 1)
     cache.delete(get_dashboard_summary_cache_key(user_id))
-    cache.delete(get_reports_budget_charts_cache_key(user_id))
+    reports_key = get_reports_budget_charts_cache_key(user_id)
+    cache.delete_many(
+        [
+            reports_key,
+            *(
+                f'{reports_key}:{period}'
+                for period in constants.REPORTS_BUDGET_CHART_PERIODS
+            ),
+        ],
+    )
     cache.delete_many(
         [
             get_period_comparison_cache_key(user_id, period_type)

@@ -121,6 +121,16 @@ class DepositRepository:
     ) -> DepositCapitalizationEvent:
         return DepositCapitalizationEvent.objects.create(**kwargs)
 
+    def get_forecast_for_update(
+        self,
+        forecast_id: int,
+        term_id: int,
+    ) -> DepositInterestForecast:
+        return DepositInterestForecast.objects.select_for_update().get(
+            pk=forecast_id,
+            term_id=term_id,
+        )
+
     def confirm_forecast(self, forecast_id: int) -> None:
         DepositInterestForecast.objects.filter(pk=forecast_id).update(
             confirmed=True,
