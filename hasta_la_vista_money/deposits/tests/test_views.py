@@ -53,6 +53,7 @@ class DepositViewSmokeTests(TestCase):
                 'matures_on': matures_on.isoformat(),
                 'annual_rate': '14.25',
                 'tracking_started_on': opened_on.isoformat(),
+                'interest_payout_destination': 'external',
             },
         )
 
@@ -64,6 +65,10 @@ class DepositViewSmokeTests(TestCase):
             DepositPrincipalEvent.Type.OPENING_POSITION,
         )
         self.assertEqual(event.effective_on, opened_on)
+        self.assertEqual(
+            deposit.current_term.interest_payout_destination,
+            DepositTerm.PayoutDestination.EXTERNAL,
+        )
 
         list_response = self.client.get(reverse('deposits:list'))
         self.assertContains(list_response, 'Летний вклад')
@@ -74,6 +79,11 @@ class DepositViewSmokeTests(TestCase):
         self.assertContains(detail_response, '14,25')
         self.assertContains(detail_response, matures_on.strftime('%d.%m.%Y'))
         self.assertContains(detail_response, 'Активен')
+        capitalize_form = detail_response.context['capitalize_form']
+        self.assertEqual(
+            capitalize_form.initial['destination'],
+            DepositTerm.PayoutDestination.EXTERNAL,
+        )
 
         accounts_response = self.client.get(reverse('finance_account:list'))
         self.assertContains(
@@ -659,4 +669,34 @@ class CapitalizeInterestSmokeTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn('Капитализировать проценты', content)
+        self.assertIn('Подтвердить выплату процентов', content)
+
+    def test_user_pays_interest_to_owned_account(self) -> None:
+        destination = Account.objects.create(
+            user=self.user,
+            name_account='Карта для процентов',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+
+        response = self.client.post(
+            reverse('deposits:capitalize', kwargs={'pk': self.deposit.pk}),
+            {
+                'gross': '6000.00',
+                'withholding': '780.00',
+                'net': '5220.00',
+                'posting_on': timezone.localdate().isoformat(),
+                'value_on': timezone.localdate().isoformat(),
+                'reason': 'Выплата на карту.',
+                'destination': 'internal_account',
+                'destination_account': str(destination.pk),
+            },
+        )
+
+        self.assertRedirects(response, self.deposit.get_absolute_url())
+        destination.refresh_from_db()
+        self.assertEqual(destination.balance, Decimal('6220.00'))
+        detail = self.client.get(self.deposit.get_absolute_url())
+        content = detail.content.decode()
+        self.assertIn('На собственный счёт', content)
+        self.assertIn('Карта для процентов', content)

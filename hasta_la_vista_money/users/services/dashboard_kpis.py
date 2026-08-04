@@ -10,6 +10,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.deposits.models import DepositCapitalizationEvent
 from hasta_la_vista_money.transactions.models import (
     Transaction,
     TransactionType,
@@ -59,6 +60,20 @@ def _sum_for_month(
     return Decimal(total or constants.ZERO)
 
 
+def _sum_interest_for_month(
+    field: str,
+    users: Iterable[User],
+    start: date,
+    end: date,
+) -> Decimal:
+    total = DepositCapitalizationEvent.objects.filter(
+        deposit__account__user__in=users,
+        posting_on__gte=start,
+        posting_on__lte=end,
+    ).aggregate(total=Sum(field))['total']
+    return Decimal(total or constants.ZERO)
+
+
 def get_dashboard_month_kpis(
     user: User,
     users: Iterable[User] | None = None,
@@ -73,12 +88,22 @@ def get_dashboard_month_kpis(
         selected_users,
         start_dt,
         end_dt,
+    ) + _sum_interest_for_month(
+        'gross',
+        selected_users,
+        period_start,
+        period_end,
     )
     expenses = _sum_for_month(
         TransactionType.EXPENSE,
         selected_users,
         start_dt,
         end_dt,
+    ) + _sum_interest_for_month(
+        'withholding',
+        selected_users,
+        period_start,
+        period_end,
     )
     net_result = income - expenses
     savings_rate = (
