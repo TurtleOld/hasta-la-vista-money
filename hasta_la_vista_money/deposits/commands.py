@@ -10,6 +10,7 @@ from hasta_la_vista_money.deposits.models import (
 from hasta_la_vista_money.users.models import User
 
 if TYPE_CHECKING:
+    from hasta_la_vista_money.deposits.models import DepositPrincipalEvent
     from hasta_la_vista_money.finance_account.models import Bank
 
 
@@ -203,3 +204,24 @@ class ConfirmInterestPaymentCommand:
 
 
 CapitalizeInterestCommand = ConfirmInterestPaymentCommand
+
+
+@dataclass(frozen=True)
+class CloseMaturedDepositCommand:
+    user: User
+    deposit_id: int
+    destination: str
+    destination_account_id: int | None
+    principal: Decimal
+    gross: Decimal
+    withholding: Decimal
+    net: Decimal
+    posting_on: date
+    value_on: date
+    forecast_id: int | None = None
+
+
+@dataclass(frozen=True)
+class CloseMaturedDepositResult:
+    principal_event: 'DepositPrincipalEvent'
+    interest_event: DepositCapitalizationEvent

@@ -59,6 +59,18 @@ class DepositRepository:
     def get_by_id_and_user(self, deposit_id: int, user: User) -> Deposit:
         return self.get_by_user(user).get(pk=deposit_id)
 
+    def get_by_id_and_user_for_update(
+        self,
+        deposit_id: int,
+        user: User,
+    ) -> Deposit:
+        return (
+            Deposit.objects.select_for_update()
+            .select_related('account')
+            .prefetch_related('terms')
+            .get(pk=deposit_id, account__user=user)
+        )
+
     def get_term_by_id_and_user(
         self,
         term_id: int,
@@ -77,12 +89,6 @@ class DepositRepository:
         DepositRatePeriod.objects.filter(pk=period_id).update(
             ends_on=new_ends_on,
         )
-
-    def delete_unconfirmed_forecasts(self, term_id: int) -> None:
-        DepositInterestForecast.objects.filter(
-            term_id=term_id,
-            confirmed=False,
-        ).delete()
 
     def delete_future_unconfirmed_forecasts(
         self,
@@ -121,6 +127,27 @@ class DepositRepository:
     ) -> DepositCapitalizationEvent:
         return DepositCapitalizationEvent.objects.create(**kwargs)
 
+    def get_planned_closure_event(
+        self,
+        deposit_id: int,
+    ) -> DepositPrincipalEvent | None:
+        return DepositPrincipalEvent.objects.filter(
+            deposit_id=deposit_id,
+            type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+        ).first()
+
+    def get_final_interest_event(
+        self,
+        deposit_id: int,
+    ) -> DepositCapitalizationEvent | None:
+        return DepositCapitalizationEvent.objects.filter(
+            deposit_id=deposit_id,
+            is_final=True,
+        ).first()
+
+    def close_term(self, term_id: int, closed_on: 'date') -> None:
+        DepositTerm.objects.filter(pk=term_id).update(closed_on=closed_on)
+
     def get_forecast_for_update(
         self,
         forecast_id: int,
@@ -135,3 +162,9 @@ class DepositRepository:
         DepositInterestForecast.objects.filter(pk=forecast_id).update(
             confirmed=True,
         )
+
+    def delete_unconfirmed_forecasts(self, term_id: int) -> None:
+        DepositInterestForecast.objects.filter(
+            term_id=term_id,
+            confirmed=False,
+        ).delete()

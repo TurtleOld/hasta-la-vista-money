@@ -14,6 +14,7 @@ from django.views.generic import FormView, ListView, TemplateView
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    CloseMaturedDepositCommand,
     ForecastTerms,
     FundDepositCommand,
     OpenExistingDepositCommand,
@@ -26,6 +27,7 @@ from hasta_la_vista_money.deposits.commands import (
 from hasta_la_vista_money.deposits.forms import (
     AddFloatingRatePeriodForm,
     CapitalizeInterestForm,
+    CloseMaturedDepositForm,
     CreateDepositForm,
     TopUpDepositForm,
     WithdrawDepositForm,
@@ -149,6 +151,13 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
         context['capitalization_events'] = (
             deposit.capitalization_events.select_related('destination_account')
         )
+        context['closure_event'] = (
+            deposit.principal_events.filter(
+                type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            )
+            .select_related('destination_account')
+            .first()
+        )
         context['capitalize_form'] = CapitalizeInterestForm(
             term=deposit.current_term,
             user=user,
@@ -162,6 +171,10 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
             user=user,
             currency=deposit.account.currency,
             initial={'effective_on': deposit.current_term.opened_on},
+        )
+        context['close_form'] = CloseMaturedDepositForm(
+            term=deposit.current_term,
+            user=user,
         )
         return context
 
@@ -352,4 +365,45 @@ class DepositCapitalizeInterestView(LoginRequiredMixin, View):
                 request,
                 _('Фактическая выплата процентов подтверждена.'),
             )
+        return HttpResponseRedirect(deposit.get_absolute_url())
+
+
+class DepositCloseView(LoginRequiredMixin, View):
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        user = cast('User', request.user)
+        typed_request = cast('Any', request)
+        service = typed_request.container.deposits.deposit_service()
+        deposit = get_object_or_404(service.get_user_deposits(user), pk=pk)
+        form = CloseMaturedDepositForm(
+            request.POST,
+            term=deposit.current_term,
+            user=user,
+        )
+        if not form.is_valid():
+            messages.error(request, _('Проверьте данные закрытия вклада.'))
+            return HttpResponseRedirect(deposit.get_absolute_url())
+        destination_account = form.cleaned_data['destination_account']
+        forecast = form.cleaned_data['forecast']
+        try:
+            service.close_matured_deposit(
+                CloseMaturedDepositCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    destination=form.cleaned_data['destination'],
+                    destination_account_id=(
+                        destination_account.pk if destination_account else None
+                    ),
+                    principal=form.cleaned_data['principal'],
+                    gross=form.cleaned_data['gross'],
+                    withholding=form.cleaned_data['withholding'],
+                    net=form.cleaned_data['net'],
+                    posting_on=form.cleaned_data['posting_on'],
+                    value_on=form.cleaned_data['value_on'],
+                    forecast_id=forecast.pk if forecast else None,
+                ),
+            )
+        except ValidationError as error:
+            messages.error(request, error.message)
+        else:
+            messages.success(request, _('Вклад закрыт в плановый срок.'))
         return HttpResponseRedirect(deposit.get_absolute_url())

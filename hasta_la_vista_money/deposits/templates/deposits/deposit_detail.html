@@ -24,6 +24,29 @@
                 <div class="accounts-hero-change">{% translate 'Ликвидная сумма' %}: {{ term.liquid_amount|comma }} <span class="cur">{{ deposit.account.currency }}</span></div>
             </div>
         </section>
+        {% if term.state == 'matured' %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Закрыть вклад' %}</h2></div>
+            <form method="post" action="{% url 'deposits:close' pk=deposit.pk %}">
+                {% csrf_token %}
+                <div class="accounts-cmp-body">
+                    {% for field in close_form %}
+                    <section class="accounts-cmp-section{% if field.errors %} has-error{% endif %}">
+                        <h3>{{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}</h3>
+                        <div class="accounts-cmp-input">
+                            {% include 'forms/_field.html' with field=field %}
+                        </div>
+                    </section>
+                    {% endfor %}
+                </div>
+                <div class="accounts-composer-ft">
+                    <div class="ft-actions">
+                        <button type="submit" class="accounts-form-button accounts-form-button-primary">{% translate 'Подтвердить плановое закрытие' %}</button>
+                    </div>
+                </div>
+            </form>
+        </section>
+        {% elif term.state != 'closed' %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Подтвердить выплату процентов' %}</h2></div>
             <form method="post" action="{% url 'deposits:capitalize' pk=deposit.pk %}">
@@ -87,6 +110,7 @@
                 </div>
             </form>
         </section>
+        {% endif %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Условия текущего срока' %}</h2></div>
             <div class="accounts-list">
@@ -110,7 +134,7 @@
         <section class="accounts-panel">
             <div class="accounts-panel-hd">
                 <h2>{% translate 'История ставки' %}</h2>
-                {% if term.state != 'matured' %}
+                {% if term.state != 'matured' and term.state != 'closed' %}
                 <a href="{% url 'deposits:add-rate-period' pk=deposit.pk term_id=term.pk %}" class="btn btn-sm btn-outline-primary">{% translate 'Добавить период' %}</a>
                 {% endif %}
             </div>
@@ -124,10 +148,10 @@
         <section class="accounts-panel">
             <div class="accounts-panel-hd">
                 <h2>{% translate 'Ожидаемые выплаты процентов' %}</h2>
-                <form method="post" action="{% url 'deposits:recalculate-forecast' pk=deposit.pk term_id=term.pk %}">
+                {% if term.state != 'closed' %}<form method="post" action="{% url 'deposits:recalculate-forecast' pk=deposit.pk term_id=term.pk %}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-sm btn-outline-primary">{% translate 'Пересчитать прогноз' %}</button>
-                </form>
+                </form>{% endif %}
             </div>
             <div class="accounts-list">
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Способ выплаты' %}</div><div class="accounts-row-name">{{ term.get_payout_schedule_kind_display }} · {{ term.get_business_day_convention_display }}</div></div></div></div>
@@ -156,6 +180,29 @@
                 {% endfor %}
             </div>
         </section>
+        {% if closure_event %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Плановое закрытие' %}</h2></div>
+            <div class="accounts-list">
+                <div class="accounts-row">
+                    <div class="accounts-row-content">
+                        <div class="accounts-min0">
+                            <div class="accounts-row-kind">
+                                {% translate 'Проводка' %}: {{ closure_event.posting_on|date:'d.m.Y' }}
+                                · {% translate 'Валютирование' %}: {{ closure_event.effective_on|date:'d.m.Y' }}
+                            </div>
+                            <div class="accounts-row-name">
+                                {{ closure_event.get_destination_display }}
+                                {% if closure_event.destination_account %} · {{ closure_event.destination_account.name_account }}{% endif %}
+                                · {% translate 'Тело' %}: {{ closure_event.amount|comma }}
+                                <span class="cur">{{ deposit.account.currency }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        {% endif %}
         {% if capitalization_events %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Подтверждённые выплаты процентов' %}</h2></div>

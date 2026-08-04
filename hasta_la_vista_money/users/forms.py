@@ -385,7 +385,11 @@ class BankStatementUploadForm(forms.Form):
         super().__init__(*args, **kwargs)
 
         self.fields['account'] = forms.ModelChoiceField(
-            queryset=Account.objects.filter(user=user),
+            queryset=(
+                Account.objects.available_for_operations()
+                .filter(user=user)
+                .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
+            ),
             label=_('Счёт'),
             widget=forms.Select(attrs={'class': FORM_CONTROL_CLASS}),
             help_text=_('Выберите счёт, на который будут записаны операции'),

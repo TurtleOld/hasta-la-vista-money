@@ -2,7 +2,9 @@
 
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.finance_account.services.types import (
@@ -170,6 +172,10 @@ class BalanceService:
 
         result: dict[int, Account] = {}
         for locked_account in accounts:
+            if locked_account.is_archived:
+                raise ValidationError(
+                    _('Архивный счёт недоступен для новых операций.'),
+                )
             delta = effective_deltas[locked_account.pk]
             if delta < 0:
                 validate_account_balance(locked_account, abs(delta))
