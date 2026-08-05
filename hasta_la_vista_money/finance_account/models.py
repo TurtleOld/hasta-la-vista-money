@@ -245,6 +245,11 @@ class Account(TimeStampedModel):
         db_index=True,
         verbose_name=_('Дата архивации'),
     )
+    last_reconciled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_('Дата последней сверки'),
+    )
 
     objects = AccountManager()
 

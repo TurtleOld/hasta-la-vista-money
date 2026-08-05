@@ -4,6 +4,7 @@ from django.db.models import QuerySet
 
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositAuditEvent,
     DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPayoutScheduleDate,
@@ -281,3 +282,26 @@ class DepositRepository:
             term_id=term_id,
             confirmed=False,
         ).delete()
+
+    def get_principal_event_by_external_id(
+        self,
+        deposit_id: int,
+        external_id: str,
+    ) -> DepositPrincipalEvent | None:
+        return DepositPrincipalEvent.objects.filter(
+            deposit_id=deposit_id,
+            external_id=external_id,
+        ).first()
+
+    def get_capitalization_event_by_external_id(
+        self,
+        deposit_id: int,
+        external_id: str,
+    ) -> DepositCapitalizationEvent | None:
+        return DepositCapitalizationEvent.objects.filter(
+            deposit_id=deposit_id,
+            external_id=external_id,
+        ).first()
+
+    def create_audit_event(self, **kwargs: object) -> DepositAuditEvent:
+        return DepositAuditEvent.objects.create(**kwargs)

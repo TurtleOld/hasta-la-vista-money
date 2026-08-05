@@ -10,6 +10,7 @@ from hasta_la_vista_money.deposits.views import (
     DepositEventReverseView,
     DepositListView,
     DepositRecalculateForecastView,
+    DepositReconcileView,
     DepositRenewView,
     DepositTopUpView,
     DepositWithdrawView,
@@ -49,5 +50,10 @@ urlpatterns = [
         '<int:pk>/terms/<int:term_id>/forecast/recalculate/',
         DepositRecalculateForecastView.as_view(),
         name='recalculate-forecast',
+    ),
+    path(
+        '<int:pk>/reconcile/',
+        DepositReconcileView.as_view(),
+        name='reconcile',
     ),
 ]

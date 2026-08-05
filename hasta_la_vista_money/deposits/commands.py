@@ -215,6 +215,7 @@ class WithdrawDepositCommand:
     amount: Decimal
     effective_on: date
     exception_reason: str = ''
+    external_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -225,6 +226,7 @@ class TopUpDepositCommand:
     amount: Decimal
     effective_on: date
     exception_reason: str = ''
+    external_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -250,6 +252,7 @@ class ConfirmInterestPaymentCommand:
     reason: str = ''
     destination: str = DepositCapitalizationEvent.Destination.CAPITALIZATION
     destination_account_id: int | None = None
+    external_id: str | None = None
 
 
 CapitalizeInterestCommand = ConfirmInterestPaymentCommand
@@ -268,6 +271,7 @@ class CloseMaturedDepositCommand:
     posting_on: date
     value_on: date
     forecast_id: int | None = None
+    external_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -306,3 +310,4 @@ class CloseDepositEarlyCommand:
     posting_on: date
     value_on: date
     closure_reason: str
+    external_id: str | None = None

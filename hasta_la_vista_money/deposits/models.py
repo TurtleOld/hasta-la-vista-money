@@ -488,6 +488,13 @@ class DepositPrincipalEvent(models.Model):
         default='',
         verbose_name=_('Причина исключения'),
     )
+    external_id = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        null=True,
+        blank=True,
+        verbose_name=_('Внешний идентификатор'),
+        help_text=_('Уникальный в пределах вклада ключ банковского факта'),
+    )
     reversal_of = models.OneToOneField(
         'self',
         null=True,
@@ -573,6 +580,11 @@ class DepositPrincipalEvent(models.Model):
                     )
                 ),
                 name='deposit_principal_reversal_reason_valid',
+            ),
+            models.UniqueConstraint(
+                fields=['deposit', 'external_id'],
+                condition=Q(external_id__isnull=False),
+                name='deposit_principal_external_id_unique',
             ),
         ]
 
@@ -755,6 +767,13 @@ class DepositCapitalizationEvent(models.Model):
         default=0,
         verbose_name=_('Корректировка ранее выплаченных процентов'),
     )
+    external_id = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        null=True,
+        blank=True,
+        verbose_name=_('Внешний идентификатор'),
+        help_text=_('Уникальный в пределах вклада ключ банковского факта'),
+    )
     reversal_of = models.OneToOneField(
         'self',
         null=True,
@@ -821,6 +840,11 @@ class DepositCapitalizationEvent(models.Model):
                 ),
                 name='deposit_interest_reversal_reason_valid',
             ),
+            models.UniqueConstraint(
+                fields=['deposit', 'external_id'],
+                condition=Q(external_id__isnull=False),
+                name='deposit_interest_external_id_unique',
+            ),
         ]
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -838,3 +862,51 @@ class DepositCapitalizationEvent(models.Model):
         raise ValidationError(
             _('Подтверждённую выплату процентов нельзя удалить.'),
         )
+
+
+class DepositAuditEvent(models.Model):
+    """Immutable audit record for deposit lifecycle operations.
+
+    Records the fact of conversion, confirmation, exclusion,
+    cancellation, closure, and renewal without storing sensitive
+    financial details (amounts, account numbers).
+    """
+
+    class Type(models.TextChoices):
+        CONVERSION = 'conversion', _('Преобразование счёта')
+        CONFIRMATION = 'confirmation', _('Подтверждение выплаты процентов')
+        EXCLUSION = 'exclusion', _('Операция вне условий')
+        CANCELLATION = 'cancellation', _('Аннулирование события')
+        CLOSURE = 'closure', _('Закрытие вклада')
+        RENEWAL = 'renewal', _('Пролонгация вклада')
+
+    deposit = models.ForeignKey(
+        Deposit,
+        on_delete=models.PROTECT,
+        related_name='audit_events',
+        verbose_name=_('Вклад'),
+    )
+    event_type = models.CharField(
+        max_length=20,
+        choices=Type.choices,
+        verbose_name=_('Тип операции'),
+    )
+    description = models.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        verbose_name=_('Описание'),
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Дата записи'),
+    )
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ['-created_at']
+        verbose_name = _('Запись аудита вклада')
+        verbose_name_plural = _('Аудит вкладов')
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=['deposit', 'event_type']),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.get_event_type_display()} — {self.description[:80]}'

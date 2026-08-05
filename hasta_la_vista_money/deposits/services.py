@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import QuerySet
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from hasta_la_vista_money import constants
@@ -42,6 +43,7 @@ from hasta_la_vista_money.deposits.interest_forecast import (
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositAuditEvent,
     DepositCapitalizationEvent,
     DepositInterestForecast,
     DepositPrincipalEvent,
@@ -267,6 +269,15 @@ class DepositService:
             amount=account.balance,
             effective_on=command.converted_on,
             source_account=None,
+        )
+        self._create_audit(
+            deposit=deposit,
+            event_type=DepositAuditEvent.Type.CONVERSION,
+            description=(
+                _('Счёт «{name}» преобразован во вклад.').format(
+                    name=account.name_account,
+                )
+            ),
         )
         return deposit
 
@@ -518,6 +529,18 @@ class DepositService:
             renewed_term=new_term,
             effective_on=command.opened_on,
         )
+        self._create_audit(
+            deposit=deposit,
+            event_type=DepositAuditEvent.Type.RENEWAL,
+            description=(
+                _(
+                    'Пролонгация вклада: новый срок с {opened} до {matures}.',
+                ).format(
+                    opened=command.opened_on,
+                    matures=command.matures_on,
+                )
+            ),
+        )
         return new_term
 
     @staticmethod
@@ -655,12 +678,51 @@ class DepositService:
         if not reason:
             raise ValidationError(_('Укажите причину аннулирования.'))
         if command.event_kind == 'interest':
-            return self._reverse_interest_event(command, reason)
+            reversal_interest = self._reverse_interest_event(
+                command,
+                reason,
+            )
+            self._create_audit(
+                deposit=reversal_interest.deposit,
+                event_type=DepositAuditEvent.Type.CANCELLATION,
+                description=(
+                    _(
+                        'Аннулирование выплаты процентов: {reason}.',
+                    ).format(reason=reason)
+                ),
+            )
+            return reversal_interest
         if command.event_kind == 'renewal':
-            return self._reverse_renewal_event(command, reason)
+            reversal_renewal = self._reverse_renewal_event(
+                command,
+                reason,
+            )
+            self._create_audit(
+                deposit=reversal_renewal.deposit,
+                event_type=DepositAuditEvent.Type.CANCELLATION,
+                description=(
+                    _(
+                        'Аннулирование пролонгации: {reason}.',
+                    ).format(reason=reason)
+                ),
+            )
+            return reversal_renewal
         if command.event_kind != 'principal':
             raise ValidationError(_('Неизвестный тип события вклада.'))
-        return self._reverse_principal_event(command, reason)
+        result = self._reverse_principal_event(command, reason)
+        self._create_audit(
+            deposit=result.deposit,
+            event_type=DepositAuditEvent.Type.CANCELLATION,
+            description=str(
+                _(
+                    'Аннулирование события «{type}»: {reason}.',
+                ).format(
+                    type=result.get_type_display(),
+                    reason=reason,
+                ),
+            ),
+        )
+        return result
 
     def _reverse_principal_event(
         self,
@@ -1004,6 +1066,18 @@ class DepositService:
         term = deposit.current_term
         if term.state == DepositTerm.State.CLOSED:
             raise ValidationError(_('Закрытый вклад недоступен для операций.'))
+
+        if command.external_id:
+            existing = self._check_principal_idempotency(
+                deposit_id=deposit.pk,
+                external_id=command.external_id,
+                event_type=DepositPrincipalEvent.Type.WITHDRAWAL,
+                amount=command.amount,
+                effective_on=command.effective_on,
+            )
+            if existing is not None:
+                return existing
+
         if not command.exception_reason.strip():
             self._validate_withdrawal_terms(
                 term,
@@ -1029,6 +1103,7 @@ class DepositService:
             source_account=None,
             destination_account=locked_accounts[destination.pk],
             exception_reason=command.exception_reason.strip(),
+            external_id=command.external_id,
         )
         self.transfer_money_log_repository.create_log(
             user=command.user,
@@ -1042,6 +1117,12 @@ class DepositService:
             ),
             notes=_('Частичное снятие тела вклада.'),
         )
+        if command.exception_reason.strip():
+            self._create_audit(
+                deposit=deposit,
+                event_type=DepositAuditEvent.Type.EXCLUSION,
+                description=command.exception_reason.strip(),
+            )
         return event
 
     @transaction.atomic
@@ -1075,6 +1156,18 @@ class DepositService:
         term = deposit.current_term
         if term.state == DepositTerm.State.CLOSED:
             raise ValidationError(_('Закрытый вклад недоступен для операций.'))
+
+        if command.external_id:
+            existing = self._check_principal_idempotency(
+                deposit_id=deposit.pk,
+                external_id=command.external_id,
+                event_type=DepositPrincipalEvent.Type.TOP_UP,
+                amount=command.amount,
+                effective_on=command.effective_on,
+            )
+            if existing is not None:
+                return existing
+
         account_ids = {source.pk, deposit.account.pk}
         locked_accounts = self.account_repository.get_by_ids_for_update(
             account_ids,
@@ -1108,8 +1201,15 @@ class DepositService:
             effective_on=command.effective_on,
             source_account=locked_accounts[source.pk],
             exception_reason=exception_reason,
+            external_id=command.external_id,
         )
         self._recalculate_forecast_for_term(term, command.effective_on)
+        if exception_reason:
+            self._create_audit(
+                deposit=deposit,
+                event_type=DepositAuditEvent.Type.EXCLUSION,
+                description=exception_reason,
+            )
         return event
 
     def capitalize_interest(
@@ -1135,6 +1235,19 @@ class DepositService:
 
         if deposit.current_term.state == DepositTerm.State.CLOSED:
             raise ValidationError(_('Закрытый вклад недоступен для операций.'))
+
+        if command.external_id:
+            existing = self._check_capitalization_idempotency(
+                deposit_id=deposit.pk,
+                external_id=command.external_id,
+                gross=command.gross,
+                withholding=command.withholding,
+                net=command.net,
+                posting_on=command.posting_on,
+                value_on=command.value_on,
+            )
+            if existing is not None:
+                return existing
 
         self._validate_capitalization_amounts(command)
         forecast = self._resolve_capitalization_forecast(
@@ -1166,11 +1279,21 @@ class DepositService:
             reason=command.reason.strip(),
             destination=command.destination,
             destination_account=destination_account,
+            external_id=command.external_id,
         )
         if forecast is not None:
             self.deposit_repository.confirm_forecast(forecast.pk)
         transaction.on_commit(
             lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        self._create_audit(
+            deposit=deposit,
+            event_type=DepositAuditEvent.Type.CONFIRMATION,
+            description=(
+                _('Выплата процентов: {net} (нетто).').format(
+                    net=command.net,
+                )
+            ),
         )
         if (
             command.destination
@@ -1315,6 +1438,7 @@ class DepositService:
             destination=command.destination,
             destination_account=destination_account,
             exception_reason=command.closure_reason.strip(),
+            external_id=command.external_id,
         )
         interest_event = self.deposit_repository.create_capitalization_event(
             deposit=deposit,
@@ -1329,12 +1453,22 @@ class DepositService:
             destination=command.destination,
             destination_account=destination_account,
             is_final=True,
+            external_id=command.external_id,
         )
         self.deposit_repository.delete_unconfirmed_forecasts(term.pk)
         self.deposit_repository.close_term(term.pk, command.value_on)
         self.account_repository.archive(deposit.account.pk)
         transaction.on_commit(
             lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        self._create_audit(
+            deposit=deposit,
+            event_type=DepositAuditEvent.Type.CLOSURE,
+            description=(
+                _(
+                    'Досрочное закрытие вклада: {reason}.',
+                ).format(reason=command.closure_reason.strip())
+            ),
         )
         return CloseMaturedDepositResult(
             principal_event=principal_event,
@@ -1442,6 +1576,7 @@ class DepositService:
             source_account=None,
             destination=command.destination,
             destination_account=destination_account,
+            external_id=command.external_id,
         )
         interest_event = self.deposit_repository.create_capitalization_event(
             deposit=deposit,
@@ -1455,6 +1590,7 @@ class DepositService:
             destination=command.destination,
             destination_account=destination_account,
             is_final=True,
+            external_id=command.external_id,
         )
         if forecast is not None:
             self.deposit_repository.confirm_forecast(forecast.pk)
@@ -1463,6 +1599,11 @@ class DepositService:
         self.account_repository.archive(deposit.account.pk)
         transaction.on_commit(
             lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        self._create_audit(
+            deposit=deposit,
+            event_type=DepositAuditEvent.Type.CLOSURE,
+            description=str(_('Плановое закрытие вклада.')),
         )
         return CloseMaturedDepositResult(
             principal_event=principal_event,
@@ -1917,3 +2058,135 @@ class DepositService:
                 )
             ]
         return self.deposit_repository.create_forecast_lines(term, lines)
+
+    def _check_principal_idempotency(
+        self,
+        *,
+        deposit_id: int,
+        external_id: str,
+        event_type: str,
+        amount: Decimal,
+        effective_on: 'date',
+    ) -> DepositPrincipalEvent | None:
+        existing = self.deposit_repository.get_principal_event_by_external_id(
+            deposit_id,
+            external_id,
+        )
+        if existing is None:
+            return None
+        if existing.reversal_of_id is not None:
+            raise ValidationError(
+                _(
+                    'Компенсирующее событие нельзя повторно провести '
+                    'с тем же внешним идентификатором.',
+                ),
+            )
+        if hasattr(existing, 'reversal') and existing.reversal is not None:
+            raise ValidationError(
+                _(
+                    'Событие с внешним идентификатором «{external_id}» '
+                    'уже аннулировано.',
+                ).format(external_id=external_id),
+            )
+        if (
+            existing.type != event_type
+            or existing.amount != amount
+            or existing.effective_on != effective_on
+        ):
+            raise ValidationError(
+                _(
+                    'Событие с внешним идентификатором «{external_id}» '
+                    'уже существует с другими параметрами.',
+                ).format(external_id=external_id),
+            )
+        return existing
+
+    def _check_capitalization_idempotency(
+        self,
+        *,
+        deposit_id: int,
+        external_id: str,
+        gross: Decimal,
+        withholding: Decimal,
+        net: Decimal,
+        posting_on: 'date',
+        value_on: 'date',
+    ) -> DepositCapitalizationEvent | None:
+        existing = (
+            self.deposit_repository.get_capitalization_event_by_external_id(
+                deposit_id,
+                external_id,
+            )
+        )
+        if existing is None:
+            return None
+        if existing.reversal_of_id is not None:
+            raise ValidationError(
+                _(
+                    'Компенсирующее событие нельзя повторно провести '
+                    'с тем же внешним идентификатором.',
+                ),
+            )
+        if hasattr(existing, 'reversal') and existing.reversal is not None:
+            raise ValidationError(
+                _(
+                    'Событие с внешним идентификатором «{external_id}» '
+                    'уже аннулировано.',
+                ).format(external_id=external_id),
+            )
+        if (
+            existing.gross != gross
+            or existing.withholding != withholding
+            or existing.net != net
+            or existing.posting_on != posting_on
+            or existing.value_on != value_on
+        ):
+            raise ValidationError(
+                _(
+                    'Событие с внешним идентификатором «{external_id}» '
+                    'уже существует с другими параметрами.',
+                ).format(external_id=external_id),
+            )
+        return existing
+
+    def _create_audit(
+        self,
+        deposit: 'Deposit',
+        event_type: str,
+        description: str,
+    ) -> None:
+        self.deposit_repository.create_audit_event(
+            deposit=deposit,
+            event_type=event_type,
+            description=description,
+        )
+
+    def reconcile_deposit(
+        self,
+        deposit_id: int,
+        user: 'User',
+    ) -> dict[str, object]:
+        deposit = self.deposit_repository.get_by_id_and_user(
+            deposit_id,
+            user,
+        )
+        events = deposit.principal_events.all()
+        calculated = Decimal()
+        for event in events:
+            calculated += self._signed_principal_amount(event)
+        for cap_event in deposit.capitalization_events.filter(
+            destination=(DepositCapitalizationEvent.Destination.CAPITALIZATION),
+        ):
+            net = cap_event.net
+            calculated += -net if cap_event.reversal_of_id else net
+        account = deposit.account
+        discrepancy = account.balance - calculated
+        now = timezone.now()
+        account.last_reconciled_at = now
+        account.save(update_fields=['last_reconciled_at'])
+        return {
+            'calculated_balance': calculated,
+            'account_balance': account.balance,
+            'discrepancy': discrepancy,
+            'last_reconciled_at': now,
+        }
