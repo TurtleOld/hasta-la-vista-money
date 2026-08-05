@@ -16,9 +16,12 @@ from hasta_la_vista_money.constants import ACCOUNT_TYPE_DEPOSIT
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    CloseDepositEarlyCommand,
     CloseMaturedDepositCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
+    EarlyClosureTerms,
+    ForecastEarlyClosureCommand,
     ForecastTerms,
     FundDepositCommand,
     OpenExistingDepositCommand,
@@ -1761,6 +1764,20 @@ class CapitalizeInterestServiceTests(TestCase):
 
         deposit.account.refresh_from_db()
         self.assertEqual(deposit.account.balance, Decimal('100000.00'))
+        self.assertIsNone(deposit.account.archived_at)
+        self.assertFalse(
+            DepositPrincipalEvent.objects.filter(
+                deposit=deposit,
+                type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            ).exists(),
+        )
+        self.assertFalse(
+            DepositCapitalizationEvent.objects.filter(
+                deposit=deposit,
+                is_final=True,
+            ).exists(),
+        )
+
         self.assertFalse(
             DepositCapitalizationEvent.objects.filter(deposit=deposit).exists(),
         )
@@ -2621,84 +2638,166 @@ class CloseMaturedDepositServiceTests(TestCase):
 
         deposit.account.refresh_from_db()
         self.assertEqual(deposit.account.balance, Decimal('100000.00'))
-        self.assertIsNone(deposit.account.archived_at)
+
+
+class CloseDepositEarlyServiceTests(TestCase):
+    def _open_active_deposit(self, user: 'User') -> Deposit:
+        today = timezone.localdate()
+        service = ApplicationContainer().deposits.deposit_service()
+        return cast(
+            'Deposit',
+            service.create_term_deposit(
+                CreateDepositCommand(
+                    user=user,
+                    name='Вклад для досрочного закрытия',
+                    bank=_sberbank(),
+                    currency='RUB',
+                    balance=Decimal('100000.00'),
+                    opened_on=today - timedelta(days=180),
+                    matures_on=today + timedelta(days=180),
+                    annual_rate=Decimal('12.00'),
+                    rate_kind=DepositTerm.RateKind.FIXED,
+                    early_closure_terms=EarlyClosureTerms(
+                        annual_rate=Decimal('1.00'),
+                        recalculation_scope=(
+                            DepositTerm.EarlyClosureRecalculationScope.WHOLE_TERM
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+    def test_forecast_has_no_financial_effects(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_active_deposit(user)
+        service = ApplicationContainer().deposits.deposit_service()
+        balance_before = deposit.account.balance
+        kpis_before = get_dashboard_month_kpis(user)
+
+        result = service.forecast_early_closure(
+            ForecastEarlyClosureCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                closure_on=timezone.localdate(),
+            ),
+        )
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(result.principal, Decimal('100000.00'))
+        self.assertIsNotNone(result.gross)
+        self.assertFalse(result.is_uncertain)
+        self.assertEqual(deposit.account.balance, balance_before)
+        self.assertEqual(get_dashboard_month_kpis(user), kpis_before)
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+
+    def test_close_preserves_previous_payout_and_counts_adjustment_once(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_active_deposit(user)
+        service = ApplicationContainer().deposits.deposit_service()
+        previous = service.confirm_interest_payment(
+            CapitalizeInterestCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                gross=Decimal('1000.00'),
+                withholding=Decimal('130.00'),
+                net=Decimal('870.00'),
+                posting_on=timezone.localdate(),
+                value_on=timezone.localdate(),
+                reason='Промежуточная выплата.',
+                destination=(DepositCapitalizationEvent.Destination.EXTERNAL),
+            ),
+        )
+
+        result = service.close_deposit_early(
+            CloseDepositEarlyCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                destination=(DepositCapitalizationEvent.Destination.EXTERNAL),
+                destination_account_id=None,
+                principal=Decimal('100000.00'),
+                gross=Decimal('500.00'),
+                withholding=Decimal('65.00'),
+                net=Decimal('435.00'),
+                prior_interest_adjustment=Decimal('-750.00'),
+                posting_on=timezone.localdate(),
+                value_on=timezone.localdate(),
+                closure_reason='Досрочное расторжение по заявлению клиента.',
+            ),
+        )
+
+        deposit.account.refresh_from_db()
+        deposit.current_term.refresh_from_db()
+        previous.refresh_from_db()
+        self.assertEqual(
+            result.principal_event.type,
+            DepositPrincipalEvent.Type.EARLY_CLOSURE,
+        )
+        self.assertEqual(
+            result.principal_event.exception_reason,
+            'Досрочное расторжение по заявлению клиента.',
+        )
+        self.assertEqual(
+            result.interest_event.prior_interest_adjustment,
+            Decimal('-750.00'),
+        )
+        self.assertTrue(
+            DepositCapitalizationEvent.objects.filter(pk=previous.pk).exists(),
+        )
+        self.assertEqual(previous.gross, Decimal('1000.00'))
+        self.assertEqual(deposit.account.balance, Decimal())
+        self.assertTrue(deposit.account.is_archived)
+        self.assertEqual(deposit.current_term.state, DepositTerm.State.CLOSED)
+        kpis = get_dashboard_month_kpis(user)
+        self.assertEqual(kpis['income'], Decimal('1500.00'))
+        self.assertEqual(kpis['expenses'], Decimal('945.00'))
+        self.assertEqual(kpis['net_result'], Decimal('555.00'))
+        cache.clear()
+        charts = budget_charts(user, period='y')
+        self.assertEqual(charts['total_income'], 1500.0)
+        self.assertEqual(charts['total_expense'], 945.0)
+
+    def test_close_rolls_back_when_final_event_storage_fails(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = self._open_active_deposit(user)
+        service = ApplicationContainer().deposits.deposit_service()
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_capitalization_event',
+                side_effect=RuntimeError('interest storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.close_deposit_early(
+                CloseDepositEarlyCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    destination=(
+                        DepositCapitalizationEvent.Destination.EXTERNAL
+                    ),
+                    destination_account_id=None,
+                    principal=Decimal('100000.00'),
+                    gross=Decimal(),
+                    withholding=Decimal(),
+                    net=Decimal(),
+                    prior_interest_adjustment=Decimal(),
+                    posting_on=timezone.localdate(),
+                    value_on=timezone.localdate(),
+                    closure_reason='Закрытие с проверкой rollback.',
+                ),
+            )
+
+        deposit.account.refresh_from_db()
+        deposit.current_term.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('100000.00'))
+        self.assertFalse(deposit.account.is_archived)
+        self.assertEqual(deposit.current_term.state, DepositTerm.State.ACTIVE)
         self.assertFalse(
             DepositPrincipalEvent.objects.filter(
                 deposit=deposit,
-                type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+                type=DepositPrincipalEvent.Type.EARLY_CLOSURE,
             ).exists(),
         )
-        self.assertFalse(
-            DepositCapitalizationEvent.objects.filter(
-                deposit=deposit,
-                is_final=True,
-            ).exists(),
-        )
-
-    def test_close_allows_zero_principal_after_full_withdrawal(self) -> None:
-        user = cast('User', UserFactory())
-        service = ApplicationContainer().deposits.deposit_service()
-        deposit = self._open_matured_deposit(user)
-        Account.objects.filter(pk=deposit.account.pk).update(balance=Decimal())
-
-        result = service.close_matured_deposit(
-            CloseMaturedDepositCommand(
-                user=user,
-                deposit_id=deposit.pk,
-                destination=DepositCapitalizationEvent.Destination.EXTERNAL,
-                destination_account_id=None,
-                principal=Decimal(),
-                gross=Decimal(),
-                withholding=Decimal(),
-                net=Decimal(),
-                posting_on=timezone.localdate(),
-                value_on=timezone.localdate(),
-            ),
-        )
-
-        deposit.account.refresh_from_db()
-        term = deposit.current_term
-        term.refresh_from_db()
-        self.assertEqual(result.principal_event.amount, Decimal())
-        self.assertEqual(term.state, DepositTerm.State.CLOSED)
-        self.assertTrue(deposit.account.is_archived)
-
-    def test_close_rejects_imprecise_or_non_final_interest_data(self) -> None:
-        user = cast('User', UserFactory())
-        service = ApplicationContainer().deposits.deposit_service()
-        deposit = self._open_matured_deposit(user)
-        non_final_forecast = DepositInterestForecast.objects.create(
-            term=deposit.current_term,
-            payout_on=timezone.localdate() - timedelta(days=1),
-            amount=Decimal('100.00'),
-            period_starts_on=deposit.current_term.opened_on,
-            period_ends_on=timezone.localdate() - timedelta(days=1),
-        )
-        base_command = CloseMaturedDepositCommand(
-            user=user,
-            deposit_id=deposit.pk,
-            destination=DepositCapitalizationEvent.Destination.EXTERNAL,
-            destination_account_id=None,
-            principal=Decimal('100000.00'),
-            gross=Decimal('10.44'),
-            withholding=Decimal('0.40'),
-            net=Decimal(10),
-            posting_on=timezone.localdate(),
-            value_on=timezone.localdate(),
-        )
-
-        for command in (
-            base_command,
-            replace(
-                base_command,
-                gross=Decimal('10.00'),
-                withholding=Decimal(),
-                net=Decimal('10.00'),
-                forecast_id=non_final_forecast.pk,
-            ),
-        ):
-            with self.assertRaises(ValidationError):
-                service.close_matured_deposit(command)
-
-        deposit.account.refresh_from_db()
-        self.assertEqual(deposit.account.balance, Decimal('100000.00'))

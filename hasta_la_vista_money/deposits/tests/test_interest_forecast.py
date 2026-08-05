@@ -5,11 +5,14 @@ from typing import NamedTuple
 from django.test import SimpleTestCase
 
 from hasta_la_vista_money.deposits.interest_forecast import (
+    EarlyClosureForecast,
+    EarlyClosureRecalculationScope,
     RateSegment,
     WeekendOnlyCalendar,
     accrual_days,
     build_forecast,
     compute_accrued_interest,
+    forecast_early_closure,
     monthly_payout_dates,
     rate_for_day,
     roll_to_business_day,
@@ -20,6 +23,74 @@ from hasta_la_vista_money.deposits.models import DepositTerm
 
 _ACTUAL_365 = DepositTerm.DayCountConvention.ACTUAL_365
 _ACTUAL_ACTUAL = DepositTerm.DayCountConvention.ACTUAL_ACTUAL
+
+
+class EarlyClosureForecastTests(SimpleTestCase):
+    class Case(NamedTuple):
+        scope: EarlyClosureRecalculationScope
+        expected_gross: Decimal
+
+    CASES = (
+        Case(
+            EarlyClosureRecalculationScope.WHOLE_TERM,
+            Decimal('495.89041096'),
+        ),
+        Case(
+            EarlyClosureRecalculationScope.CURRENT_PERIOD,
+            Decimal('167.12328767'),
+        ),
+        Case(
+            EarlyClosureRecalculationScope.WITHDRAWN_AMOUNT,
+            Decimal('123.97260274'),
+        ),
+    )
+
+    def test_supported_scopes_recalculate_at_early_closure_rate(self) -> None:
+        for case in self.CASES:
+            with self.subTest(scope=case.scope):
+                forecast = forecast_early_closure(
+                    scope=case.scope,
+                    closure_on=date(2026, 7, 1),
+                    term_opened_on=date(2026, 1, 1),
+                    current_period_opened_on=date(2026, 5, 1),
+                    principal=Decimal('100000.00'),
+                    withdrawn_amount=Decimal('25000.00'),
+                    annual_rate=Decimal('1.00'),
+                    day_count_convention=_ACTUAL_365,
+                    accrual_start_included=True,
+                    accrual_end_included=False,
+                )
+
+                self.assertEqual(
+                    forecast,
+                    EarlyClosureForecast(
+                        scope=case.scope,
+                        gross=case.expected_gross,
+                        is_uncertain=False,
+                        uncertainty_reason='',
+                    ),
+                )
+
+    def test_unsupported_bank_formula_returns_no_amount(self) -> None:
+        forecast = forecast_early_closure(
+            scope=EarlyClosureRecalculationScope.UNSUPPORTED,
+            closure_on=date(2026, 7, 1),
+            term_opened_on=date(2026, 1, 1),
+            current_period_opened_on=date(2026, 5, 1),
+            principal=Decimal('100000.00'),
+            withdrawn_amount=Decimal('100000.00'),
+            annual_rate=Decimal('1.00'),
+            day_count_convention=_ACTUAL_365,
+            accrual_start_included=True,
+            accrual_end_included=False,
+        )
+
+        self.assertIsNone(forecast.gross)
+        self.assertTrue(forecast.is_uncertain)
+        self.assertEqual(
+            forecast.uncertainty_reason,
+            'Формула банка не поддерживается.',
+        )
 
 
 class YearLengthTests(SimpleTestCase):

@@ -14,7 +14,10 @@ from django.views.generic import FormView, ListView, TemplateView
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    CloseDepositEarlyCommand,
     CloseMaturedDepositCommand,
+    EarlyClosureTerms,
+    ForecastEarlyClosureCommand,
     ForecastTerms,
     FundDepositCommand,
     OpenExistingDepositCommand,
@@ -28,8 +31,10 @@ from hasta_la_vista_money.deposits.commands import (
 from hasta_la_vista_money.deposits.forms import (
     AddFloatingRatePeriodForm,
     CapitalizeInterestForm,
+    CloseDepositEarlyForm,
     CloseMaturedDepositForm,
     CreateDepositForm,
+    ForecastEarlyClosureForm,
     RenewDepositForm,
     TopUpDepositForm,
     WithdrawDepositForm,
@@ -46,7 +51,12 @@ if TYPE_CHECKING:
 
 def _contract_terms_from_data(
     data: dict[str, Any],
-) -> tuple[ForecastTerms, WithdrawalTerms, TopUpTerms]:
+) -> tuple[
+    ForecastTerms,
+    WithdrawalTerms,
+    TopUpTerms,
+    EarlyClosureTerms,
+]:
     return (
         ForecastTerms(
             day_count_convention=data['day_count_convention'],
@@ -70,6 +80,11 @@ def _contract_terms_from_data(
             maximum_top_up_amount=data['maximum_top_up_amount'],
             top_up_deadline=data['top_up_deadline'],
             maximum_balance=data['maximum_balance'],
+        ),
+        EarlyClosureTerms(
+            annual_rate=data['early_closure_annual_rate'],
+            recalculation_scope=data['early_closure_recalculation_scope'],
+            withdrawn_amount=data['early_closure_withdrawn_amount'],
         ),
     )
 
@@ -99,9 +114,12 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
         data = form.cleaned_data
         request = cast('Any', self.request)
         service = request.container.deposits.deposit_service()
-        forecast_terms, withdrawal_terms, top_up_terms = (
-            _contract_terms_from_data(data)
-        )
+        (
+            forecast_terms,
+            withdrawal_terms,
+            top_up_terms,
+            early_closure_terms,
+        ) = _contract_terms_from_data(data)
         try:
             if data['opening_method'] == DepositPrincipalEvent.Type.FUNDING:
                 source_account = cast('Account', data['source_account'])
@@ -120,6 +138,7 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
                         forecast_terms=forecast_terms,
                         withdrawal_terms=withdrawal_terms,
                         top_up_terms=top_up_terms,
+                        early_closure_terms=early_closure_terms,
                     ),
                 )
             else:
@@ -138,6 +157,7 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
                         forecast_terms=forecast_terms,
                         withdrawal_terms=withdrawal_terms,
                         top_up_terms=top_up_terms,
+                        early_closure_terms=early_closure_terms,
                     ),
                 )
         except ValidationError as error:
@@ -169,7 +189,10 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
         )
         context['closure_event'] = (
             deposit.principal_events.filter(
-                type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+                type__in=(
+                    DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+                    DepositPrincipalEvent.Type.EARLY_CLOSURE,
+                ),
             )
             .select_related('destination_account')
             .first()
@@ -191,6 +214,9 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
         context['close_form'] = CloseMaturedDepositForm(
             term=deposit.current_term,
             user=user,
+        )
+        context['early_closure_forecast_form'] = ForecastEarlyClosureForm(
+            term=deposit.current_term,
         )
         return context
 
@@ -231,9 +257,12 @@ class DepositRenewView(LoginRequiredMixin, FormView[RenewDepositForm]):
         deposit = self.get_deposit()
         user = cast('User', self.request.user)
         data = form.cleaned_data
-        forecast_terms, withdrawal_terms, top_up_terms = (
-            _contract_terms_from_data(data)
-        )
+        (
+            forecast_terms,
+            withdrawal_terms,
+            top_up_terms,
+            early_closure_terms,
+        ) = _contract_terms_from_data(data)
         request = cast('Any', self.request)
         service = request.container.deposits.deposit_service()
         try:
@@ -248,6 +277,7 @@ class DepositRenewView(LoginRequiredMixin, FormView[RenewDepositForm]):
                     forecast_terms=forecast_terms,
                     withdrawal_terms=withdrawal_terms,
                     top_up_terms=top_up_terms,
+                    early_closure_terms=early_closure_terms,
                 ),
             )
         except ValidationError as error:
@@ -481,4 +511,111 @@ class DepositCloseView(LoginRequiredMixin, View):
             messages.error(request, error.message)
         else:
             messages.success(request, _('Вклад закрыт в плановый срок.'))
+        return HttpResponseRedirect(deposit.get_absolute_url())
+
+
+class DepositEarlyClosureView(LoginRequiredMixin, TemplateView):
+    template_name = 'deposits/deposit_early_closure.html'
+
+    def get_deposit(self) -> Deposit:
+        user = cast('User', self.request.user)
+        request = cast('Any', self.request)
+        service = request.container.deposits.deposit_service()
+        deposit = cast(
+            'Deposit',
+            get_object_or_404(
+                service.get_user_deposits(user),
+                pk=self.kwargs['pk'],
+            ),
+        )
+        if deposit.current_term.state != 'active':
+            raise Http404
+        return deposit
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context['deposit'] = self.get_deposit()
+        return context
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        user = cast('User', request.user)
+        typed_request = cast('Any', request)
+        service = typed_request.container.deposits.deposit_service()
+        deposit = self.get_deposit()
+        if 'estimate' in request.POST:
+            forecast_form = ForecastEarlyClosureForm(
+                request.POST,
+                term=deposit.current_term,
+            )
+            if not forecast_form.is_valid():
+                return self.render_to_response(
+                    {
+                        'deposit': deposit,
+                        'forecast_form': forecast_form,
+                    },
+                )
+            forecast = service.forecast_early_closure(
+                ForecastEarlyClosureCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    closure_on=forecast_form.cleaned_data['closure_on'],
+                ),
+            )
+            initial = {
+                'principal': forecast.principal,
+                'gross': forecast.gross or Decimal(),
+                'withholding': Decimal(),
+                'net': forecast.gross or Decimal(),
+                'posting_on': forecast_form.cleaned_data['closure_on'],
+                'value_on': forecast_form.cleaned_data['closure_on'],
+            }
+            return self.render_to_response(
+                {
+                    'deposit': deposit,
+                    'forecast': forecast,
+                    'forecast_form': forecast_form,
+                    'confirmation_form': CloseDepositEarlyForm(
+                        term=deposit.current_term,
+                        user=user,
+                        initial=initial,
+                    ),
+                },
+            )
+        form = CloseDepositEarlyForm(
+            request.POST,
+            term=deposit.current_term,
+            user=user,
+        )
+        if not form.is_valid():
+            return self.render_to_response(
+                {'deposit': deposit, 'confirmation_form': form},
+            )
+        destination_account = form.cleaned_data['destination_account']
+        try:
+            service.close_deposit_early(
+                CloseDepositEarlyCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    destination=form.cleaned_data['destination'],
+                    destination_account_id=(
+                        destination_account.pk if destination_account else None
+                    ),
+                    principal=form.cleaned_data['principal'],
+                    gross=form.cleaned_data['gross'],
+                    withholding=form.cleaned_data['withholding'],
+                    net=form.cleaned_data['net'],
+                    prior_interest_adjustment=form.cleaned_data[
+                        'prior_interest_adjustment'
+                    ],
+                    posting_on=form.cleaned_data['posting_on'],
+                    value_on=form.cleaned_data['value_on'],
+                    closure_reason=form.cleaned_data['closure_reason'],
+                ),
+            )
+        except ValidationError as error:
+            form.add_error(None, error)
+            return self.render_to_response(
+                {'deposit': deposit, 'confirmation_form': form},
+            )
+        messages.success(request, _('Вклад закрыт досрочно.'))
         return HttpResponseRedirect(deposit.get_absolute_url())

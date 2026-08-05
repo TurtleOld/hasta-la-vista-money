@@ -58,6 +58,17 @@
             </form>
         </section>
         {% elif term.state != 'closed' %}
+        {% if term.state == 'active' %}
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Закрыть вклад досрочно' %}</h2></div>
+            <div class="accounts-composer-ft">
+                <div class="hint">{% translate 'Сначала оцените результат по условиям вклада, затем подтвердите фактические суммы банка.' %}</div>
+                <div class="ft-actions">
+                    <a href="{% url 'deposits:early-close' pk=deposit.pk %}" class="accounts-form-button accounts-form-button-primary">{% translate 'Оценить досрочное закрытие' %}</a>
+                </div>
+            </div>
+        </section>
+        {% endif %}
         <section class="accounts-panel">
             <div class="accounts-panel-hd"><h2>{% translate 'Подтвердить выплату процентов' %}</h2></div>
             <form method="post" action="{% url 'deposits:capitalize' pk=deposit.pk %}">
@@ -139,6 +150,7 @@
                 {% endwith %}
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Срок' %}</div><div class="accounts-row-name">{{ term.opened_on|date:'d.m.Y' }} — {{ term.matures_on|date:'d.m.Y' }}</div></div></div></div>
                 <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Состояние' %}</div><div class="accounts-row-name">{{ term.state_label }}</div></div></div></div>
+                <div class="accounts-row"><div class="accounts-row-content"><div class="accounts-min0"><div class="accounts-row-kind">{% translate 'Досрочное расторжение' %}</div><div class="accounts-row-name">{{ term.get_early_closure_recalculation_scope_display }}{% if term.early_closure_annual_rate is not None %} · {{ term.early_closure_annual_rate }}%{% endif %}</div></div></div></div>
             </div>
         </section>
         <section class="accounts-panel">
@@ -217,7 +229,7 @@
         </section>
         {% if closure_event %}
         <section class="accounts-panel">
-            <div class="accounts-panel-hd"><h2>{% translate 'Плановое закрытие' %}</h2></div>
+            <div class="accounts-panel-hd"><h2>{% if closure_event.type == 'early_closure' %}{% translate 'Досрочное закрытие' %}{% else %}{% translate 'Плановое закрытие' %}{% endif %}</h2></div>
             <div class="accounts-list">
                 <div class="accounts-row">
                     <div class="accounts-row-content">
@@ -231,6 +243,7 @@
                                 {% if closure_event.destination_account %} · {{ closure_event.destination_account.name_account }}{% endif %}
                                 · {% translate 'Тело' %}: {{ closure_event.amount|comma }}
                                 <span class="cur">{{ deposit.account.currency }}</span>
+                                {% if closure_event.exception_reason %} · {{ closure_event.exception_reason }}{% endif %}
                             </div>
                         </div>
                     </div>
@@ -256,7 +269,8 @@
                                 ·
                                 {% translate 'Брутто' %}: {{ event.gross|comma }}
                                 · {% translate 'Удержание' %}: {{ event.withholding|comma }}
-                                · {% translate 'Нетто' %}: {{ event.net|comma }}
+                                 · {% translate 'Нетто' %}: {{ event.net|comma }}
+                                {% if event.prior_interest_adjustment %} · {% translate 'Корректировка прежних процентов' %}: {{ event.prior_interest_adjustment|comma }}{% endif %}
                                 <span class="cur">{{ deposit.account.currency }}</span>
                                 {% if event.reason %} · {{ event.reason }}{% endif %}
                             </div>

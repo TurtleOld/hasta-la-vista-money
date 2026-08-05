@@ -370,6 +370,7 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
         .annotate(
             gross_total=Sum('gross'),
             withholding_total=Sum('withholding'),
+            adjustment_total=Sum('prior_interest_adjustment'),
         )
     }
     all_months_set.update(interest_by_month)
@@ -406,8 +407,14 @@ def budget_charts(user: User, period: str = 'y') -> BudgetChartsDict:
         interest = interest_by_month.get(month)
         if interest is None:
             continue
-        total_income[index] += float(interest['gross_total'] or 0)
-        total_expense[index] += float(interest['withholding_total'] or 0)
+        adjustment = Decimal(interest['adjustment_total'] or 0)
+        total_income[index] += float(
+            Decimal(interest['gross_total'] or 0) + max(adjustment, Decimal()),
+        )
+        total_expense[index] += float(
+            Decimal(interest['withholding_total'] or 0)
+            - min(adjustment, Decimal()),
+        )
 
     chart_balance = (
         [total_income[i] - total_expense[i] for i in range(len(months))]

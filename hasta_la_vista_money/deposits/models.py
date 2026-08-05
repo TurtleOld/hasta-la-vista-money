@@ -88,6 +88,12 @@ class DepositTerm(models.Model):
         PRECEDING = 'preceding', _('На предыдущий рабочий день')
         FOLLOWING = 'following', _('На следующий рабочий день')
 
+    class EarlyClosureRecalculationScope(models.TextChoices):
+        WHOLE_TERM = 'whole_term', _('Весь срок')
+        CURRENT_PERIOD = 'current_period', _('Текущий период')
+        WITHDRAWN_AMOUNT = 'withdrawn_amount', _('Снятая сумма')
+        UNSUPPORTED = 'unsupported', _('Формула банка не поддерживается')
+
     deposit = models.ForeignKey(
         Deposit,
         on_delete=models.CASCADE,
@@ -193,6 +199,28 @@ class DepositTerm(models.Model):
         blank=True,
         verbose_name=_('Максимальный остаток после пополнения'),
     )
+    early_closure_annual_rate = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        verbose_name=_('Ставка досрочного расторжения'),
+    )
+    early_closure_recalculation_scope = models.CharField(
+        max_length=20,
+        choices=EarlyClosureRecalculationScope.choices,
+        default=EarlyClosureRecalculationScope.UNSUPPORTED,
+        verbose_name=_('Область пересчёта при досрочном расторжении'),
+    )
+    early_closure_withdrawn_amount = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        verbose_name=_('Сумма для пересчёта при досрочном расторжении'),
+    )
     closed_on = models.DateField(
         null=True,
         blank=True,
@@ -214,9 +242,9 @@ class DepositTerm(models.Model):
             models.CheckConstraint(
                 condition=(
                     Q(closed_on__isnull=True)
-                    | Q(closed_on__gte=models.F('matures_on'))
+                    | Q(closed_on__gte=models.F('opened_on'))
                 ),
-                name='planned_deposit_closure_not_before_maturity',
+                name='deposit_closure_not_before_opening',
             ),
         ]
 
@@ -333,6 +361,7 @@ class DepositPrincipalEvent(models.Model):
         TOP_UP = 'top_up', _('Пополнение')
         WITHDRAWAL = 'withdrawal', _('Снятие')
         PLANNED_CLOSURE = 'planned_closure', _('Плановое закрытие')
+        EARLY_CLOSURE = 'early_closure', _('Досрочное закрытие')
 
     deposit = models.ForeignKey(
         Deposit,
@@ -392,6 +421,7 @@ class DepositPrincipalEvent(models.Model):
                     | Q(type='top_up', amount__gt=0)
                     | Q(type='withdrawal', amount__gt=0)
                     | Q(type='planned_closure', amount__gte=0)
+                    | Q(type='early_closure', amount__gte=0)
                 ),
                 name='deposit_principal_event_amount_valid',
             ),
@@ -422,13 +452,29 @@ class DepositPrincipalEvent(models.Model):
                         destination=InterestPayoutDestination.EXTERNAL,
                         destination_account__isnull=True,
                     )
+                    | Q(
+                        type='early_closure',
+                        source_account__isnull=True,
+                        destination=(
+                            InterestPayoutDestination.INTERNAL_ACCOUNT
+                        ),
+                        destination_account__isnull=False,
+                    )
+                    | Q(
+                        type='early_closure',
+                        source_account__isnull=True,
+                        destination=InterestPayoutDestination.EXTERNAL,
+                        destination_account__isnull=True,
+                    )
                 ),
                 name='deposit_principal_event_source_valid',
             ),
             models.UniqueConstraint(
                 fields=['deposit'],
-                condition=Q(type='planned_closure'),
-                name='one_planned_closure_per_deposit',
+                condition=Q(
+                    type__in=('planned_closure', 'early_closure'),
+                ),
+                name='one_closure_per_deposit',
             ),
         ]
 
@@ -604,6 +650,12 @@ class DepositCapitalizationEvent(models.Model):
     is_final = models.BooleanField(
         default=False,
         verbose_name=_('Финальная выплата при закрытии'),
+    )
+    prior_interest_adjustment = models.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        default=0,
+        verbose_name=_('Корректировка ранее выплаченных процентов'),
     )
     confirmed_at = models.DateTimeField(auto_now_add=True)
 

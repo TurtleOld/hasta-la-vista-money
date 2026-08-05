@@ -11,11 +11,15 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    CloseDepositEarlyCommand,
     CloseMaturedDepositCommand,
     CloseMaturedDepositResult,
     ConfirmInterestPaymentCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
+    EarlyClosureTerms,
+    ForecastEarlyClosureCommand,
+    ForecastEarlyClosureResult,
     ForecastTerms,
     FundDepositCommand,
     OpenExistingDepositCommand,
@@ -27,11 +31,13 @@ from hasta_la_vista_money.deposits.commands import (
     WithdrawDepositCommand,
 )
 from hasta_la_vista_money.deposits.interest_forecast import (
+    EarlyClosureRecalculationScope,
     PrincipalChange,
     ProductionCalendar,
     RateSegment,
     WeekendOnlyCalendar,
     build_forecast,
+    forecast_early_closure,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
@@ -244,6 +250,7 @@ class DepositService:
             **self._forecast_term_kwargs(command.forecast_terms),
             **self._withdrawal_term_kwargs(command.withdrawal_terms),
             **self._top_up_term_kwargs(command.top_up_terms),
+            **self._early_closure_term_kwargs(command.early_closure_terms),
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -360,6 +367,7 @@ class DepositService:
             **self._forecast_term_kwargs(command.forecast_terms),
             **self._withdrawal_term_kwargs(command.withdrawal_terms),
             **self._top_up_term_kwargs(command.top_up_terms),
+            **self._early_closure_term_kwargs(command.early_closure_terms),
         )
         self.deposit_repository.create_rate_period(
             term=term,
@@ -411,6 +419,16 @@ class DepositService:
             'maximum_top_up_amount': top_up_terms.maximum_top_up_amount,
             'top_up_deadline': top_up_terms.top_up_deadline,
             'maximum_balance': top_up_terms.maximum_balance,
+        }
+
+    def _early_closure_term_kwargs(
+        self,
+        terms: EarlyClosureTerms,
+    ) -> dict[str, object]:
+        return {
+            'early_closure_annual_rate': terms.annual_rate,
+            'early_closure_recalculation_scope': terms.recalculation_scope,
+            'early_closure_withdrawn_amount': terms.withdrawn_amount,
         }
 
     def _create_custom_schedule_dates(
@@ -482,6 +500,7 @@ class DepositService:
             **self._forecast_term_kwargs(command.forecast_terms),
             **self._withdrawal_term_kwargs(command.withdrawal_terms),
             **self._top_up_term_kwargs(command.top_up_terms),
+            **self._early_closure_term_kwargs(command.early_closure_terms),
         )
         self.deposit_repository.create_rate_period(
             term=new_term,
@@ -833,6 +852,197 @@ class DepositService:
                 )
         return event
 
+    def forecast_early_closure(
+        self,
+        command: ForecastEarlyClosureCommand,
+    ) -> ForecastEarlyClosureResult:
+        try:
+            deposit = self.deposit_repository.get_by_id_and_user(
+                command.deposit_id,
+                command.user,
+            )
+        except Deposit.DoesNotExist as error:
+            raise ValidationError(
+                _('Вклад не найден или недоступен.'),
+            ) from error
+        term = deposit.current_term
+        if term.state != DepositTerm.State.ACTIVE:
+            raise ValidationError(
+                _('Досрочное закрытие доступно только для активного вклада.'),
+            )
+        if not term.opened_on <= command.closure_on < term.matures_on:
+            raise ValidationError(
+                _('Дата досрочного закрытия должна попадать в срок вклада.'),
+            )
+        scope = EarlyClosureRecalculationScope(
+            term.early_closure_recalculation_scope,
+        )
+        if (
+            scope == EarlyClosureRecalculationScope.UNSUPPORTED
+            or term.early_closure_annual_rate is None
+        ):
+            return ForecastEarlyClosureResult(
+                principal=deposit.account.balance,
+                gross=None,
+                recalculation_scope=scope,
+                is_uncertain=True,
+                uncertainty_reason=str(
+                    _('Формула банка не поддерживается.'),
+                ),
+            )
+        current_period_opened_on = term.opened_on
+        previous_payment = self.deposit_repository.get_latest_interest_event(
+            deposit.pk,
+            command.closure_on,
+        )
+        if previous_payment is not None:
+            current_period_opened_on = previous_payment.value_on
+        forecast = forecast_early_closure(
+            scope=scope,
+            closure_on=command.closure_on,
+            term_opened_on=term.opened_on,
+            current_period_opened_on=current_period_opened_on,
+            principal=deposit.account.balance,
+            withdrawn_amount=(
+                term.early_closure_withdrawn_amount or deposit.account.balance
+            ),
+            annual_rate=term.early_closure_annual_rate,
+            day_count_convention=DepositTerm.DayCountConvention(
+                term.day_count_convention,
+            ),
+            accrual_start_included=term.accrual_start_included,
+            accrual_end_included=term.accrual_end_included,
+        )
+        return ForecastEarlyClosureResult(
+            principal=deposit.account.balance,
+            gross=forecast.gross,
+            recalculation_scope=forecast.scope,
+            is_uncertain=forecast.is_uncertain,
+            uncertainty_reason=forecast.uncertainty_reason,
+        )
+
+    @transaction.atomic
+    def close_deposit_early(
+        self,
+        command: CloseDepositEarlyCommand,
+    ) -> CloseMaturedDepositResult:
+        try:
+            deposit = self.deposit_repository.get_by_id_and_user_for_update(
+                command.deposit_id,
+                command.user,
+            )
+        except Deposit.DoesNotExist as error:
+            raise ValidationError(
+                _('Вклад не найден или недоступен.'),
+            ) from error
+        term = deposit.current_term
+        self._validate_early_closure(term, command)
+        destination_account = self._resolve_closure_destination(
+            deposit,
+            command,
+        )
+        account_ids = {deposit.account.pk}
+        if destination_account is not None:
+            account_ids.add(destination_account.pk)
+        closure_accounts = self.account_repository.get_by_ids_for_update(
+            account_ids,
+        )
+        if len(closure_accounts) != len(account_ids):
+            raise ValidationError(_('Счёт закрытия не найден или недоступен.'))
+        deposit.account = closure_accounts[deposit.account.pk]
+        if command.principal != deposit.account.balance:
+            raise ValidationError(
+                _('Возвращаемое тело должно совпадать с остатком вклада.'),
+            )
+        self._validate_closure_interest_amounts(command)
+        self._validate_early_closure_adjustment(command)
+
+        account_deltas = {deposit.account.pk: -command.principal}
+        if destination_account is not None:
+            destination_account = closure_accounts[destination_account.pk]
+            account_deltas[destination_account.pk] = (
+                command.principal + command.net
+            )
+        locked_accounts = self.balance_service.apply_account_deltas(
+            account_deltas,
+        )
+        closed_account = locked_accounts.get(
+            deposit.account.pk,
+            closure_accounts[deposit.account.pk],
+        )
+        if closed_account.balance != 0:
+            raise ValidationError(
+                _('После закрытия остаток счёта вклада должен быть нулевым.'),
+            )
+        principal_event = self.deposit_repository.create_principal_event(
+            deposit=deposit,
+            type=DepositPrincipalEvent.Type.EARLY_CLOSURE,
+            amount=command.principal,
+            posting_on=command.posting_on,
+            effective_on=command.value_on,
+            source_account=None,
+            destination=command.destination,
+            destination_account=destination_account,
+            exception_reason=command.closure_reason.strip(),
+        )
+        interest_event = self.deposit_repository.create_capitalization_event(
+            deposit=deposit,
+            forecast=None,
+            gross=command.gross,
+            withholding=command.withholding,
+            net=command.net,
+            prior_interest_adjustment=command.prior_interest_adjustment,
+            posting_on=command.posting_on,
+            value_on=command.value_on,
+            reason=command.closure_reason.strip(),
+            destination=command.destination,
+            destination_account=destination_account,
+            is_final=True,
+        )
+        self.deposit_repository.delete_unconfirmed_forecasts(term.pk)
+        self.deposit_repository.close_term(term.pk, command.value_on)
+        self.account_repository.archive(deposit.account.pk)
+        transaction.on_commit(
+            lambda: invalidate_user_detailed_statistics_cache(command.user.pk),
+        )
+        return CloseMaturedDepositResult(
+            principal_event=principal_event,
+            interest_event=interest_event,
+        )
+
+    @staticmethod
+    def _validate_early_closure(
+        term: DepositTerm,
+        command: CloseDepositEarlyCommand,
+    ) -> None:
+        if term.state != DepositTerm.State.ACTIVE:
+            raise ValidationError(
+                _('Досрочное закрытие доступно только для активного вклада.'),
+            )
+        if not command.closure_reason.strip():
+            raise ValidationError(_('Укажите причину досрочного закрытия.'))
+        if not term.opened_on <= command.value_on < term.matures_on:
+            raise ValidationError(
+                _('Дата досрочного закрытия должна попадать в срок вклада.'),
+            )
+        if command.posting_on >= term.matures_on:
+            raise ValidationError(
+                _('Дата проводки должна быть раньше окончания срока.'),
+            )
+
+    @staticmethod
+    def _validate_early_closure_adjustment(
+        command: CloseDepositEarlyCommand,
+    ) -> None:
+        if command.prior_interest_adjustment != (
+            command.prior_interest_adjustment.quantize(
+                constants.MIN_MONEY_AMOUNT,
+            )
+        ):
+            raise ValidationError(
+                _('Корректировка должна иметь точность до копеек.'),
+            )
+
     @transaction.atomic
     def close_matured_deposit(
         self,
@@ -1008,7 +1218,7 @@ class DepositService:
     def _resolve_closure_destination(
         self,
         deposit: Deposit,
-        command: CloseMaturedDepositCommand,
+        command: CloseMaturedDepositCommand | CloseDepositEarlyCommand,
     ) -> Account | None:
         if command.destination == InterestPayoutDestination.EXTERNAL:
             if command.destination_account_id is not None:
@@ -1040,7 +1250,7 @@ class DepositService:
 
     def _validate_closure_interest_amounts(
         self,
-        command: CloseMaturedDepositCommand,
+        command: CloseMaturedDepositCommand | CloseDepositEarlyCommand,
     ) -> None:
         self._validate_interest_amounts(
             command.gross,
