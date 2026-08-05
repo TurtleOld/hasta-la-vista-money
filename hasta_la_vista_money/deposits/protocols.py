@@ -13,6 +13,7 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    RenewDepositCommand,
     TopUpDepositCommand,
 )
 from hasta_la_vista_money.deposits.models import (
@@ -21,6 +22,7 @@ from hasta_la_vista_money.deposits.models import (
     DepositInterestForecast,
     DepositPrincipalEvent,
     DepositRatePeriod,
+    DepositTerm,
 )
 from hasta_la_vista_money.users.models import User
 
@@ -122,8 +124,15 @@ class DepositServiceProtocol(Protocol):
 
         Raises:
             ValidationError: If the term is invalid or not owned, or the
-                custom payout schedule has no configured dates.
+            custom payout schedule has no configured dates.
         """
+
+    def renew_matured_deposit(
+        self,
+        command: RenewDepositCommand,
+    ) -> DepositTerm: ...
+
+    def is_renewal_available(self, deposit: Deposit) -> bool: ...
 
     def top_up_deposit_principal(
         self,

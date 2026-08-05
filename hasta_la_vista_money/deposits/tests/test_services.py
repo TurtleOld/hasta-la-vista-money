@@ -19,10 +19,14 @@ from hasta_la_vista_money.deposits.commands import (
     CloseMaturedDepositCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
+    ForecastTerms,
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    RenewDepositCommand,
     TopUpDepositCommand,
+    TopUpTerms,
+    WithdrawalTerms,
 )
 from hasta_la_vista_money.deposits.models import (
     Deposit,
@@ -2131,6 +2135,212 @@ class CapitalizeInterestServiceTests(TestCase):
                     reason='Чужой вклад.',
                 ),
             )
+
+
+class RenewMaturedDepositServiceTests(TestCase):
+    def _open_matured_deposit(self, user: 'User') -> Deposit:
+        service = ApplicationContainer().deposits.deposit_service()
+        return cast(
+            'Deposit',
+            service.create_term_deposit(
+                CreateDepositCommand(
+                    user=user,
+                    name='Вклад для пролонгации',
+                    bank=_sberbank(),
+                    currency='RUB',
+                    balance=Decimal('100000.00'),
+                    opened_on=timezone.localdate() - timedelta(days=365),
+                    matures_on=timezone.localdate(),
+                    annual_rate=Decimal('12.00'),
+                    rate_kind=DepositTerm.RateKind.FIXED,
+                ),
+            ),
+        )
+
+    def _renewal_command(
+        self,
+        user: 'User',
+        deposit: Deposit,
+    ) -> RenewDepositCommand:
+        opened_on = timezone.localdate() + timedelta(days=1)
+        return RenewDepositCommand(
+            user=user,
+            deposit_id=deposit.pk,
+            opened_on=opened_on,
+            matures_on=opened_on + timedelta(days=180),
+            annual_rate=Decimal('10.50'),
+            rate_kind=DepositTerm.RateKind.FIXED,
+        )
+
+    def test_renew_creates_separate_term_rate_and_forecast(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_matured_deposit(user)
+        old_term = deposit.current_term
+        old_rate = old_term.rate_periods.get()
+        service.recalculate_forecast(
+            RecalculateInterestForecastCommand(
+                user=user,
+                term_id=old_term.pk,
+            ),
+        )
+        old_forecasts = list(
+            old_term.interest_forecasts.values_list(
+                'payout_on',
+                'amount',
+                'confirmed',
+            ),
+        )
+        principal_event_ids = list(
+            DepositPrincipalEvent.objects.filter(deposit=deposit).values_list(
+                'pk',
+                flat=True,
+            ),
+        )
+        balance_before = deposit.account.balance
+        kpis_before = get_dashboard_month_kpis(user)
+        command = self._renewal_command(user, deposit)
+        custom_payout_on = command.opened_on + timedelta(days=90)
+        command = replace(
+            command,
+            forecast_terms=ForecastTerms(
+                payout_schedule_kind=(DepositTerm.PayoutScheduleKind.CUSTOM),
+                custom_payout_dates=[custom_payout_on],
+                interest_payout_destination=(
+                    DepositTerm.PayoutDestination.EXTERNAL
+                ),
+            ),
+            withdrawal_terms=WithdrawalTerms(
+                withdrawal_allowed=True,
+                minimum_balance=Decimal('50000.00'),
+            ),
+            top_up_terms=TopUpTerms(top_up_allowed=True),
+        )
+
+        new_term = service.renew_matured_deposit(command)
+
+        old_term.refresh_from_db()
+        old_rate.refresh_from_db()
+        deposit.account.refresh_from_db()
+        self.assertFalse(old_term.is_current)
+        self.assertTrue(new_term.is_current)
+        self.assertEqual(deposit.current_term, new_term)
+        self.assertEqual(new_term.opened_on, command.opened_on)
+        self.assertEqual(new_term.matures_on, command.matures_on)
+        self.assertEqual(new_term.rate_kind, command.rate_kind)
+        new_rate = new_term.rate_periods.get()
+        self.assertEqual(new_rate.starts_on, command.opened_on)
+        self.assertEqual(new_rate.ends_on, command.matures_on)
+        self.assertEqual(new_rate.annual_rate, command.annual_rate)
+        self.assertEqual(
+            list(
+                new_term.payout_schedule_dates.values_list(
+                    'payout_on',
+                    flat=True,
+                ),
+            ),
+            [custom_payout_on],
+        )
+        self.assertEqual(new_term.interest_forecasts.count(), 2)
+        self.assertTrue(new_term.withdrawal_allowed)
+        self.assertEqual(new_term.minimum_balance, Decimal('50000.00'))
+        self.assertTrue(new_term.top_up_allowed)
+        self.assertEqual(old_rate.annual_rate, Decimal('12.00'))
+        self.assertEqual(
+            list(
+                old_term.interest_forecasts.values_list(
+                    'payout_on',
+                    'amount',
+                    'confirmed',
+                ),
+            ),
+            old_forecasts,
+        )
+        self.assertEqual(
+            list(
+                DepositPrincipalEvent.objects.filter(
+                    deposit=deposit,
+                ).values_list('pk', flat=True),
+            ),
+            principal_event_ids,
+        )
+        self.assertEqual(deposit.account.balance, balance_before)
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+        self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+        kpis_after = get_dashboard_month_kpis(user)
+        for field in ('income', 'expenses', 'net_result', 'savings_rate'):
+            with self.subTest(field=field):
+                self.assertEqual(kpis_after[field], kpis_before[field])
+
+    def test_renew_rejects_overlap_repeat_and_zero_balance(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        overlap_deposit = self._open_matured_deposit(user)
+        overlap_command = replace(
+            self._renewal_command(user, overlap_deposit),
+            opened_on=timezone.localdate(),
+        )
+        old_term = overlap_deposit.current_term
+        backwards_command = replace(
+            self._renewal_command(user, overlap_deposit),
+            opened_on=old_term.opened_on - timedelta(days=180),
+            matures_on=old_term.opened_on - timedelta(days=1),
+        )
+        invalid_schedule_command = replace(
+            self._renewal_command(user, overlap_deposit),
+            forecast_terms=ForecastTerms(
+                payout_schedule_kind=DepositTerm.PayoutScheduleKind.CUSTOM,
+                custom_payout_dates=[old_term.matures_on],
+            ),
+        )
+        zero_deposit = self._open_matured_deposit(user)
+        Account.objects.filter(pk=zero_deposit.account.pk).update(
+            balance=Decimal(),
+        )
+
+        with self.assertRaises(ValidationError):
+            service.renew_matured_deposit(overlap_command)
+        with self.assertRaises(ValidationError):
+            service.renew_matured_deposit(backwards_command)
+        with self.assertRaises(ValidationError):
+            service.renew_matured_deposit(invalid_schedule_command)
+        self.assertEqual(overlap_deposit.terms.count(), 1)
+
+        command = self._renewal_command(user, overlap_deposit)
+        service.renew_matured_deposit(command)
+        with self.assertRaises(ValidationError):
+            service.renew_matured_deposit(command)
+        self.assertEqual(overlap_deposit.terms.count(), 2)
+
+        with self.assertRaises(ValidationError):
+            service.renew_matured_deposit(
+                self._renewal_command(user, zero_deposit),
+            )
+        self.assertEqual(zero_deposit.terms.count(), 1)
+
+    def test_renew_rolls_back_term_switch_when_forecast_creation_fails(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_matured_deposit(user)
+        old_term = deposit.current_term
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_forecast_lines',
+                side_effect=RuntimeError('forecast storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.renew_matured_deposit(
+                self._renewal_command(user, deposit),
+            )
+
+        old_term.refresh_from_db()
+        self.assertTrue(old_term.is_current)
+        self.assertEqual(deposit.terms.count(), 1)
 
 
 class CloseMaturedDepositServiceTests(TestCase):

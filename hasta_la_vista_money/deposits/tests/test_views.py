@@ -753,3 +753,87 @@ class CloseMaturedDepositSmokeTests(TestCase):
         self.assertContains(detail_after, 'Плановое закрытие')
         self.assertNotContains(detail_after, 'Пополнить вклад')
         self.assertNotContains(detail_after, 'Снять тело вклада')
+
+
+class RenewMaturedDepositSmokeTests(TestCase):
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.client.force_login(self.user)
+        service = ApplicationContainer().deposits.deposit_service()
+        self.deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Продлеваемый вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('100000.00'),
+                opened_on=timezone.localdate() - timedelta(days=365),
+                matures_on=timezone.localdate(),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+
+    def test_user_renews_matured_deposit_and_sees_term_history(self) -> None:
+        old_term = self.deposit.current_term
+        detail_before = self.client.get(self.deposit.get_absolute_url())
+        self.assertContains(detail_before, 'Пролонгировать вклад')
+        renew_url = reverse('deposits:renew', args=[self.deposit.pk])
+        form_response = self.client.get(renew_url)
+        self.assertEqual(form_response.status_code, 200)
+        self.assertEqual(
+            form_response.context['form'].initial['annual_rate'],
+            Decimal('12.00'),
+        )
+        opened_on = timezone.localdate() + timedelta(days=1)
+        matures_on = opened_on + timedelta(days=180)
+
+        response = self.client.post(
+            renew_url,
+            {
+                'rate_kind': 'fixed',
+                'opened_on': opened_on.isoformat(),
+                'matures_on': matures_on.isoformat(),
+                'annual_rate': '10.50',
+                'payout_schedule_kind': 'maturity',
+            },
+        )
+
+        self.assertRedirects(response, self.deposit.get_absolute_url())
+        old_term.refresh_from_db()
+        self.assertFalse(old_term.is_current)
+        new_term = self.deposit.current_term
+        self.assertEqual(new_term.opened_on, opened_on)
+        self.assertTrue(new_term.interest_forecasts.exists())
+        detail_after = self.client.get(self.deposit.get_absolute_url())
+        self.assertContains(detail_after, 'История сроков')
+        self.assertContains(detail_after, 'Текущий срок')
+        self.assertContains(detail_after, 'Завершённый срок')
+        self.assertContains(
+            detail_after,
+            old_term.opened_on.strftime('%d.%m.%Y'),
+        )
+        self.assertContains(detail_after, opened_on.strftime('%d.%m.%Y'))
+
+    def test_other_user_cannot_renew_deposit(self) -> None:
+        self.client.logout()
+        self.client.force_login(cast('User', UserFactory()))
+
+        response = self.client.get(
+            reverse('deposits:renew', args=[self.deposit.pk]),
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_zero_balance_hides_and_rejects_renewal(self) -> None:
+        Account.objects.filter(pk=self.deposit.account.pk).update(
+            balance=Decimal(),
+        )
+
+        detail_response = self.client.get(self.deposit.get_absolute_url())
+        renew_response = self.client.get(
+            reverse('deposits:renew', args=[self.deposit.pk]),
+        )
+
+        self.assertNotContains(detail_response, 'Пролонгировать вклад')
+        self.assertEqual(renew_response.status_code, 404)

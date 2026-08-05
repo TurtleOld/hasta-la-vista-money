@@ -8,6 +8,7 @@ from hasta_la_vista_money.deposits.views import (
     DepositDetailView,
     DepositListView,
     DepositRecalculateForecastView,
+    DepositRenewView,
     DepositTopUpView,
     DepositWithdrawView,
 )
@@ -21,6 +22,7 @@ urlpatterns = [
     path('<int:pk>/withdraw/', DepositWithdrawView.as_view(), name='withdraw'),
     path('<int:pk>/top-up/', DepositTopUpView.as_view(), name='top-up'),
     path('<int:pk>/close/', DepositCloseView.as_view(), name='close'),
+    path('<int:pk>/renew/', DepositRenewView.as_view(), name='renew'),
     path(
         '<int:pk>/capitalize/',
         DepositCapitalizeInterestView.as_view(),

@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from typing import TYPE_CHECKING, cast
 
 from django.forms import ChoiceField, DateField, DateInput, ModelChoiceField
@@ -8,8 +9,9 @@ from hasta_la_vista_money import constants
 from hasta_la_vista_money.deposits.forms import (
     AddFloatingRatePeriodForm,
     CreateDepositForm,
+    RenewDepositForm,
 )
-from hasta_la_vista_money.deposits.models import DepositTerm
+from hasta_la_vista_money.deposits.models import Deposit, DepositTerm
 from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.users.factories import UserFactory
 
@@ -243,3 +245,60 @@ class AddFloatingRatePeriodFormTests(TestCase):
         )
 
         self.assertTrue(form.is_valid(), form.errors)
+
+
+class RenewDepositFormTests(TestCase):
+    def test_initial_values_preserve_previous_terms_for_explicit_editing(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        account = Account.objects.create(
+            user=user,
+            name_account='Вклад',
+            type_account=constants.ACCOUNT_TYPE_DEBIT,
+            currency='RUB',
+            balance='50000.00',
+        )
+        Account.objects.filter(pk=account.pk).update(
+            type_account=constants.ACCOUNT_TYPE_DEPOSIT,
+        )
+        account.refresh_from_db()
+        deposit = Deposit.objects.create(
+            account=account,
+            name='Вклад',
+            bank=_sberbank(),
+        )
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=date(2025, 1, 1),
+            matures_on=date(2026, 1, 1),
+            payout_schedule_kind=DepositTerm.PayoutScheduleKind.CUSTOM,
+            withdrawal_allowed=True,
+            withdrawal_deadline=date(2025, 7, 1),
+            minimum_balance=Decimal('10000.00'),
+            top_up_allowed=True,
+            top_up_deadline=date(2025, 8, 1),
+        )
+        term.rate_periods.create(
+            starts_on=term.opened_on,
+            ends_on=term.matures_on,
+            annual_rate='12.50',
+        )
+        term.payout_schedule_dates.create(payout_on=date(2025, 6, 1))
+
+        form = RenewDepositForm(term=term)
+
+        self.assertEqual(form.initial['opened_on'], date(2026, 1, 2))
+        self.assertEqual(form.initial['matures_on'], date(2027, 1, 2))
+        self.assertEqual(form.initial['annual_rate'], Decimal('12.50'))
+        self.assertEqual(
+            form.initial['payout_schedule_kind'],
+            DepositTerm.PayoutScheduleKind.CUSTOM,
+        )
+        self.assertEqual(form.initial['custom_payout_dates'], '02/06/2026')
+        self.assertTrue(form.initial['withdrawal_allowed'])
+        self.assertEqual(form.initial['withdrawal_deadline'], date(2026, 7, 2))
+        self.assertEqual(form.initial['minimum_balance'], Decimal('10000.00'))
+        self.assertEqual(form.initial['top_up_deadline'], date(2026, 8, 2))
+        self.assertNotIn('name', form.fields)
+        self.assertNotIn('balance', form.fields)

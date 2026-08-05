@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, cast
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -19,6 +19,7 @@ from hasta_la_vista_money.deposits.commands import (
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
+    RenewDepositCommand,
     TopUpDepositCommand,
     TopUpTerms,
     WithdrawalTerms,
@@ -29,14 +30,48 @@ from hasta_la_vista_money.deposits.forms import (
     CapitalizeInterestForm,
     CloseMaturedDepositForm,
     CreateDepositForm,
+    RenewDepositForm,
     TopUpDepositForm,
     WithdrawDepositForm,
 )
-from hasta_la_vista_money.deposits.models import Deposit, DepositPrincipalEvent
+from hasta_la_vista_money.deposits.models import (
+    Deposit,
+    DepositPrincipalEvent,
+)
 
 if TYPE_CHECKING:
     from hasta_la_vista_money.finance_account.models import Account
     from hasta_la_vista_money.users.models import User
+
+
+def _contract_terms_from_data(
+    data: dict[str, Any],
+) -> tuple[ForecastTerms, WithdrawalTerms, TopUpTerms]:
+    return (
+        ForecastTerms(
+            day_count_convention=data['day_count_convention'],
+            accrual_start_included=data['accrual_start_included'],
+            accrual_end_included=data['accrual_end_included'],
+            payout_schedule_kind=data['payout_schedule_kind'],
+            custom_payout_dates=data['custom_payout_dates'],
+            business_day_convention=data['business_day_convention'],
+            interest_payout_destination=data['interest_payout_destination'],
+        ),
+        WithdrawalTerms(
+            withdrawal_allowed=data['withdrawal_allowed'],
+            minimum_withdrawal_amount=data['minimum_withdrawal_amount'],
+            maximum_withdrawal_amount=data['maximum_withdrawal_amount'],
+            withdrawal_deadline=data['withdrawal_deadline'],
+            minimum_balance=data['minimum_balance'] or Decimal(),
+        ),
+        TopUpTerms(
+            top_up_allowed=data['top_up_allowed'],
+            minimum_top_up_amount=data['minimum_top_up_amount'],
+            maximum_top_up_amount=data['maximum_top_up_amount'],
+            top_up_deadline=data['top_up_deadline'],
+            maximum_balance=data['maximum_balance'],
+        ),
+    )
 
 
 class DepositListView(LoginRequiredMixin, ListView[Deposit]):
@@ -64,28 +99,8 @@ class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):
         data = form.cleaned_data
         request = cast('Any', self.request)
         service = request.container.deposits.deposit_service()
-        forecast_terms = ForecastTerms(
-            day_count_convention=data['day_count_convention'],
-            accrual_start_included=data['accrual_start_included'],
-            accrual_end_included=data['accrual_end_included'],
-            payout_schedule_kind=data['payout_schedule_kind'],
-            custom_payout_dates=data['custom_payout_dates'],
-            business_day_convention=data['business_day_convention'],
-            interest_payout_destination=data['interest_payout_destination'],
-        )
-        withdrawal_terms = WithdrawalTerms(
-            withdrawal_allowed=data['withdrawal_allowed'],
-            minimum_withdrawal_amount=data['minimum_withdrawal_amount'],
-            maximum_withdrawal_amount=data['maximum_withdrawal_amount'],
-            withdrawal_deadline=data['withdrawal_deadline'],
-            minimum_balance=data['minimum_balance'] or Decimal(),
-        )
-        top_up_terms = TopUpTerms(
-            top_up_allowed=data['top_up_allowed'],
-            minimum_top_up_amount=data['minimum_top_up_amount'],
-            maximum_top_up_amount=data['maximum_top_up_amount'],
-            top_up_deadline=data['top_up_deadline'],
-            maximum_balance=data['maximum_balance'],
+        forecast_terms, withdrawal_terms, top_up_terms = (
+            _contract_terms_from_data(data)
         )
         try:
             if data['opening_method'] == DepositPrincipalEvent.Type.FUNDING:
@@ -145,6 +160,7 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
             pk=self.kwargs['pk'],
         )
         context['deposit'] = deposit
+        context['renewal_available'] = service.is_renewal_available(deposit)
         context['forecast_lines'] = (
             deposit.current_term.interest_forecasts.all()
         )
@@ -180,6 +196,65 @@ class DepositDetailView(LoginRequiredMixin, TemplateView):
 
     def get_success_url(self) -> str:
         return reverse('deposits:list')
+
+
+class DepositRenewView(LoginRequiredMixin, FormView[RenewDepositForm]):
+    form_class = RenewDepositForm
+    template_name = 'deposits/deposit_renew.html'
+
+    def get_deposit(self) -> Deposit:
+        user = cast('User', self.request.user)
+        request = cast('Any', self.request)
+        service = request.container.deposits.deposit_service()
+        deposit = cast(
+            'Deposit',
+            get_object_or_404(
+                service.get_user_deposits(user),
+                pk=self.kwargs['pk'],
+            ),
+        )
+        if not service.is_renewal_available(deposit):
+            raise Http404
+        return deposit
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        kwargs = super().get_form_kwargs()
+        kwargs['term'] = self.get_deposit().current_term
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context['deposit'] = self.get_deposit()
+        return context
+
+    def form_valid(self, form: RenewDepositForm) -> HttpResponse:
+        deposit = self.get_deposit()
+        user = cast('User', self.request.user)
+        data = form.cleaned_data
+        forecast_terms, withdrawal_terms, top_up_terms = (
+            _contract_terms_from_data(data)
+        )
+        request = cast('Any', self.request)
+        service = request.container.deposits.deposit_service()
+        try:
+            service.renew_matured_deposit(
+                RenewDepositCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    opened_on=data['opened_on'],
+                    matures_on=data['matures_on'],
+                    annual_rate=data['annual_rate'],
+                    rate_kind=data['rate_kind'],
+                    forecast_terms=forecast_terms,
+                    withdrawal_terms=withdrawal_terms,
+                    top_up_terms=top_up_terms,
+                ),
+            )
+        except ValidationError as error:
+            form.add_error(None, error)
+            return self.form_invalid(form)
+        messages.success(self.request, _('Вклад успешно пролонгирован.'))
+        return HttpResponseRedirect(deposit.get_absolute_url())
 
 
 class DepositRecalculateForecastView(LoginRequiredMixin, View):
