@@ -149,6 +149,20 @@ class DepositRepository:
     ) -> DepositCapitalizationEvent:
         return DepositCapitalizationEvent.objects.create(**kwargs)
 
+    def get_latest_interest_event(
+        self,
+        deposit_id: int,
+        before: 'date',
+    ) -> DepositCapitalizationEvent | None:
+        return (
+            DepositCapitalizationEvent.objects.filter(
+                deposit_id=deposit_id,
+                value_on__lt=before,
+            )
+            .order_by('-value_on')
+            .first()
+        )
+
     def get_planned_closure_event(
         self,
         deposit_id: int,

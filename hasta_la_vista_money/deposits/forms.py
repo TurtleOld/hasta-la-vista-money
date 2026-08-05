@@ -55,6 +55,26 @@ def _parse_html5_date(token: str) -> date:
 
 
 class CreateDepositForm(forms.Form):
+    early_closure_annual_rate = forms.DecimalField(
+        required=False,
+        min_value=0,
+        max_digits=6,
+        decimal_places=2,
+        label=_('Ставка досрочного расторжения, %'),
+    )
+    early_closure_recalculation_scope = forms.ChoiceField(
+        choices=DepositTerm.EarlyClosureRecalculationScope.choices,
+        initial=DepositTerm.EarlyClosureRecalculationScope.UNSUPPORTED,
+        required=False,
+        label=_('Область пересчёта при досрочном расторжении'),
+    )
+    early_closure_withdrawn_amount = forms.DecimalField(
+        required=False,
+        min_value=0,
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        label=_('Сумма для пересчёта'),
+    )
     withdrawal_allowed = forms.BooleanField(
         required=False,
         label=_('Разрешено частичное снятие'),
@@ -325,7 +345,34 @@ class CreateDepositForm(forms.Form):
             )
         self._clean_withdrawal_terms(cleaned_data)
         self._clean_top_up_terms(cleaned_data)
+        self._clean_early_closure_terms(cleaned_data)
         return cleaned_data
+
+    def _clean_early_closure_terms(
+        self,
+        cleaned_data: dict[str, Any],
+    ) -> None:
+        scope = cleaned_data.get('early_closure_recalculation_scope') or (
+            DepositTerm.EarlyClosureRecalculationScope.UNSUPPORTED
+        )
+        cleaned_data['early_closure_recalculation_scope'] = scope
+        rate = cleaned_data.get('early_closure_annual_rate')
+        if (
+            scope != DepositTerm.EarlyClosureRecalculationScope.UNSUPPORTED
+            and rate is None
+        ):
+            self.add_error(
+                'early_closure_annual_rate',
+                _('Укажите ставку досрочного расторжения.'),
+            )
+        if (
+            scope == DepositTerm.EarlyClosureRecalculationScope.WITHDRAWN_AMOUNT
+            and cleaned_data.get('early_closure_withdrawn_amount') is None
+        ):
+            self.add_error(
+                'early_closure_withdrawn_amount',
+                _('Укажите сумму для пересчёта.'),
+            )
 
     def _clean_withdrawal_terms(
         self,
@@ -756,6 +803,121 @@ class CloseMaturedDepositForm(forms.Form):
                 self.add_error(
                     field_name,
                     _('Дата закрытия не может быть раньше окончания срока.'),
+                )
+        return cleaned
+
+
+class ForecastEarlyClosureForm(forms.Form):
+    closure_on = forms.DateField(
+        input_formats=list(constants.HTML5_DATE_INPUT_FORMATS),
+        widget=_deposit_date_widget(),
+        label=_('Дата досрочного закрытия'),
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        term: DepositTerm,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.term = term
+        self.initial.setdefault('closure_on', timezone.localdate())
+
+    def clean_closure_on(self) -> date:
+        closure_on = cast('date', self.cleaned_data['closure_on'])
+        if not self.term.opened_on <= closure_on < self.term.matures_on:
+            raise ValidationError(
+                _('Дата досрочного закрытия должна попадать в срок вклада.'),
+            )
+        return closure_on
+
+
+class CloseDepositEarlyForm(CloseMaturedDepositForm):
+    prior_interest_adjustment = forms.DecimalField(
+        max_digits=constants.TWENTY,
+        decimal_places=constants.TWO,
+        initial=Decimal(),
+        label=_('Корректировка ранее выплаченных процентов'),
+        help_text=_('Возврат банку указывается отрицательной суммой.'),
+    )
+    closure_reason = forms.CharField(
+        max_length=constants.TWO_HUNDRED_FIFTY,
+        widget=forms.Textarea(attrs={'rows': 2}),
+        label=_('Причина досрочного закрытия'),
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        term: DepositTerm,
+        user: 'User',
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, term=term, user=user, **kwargs)
+        self.fields.pop('forecast')
+
+    def clean(self) -> dict[str, Any] | None:
+        cleaned = forms.Form.clean(self)
+        if cleaned is None:
+            return cleaned
+        destination = cleaned.get('destination')
+        account = cleaned.get('destination_account')
+        principal = cleaned.get('principal')
+        gross = cleaned.get('gross')
+        withholding = cleaned.get('withholding')
+        net = cleaned.get('net')
+        posting_on = cleaned.get('posting_on')
+        value_on = cleaned.get('value_on')
+        if (
+            destination
+            == DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+            and account is None
+        ):
+            self.add_error(
+                'destination_account',
+                _('Выберите собственный счёт для возврата вклада.'),
+            )
+        if (
+            destination
+            != DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+            and account is not None
+        ):
+            self.add_error(
+                'destination_account',
+                _('Для внешнего возврата счёт не указывается.'),
+            )
+        if (
+            principal is not None
+            and principal != self.term.deposit.account.balance
+        ):
+            self.add_error(
+                'principal',
+                _('Возвращаемое тело должно совпадать с остатком вклада.'),
+            )
+        if (
+            isinstance(gross, Decimal)
+            and isinstance(withholding, Decimal)
+            and isinstance(net, Decimal)
+            and gross - withholding != net
+        ):
+            self.add_error(
+                'net',
+                _('Чистые проценты должны равняться gross минус удержание.'),
+            )
+        for field_name, actual_on in (
+            ('posting_on', posting_on),
+            ('value_on', value_on),
+        ):
+            if actual_on is not None and not (
+                self.term.opened_on <= actual_on < self.term.matures_on
+            ):
+                self.add_error(
+                    field_name,
+                    _(
+                        'Дата досрочного закрытия должна попадать '
+                        'в срок вклада.',
+                    ),
                 )
         return cleaned
 

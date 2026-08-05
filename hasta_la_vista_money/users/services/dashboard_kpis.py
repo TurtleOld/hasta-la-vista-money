@@ -74,6 +74,23 @@ def _sum_interest_for_month(
     return Decimal(total or constants.ZERO)
 
 
+def _interest_adjustment_for_month(
+    users: Iterable[User],
+    start: date,
+    end: date,
+) -> tuple[Decimal, Decimal]:
+    adjustments = list(
+        DepositCapitalizationEvent.objects.filter(
+            deposit__account__user__in=users,
+            posting_on__gte=start,
+            posting_on__lte=end,
+        ).values_list('prior_interest_adjustment', flat=True),
+    )
+    income = sum((value for value in adjustments if value > 0), Decimal())
+    expenses = -sum((value for value in adjustments if value < 0), Decimal())
+    return income, expenses
+
+
 def get_dashboard_month_kpis(
     user: User,
     users: Iterable[User] | None = None,
@@ -82,28 +99,41 @@ def get_dashboard_month_kpis(
     period_start, period_end = _current_month_bounds()
     start_dt, end_dt = _aware_bounds(period_start, period_end)
     selected_users = list(users or [user])
-
-    income = _sum_for_month(
-        TransactionType.INCOME,
-        selected_users,
-        start_dt,
-        end_dt,
-    ) + _sum_interest_for_month(
-        'gross',
+    adjustment_income, adjustment_expenses = _interest_adjustment_for_month(
         selected_users,
         period_start,
         period_end,
     )
-    expenses = _sum_for_month(
-        TransactionType.EXPENSE,
-        selected_users,
-        start_dt,
-        end_dt,
-    ) + _sum_interest_for_month(
-        'withholding',
-        selected_users,
-        period_start,
-        period_end,
+
+    income = (
+        _sum_for_month(
+            TransactionType.INCOME,
+            selected_users,
+            start_dt,
+            end_dt,
+        )
+        + _sum_interest_for_month(
+            'gross',
+            selected_users,
+            period_start,
+            period_end,
+        )
+        + adjustment_income
+    )
+    expenses = (
+        _sum_for_month(
+            TransactionType.EXPENSE,
+            selected_users,
+            start_dt,
+            end_dt,
+        )
+        + _sum_interest_for_month(
+            'withholding',
+            selected_users,
+            period_start,
+            period_end,
+        )
+        + adjustment_expenses
     )
     net_result = income - expenses
     savings_rate = (

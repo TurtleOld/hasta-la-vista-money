@@ -5,11 +5,14 @@ from django.db.models import QuerySet
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    CloseDepositEarlyCommand,
     CloseMaturedDepositCommand,
     CloseMaturedDepositResult,
     ConfirmInterestPaymentCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
+    ForecastEarlyClosureCommand,
+    ForecastEarlyClosureResult,
     FundDepositCommand,
     OpenExistingDepositCommand,
     RecalculateInterestForecastCommand,
@@ -152,4 +155,14 @@ class DepositServiceProtocol(Protocol):
     def close_matured_deposit(
         self,
         command: CloseMaturedDepositCommand,
+    ) -> CloseMaturedDepositResult: ...
+
+    def forecast_early_closure(
+        self,
+        command: ForecastEarlyClosureCommand,
+    ) -> ForecastEarlyClosureResult: ...
+
+    def close_deposit_early(
+        self,
+        command: CloseDepositEarlyCommand,
     ) -> CloseMaturedDepositResult: ...

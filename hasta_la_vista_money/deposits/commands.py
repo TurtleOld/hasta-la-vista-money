@@ -53,6 +53,15 @@ class TopUpTerms:
 
 
 @dataclass(frozen=True)
+class EarlyClosureTerms:
+    annual_rate: Decimal | None = None
+    recalculation_scope: str = (
+        DepositTerm.EarlyClosureRecalculationScope.UNSUPPORTED
+    )
+    withdrawn_amount: Decimal | None = None
+
+
+@dataclass(frozen=True)
 class CreateDepositCommand:
     user: User
     name: str
@@ -66,6 +75,9 @@ class CreateDepositCommand:
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
     top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
+    early_closure_terms: EarlyClosureTerms = field(
+        default_factory=EarlyClosureTerms,
+    )
 
 
 @dataclass(frozen=True)
@@ -89,6 +101,9 @@ class FundDepositCommand:
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
     top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
+    early_closure_terms: EarlyClosureTerms = field(
+        default_factory=EarlyClosureTerms,
+    )
 
 
 @dataclass(frozen=True)
@@ -113,6 +128,9 @@ class ConvertAccountToDepositCommand:
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
     top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
+    early_closure_terms: EarlyClosureTerms = field(
+        default_factory=EarlyClosureTerms,
+    )
 
 
 @dataclass(frozen=True)
@@ -137,6 +155,9 @@ class OpenExistingDepositCommand:
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
     top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
+    early_closure_terms: EarlyClosureTerms = field(
+        default_factory=EarlyClosureTerms,
+    )
 
 
 @dataclass(frozen=True)
@@ -152,6 +173,9 @@ class RenewDepositCommand:
     forecast_terms: ForecastTerms = field(default_factory=ForecastTerms)
     withdrawal_terms: WithdrawalTerms = field(default_factory=WithdrawalTerms)
     top_up_terms: TopUpTerms = field(default_factory=TopUpTerms)
+    early_closure_terms: EarlyClosureTerms = field(
+        default_factory=EarlyClosureTerms,
+    )
 
 
 @dataclass(frozen=True)
@@ -240,3 +264,35 @@ class CloseMaturedDepositCommand:
 class CloseMaturedDepositResult:
     principal_event: 'DepositPrincipalEvent'
     interest_event: DepositCapitalizationEvent
+
+
+@dataclass(frozen=True)
+class ForecastEarlyClosureCommand:
+    user: User
+    deposit_id: int
+    closure_on: date
+
+
+@dataclass(frozen=True)
+class ForecastEarlyClosureResult:
+    principal: Decimal
+    gross: Decimal | None
+    recalculation_scope: str
+    is_uncertain: bool
+    uncertainty_reason: str
+
+
+@dataclass(frozen=True)
+class CloseDepositEarlyCommand:
+    user: User
+    deposit_id: int
+    destination: str
+    destination_account_id: int | None
+    principal: Decimal
+    gross: Decimal
+    withholding: Decimal
+    net: Decimal
+    prior_interest_adjustment: Decimal
+    posting_on: date
+    value_on: date
+    closure_reason: str

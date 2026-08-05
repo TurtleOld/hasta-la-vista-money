@@ -9,7 +9,10 @@ Account.balance or any actual income/expense.
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from enum import StrEnum
 from typing import Protocol
+
+from django.utils.translation import gettext as _
 
 from hasta_la_vista_money.deposits.models import DepositTerm
 
@@ -72,6 +75,78 @@ class ForecastLine:
     period_ends_on: date
     is_rate_undefined: bool
     is_date_tentative: bool
+
+
+class EarlyClosureRecalculationScope(StrEnum):
+    WHOLE_TERM = 'whole_term'
+    CURRENT_PERIOD = 'current_period'
+    WITHDRAWN_AMOUNT = 'withdrawn_amount'
+    UNSUPPORTED = 'unsupported'
+
+
+@dataclass(frozen=True)
+class EarlyClosureForecast:
+    scope: EarlyClosureRecalculationScope
+    gross: Decimal | None
+    is_uncertain: bool
+    uncertainty_reason: str
+
+
+def forecast_early_closure(
+    *,
+    scope: EarlyClosureRecalculationScope,
+    closure_on: date,
+    term_opened_on: date,
+    current_period_opened_on: date,
+    principal: Decimal,
+    withdrawn_amount: Decimal,
+    annual_rate: Decimal,
+    day_count_convention: DepositTerm.DayCountConvention,
+    accrual_start_included: bool,
+    accrual_end_included: bool,
+) -> EarlyClosureForecast:
+    """Forecast a simple contractual early-closure recalculation."""
+    if scope == EarlyClosureRecalculationScope.UNSUPPORTED:
+        return EarlyClosureForecast(
+            scope=scope,
+            gross=None,
+            is_uncertain=True,
+            uncertainty_reason=_('Формула банка не поддерживается.'),
+        )
+    period_starts_on = (
+        current_period_opened_on
+        if scope == EarlyClosureRecalculationScope.CURRENT_PERIOD
+        else term_opened_on
+    )
+    recalculated_principal = (
+        withdrawn_amount
+        if scope == EarlyClosureRecalculationScope.WITHDRAWN_AMOUNT
+        else principal
+    )
+    amount, is_rate_undefined = compute_accrued_interest(
+        period_starts_on,
+        closure_on,
+        start_included=accrual_start_included,
+        end_included=accrual_end_included,
+        day_count_convention=day_count_convention,
+        principal=recalculated_principal,
+        rate_segments=[
+            RateSegment(period_starts_on, closure_on, annual_rate),
+        ],
+    )
+    if is_rate_undefined:
+        return EarlyClosureForecast(
+            scope=scope,
+            gross=None,
+            is_uncertain=True,
+            uncertainty_reason=_('Ставка пересчёта не определена.'),
+        )
+    return EarlyClosureForecast(
+        scope=scope,
+        gross=amount,
+        is_uncertain=False,
+        uncertainty_reason='',
+    )
 
 
 def year_length_for_day_count(
