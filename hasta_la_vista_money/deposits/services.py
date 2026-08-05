@@ -1,4 +1,5 @@
 import contextlib
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
@@ -65,6 +66,13 @@ from hasta_la_vista_money.users.models import User
 from hasta_la_vista_money.users.services.cache import (
     invalidate_user_detailed_statistics_cache,
 )
+
+
+@dataclass(frozen=True)
+class DepositOverview:
+    active_deposits: tuple[Deposit, ...]
+    archived_deposits: tuple[Deposit, ...]
+    by_currency: dict[str, dict[str, Decimal]]
 
 
 class DepositService:
@@ -663,6 +671,45 @@ class DepositService:
 
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]:
         return self.deposit_repository.get_by_user(user)
+
+    def get_user_deposit_overview(self, user: User) -> DepositOverview:
+        deposits = tuple(self.get_user_deposits(user))
+        active_deposits = tuple(
+            deposit
+            for deposit in deposits
+            if deposit.account.archived_at is None
+        )
+        archived_deposits = tuple(
+            deposit
+            for deposit in deposits
+            if deposit.account.archived_at is not None
+        )
+        active_terms = {
+            deposit.account.pk: deposit.current_term
+            for deposit in active_deposits
+        }
+        by_currency: dict[str, dict[str, Decimal]] = {}
+        accounts = self.account_repository.get_by_user_with_related(
+            user,
+        ).filter(
+            archived_at__isnull=True,
+            type_account__in=constants.ASSET_ACCOUNT_TYPES,
+        )
+        for account in accounts:
+            totals = by_currency.setdefault(
+                account.currency,
+                {'assets': Decimal(), 'liquidity': Decimal()},
+            )
+            totals['assets'] += account.balance
+            term = active_terms.get(account.pk)
+            totals['liquidity'] += (
+                term.liquid_amount if term is not None else account.balance
+            )
+        return DepositOverview(
+            active_deposits=active_deposits,
+            archived_deposits=archived_deposits,
+            by_currency=by_currency,
+        )
 
     def get_user_deposit(self, deposit_id: int, user: User) -> Deposit:
         return self.deposit_repository.get_by_id_and_user(deposit_id, user)

@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from django.db.models import QuerySet
 
@@ -30,6 +30,9 @@ from hasta_la_vista_money.deposits.models import (
     DepositTerm,
 )
 from hasta_la_vista_money.users.models import User
+
+if TYPE_CHECKING:
+    from hasta_la_vista_money.deposits.services import DepositOverview
 
 
 class DepositServiceProtocol(Protocol):
@@ -112,6 +115,8 @@ class DepositServiceProtocol(Protocol):
         """
 
     def get_user_deposits(self, user: User) -> QuerySet[Deposit]: ...
+
+    def get_user_deposit_overview(self, user: User) -> 'DepositOverview': ...
 
     def get_user_deposit(self, deposit_id: int, user: User) -> Deposit: ...
 

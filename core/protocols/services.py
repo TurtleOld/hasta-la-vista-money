@@ -198,13 +198,16 @@ class AccountServiceProtocol(Protocol):
         """
         ...
 
-    def get_sum_all_accounts(self, accounts: QuerySet[Account]) -> Decimal:
-        """Calculate total balance for accounts.
+    def get_balances_by_currency(
+        self,
+        accounts: QuerySet[Account],
+    ) -> dict[str, Decimal]:
+        """Calculate account balances grouped by currency.
 
         Args:
-            accounts: QuerySet of accounts to sum.
+            accounts: QuerySet of accounts to aggregate.
 
         Returns:
-            Total balance as Decimal.
+            Account balance keyed by currency code.
         """
         ...

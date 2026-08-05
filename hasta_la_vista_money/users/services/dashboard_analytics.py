@@ -14,6 +14,9 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.deposits.reporting import (
+    actual_interest_totals_for_periods,
+)
 from hasta_la_vista_money.transactions.models import (
     Category,
     Transaction,
@@ -131,37 +134,80 @@ def get_period_comparison(
     previous_start_dt = period_dates['previous_start']
     previous_end_dt = period_dates['previous_end']
 
-    expense_aggregates = Transaction.objects.filter(
-        user=user,
-        type=TransactionType.EXPENSE,
-    ).aggregate(
-        current_total=Sum(
+    transaction_totals = Transaction.objects.filter(user=user).aggregate(
+        current_expense=Sum(
             'amount',
-            filter=Q(date__gte=current_start_dt, date__lte=today_dt),
+            filter=Q(
+                type=TransactionType.EXPENSE,
+                date__gte=current_start_dt,
+                date__lte=today_dt,
+            ),
         ),
-        previous_total=Sum(
+        previous_expense=Sum(
             'amount',
-            filter=Q(date__gte=previous_start_dt, date__lte=previous_end_dt),
+            filter=Q(
+                type=TransactionType.EXPENSE,
+                date__gte=previous_start_dt,
+                date__lte=previous_end_dt,
+            ),
+        ),
+        current_income=Sum(
+            'amount',
+            filter=Q(
+                type=TransactionType.INCOME,
+                date__gte=current_start_dt,
+                date__lte=today_dt,
+            ),
+        ),
+        previous_income=Sum(
+            'amount',
+            filter=Q(
+                type=TransactionType.INCOME,
+                date__gte=previous_start_dt,
+                date__lte=previous_end_dt,
+            ),
         ),
     )
-    income_aggregates = Transaction.objects.filter(
-        user=user,
-        type=TransactionType.INCOME,
-    ).aggregate(
-        current_total=Sum(
-            'amount',
-            filter=Q(date__gte=current_start_dt, date__lte=today_dt),
-        ),
-        previous_total=Sum(
-            'amount',
-            filter=Q(date__gte=previous_start_dt, date__lte=previous_end_dt),
-        ),
+    interest_totals = actual_interest_totals_for_periods(
+        [user],
+        {
+            'current': (current_start_dt.date(), today_dt.date()),
+            'previous': (
+                previous_start_dt.date(),
+                previous_end_dt.date(),
+            ),
+        },
     )
-
-    current_expenses = expense_aggregates['current_total'] or Decimal(0)
-    previous_expenses = expense_aggregates['previous_total'] or Decimal(0)
-    current_income = income_aggregates['current_total'] or Decimal(0)
-    previous_income = income_aggregates['previous_total'] or Decimal(0)
+    current_interest_income, current_interest_expense = interest_totals[
+        'current'
+    ]
+    previous_interest_income, previous_interest_expense = interest_totals[
+        'previous'
+    ]
+    current_expenses = (
+        Decimal(
+            transaction_totals['current_expense'] or constants.ZERO,
+        )
+        + current_interest_expense
+    )
+    previous_expenses = (
+        Decimal(
+            transaction_totals['previous_expense'] or constants.ZERO,
+        )
+        + previous_interest_expense
+    )
+    current_income = (
+        Decimal(
+            transaction_totals['current_income'] or constants.ZERO,
+        )
+        + current_interest_income
+    )
+    previous_income = (
+        Decimal(
+            transaction_totals['previous_income'] or constants.ZERO,
+        )
+        + previous_interest_income
+    )
 
     expenses_change_percent = (
         float((current_expenses - previous_expenses) / previous_expenses * 100)

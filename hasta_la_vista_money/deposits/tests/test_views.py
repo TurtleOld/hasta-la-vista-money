@@ -32,6 +32,94 @@ def _sberbank() -> Bank:
 
 
 class DepositViewSmokeTests(TestCase):
+    def test_overview_separates_archived_and_groups_assets_and_liquidity(
+        self,
+    ) -> None:
+        service = ApplicationContainer().deposits.deposit_service()
+        today = timezone.localdate()
+        Account.objects.create(
+            user=self.user,
+            name_account='Долларовый счёт',
+            type_account=constants.ACCOUNT_TYPE_DEBIT,
+            currency='USD',
+            balance=Decimal('25.00'),
+        )
+        Account.objects.create(
+            user=self.user,
+            name_account='Долларовый кредит',
+            type_account=constants.ACCOUNT_TYPE_CREDIT,
+            currency='USD',
+            balance=Decimal('500.00'),
+        )
+        active = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Активный вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('1000.00'),
+                opened_on=today,
+                matures_on=today + timedelta(days=90),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        active_term = active.current_term
+        active_term.withdrawal_allowed = True
+        active_term.minimum_balance = Decimal('700.00')
+        active_term.save()
+        forecast = DepositInterestForecast.objects.create(
+            term=active_term,
+            payout_on=today + timedelta(days=30),
+            amount=Decimal('10.00'),
+            period_starts_on=today,
+            period_ends_on=today + timedelta(days=29),
+        )
+        archived = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Архивный вклад',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('0.00'),
+                opened_on=today - timedelta(days=180),
+                matures_on=today - timedelta(days=90),
+                annual_rate=Decimal('10.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        archived.account.archived_at = timezone.now()
+        archived.account.save(update_fields=['archived_at'])
+        archived.current_term.closed_on = today - timedelta(days=90)
+        archived.current_term.save(update_fields=['closed_on'])
+
+        response = self.client.get(reverse('deposits:list'))
+
+        self.assertEqual(list(response.context['active_deposits']), [active])
+        self.assertEqual(
+            list(response.context['archived_deposits']),
+            [archived],
+        )
+        self.assertEqual(
+            response.context['overview_by_currency'],
+            {
+                'RUB': {
+                    'assets': Decimal('1000.00'),
+                    'liquidity': Decimal('300.00'),
+                },
+                'USD': {
+                    'assets': Decimal('25.00'),
+                    'liquidity': Decimal('25.00'),
+                },
+            },
+        )
+        self.assertContains(response, 'Активные вклады')
+        self.assertContains(response, 'Архив')
+        self.assertContains(response, 'Ликвидная сумма')
+        self.assertContains(response, 'Ближайшая выплата')
+        self.assertContains(response, 'Дата окончания')
+        self.assertContains(response, forecast.payout_on.strftime('%d.%m.%Y'))
+
     def test_user_reverses_event_and_sees_reason_in_history(self) -> None:
         service = ApplicationContainer().deposits.deposit_service()
         opened_on = timezone.localdate()

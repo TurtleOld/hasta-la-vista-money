@@ -654,7 +654,7 @@ class TestAccount(TestCase):
 class TestAccountServices(TestCase):
     """
     Unit tests for account service functions
-    (get_accounts_for_user_or_group, get_sum_all_accounts,
+    (get_accounts_for_user_or_group, get_balances_by_currency,
     get_transfer_money_log).
     """
 
@@ -711,12 +711,16 @@ class TestAccountServices(TestCase):
         group_users = list(self.group.user_set.all())
         self.assertTrue(all(acc.user in group_users for acc in accounts))
 
-    def test_get_sum_all_accounts(self) -> None:
-        """Test that get_sum_all_accounts returns correct sum for queryset."""
+    def test_get_balances_by_currency(self) -> None:
+        """Test that balances are grouped without mixing currencies."""
         accounts = Account.objects.filter(user=self.user)
-        expected_sum = sum(acc.balance for acc in accounts)
-        result = self.account_service.get_sum_all_accounts(accounts)
-        self.assertEqual(result, expected_sum)
+        expected: dict[str, Decimal] = {}
+        for account in accounts:
+            expected[account.currency] = (
+                expected.get(account.currency, Decimal()) + account.balance
+            )
+        result = self.account_service.get_balances_by_currency(accounts)
+        self.assertEqual(result, expected)
 
     def test_get_transfer_money_log(self) -> None:
         """Test that get_transfer_money_log returns recent logs for user."""

@@ -1,0 +1,29 @@
+{% load i18n comma %}
+{% for deposit in deposit_items %}
+    {% with term=deposit.current_term rate=deposit.current_term.current_rate payout=deposit.current_term.next_payout %}
+    <a href="{{ deposit.get_absolute_url }}" class="accounts-row">
+        <div class="accounts-row-content">
+            <div class="accounts-row-mark">%</div>
+            <div class="accounts-min0">
+                <div class="accounts-row-name">{{ deposit.name }}</div>
+                <div class="accounts-row-kind">{{ deposit.bank.name }} · {{ term.state_label }}</div>
+                <div class="accounts-row-kind">
+                    {% translate 'Текущая ставка' %}: {% if rate %}{{ rate.annual_rate }}%{% else %}{% translate 'не определена' %}{% endif %}
+                    · {% translate 'Ликвидная сумма' %}: {{ term.liquid_amount|comma }} {{ deposit.account.currency }}
+                </div>
+                <div class="accounts-row-kind">
+                    {% translate 'Ближайшая выплата' %}: {% if payout %}{{ payout.amount|comma }} {{ deposit.account.currency }}, {{ payout.payout_on|date:'d.m.Y' }}{% else %}{% translate 'нет' %}{% endif %}
+                    · {% translate 'Дата окончания' %}: {{ term.matures_on|date:'d.m.Y' }}
+                </div>
+            </div>
+            <div class="accounts-row-right">
+                <div class="accounts-row-amt">{{ deposit.account.balance|comma }}<span class="cur">{{ deposit.account.currency }}</span></div>
+            </div>
+        </div>
+    </a>
+    {% endwith %}
+{% empty %}
+    <div class="accounts-empty">
+        <p class="accounts-empty-text">{% translate 'Вкладов в этом разделе нет.' %}</p>
+    </div>
+{% endfor %}

@@ -21,7 +21,13 @@
                     {% translate 'Общий баланс семьи' %}
                 </div>
                 <div class="accounts-hero-amt">
-                    <span id="accounts-hero-amt-value" class="hide-target">{{ sum_all_accounts_in_group|comma }}<span class="cur">₽</span></span>
+                    <span id="accounts-hero-amt-value" class="hide-target">
+                        {% for currency, amount in sum_all_accounts_in_group.items %}
+                            {{ amount|comma }}<span class="cur">{{ currency }}</span>{% if not forloop.last %} · {% endif %}
+                        {% empty %}
+                            0
+                        {% endfor %}
+                    </span>
                 </div>
                 <div id="accounts-hero-change" class="accounts-hero-change">
                     {% if balance_trend.has_data %}

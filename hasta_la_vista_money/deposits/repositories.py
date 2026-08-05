@@ -57,7 +57,7 @@ class DepositRepository:
     def get_by_user(self, user: User) -> QuerySet[Deposit]:
         return (
             Deposit.objects.filter(account__user=user)
-            .select_related('account')
+            .select_related('account', 'bank')
             .prefetch_related(
                 'terms__rate_periods',
                 'terms__payout_schedule_dates',

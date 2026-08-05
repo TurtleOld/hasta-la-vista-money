@@ -18,31 +18,35 @@
             </div>
         </div>
         <section class="accounts-panel">
-            <div class="accounts-panel-hd"><h2>{% translate 'Мои вклады' %}</h2></div>
+            <div class="accounts-panel-hd"><h2>{% translate 'Финансовый обзор' %}</h2></div>
             <div class="accounts-list">
-                {% for deposit in deposits %}
-                    {% with term=deposit.current_term %}
-                    <a href="{{ deposit.get_absolute_url }}" class="accounts-row">
+                {% for currency, totals in overview_by_currency.items %}
+                    <div class="accounts-row">
                         <div class="accounts-row-content">
-                            <div class="accounts-row-mark">%</div>
                             <div class="accounts-min0">
-                                <div class="accounts-row-name">{{ deposit.name }}</div>
-                                {% with rate=term.current_rate %}
-                                <div class="accounts-row-kind">{{ deposit.bank.name }} · {{ term.state_label }} · {% if rate %}{{ rate.annual_rate }}%{% else %}{% translate 'Ставка на текущий период не определена' %}{% endif %}</div>
-                                {% endwith %}
-                            </div>
-                            <div class="accounts-row-right">
-                                <div class="accounts-row-amt">{{ deposit.account.balance|comma }}<span class="cur">{{ deposit.account.currency }}</span></div>
+                                <div class="accounts-row-name">{{ currency }}</div>
+                                <div class="accounts-row-kind">{% translate 'Активы' %}: {{ totals.assets|comma }} {{ currency }} · {% translate 'Свободные деньги' %}: {{ totals.liquidity|comma }} {{ currency }}</div>
                             </div>
                         </div>
-                    </a>
-                    {% endwith %}
+                    </div>
                 {% empty %}
                     <div class="accounts-empty">
                         <p class="accounts-empty-title">{% translate 'Срочных вкладов пока нет' %}</p>
-                        <p class="accounts-empty-text">{% translate 'Создайте договор со сроком и ставкой.' %}</p>
+                        <p class="accounts-empty-text">{% translate 'Активов для обзора пока нет.' %}</p>
                     </div>
                 {% endfor %}
+            </div>
+        </section>
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Активные вклады' %}</h2></div>
+            <div class="accounts-list">
+                {% include 'deposits/_deposit_overview_rows.html' with deposit_items=active_deposits %}
+            </div>
+        </section>
+        <section class="accounts-panel">
+            <div class="accounts-panel-hd"><h2>{% translate 'Архив' %}</h2></div>
+            <div class="accounts-list">
+                {% include 'deposits/_deposit_overview_rows.html' with deposit_items=archived_deposits %}
             </div>
         </section>
     </div>
