@@ -285,12 +285,41 @@ class DepositTerm(models.Model):
     @property
     def liquid_amount(self) -> Decimal:
         balance = self.deposit.account.balance
-        if not self.withdrawal_allowed:
+        today = timezone.localdate()
+        if self.state == self.State.MATURED:
+            return balance
+        if (
+            not self.withdrawal_allowed
+            or self.state != self.State.ACTIVE
+            or (
+                self.withdrawal_deadline is not None
+                and today > self.withdrawal_deadline
+            )
+        ):
             return Decimal()
         available = max(balance - self.minimum_balance, Decimal())
         if self.maximum_withdrawal_amount is not None:
-            return min(available, self.maximum_withdrawal_amount)
+            available = min(available, self.maximum_withdrawal_amount)
+        if (
+            self.minimum_withdrawal_amount is not None
+            and available < self.minimum_withdrawal_amount
+        ):
+            return Decimal()
         return available
+
+    @property
+    def next_payout(self) -> 'DepositInterestForecast | None':
+        today = timezone.localdate()
+        forecasts = (
+            forecast
+            for forecast in self.interest_forecasts.all()
+            if not forecast.confirmed and forecast.payout_on >= today
+        )
+        return min(
+            forecasts,
+            key=lambda forecast: forecast.payout_on,
+            default=None,
+        )
 
 
 class DepositRatePeriod(models.Model):

@@ -168,17 +168,24 @@ class AccountService:
         """
         return self.account_repository.get_by_user_and_group(user, group_id)
 
-    def get_sum_all_accounts(self, accounts: QuerySet[Account]) -> Decimal:
-        """Calculate total balance for a queryset of accounts.
+    def get_balances_by_currency(
+        self,
+        accounts: QuerySet[Account],
+    ) -> dict[str, Decimal]:
+        """Calculate account balances grouped by currency.
 
         Args:
             accounts: QuerySet of accounts to sum.
 
         Returns:
-            Total balance as Decimal.
+            Account balance keyed by currency code.
         """
-        total = accounts.aggregate(total=Sum('balance'))['total']
-        return Decimal(total or constants.ZERO)
+        return {
+            str(row['currency']): Decimal(row['total'] or constants.ZERO)
+            for row in accounts.values('currency')
+            .annotate(total=Sum('balance'))
+            .order_by('currency')
+        }
 
     def get_transfer_money_log(
         self,

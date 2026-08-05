@@ -166,7 +166,9 @@ class AccountPageContextService:
             Dictionary with balance statistics.
         """
         accounts = self.account_repository.get_by_user_with_related(user)
-        sum_all_accounts = self.account_service.get_sum_all_accounts(accounts)
+        sum_all_accounts = self.account_service.get_balances_by_currency(
+            accounts,
+        )
 
         if user.groups.exists():
             accounts_in_group = self.account_repository.get_by_user_and_group(
@@ -174,7 +176,7 @@ class AccountPageContextService:
                 'family',
             )
             sum_all_accounts_in_group = (
-                self.account_service.get_sum_all_accounts(accounts_in_group)
+                self.account_service.get_balances_by_currency(accounts_in_group)
             )
             total_credit_debt = compute_total_payment_schedule_debt(
                 accounts_in_group,
@@ -185,7 +187,7 @@ class AccountPageContextService:
                 user,
             )
             sum_all_accounts_in_group = (
-                self.account_service.get_sum_all_accounts(accounts_user)
+                self.account_service.get_balances_by_currency(accounts_user)
             )
             total_credit_debt = compute_total_payment_schedule_debt(
                 accounts_user,

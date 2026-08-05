@@ -11,7 +11,14 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from hasta_la_vista_money.finance_account.models import Account
+from config.containers import ApplicationContainer
+from hasta_la_vista_money.deposits.commands import CreateDepositCommand
+from hasta_la_vista_money.deposits.models import (
+    DepositCapitalizationEvent,
+    DepositInterestForecast,
+    DepositTerm,
+)
+from hasta_la_vista_money.finance_account.models import Account, Bank
 from hasta_la_vista_money.transactions.models import Category, TransactionType
 from hasta_la_vista_money.users.services.dashboard_analytics import (
     calculate_linear_trend,
@@ -142,6 +149,51 @@ class GetPeriodComparisonTest(TestCase):
 
         self.assertIn('current', cached_result)
         self.assertEqual(len(queries), 0)
+
+    def test_comparison_counts_actual_interest_and_excludes_forecast(
+        self,
+    ) -> None:
+        today = timezone.localdate()
+        bank, _ = Bank.objects.get_or_create(
+            code='SBERBANK',
+            defaults={'name': 'Сбербанк', 'is_system': True},
+        )
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Вклад',
+                bank=bank,
+                currency='RUB',
+                balance=Decimal('1000.00'),
+                opened_on=today,
+                matures_on=today + timedelta(days=90),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        term = deposit.current_term
+        DepositInterestForecast.objects.create(
+            term=term,
+            payout_on=today,
+            amount=Decimal('999.00'),
+            period_starts_on=today,
+            period_ends_on=today,
+        )
+        DepositCapitalizationEvent.objects.create(
+            deposit=deposit,
+            gross=Decimal('100.00'),
+            withholding=Decimal('13.00'),
+            net=Decimal('87.00'),
+            posting_on=today,
+            value_on=today,
+        )
+
+        result = get_period_comparison(self.user, 'month')
+
+        self.assertEqual(result['current']['income'], 100.0)
+        self.assertEqual(result['current']['expenses'], 13.0)
+        self.assertEqual(result['current']['savings'], 87.0)
 
 
 class GetDrillDownDataTest(TestCase):

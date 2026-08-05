@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from hasta_la_vista_money.deposits.models import (
     Deposit,
+    DepositInterestForecast,
     DepositRatePeriod,
     DepositTerm,
 )
@@ -114,6 +115,89 @@ class DepositTermRateKindTests(TestCase):
 
 
 class DepositTermLifecycleTests(TestCase):
+    def test_liquid_amount_obeys_term_state_deadline_and_minimum(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=30),
+            matures_on=today + timedelta(days=30),
+            is_current=True,
+            withdrawal_allowed=True,
+            minimum_withdrawal_amount=Decimal('500.00'),
+            withdrawal_deadline=today,
+            minimum_balance=Decimal('9700.00'),
+        )
+
+        with patch(
+            'hasta_la_vista_money.deposits.models.timezone.localdate',
+            return_value=today,
+        ):
+            self.assertEqual(term.liquid_amount, Decimal())
+
+        term.minimum_withdrawal_amount = Decimal('200.00')
+        with patch(
+            'hasta_la_vista_money.deposits.models.timezone.localdate',
+            return_value=today,
+        ):
+            self.assertEqual(term.liquid_amount, Decimal('300.00'))
+
+        with patch(
+            'hasta_la_vista_money.deposits.models.timezone.localdate',
+            return_value=today + timedelta(days=1),
+        ):
+            self.assertEqual(term.liquid_amount, Decimal())
+
+        with patch(
+            'hasta_la_vista_money.deposits.models.timezone.localdate',
+            return_value=term.matures_on,
+        ):
+            self.assertEqual(term.liquid_amount, Decimal('10000.00'))
+
+        term.closed_on = today
+        with patch(
+            'hasta_la_vista_money.deposits.models.timezone.localdate',
+            return_value=today,
+        ):
+            self.assertEqual(term.liquid_amount, Decimal())
+
+    def test_next_payout_is_nearest_unconfirmed_future_forecast(self) -> None:
+        user = cast('User', UserFactory())
+        deposit = _make_deposit(user)
+        today = timezone.localdate()
+        term = DepositTerm.objects.create(
+            deposit=deposit,
+            opened_on=today - timedelta(days=30),
+            matures_on=today + timedelta(days=60),
+            is_current=True,
+        )
+        common = {
+            'term': term,
+            'amount': Decimal('100.00'),
+            'period_starts_on': today - timedelta(days=30),
+            'period_ends_on': today,
+        }
+        DepositInterestForecast.objects.create(
+            **common,
+            payout_on=today - timedelta(days=1),
+        )
+        DepositInterestForecast.objects.create(
+            **common,
+            payout_on=today + timedelta(days=10),
+            confirmed=True,
+        )
+        expected = DepositInterestForecast.objects.create(
+            **common,
+            payout_on=today + timedelta(days=20),
+        )
+
+        with patch(
+            'hasta_la_vista_money.deposits.models.timezone.localdate',
+            return_value=today,
+        ):
+            self.assertEqual(term.next_payout, expected)
+
     def test_term_is_matured_on_planned_maturity_date(self) -> None:
         user = cast('User', UserFactory())
         deposit = _make_deposit(user)

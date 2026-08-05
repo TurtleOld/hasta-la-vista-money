@@ -157,28 +157,25 @@ class TestAccountServices(TestCase):
         self.assertNotIn(self.account1, accounts)
         self.assertNotIn(self.account2, accounts)
 
-    def test_get_sum_all_accounts(self) -> None:
-        """Test get_sum_all_accounts function."""
+    def test_get_balances_by_currency(self) -> None:
+        """Test account balances grouped by currency."""
         accounts = Account.objects.filter(user=self.user1)
-        expected_sum = sum(acc.balance for acc in accounts)
+        result = self.account_service.get_balances_by_currency(accounts)
+        self.assertEqual(result, {'RUB': Decimal('1500.00')})
 
-        result = self.account_service.get_sum_all_accounts(accounts)
-        self.assertEqual(result, expected_sum)
-        self.assertEqual(result, Decimal('1500.00'))
-
-    def test_get_sum_all_accounts_empty_queryset(self) -> None:
-        """Test get_sum_all_accounts with empty queryset."""
+    def test_get_balances_by_currency_empty_queryset(self) -> None:
+        """Test currency balances with an empty queryset."""
         accounts = Account.objects.none()
-        result = self.account_service.get_sum_all_accounts(accounts)
-        self.assertEqual(result, Decimal('0.00'))
+        result = self.account_service.get_balances_by_currency(accounts)
+        self.assertEqual(result, {})
 
-    def test_get_sum_all_accounts_single_account(self) -> None:
-        """Test get_sum_all_accounts with single account."""
+    def test_get_balances_by_currency_single_account(self) -> None:
+        """Test currency balances with a single account."""
         accounts = Account.objects.filter(pk=self.account1.pk)
-        result = self.account_service.get_sum_all_accounts(accounts)
-        self.assertEqual(result, Decimal('1000.00'))
+        result = self.account_service.get_balances_by_currency(accounts)
+        self.assertEqual(result, {'RUB': Decimal('1000.00')})
 
-    def test_get_sum_all_accounts_parametrized(self) -> None:
+    def test_get_balances_by_currency_parametrized(self) -> None:
         """Test parametrized sum calculation with different account sets.
 
         Tests boundary conditions, precision, and currency handling.
@@ -219,8 +216,9 @@ class TestAccountServices(TestCase):
                 qs = Account.objects.filter(
                     pk__in=[acc.pk for acc in accounts_list],
                 )
-                result = self.account_service.get_sum_all_accounts(qs)
-                self.assertEqual(result, case['expected'])
+                result = self.account_service.get_balances_by_currency(qs)
+                expected = {'RUB': case['expected']} if balances_list else {}
+                self.assertEqual(result, expected)
 
         acc1 = cast(
             'Account',
@@ -239,8 +237,11 @@ class TestAccountServices(TestCase):
             ),
         )
         qs = Account.objects.filter(pk__in=[acc1.pk, acc2.pk])
-        result = self.account_service.get_sum_all_accounts(qs)
-        self.assertEqual(result, Decimal('300.00'))
+        result = self.account_service.get_balances_by_currency(qs)
+        self.assertEqual(
+            result,
+            {'RUB': Decimal('100.00'), 'USD': Decimal('200.00')},
+        )
 
     def test_get_transfer_money_log(self) -> None:
         """Test get_transfer_money_log function."""

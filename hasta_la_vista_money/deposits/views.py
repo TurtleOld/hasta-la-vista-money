@@ -101,7 +101,20 @@ class DepositListView(LoginRequiredMixin, ListView[Deposit]):
         user = cast('User', self.request.user)
         request = cast('Any', self.request)
         service = request.container.deposits.deposit_service()
-        return service.get_user_deposits(user)
+        overview = service.get_user_deposit_overview(user)
+        self.active_deposits = overview.active_deposits
+        self.archived_deposits = overview.archived_deposits
+        self.overview_by_currency = overview.by_currency
+        return (*overview.active_deposits, *overview.archived_deposits)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context.update(
+            active_deposits=self.active_deposits,
+            archived_deposits=self.archived_deposits,
+            overview_by_currency=self.overview_by_currency,
+        )
+        return context
 
 
 class DepositCreateView(LoginRequiredMixin, FormView[CreateDepositForm]):

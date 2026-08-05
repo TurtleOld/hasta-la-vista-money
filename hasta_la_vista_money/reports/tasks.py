@@ -5,9 +5,9 @@ and user statistics reports.
 """
 
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from celery import shared_task
@@ -15,6 +15,10 @@ from django.db.models import Avg, Count, Max, Min, Sum
 from django.db.models.functions import TruncMonth
 
 from hasta_la_vista_money import constants
+from hasta_la_vista_money.deposits.reporting import (
+    actual_interest_totals,
+    actual_interest_totals_by_month,
+)
 from hasta_la_vista_money.receipts.models import Receipt
 from hasta_la_vista_money.transactions.models import (
     Transaction,
@@ -63,11 +67,11 @@ def generate_monthly_report(
             date__gte=start_date,
             date__lt=end_date,
         ).aggregate(
-            total_income=Sum('amount'),
-            income_count=Count('id'),
-            avg_income=Avg('amount'),
-            min_income=Min('amount'),
-            max_income=Max('amount'),
+            transaction_total=Sum('amount'),
+            transaction_count=Count('id'),
+            transaction_average=Avg('amount'),
+            transaction_minimum=Min('amount'),
+            transaction_maximum=Max('amount'),
         )
 
         expense_stats = Transaction.objects.filter(
@@ -76,12 +80,31 @@ def generate_monthly_report(
             date__gte=start_date,
             date__lt=end_date,
         ).aggregate(
-            total_expense=Sum('amount'),
-            expense_count=Count('id'),
-            avg_expense=Avg('amount'),
-            min_expense=Min('amount'),
-            max_expense=Max('amount'),
+            transaction_total=Sum('amount'),
+            transaction_count=Count('id'),
+            transaction_average=Avg('amount'),
+            transaction_minimum=Min('amount'),
+            transaction_maximum=Max('amount'),
         )
+        interest_income, interest_expense = actual_interest_totals(
+            [user],
+            start_date.date(),
+            (end_date - timedelta(days=1)).date(),
+        )
+        income_stats['total_income'] = (
+            Decimal(
+                income_stats['transaction_total'] or constants.ZERO,
+            )
+            + interest_income
+        )
+        income_stats['deposit_interest_income'] = interest_income
+        expense_stats['total_expense'] = (
+            Decimal(
+                expense_stats['transaction_total'] or constants.ZERO,
+            )
+            + interest_expense
+        )
+        expense_stats['deposit_interest_expense'] = interest_expense
 
         top_income_qs = (
             Transaction.objects.filter(
@@ -97,7 +120,10 @@ def generate_monthly_report(
             )
             .order_by('-total')[:5]
         )
-        top_income_categories: list[dict[str, Any]] = list(top_income_qs)
+        top_income_categories = cast(
+            'list[dict[str, Any]]',
+            list(top_income_qs),
+        )
 
         top_expense_qs = (
             Transaction.objects.filter(
@@ -113,7 +139,10 @@ def generate_monthly_report(
             )
             .order_by('-total')[:5]
         )
-        top_expense_categories: list[dict[str, Any]] = list(top_expense_qs)
+        top_expense_categories = cast(
+            'list[dict[str, Any]]',
+            list(top_expense_qs),
+        )
 
         receipt_stats = Receipt.objects.filter(
             user=user,
@@ -138,7 +167,7 @@ def generate_monthly_report(
             )
             .order_by('-total')[:5]
         )
-        top_sellers: list[dict[str, Any]] = list(top_sellers_qs)
+        top_sellers = cast('list[dict[str, Any]]', list(top_sellers_qs))
 
         summary = {
             'net_income': (income_stats['total_income'] or 0)
@@ -243,6 +272,7 @@ def generate_yearly_report(
                 0,
             )
 
+        monthly_interest = actual_interest_totals_by_month(user, year)
         monthly_data = []
         for month in range(
             constants.NUMBER_FIRST_MONTH_YEAR,
@@ -250,6 +280,12 @@ def generate_yearly_report(
         ):
             month_income = monthly_totals[month][TransactionType.INCOME]
             month_expense = monthly_totals[month][TransactionType.EXPENSE]
+            interest_income, interest_expense = monthly_interest.get(
+                month,
+                (Decimal(), Decimal()),
+            )
+            month_income += interest_income
+            month_expense += interest_expense
 
             monthly_data.append(
                 {
@@ -265,9 +301,9 @@ def generate_yearly_report(
             type=TransactionType.INCOME,
             date__year=year,
         ).aggregate(
-            total=Sum('amount'),
-            count=Count('id'),
-            avg=Avg('amount'),
+            transaction_total=Sum('amount'),
+            transaction_count=Count('id'),
+            transaction_average=Avg('amount'),
         )
 
         yearly_expense = Transaction.objects.filter(
@@ -275,10 +311,32 @@ def generate_yearly_report(
             type=TransactionType.EXPENSE,
             date__year=year,
         ).aggregate(
-            total=Sum('amount'),
-            count=Count('id'),
-            avg=Avg('amount'),
+            transaction_total=Sum('amount'),
+            transaction_count=Count('id'),
+            transaction_average=Avg('amount'),
         )
+        interest_income = sum(
+            (totals[0] for totals in monthly_interest.values()),
+            start=Decimal(),
+        )
+        interest_expense = sum(
+            (totals[1] for totals in monthly_interest.values()),
+            start=Decimal(),
+        )
+        yearly_income['total'] = (
+            Decimal(
+                yearly_income['transaction_total'] or constants.ZERO,
+            )
+            + interest_income
+        )
+        yearly_income['deposit_interest'] = interest_income
+        yearly_expense['total'] = (
+            Decimal(
+                yearly_expense['transaction_total'] or constants.ZERO,
+            )
+            + interest_expense
+        )
+        yearly_expense['deposit_interest'] = interest_expense
 
         top_income_year_qs = (
             Transaction.objects.filter(
@@ -292,7 +350,10 @@ def generate_yearly_report(
             )
             .order_by('-total')[:10]
         )
-        top_income_categories: list[dict[str, Any]] = list(top_income_year_qs)
+        top_income_categories = cast(
+            'list[dict[str, Any]]',
+            list(top_income_year_qs),
+        )
 
         top_expense_year_qs = (
             Transaction.objects.filter(
@@ -306,8 +367,9 @@ def generate_yearly_report(
             )
             .order_by('-total')[:10]
         )
-        top_expense_categories: list[dict[str, Any]] = list(
-            top_expense_year_qs,
+        top_expense_categories = cast(
+            'list[dict[str, Any]]',
+            list(top_expense_year_qs),
         )
 
         summary = {
@@ -341,8 +403,8 @@ def generate_yearly_report(
             total_income=str(yearly_income['total']),
             total_expense=str(yearly_expense['total']),
             net_income=str(summary['net_income']),
-            transactions_count=(yearly_income['count'] or 0)
-            + (yearly_expense['count'] or 0),
+            transactions_count=(yearly_income['transaction_count'] or 0)
+            + (yearly_expense['transaction_count'] or 0),
         )
 
     except Exception as e:
@@ -376,19 +438,30 @@ def generate_user_statistics(
             user=user,
             type=TransactionType.INCOME,
         ).aggregate(
-            total=Sum('amount'),
-            count=Count('id'),
-            avg=Avg('amount'),
+            transaction_total=Sum('amount'),
+            transaction_count=Count('id'),
+            transaction_average=Avg('amount'),
         )
 
         total_expense = Transaction.objects.filter(
             user=user,
             type=TransactionType.EXPENSE,
         ).aggregate(
-            total=Sum('amount'),
-            count=Count('id'),
-            avg=Avg('amount'),
+            transaction_total=Sum('amount'),
+            transaction_count=Count('id'),
+            transaction_average=Avg('amount'),
         )
+        transaction_income_total = Decimal(
+            total_income['transaction_total'] or constants.ZERO,
+        )
+        transaction_expense_total = Decimal(
+            total_expense['transaction_total'] or constants.ZERO,
+        )
+        interest_income, interest_expense = actual_interest_totals([user])
+        total_income['total'] = transaction_income_total + interest_income
+        total_income['deposit_interest'] = interest_income
+        total_expense['total'] = transaction_expense_total + interest_expense
+        total_expense['deposit_interest'] = interest_expense
 
         total_receipts = Receipt.objects.filter(user=user).aggregate(
             total=Sum('total_sum'),
@@ -408,7 +481,10 @@ def generate_user_statistics(
             )
             .order_by('-total')[:10]
         )
-        income_categories: list[dict[str, Any]] = list(income_cat_qs)
+        income_categories = cast(
+            'list[dict[str, Any]]',
+            list(income_cat_qs),
+        )
 
         expense_cat_qs = (
             Transaction.objects.filter(
@@ -422,7 +498,10 @@ def generate_user_statistics(
             )
             .order_by('-total')[:10]
         )
-        expense_categories: list[dict[str, Any]] = list(expense_cat_qs)
+        expense_categories = cast(
+            'list[dict[str, Any]]',
+            list(expense_cat_qs),
+        )
 
         first_income = Transaction.objects.filter(
             user=user,
@@ -443,14 +522,20 @@ def generate_user_statistics(
         summary = {
             'net_worth': (total_income['total'] or 0)
             - (total_expense['total'] or 0),
-            'total_transactions': (total_income['count'] or 0)
-            + (total_expense['count'] or 0),
+            'total_transactions': (total_income['transaction_count'] or 0)
+            + (total_expense['transaction_count'] or 0),
             'avg_transaction': (
-                ((total_income['total'] or 0) + (total_expense['total'] or 0))
-                / ((total_income['count'] or 0) + (total_expense['count'] or 0))
+                (transaction_income_total + transaction_expense_total)
+                / (
+                    (total_income['transaction_count'] or 0)
+                    + (total_expense['transaction_count'] or 0)
+                )
             )
-            if ((total_income['count'] or 0) + (total_expense['count'] or 0))
-            > 0
+            if (
+                (total_income['transaction_count'] or 0)
+                + (total_expense['transaction_count'] or 0)
+                > 0
+            )
             else 0,
         }
 
