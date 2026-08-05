@@ -105,6 +105,16 @@ class AccountQuerySet(models.QuerySet['Account']):
     def available_for_operations(self) -> 'AccountQuerySet':
         return self.filter(archived_at__isnull=True)
 
+    def available_for_regular_operations(self) -> 'AccountQuerySet':
+        """Accounts selectable for income/expense/transfer/receipt flows.
+
+        Excludes deposits, which can only be modified through the
+        deposits domain service.
+        """
+        return self.available_for_operations().exclude(
+            type_account=constants.ACCOUNT_TYPE_DEPOSIT,
+        )
+
 
 class AccountManager(models.Manager['Account']):
     """Keep deposit accounts behind the deposit domain service."""
@@ -132,6 +142,9 @@ class AccountManager(models.Manager['Account']):
 
     def available_for_operations(self) -> AccountQuerySet:
         return self.get_queryset().available_for_operations()
+
+    def available_for_regular_operations(self) -> AccountQuerySet:
+        return self.get_queryset().available_for_regular_operations()
 
     def create(self, **kwargs: object) -> 'Account':
         if kwargs.get('type_account') == constants.ACCOUNT_TYPE_DEPOSIT:

@@ -9,7 +9,7 @@ from datetime import datetime, time
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction as db_transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -59,6 +59,15 @@ class TransactionService:
         if transaction_obj.user != user:
             raise PermissionDenied(
                 _('У вас нет прав на изменение этой операции.'),
+            )
+
+    @staticmethod
+    def _validate_account_not_deposit(account: Account) -> None:
+        if account.is_deposit:
+            raise ValidationError(
+                _(
+                    'Операции по вкладу доступны только через сервис вкладов.',
+                ),
             )
 
     @staticmethod
@@ -114,6 +123,7 @@ class TransactionService:
     ) -> Transaction:
         """Create a new transaction and adjust the account balance."""
         self._validate_account_owner(command.user, command.account)
+        self._validate_account_not_deposit(command.account)
         self._validate_type_matches_category(
             command.type_value,
             command.category,
@@ -146,6 +156,7 @@ class TransactionService:
             command.transaction_obj,
         )
         self._validate_account_owner(command.user, command.account)
+        self._validate_account_not_deposit(command.account)
         self._validate_type_matches_category(
             command.type_value,
             command.category,

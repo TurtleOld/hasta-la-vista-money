@@ -346,6 +346,24 @@ class ReceiptUpdateViewTest(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_receipt_update_form_excludes_deposit_accounts(self) -> None:
+        """Deposit accounts must not be selectable on receipt update."""
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.account1.bank,
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+
+        response = self.client.get(
+            reverse('receipts:update', kwargs={'pk': self.receipt.pk}),
+        )
+
+        account_queryset = response.context['form'].fields['account'].queryset
+        self.assertNotIn(deposit_account, account_queryset)
+        self.assertIn(self.account1, account_queryset)
+
     def test_receipt_update_invalid_form(self) -> None:
         """Test receipt update with invalid data."""
         initial_balance = self.initial_balance

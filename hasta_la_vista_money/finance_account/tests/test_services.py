@@ -542,3 +542,59 @@ class TestTransferService(TestCase):
         self.assertTrue(
             TransferMoneyLog.objects.filter(pk=transfer_log.pk).exists(),
         )
+
+    def test_transfer_rejects_deposit_as_source(self) -> None:
+        """Transferring from a deposit account bypasses the deposit domain."""
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.from_account.bank,
+            currency='RUB',
+            balance=Decimal('5000.00'),
+        )
+        with self.assertRaises(ValidationError):
+            self.transfer_service.transfer_money(
+                from_account=deposit_account,
+                to_account=self.to_account,
+                amount=Decimal('100.00'),
+                user=self.user,
+                exchange_date=datetime(
+                    2024,
+                    1,
+                    1,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
+                notes='Deposit source',
+            )
+        deposit_account.refresh_from_db()
+        self.to_account.refresh_from_db()
+        self.assertEqual(deposit_account.balance, Decimal('5000.00'))
+        self.assertEqual(self.to_account.balance, Decimal('500.00'))
+
+    def test_transfer_rejects_deposit_as_destination(self) -> None:
+        """Transferring to a deposit account bypasses the deposit domain."""
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.from_account.bank,
+            currency='RUB',
+            balance=Decimal('5000.00'),
+        )
+        with self.assertRaises(ValidationError):
+            self.transfer_service.transfer_money(
+                from_account=self.from_account,
+                to_account=deposit_account,
+                amount=Decimal('100.00'),
+                user=self.user,
+                exchange_date=datetime(
+                    2024,
+                    1,
+                    1,
+                    tzinfo=timezone.get_current_timezone(),
+                ),
+                notes='Deposit destination',
+            )
+        deposit_account.refresh_from_db()
+        self.from_account.refresh_from_db()
+        self.assertEqual(deposit_account.balance, Decimal('5000.00'))
+        self.assertEqual(self.from_account.balance, Decimal('1000.00'))
