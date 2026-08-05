@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 
 from config.containers import ApplicationContainer
@@ -276,6 +276,51 @@ class TransactionServiceTest(TestCase):
                 user=other,
                 transaction_id=tx.pk,
             )
+
+    def test_add_rejects_deposit_account(self) -> None:
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.account.bank,
+            currency='RUB',
+            balance=Decimal('5000.00'),
+        )
+        with self.assertRaises(ValidationError):
+            self.service.add_transaction(
+                self._create_command(
+                    account=deposit_account,
+                    amount=Decimal('1.00'),
+                    type_value=TransactionType.INCOME,
+                ),
+            )
+        deposit_account.refresh_from_db()
+        self.assertEqual(deposit_account.balance, Decimal('5000.00'))
+
+    def test_update_rejects_deposit_account(self) -> None:
+        tx = self.service.add_transaction(
+            self._create_command(
+                amount=Decimal('100.00'),
+                type_value=TransactionType.INCOME,
+            ),
+        )
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.account.bank,
+            currency='RUB',
+            balance=Decimal('5000.00'),
+        )
+        with self.assertRaises(ValidationError):
+            self.service.update_transaction(
+                self._update_command(
+                    transaction_obj=tx,
+                    account=deposit_account,
+                    amount=Decimal('100.00'),
+                    type_value=TransactionType.INCOME,
+                ),
+            )
+        deposit_account.refresh_from_db()
+        self.assertEqual(deposit_account.balance, Decimal('5000.00'))
 
     def test_update_swaps_accounts(self) -> None:
         second_account = Account.objects.get(pk=2)

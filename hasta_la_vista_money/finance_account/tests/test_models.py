@@ -283,3 +283,29 @@ class TestAccountManagers(TestCase):
 
         user3_accounts = Account.objects.by_user(user3)
         self.assertEqual(user3_accounts.count(), 0)
+
+    def test_available_for_regular_operations_excludes_deposits(self) -> None:
+        """Deposits must not be selectable for regular operations."""
+        deposit_account = Account.objects.create_deposit(
+            user=self.user1,
+            name_account='Вклад',
+            bank=self.account1.bank,
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+
+        regular_accounts = Account.objects.available_for_regular_operations()
+
+        self.assertIn(self.account1, regular_accounts)
+        self.assertNotIn(deposit_account, regular_accounts)
+
+    def test_available_for_regular_operations_excludes_archived(self) -> None:
+        """Archived accounts must not be selectable for regular
+        operations."""
+        self.account1.archived_at = timezone.now()
+        self.account1.save()
+
+        regular_accounts = Account.objects.available_for_regular_operations()
+
+        self.assertNotIn(self.account1, regular_accounts)
+        self.assertIn(self.account2, regular_accounts)

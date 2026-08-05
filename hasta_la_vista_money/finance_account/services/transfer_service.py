@@ -78,6 +78,13 @@ class TransferService:
             raise PermissionDenied(
                 _('У вас нет прав на операции с этими счетами.'),
             )
+        if from_account.is_deposit or to_account.is_deposit:
+            raise ValidationError(
+                _(
+                    'Перевод со вклада или на вклад доступен только через '
+                    'сервис вкладов.',
+                ),
+            )
 
         locked_accounts = self._balance_service.apply_account_deltas(
             {

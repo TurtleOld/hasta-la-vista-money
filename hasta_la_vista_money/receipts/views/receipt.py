@@ -71,10 +71,8 @@ class ReceiptCreateView(
             form.fields['account'],
         )
         account_field.queryset = (
-            Account.objects.available_for_operations().by_user_with_related(
-                current_user,
-            )
-        )
+            Account.objects.available_for_regular_operations()
+        ).by_user_with_related(current_user)
         seller_field = cast('ModelChoiceField[Seller]', form.fields['seller'])
         seller_field.queryset = Seller.objects.for_user(current_user)
         return form
@@ -210,9 +208,7 @@ class ReceiptUpdateView(
         )
         account_field.queryset = account_repository.get_by_user_with_related(
             current_user,
-        ).filter(
-            archived_at__isnull=True,
-        )
+        ).available_for_regular_operations()
         seller_field = cast(
             'ModelChoiceField[Seller]',
             form.fields['seller'],

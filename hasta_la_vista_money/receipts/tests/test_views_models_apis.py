@@ -227,6 +227,21 @@ class TestReceipt(TestCase):
         response = self.client.get(reverse_lazy('receipts:list'))
         self.assertRedirects(response, '/login/?next=/receipts/')
 
+    def test_receipt_create_form_excludes_deposit_accounts(self) -> None:
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.account.bank,
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(reverse_lazy('receipts:create'))
+        self.assertEqual(response.status_code, constants.SUCCESS_CODE)
+        account_queryset = response.context['form'].fields['account'].queryset
+        self.assertNotIn(deposit_account, account_queryset)
+        self.assertIn(self.account, account_queryset)
+
     def test_receipt_create_unauthorized(self) -> None:
         response = self.client.get(reverse_lazy('receipts:create'))
         self.assertRedirects(response, '/login/?next=/receipts/create/')
@@ -539,6 +554,19 @@ class TestForms(TestCase):
         )
 
         self.assertTrue(form.is_valid())
+
+    def test_upload_image_form_excludes_deposit_accounts(self) -> None:
+        deposit_account = Account.objects.create_deposit(
+            user=self.user,
+            name_account='Вклад',
+            bank=self.account.bank,
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        form = UploadImageForm(user=self.user, data={})
+        queryset = form.fields['account'].queryset  # type: ignore[attr-defined]
+        self.assertNotIn(deposit_account, queryset)
+        self.assertIn(self.account, queryset)
 
     def test_upload_image_form_rejects_corrupt_jpeg(self) -> None:
         test_file = SimpleUploadedFile(
