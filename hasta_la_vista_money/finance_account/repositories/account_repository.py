@@ -5,6 +5,7 @@ including filtering by user, group, type, and currency.
 """
 
 from django.db.models import QuerySet
+from django.utils import timezone
 
 from hasta_la_vista_money.finance_account.models import Account
 from hasta_la_vista_money.users.models import FamilyGroupMembership, User
@@ -59,6 +60,11 @@ class AccountRepository:
             pk__in=account_ids,
         )
         return {account.pk: account for account in accounts}
+
+    def archive(self, account_id: int) -> None:
+        Account.objects.filter(pk=account_id).update(
+            archived_at=timezone.now(),
+        )
 
     def get_by_user(self, user: User) -> QuerySet[Account]:
         """Get all accounts for a user.

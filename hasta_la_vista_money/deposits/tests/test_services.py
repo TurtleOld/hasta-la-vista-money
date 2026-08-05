@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
@@ -6,6 +7,7 @@ from unittest.mock import patch
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
+from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -14,6 +16,7 @@ from hasta_la_vista_money.constants import ACCOUNT_TYPE_DEPOSIT
 from hasta_la_vista_money.deposits.commands import (
     AddFloatingRatePeriodCommand,
     CapitalizeInterestCommand,
+    CloseMaturedDepositCommand,
     ConvertAccountToDepositCommand,
     CreateDepositCommand,
     FundDepositCommand,
@@ -104,6 +107,10 @@ class DepositServiceIntegrationTests(TestCase):
         self.assertEqual(event.source_account, source_account)
         self.assertFalse(Transaction.objects.filter(user=user).exists())
         self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+        with self.assertRaises(ProtectedError):
+            deposit.delete()
+        with self.assertRaises(ProtectedError):
+            deposit.account.delete()
         kpis_after = get_dashboard_month_kpis(user)
         for field in ('income', 'expenses', 'net_result', 'savings_rate'):
             with self.subTest(field=field):
@@ -2124,3 +2131,364 @@ class CapitalizeInterestServiceTests(TestCase):
                     reason='Чужой вклад.',
                 ),
             )
+
+
+class CloseMaturedDepositServiceTests(TestCase):
+    def _open_matured_deposit(
+        self,
+        user: 'User',
+        *,
+        matures_on: date | None = None,
+    ) -> Deposit:
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit: Deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=user,
+                name='Вклад к закрытию',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('100000.00'),
+                opened_on=timezone.localdate() - timedelta(days=365),
+                matures_on=matures_on or timezone.localdate(),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        return deposit
+
+    def test_close_to_owned_account_returns_principal_and_final_interest(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_matured_deposit(user)
+        destination = Account.objects.create(
+            user=user,
+            name_account='Счёт возврата',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+
+        result = service.close_matured_deposit(
+            CloseMaturedDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                destination=(
+                    DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+                ),
+                destination_account_id=destination.pk,
+                principal=Decimal('100000.00'),
+                gross=Decimal('12000.00'),
+                withholding=Decimal('1560.00'),
+                net=Decimal('10440.00'),
+                posting_on=timezone.localdate(),
+                value_on=timezone.localdate(),
+            ),
+        )
+
+        deposit.account.refresh_from_db()
+        destination.refresh_from_db()
+        term = deposit.current_term
+        term.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal())
+        self.assertIsNotNone(deposit.account.archived_at)
+        self.assertFalse(
+            Account.objects.available_for_operations()
+            .filter(pk=deposit.account.pk)
+            .exists(),
+        )
+        self.assertEqual(destination.balance, Decimal('111440.00'))
+        self.assertEqual(term.state, DepositTerm.State.CLOSED)
+        self.assertEqual(term.closed_on, timezone.localdate())
+        self.assertEqual(
+            result.principal_event.type,
+            DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+        )
+        self.assertEqual(result.principal_event.amount, Decimal('100000.00'))
+        self.assertTrue(result.interest_event.is_final)
+        self.assertEqual(result.interest_event.gross, Decimal('12000.00'))
+        self.assertFalse(Transaction.objects.filter(user=user).exists())
+        self.assertFalse(TransferMoneyLog.objects.filter(user=user).exists())
+        self.assertFalse(
+            DepositInterestForecast.objects.filter(
+                term=term,
+                confirmed=False,
+            ).exists(),
+        )
+
+    def test_close_to_external_recipient_changes_no_other_balance_and_reports(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_matured_deposit(user)
+        ordinary_account = Account.objects.create(
+            user=user,
+            name_account='Обычный счёт',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+        command = CloseMaturedDepositCommand(
+            user=user,
+            deposit_id=deposit.pk,
+            destination=DepositCapitalizationEvent.Destination.EXTERNAL,
+            destination_account_id=None,
+            principal=Decimal('100000.00'),
+            gross=Decimal('12000.00'),
+            withholding=Decimal('1560.00'),
+            net=Decimal('10440.00'),
+            posting_on=timezone.localdate(),
+            value_on=timezone.localdate(),
+        )
+
+        first_result = service.close_matured_deposit(command)
+        replay_result = service.close_matured_deposit(command)
+
+        deposit.account.refresh_from_db()
+        ordinary_account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal())
+        self.assertEqual(ordinary_account.balance, Decimal('1000.00'))
+        self.assertIsNone(first_result.principal_event.destination_account)
+        self.assertIsNone(first_result.interest_event.destination_account)
+        self.assertEqual(
+            replay_result.principal_event.pk,
+            first_result.principal_event.pk,
+        )
+        self.assertEqual(
+            replay_result.interest_event.pk,
+            first_result.interest_event.pk,
+        )
+        with self.assertRaises(ValidationError):
+            service.close_matured_deposit(
+                replace(
+                    command,
+                    posting_on=timezone.localdate() + timedelta(days=1),
+                ),
+            )
+        kpis = get_dashboard_month_kpis(user)
+        self.assertEqual(kpis['income'], Decimal('12000.00'))
+        self.assertEqual(kpis['expenses'], Decimal('1560.00'))
+        self.assertEqual(kpis['net_result'], Decimal('10440.00'))
+        with self.assertRaises(ValidationError):
+            service.confirm_interest_payment(
+                CapitalizeInterestCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    gross=Decimal('100.00'),
+                    withholding=Decimal(),
+                    net=Decimal('100.00'),
+                    posting_on=timezone.localdate(),
+                    value_on=timezone.localdate(),
+                    reason='Недопустимая выплата после закрытия.',
+                    destination=(
+                        DepositCapitalizationEvent.Destination.EXTERNAL
+                    ),
+                ),
+            )
+        self.assertEqual(
+            DepositCapitalizationEvent.objects.filter(deposit=deposit).count(),
+            1,
+        )
+
+    def test_close_rejects_active_term_and_principal_mismatch(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        active_deposit = self._open_matured_deposit(
+            user,
+            matures_on=timezone.localdate() + timedelta(days=1),
+        )
+        matured_deposit = self._open_matured_deposit(user)
+        invalid_commands = (
+            CloseMaturedDepositCommand(
+                user=user,
+                deposit_id=active_deposit.pk,
+                destination=DepositCapitalizationEvent.Destination.EXTERNAL,
+                destination_account_id=None,
+                principal=Decimal('100000.00'),
+                gross=Decimal(),
+                withholding=Decimal(),
+                net=Decimal(),
+                posting_on=timezone.localdate(),
+                value_on=timezone.localdate(),
+            ),
+            CloseMaturedDepositCommand(
+                user=user,
+                deposit_id=matured_deposit.pk,
+                destination=DepositCapitalizationEvent.Destination.EXTERNAL,
+                destination_account_id=None,
+                principal=Decimal('99999.00'),
+                gross=Decimal(),
+                withholding=Decimal(),
+                net=Decimal(),
+                posting_on=timezone.localdate(),
+                value_on=timezone.localdate(),
+            ),
+        )
+
+        for command in invalid_commands:
+            with (
+                self.subTest(deposit_id=command.deposit_id),
+                self.assertRaises(ValidationError),
+            ):
+                service.close_matured_deposit(command)
+
+        for deposit in (active_deposit, matured_deposit):
+            deposit.account.refresh_from_db()
+            self.assertEqual(deposit.account.balance, Decimal('100000.00'))
+            self.assertIsNone(deposit.account.archived_at)
+
+    def test_close_rejects_foreign_and_wrong_currency_destination(self) -> None:
+        user = cast('User', UserFactory())
+        other_user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_matured_deposit(user)
+        invalid_accounts = (
+            Account.objects.create(
+                user=other_user,
+                name_account='Чужой счёт',
+                currency='RUB',
+                balance=Decimal(),
+            ),
+            Account.objects.create(
+                user=user,
+                name_account='Счёт в долларах',
+                currency='USD',
+                balance=Decimal(),
+            ),
+        )
+
+        for account in invalid_accounts:
+            with (
+                self.subTest(account=account.pk),
+                self.assertRaises(ValidationError),
+            ):
+                service.close_matured_deposit(
+                    CloseMaturedDepositCommand(
+                        user=user,
+                        deposit_id=deposit.pk,
+                        destination=(
+                            DepositCapitalizationEvent.Destination.INTERNAL_ACCOUNT
+                        ),
+                        destination_account_id=account.pk,
+                        principal=Decimal('100000.00'),
+                        gross=Decimal(),
+                        withholding=Decimal(),
+                        net=Decimal(),
+                        posting_on=timezone.localdate(),
+                        value_on=timezone.localdate(),
+                    ),
+                )
+
+    def test_close_rolls_back_balance_and_events_on_interest_failure(
+        self,
+    ) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_matured_deposit(user)
+
+        with (
+            patch.object(
+                service.deposit_repository,
+                'create_capitalization_event',
+                side_effect=RuntimeError('interest storage failed'),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            service.close_matured_deposit(
+                CloseMaturedDepositCommand(
+                    user=user,
+                    deposit_id=deposit.pk,
+                    destination=DepositCapitalizationEvent.Destination.EXTERNAL,
+                    destination_account_id=None,
+                    principal=Decimal('100000.00'),
+                    gross=Decimal('1000.00'),
+                    withholding=Decimal(),
+                    net=Decimal('1000.00'),
+                    posting_on=timezone.localdate(),
+                    value_on=timezone.localdate(),
+                ),
+            )
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('100000.00'))
+        self.assertIsNone(deposit.account.archived_at)
+        self.assertFalse(
+            DepositPrincipalEvent.objects.filter(
+                deposit=deposit,
+                type=DepositPrincipalEvent.Type.PLANNED_CLOSURE,
+            ).exists(),
+        )
+        self.assertFalse(
+            DepositCapitalizationEvent.objects.filter(
+                deposit=deposit,
+                is_final=True,
+            ).exists(),
+        )
+
+    def test_close_allows_zero_principal_after_full_withdrawal(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_matured_deposit(user)
+        Account.objects.filter(pk=deposit.account.pk).update(balance=Decimal())
+
+        result = service.close_matured_deposit(
+            CloseMaturedDepositCommand(
+                user=user,
+                deposit_id=deposit.pk,
+                destination=DepositCapitalizationEvent.Destination.EXTERNAL,
+                destination_account_id=None,
+                principal=Decimal(),
+                gross=Decimal(),
+                withholding=Decimal(),
+                net=Decimal(),
+                posting_on=timezone.localdate(),
+                value_on=timezone.localdate(),
+            ),
+        )
+
+        deposit.account.refresh_from_db()
+        term = deposit.current_term
+        term.refresh_from_db()
+        self.assertEqual(result.principal_event.amount, Decimal())
+        self.assertEqual(term.state, DepositTerm.State.CLOSED)
+        self.assertTrue(deposit.account.is_archived)
+
+    def test_close_rejects_imprecise_or_non_final_interest_data(self) -> None:
+        user = cast('User', UserFactory())
+        service = ApplicationContainer().deposits.deposit_service()
+        deposit = self._open_matured_deposit(user)
+        non_final_forecast = DepositInterestForecast.objects.create(
+            term=deposit.current_term,
+            payout_on=timezone.localdate() - timedelta(days=1),
+            amount=Decimal('100.00'),
+            period_starts_on=deposit.current_term.opened_on,
+            period_ends_on=timezone.localdate() - timedelta(days=1),
+        )
+        base_command = CloseMaturedDepositCommand(
+            user=user,
+            deposit_id=deposit.pk,
+            destination=DepositCapitalizationEvent.Destination.EXTERNAL,
+            destination_account_id=None,
+            principal=Decimal('100000.00'),
+            gross=Decimal('10.44'),
+            withholding=Decimal('0.40'),
+            net=Decimal(10),
+            posting_on=timezone.localdate(),
+            value_on=timezone.localdate(),
+        )
+
+        for command in (
+            base_command,
+            replace(
+                base_command,
+                gross=Decimal('10.00'),
+                withholding=Decimal(),
+                net=Decimal('10.00'),
+                forecast_id=non_final_forecast.pk,
+            ),
+        ):
+            with self.assertRaises(ValidationError):
+                service.close_matured_deposit(command)
+
+        deposit.account.refresh_from_db()
+        self.assertEqual(deposit.account.balance, Decimal('100000.00'))

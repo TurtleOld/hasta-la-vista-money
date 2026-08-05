@@ -256,8 +256,12 @@ class TransferMoneyAccountForm(BaseTransferForm, FormValidationMixin):
         self.transfer_service = transfer_service
         self.account_repository = account_repository
 
-        user_accounts = self.account_repository.get_by_user(user).exclude(
-            type_account=constants.ACCOUNT_TYPE_DEPOSIT,
+        user_accounts = (
+            self.account_repository.get_by_user(user)
+            .filter(
+                archived_at__isnull=True,
+            )
+            .exclude(type_account=constants.ACCOUNT_TYPE_DEPOSIT)
         )
         accounts = list(user_accounts)
         initial_accounts = self._get_default_transfer_accounts(

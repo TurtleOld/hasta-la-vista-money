@@ -68,6 +68,7 @@ class DepositTerm(models.Model):
         PLANNED = 'planned', _('Запланирован')
         ACTIVE = 'active', _('Активен')
         MATURED = 'matured', _('Срок истёк')
+        CLOSED = 'closed', _('Закрыт')
 
     class RateKind(models.TextChoices):
         FIXED = 'fixed', _('Фиксированная')
@@ -192,6 +193,11 @@ class DepositTerm(models.Model):
         blank=True,
         verbose_name=_('Максимальный остаток после пополнения'),
     )
+    closed_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Фактическая дата закрытия'),
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ['opened_on']
@@ -205,14 +211,23 @@ class DepositTerm(models.Model):
                 condition=Q(is_current=True),
                 name='one_current_term_per_deposit',
             ),
+            models.CheckConstraint(
+                condition=(
+                    Q(closed_on__isnull=True)
+                    | Q(closed_on__gte=models.F('matures_on'))
+                ),
+                name='planned_deposit_closure_not_before_maturity',
+            ),
         ]
 
     @property
     def state(self) -> str:
+        if self.closed_on is not None:
+            return self.State.CLOSED
         today = timezone.localdate()
         if today < self.opened_on:
             return self.State.PLANNED
-        if today > self.matures_on:
+        if today >= self.matures_on:
             return self.State.MATURED
         return self.State.ACTIVE
 
@@ -317,6 +332,7 @@ class DepositPrincipalEvent(models.Model):
         OPENING_POSITION = 'opening_position', _('Начальная позиция')
         TOP_UP = 'top_up', _('Пополнение')
         WITHDRAWAL = 'withdrawal', _('Снятие')
+        PLANNED_CLOSURE = 'planned_closure', _('Плановое закрытие')
 
     deposit = models.ForeignKey(
         Deposit,
@@ -330,6 +346,18 @@ class DepositPrincipalEvent(models.Model):
         validators=[MinValueValidator(0)],
     )
     effective_on = models.DateField(verbose_name=_('Дата события'))
+    posting_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_('Дата проводки'),
+    )
+    destination = models.CharField(
+        max_length=20,
+        choices=InterestPayoutDestination.choices,
+        null=True,
+        blank=True,
+        verbose_name=_('Назначение возврата тела'),
+    )
     source_account = models.ForeignKey(
         Account,
         blank=True,
@@ -363,6 +391,7 @@ class DepositPrincipalEvent(models.Model):
                     | Q(type='opening_position', amount__gte=0)
                     | Q(type='top_up', amount__gt=0)
                     | Q(type='withdrawal', amount__gt=0)
+                    | Q(type='planned_closure', amount__gte=0)
                 ),
                 name='deposit_principal_event_amount_valid',
             ),
@@ -379,8 +408,27 @@ class DepositPrincipalEvent(models.Model):
                         source_account__isnull=True,
                         destination_account__isnull=False,
                     )
+                    | Q(
+                        type='planned_closure',
+                        source_account__isnull=True,
+                        destination=(
+                            InterestPayoutDestination.INTERNAL_ACCOUNT
+                        ),
+                        destination_account__isnull=False,
+                    )
+                    | Q(
+                        type='planned_closure',
+                        source_account__isnull=True,
+                        destination=InterestPayoutDestination.EXTERNAL,
+                        destination_account__isnull=True,
+                    )
                 ),
                 name='deposit_principal_event_source_valid',
+            ),
+            models.UniqueConstraint(
+                fields=['deposit'],
+                condition=Q(type='planned_closure'),
+                name='one_planned_closure_per_deposit',
             ),
         ]
 
@@ -553,6 +601,10 @@ class DepositCapitalizationEvent(models.Model):
         default='',
         verbose_name=_('Причина внеплановой выплаты'),
     )
+    is_final = models.BooleanField(
+        default=False,
+        verbose_name=_('Финальная выплата при закрытии'),
+    )
     confirmed_at = models.DateTimeField(auto_now_add=True)
 
     objects = DepositCapitalizationEventQuerySet.as_manager()
@@ -594,6 +646,11 @@ class DepositCapitalizationEvent(models.Model):
                 fields=['forecast'],
                 condition=Q(forecast__isnull=False),
                 name='one_actual_interest_event_per_forecast',
+            ),
+            models.UniqueConstraint(
+                fields=['deposit'],
+                condition=Q(is_final=True),
+                name='one_final_interest_event_per_deposit',
             ),
         ]
 

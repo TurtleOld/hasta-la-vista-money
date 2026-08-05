@@ -700,3 +700,56 @@ class CapitalizeInterestSmokeTests(TestCase):
         content = detail.content.decode()
         self.assertIn('На собственный счёт', content)
         self.assertIn('Карта для процентов', content)
+
+
+class CloseMaturedDepositSmokeTests(TestCase):
+    def setUp(self) -> None:
+        self.user = cast('User', UserFactory())
+        self.client.force_login(self.user)
+        service = ApplicationContainer().deposits.deposit_service()
+        self.deposit = service.create_term_deposit(
+            CreateDepositCommand(
+                user=self.user,
+                name='Вклад к закрытию',
+                bank=_sberbank(),
+                currency='RUB',
+                balance=Decimal('100000.00'),
+                opened_on=timezone.localdate() - timedelta(days=365),
+                matures_on=timezone.localdate(),
+                annual_rate=Decimal('12.00'),
+                rate_kind=DepositTerm.RateKind.FIXED,
+            ),
+        )
+        self.destination = Account.objects.create(
+            user=self.user,
+            name_account='Счёт возврата',
+            currency='RUB',
+            balance=Decimal('1000.00'),
+        )
+
+    def test_user_closes_matured_deposit_from_detail_card(self) -> None:
+        detail_before = self.client.get(self.deposit.get_absolute_url())
+        self.assertContains(detail_before, 'Закрыть вклад')
+
+        response = self.client.post(
+            reverse('deposits:close', kwargs={'pk': self.deposit.pk}),
+            {
+                'destination': 'internal_account',
+                'destination_account': str(self.destination.pk),
+                'principal': '100000.00',
+                'gross': '12000.00',
+                'withholding': '1560.00',
+                'net': '10440.00',
+                'posting_on': timezone.localdate().isoformat(),
+                'value_on': timezone.localdate().isoformat(),
+            },
+        )
+
+        self.assertRedirects(response, self.deposit.get_absolute_url())
+        self.destination.refresh_from_db()
+        self.assertEqual(self.destination.balance, Decimal('111440.00'))
+        detail_after = self.client.get(self.deposit.get_absolute_url())
+        self.assertContains(detail_after, 'Закрыт')
+        self.assertContains(detail_after, 'Плановое закрытие')
+        self.assertNotContains(detail_after, 'Пополнить вклад')
+        self.assertNotContains(detail_after, 'Снять тело вклада')

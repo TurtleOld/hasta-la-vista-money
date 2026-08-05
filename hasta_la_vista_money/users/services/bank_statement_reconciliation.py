@@ -408,6 +408,8 @@ class BankStatementReconciliationService:
         account = Account.objects.select_for_update().get(
             pk=row.upload.account_id,
         )
+        if account.is_archived or account.is_deposit:
+            raise InvalidReconciliationDecisionError('account')
         created = Transaction.objects.create(
             user=row.upload.user,
             account=row.upload.account,

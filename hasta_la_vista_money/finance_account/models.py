@@ -102,6 +102,9 @@ class AccountQuerySet(models.QuerySet['Account']):
         """Return accounts of the specified type (e.g., 'CreditCard')."""
         return self.filter(type_account=type_account)
 
+    def available_for_operations(self) -> 'AccountQuerySet':
+        return self.filter(archived_at__isnull=True)
+
 
 class AccountManager(models.Manager['Account']):
     """Keep deposit accounts behind the deposit domain service."""
@@ -126,6 +129,9 @@ class AccountManager(models.Manager['Account']):
 
     def by_type(self, type_account: str) -> AccountQuerySet:
         return self.get_queryset().by_type(type_account)
+
+    def available_for_operations(self) -> AccountQuerySet:
+        return self.get_queryset().available_for_operations()
 
     def create(self, **kwargs: object) -> 'Account':
         if kwargs.get('type_account') == constants.ACCOUNT_TYPE_DEPOSIT:
@@ -233,6 +239,12 @@ class Account(TimeStampedModel):
             '(например, 120)',
         ),
     )
+    archived_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name=_('Дата архивации'),
+    )
 
     objects = AccountManager()
 
@@ -263,6 +275,10 @@ class Account(TimeStampedModel):
     @property
     def is_deposit(self) -> bool:
         return self.type_account == constants.ACCOUNT_TYPE_DEPOSIT
+
+    @property
+    def is_archived(self) -> bool:
+        return self.archived_at is not None
 
 
 class TransferMoneyLogQuerySet(models.QuerySet['TransferMoneyLog']):
